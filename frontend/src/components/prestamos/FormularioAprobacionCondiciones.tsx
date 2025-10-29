@@ -17,10 +17,10 @@ interface FormularioAprobacionCondicionesProps {
 
 export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }: FormularioAprobacionCondicionesProps) {
   const [condicionesAprobacion, setCondicionesAprobacion] = useState({
-    tasa_interes: 8.0,
-    plazo_maximo: 36,
-    fecha_base_calculo: new Date().toISOString().split('T')[0],
-    observaciones: ''
+    tasa_interes: prestamo.tasa_interes ? parseFloat(prestamo.tasa_interes.toString()) : 8.0,
+    plazo_maximo: prestamo.numero_cuotas || 36,
+    fecha_base_calculo: prestamo.fecha_base_calculo || new Date().toISOString().split('T')[0],
+    observaciones: prestamo.observaciones || ''
   })
   const [isLoading, setIsLoading] = useState(false)
   const [sugerencias, setSugerencias] = useState<any>(null)
@@ -49,19 +49,27 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
   }, [prestamo.id])
 
   const handleAprobar = async () => {
+    console.log('🔄 handleAprobar llamado')
+    console.log('📋 Condiciones:', condicionesAprobacion)
+    
     // Validaciones
     if (!condicionesAprobacion.fecha_base_calculo) {
+      console.error('❌ Validación fallida: fecha_base_calculo vacía')
       toast.error('Debe seleccionar una fecha de desembolso')
       return
     }
-    if (condicionesAprobacion.tasa_interes <= 0 || condicionesAprobacion.tasa_interes > 100) {
+    if (condicionesAprobacion.tasa_interes < 0 || condicionesAprobacion.tasa_interes > 100) {
+      console.error('❌ Validación fallida: tasa_interes fuera de rango', condicionesAprobacion.tasa_interes)
       toast.error('La tasa de interés debe estar entre 0 y 100%')
       return
     }
     if (condicionesAprobacion.plazo_maximo <= 0) {
+      console.error('❌ Validación fallida: plazo_maximo inválido', condicionesAprobacion.plazo_maximo)
       toast.error('El plazo máximo debe ser mayor a 0 meses')
       return
     }
+
+    console.log('✅ Validaciones pasadas')
 
     const mensajeConfirmacion = 
       `¿Desea aprobar este préstamo con las siguientes condiciones?\n\n` +
@@ -70,10 +78,13 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
       `• Fecha de Desembolso: ${new Date(condicionesAprobacion.fecha_base_calculo).toLocaleDateString()}`
 
     if (!window.confirm(mensajeConfirmacion)) {
+      console.log('❌ Usuario canceló la confirmación')
       return
     }
 
+    console.log('✅ Confirmación aceptada por el usuario')
     setIsLoading(true)
+    
     try {
       const condiciones = {
         estado: 'APROBADO',
@@ -83,16 +94,24 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
         observaciones: condicionesAprobacion.observaciones || `Aprobado manualmente. Préstamo ID: ${prestamo.id}`
       }
 
-      await aplicarCondiciones.mutateAsync({
+      console.log('📤 Enviando condiciones al backend:', condiciones)
+      console.log('🆔 Prestamo ID:', prestamo.id)
+
+      const resultado = await aplicarCondiciones.mutateAsync({
         prestamoId: prestamo.id,
         condiciones
       })
+
+      console.log('✅ Respuesta del backend:', resultado)
 
       toast.success('✅ Préstamo aprobado exitosamente. La tabla de amortización ha sido generada automáticamente.')
       onSuccess()
       onClose()
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Error al aprobar préstamo')
+      console.error('❌ Error completo al aprobar préstamo:', error)
+      console.error('❌ Error response:', error.response)
+      console.error('❌ Error message:', error.message)
+      toast.error(error.response?.data?.detail || error.message || 'Error al aprobar préstamo')
     } finally {
       setIsLoading(false)
     }
@@ -149,11 +168,15 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
                           step="0.1"
                           min="0"
                           max="100"
-                          value={condicionesAprobacion.tasa_interes}
-                          onChange={(e) => setCondicionesAprobacion({
-                            ...condicionesAprobacion,
-                            tasa_interes: parseFloat(e.target.value) || 0
-                          })}
+                          value={condicionesAprobacion.tasa_interes || ''}
+                          onChange={(e) => {
+                            const valor = e.target.value === '' ? 0 : parseFloat(e.target.value)
+                            console.log('📝 Tasa de interés cambiada:', valor)
+                            setCondicionesAprobacion({
+                              ...condicionesAprobacion,
+                              tasa_interes: isNaN(valor) ? 0 : valor
+                            })
+                          }}
                           className="pl-10"
                           placeholder="8.0"
                         />
@@ -168,11 +191,15 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
                         type="number"
                         step="1"
                         min="1"
-                        value={condicionesAprobacion.plazo_maximo}
-                        onChange={(e) => setCondicionesAprobacion({
-                          ...condicionesAprobacion,
-                          plazo_maximo: parseInt(e.target.value) || 36
-                        })}
+                        value={condicionesAprobacion.plazo_maximo || ''}
+                        onChange={(e) => {
+                          const valor = e.target.value === '' ? 36 : parseInt(e.target.value)
+                          console.log('📝 Plazo máximo cambiado:', valor)
+                          setCondicionesAprobacion({
+                            ...condicionesAprobacion,
+                            plazo_maximo: isNaN(valor) ? 36 : valor
+                          })
+                        }}
                         placeholder="36"
                       />
                     </div>
@@ -223,9 +250,30 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
                 </Button>
                 <Button 
                   type="button"
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  onClick={handleAprobar}
-                  disabled={isLoading}
+                  className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    console.log('🖱️ Click en botón Aprobar Préstamo')
+                    console.log('📋 Estado actual de condiciones:', condicionesAprobacion)
+                    handleAprobar()
+                  }}
+                  disabled={
+                    isLoading || 
+                    !condicionesAprobacion.fecha_base_calculo || 
+                    condicionesAprobacion.tasa_interes < 0 || 
+                    condicionesAprobacion.tasa_interes > 100 || 
+                    condicionesAprobacion.plazo_maximo <= 0
+                  }
+                  title={
+                    !condicionesAprobacion.fecha_base_calculo 
+                      ? 'Debe seleccionar una fecha de desembolso'
+                      : condicionesAprobacion.tasa_interes < 0 || condicionesAprobacion.tasa_interes > 100
+                      ? 'La tasa de interés debe estar entre 0 y 100%'
+                      : condicionesAprobacion.plazo_maximo <= 0
+                      ? 'El plazo máximo debe ser mayor a 0'
+                      : 'Aprobar préstamo con las condiciones especificadas'
+                  }
                 >
                   {isLoading ? 'Aprobando...' : 'Aprobar Préstamo'}
                 </Button>
