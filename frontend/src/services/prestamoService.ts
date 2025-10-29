@@ -5,6 +5,23 @@ import { logger } from '@/utils/logger'
 // Constantes de configuración
 const DEFAULT_PER_PAGE = 20
 
+// Tipo para el resumen de préstamos
+type ResumenPrestamos = {
+  tiene_prestamos: boolean
+  total_prestamos: number
+  total_saldo_pendiente?: number
+  total_cuotas_mora?: number
+  prestamos?: Array<{
+    id: number
+    modelo_vehiculo: string
+    total_financiamiento: number
+    saldo_pendiente: number
+    cuotas_en_mora: number
+    estado: string
+    fecha_registro: string | null
+  }>
+}
+
 class PrestamoService {
   private baseUrl = '/api/v1/prestamos'
 
@@ -55,22 +72,8 @@ class PrestamoService {
   }
 
   // Obtener resumen de préstamos por cédula (saldo, mora, etc.)
-  async getResumenPrestamos(cedula: string): Promise<{
-    tiene_prestamos: boolean
-    total_prestamos: number
-    total_saldo_pendiente?: number
-    total_cuotas_mora?: number
-    prestamos?: Array<{
-      id: number
-      modelo_vehiculo: string
-      total_financiamiento: number
-      saldo_pendiente: number
-      cuotas_en_mora: number
-      estado: string
-      fecha_registro: string | null
-    }>
-  }> {
-    const response = await apiClient.get(`${this.baseUrl}/cedula/${cedula}/resumen`)
+  async getResumenPrestamos(cedula: string): Promise<ResumenPrestamos> {
+    const response = await apiClient.get<ResumenPrestamos>(`${this.baseUrl}/cedula/${cedula}/resumen`)
     return response
   }
 

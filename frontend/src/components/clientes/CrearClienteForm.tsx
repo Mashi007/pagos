@@ -37,7 +37,14 @@ interface FormData {
   nombres: string  // ✅ UNIFICA nombres + apellidos (2-4 palabras)
   telefono: string
   email: string
-  direccion: string
+  // Dirección estructurada
+  callePrincipal: string
+  calleTransversal: string
+  descripcion: string  // Lugar cercano, color de casa
+  parroquia: string
+  municipio: string
+  ciudad: string
+  estadoDireccion: string  // Estado (nuevo campo)
   fechaNacimiento: string
   ocupacion: string  // ✅ MÁXIMO 2 palabras
   
@@ -108,7 +115,14 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     nombres: '',  // ✅ UNIFICA nombres + apellidos
     telefono: '',
     email: '',
-    direccion: '',
+    // Dirección estructurada
+    callePrincipal: '',
+    calleTransversal: '',
+    descripcion: '',
+    parroquia: '',
+    municipio: '',
+    ciudad: '',
+    estadoDireccion: '',
     fechaNacimiento: getTodayDate(), // ✅ Fecha por defecto: hoy
     ocupacion: '',
     estado: 'ACTIVO',
@@ -144,12 +158,67 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         return fechaISO
       }
       
+      // ✅ Función para parsear dirección estructurada desde la BD
+      const parsearDireccion = (direccionCompleta: string) => {
+        if (!direccionCompleta) {
+          return {
+            callePrincipal: '',
+            calleTransversal: '',
+            descripcion: '',
+            parroquia: '',
+            municipio: '',
+            ciudad: '',
+            estadoDireccion: ''
+          }
+        }
+        
+        // Intentar parsear si está en formato JSON
+        try {
+          const parsed = JSON.parse(direccionCompleta)
+          return {
+            callePrincipal: parsed.callePrincipal || '',
+            calleTransversal: parsed.calleTransversal || '',
+            descripcion: parsed.descripcion || '',
+            parroquia: parsed.parroquia || '',
+            municipio: parsed.municipio || '',
+            ciudad: parsed.ciudad || '',
+            estadoDireccion: parsed.estado || parsed.estadoDireccion || ''
+          }
+        } catch {
+          // Si no es JSON, dividir por separadores comunes o dejarlo en callePrincipal
+          const partes = direccionCompleta.split('|')
+          if (partes.length >= 7) {
+            return {
+              callePrincipal: partes[0] || '',
+              calleTransversal: partes[1] || '',
+              descripcion: partes[2] || '',
+              parroquia: partes[3] || '',
+              municipio: partes[4] || '',
+              ciudad: partes[5] || '',
+              estadoDireccion: partes[6] || ''
+            }
+          }
+          // Si es un texto simple, dejar todo en callePrincipal
+          return {
+            callePrincipal: direccionCompleta,
+            calleTransversal: '',
+            descripcion: '',
+            parroquia: '',
+            municipio: '',
+            ciudad: '',
+            estadoDireccion: ''
+          }
+        }
+      }
+      
+      const direccionData = parsearDireccion(cliente.direccion || '')
+      
       const newFormData = {
         cedula: cliente.cedula || '',
         nombres: nombresValue,  // ✅ nombres unificados
         telefono: extraerNumeroTelefono(cliente.telefono || ''),  // ✅ Extraer solo el número (sin +58)
         email: cliente.email || '',
-        direccion: cliente.direccion || '',
+        ...direccionData,
         fechaNacimiento: convertirFechaLocal(cliente.fecha_nacimiento || ''), // ✅ Convertir ISO a DD/MM/YYYY
         ocupacion: cliente.ocupacion || '',
         estado: cliente.estado || 'ACTIVO',
@@ -208,13 +277,22 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     return { field: 'ocupacion', isValid: true, message: 'Ocupación válida' }
   }
   
-  const validateDireccion = (direccion: string): ValidationResult => {
-    if (!direccion || direccion.trim() === '') {
-      return { field: 'direccion', isValid: false, message: 'Dirección requerida' }
+  // ✅ Validación para dirección estructurada
+  const validateDireccion = (): ValidationResult => {
+    if (!formData.callePrincipal || formData.callePrincipal.trim() === '') {
+      return { field: 'direccion', isValid: false, message: 'Calle Principal es requerida' }
     }
-    
-    if (direccion.trim().length < 5) {
-      return { field: 'direccion', isValid: false, message: 'La dirección debe tener mínimo 5 caracteres' }
+    if (!formData.parroquia || formData.parroquia.trim() === '') {
+      return { field: 'direccion', isValid: false, message: 'Parroquia es requerida' }
+    }
+    if (!formData.municipio || formData.municipio.trim() === '') {
+      return { field: 'direccion', isValid: false, message: 'Municipio es requerido' }
+    }
+    if (!formData.ciudad || formData.ciudad.trim() === '') {
+      return { field: 'direccion', isValid: false, message: 'Ciudad es requerida' }
+    }
+    if (!formData.estadoDireccion || formData.estadoDireccion.trim() === '') {
+      return { field: 'direccion', isValid: false, message: 'Estado es requerido' }
     }
     
     return { field: 'direccion', isValid: true, message: 'Dirección válida' }
@@ -410,14 +488,26 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       validation = validateNombres(formattedValue)
     } else if (field === 'ocupacion') {
       validation = validateOcupacion(formattedValue)
-    } else if (field === 'direccion') {
-      validation = validateDireccion(formattedValue)
     } else if (field === 'fechaNacimiento') {
       validation = validateFechaNacimiento(formattedValue)
     } else if (field === 'telefono') {
       validation = validateTelefono(formattedValue)
     } else {
-      validation = await validateField(field, formattedValue)
+      // Para campos de dirección, validar cuando cambie cualquier campo
+      if (['callePrincipal', 'calleTransversal', 'descripcion', 'parroquia', 'municipio', 'ciudad', 'estadoDireccion'].includes(field)) {
+        // Validar dirección completa cuando cambie cualquier campo de dirección
+        setTimeout(() => {
+          const direccionValidation = validateDireccion()
+          setValidations(prev => {
+            const filtered = prev.filter(v => v.field !== 'direccion')
+            return [...filtered, direccionValidation]
+          })
+        }, 100)
+        // Retornar validación temporal
+        validation = { field: 'direccion', isValid: true, message: '' }
+      } else {
+        validation = await validateField(field, formattedValue)
+      }
     }
     
     setValidations(prev => {
@@ -434,13 +524,14 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     
     const requiredFields: (keyof FormData)[] = [
       'cedula', 'nombres', 'telefono', 'email', 
-      'direccion', 'fechaNacimiento', 'ocupacion'
+      'callePrincipal', 'parroquia', 'municipio', 'ciudad', 'estadoDireccion',
+      'fechaNacimiento', 'ocupacion'
     ]
     
     // ✅ Solo en modo creación: validar nombres, ocupacion, direccion, fechaNacimiento y telefono con funciones personalizadas
     const nombresValidation = validateNombres(formData.nombres)
     const ocupacionValidation = validateOcupacion(formData.ocupacion)
-    const direccionValidation = validateDireccion(formData.direccion)
+    const direccionValidation = validateDireccion()
     const fechaNacimientoValidation = validateFechaNacimiento(formData.fechaNacimiento)
     const telefonoValidation = validateTelefono(formData.telefono)
     
@@ -486,6 +577,14 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       })
     }
     
+    // Validar campos de dirección
+    const direccionValida = direccionValidation.isValid &&
+      formData.callePrincipal &&
+      formData.parroquia &&
+      formData.municipio &&
+      formData.ciudad &&
+      formData.estadoDireccion
+    
     return requiredFields.every(field => {
       // Usar validaciones personalizadas para nombres, ocupacion, direccion, fechaNacimiento y telefono
       if (field === 'nombres') {
@@ -494,14 +593,15 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       if (field === 'ocupacion') {
         return ocupacionValidation.isValid && formData[field]
       }
-      if (field === 'direccion') {
-        return direccionValidation.isValid && formData[field]
-      }
       if (field === 'fechaNacimiento') {
         return fechaNacimientoValidation.isValid && formData[field]
       }
       if (field === 'telefono') {
         return telefonoValidation.isValid && formData[field]
+      }
+      // Validar campos de dirección
+      if (['callePrincipal', 'parroquia', 'municipio', 'ciudad', 'estadoDireccion'].includes(field)) {
+        return direccionValida && formData[field]
       }
       
       const validation = validations.find(v => v.field === field)
@@ -512,9 +612,25 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // ✅ VALIDACIÓN: Asegurar que campos requeridos NO estén vacíos
-    if (!formData.direccion || !formData.direccion.trim()) {
-      alert('⚠️ ERROR: Debe completar el campo Dirección')
+    // ✅ VALIDACIÓN: Asegurar que campos de dirección requeridos NO estén vacíos
+    if (!formData.callePrincipal || !formData.callePrincipal.trim()) {
+      alert('⚠️ ERROR: Debe completar el campo Calle Principal')
+      return
+    }
+    if (!formData.parroquia || !formData.parroquia.trim()) {
+      alert('⚠️ ERROR: Debe completar el campo Parroquia')
+      return
+    }
+    if (!formData.municipio || !formData.municipio.trim()) {
+      alert('⚠️ ERROR: Debe completar el campo Municipio')
+      return
+    }
+    if (!formData.ciudad || !formData.ciudad.trim()) {
+      alert('⚠️ ERROR: Debe completar el campo Ciudad')
+      return
+    }
+    if (!formData.estadoDireccion || !formData.estadoDireccion.trim()) {
+      alert('⚠️ ERROR: Debe completar el campo Estado')
       return
     }
     if (!formData.fechaNacimiento || !formData.fechaNacimiento.trim()) {
@@ -536,12 +652,23 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       // ✅ Concatenar +58 con el número de teléfono
       const telefonoCompleto = `+58${formData.telefono.replace(/\D/g, '').slice(0, 10)}`
       
+      // ✅ Construir dirección como JSON estructurado
+      const direccionCompleta = JSON.stringify({
+        callePrincipal: formData.callePrincipal.trim(),
+        calleTransversal: formData.calleTransversal.trim() || null,
+        descripcion: formData.descripcion.trim() || null,
+        parroquia: formData.parroquia.trim(),
+        municipio: formData.municipio.trim(),
+        ciudad: formData.ciudad.trim(),
+        estado: formData.estadoDireccion.trim()
+      })
+      
       const clienteData = {
         cedula: formData.cedula,
         nombres: formData.nombres,  // ✅ nombres unificados (nombres + apellidos)
         telefono: telefonoCompleto,  // ✅ Formato: +581234567890
         email: formData.email,
-        direccion: formData.direccion,
+        direccion: direccionCompleta,  // ✅ Dirección estructurada como JSON
         fecha_nacimiento: convertirFechaAISO(formData.fechaNacimiento), // ✅ Convertir DD/MM/YYYY → YYYY-MM-DD
         ocupacion: formData.ocupacion,
         estado: formData.estado,
@@ -822,20 +949,106 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                 )}
               </div>
 
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Dirección <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
-                  <Textarea
-                    value={formData.direccion}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange('direccion', e.target.value)}
-                    className={`pl-10 ${getFieldValidation('direccion')?.isValid === false ? 'border-red-500 border-2 bg-red-50' : ''}`}
-                    placeholder="Dirección completa del cliente"
-                    rows={2}
-                  />
+              {/* Sección de Dirección Estructurada */}
+              <div className="md:col-span-2 space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b">
+                  <MapPin className="w-5 h-5 text-gray-600" />
+                  <label className="text-sm font-semibold text-gray-700">
+                    Dirección <span className="text-red-500">*</span>
+                  </label>
                 </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">
+                      Calle Principal <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.callePrincipal}
+                      onChange={(e) => handleInputChange('callePrincipal', e.target.value)}
+                      className={`${getFieldValidation('direccion')?.isValid === false ? 'border-red-500 border-2 bg-red-50' : ''}`}
+                      placeholder="Ej: Av. Bolívar"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">
+                      Calle Transversal
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.calleTransversal}
+                      onChange={(e) => handleInputChange('calleTransversal', e.target.value)}
+                      placeholder="Ej: Calle 5 de Julio"
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium text-gray-700">
+                      Descripción (Lugar cercano, color de casa)
+                    </label>
+                    <Textarea
+                      value={formData.descripcion}
+                      onChange={(e) => handleInputChange('descripcion', e.target.value)}
+                      placeholder="Ej: Cerca del mercado, casa color azul"
+                      rows={2}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">
+                      Parroquia <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.parroquia}
+                      onChange={(e) => handleInputChange('parroquia', e.target.value)}
+                      className={`${getFieldValidation('direccion')?.isValid === false ? 'border-red-500 border-2 bg-red-50' : ''}`}
+                      placeholder="Ej: San Juan"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">
+                      Municipio <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.municipio}
+                      onChange={(e) => handleInputChange('municipio', e.target.value)}
+                      className={`${getFieldValidation('direccion')?.isValid === false ? 'border-red-500 border-2 bg-red-50' : ''}`}
+                      placeholder="Ej: Libertador"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">
+                      Ciudad <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.ciudad}
+                      onChange={(e) => handleInputChange('ciudad', e.target.value)}
+                      className={`${getFieldValidation('direccion')?.isValid === false ? 'border-red-500 border-2 bg-red-50' : ''}`}
+                      placeholder="Ej: Caracas"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">
+                      Estado <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="text"
+                      value={formData.estadoDireccion}
+                      onChange={(e) => handleInputChange('estadoDireccion', e.target.value)}
+                      className={`${getFieldValidation('direccion')?.isValid === false ? 'border-red-500 border-2 bg-red-50' : ''}`}
+                      placeholder="Ej: Distrito Capital"
+                    />
+                  </div>
+                </div>
+                
                 {getFieldValidation('direccion') && getFieldValidation('direccion')?.isValid === false && (
                   <div className="text-xs flex items-center gap-1 text-red-600 font-medium">
                     <XCircle className="w-3 h-3" />
