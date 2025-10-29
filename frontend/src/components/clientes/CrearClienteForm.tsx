@@ -291,6 +291,50 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     return { field: 'direccion', isValid: true, message: 'Dirección válida' }
   }
   
+  const validateFechaNacimiento = (fecha: string): ValidationResult => {
+    if (!fecha || fecha.trim() === '') {
+      return { field: 'fechaNacimiento', isValid: false, message: 'Fecha de nacimiento requerida' }
+    }
+    
+    // Validar formato DD/MM/YYYY
+    const fechaFormatRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/
+    if (!fechaFormatRegex.test(fecha.trim())) {
+      return { field: 'fechaNacimiento', isValid: false, message: 'Formato inválido. Use: DD/MM/YYYY' }
+    }
+    
+    // Extraer día, mes y año
+    const [, dia, mes, ano] = fecha.trim().match(fechaFormatRegex)!
+    const diaNum = parseInt(dia, 10)
+    const mesNum = parseInt(mes, 10)
+    const anoNum = parseInt(ano, 10)
+    
+    // Validar rangos
+    if (diaNum < 1 || diaNum > 31) {
+      return { field: 'fechaNacimiento', isValid: false, message: 'Día inválido (1-31)' }
+    }
+    if (mesNum < 1 || mesNum > 12) {
+      return { field: 'fechaNacimiento', isValid: false, message: 'Mes inválido (1-12)' }
+    }
+    if (anoNum < 1900 || anoNum > 2100) {
+      return { field: 'fechaNacimiento', isValid: false, message: 'Año inválido (1900-2100)' }
+    }
+    
+    // Validar que la fecha sea válida
+    const fechaNac = new Date(anoNum, mesNum - 1, diaNum)
+    if (fechaNac.getDate() !== diaNum || fechaNac.getMonth() !== mesNum - 1 || fechaNac.getFullYear() !== anoNum) {
+      return { field: 'fechaNacimiento', isValid: false, message: 'Fecha inválida (ej: 31/02 no existe)' }
+    }
+    
+    // Validar que la fecha sea pasada
+    const hoy = new Date()
+    hoy.setHours(0, 0, 0, 0)
+    if (fechaNac >= hoy) {
+      return { field: 'fechaNacimiento', isValid: false, message: 'La fecha no puede ser futura' }
+    }
+    
+    return { field: 'fechaNacimiento', isValid: true, message: 'Fecha válida' }
+  }
+  
   // ✅ Formato automático deshabilitado - respetar formato original del usuario
   const formatNombres = (text: string): string => {
     return text // Mantener formato original
@@ -387,6 +431,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       validation = validateOcupacion(formattedValue)
     } else if (field === 'direccion') {
       validation = validateDireccion(formattedValue)
+    } else if (field === 'fechaNacimiento') {
+      validation = validateFechaNacimiento(formattedValue)
     } else {
       validation = await validateField(field, formattedValue)
     }
@@ -409,15 +455,17 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       'concesionario', 'analista'
     ]
     
-    // ✅ Solo en modo creación: validar nombres, ocupacion y direccion con funciones personalizadas
+    // ✅ Solo en modo creación: validar nombres, ocupacion, direccion y fechaNacimiento con funciones personalizadas
     const nombresValidation = validateNombres(formData.nombres)
     const ocupacionValidation = validateOcupacion(formData.ocupacion)
     const direccionValidation = validateDireccion(formData.direccion)
+    const fechaNacimientoValidation = validateFechaNacimiento(formData.fechaNacimiento)
     
     // Agregar validaciones personalizadas al estado
     const nombresValidationResult = validations.find(v => v.field === 'nombres')
     const ocupacionValidationResult = validations.find(v => v.field === 'ocupacion')
     const direccionValidationResult = validations.find(v => v.field === 'direccion')
+    const fechaNacimientoValidationResult = validations.find(v => v.field === 'fechaNacimiento')
     
     if (!nombresValidationResult || nombresValidationResult.isValid !== nombresValidation.isValid) {
       setValidations(prev => {
@@ -440,8 +488,15 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       })
     }
     
+    if (!fechaNacimientoValidationResult || fechaNacimientoValidationResult.isValid !== fechaNacimientoValidation.isValid) {
+      setValidations(prev => {
+        const filtered = prev.filter(v => v.field !== 'fechaNacimiento')
+        return [...filtered, fechaNacimientoValidation]
+      })
+    }
+    
     return requiredFields.every(field => {
-      // Usar validaciones personalizadas para nombres, ocupacion y direccion
+      // Usar validaciones personalizadas para nombres, ocupacion, direccion y fechaNacimiento
       if (field === 'nombres') {
         return nombresValidation.isValid && formData[field]
       }
@@ -450,6 +505,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       }
       if (field === 'direccion') {
         return direccionValidation.isValid && formData[field]
+      }
+      if (field === 'fechaNacimiento') {
+        return fechaNacimientoValidation.isValid && formData[field]
       }
       
       const validation = validations.find(v => v.field === field)
@@ -512,6 +570,24 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         
         console.log('✅ DEBUG - Activando popup de duplicados (status 409)')
         console.log('✅ DEBUG - Datos del cliente existente:', error.response?.data?.detail?.cliente_existente)
+        console.log('🔍 DEBUG - formData ANTES de mostrar modal:', formData)
+        
+        // ✅ VALIDACIÓN: Verificar que los campos necesarios están llenos
+        if (!formData.direccion || !formData.direccion.trim()) {
+          alert('⚠️ ERROR: Debe completar el campo Dirección antes de continuar')
+          setIsSubmitting(false)
+          return
+        }
+        if (!formData.fechaNacimiento || !formData.fechaNacimiento.trim()) {
+          alert('⚠️ ERROR: Debe completar el campo Fecha de Nacimiento antes de continuar')
+          setIsSubmitting(false)
+          return
+        }
+        if (!formData.ocupacion || !formData.ocupacion.trim()) {
+          alert('⚠️ ERROR: Debe completar el campo Ocupación antes de continuar')
+          setIsSubmitting(false)
+          return
+        }
         
         // Mostrar popup de advertencia con datos del cliente existente
         setDuplicateCedula(formData.cedula)
