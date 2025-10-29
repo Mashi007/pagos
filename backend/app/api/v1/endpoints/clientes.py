@@ -218,8 +218,12 @@ def crear_cliente(
         cliente_dict = cliente_data.model_dump(exclude={"confirm_duplicate"})
 
         # Proporcionar valores por defecto para campos opcionales
-        cliente_dict["modelo_vehiculo"] = cliente_dict.get("modelo_vehiculo") or "Por Definir"
-        cliente_dict["concesionario"] = cliente_dict.get("concesionario") or "Por Definir"
+        cliente_dict["modelo_vehiculo"] = (
+            cliente_dict.get("modelo_vehiculo") or "Por Definir"
+        )
+        cliente_dict["concesionario"] = (
+            cliente_dict.get("concesionario") or "Por Definir"
+        )
         cliente_dict["analista"] = cliente_dict.get("analista") or "Por Definir"
 
         # Sincronizar estado y activo (crear siempre con ACTIVO=True)
