@@ -99,6 +99,7 @@ export interface Prestamo {
   estado: 'DRAFT' | 'EN_REVISION' | 'APROBADO' | 'RECHAZADO'
   usuario_proponente: string
   usuario_aprobador?: string
+  usuario_autoriza?: string
   observaciones?: string
   fecha_registro: string
   fecha_aprobacion?: string
@@ -120,6 +121,7 @@ export interface PrestamoForm {
   tasa_interes?: number
   fecha_base_calculo?: string
   observaciones?: string
+  usuario_autoriza?: string  // Email del usuario que autoriza crear nuevo préstamo
 }
 
 // Tipos para respuestas de API

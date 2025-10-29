@@ -68,6 +68,21 @@ BEGIN
     END IF;
 END $$;
 
+-- Agregar columna usuario_autoriza
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT FROM information_schema.columns 
+        WHERE table_name = 'prestamos' AND column_name = 'usuario_autoriza'
+    ) THEN
+        ALTER TABLE prestamos 
+        ADD COLUMN usuario_autoriza VARCHAR(100);
+        RAISE NOTICE '✅ Columna usuario_autoriza agregada';
+    ELSE
+        RAISE NOTICE '⚠️ Columna usuario_autoriza ya existe';
+    END IF;
+END $$;
+
 -- ============================================
 -- PASO 3: VERIFICAR ESTRUCTURA DE LA TABLA
 -- ============================================
@@ -79,7 +94,7 @@ SELECT
     column_default
 FROM information_schema.columns
 WHERE table_name = 'prestamos'
-    AND column_name IN ('concesionario', 'analista', 'modelo_vehiculo')
+    AND column_name IN ('concesionario', 'analista', 'modelo_vehiculo', 'usuario_autoriza')
 ORDER BY ordinal_position;
 
 -- ============================================

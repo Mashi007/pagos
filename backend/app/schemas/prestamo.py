@@ -41,6 +41,7 @@ class PrestamoCreate(PrestamoBase):
     concesionario: Optional[str] = Field(None, max_length=100)
     analista: Optional[str] = Field(None, max_length=100)
     modelo_vehiculo: Optional[str] = Field(None, max_length=100)
+    usuario_autoriza: Optional[str] = Field(None, max_length=100)
 
 
 class PrestamoUpdate(BaseModel):
@@ -85,6 +86,7 @@ class PrestamoResponse(PrestamoBase):
     estado: str
     usuario_proponente: str
     usuario_aprobador: Optional[str] = None
+    usuario_autoriza: Optional[str] = None
     observaciones: Optional[str] = None
     fecha_registro: datetime
     fecha_aprobacion: Optional[datetime] = None

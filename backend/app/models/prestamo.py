@@ -64,6 +64,9 @@ class Prestamo(Base):
     usuario_aprobador = Column(
         String(100), nullable=True
     )  # Email del admin (se llena al aprobar)
+    usuario_autoriza = Column(
+        String(100), nullable=True
+    )  # Email del usuario que autoriza crear nuevo préstamo cuando ya existe uno
     observaciones = Column(Text, nullable=True)  # Observaciones de aprobación/rechazo
 
     # Fechas de aprobación

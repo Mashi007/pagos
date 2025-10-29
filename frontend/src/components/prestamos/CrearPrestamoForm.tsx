@@ -27,7 +27,10 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useConcesionariosActivos } from '@/hooks/useConcesionarios'
 import { useAnalistasActivos } from '@/hooks/useAnalistas'
 import { useModelosVehiculosActivos } from '@/hooks/useModelosVehiculos'
+import { useSimpleAuth } from '@/store/simpleAuthStore'
+import { prestamoService } from '@/services/prestamoService'
 import { Prestamo, PrestamoForm } from '@/types'
+import { ModalValidacionPrestamoExistente } from './ModalValidacionPrestamoExistente'
 
 interface CrearPrestamoFormProps {
   prestamo?: Prestamo // Préstamo existente para edición
@@ -67,8 +70,14 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const { data: concesionarios = [] } = useConcesionariosActivos()
   const { data: analistas = [] } = useAnalistasActivos()
   const { data: modelosVehiculos = [] } = useModelosVehiculosActivos()
+  const { user } = useSimpleAuth()
 
   const [valorActivo, setValorActivo] = useState<number>(0)
+  
+  // Estados para validación de préstamos existentes
+  const [showModalValidacion, setShowModalValidacion] = useState(false)
+  const [resumenPrestamos, setResumenPrestamos] = useState<any>(null)
+  const [justificacionAutorizacion, setJustificacionAutorizacion] = useState('')
   const [anticipo, setAnticipo] = useState<number>(0)
   const [showAdditionalInfo, setShowAdditionalInfo] = useState(false)
   const [clienteData, setClienteData] = useState<any>(null)
@@ -186,13 +195,39 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       return
     }
 
+    // Si es un nuevo préstamo, verificar si el cliente ya tiene préstamos
+    if (!prestamo && formData.cedula) {
+      try {
+        const resumen = await prestamoService.getResumenPrestamos(formData.cedula)
+        
+        if (resumen.tiene_prestamos && resumen.prestamos && resumen.prestamos.length > 0) {
+          // Mostrar modal de validación
+          setResumenPrestamos(resumen)
+          setShowModalValidacion(true)
+          return // No continuar hasta que se confirme en el modal
+        }
+      } catch (error) {
+        console.error('Error verificando préstamos existentes:', error)
+        // Continuar con el proceso si hay error (no bloquear)
+      }
+    }
+
+    // Proceder con la creación/actualización
+    await crearOActualizarPrestamo()
+  }
+
+  const crearOActualizarPrestamo = async () => {
     try {
       // Preparar datos con numero_cuotas y cuota_periodo
       const prestamoData = {
         ...formData,
         numero_cuotas: numeroCuotas,
         cuota_periodo: cuotaPeriodo,
-        fecha_base_calculo: formData.fecha_base_calculo, // Fecha de desembolso
+        fecha_base_calculo: formData.fecha_base_calculo,
+        usuario_autoriza: !prestamo && justificacionAutorizacion ? user?.email : undefined,
+        observaciones: justificacionAutorizacion 
+          ? `${formData.observaciones || ''}\n\n--- JUSTIFICACIÓN PARA NUEVO PRÉSTAMO ---\n${justificacionAutorizacion}`.trim()
+          : formData.observaciones,
       }
       
       if (prestamo) {
@@ -201,11 +236,9 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
           id: prestamo.id,
           data: prestamoData
         })
-        // El toast ya se muestra en el hook useUpdatePrestamo
       } else {
         // Crear nuevo préstamo
         await createPrestamo.mutateAsync(prestamoData as PrestamoForm)
-        // El toast ya se muestra en el hook useCreatePrestamo
       }
       
       onSuccess()
@@ -214,6 +247,13 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       toast.error('Error al guardar el préstamo')
       console.error('Error saving loan:', error)
     }
+  }
+
+  const handleConfirmarAutorizacion = (justificacion: string) => {
+    setJustificacionAutorizacion(justificacion)
+    setShowModalValidacion(false)
+    // Continuar con la creación del préstamo
+    crearOActualizarPrestamo()
   }
 
   // Verificar permisos de edición
@@ -755,6 +795,21 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
               )}
             </div>
           </form>
+
+          {/* Modal de Validación de Préstamos Existentes */}
+          {showModalValidacion && resumenPrestamos && resumenPrestamos.tiene_prestamos && (
+            <ModalValidacionPrestamoExistente
+              prestamos={resumenPrestamos.prestamos || []}
+              totalSaldo={resumenPrestamos.total_saldo_pendiente || 0}
+              totalCuotasMora={resumenPrestamos.total_cuotas_mora || 0}
+              onConfirm={handleConfirmarAutorizacion}
+              onCancel={() => {
+                setShowModalValidacion(false)
+                setResumenPrestamos(null)
+                setJustificacionAutorizacion('')
+              }}
+            />
+          )}
         </motion.div>
       </motion.div>
     </AnimatePresence>

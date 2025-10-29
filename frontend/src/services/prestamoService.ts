@@ -54,6 +54,26 @@ class PrestamoService {
     return response || []
   }
 
+  // Obtener resumen de préstamos por cédula (saldo, mora, etc.)
+  async getResumenPrestamos(cedula: string): Promise<{
+    tiene_prestamos: boolean
+    total_prestamos: number
+    total_saldo_pendiente?: number
+    total_cuotas_mora?: number
+    prestamos?: Array<{
+      id: number
+      modelo_vehiculo: string
+      total_financiamiento: number
+      saldo_pendiente: number
+      cuotas_en_mora: number
+      estado: string
+      fecha_registro: string | null
+    }>
+  }> {
+    const response = await apiClient.get(`${this.baseUrl}/cedula/${cedula}/resumen`)
+    return response
+  }
+
   // Obtener historial de auditoría de un préstamo
   async getAuditoria(prestamoId: number): Promise<any[]> {
     const response = await apiClient.get<any[]>(`${this.baseUrl}/auditoria/${prestamoId}`)

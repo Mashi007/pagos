@@ -147,7 +147,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       const newFormData = {
         cedula: cliente.cedula || '',
         nombres: nombresValue,  // ✅ nombres unificados
-        telefono: cliente.telefono || '',
+        telefono: extraerNumeroTelefono(cliente.telefono || ''),  // ✅ Extraer solo el número (sin +58)
         email: cliente.email || '',
         direccion: cliente.direccion || '',
         fechaNacimiento: convertirFechaLocal(cliente.fecha_nacimiento || ''), // ✅ Convertir ISO a DD/MM/YYYY
@@ -219,6 +219,46 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     
     return { field: 'direccion', isValid: true, message: 'Dirección válida' }
   }
+
+  // ✅ Validación personalizada para teléfono (10 dígitos, sin empezar por 0)
+  const validateTelefono = (telefono: string): ValidationResult => {
+    if (!telefono || telefono.trim() === '') {
+      return { field: 'telefono', isValid: false, message: 'Teléfono requerido' }
+    }
+    
+    // Remover espacios y caracteres no numéricos
+    const numeroLimpio = telefono.replace(/\D/g, '')
+    
+    // Validar que tenga exactamente 10 dígitos
+    if (numeroLimpio.length !== 10) {
+      return { field: 'telefono', isValid: false, message: 'El teléfono debe tener exactamente 10 dígitos' }
+    }
+    
+    // Validar que no empiece por 0
+    if (numeroLimpio.startsWith('0')) {
+      return { field: 'telefono', isValid: false, message: 'El teléfono no puede empezar por 0' }
+    }
+    
+    // Validar que todos los caracteres sean dígitos (0-9)
+    if (!/^\d{10}$/.test(numeroLimpio)) {
+      return { field: 'telefono', isValid: false, message: 'El teléfono solo puede contener números (0-9)' }
+    }
+    
+    return { field: 'telefono', isValid: true, message: 'Teléfono válido' }
+  }
+  
+  // ✅ Función para extraer el número de teléfono de la BD (+581234567890 → 1234567890)
+  const extraerNumeroTelefono = (telefonoCompleto: string): string => {
+    if (!telefonoCompleto) return ''
+    
+    // Si empieza con +58, eliminar el prefijo
+    if (telefonoCompleto.startsWith('+58')) {
+      return telefonoCompleto.substring(3)
+    }
+    
+    // Si ya es solo el número, devolverlo
+    return telefonoCompleto.replace(/\D/g, '').slice(0, 10)
+  }
   
   const validateFechaNacimiento = (fecha: string): ValidationResult => {
     if (!fecha || fecha.trim() === '') {
@@ -261,10 +301,16 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       return { field: 'fechaNacimiento', isValid: false, message: 'La fecha de nacimiento no puede ser futura o de hoy' }
     }
     
-    // ✅ Validar que tenga al menos 18 años exactos
-    const fecha18 = new Date(anoNum + 18, mesNum - 1, diaNum)
-    if (fecha18 > hoy) {
-      return { field: 'fechaNacimiento', isValid: false, message: 'Debe tener al menos 18 años cumplidos' }
+    // ✅ Validar que tenga al menos 21 años cumplidos
+    const fecha21 = new Date(anoNum + 21, mesNum - 1, diaNum)
+    if (fecha21 > hoy) {
+      return { field: 'fechaNacimiento', isValid: false, message: 'Debe tener al menos 21 años cumplidos' }
+    }
+    
+    // ✅ Validar que tenga como máximo 60 años cumplidos
+    const fecha60 = new Date(anoNum + 60, mesNum - 1, diaNum)
+    if (fecha60 <= hoy) {
+      return { field: 'fechaNacimiento', isValid: false, message: 'No puede tener más de 60 años cumplidos' }
     }
     
     return { field: 'fechaNacimiento', isValid: true, message: 'Fecha válida' }
@@ -368,6 +414,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       validation = validateDireccion(formattedValue)
     } else if (field === 'fechaNacimiento') {
       validation = validateFechaNacimiento(formattedValue)
+    } else if (field === 'telefono') {
+      validation = validateTelefono(formattedValue)
     } else {
       validation = await validateField(field, formattedValue)
     }
@@ -389,11 +437,12 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       'direccion', 'fechaNacimiento', 'ocupacion'
     ]
     
-    // ✅ Solo en modo creación: validar nombres, ocupacion, direccion y fechaNacimiento con funciones personalizadas
+    // ✅ Solo en modo creación: validar nombres, ocupacion, direccion, fechaNacimiento y telefono con funciones personalizadas
     const nombresValidation = validateNombres(formData.nombres)
     const ocupacionValidation = validateOcupacion(formData.ocupacion)
     const direccionValidation = validateDireccion(formData.direccion)
     const fechaNacimientoValidation = validateFechaNacimiento(formData.fechaNacimiento)
+    const telefonoValidation = validateTelefono(formData.telefono)
     
     // Agregar validaciones personalizadas al estado
     const nombresValidationResult = validations.find(v => v.field === 'nombres')

@@ -33,6 +33,7 @@ CREATE TABLE prestamos (
     concesionario VARCHAR(100),
     analista VARCHAR(100),
     modelo_vehiculo VARCHAR(100),
+    usuario_autoriza VARCHAR(100),
     estado VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
     usuario_proponente VARCHAR(100) NOT NULL,
     usuario_aprobador VARCHAR(100),
