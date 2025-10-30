@@ -26,6 +26,38 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("/health")
+def healthcheck_reportes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Verificación rápida del módulo de Reportes y conexión a BD.
+
+    Ejecuta consultas mínimas para confirmar conectividad y disponibilidad de datos
+    necesarios para la generación de reportes de cartera y pagos.
+    """
+    try:
+        logger.info("[reportes.health] Verificando conexión a BD y métricas básicas")
+
+        total_prestamos = db.query(func.count(Prestamo.id)).scalar() or 0
+        total_pagos = db.query(func.count(Pago.id)).scalar() or 0
+
+        return {
+            "status": "ok",
+            "database": True,
+            "metrics": {
+                "total_prestamos": int(total_prestamos),
+                "total_pagos": int(total_pagos),
+            },
+            "timestamp": datetime.now(),
+        }
+    except Exception as e:
+        logger.error(f"[reportes.health] Error: {e}")
+        raise HTTPException(
+            status_code=500, detail="Error de conexión o consulta a la base de datos"
+        )
+
+
 class ReporteCartera(BaseModel):
     """Schema para reporte de cartera"""
 
@@ -59,6 +91,7 @@ def reporte_cartera(
 ):
     """Genera reporte de cartera al día de corte."""
     try:
+        logger.info("[reportes.cartera] Iniciando generación de reporte")
         if not fecha_corte:
             fecha_corte = date.today()
 
@@ -151,7 +184,7 @@ def reporte_cartera(
                 }
             )
 
-        return ReporteCartera(
+        resultado = ReporteCartera(
             fecha_corte=fecha_corte,
             cartera_total=cartera_total,
             capital_pendiente=capital_pendiente,
@@ -162,6 +195,8 @@ def reporte_cartera(
             distribucion_por_monto=distribucion_por_monto,
             distribucion_por_mora=distribucion_por_mora,
         )
+        logger.info("[reportes.cartera] Reporte generado correctamente")
+        return resultado
 
     except Exception as e:
         logger.error(f"Error generando reporte de cartera: {e}")
@@ -179,6 +214,9 @@ def reporte_pagos(
 ):
     """Genera reporte de pagos en un rango de fechas."""
     try:
+        logger.info(
+            f"[reportes.pagos] Generando reporte pagos desde {fecha_inicio} hasta {fecha_fin}"
+        )
         # Total de pagos
         total_pagos = db.query(func.sum(Pago.monto)).filter(
             Pago.fecha_pago >= fecha_inicio,
@@ -224,7 +262,7 @@ def reporte_pagos(
             .all()
         )
 
-        return ReportePagos(
+        resultado = ReportePagos(
             fecha_inicio=fecha_inicio,
             fecha_fin=fecha_fin,
             total_pagos=total_pagos,
@@ -238,6 +276,8 @@ def reporte_pagos(
                 for item in pagos_por_dia
             ],
         )
+        logger.info("[reportes.pagos] Reporte generado correctamente")
+        return resultado
 
     except Exception as e:
         logger.error(f"Error generando reporte de pagos: {e}")
@@ -255,6 +295,7 @@ def exportar_reporte_cartera(
 ):
     """Exporta reporte de cartera en Excel o PDF."""
     try:
+        logger.info(f"[reportes.exportar] Exportando reporte cartera en formato {formato}")
         # Obtener datos del reporte
         reporte = reporte_cartera(fecha_corte, db, current_user)
 
@@ -290,13 +331,15 @@ def exportar_reporte_cartera(
             wb.save(output)
             output.seek(0)
 
-            return StreamingResponse(
+            response = StreamingResponse(
                 output,
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 headers={
                     "Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.xlsx"
                 },
             )
+            logger.info("[reportes.exportar] Excel generado correctamente")
+            return response
 
         elif formato.lower() == "pdf":
             # Crear archivo PDF
@@ -329,13 +372,15 @@ def exportar_reporte_cartera(
             c.save()
             output.seek(0)
 
-            return StreamingResponse(
+            response = StreamingResponse(
                 output,
                 media_type="application/pdf",
                 headers={
                     "Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.pdf"
                 },
             )
+            logger.info("[reportes.exportar] PDF generado correctamente")
+            return response
 
         else:
             raise HTTPException(

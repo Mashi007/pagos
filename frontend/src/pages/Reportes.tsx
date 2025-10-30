@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   FileText,
@@ -97,6 +97,7 @@ export function Reportes() {
   const [filterEstado, setFilterEstado] = useState('Todos')
   const [selectedPeriodo, setSelectedPeriodo] = useState('mes')
   const [generandoReporte, setGenerandoReporte] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
   // Obtener resumen del dashboard para KPIs
   const { data: resumenData, isLoading: loadingResumen } = useQuery({
@@ -127,6 +128,9 @@ export function Reportes() {
         
         toast.dismiss()
         toast.success(`Reporte de ${tipo} generado exitosamente`)
+        // Refrescar KPIs/resumen tras descarga
+        queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
+        queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else if (tipo === 'PAGOS') {
         // Para pagos, necesitamos fechas de inicio y fin
         const fechaFin = new Date()
@@ -141,6 +145,9 @@ export function Reportes() {
         toast.dismiss()
         toast.success(`Reporte de ${tipo} obtenido exitosamente`)
         console.log('Reporte de pagos:', reporte)
+        // Refrescar KPIs/resumen tras consulta
+        queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
+        queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else {
         toast.dismiss()
         toast.info(`Generación de reporte ${tipo} próximamente disponible`)

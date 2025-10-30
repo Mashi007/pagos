@@ -21,6 +21,7 @@ from app.schemas.auth import (
 )
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
+from app.models.auditoria import Auditoria
 from app.utils.validators import validate_password_strength
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,26 @@ async def login(
         )
 
         logger.info(f"Login exitoso para: {login_data.email}")
+
+        # Registrar auditoría de LOGIN
+        try:
+            ip = request.client.host if request and request.client else None
+            ua = request.headers.get("user-agent") if request else None
+            audit = Auditoria(
+                usuario_id=user.id,
+                accion="LOGIN",
+                entidad="USUARIOS",
+                entidad_id=user.id,
+                detalles="Inicio de sesión",
+                ip_address=ip,
+                user_agent=ua,
+                exito="EXITOSO",
+            )
+            db.add(audit)
+            db.commit()
+        except Exception as e:
+            # No bloquear login por auditoría
+            logger.warning(f"No se pudo registrar auditoría LOGIN: {e}")
 
         # Preparar información del usuario para la respuesta
         user_info = {
@@ -255,3 +276,38 @@ async def options_handler(request: Request, response: Response):
     """
     add_cors_headers(request, response)
     return {"message": "OK"}
+
+
+@router.post("/logout")
+async def logout(
+    request: Request,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    🚪 Logout del usuario actual: registra evento de auditoría
+    """
+    try:
+        add_cors_headers(request, response)
+
+        ip = request.client.host if request and request.client else None
+        ua = request.headers.get("user-agent") if request else None
+
+        audit = Auditoria(
+            usuario_id=current_user.id,
+            accion="LOGOUT",
+            entidad="USUARIOS",
+            entidad_id=current_user.id,
+            detalles="Cierre de sesión",
+            ip_address=ip,
+            user_agent=ua,
+            exito="EXITOSO",
+        )
+        db.add(audit)
+        db.commit()
+
+        return {"message": "Sesión cerrada"}
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"No se pudo registrar auditoría LOGOUT: {e}")
+        return {"message": "Sesión cerrada"}
