@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, verify_password
+from app.models.auditoria import Auditoria
 from app.models.user import User
 from app.schemas.auth import (
     ChangePasswordRequest,
@@ -21,7 +22,6 @@ from app.schemas.auth import (
 )
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
-from app.models.auditoria import Auditoria
 from app.utils.validators import validate_password_strength
 
 logger = logging.getLogger(__name__)

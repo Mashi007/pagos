@@ -226,11 +226,15 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       errors.push('Debe seleccionar un Modelo de Vehículo')
     }
 
-    // Si hay errores, mostrar mensajes
+    // Si hay errores, mostrar notificación consolidada y bloquear envío
     if (errors.length > 0) {
-      errors.forEach(error => {
-        toast.error(error)
-      })
+      const listado = errors.map(e => `• ${e}`).join('\n')
+      toast.error(`Faltan datos obligatorios:\n${listado}`)
+      // Desplazar al inicio del formulario para que el operador corrija
+      try {
+        const formEl = (e.target as HTMLFormElement)
+        formEl?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      } catch {}
       return
     }
 
