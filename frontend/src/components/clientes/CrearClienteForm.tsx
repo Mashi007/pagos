@@ -441,27 +441,29 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     return { field: 'fechaNacimiento', isValid: true, message: 'Fecha válida' }
   }
   
-  // ✅ Función para formatear texto a Title Case (primera letra mayúscula)
+  // ✅ Función para formatear texto a Title Case preservando espacio final mientras se escribe
   const toTitleCase = (text: string): string => {
-    if (!text || text.trim() === '') return text
-    
-    return text
+    if (!text) return text
+
+    // Detectar si el usuario dejó un espacio al final (para agregar otra palabra)
+    const endsWithSpace = /\s$/.test(text)
+
+    // Normalizar múltiples espacios internos a uno, y capitalizar palabras
+    const formatted = text
       .toLowerCase()
-      .split(' ')
-      .map(word => {
-        if (word.length === 0) return word
-        // Primera letra en mayúscula, resto en minúscula
-        return word.charAt(0).toUpperCase() + word.slice(1)
-      })
+      .split(/\s+/)
+      .filter(w => w.length > 0)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ')
-      .trim()
+
+    // Preservar un espacio al final si el usuario lo tecleó
+    return endsWithSpace ? formatted + ' ' : formatted
   }
 
   // ✅ Función para formatear nombres a Title Case en tiempo real (primera letra mayúscula)
   const formatNombres = (text: string): string => {
-    if (!text || text.trim() === '') return text
-    
-    // Aplicar Title Case: primera letra de cada palabra en mayúscula
+    if (!text) return text
+    // Aplicar Title Case preservando espacio final (no hacer trim aquí)
     return toTitleCase(text)
   }
 
