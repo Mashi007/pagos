@@ -135,6 +135,8 @@ declare module '@/components/ui/searchable-select' {
     onChange: (value: string) => void
     placeholder?: string
     className?: string
+    disabled?: boolean
+    onSearch?: (query: string) => void
   }
   export const SearchableSelect: React.FC<SearchableSelectProps>
 }

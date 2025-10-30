@@ -320,7 +320,7 @@ async def logout(
             detalles="Cierre de sesión",
             ip_address=ip,
             user_agent=ua,
-            exito="EXITOSO",
+            exito=True,
         )
         db.add(audit)
         db.commit()
