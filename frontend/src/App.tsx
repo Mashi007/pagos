@@ -34,6 +34,7 @@ const Cobranzas = lazy(() => import('@/pages/Cobranzas').then(module => ({ defau
 const Auditoria = lazy(() => import('@/pages/Auditoria').then(module => ({ default: module.Auditoria })))
 const Notificaciones = lazy(() => import('@/pages/Notificaciones').then(module => ({ default: module.Notificaciones })))
 const Programador = lazy(() => import('@/pages/Programador').then(module => ({ default: module.Programador })))
+const Plantillas = lazy(() => import('@/pages/Plantillas').then(module => ({ default: module.Plantillas })))
 const Configuracion = lazy(() => import('@/pages/Configuracion').then(module => ({ default: module.Configuracion })))
 const Analistas = lazy(() => import('@/pages/Analistas').then(module => ({ default: module.Analistas })))
 const PagosPage = lazy(() => import('@/pages/PagosPage').then(module => ({ default: module.PagosPage })))
@@ -193,6 +194,16 @@ function App() {
 
           {/* Notificaciones */}
           <Route path="notificaciones" element={<Notificaciones />} />
+
+          {/* Herramientas: Plantillas (solo admin) */}
+          <Route
+            path="herramientas/plantillas"
+            element={
+              <SimpleProtectedRoute requireAdmin={true}>
+                <Plantillas />
+              </SimpleProtectedRoute>
+            }
+          />
 
           {/* Scheduler */}
           <Route

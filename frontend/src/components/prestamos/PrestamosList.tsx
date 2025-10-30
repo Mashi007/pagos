@@ -323,15 +323,7 @@ export function PrestamosList() {
                                           </Button>
                                         )}
 
-                            {/* Edición deshabilitada por política: no editable */}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled
-                              title="La edición de préstamos está deshabilitada"
-                            >
-                              <Lock className="h-4 w-4 text-gray-400" />
-                            </Button>
+                            {/* Editar removido por política: no editable */}
                             
                             {/* Botón Eliminar - Solo Admin */}
                             {canDeletePrestamo() ? (

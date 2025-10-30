@@ -115,6 +115,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
       children: [
         { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
+        // Solo Admin: Plantillas de notificaciones
+        ...(user?.is_admin ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: Mail }] : []),
         { title: 'Programador', href: '/scheduler', icon: Calendar },
         { title: 'Auditoría', href: '/auditoria', icon: Shield },
       ],
