@@ -1,11 +1,13 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const API_URL = process.env.VITE_API_BASE_URL || process.env.VITE_API_URL || 'http://localhost:8080';
 
 // ============================================
 // SECURITY HEADERS - OWASP Best Practices
@@ -36,7 +38,7 @@ app.use((req, res, next) => {
     "style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' data: https:; " +
     "font-src 'self' data:; " +
-    "connect-src 'self' " + (process.env.VITE_API_URL || 'http://localhost:8080')
+    "connect-src 'self' " + API_URL
   );
   
   // Referrer Policy
@@ -55,6 +57,21 @@ app.use(express.static(path.join(__dirname, 'dist'), {
   lastModified: true
 }));
 
+// ============================================
+// PROXY /api -> Backend (Render)
+// ============================================
+if (API_URL) {
+  console.log(`➡️  Proxy de /api hacia: ${API_URL}`);
+  app.use(
+    '/api',
+    createProxyMiddleware({
+      target: API_URL,
+      changeOrigin: true,
+      xfwd: true,
+    })
+  );
+}
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -65,18 +82,9 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Manejar SPA routing - todas las rutas sirven index.html EXCEPTO /api/*
+// Manejar SPA routing - todas las rutas sirven index.html (el proxy ya atendió /api/*)
 app.get('*', (req, res) => {
-  // ✅ CORRECCIÓN: No interceptar rutas de API
-  if (req.path.startsWith('/api/')) {
-    console.log(`🚫 Ruta de API interceptada por frontend: ${req.path} - Debería ir al backend`);
-    return res.status(404).json({ 
-      error: 'API endpoint not found on frontend server',
-      message: 'Esta ruta debe ser manejada por el backend',
-      path: req.path
-    });
-  }
-  
+  // El proxy de /api maneja las APIs; aquí solo servimos la SPA
   console.log(`📄 Sirviendo index.html para ruta: ${req.path}`);
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
@@ -89,6 +97,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📡 Puerto: ${PORT}`);
   console.log(`📁 Directorio: ${path.join(__dirname, 'dist')}`);
   console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 API URL: ${process.env.VITE_API_URL || 'No configurado'}`);
+  console.log(`🔗 API URL: ${API_URL || 'No configurado'}`);
   console.log('✅ Servidor listo para recibir requests');
 });
