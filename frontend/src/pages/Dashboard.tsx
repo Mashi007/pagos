@@ -356,19 +356,8 @@ export function Dashboard() {
     }
   }
 
-  // KPIs Principales (se eliminaron KPIs de usuarios por solicitud)
-  const kpiCards = [
-    {
-      title: 'Cartera Total',
-      value: formatCurrency(data.cartera_total),
-      description: 'Total de préstamos activos',
-      icon: DollarSign,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-      variacion: calcularVariacion(data.cartera_total, data.cartera_anterior),
-      status: 'excellent'
-    }
-  ]
+  // KPIs principales eliminados por solicitud
+  const kpiCards: any[] = []
 
   const progressPercentage = (data.avance_meta / data.meta_mensual) * 100
 

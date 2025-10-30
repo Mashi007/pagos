@@ -11,6 +11,7 @@ from app.models.cliente import Cliente
 from app.models.notificacion import Notificacion
 from app.models.notificacion_plantilla import NotificacionPlantilla
 from app.models.prestamo import Prestamo
+from app.models.auditoria import Auditoria
 from app.models.user import User
 from app.schemas.notificacion_plantilla import (
     NotificacionPlantillaCreate,
@@ -329,6 +330,21 @@ def crear_plantilla(
         db.commit()
         db.refresh(nueva_plantilla)
 
+        # Auditoría
+        try:
+            audit = Auditoria(
+                usuario_id=current_user.id,
+                accion="CREATE",
+                entidad="NOTIFICACION_PLANTILLA",
+                entidad_id=nueva_plantilla.id,
+                detalles=f"Creó plantilla {nueva_plantilla.nombre}",
+                exito="EXITOSO",
+            )
+            db.add(audit)
+            db.commit()
+        except Exception as e:
+            logger.warning(f"No se pudo registrar auditoría creación plantilla: {e}")
+
         return nueva_plantilla
 
     except HTTPException:
@@ -365,6 +381,21 @@ def actualizar_plantilla(
         db.commit()
         db.refresh(plantilla_existente)
 
+        # Auditoría
+        try:
+            audit = Auditoria(
+                usuario_id=current_user.id,
+                accion="UPDATE",
+                entidad="NOTIFICACION_PLANTILLA",
+                entidad_id=plantilla_id,
+                detalles=f"Actualizó plantilla {plantilla_existente.nombre}",
+                exito="EXITOSO",
+            )
+            db.add(audit)
+            db.commit()
+        except Exception as e:
+            logger.warning(f"No se pudo registrar auditoría actualización plantilla: {e}")
+
         return plantilla_existente
 
     except HTTPException:
@@ -392,8 +423,25 @@ def eliminar_plantilla(
         if not plantilla:
             raise HTTPException(status_code=404, detail="Plantilla no encontrada")
 
+        plantilla_id_ref = plantilla.id
+        nombre_ref = plantilla.nombre
         db.delete(plantilla)
         db.commit()
+
+        # Auditoría
+        try:
+            audit = Auditoria(
+                usuario_id=current_user.id,
+                accion="DELETE",
+                entidad="NOTIFICACION_PLANTILLA",
+                entidad_id=plantilla_id_ref,
+                detalles=f"Eliminó plantilla {nombre_ref}",
+                exito="EXITOSO",
+            )
+            db.add(audit)
+            db.commit()
+        except Exception as e:
+            logger.warning(f"No se pudo registrar auditoría eliminación plantilla: {e}")
 
         return {"mensaje": "Plantilla eliminada exitosamente"}
 
@@ -428,6 +476,54 @@ def obtener_plantilla(
         raise
     except Exception as e:
         logger.error(f"Error obteniendo plantilla: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/plantillas/{plantilla_id}/export")
+def exportar_plantilla(
+    plantilla_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exporta una plantilla en formato JSON y registra auditoría"""
+    try:
+        plantilla = (
+            db.query(NotificacionPlantilla)
+            .filter(NotificacionPlantilla.id == plantilla_id)
+            .first()
+        )
+        if not plantilla:
+            raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+
+        data = {
+            "id": plantilla.id,
+            "nombre": plantilla.nombre,
+            "tipo": plantilla.tipo,
+            "asunto": plantilla.asunto,
+            "cuerpo": plantilla.cuerpo,
+            "activa": bool(plantilla.activa),
+        }
+
+        # Auditoría
+        try:
+            audit = Auditoria(
+                usuario_id=current_user.id,
+                accion="EXPORT",
+                entidad="NOTIFICACION_PLANTILLA",
+                entidad_id=plantilla.id,
+                detalles=f"Exportó plantilla {plantilla.nombre}",
+                exito="EXITOSO",
+            )
+            db.add(audit)
+            db.commit()
+        except Exception as e:
+            logger.warning(f"No se pudo registrar auditoría exportación plantilla: {e}")
+
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exportando plantilla: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
