@@ -47,6 +47,8 @@ class Notificacion(Base):
 
     # Contenido
     tipo = Column(String(20), nullable=False, index=True)  # EMAIL, SMS, WHATSAPP
+    canal = Column(String(20), nullable=True, index=True)
+    asunto = Column(String(255), nullable=True)
     mensaje = Column(Text, nullable=False)
 
     # Estado y control
@@ -107,6 +109,15 @@ class Notificacion(Base):
         """Marca la notificación como leída"""
         if str(self.estado) == EstadoNotificacion.ENVIADA.value:
             self.leida = True
+
+    # Propiedades de compatibilidad para esquemas de respuesta
+    @property
+    def fecha_envio(self):
+        return self.enviada_en
+
+    @property
+    def fecha_creacion(self):
+        return self.created_at
 
     @classmethod
     def crear_recordatorio_pago(

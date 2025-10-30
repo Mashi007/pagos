@@ -29,6 +29,53 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@router.get("/health")
+def healthcheck_cobranzas(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Verificación rápida del módulo de Cobranzas y conexión a BD para Dashboard.
+
+    Retorna métricas mínimas que confirman conectividad a la base de datos
+    y disponibilidad de datos para alimentar el dashboard.
+    """
+    try:
+        hoy = date.today()
+
+        # Prueba simple de consulta (usa dependencias y pool configurado)
+        total_cuotas = db.query(func.count(Cuota.id)).scalar() or 0
+
+        # Métricas clave de cobranzas para dashboard
+        cuotas_vencidas = (
+            db.query(func.count(Cuota.id))
+            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
+            .scalar()
+            or 0
+        )
+
+        monto_vencido = (
+            db.query(func.sum(Cuota.monto_cuota))
+            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
+            .scalar()
+            or 0.0
+        )
+
+        return {
+            "status": "ok",
+            "database": True,
+            "metrics": {
+                "total_cuotas": int(total_cuotas),
+                "cuotas_vencidas": int(cuotas_vencidas),
+                "monto_vencido": float(monto_vencido),
+            },
+            "fecha_corte": hoy.isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Healthcheck cobranzas error: {e}")
+        raise HTTPException(status_code=500, detail="Error de conexión o consulta a la base de datos")
+
+
 @router.get("/clientes-atrasados")
 def obtener_clientes_atrasados(
     dias_retraso: Optional[int] = Query(
