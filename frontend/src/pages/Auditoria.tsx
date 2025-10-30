@@ -29,7 +29,7 @@ export function Auditoria() {
     orden: 'desc'
   })
 
-  // Cargar auditoría al montar el componente y auto-actualizar (polling)
+  // Cargar auditoría al montar el componente y auto-actualizar (polling cada 30 min)
   useEffect(() => {
     cargarAuditoria()
     cargarEstadisticas()
@@ -37,7 +37,7 @@ export function Auditoria() {
     const interval = setInterval(() => {
       cargarAuditoria()
       cargarEstadisticas()
-    }, 10000) // 10s
+    }, 30 * 60 * 1000) // 30 minutos
 
     return () => clearInterval(interval)
   }, [currentPage, filtros])
@@ -246,6 +246,8 @@ export function Auditoria() {
                   <SelectItem value="CLIENTES">Clientes</SelectItem>
                   <SelectItem value="PRESTAMOS">Préstamos</SelectItem>
                   <SelectItem value="PAGOS">Pagos</SelectItem>
+                  <SelectItem value="COBRANZAS">Cobranzas</SelectItem>
+                  <SelectItem value="REPORTES">Reportes</SelectItem>
                   <SelectItem value="AUDITORIA">Auditoría</SelectItem>
                   <SelectItem value="CONFIGURACION">Configuración</SelectItem>
                 </SelectContent>

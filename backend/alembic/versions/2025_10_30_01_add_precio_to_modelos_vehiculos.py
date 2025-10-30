@@ -1,7 +1,7 @@
 """add precio and audit fields to modelos_vehiculos
 
-Revision ID: add_precio_modelos_vehiculos_20251030
-Revises: 
+Revision ID: 20251030_modelos_vehiculos_precio
+Revises: 20251030_actualizar_catalogos
 Create Date: 2025-10-30
 """
 
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'add_precio_modelos_vehiculos_20251030'
-down_revision = None  # ACTUALIZAR con la revisión anterior si aplica
+revision = '20251030_modelos_vehiculos_precio'
+down_revision = '20251030_actualizar_catalogos'
 branch_labels = None
 depends_on = None
 
