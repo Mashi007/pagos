@@ -26,7 +26,7 @@
     "start": "npm run setup && npm run dev",
     "serve": "serve -s dist -l $PORT",
     "render-build": "npm install && npm run build",
-    "render-start": "serve dist -l $PORT -s --single"
+    "render-start": "node server.js"
   },
   "dependencies": {
     "react": "^18.2.0",
