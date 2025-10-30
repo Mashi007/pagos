@@ -44,16 +44,22 @@ class Auditoria(Base):
     accion = Column(
         String(50), nullable=False, index=True
     )  # CREATE, UPDATE, DELETE, etc.
-    entidad = Column(String(50), nullable=False, index=True)  # Cliente, Prestamo, etc.
-    entidad_id = Column(Integer, nullable=True, index=True)  # ID del registro afectado
+    # Compatibilidad de nombres con BD existente: modulo/registro_id/descripcion/resultado
+    entidad = Column(
+        "modulo", String(50), nullable=False, index=True
+    )  # Cliente, Prestamo, etc.
+    entidad_id = Column(
+        "registro_id", Integer, nullable=True, index=True
+    )  # ID del registro afectado
 
     # Información adicional
-    detalles = Column(Text, nullable=True)  # Descripción detallada
+    detalles = Column("descripcion", Text, nullable=True)  # Descripción detallada
     ip_address = Column(String(45), nullable=True)  # IPv4 o IPv6
     user_agent = Column(Text, nullable=True)  # Navegador/dispositivo
 
     # Resultado de la acción
-    exito = Column(Boolean, default=True, nullable=False)  # Si la acción fue exitosa
+    # En algunas BD este campo es texto ('EXITOSO'/'FALLIDO'). Usamos String para compatibilidad
+    exito = Column("resultado", String(20), nullable=True)
     mensaje_error = Column(Text, nullable=True)  # Mensaje de error si falló
 
     # Timestamps

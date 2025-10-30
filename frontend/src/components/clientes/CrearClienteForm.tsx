@@ -30,6 +30,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { clienteService } from '@/services/clienteService'
 import { validadoresService } from '@/services/validadoresService'
 import { ExcelUploader } from './ExcelUploader'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 
 interface FormData {
   // Datos personales - OBLIGATORIOS
@@ -71,6 +72,8 @@ interface CrearClienteFormProps {
 }
 
 export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated, onOpenEditExisting }: CrearClienteFormProps) {
+  // Cierre global con ESC
+  useEscapeClose(onClose, true)
   // ✅ Función para convertir DD/MM/YYYY a YYYY-MM-DD
   const convertirFechaAISO = (fechaDDMMYYYY: string): string => {
     // Si la fecha ya está en formato ISO (YYYY-MM-DD), devolverla tal cual

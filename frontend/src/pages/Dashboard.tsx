@@ -356,28 +356,8 @@ export function Dashboard() {
     }
   }
 
-  // KPIs Principales con tendencias (sin Total Usuarios - eliminado según solicitud)
+  // KPIs Principales (se eliminaron KPIs de usuarios por solicitud)
   const kpiCards = [
-    {
-      title: 'Usuarios Activos',
-      value: usuariosLoading ? '...' : usuariosActivos.toString(),
-      description: usuariosError ? 'Error al cargar' : `${porcentajeActivos.toFixed(1)}% del total`,
-      icon: CheckCircle,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-      variacion: { valor: 0, esPositivo: true, icono: TrendingUp, color: 'text-green-600', bgColor: 'bg-green-50' },
-      status: 'good'
-    },
-    {
-      title: 'Administradores',
-      value: usuariosLoading ? '...' : usuariosAdmin.toString(),
-      description: usuariosError ? 'Error al cargar' : 'Acceso completo al sistema',
-      icon: Shield,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-      variacion: { valor: 0, esPositivo: true, icono: TrendingUp, color: 'text-gray-600', bgColor: 'bg-gray-50' },
-      status: 'warning'
-    },
     {
       title: 'Cartera Total',
       value: formatCurrency(data.cartera_total),

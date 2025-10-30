@@ -18,6 +18,20 @@ export interface DashboardFiltros {
  * Cualquier KPI nuevo debe usar este hook para aplicar filtros automáticamente
  */
 export function useDashboardFiltros(filtros: DashboardFiltros) {
+  // Normaliza valores provenientes del backend que puedan venir con forma de tupla string: ("VALOR",)
+  const normalizarValor = (valor?: string): string | undefined => {
+    if (!valor) return valor
+    let s = String(valor).trim()
+    // Casos: ('ABC',) o ("ABC",)
+    if ((s.startsWith("('") && s.endsWith("',)")) || (s.startsWith('(\"') && s.endsWith('\",)'))) {
+      s = s.slice(2, -2)
+    } else if (s.startsWith('(') && s.endsWith(',)')) {
+      s = s.slice(1, -2)
+    }
+    // Remover comillas sobrantes en extremos
+    s = s.replace(/^['\"]/,'').replace(/['\"]$/,'').trim()
+    return s
+  }
   /**
    * Construye parámetros de query string para endpoints de dashboard
    * Uso: const params = construirParams(); apiClient.get(`/endpoint?${params}`)
@@ -28,9 +42,9 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
       params.append('periodo', periodo)
       
       // Aplicar todos los filtros disponibles
-      if (filtros.analista) params.append('analista', filtros.analista)
-      if (filtros.concesionario) params.append('concesionario', filtros.concesionario)
-      if (filtros.modelo) params.append('modelo', filtros.modelo)
+      if (filtros.analista) params.append('analista', normalizarValor(filtros.analista)!)
+      if (filtros.concesionario) params.append('concesionario', normalizarValor(filtros.concesionario)!)
+      if (filtros.modelo) params.append('modelo', normalizarValor(filtros.modelo)!)
       if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio)
       if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin)
       if (filtros.consolidado) params.append('consolidado', 'true')
@@ -52,9 +66,9 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
       fecha_fin?: string
     } => {
       const obj: any = {}
-      if (filtros.analista) obj.analista = filtros.analista
-      if (filtros.concesionario) obj.concesionario = filtros.concesionario
-      if (filtros.modelo) obj.modelo = filtros.modelo
+      if (filtros.analista) obj.analista = normalizarValor(filtros.analista)
+      if (filtros.concesionario) obj.concesionario = normalizarValor(filtros.concesionario)
+      if (filtros.modelo) obj.modelo = normalizarValor(filtros.modelo)
       if (filtros.fecha_inicio) obj.fecha_inicio = filtros.fecha_inicio
       if (filtros.fecha_fin) obj.fecha_fin = filtros.fecha_fin
       return obj

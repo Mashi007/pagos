@@ -14,6 +14,7 @@ import {
   CheckCircle2
 } from 'lucide-react'
 import { useDebounce } from '@/hooks/useDebounce'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,6 +43,9 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const createPrestamo = useCreatePrestamo()
   const updatePrestamo = useUpdatePrestamo()
   const { canEditPrestamo, canApprovePrestamo } = usePermissions()
+  
+  // Cerrar con ESC
+  useEscapeClose(onClose, true)
   
   // Función para obtener la fecha actual en formato YYYY-MM-DD
   const getCurrentDate = () => {
@@ -322,13 +326,6 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
           exit={{ scale: 0.95, y: 20 }}
           className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => {
-            // Prevenir cierre con Escape
-            if (e.key === 'Escape') {
-              e.preventDefault()
-              e.stopPropagation()
-            }
-          }}
         >
           <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
             <h2 className="text-xl font-bold">

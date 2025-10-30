@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/popover'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
@@ -85,6 +86,8 @@ interface EvaluacionFormData {
 }
 
 export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: EvaluacionRiesgoFormProps) {
+  // Permitir cerrar con Escape
+  useEscapeClose(onClose, true)
   const { isAdmin } = usePermissions()
   const [isLoading, setIsLoading] = useState(false)
   const [isAprobando, setIsAprobando] = useState(false)

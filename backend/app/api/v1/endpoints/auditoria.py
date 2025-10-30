@@ -108,7 +108,11 @@ def listar_auditoria(
             usuario_email_val = getattr(r.usuario, "email", None)
             modulo_val = getattr(r, "entidad", None)
             descripcion_val = getattr(r, "detalles", None)
-            resultado_val = "EXITOSO" if getattr(r, "exito", True) else "FALLIDO"
+            exito_attr = getattr(r, "exito", None)
+            if isinstance(exito_attr, bool):
+                resultado_val = "EXITOSO" if exito_attr else "FALLIDO"
+            else:
+                resultado_val = exito_attr or "EXITOSO"
             unified.append(
                 {
                     "id": r.id,
@@ -362,8 +366,12 @@ def _crear_excel_auditoria(registros):
 
     # Datos
     for row, registro in enumerate(registros, 2):
-        ws.cell(row=row, column=1, value=registro.fecha)
-        ws.cell(row=row, column=2, value=registro.usuario_email)
+        ws.cell(row=row, column=1, value=getattr(registro, "fecha", None))
+        # Intentar email directo o desde relación usuario
+        usuario_email = getattr(registro, "usuario_email", None)
+        if not usuario_email and getattr(registro, "usuario", None) is not None:
+            usuario_email = getattr(registro.usuario, "email", None)
+        ws.cell(row=row, column=2, value=usuario_email)
         # El modelo base no tiene 'modulo', usamos 'entidad' y mapeamos resultado
         ws.cell(row=row, column=3, value=getattr(registro, "entidad", None))
         ws.cell(row=row, column=4, value=registro.accion)
