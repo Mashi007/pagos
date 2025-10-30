@@ -13,6 +13,7 @@ interface SearchableSelectProps {
   placeholder?: string
   className?: string
   disabled?: boolean
+  onSearch?: (query: string) => void
 }
 
 export function SearchableSelect({
@@ -21,7 +22,8 @@ export function SearchableSelect({
   onChange,
   placeholder = "Buscar...",
   className,
-  disabled = false
+  disabled = false,
+  onSearch
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -124,7 +126,10 @@ export function SearchableSelect({
                 ref={inputRef}
                 type="text"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value)
+                  onSearch?.(e.target.value)
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder={`Buscar ${placeholder.toLowerCase()}...`}
                 className="w-full pl-10 pr-10 py-3 text-base bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
