@@ -359,7 +359,9 @@ def exportar_auditoria(
             db.add(audit)
             db.commit()
         except Exception as e:
-            logger.warning(f"No se pudo registrar auditoría exportación de auditoría: {e}")
+            logger.warning(
+                f"No se pudo registrar auditoría exportación de auditoría: {e}"
+            )
 
         return Response(
             content=output.getvalue(),
