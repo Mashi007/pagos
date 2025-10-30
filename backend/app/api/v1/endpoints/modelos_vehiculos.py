@@ -140,7 +140,9 @@ def actualizar_modelo_vehiculo(
     # Actualizar timestamp manualmente
     modelo.updated_at = datetime.utcnow()
     modelo.fecha_actualizacion = datetime.utcnow()
-    modelo.actualizado_por = current_user.email if getattr(current_user, "email", None) else None
+    modelo.actualizado_por = (
+        current_user.email if getattr(current_user, "email", None) else None
+    )
 
     db.commit()
     db.refresh(modelo)
@@ -181,13 +183,17 @@ def importar_modelos_vehiculos(
     try:
         import pandas as pd
 
-        if not archivo.filename.lower().endswith(('.xlsx', '.xls')):
-            raise HTTPException(status_code=400, detail="Formato inválido. Use Excel .xlsx/.xls")
+        if not archivo.filename.lower().endswith((".xlsx", ".xls")):
+            raise HTTPException(
+                status_code=400, detail="Formato inválido. Use Excel .xlsx/.xls"
+            )
 
         df = pd.read_excel(archivo.file)
         columnas = {c.lower().strip() for c in df.columns}
         if "modelo" not in columnas or "precio" not in columnas:
-            raise HTTPException(status_code=400, detail="Columnas requeridas: modelo, precio")
+            raise HTTPException(
+                status_code=400, detail="Columnas requeridas: modelo, precio"
+            )
 
         creados = 0
         actualizados = 0
@@ -200,14 +206,14 @@ def importar_modelos_vehiculos(
             fecha_act = row.get("fecha_actualizacion")
 
             existente = (
-                db.query(ModeloVehiculo)
-                .filter(ModeloVehiculo.modelo == nombre)
-                .first()
+                db.query(ModeloVehiculo).filter(ModeloVehiculo.modelo == nombre).first()
             )
             if existente:
                 existente.precio = precio_val
                 existente.fecha_actualizacion = (
-                    pd.to_datetime(fecha_act).to_pydatetime() if pd.notna(fecha_act) else datetime.utcnow()
+                    pd.to_datetime(fecha_act).to_pydatetime()
+                    if pd.notna(fecha_act)
+                    else datetime.utcnow()
                 )
                 existente.actualizado_por = (
                     current_user.email if getattr(current_user, "email", None) else None
@@ -219,13 +225,21 @@ def importar_modelos_vehiculos(
                     activo=True,
                     precio=precio_val,
                     fecha_actualizacion=datetime.utcnow(),
-                    actualizado_por=current_user.email if getattr(current_user, "email", None) else None,
+                    actualizado_por=(
+                        current_user.email
+                        if getattr(current_user, "email", None)
+                        else None
+                    ),
                 )
                 db.add(nuevo)
                 creados += 1
 
         db.commit()
-        return {"message": "Importación completada", "creados": creados, "actualizados": actualizados}
+        return {
+            "message": "Importación completada",
+            "creados": creados,
+            "actualizados": actualizados,
+        }
 
     except HTTPException:
         raise
