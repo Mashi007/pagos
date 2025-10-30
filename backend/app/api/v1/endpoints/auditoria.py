@@ -10,7 +10,11 @@ from sqlalchemy.orm import Session, joinedload
 from app.api.deps import get_current_user, get_db
 from app.models.auditoria import Auditoria
 from app.models.user import User
-from app.schemas.auditoria import AuditoriaResponse, AuditoriaListResponse, AuditoriaStatsResponse
+from app.schemas.auditoria import (
+    AuditoriaResponse,
+    AuditoriaListResponse,
+    AuditoriaStatsResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -216,11 +220,15 @@ def estadisticas_auditoria(
 
         # Acciones por módulo (entidad)
         acciones_por_modulo_rows = (
-            db.query(getattr(Auditoria, "entidad").label("modulo"), func.count(Auditoria.id))
+            db.query(
+                getattr(Auditoria, "entidad").label("modulo"), func.count(Auditoria.id)
+            )
             .group_by(getattr(Auditoria, "entidad"))
             .all()
         )
-        acciones_por_modulo = {row.modulo or "DESCONOCIDO": row[1] for row in acciones_por_modulo_rows}
+        acciones_por_modulo = {
+            row.modulo or "DESCONOCIDO": row[1] for row in acciones_por_modulo_rows
+        }
 
         # Acciones por usuario (email)
         acciones_por_usuario_rows = (
