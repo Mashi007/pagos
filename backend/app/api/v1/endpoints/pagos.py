@@ -221,13 +221,10 @@ def listar_ultimos_pagos(
         )
 
         # Join para obtener el registro de pago completo de esa última fecha
-        pagos_ultimos_q = (
-            db.query(Pago)
-            .join(
-                sub_ultimos,
-                (Pago.cedula_cliente == sub_ultimos.c.cedula)
-                & (Pago.fecha_registro == sub_ultimos.c.max_fecha),
-            )
+        pagos_ultimos_q = db.query(Pago).join(
+            sub_ultimos,
+            (Pago.cedula_cliente == sub_ultimos.c.cedula)
+            & (Pago.fecha_registro == sub_ultimos.c.max_fecha),
         )
 
         # Filtros
@@ -259,7 +256,9 @@ def listar_ultimos_pagos(
             # Préstamos del cliente
             prestamos_ids = [
                 p.id
-                for p in db.query(Prestamo.id).filter(Prestamo.cedula == pago.cedula_cliente).all()
+                for p in db.query(Prestamo.id)
+                .filter(Prestamo.cedula == pago.cedula_cliente)
+                .all()
             ]
 
             total_prestamos = len(prestamos_ids)
@@ -295,7 +294,9 @@ def listar_ultimos_pagos(
                     "prestamo_id": pago.prestamo_id,
                     "estado_pago": pago.estado,
                     "monto_ultimo_pago": float(pago.monto_pagado),
-                    "fecha_ultimo_pago": pago.fecha_pago.isoformat() if pago.fecha_pago else None,
+                    "fecha_ultimo_pago": (
+                        pago.fecha_pago.isoformat() if pago.fecha_pago else None
+                    ),
                     "cuotas_atrasadas": int(cuotas_atrasadas),
                     "saldo_vencido": float(saldo_vencido),
                     "total_prestamos": total_prestamos,
