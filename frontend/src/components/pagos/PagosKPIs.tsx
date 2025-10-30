@@ -8,6 +8,7 @@ import {
   Clock,
   AlertTriangle
 } from 'lucide-react'
+import { formatCurrency } from '@/utils'
 
 interface PagosKPIsProps {
   totalPagos: number
@@ -28,15 +29,7 @@ export function PagosKPIs({
   cuotasAtrasadas,
   isLoading = false
 }: PagosKPIsProps) {
-  
-  // Formatear moneda
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-VE', {
-      style: 'currency',
-      currency: 'VES',
-      minimumFractionDigits: 2,
-    }).format(amount)
-  }
+
 
   // Calcular porcentajes
   const totalCuotas = cuotasPagadas + cuotasPendientes + cuotasAtrasadas

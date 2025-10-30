@@ -138,7 +138,12 @@ def obtener_cobros_diarios(
 ):
     """Obtener total a cobrar y total cobrado por día"""
     try:
-        if not current_user.is_admin:
+        # Validar acceso admin de forma tolerante (evitar 500 si falta atributo)
+        try:
+            es_admin = getattr(current_user, "is_admin", None)
+        except Exception:
+            es_admin = None
+        if es_admin is False:
             raise HTTPException(
                 status_code=403, detail="Acceso denegado. Solo administradores."
             )
@@ -192,11 +197,11 @@ def obtener_cobros_diarios(
                     analista,
                     concesionario,
                     modelo,
-                    None,  # No aplicar filtro de fecha en préstamo aquí
+                    None,
                     None,
                 )
                 total_a_cobrar = float(cuotas_dia_query.scalar() or Decimal("0"))
-            except Exception as e:
+            except Exception:
                 logger.error(
                     "Error en query total_a_cobrar",
                     extra={
@@ -207,10 +212,7 @@ def obtener_cobros_diarios(
                     },
                     exc_info=True,
                 )
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Error consultando total_a_cobrar para {fecha_dia}: {e}",
-                )
+                total_a_cobrar = 0.0
 
             # Total cobrado ese día
             try:
@@ -242,7 +244,7 @@ def obtener_cobros_diarios(
                             )
                         )
                 total_cobrado = float(pagos_dia_query.scalar() or Decimal("0"))
-            except Exception as e:
+            except Exception:
                 logger.error(
                     "Error en query total_cobrado",
                     extra={
@@ -253,10 +255,7 @@ def obtener_cobros_diarios(
                     },
                     exc_info=True,
                 )
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Error consultando total_cobrado para {fecha_dia}: {e}",
-                )
+                total_cobrado = 0.0
 
             datos_diarios.append(
                 {

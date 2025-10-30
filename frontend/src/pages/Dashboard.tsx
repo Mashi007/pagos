@@ -506,8 +506,8 @@ export function Dashboard() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Analista</label>
                   <Select 
-                    value={filtros.analista || ''} 
-                    onValueChange={(value) => setFiltros(prev => ({ ...prev, analista: value || undefined }))}
+                    value={filtros.analista ?? '__ALL__'} 
+                    onValueChange={(value) => setFiltros(prev => ({ ...prev, analista: value === '__ALL__' ? undefined : value }))}
                     disabled={loadingOpcionesFiltros}
                   >
                     <SelectTrigger>
@@ -520,15 +520,15 @@ export function Dashboard() {
                       } />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todos los analistas</SelectItem>
+                      <SelectItem value="__ALL__">Todos los analistas</SelectItem>
                       {loadingOpcionesFiltros ? (
-                        <SelectItem value="" disabled>Cargando opciones...</SelectItem>
+                        <SelectItem value="__ALL__" disabled>Cargando opciones...</SelectItem>
                       ) : opcionesFiltros?.analistas && opcionesFiltros.analistas.length > 0 ? (
                         opcionesFiltros.analistas.map((a: string) => (
                           <SelectItem key={a} value={a}>{a}</SelectItem>
                         ))
                       ) : (
-                        <SelectItem value="" disabled>No hay opciones disponibles</SelectItem>
+                        <SelectItem value="__ALL__" disabled>No hay opciones disponibles</SelectItem>
                       )}
                     </SelectContent>
                   </Select>
@@ -538,8 +538,8 @@ export function Dashboard() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Concesionario</label>
                   <Select 
-                    value={filtros.concesionario || ''} 
-                    onValueChange={(value) => setFiltros(prev => ({ ...prev, concesionario: value || undefined }))}
+                    value={filtros.concesionario ?? '__ALL__'} 
+                    onValueChange={(value) => setFiltros(prev => ({ ...prev, concesionario: value === '__ALL__' ? undefined : value }))}
                     disabled={loadingOpcionesFiltros}
                   >
                     <SelectTrigger>
@@ -552,15 +552,15 @@ export function Dashboard() {
                       } />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todos los concesionarios</SelectItem>
+                      <SelectItem value="__ALL__">Todos los concesionarios</SelectItem>
                       {loadingOpcionesFiltros ? (
-                        <SelectItem value="" disabled>Cargando opciones...</SelectItem>
+                        <SelectItem value="__ALL__" disabled>Cargando opciones...</SelectItem>
                       ) : opcionesFiltros?.concesionarios && opcionesFiltros.concesionarios.length > 0 ? (
                         opcionesFiltros.concesionarios.map((c: string) => (
                           <SelectItem key={c} value={c}>{c}</SelectItem>
                         ))
                       ) : (
-                        <SelectItem value="" disabled>No hay opciones disponibles</SelectItem>
+                        <SelectItem value="__ALL__" disabled>No hay opciones disponibles</SelectItem>
                       )}
                     </SelectContent>
                   </Select>
@@ -570,8 +570,8 @@ export function Dashboard() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Modelo</label>
                   <Select 
-                    value={filtros.modelo || ''} 
-                    onValueChange={(value) => setFiltros(prev => ({ ...prev, modelo: value || undefined }))}
+                    value={filtros.modelo ?? '__ALL__'} 
+                    onValueChange={(value) => setFiltros(prev => ({ ...prev, modelo: value === '__ALL__' ? undefined : value }))}
                     disabled={loadingOpcionesFiltros}
                   >
                     <SelectTrigger>
@@ -584,15 +584,15 @@ export function Dashboard() {
                       } />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todos los modelos</SelectItem>
+                      <SelectItem value="__ALL__">Todos los modelos</SelectItem>
                       {loadingOpcionesFiltros ? (
-                        <SelectItem value="" disabled>Cargando opciones...</SelectItem>
+                        <SelectItem value="__ALL__" disabled>Cargando opciones...</SelectItem>
                       ) : opcionesFiltros?.modelos && opcionesFiltros.modelos.length > 0 ? (
                         opcionesFiltros.modelos.map((m: string) => (
                           <SelectItem key={m} value={m}>{m}</SelectItem>
                         ))
                       ) : (
-                        <SelectItem value="" disabled>No hay opciones disponibles</SelectItem>
+                        <SelectItem value="__ALL__" disabled>No hay opciones disponibles</SelectItem>
                       )}
                     </SelectContent>
                   </Select>
