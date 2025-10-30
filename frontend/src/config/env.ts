@@ -16,31 +16,29 @@ interface EnvConfig {
 }
 
 function validateEnv(): EnvConfig {
-  const API_URL = import.meta.env.VITE_API_URL;
   const NODE_ENV = import.meta.env.VITE_NODE_ENV || import.meta.env.MODE;
   const APP_NAME = import.meta.env.VITE_APP_NAME || DEFAULT_APP_NAME;
   const APP_VERSION = import.meta.env.VITE_APP_VERSION || DEFAULT_APP_VERSION;
-
-  // Validar variables críticas
-  if (!API_URL) {
-    throw new Error(
-      '❌ CRÍTICO: Variable VITE_API_URL no configurada. ' +
-      'Configure en archivo .env o variables de entorno.'
-    );
-  }
-
-  // Validar formato de URL
-  try {
-    new URL(API_URL);
-  } catch {
-    throw new Error(
-      `❌ CRÍTICO: VITE_API_URL tiene formato inválido: ${API_URL}`
-    );
-  }
-
-  // Advertir si está en producción sin HTTPS
-  if (NODE_ENV === 'production' && !API_URL.startsWith('https://')) {
-    // Warning removido según normas de linting
+  
+  // ✅ PRODUCCIÓN: Usar rutas relativas (el proxy en server.js maneja /api/*)
+  // ✅ DESARROLLO: Usar URL absoluta si está configurada
+  let API_URL = import.meta.env.VITE_API_URL || '';
+  
+  if (NODE_ENV === 'production') {
+    // En producción, usar rutas relativas para que el proxy funcione
+    API_URL = '';
+  } else {
+    // En desarrollo, validar URL si está configurada
+    if (API_URL) {
+      try {
+        new URL(API_URL);
+      } catch {
+        console.warn(`⚠️ VITE_API_URL tiene formato inválido: ${API_URL}. Usando rutas relativas.`);
+        API_URL = '';
+      }
+    } else {
+      console.warn('⚠️ VITE_API_URL no configurada. Usando rutas relativas en desarrollo.');
+    }
   }
 
   return {
