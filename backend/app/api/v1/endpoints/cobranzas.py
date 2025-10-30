@@ -24,6 +24,7 @@ from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.user import User
+from app.services.notificacion_automatica_service import NotificacionAutomaticaService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -404,6 +405,37 @@ def obtener_resumen_cobranzas(
 
     except Exception as e:
         logger.error(f"Error obteniendo resumen de cobranzas: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+# ============================================
+# NOTIFICACIONES DE ATRASO (VINCULACIÓN COBRANZAS)
+# ============================================
+
+
+@router.post("/notificaciones/atrasos")
+def disparar_notificaciones_atrasos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Dispara el proceso automático de notificaciones de atrasos
+    desde el módulo de Cobranzas.
+
+    Equivale a POST /api/v1/notificaciones/automaticas/procesar pero
+    queda vinculado funcionalmente a Cobranzas para facilitar su uso
+    desde esta área.
+    """
+    try:
+        service = NotificacionAutomaticaService(db)
+        stats = service.procesar_notificaciones_automaticas()
+
+        return {
+            "mensaje": "Notificaciones de atrasos procesadas",
+            "estadisticas": stats,
+        }
+    except Exception as e:
+        logger.error(f"Error disparando notificaciones de atrasos: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
