@@ -328,6 +328,40 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Seleccionar primero el Modelo para cargar el precio */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Modelo de Vehículo <span className="text-red-500">*</span>
+                  </label>
+                  <Select
+                    value={formData.modelo_vehiculo ?? ''}
+                    onValueChange={(value) => {
+                      setFormData({
+                        ...formData,
+                        modelo_vehiculo: value,
+                      })
+                      const modeloSel = modelosVehiculos.find((m:any) => m.modelo === value)
+                      if (modeloSel && typeof modeloSel.precio === 'number') {
+                        setValorActivo(modeloSel.precio)
+                      } else {
+                        setValorActivo(0)
+                      }
+                    }}
+                    disabled={isReadOnly}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar modelo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {modelosVehiculos.map((modelo) => (
+                        <SelectItem key={modelo.id} value={modelo.modelo}>
+                          {modelo.modelo}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500 mt-1">Seleccione el modelo para cargar automáticamente el precio del activo.</p>
+                </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Cédula <span className="text-red-500">*</span>
@@ -438,12 +472,10 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       step="0.01"
                       min="0"
                       value={valorActivo === 0 ? '' : valorActivo}
-                      onChange={(e) => {
-                        const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
-                        setValorActivo(value)
-                      }}
-                      placeholder="Ingrese el valor del activo"
-                      disabled={isReadOnly}
+                      readOnly
+                      className="bg-gray-100"
+                      placeholder="Se carga según el modelo seleccionado"
+                      disabled={isReadOnly || !formData.modelo_vehiculo}
                     />
                   </div>
 
@@ -650,8 +682,8 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
 
                 {/* Eliminados campos duplicados de Producto y Analista Asignado */}
 
-                {/* Nuevos campos de configuración */}
-                <div className="grid grid-cols-3 gap-4">
+                {/* Nuevos campos de configuración (sin Modelo aquí) */}
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">
                       Concesionario
@@ -668,7 +700,6 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                         <SelectValue placeholder="Seleccionar concesionario" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Seleccionar concesionario</SelectItem>
                         {concesionarios.map((concesionario) => (
                           <SelectItem key={concesionario.id} value={concesionario.nombre}>
                             {concesionario.nombre}
@@ -694,7 +725,6 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                         <SelectValue placeholder="Seleccionar analista" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Seleccionar analista</SelectItem>
                         {analistas.map((analista) => (
                           <SelectItem key={analista.id} value={analista.nombre}>
                             {analista.nombre}
@@ -704,31 +734,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                     </Select>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Modelo de Vehículo
-                    </label>
-                    <Select
-                      value={formData.modelo_vehiculo ?? ''}
-                      onValueChange={(value) => setFormData({ 
-                        ...formData, 
-                        modelo_vehiculo: value
-                      })}
-                      disabled={isReadOnly}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar modelo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Seleccionar modelo</SelectItem>
-                        {modelosVehiculos.map((modelo) => (
-                          <SelectItem key={modelo.id} value={modelo.modelo}>
-                            {modelo.modelo}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {/* Modelo movido arriba */}
                 </div>
 
                 <div>

@@ -46,53 +46,71 @@ def obtener_opciones_filtros(
             return valores
 
         # 1. ANALISTAS - Combinar analista y producto_financiero sin duplicados
-        analistas_query = (
-            db.query(func.distinct(Prestamo.analista))
-            .filter(Prestamo.analista.isnot(None), Prestamo.analista != "")
-            .all()
-        )
-        analistas_set = obtener_valores_unicos(analistas_query)
+        try:
+            analistas_query = (
+                db.query(func.distinct(Prestamo.analista))
+                .filter(Prestamo.analista.isnot(None), Prestamo.analista != "")
+                .all()
+            )
+            analistas_set = obtener_valores_unicos(analistas_query)
+        except Exception:
+            # Si la columna no existe todavía (migraciones pendientes)
+            analistas_set = set()
 
         # Productos financieros (pueden ser analistas)
-        productos_fin_query = (
-            db.query(func.distinct(Prestamo.producto_financiero))
-            .filter(
-                Prestamo.producto_financiero.isnot(None),
-                Prestamo.producto_financiero != "",
+        try:
+            productos_fin_query = (
+                db.query(func.distinct(Prestamo.producto_financiero))
+                .filter(
+                    Prestamo.producto_financiero.isnot(None),
+                    Prestamo.producto_financiero != "",
+                )
+                .all()
             )
-            .all()
-        )
-        productos_set = obtener_valores_unicos(productos_fin_query)
+            productos_set = obtener_valores_unicos(productos_fin_query)
+        except Exception:
+            productos_set = set()
 
         # Combinar sin duplicados
         analistas_final = sorted(analistas_set | productos_set)
 
         # 2. CONCESIONARIOS - Únicos y normalizados
-        concesionarios_query = (
-            db.query(func.distinct(Prestamo.concesionario))
-            .filter(Prestamo.concesionario.isnot(None), Prestamo.concesionario != "")
-            .all()
-        )
-        concesionarios_set = obtener_valores_unicos(concesionarios_query)
+        try:
+            concesionarios_query = (
+                db.query(func.distinct(Prestamo.concesionario))
+                .filter(
+                    Prestamo.concesionario.isnot(None), Prestamo.concesionario != ""
+                )
+                .all()
+            )
+            concesionarios_set = obtener_valores_unicos(concesionarios_query)
+        except Exception:
+            concesionarios_set = set()
         concesionarios_final = sorted(concesionarios_set)
 
         # 3. MODELOS - Combinar producto y modelo_vehiculo sin duplicados
-        modelos_producto_query = (
-            db.query(func.distinct(Prestamo.producto))
-            .filter(Prestamo.producto.isnot(None), Prestamo.producto != "")
-            .all()
-        )
-        modelos_producto_set = obtener_valores_unicos(modelos_producto_query)
+        try:
+            modelos_producto_query = (
+                db.query(func.distinct(Prestamo.producto))
+                .filter(Prestamo.producto.isnot(None), Prestamo.producto != "")
+                .all()
+            )
+            modelos_producto_set = obtener_valores_unicos(modelos_producto_query)
+        except Exception:
+            modelos_producto_set = set()
 
         # También modelo_vehiculo
-        modelos_vehiculo_query = (
-            db.query(func.distinct(Prestamo.modelo_vehiculo))
-            .filter(
-                Prestamo.modelo_vehiculo.isnot(None), Prestamo.modelo_vehiculo != ""
+        try:
+            modelos_vehiculo_query = (
+                db.query(func.distinct(Prestamo.modelo_vehiculo))
+                .filter(
+                    Prestamo.modelo_vehiculo.isnot(None), Prestamo.modelo_vehiculo != ""
+                )
+                .all()
             )
-            .all()
-        )
-        modelos_vehiculo_set = obtener_valores_unicos(modelos_vehiculo_query)
+            modelos_vehiculo_set = obtener_valores_unicos(modelos_vehiculo_query)
+        except Exception:
+            modelos_vehiculo_set = set()
 
         # Combinar sin duplicados
         modelos_final = sorted(modelos_producto_set | modelos_vehiculo_set)
