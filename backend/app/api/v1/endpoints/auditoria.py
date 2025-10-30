@@ -152,18 +152,95 @@ def exportar_auditoria(
 ):
     # Exportar auditoría a Excel
     try:
-        # Construir query
-        query = db.query(Auditoria)
-        query = _aplicar_filtros_auditoria(
-            query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
+        # Permitir solo ADMIN
+        if not getattr(current_user, "is_admin", False):
+            raise HTTPException(status_code=403, detail="No autorizado")
+
+        # Consultas base
+        query_general = db.query(Auditoria)
+        query_general = _aplicar_filtros_auditoria(
+            query_general, usuario_email, modulo, accion, fecha_desde, fecha_hasta
+        ).order_by(desc(Auditoria.fecha))
+        registros_general = query_general.all()
+
+        registros_prestamos = db.query(PrestamoAuditoria).order_by(
+            desc(PrestamoAuditoria.fecha_cambio)
         )
-        query = query.order_by(desc(Auditoria.fecha))
+        registros_pagos = db.query(PagoAuditoria).order_by(
+            desc(PagoAuditoria.fecha_cambio)
+        )
 
-        # Obtener datos
-        registros = query.all()
+        # Filtros aproximados para detalladas
+        if accion:
+            registros_prestamos = registros_prestamos.filter(PrestamoAuditoria.accion == accion)
+            registros_pagos = registros_pagos.filter(PagoAuditoria.accion == accion)
+        if fecha_desde:
+            registros_prestamos = registros_prestamos.filter(
+                PrestamoAuditoria.fecha_cambio >= fecha_desde
+            )
+            registros_pagos = registros_pagos.filter(PagoAuditoria.fecha_cambio >= fecha_desde)
+        if fecha_hasta:
+            registros_prestamos = registros_prestamos.filter(
+                PrestamoAuditoria.fecha_cambio <= fecha_hasta
+            )
+            registros_pagos = registros_pagos.filter(PagoAuditoria.fecha_cambio <= fecha_hasta)
+        # modulo/usuario_email no siempre disponibles en detalladas; modulo lo mapeamos
+        registros_prestamos = registros_prestamos.all()
+        registros_pagos = registros_pagos.all()
 
-        # Crear archivo Excel
-        output = _crear_excel_auditoria(registros)
+        # Unificar
+        unified = []
+        for r in registros_general:
+            unified.append(
+                {
+                    "fecha": r.fecha,
+                    "usuario_email": r.usuario_email,
+                    "modulo": getattr(r, "entidad", None),
+                    "accion": r.accion,
+                    "descripcion": getattr(r, "detalles", None),
+                    "ip_address": getattr(r, "ip_address", None),
+                }
+            )
+        for r in registros_prestamos:
+            desc_text = f"{r.accion} {r.campo_modificado}: "
+            if r.valor_anterior is not None:
+                desc_text += f"{r.valor_anterior} -> "
+            desc_text += f"{r.valor_nuevo}"
+            if r.observaciones:
+                desc_text += f" ({r.observaciones})"
+            unified.append(
+                {
+                    "fecha": r.fecha_cambio,
+                    "usuario_email": r.usuario,
+                    "modulo": "PRESTAMOS",
+                    "accion": r.accion,
+                    "descripcion": desc_text,
+                    "ip_address": None,
+                }
+            )
+        for r in registros_pagos:
+            desc_text = f"{r.accion} {r.campo_modificado}: "
+            if r.valor_anterior is not None:
+                desc_text += f"{r.valor_anterior} -> "
+            desc_text += f"{r.valor_nuevo}"
+            if getattr(r, "observaciones", None):
+                desc_text += f" ({r.observaciones})"
+            unified.append(
+                {
+                    "fecha": r.fecha_cambio,
+                    "usuario_email": r.usuario,
+                    "modulo": "PAGOS",
+                    "accion": r.accion,
+                    "descripcion": desc_text,
+                    "ip_address": None,
+                }
+            )
+
+        # Ordenar por fecha desc
+        unified.sort(key=lambda x: x.get("fecha") or 0, reverse=True)
+
+        # Crear archivo Excel desde datos unificados
+        output = _crear_excel_auditoria_unificado(unified)
 
         return Response(
             content=output.getvalue(),
@@ -206,6 +283,32 @@ def _crear_excel_auditoria(registros):
     wb.save(output)
     output.seek(0)
 
+    return output
+
+
+def _crear_excel_auditoria_unificado(registros):
+    # Crear archivo Excel en memoria a partir de lista de dicts unificada
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Auditoría"
+
+    headers = ["Fecha", "Usuario", "Módulo", "Acción", "Detalles", "IP"]
+    for col, header in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=header)
+
+    for row, registro in enumerate(registros, 2):
+        ws.cell(row=row, column=1, value=registro.get("fecha"))
+        ws.cell(row=row, column=2, value=registro.get("usuario_email"))
+        ws.cell(row=row, column=3, value=registro.get("modulo"))
+        ws.cell(row=row, column=4, value=registro.get("accion"))
+        ws.cell(row=row, column=5, value=registro.get("descripcion"))
+        ws.cell(row=row, column=6, value=registro.get("ip_address"))
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
     return output
 
 
