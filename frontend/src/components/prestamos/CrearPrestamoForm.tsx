@@ -105,6 +105,19 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     }
   }, [valorActivo])
 
+  // Si se selecciona modelo o llegan modelos desde configuración, cargar su precio
+  useEffect(() => {
+    if (formData.modelo_vehiculo && modelosVehiculos && modelosVehiculos.length > 0) {
+      const modeloSel: any = modelosVehiculos.find((m: any) => m.modelo === formData.modelo_vehiculo)
+      if (modeloSel && modeloSel.precio != null) {
+        const precioNum = typeof modeloSel.precio === 'number' ? modeloSel.precio : parseFloat(String(modeloSel.precio))
+        if (!Number.isNaN(precioNum)) {
+          setValorActivo(precioNum)
+        }
+      }
+    }
+  }, [formData.modelo_vehiculo, modelosVehiculos])
+
   // Calcular total_financiamiento automáticamente
   useEffect(() => {
     const total = valorActivo - anticipo
@@ -341,8 +354,11 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                         modelo_vehiculo: value,
                       })
                       const modeloSel = modelosVehiculos.find((m:any) => m.modelo === value)
-                      if (modeloSel && typeof modeloSel.precio === 'number') {
-                        setValorActivo(modeloSel.precio)
+                      if (modeloSel && modeloSel.precio != null) {
+                        const precioNum = typeof modeloSel.precio === 'number' ? modeloSel.precio : parseFloat(String(modeloSel.precio))
+                        if (!Number.isNaN(precioNum)) {
+                          setValorActivo(precioNum)
+                        }
                       } else {
                         setValorActivo(0)
                       }
@@ -471,7 +487,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       type="number"
                       step="0.01"
                       min="0"
-                      value={valorActivo === 0 ? '' : valorActivo}
+                      value={Number.isFinite(valorActivo) ? valorActivo : ''}
                       readOnly
                       className="bg-gray-100"
                       placeholder="Se carga según el modelo seleccionado"

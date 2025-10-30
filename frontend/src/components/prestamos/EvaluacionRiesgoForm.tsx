@@ -92,6 +92,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   const [showSection, setShowSection] = useState<string>('criterio1')
   const [clienteEdad, setClienteEdad] = useState<number>(0)
   const [showFormularioAprobacion, setShowFormularioAprobacion] = useState(false)
+  const [resumenPrestamos, setResumenPrestamos] = useState<any | null>(null)
+  const [bloqueadoPorMora, setBloqueadoPorMora] = useState<boolean>(false)
   
   // Estado para condiciones editables de aprobación
   const [condicionesAprobacion, setCondicionesAprobacion] = useState({
@@ -149,6 +151,24 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     }
     
     calcularEdad()
+  }, [prestamo.cedula])
+
+  // Cargar resumen por cédula para validar si existen préstamos y cuotas en mora
+  useEffect(() => {
+    const cargarResumen = async () => {
+      try {
+        const resumen = await prestamoService.getResumenPrestamos(prestamo.cedula)
+        setResumenPrestamos(resumen)
+        const tieneMora = (resumen?.total_cuotas_mora || 0) > 0
+        setBloqueadoPorMora(tieneMora)
+        if (tieneMora) {
+          setShowSection('situacion')
+        }
+      } catch (e) {
+        setResumenPrestamos({ error: true, tiene_prestamos: false, prestamos: [] })
+      }
+    }
+    cargarResumen()
   }, [prestamo.cedula])
 
   // Actualizar condiciones de aprobación cuando hay resultado de evaluación
@@ -220,6 +240,11 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (bloqueadoPorMora) {
+      toast.error('No puede continuar: el cliente tiene cuotas en mora.')
+      setShowSection('situacion')
+      return
+    }
     
     const confirmacion = window.confirm(
       '⚠️ CONFIRMACIÓN IMPORTANTE\n\n' +
@@ -309,6 +334,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   }
 
   const secciones = [
+    { id: 'situacion', label: 'Situación del Cliente', puntos: '' },
     { id: 'criterio1', label: 'Criterio 1: Capacidad de Pago', puntos: '29' },
     { id: 'criterio2', label: 'Criterio 2: Estabilidad Laboral', puntos: '23' },
     { id: 'criterio3', label: 'Criterio 3: Referencias', puntos: '9' },
@@ -367,6 +393,67 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[60vh]">
+          {/* SITUACIÓN DEL CLIENTE (Resumen de préstamos) */}
+          {showSection === 'situacion' && (
+            <Card className="border-purple-200">
+              <CardHeader className="bg-purple-50">
+                <CardTitle className="flex items-center gap-2 text-purple-700">
+                  <Info className="h-5 w-5" />
+                  Situación del Cliente
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-3">
+                {!resumenPrestamos && <p>Cargando resumen...</p>}
+                {resumenPrestamos && !resumenPrestamos.tiene_prestamos && (
+                  <div className="p-3 rounded bg-green-50 border border-green-200 text-green-800">
+                    No tiene préstamos vigentes. Puede continuar con el análisis.
+                  </div>
+                )}
+                {resumenPrestamos && resumenPrestamos.tiene_prestamos && (
+                  <div className="space-y-3">
+                    <div className="p-3 rounded bg-yellow-50 border border-yellow-200 text-yellow-900">
+                      Préstamos vigentes: {resumenPrestamos.total_prestamos}. Saldo pendiente total: ${Number(resumenPrestamos.total_saldo_pendiente || 0).toFixed(2)}.
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left border-b">
+                            <th className="py-2 pr-4">ID</th>
+                            <th className="py-2 pr-4">Modelo</th>
+                            <th className="py-2 pr-4">Financiamiento</th>
+                            <th className="py-2 pr-4">Saldo</th>
+                            <th className="py-2 pr-4">Cuotas en Mora</th>
+                            <th className="py-2 pr-4">Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(resumenPrestamos.prestamos || []).map((p:any) => (
+                            <tr key={p.id} className="border-b">
+                              <td className="py-2 pr-4">{p.id}</td>
+                              <td className="py-2 pr-4">{p.modelo_vehiculo}</td>
+                              <td className="py-2 pr-4">${Number(p.total_financiamiento).toFixed(2)}</td>
+                              <td className="py-2 pr-4">${Number(p.saldo_pendiente).toFixed(2)}</td>
+                              <td className="py-2 pr-4">{p.cuotas_en_mora}</td>
+                              <td className="py-2 pr-4">{p.estado}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {bloqueadoPorMora ? (
+                      <div className="p-3 rounded bg-red-50 border border-red-200 text-red-800">
+                        Hay cuotas en mora. No se puede continuar hasta regularizar la situación.
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded bg-blue-50 border border-blue-200 text-blue-800">
+                        No hay cuotas en mora. Puede continuar con el análisis.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
           {/* CRITERIO 1: CAPACIDAD DE PAGO (33 puntos) */}
           {showSection === 'criterio1' && (
           <Card className="border-blue-200">
