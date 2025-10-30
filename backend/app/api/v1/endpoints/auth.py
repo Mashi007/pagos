@@ -87,7 +87,7 @@ async def login(
                     detalles="Intento de login fallido",
                     ip_address=ip,
                     user_agent=ua,
-                    exito="FALLIDO",
+                    exito=False,
                 )
                 db.add(audit)
                 db.commit()
@@ -121,7 +121,7 @@ async def login(
                 detalles="Inicio de sesión",
                 ip_address=ip,
                 user_agent=ua,
-                exito="EXITOSO",
+                exito=True,
             )
             db.add(audit)
             db.commit()

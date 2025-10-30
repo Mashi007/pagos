@@ -565,7 +565,7 @@ def registrar_evento_auditoria(
             detalles=data.descripcion,
             ip_address=None,
             user_agent=None,
-            exito="EXITOSO",
+            exito=True,
         )
         db.add(audit)
         db.commit()
