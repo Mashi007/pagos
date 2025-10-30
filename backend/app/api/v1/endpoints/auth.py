@@ -92,6 +92,11 @@ async def login(
                 db.add(audit)
                 db.commit()
             except Exception as e:
+                # Importante: limpiar la sesión tras error de INSERT para no dejarla en estado inválido
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
                 logger.warning(f"No se pudo registrar auditoría LOGIN FALLIDO: {e}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -126,7 +131,11 @@ async def login(
             db.add(audit)
             db.commit()
         except Exception as e:
-            # No bloquear login por auditoría
+            # No bloquear login por auditoría, y limpiar sesión si falló el INSERT
+            try:
+                db.rollback()
+            except Exception:
+                pass
             logger.warning(f"No se pudo registrar auditoría LOGIN: {e}")
 
         # Preparar información del usuario para la respuesta
@@ -323,7 +332,16 @@ async def logout(
             exito=True,
         )
         db.add(audit)
-        db.commit()
+        try:
+            db.commit()
+        except Exception as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            logging.getLogger(__name__).warning(
+                f"No se pudo registrar auditoría LOGOUT: {e}"
+            )
 
         return {"message": "Sesión cerrada"}
     except Exception as e:
