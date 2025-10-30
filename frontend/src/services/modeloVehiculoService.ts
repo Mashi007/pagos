@@ -4,18 +4,23 @@ export interface ModeloVehiculo {
   id: number
   modelo: string  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
   activo: boolean
+  precio: number | null
   created_at: string
   updated_at?: string
+  fecha_actualizacion?: string | null
+  actualizado_por?: string | null
 }
 
 export interface ModeloVehiculoCreate {
   modelo: string  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
   activo?: boolean
+  precio: number
 }
 
 export interface ModeloVehiculoUpdate {
   modelo?: string  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
   activo?: boolean
+  precio?: number
 }
 
 export interface ModeloVehiculoListResponse {
@@ -75,6 +80,15 @@ class ModeloVehiculoService {
   // Eliminar un modelo (soft delete)
   async eliminarModelo(id: number): Promise<{ message: string }> {
     return await apiClient.delete<{ message: string }>(`${this.baseUrl}/${id}`)
+  }
+
+  // Importación masiva desde Excel
+  async importarDesdeExcel(file: File): Promise<{ message: string; creados: number; actualizados: number }> {
+    const formData = new FormData()
+    formData.append('archivo', file)
+    return await apiClient.post(`${this.baseUrl}/importar`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
   }
 }
 

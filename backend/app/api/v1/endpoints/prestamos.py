@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
+from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.prestamo_auditoria import PrestamoAuditoria
 from app.models.user import User
 from app.schemas.prestamo import (
@@ -452,7 +453,24 @@ def crear_prestamo(
                 detail=f"Cliente con cédula {prestamo_data.cedula} no encontrado",
             )
 
-        # 2. Determinar número de cuotas y cuota por período
+        # 2. Validar modelo de vehículo si viene y debe tener precio configurado
+        if getattr(prestamo_data, "modelo_vehiculo", None):
+            existente = (
+                db.query(ModeloVehiculo)
+                .filter(
+                    ModeloVehiculo.modelo == prestamo_data.modelo_vehiculo,
+                    ModeloVehiculo.activo.is_(True),
+                    ModeloVehiculo.precio.isnot(None),
+                )
+                .first()
+            )
+            if not existente:
+                raise HTTPException(
+                    status_code=400,
+                    detail="El modelo seleccionado no existe, está inactivo o no tiene precio configurado",
+                )
+
+        # 3. Determinar número de cuotas y cuota por período
         # Si el frontend envía numero_cuotas y cuota_periodo, usarlos
         # Si no, calcularlos automáticamente según modalidad
         if (
@@ -474,7 +492,7 @@ def crear_prestamo(
                 f"Calculados automáticamente: {numero_cuotas} cuotas, ${cuota_periodo} por período"
             )
 
-        # 3. Crear el préstamo
+        # 4. Crear el préstamo
         prestamo = Prestamo(
             cliente_id=cliente.id,
             cedula=prestamo_data.cedula,
@@ -500,7 +518,7 @@ def crear_prestamo(
         db.commit()
         db.refresh(prestamo)
 
-        # 4. Registrar en auditoría
+        # 5. Registrar en auditoría
         crear_registro_auditoria(
             prestamo_id=prestamo.id,
             cedula=prestamo.cedula,

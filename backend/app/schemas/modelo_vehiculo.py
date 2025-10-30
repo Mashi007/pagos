@@ -2,6 +2,7 @@
 """Schemas para ModeloVehiculo"""
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -12,12 +13,17 @@ class ModeloVehiculoBase(BaseModel):
 
     modelo: str = Field(..., min_length=1, max_length=100)
     activo: bool = Field(default=True, description="Estado del modelo")
+    precio: Decimal | None = Field(
+        default=None,
+        description="Precio del modelo en la moneda configurada",
+        gt=0,
+    )
 
 
 class ModeloVehiculoCreate(ModeloVehiculoBase):
     """Schema para crear un modelo de vehículo"""
 
-    pass
+    precio: Decimal = Field(..., gt=0)
 
 
 class ModeloVehiculoUpdate(BaseModel):
@@ -25,6 +31,7 @@ class ModeloVehiculoUpdate(BaseModel):
 
     modelo: Optional[str] = Field(None, min_length=1, max_length=100)
     activo: Optional[bool] = None
+    precio: Optional[Decimal] = Field(None, gt=0)
 
 
 class ModeloVehiculoResponse(ModeloVehiculoBase):
@@ -33,6 +40,8 @@ class ModeloVehiculoResponse(ModeloVehiculoBase):
     id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    fecha_actualizacion: Optional[datetime] = None
+    actualizado_por: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

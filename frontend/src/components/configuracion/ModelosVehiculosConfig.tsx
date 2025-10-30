@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ModeloVehiculo, ModeloVehiculoUpdate, ModeloVehiculoCreate } from '@/services/modeloVehiculoService'
+import { configuracionGeneralService } from '@/services/configuracionGeneralService'
 import { useModelosVehiculos, useDeleteModeloVehiculo, useUpdateModeloVehiculo, useCreateModeloVehiculo } from '@/hooks/useModelosVehiculos'
 import toast from 'react-hot-toast'
 
@@ -26,8 +27,11 @@ export function ModelosVehiculosConfig() {
   const [editingModelo, setEditingModelo] = useState<ModeloVehiculo | null>(null)
   const [formData, setFormData] = useState<ModeloVehiculoCreate>({
     modelo: '',
-    activo: true
+    activo: true,
+    precio: 0
   })
+  const [moneda, setMoneda] = useState<string>('VES')
+  const [archivoExcel, setArchivoExcel] = useState<File | null>(null)
   const [validationError, setValidationError] = useState<string>('')
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
@@ -45,6 +49,15 @@ export function ModelosVehiculosConfig() {
   const createModeloMutation = useCreateModeloVehiculo()
   
   const modelos = modelosData?.items || []
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const cfg = await configuracionGeneralService.obtenerConfiguracionGeneral()
+        setMoneda(cfg.moneda)
+      } catch {}
+    })()
+  }, [])
 
   const handleEliminar = async (id: number) => {
     try {
@@ -87,7 +100,8 @@ export function ModelosVehiculosConfig() {
     setEditingModelo(modelo)
     setFormData({
       modelo: modelo.modelo,
-      activo: modelo.activo
+      activo: modelo.activo,
+      precio: Number(modelo.precio || 0)
     })
     setValidationError('')
     setShowCreateForm(true)
@@ -132,7 +146,8 @@ export function ModelosVehiculosConfig() {
   const resetForm = () => {
     setFormData({
       modelo: '',
-      activo: true
+      activo: true,
+      precio: 0
     })
     setValidationError('')
     setEditingModelo(null)
@@ -268,6 +283,7 @@ export function ModelosVehiculosConfig() {
               <TableRow>
                 <TableHead>ID</TableHead>
                 <TableHead>Modelo</TableHead>
+                <TableHead>Precio ({moneda})</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Fecha Creación</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
@@ -278,6 +294,7 @@ export function ModelosVehiculosConfig() {
                 <TableRow key={modelo.id}>
                   <TableCell className="font-medium">{modelo.id}</TableCell>
                   <TableCell>{modelo.modelo}</TableCell>
+                  <TableCell>{modelo.precio != null ? Number(modelo.precio).toLocaleString('es-VE', { minimumFractionDigits: 2 }) : '-'}</TableCell>
                   <TableCell>
                     <Badge variant={(modelo.activo === true || modelo.activo === 1) ? "default" : "secondary"}>
                       {(modelo.activo === true || modelo.activo === 1) ? "Activo" : "Inactivo"}
@@ -404,6 +421,20 @@ export function ModelosVehiculosConfig() {
                       autoFocus
                       className={validationError ? 'border-red-500' : ''}
                     />
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Precio ({moneda}) *
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={formData.precio}
+                      onChange={(e) => setFormData({ ...formData, precio: Number(e.target.value) })}
+                      placeholder={`0.00`}
+                      required
+                    />
+                  </div>
                     {validationError && (
                       <p className="text-xs text-red-500 mt-1">
                         {validationError}
@@ -461,6 +492,37 @@ export function ModelosVehiculosConfig() {
           </div>
         </div>
       )}
+
+      {/* Importación desde Excel */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Importar Modelos y Precios (Excel)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="text-sm text-gray-600">Columnas requeridas: <b>modelo</b>, <b>precio</b>. Opcional: <b>fecha_actualizacion</b>.</div>
+          <input type="file" accept=".xlsx,.xls" onChange={(e) => setArchivoExcel(e.target.files?.[0] || null)} />
+          <div className="flex items-center gap-2">
+            <Button
+              disabled={!archivoExcel}
+              onClick={async () => {
+                if (!archivoExcel) return
+                try {
+                  const svc = (await import('@/services/modeloVehiculoService')).modeloVehiculoService
+                  const res = await svc.importarDesdeExcel(archivoExcel)
+                  toast.success(`Importado: ${res.creados} creados, ${res.actualizados} actualizados`)
+                  setArchivoExcel(null)
+                  await refetch()
+                } catch (err: any) {
+                  toast.error(err?.response?.data?.detail || 'Error al importar')
+                }
+              }}
+            >
+              Cargar Excel
+            </Button>
+            <div className="text-xs text-gray-500">Moneda del sistema: {moneda}</div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

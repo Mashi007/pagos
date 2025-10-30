@@ -657,10 +657,10 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       Concesionario
                     </label>
                     <Select
-                      value={formData.concesionario || undefined}
+                      value={formData.concesionario ?? ''}
                       onValueChange={(value) => setFormData({ 
                         ...formData, 
-                        concesionario: value || undefined
+                        concesionario: value
                       })}
                       disabled={isReadOnly}
                     >
@@ -668,6 +668,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                         <SelectValue placeholder="Seleccionar concesionario" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="">Seleccionar concesionario</SelectItem>
                         {concesionarios.map((concesionario) => (
                           <SelectItem key={concesionario.id} value={concesionario.nombre}>
                             {concesionario.nombre}
@@ -682,10 +683,10 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       Analista
                     </label>
                     <Select
-                      value={formData.analista || undefined}
+                      value={formData.analista ?? ''}
                       onValueChange={(value) => setFormData({ 
                         ...formData, 
-                        analista: value || undefined
+                        analista: value
                       })}
                       disabled={isReadOnly}
                     >
@@ -693,6 +694,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                         <SelectValue placeholder="Seleccionar analista" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="">Seleccionar analista</SelectItem>
                         {analistas.map((analista) => (
                           <SelectItem key={analista.id} value={analista.nombre}>
                             {analista.nombre}
@@ -707,10 +709,10 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       Modelo de Vehículo
                     </label>
                     <Select
-                      value={formData.modelo_vehiculo || undefined}
+                      value={formData.modelo_vehiculo ?? ''}
                       onValueChange={(value) => setFormData({ 
                         ...formData, 
-                        modelo_vehiculo: value || undefined
+                        modelo_vehiculo: value
                       })}
                       disabled={isReadOnly}
                     >
@@ -718,6 +720,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                         <SelectValue placeholder="Seleccionar modelo" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="">Seleccionar modelo</SelectItem>
                         {modelosVehiculos.map((modelo) => (
                           <SelectItem key={modelo.id} value={modelo.modelo}>
                             {modelo.modelo}
