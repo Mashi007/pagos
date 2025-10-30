@@ -100,7 +100,7 @@ class AuditoriaService {
   // Exportar auditoría a Excel
   async exportarExcel(filters?: Omit<AuditoriaFilters, 'skip' | 'limit' | 'ordenar_por' | 'orden'>): Promise<Blob> {
     try {
-      const response: any = await apiClient.get(`${this.baseUrl}/export/excel`, {
+      const response: any = await apiClient.get(`${this.baseUrl}/exportar`, {
         params: filters,
         responseType: 'blob'
       })

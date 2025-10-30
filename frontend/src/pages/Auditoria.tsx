@@ -29,11 +29,18 @@ export function Auditoria() {
     orden: 'desc'
   })
 
-  // Cargar auditoría al montar el componente
+  // Cargar auditoría al montar el componente y auto-actualizar (polling)
   useEffect(() => {
     cargarAuditoria()
     cargarEstadisticas()
-  }, [currentPage])
+
+    const interval = setInterval(() => {
+      cargarAuditoria()
+      cargarEstadisticas()
+    }, 10000) // 10s
+
+    return () => clearInterval(interval)
+  }, [currentPage, filtros])
 
   const cargarAuditoria = async () => {
     try {
@@ -336,7 +343,7 @@ export function Auditoria() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-gray-600 max-w-xs truncate">
-                      {auditoria.descripcion || 'N/A'}
+                      {auditoria.descripcion || `${auditoria.accion} en ${auditoria.modulo}${auditoria.registro_id ? ` #${auditoria.registro_id}` : ''}`}
                     </TableCell>
                     <TableCell>
                       <Badge className={auditoria.resultado === 'EXITOSO' ? 'bg-green-600' : 'bg-red-600'}>

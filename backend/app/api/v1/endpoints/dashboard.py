@@ -197,7 +197,7 @@ def obtener_cobros_diarios(
             # Total cobrado ese día
             try:
                 pagos_dia_query = db.query(func.sum(Pago.monto_pagado)).filter(
-                    cast(Pago.fecha_pago, DATE) == fecha_dia
+                    func.date(Pago.fecha_pago) == fecha_dia
                 )
                 if analista or concesionario or modelo:
                     pagos_dia_query = pagos_dia_query.join(
