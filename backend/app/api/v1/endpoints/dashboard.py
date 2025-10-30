@@ -4,7 +4,8 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, func, or_, cast
+from sqlalchemy.sql.sqltypes import DATE
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -124,13 +125,21 @@ def obtener_cobros_diarios(
                 status_code=403, detail="Acceso denegado. Solo administradores."
             )
 
+        # Normalizar parámetro 'dias'
+        try:
+            dias_norm = int(dias or 30)
+        except Exception:
+            dias_norm = 30
+        if dias_norm <= 0:
+            dias_norm = 30
+
         hoy = date.today()
 
         # Calcular fecha inicio (dias días atrás o fecha_inicio si está definida)
         if fecha_inicio:
             fecha_inicio_query = fecha_inicio
         else:
-            fecha_inicio_query = hoy - timedelta(days=dias)
+            fecha_inicio_query = hoy - timedelta(days=dias_norm)
 
         if fecha_fin:
             fecha_fin_query = fecha_fin
@@ -148,56 +157,88 @@ def obtener_cobros_diarios(
 
         for fecha_dia in fechas:
             # Total a cobrar (cuotas vencidas y pendientes de ese día)
-            cuotas_dia_query = (
-                db.query(func.sum(Cuota.monto_cuota))
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    and_(
-                        Cuota.fecha_vencimiento == fecha_dia,
-                        Cuota.estado != "PAGADO",
-                        Prestamo.activo.is_(True),
+            try:
+                cuotas_dia_query = (
+                    db.query(func.sum(Cuota.monto_cuota))
+                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                    .filter(
+                        and_(
+                            Cuota.fecha_vencimiento == fecha_dia,
+                            Cuota.estado != "PAGADO",
+                            Prestamo.activo.is_(True),
+                        )
                     )
                 )
-            )
-            cuotas_dia_query = FiltrosDashboard.aplicar_filtros_cuota(
-                cuotas_dia_query,
-                analista,
-                concesionario,
-                modelo,
-                None,  # No aplicar filtro de fecha en préstamo aquí
-                None,
-            )
-            total_a_cobrar = float(cuotas_dia_query.scalar() or Decimal("0"))
+                cuotas_dia_query = FiltrosDashboard.aplicar_filtros_cuota(
+                    cuotas_dia_query,
+                    analista,
+                    concesionario,
+                    modelo,
+                    None,  # No aplicar filtro de fecha en préstamo aquí
+                    None,
+                )
+                total_a_cobrar = float(cuotas_dia_query.scalar() or Decimal("0"))
+            except Exception as e:
+                logger.error(
+                    "Error en query total_a_cobrar",
+                    extra={
+                        "fecha": fecha_dia.isoformat(),
+                        "analista": analista,
+                        "concesionario": concesionario,
+                        "modelo": modelo,
+                    },
+                    exc_info=True,
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error consultando total_a_cobrar para {fecha_dia}: {e}",
+                )
 
             # Total cobrado ese día
-            pagos_dia_query = db.query(func.sum(Pago.monto_pagado)).filter(
-                func.date(Pago.fecha_pago) == fecha_dia
-            )
-            if analista or concesionario or modelo:
-                pagos_dia_query = pagos_dia_query.join(
-                    Prestamo, Pago.prestamo_id == Prestamo.id
+            try:
+                pagos_dia_query = db.query(func.sum(Pago.monto_pagado)).filter(
+                    cast(Pago.fecha_pago, DATE) == fecha_dia
                 )
-            # Aplicar filtros de préstamo pero no de fecha de pago (ya está filtrada)
-            if analista or concesionario or modelo:
-                if analista:
-                    pagos_dia_query = pagos_dia_query.filter(
-                        or_(
-                            Prestamo.analista == analista,
-                            Prestamo.producto_financiero == analista,
+                if analista or concesionario or modelo:
+                    pagos_dia_query = pagos_dia_query.join(
+                        Prestamo, Pago.prestamo_id == Prestamo.id
+                    )
+                # Aplicar filtros de préstamo pero no de fecha de pago (ya está filtrada)
+                if analista or concesionario or modelo:
+                    if analista:
+                        pagos_dia_query = pagos_dia_query.filter(
+                            or_(
+                                Prestamo.analista == analista,
+                                Prestamo.producto_financiero == analista,
+                            )
                         )
-                    )
-                if concesionario:
-                    pagos_dia_query = pagos_dia_query.filter(
-                        Prestamo.concesionario == concesionario
-                    )
-                if modelo:
-                    pagos_dia_query = pagos_dia_query.filter(
-                        or_(
-                            Prestamo.producto == modelo,
-                            Prestamo.modelo_vehiculo == modelo,
+                    if concesionario:
+                        pagos_dia_query = pagos_dia_query.filter(
+                            Prestamo.concesionario == concesionario
                         )
-                    )
-            total_cobrado = float(pagos_dia_query.scalar() or Decimal("0"))
+                    if modelo:
+                        pagos_dia_query = pagos_dia_query.filter(
+                            or_(
+                                Prestamo.producto == modelo,
+                                Prestamo.modelo_vehiculo == modelo,
+                            )
+                        )
+                total_cobrado = float(pagos_dia_query.scalar() or Decimal("0"))
+            except Exception as e:
+                logger.error(
+                    "Error en query total_cobrado",
+                    extra={
+                        "fecha": fecha_dia.isoformat(),
+                        "analista": analista,
+                        "concesionario": concesionario,
+                        "modelo": modelo,
+                    },
+                    exc_info=True,
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error consultando total_cobrado para {fecha_dia}: {e}",
+                )
 
             datos_diarios.append(
                 {

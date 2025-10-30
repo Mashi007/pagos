@@ -631,33 +631,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Producto</label>
-                    <Input
-                      value={formData.producto}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        producto: e.target.value 
-                      })}
-                      disabled={isReadOnly || !!clienteData}
-                      placeholder="Producto financiero"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Analista Asignado</label>
-                    <Input
-                      value={formData.producto_financiero}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        producto_financiero: e.target.value 
-                      })}
-                      disabled={isReadOnly || !!clienteData}
-                      placeholder="Producto financiero"
-                    />
-                  </div>
-                </div>
+                {/* Eliminados campos duplicados de Producto y Analista Asignado */}
 
                 {/* Nuevos campos de configuración */}
                 <div className="grid grid-cols-3 gap-4">
