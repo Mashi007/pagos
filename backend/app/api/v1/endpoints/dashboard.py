@@ -4,9 +4,9 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, func, or_, cast
-from sqlalchemy.sql.sqltypes import DATE
+from sqlalchemy import and_, cast, func, or_
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.sqltypes import DATE
 
 from app.api.deps import get_current_user, get_db
 from app.models.amortizacion import Cuota

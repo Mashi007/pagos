@@ -15,8 +15,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
-from app.models.prestamo import Prestamo
 from app.models.modelo_vehiculo import ModeloVehiculo
+from app.models.prestamo import Prestamo
 from app.models.prestamo_auditoria import PrestamoAuditoria
 from app.models.user import User
 from app.schemas.prestamo import (
@@ -24,10 +24,8 @@ from app.schemas.prestamo import (
     PrestamoResponse,
     PrestamoUpdate,
 )
-from app.services.prestamo_amortizacion_service import (
-    generar_tabla_amortizacion as generar_amortizacion,
-    obtener_cuotas_prestamo as obtener_cuotas_service,
-)
+from app.services.prestamo_amortizacion_service import generar_tabla_amortizacion as generar_amortizacion
+from app.services.prestamo_amortizacion_service import obtener_cuotas_prestamo as obtener_cuotas_service
 from app.services.prestamo_evaluacion_service import crear_evaluacion_prestamo
 
 router = APIRouter()

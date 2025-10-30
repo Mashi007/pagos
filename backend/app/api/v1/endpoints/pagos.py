@@ -247,10 +247,11 @@ def listar_ultimos_pagos(
 
         # Para cada cédula, calcular agregados sobre amortización (todas sus deudas)
         items = []
+        from datetime import date
+        from decimal import Decimal
+
         from app.models.amortizacion import Cuota
         from app.models.prestamo import Prestamo
-        from decimal import Decimal
-        from datetime import date
 
         for pago in pagos_ultimos:
             # Préstamos del cliente

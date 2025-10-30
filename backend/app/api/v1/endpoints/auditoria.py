@@ -9,12 +9,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user, get_db
 from app.models.auditoria import Auditoria
-from app.models.user import User
-from app.models.prestamo_auditoria import PrestamoAuditoria
 from app.models.pago_auditoria import PagoAuditoria
+from app.models.prestamo_auditoria import PrestamoAuditoria
+from app.models.user import User
 from app.schemas.auditoria import (
-    AuditoriaResponse,
     AuditoriaListResponse,
+    AuditoriaResponse,
     AuditoriaStatsResponse,
 )
 
