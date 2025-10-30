@@ -74,7 +74,9 @@ def healthcheck_cobranzas(
         }
     except Exception as e:
         logger.error(f"Healthcheck cobranzas error: {e}")
-        raise HTTPException(status_code=500, detail="Error de conexión o consulta a la base de datos")
+        raise HTTPException(
+            status_code=500, detail="Error de conexión o consulta a la base de datos"
+        )
 
 
 @router.get("/clientes-atrasados")
