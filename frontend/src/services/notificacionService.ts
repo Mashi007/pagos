@@ -70,6 +70,15 @@ class NotificacionService {
     return await apiClient.delete(`${this.baseUrl}/plantillas/${id}`)
   }
 
+  async exportarPlantilla(id: number): Promise<NotificacionPlantilla> {
+    return await apiClient.get<NotificacionPlantilla>(`${this.baseUrl}/plantillas/${id}/export`)
+  }
+
+  async enviarConPlantilla(plantillaId: number, params: { cliente_id: number, variables: Record<string, any> }): Promise<any> {
+    const query = new URLSearchParams({ cliente_id: String(params.cliente_id) })
+    return await apiClient.post(`${this.baseUrl}/plantillas/${plantillaId}/enviar?${query}`, params.variables)
+  }
+
   // Notificaciones
   async listarNotificaciones(skip = 0, limit = 100, estado?: string): Promise<Notificacion[]> {
     const params = new URLSearchParams()

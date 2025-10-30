@@ -323,28 +323,15 @@ export function PrestamosList() {
                                           </Button>
                                         )}
 
-                            {/* Botón Editar - Solo si tiene permisos */}
-                            {canEditPrestamo(prestamo.estado) ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEdit(prestamo)}
-                                title="Editar préstamo"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled
-                                title={prestamo.estado === 'APROBADO' || prestamo.estado === 'RECHAZADO' 
-                                  ? 'Solo administradores pueden editar préstamos aprobados/rechazados'
-                                  : 'No tiene permisos para editar'}
-                              >
-                                <Lock className="h-4 w-4 text-gray-400" />
-                              </Button>
-                            )}
+                            {/* Edición deshabilitada por política: no editable */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled
+                              title="La edición de préstamos está deshabilitada"
+                            >
+                              <Lock className="h-4 w-4 text-gray-400" />
+                            </Button>
                             
                             {/* Botón Eliminar - Solo Admin */}
                             {canDeletePrestamo() ? (

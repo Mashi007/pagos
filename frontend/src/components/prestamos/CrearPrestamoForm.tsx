@@ -256,6 +256,19 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       }
     }
 
+    // Confirmación: creación definitiva (no editable posteriormente)
+    if (!prestamo) {
+      const ok = window.confirm(
+        'Confirmación importante\n\n' +
+        'Al crear el préstamo no podrá editarlo después.\n' +
+        '¿Desea continuar?'
+      )
+      if (!ok) {
+        toast('Creación cancelada')
+        return
+      }
+    }
+
     // Proceder con la creación/actualización
     await crearOActualizarPrestamo()
   }
@@ -307,8 +320,8 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     crearOActualizarPrestamo()
   }
 
-  // Verificar permisos de edición
-  const isReadOnly = prestamo ? !canEditPrestamo(prestamo.estado) : false
+  // Verificar permisos de edición - Política: no se permite edición de préstamos ya creados
+  const isReadOnly = prestamo ? true : false
   const canApprove = prestamo ? canApprovePrestamo() : false
 
   return (
