@@ -215,13 +215,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       errors.push('La fecha de requerimiento es requerida')
     }
     
-    // Requeridos adicionales del formulario
-    if (!formData.producto || String(formData.producto).trim() === '') {
-      errors.push('El campo Producto es requerido')
-    }
-    if (!formData.producto_financiero || String(formData.producto_financiero).trim() === '') {
-      errors.push('El campo Producto Financiero es requerido')
-    }
+    // Requeridos adicionales del formulario (producto/producto_financiero se completan automáticamente al enviar)
     if (!formData.concesionario || String(formData.concesionario).trim() === '') {
       errors.push('Debe seleccionar un Concesionario')
     }
