@@ -240,12 +240,11 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     if (!prestamo && formData.cedula) {
       try {
         const resumen = await prestamoService.getResumenPrestamos(formData.cedula)
-        
-        if (resumen.tiene_prestamos && resumen.prestamos && resumen.prestamos.length > 0) {
-          // Mostrar modal de validación
+        // Solo bloquear con modal si hay cuotas en mora (>0)
+        if (resumen.tiene_prestamos && (resumen.total_cuotas_mora || 0) > 0) {
           setResumenPrestamos(resumen)
           setShowModalValidacion(true)
-          return // No continuar hasta que se confirme en el modal
+          return
         }
       } catch (error) {
         console.error('Error verificando préstamos existentes:', error)
@@ -262,6 +261,13 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       // Preparar datos con numero_cuotas y cuota_periodo
       const prestamoData = {
         ...formData,
+        // Asegurar producto/producto_financiero desde selecciones si están vacíos
+        producto: formData.producto && String(formData.producto).trim() !== ''
+          ? formData.producto
+          : (formData.modelo_vehiculo || ''),
+        producto_financiero: formData.producto_financiero && String(formData.producto_financiero).trim() !== ''
+          ? formData.producto_financiero
+          : (formData.analista || ''),
         numero_cuotas: numeroCuotas,
         cuota_periodo: cuotaPeriodo,
         fecha_base_calculo: formData.fecha_base_calculo,

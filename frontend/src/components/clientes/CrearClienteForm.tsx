@@ -816,7 +816,11 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
       // Notificar y ofrecer abrir en edición
       if (error.response?.status === 400) {
-        const wantsEdit = window.confirm(`⚠️ ${errorMessage}\n\n¿Deseas abrir el cliente existente para editarlo?`)
+        // Mensaje amigable unificado para regla de duplicados
+        const friendly = existingId
+          ? `No puedes crear un cliente con el mismo nombre o número de cédula.\n\nYa existe un registro con ID: ${existingId}.\n\n¿Deseas abrir el cliente existente para editarlo?`
+          : `No puedes crear un cliente con el mismo nombre o número de cédula.\n\n¿Deseas abrir el cliente existente para editarlo?`
+        const wantsEdit = window.confirm(`⚠️ ${friendly}`)
         if (wantsEdit) {
           // Cerrar el modal de creación antes de abrir edición
           onClose()
