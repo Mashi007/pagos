@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.api.deps import get_current_user, get_db
 from app.models.auditoria import Auditoria
 from app.models.user import User
+from app.models.prestamo_auditoria import PrestamoAuditoria
+from app.models.pago_auditoria import PagoAuditoria
 from app.schemas.auditoria import (
     AuditoriaResponse,
     AuditoriaListResponse,
@@ -75,9 +77,9 @@ def listar_auditoria(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Listar registros de auditoría con filtros y paginación
+    # Listar registros de auditoría con filtros y paginación (incluye fuentes detalladas)
     try:
-        # Construir query base
+        # Construir query base (auditoría general)
         query = db.query(Auditoria).options(joinedload(Auditoria.usuario))
 
         # Aplicar filtros
@@ -88,42 +90,123 @@ def listar_auditoria(
         # Aplicar ordenamiento
         query = _aplicar_ordenamiento_auditoria(query, ordenar_por, orden)
 
-        # Obtener total para paginación
-        total = query.count()
+        # Ejecutar consultas y unificar (general + préstamos + pagos)
+        registros_general = query.all()
+        registros_prestamos = (
+            db.query(PrestamoAuditoria)
+            .order_by(PrestamoAuditoria.fecha_cambio.desc())
+            .all()
+        )
+        registros_pagos = (
+            db.query(PagoAuditoria)
+            .order_by(PagoAuditoria.fecha_cambio.desc())
+            .all()
+        )
 
-        # Aplicar paginación
-        query = query.offset(skip).limit(limit)
+        unified = []
 
-        # Ejecutar query
-        registros = query.all()
-
-        # Adaptar a respuesta esperada por el frontend
-        items = []
-        for r in registros:
-            # Mapear campos del modelo existente a los esperados por el esquema/respuesta del frontend
+        # General
+        for r in registros_general:
             usuario_email_val = getattr(r.usuario, "email", None)
             modulo_val = getattr(r, "entidad", None)
             descripcion_val = getattr(r, "detalles", None)
             resultado_val = "EXITOSO" if getattr(r, "exito", True) else "FALLIDO"
+            unified.append(
+                {
+                    "id": r.id,
+                    "usuario_id": r.usuario_id,
+                    "usuario_email": usuario_email_val,
+                    "accion": r.accion,
+                    "modulo": modulo_val,
+                    "tabla": modulo_val,
+                    "registro_id": getattr(r, "entidad_id", None),
+                    "descripcion": descripcion_val,
+                    "ip_address": getattr(r, "ip_address", None),
+                    "user_agent": getattr(r, "user_agent", None),
+                    "resultado": resultado_val,
+                    "mensaje_error": getattr(r, "mensaje_error", None),
+                    "fecha": r.fecha,
+                }
+            )
 
-            item = {
-                "id": r.id,
-                "usuario_id": r.usuario_id,
-                "usuario_email": usuario_email_val,
-                "accion": r.accion,
-                "modulo": modulo_val,
-                "tabla": modulo_val,  # fallback
-                "registro_id": getattr(r, "entidad_id", None),
-                "descripcion": descripcion_val,
-                "ip_address": getattr(r, "ip_address", None),
-                "user_agent": getattr(r, "user_agent", None),
-                "resultado": resultado_val,
-                "mensaje_error": getattr(r, "mensaje_error", None),
-                "fecha": r.fecha,
-            }
-            items.append(AuditoriaResponse.model_validate(item))
+        # Prestamos detallada
+        for r in registros_prestamos:
+            desc = f"{r.accion} {r.campo_modificado}: "
+            if r.valor_anterior is not None:
+                desc += f"{r.valor_anterior} -> "
+            desc += f"{r.valor_nuevo}"
+            if r.observaciones:
+                desc += f" ({r.observaciones})"
 
+            unified.append(
+                {
+                    "id": r.id,
+                    "usuario_id": None,
+                    "usuario_email": r.usuario,
+                    "accion": r.accion,
+                    "modulo": "PRESTAMOS",
+                    "tabla": "prestamos",
+                    "registro_id": r.prestamo_id,
+                    "descripcion": desc,
+                    "ip_address": None,
+                    "user_agent": None,
+                    "resultado": "EXITOSO",
+                    "mensaje_error": None,
+                    "fecha": r.fecha_cambio,
+                }
+            )
+
+        # Pagos detallada
+        for r in registros_pagos:
+            desc = f"{r.accion} {r.campo_modificado}: "
+            if r.valor_anterior is not None:
+                desc += f"{r.valor_anterior} -> "
+            desc += f"{r.valor_nuevo}"
+            if getattr(r, "observaciones", None):
+                desc += f" ({r.observaciones})"
+
+            unified.append(
+                {
+                    "id": r.id,
+                    "usuario_id": None,
+                    "usuario_email": r.usuario,
+                    "accion": r.accion,
+                    "modulo": "PAGOS",
+                    "tabla": "pagos",
+                    "registro_id": r.pago_id,
+                    "descripcion": desc,
+                    "ip_address": None,
+                    "user_agent": None,
+                    "resultado": "EXITOSO",
+                    "mensaje_error": None,
+                    "fecha": r.fecha_cambio,
+                }
+            )
+
+        # Aplicar filtros en memoria para unificado
+        if usuario_email:
+            unified = [u for u in unified if u.get("usuario_email") and usuario_email.lower() in u["usuario_email"].lower()]
+        if modulo:
+            unified = [u for u in unified if u.get("modulo") == modulo]
+        if accion:
+            unified = [u for u in unified if u.get("accion") == accion]
+
+        # Orden y paginación
+        reverse = orden != "asc"
+        key_map = {
+            "usuario_email": lambda x: x.get("usuario_email") or "",
+            "modulo": lambda x: x.get("modulo") or "",
+            "accion": lambda x: x.get("accion") or "",
+            "fecha": lambda x: x.get("fecha") or 0,
+        }
+        sort_key = key_map.get(ordenar_por, key_map["fecha"])
+        unified.sort(key=sort_key, reverse=reverse)
+
+        total = len(unified)
         total_pages, current_page = _calcular_paginacion_auditoria(total, limit, skip)
+        paged = unified[skip : skip + limit]
+
+        items = [AuditoriaResponse.model_validate(i) for i in paged]
 
         return {
             "items": items,
@@ -215,10 +298,15 @@ def estadisticas_auditoria(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        # Totales
-        total_acciones = db.query(func.count(Auditoria.id)).scalar() or 0
+        # Totales (sumando fuentes detalladas)
+        total_acciones = (
+            (db.query(func.count(Auditoria.id)).scalar() or 0)
+            + (db.query(func.count(PrestamoAuditoria.id)).scalar() or 0)
+            + (db.query(func.count(PagoAuditoria.id)).scalar() or 0)
+        )
 
         # Acciones por módulo (entidad)
+        acciones_por_modulo = {}
         acciones_por_modulo_rows = (
             db.query(
                 getattr(Auditoria, "entidad").label("modulo"), func.count(Auditoria.id)
@@ -226,9 +314,15 @@ def estadisticas_auditoria(
             .group_by(getattr(Auditoria, "entidad"))
             .all()
         )
-        acciones_por_modulo = {
-            row.modulo or "DESCONOCIDO": row[1] for row in acciones_por_modulo_rows
-        }
+        for modulo_val, cnt in acciones_por_modulo_rows:
+            key = modulo_val or "DESCONOCIDO"
+            acciones_por_modulo[key] = acciones_por_modulo.get(key, 0) + cnt
+        acciones_por_modulo["PRESTAMOS"] = acciones_por_modulo.get(
+            "PRESTAMOS", 0
+        ) + (db.query(func.count(PrestamoAuditoria.id)).scalar() or 0)
+        acciones_por_modulo["PAGOS"] = acciones_por_modulo.get("PAGOS", 0) + (
+            db.query(func.count(PagoAuditoria.id)).scalar() or 0
+        )
 
         # Acciones por usuario (email)
         acciones_por_usuario_rows = (
@@ -248,22 +342,19 @@ def estadisticas_auditoria(
         inicio_mes = datetime(now.year, now.month, 1)
 
         acciones_hoy = (
-            db.query(func.count(Auditoria.id))
-            .filter(Auditoria.fecha >= inicio_hoy)
-            .scalar()
-            or 0
+            (db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_hoy).scalar() or 0)
+            + (db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0)
+            + (db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0)
         )
         acciones_esta_semana = (
-            db.query(func.count(Auditoria.id))
-            .filter(Auditoria.fecha >= inicio_semana)
-            .scalar()
-            or 0
+            (db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_semana).scalar() or 0)
+            + (db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_semana).scalar() or 0)
+            + (db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_semana).scalar() or 0)
         )
         acciones_este_mes = (
-            db.query(func.count(Auditoria.id))
-            .filter(Auditoria.fecha >= inicio_mes)
-            .scalar()
-            or 0
+            (db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_mes).scalar() or 0)
+            + (db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0)
+            + (db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0)
         )
 
         return AuditoriaStatsResponse(
