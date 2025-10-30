@@ -7,6 +7,7 @@ services:
     branch: main
     autoDeploy: true
     buildCommand: cd backend && pip install -r requirements.txt
+    releaseCommand: cd backend && alembic upgrade head
     startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 30
     healthCheckPath: /api/v1/health/render
     envVars:
