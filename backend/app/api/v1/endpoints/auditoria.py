@@ -98,9 +98,7 @@ def listar_auditoria(
             .all()
         )
         registros_pagos = (
-            db.query(PagoAuditoria)
-            .order_by(PagoAuditoria.fecha_cambio.desc())
-            .all()
+            db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc()).all()
         )
 
         unified = []
@@ -185,7 +183,12 @@ def listar_auditoria(
 
         # Aplicar filtros en memoria para unificado
         if usuario_email:
-            unified = [u for u in unified if u.get("usuario_email") and usuario_email.lower() in u["usuario_email"].lower()]
+            unified = [
+                u
+                for u in unified
+                if u.get("usuario_email")
+                and usuario_email.lower() in u["usuario_email"].lower()
+            ]
         if modulo:
             unified = [u for u in unified if u.get("modulo") == modulo]
         if accion:
@@ -317,9 +320,9 @@ def estadisticas_auditoria(
         for modulo_val, cnt in acciones_por_modulo_rows:
             key = modulo_val or "DESCONOCIDO"
             acciones_por_modulo[key] = acciones_por_modulo.get(key, 0) + cnt
-        acciones_por_modulo["PRESTAMOS"] = acciones_por_modulo.get(
-            "PRESTAMOS", 0
-        ) + (db.query(func.count(PrestamoAuditoria.id)).scalar() or 0)
+        acciones_por_modulo["PRESTAMOS"] = acciones_por_modulo.get("PRESTAMOS", 0) + (
+            db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
+        )
         acciones_por_modulo["PAGOS"] = acciones_por_modulo.get("PAGOS", 0) + (
             db.query(func.count(PagoAuditoria.id)).scalar() or 0
         )
@@ -342,19 +345,64 @@ def estadisticas_auditoria(
         inicio_mes = datetime(now.year, now.month, 1)
 
         acciones_hoy = (
-            (db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_hoy).scalar() or 0)
-            + (db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0)
-            + (db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0)
+            (
+                db.query(func.count(Auditoria.id))
+                .filter(Auditoria.fecha >= inicio_hoy)
+                .scalar()
+                or 0
+            )
+            + (
+                db.query(func.count(PrestamoAuditoria.id))
+                .filter(PrestamoAuditoria.fecha_cambio >= inicio_hoy)
+                .scalar()
+                or 0
+            )
+            + (
+                db.query(func.count(PagoAuditoria.id))
+                .filter(PagoAuditoria.fecha_cambio >= inicio_hoy)
+                .scalar()
+                or 0
+            )
         )
         acciones_esta_semana = (
-            (db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_semana).scalar() or 0)
-            + (db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_semana).scalar() or 0)
-            + (db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_semana).scalar() or 0)
+            (
+                db.query(func.count(Auditoria.id))
+                .filter(Auditoria.fecha >= inicio_semana)
+                .scalar()
+                or 0
+            )
+            + (
+                db.query(func.count(PrestamoAuditoria.id))
+                .filter(PrestamoAuditoria.fecha_cambio >= inicio_semana)
+                .scalar()
+                or 0
+            )
+            + (
+                db.query(func.count(PagoAuditoria.id))
+                .filter(PagoAuditoria.fecha_cambio >= inicio_semana)
+                .scalar()
+                or 0
+            )
         )
         acciones_este_mes = (
-            (db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_mes).scalar() or 0)
-            + (db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0)
-            + (db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0)
+            (
+                db.query(func.count(Auditoria.id))
+                .filter(Auditoria.fecha >= inicio_mes)
+                .scalar()
+                or 0
+            )
+            + (
+                db.query(func.count(PrestamoAuditoria.id))
+                .filter(PrestamoAuditoria.fecha_cambio >= inicio_mes)
+                .scalar()
+                or 0
+            )
+            + (
+                db.query(func.count(PagoAuditoria.id))
+                .filter(PagoAuditoria.fecha_cambio >= inicio_mes)
+                .scalar()
+                or 0
+            )
         )
 
         return AuditoriaStatsResponse(
