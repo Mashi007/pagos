@@ -258,18 +258,24 @@ def exportar_auditoria(
 
         # Filtros aproximados para detalladas
         if accion:
-            registros_prestamos = registros_prestamos.filter(PrestamoAuditoria.accion == accion)
+            registros_prestamos = registros_prestamos.filter(
+                PrestamoAuditoria.accion == accion
+            )
             registros_pagos = registros_pagos.filter(PagoAuditoria.accion == accion)
         if fecha_desde:
             registros_prestamos = registros_prestamos.filter(
                 PrestamoAuditoria.fecha_cambio >= fecha_desde
             )
-            registros_pagos = registros_pagos.filter(PagoAuditoria.fecha_cambio >= fecha_desde)
+            registros_pagos = registros_pagos.filter(
+                PagoAuditoria.fecha_cambio >= fecha_desde
+            )
         if fecha_hasta:
             registros_prestamos = registros_prestamos.filter(
                 PrestamoAuditoria.fecha_cambio <= fecha_hasta
             )
-            registros_pagos = registros_pagos.filter(PagoAuditoria.fecha_cambio <= fecha_hasta)
+            registros_pagos = registros_pagos.filter(
+                PagoAuditoria.fecha_cambio <= fecha_hasta
+            )
         # modulo/usuario_email no siempre disponibles en detalladas; modulo lo mapeamos
         registros_prestamos = registros_prestamos.all()
         registros_pagos = registros_pagos.all()
