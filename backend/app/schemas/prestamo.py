@@ -38,11 +38,25 @@ class PrestamoCreate(PrestamoBase):
     cuota_periodo: Optional[Decimal] = (
         None  # Si se envía, se usa; si no, se calcula automáticamente
     )
-    concesionario: Optional[str] = Field(None, max_length=100)
-    analista: Optional[str] = Field(None, max_length=100)
-    modelo_vehiculo: Optional[str] = Field(None, max_length=100)
+    concesionario: str = Field(..., max_length=100)
+    analista: str = Field(..., max_length=100)
+    modelo_vehiculo: str = Field(..., max_length=100)
     usuario_autoriza: Optional[str] = Field(None, max_length=100)
     observaciones: Optional[str] = None
+
+    @field_validator(
+        "cedula",
+        "producto",
+        "producto_financiero",
+        "concesionario",
+        "analista",
+        "modelo_vehiculo",
+    )
+    @classmethod
+    def non_empty_strings(cls, v: str) -> str:
+        if isinstance(v, str) and v.strip() == "":
+            raise ValueError("Campo requerido")
+        return v
 
 
 class PrestamoUpdate(BaseModel):

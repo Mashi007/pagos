@@ -198,6 +198,23 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       errors.push('La fecha de requerimiento es requerida')
     }
     
+    // Requeridos adicionales del formulario
+    if (!formData.producto || String(formData.producto).trim() === '') {
+      errors.push('El campo Producto es requerido')
+    }
+    if (!formData.producto_financiero || String(formData.producto_financiero).trim() === '') {
+      errors.push('El campo Producto Financiero es requerido')
+    }
+    if (!formData.concesionario || String(formData.concesionario).trim() === '') {
+      errors.push('Debe seleccionar un Concesionario')
+    }
+    if (!formData.analista || String(formData.analista).trim() === '') {
+      errors.push('Debe seleccionar un Analista')
+    }
+    if (!formData.modelo_vehiculo || String(formData.modelo_vehiculo).trim() === '') {
+      errors.push('Debe seleccionar un Modelo de Vehículo')
+    }
+
     // Si hay errores, mostrar mensajes
     if (errors.length > 0) {
       errors.forEach(error => {
