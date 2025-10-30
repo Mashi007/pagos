@@ -75,6 +75,24 @@ async def login(
 
         if not user:
             logger.warning(f"Login fallido para: {login_data.email}")
+            # Auditoría de LOGIN fallido (sin bloquear)
+            try:
+                ip = request.client.host if request and request.client else None
+                ua = request.headers.get("user-agent") if request else None
+                audit = Auditoria(
+                    usuario_id=0,  # usuario desconocido
+                    accion="LOGIN",
+                    entidad="USUARIOS",
+                    entidad_id=None,
+                    detalles="Intento de login fallido",
+                    ip_address=ip,
+                    user_agent=ua,
+                    exito="FALLIDO",
+                )
+                db.add(audit)
+                db.commit()
+            except Exception as e:
+                logger.warning(f"No se pudo registrar auditoría LOGIN FALLIDO: {e}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Usuario o clave incorrecto",
