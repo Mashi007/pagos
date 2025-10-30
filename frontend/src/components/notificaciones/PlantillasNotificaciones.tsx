@@ -6,6 +6,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card } from '@/components/ui/card'
 import { Tabs } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { useSearchClientes } from '@/hooks/useClientes'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 
 type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
 
@@ -102,6 +104,42 @@ export function PlantillasNotificaciones() {
     if (focus === 'encabezado') return insertInto(encRef.current, setEncabezado, encabezado)
     if (focus === 'cuerpo') return insertInto(cuerpoRef.current, setCuerpo, cuerpo)
     if (focus === 'firma') return insertInto(firmaRef.current, setFirma, firma)
+  }
+
+  // Búsqueda clientes para prueba
+  const [queryCliente, setQueryCliente] = useState('')
+  const { data: resultadosClientes } = useSearchClientes(queryCliente)
+
+  const aplicarFormato = (tag: 'b' | 'i' | 'u' | 'ul' | 'a') => {
+    const wrap = (el: HTMLTextAreaElement | null, setter: (v: string) => void, current: string) => {
+      if (!el) return
+      const start = el.selectionStart ?? 0
+      const end = el.selectionEnd ?? 0
+      const selected = current.slice(start, end)
+      let before = '', after = ''
+      if (tag === 'a') {
+        before = '<a href="https://">'
+        after = '</a>'
+      } else if (tag === 'ul') {
+        const lines = selected || 'Elemento 1\nElemento 2'
+        const wrapped = lines.split('\n').map(l => `<li>${l || 'Elemento'}</li>`).join('\n')
+        const next = current.slice(0, start) + `<ul>\n${wrapped}\n</ul>` + current.slice(end)
+        setter(next)
+        return
+      } else {
+        before = `<${tag}>`
+        after = `</${tag}>`
+      }
+      const next = current.slice(0, start) + before + (selected || 'texto') + after + current.slice(end)
+      setter(next)
+      setTimeout(() => {
+        try { el.focus() } catch {}
+      }, 0)
+    }
+    if (focus === 'encabezado') return wrap(encRef.current, setEncabezado, encabezado)
+    if (focus === 'cuerpo') return wrap(cuerpoRef.current, setCuerpo, cuerpo)
+    if (focus === 'firma') return wrap(firmaRef.current, setFirma, firma)
+    if (focus === 'asunto') return // no aplicar html al asunto
   }
 
   const validarObligatorias = (): string | null => {
@@ -224,6 +262,15 @@ export function PlantillasNotificaciones() {
               <label className="text-sm text-gray-600">Asunto</label>
               <Input ref={asuntoRef as any} value={asunto} onFocus={()=>setFocus('asunto')} onChange={e=>setAsunto(e.target.value)} placeholder="Asunto del correo" />
             </div>
+            <div className="col-span-2">
+              <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">Formato rápido (encabezado/cuerpo/firma):
+                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('b')}>B</Button>
+                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('i')}>I</Button>
+                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('u')}>U</Button>
+                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('ul')}>Lista</Button>
+                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('a')}>Enlace</Button>
+              </div>
+            </div>
             <div>
               <label className="text-sm text-gray-600">Encabezado</label>
               <Textarea ref={encRef} value={encabezado} onFocus={()=>setFocus('encabezado')} onChange={e=>setEncabezado(e.target.value)} rows={4} placeholder="Encabezado" />
@@ -260,10 +307,19 @@ export function PlantillasNotificaciones() {
             <pre className="whitespace-pre-wrap text-sm mt-2">{cuerpoFinal || '(sin contenido)'}</pre>
           </div>
 
-          <div className="flex items-end gap-2">
-            <div>
-              <label className="text-sm text-gray-600">Cliente de prueba (ID)</label>
-              <Input value={clienteIdPrueba} onChange={e=>setClienteIdPrueba(e.target.value ? Number(e.target.value) : '')} placeholder="123" />
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <label className="text-sm text-gray-600">Cliente de prueba</label>
+              <SearchableSelect
+                value={clienteIdPrueba ? String(clienteIdPrueba) : ''}
+                onSearch={setQueryCliente}
+                onChange={(val) => setClienteIdPrueba(val ? Number(val) : '')}
+                options={(resultadosClientes || []).map((c: any) => ({
+                  label: `${c.cedula} - ${c.nombres}`,
+                  value: String(c.id ?? c.cliente_id ?? ''),
+                }))}
+                placeholder="Buscar por cédula o nombre..."
+              />
             </div>
             <Button onClick={enviarPrueba}>Enviar prueba</Button>
           </div>
