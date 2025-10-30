@@ -355,7 +355,9 @@ def exportar_reporte_cartera(
                 db.add(audit)
                 db.commit()
             except Exception as e:
-                logger.warning(f"No se pudo registrar auditoría de exportación (Excel): {e}")
+                logger.warning(
+                    f"No se pudo registrar auditoría de exportación (Excel): {e}"
+                )
             return response
 
         elif formato.lower() == "pdf":
@@ -410,7 +412,9 @@ def exportar_reporte_cartera(
                 db.add(audit)
                 db.commit()
             except Exception as e:
-                logger.warning(f"No se pudo registrar auditoría de exportación (PDF): {e}")
+                logger.warning(
+                    f"No se pudo registrar auditoría de exportación (PDF): {e}"
+                )
             return response
 
         else:

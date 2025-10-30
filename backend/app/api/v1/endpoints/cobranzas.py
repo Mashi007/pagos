@@ -945,7 +945,9 @@ def informe_resumen_ejecutivo(
                 db.add(audit)
                 db.commit()
             except Exception as e:
-                logger.warning(f"No se pudo registrar auditoría exportación cobranzas (Excel): {e}")
+                logger.warning(
+                    f"No se pudo registrar auditoría exportación cobranzas (Excel): {e}"
+                )
             return respuesta
         elif formato.lower() == "pdf":
             respuesta = _generar_pdf_resumen_ejecutivo(datos_resumen)
@@ -962,7 +964,9 @@ def informe_resumen_ejecutivo(
                 db.add(audit)
                 db.commit()
             except Exception as e:
-                logger.warning(f"No se pudo registrar auditoría exportación cobranzas (PDF): {e}")
+                logger.warning(
+                    f"No se pudo registrar auditoría exportación cobranzas (PDF): {e}"
+                )
             return respuesta
         else:
             raise HTTPException(status_code=400, detail="Formato no válido")
