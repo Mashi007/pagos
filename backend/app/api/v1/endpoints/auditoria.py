@@ -339,6 +339,28 @@ def exportar_auditoria(
         # Crear archivo Excel desde datos unificados
         output = _crear_excel_auditoria_unificado(unified)
 
+        # Auditoría de exportación de Auditoría (solo admin)
+        try:
+            detalles = "Exportó auditoría unificada"
+            if usuario_email:
+                detalles += f" (usuario_email={usuario_email})"
+            if modulo:
+                detalles += f" (modulo={modulo})"
+            if accion:
+                detalles += f" (accion={accion})"
+            audit = Auditoria(
+                usuario_id=current_user.id,
+                accion="EXPORT",
+                entidad="AUDITORIA",
+                entidad_id=None,
+                detalles=detalles,
+                exito="EXITOSO",
+            )
+            db.add(audit)
+            db.commit()
+        except Exception as e:
+            logger.warning(f"No se pudo registrar auditoría exportación de auditoría: {e}")
+
         return Response(
             content=output.getvalue(),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

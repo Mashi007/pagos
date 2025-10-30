@@ -102,7 +102,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   
   // Estado para condiciones editables de aprobación
   const [condicionesAprobacion, setCondicionesAprobacion] = useState({
-    tasa_interes: 8.0,
+    tasa_interes: 0.0,
     plazo_maximo: 36,
     fecha_base_calculo: new Date().toISOString().split('T')[0],
     observaciones: ''
@@ -110,6 +110,18 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   
   const aplicarCondiciones = useAplicarCondicionesAprobacion()
   const updatePrestamo = useUpdatePrestamo()
+
+  // Reglas mínimas para considerar cada sección completa
+  const seccion1Completa =
+    (formData.ingresos_mensuales ?? 0) > 0 &&
+    (formData.gastos_fijos_mensuales ?? 0) >= 0 &&
+    (formData.otras_deudas ?? 0) >= 0
+
+  const seccion2Completa =
+    (formData.meses_trabajo ?? 0) >= 0 && !!formData.tipo_empleo && !!formData.sector_economico
+
+  // Se podrían agregar otras secciones si se vuelven obligatorias
+  const todasSeccionesCompletas = seccion1Completa && seccion2Completa
   
   // Calcular edad automáticamente desde la cédula del préstamo
   useEffect(() => {

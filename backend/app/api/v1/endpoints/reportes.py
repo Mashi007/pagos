@@ -20,6 +20,7 @@ from app.core.constants import EstadoPrestamo
 from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
+from app.models.auditoria import Auditoria
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -341,6 +342,20 @@ def exportar_reporte_cartera(
                 },
             )
             logger.info("[reportes.exportar] Excel generado correctamente")
+            # Auditoría de exportación
+            try:
+                audit = Auditoria(
+                    usuario_id=current_user.id,
+                    accion="EXPORT",
+                    entidad="REPORTES",
+                    entidad_id=None,
+                    detalles=f"Exportó cartera en Excel (fecha_corte={reporte.fecha_corte})",
+                    exito="EXITOSO",
+                )
+                db.add(audit)
+                db.commit()
+            except Exception as e:
+                logger.warning(f"No se pudo registrar auditoría de exportación (Excel): {e}")
             return response
 
         elif formato.lower() == "pdf":
@@ -382,6 +397,20 @@ def exportar_reporte_cartera(
                 },
             )
             logger.info("[reportes.exportar] PDF generado correctamente")
+            # Auditoría de exportación
+            try:
+                audit = Auditoria(
+                    usuario_id=current_user.id,
+                    accion="EXPORT",
+                    entidad="REPORTES",
+                    entidad_id=None,
+                    detalles=f"Exportó cartera en PDF (fecha_corte={reporte.fecha_corte})",
+                    exito="EXITOSO",
+                )
+                db.add(audit)
+                db.commit()
+            except Exception as e:
+                logger.warning(f"No se pudo registrar auditoría de exportación (PDF): {e}")
             return response
 
         else:

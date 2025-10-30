@@ -24,6 +24,7 @@ from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.user import User
+from app.models.auditoria import Auditoria
 from app.services.notificacion_automatica_service import NotificacionAutomaticaService
 
 router = APIRouter()
@@ -930,9 +931,39 @@ def informe_resumen_ejecutivo(
         if formato.lower() == "json":
             return datos_resumen
         elif formato.lower() == "excel":
-            return _generar_excel_resumen_ejecutivo(datos_resumen)
+            respuesta = _generar_excel_resumen_ejecutivo(datos_resumen)
+            # Auditoría de exportación
+            try:
+                audit = Auditoria(
+                    usuario_id=current_user.id,
+                    accion="EXPORT",
+                    entidad="COBRANZAS",
+                    entidad_id=None,
+                    detalles="Exportó Resumen Ejecutivo en Excel",
+                    exito="EXITOSO",
+                )
+                db.add(audit)
+                db.commit()
+            except Exception as e:
+                logger.warning(f"No se pudo registrar auditoría exportación cobranzas (Excel): {e}")
+            return respuesta
         elif formato.lower() == "pdf":
-            return _generar_pdf_resumen_ejecutivo(datos_resumen)
+            respuesta = _generar_pdf_resumen_ejecutivo(datos_resumen)
+            # Auditoría de exportación
+            try:
+                audit = Auditoria(
+                    usuario_id=current_user.id,
+                    accion="EXPORT",
+                    entidad="COBRANZAS",
+                    entidad_id=None,
+                    detalles="Exportó Resumen Ejecutivo en PDF",
+                    exito="EXITOSO",
+                )
+                db.add(audit)
+                db.commit()
+            except Exception as e:
+                logger.warning(f"No se pudo registrar auditoría exportación cobranzas (PDF): {e}")
+            return respuesta
         else:
             raise HTTPException(status_code=400, detail="Formato no válido")
 
