@@ -408,6 +408,12 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
               </button>
             ))}
           </div>
+          {/* Aviso de pendientes */}
+          {!todasSeccionesCompletas && (
+            <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded">
+              Debe completar los campos obligatorios en: { !seccion1Completa ? 'Criterio 1' : '' }{ !seccion1Completa && !seccion2Completa ? ', ' : ''}{ !seccion2Completa ? 'Criterio 2' : '' }.
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[60vh]">
@@ -1458,7 +1464,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isLoading}>
+              <Button type="submit" disabled={isLoading || !todasSeccionesCompletas || bloqueadoPorMora} title={!todasSeccionesCompletas ? 'Complete las secciones requeridas' : undefined}>
                 <Calculator className="h-4 w-4 mr-2" />
                 {isLoading ? 'Evaluando...' : 'Evaluar Riesgo'}
               </Button>
