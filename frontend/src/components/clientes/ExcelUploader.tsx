@@ -93,6 +93,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [showOnlyPending, setShowOnlyPending] = useState(false)
 
 
+  // Normalizador: si el valor es 'nn' (cualquier caso/espacios), convertir a vacío
+  const blankIfNN = (value: string | null | undefined): string => {
+    if (value == null) return ''
+    const trimmed = value.toString().trim()
+    return trimmed.toLowerCase() === 'nn' ? '' : trimmed
+  }
+
   // Función para manejar notificaciones de validación por fila completa
   const handleRowValidationNotification = (rowIndex: number, rowData: ExcelRow) => {
     const trackerKey = `row-${rowIndex}`
@@ -319,16 +326,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       setSavingProgress(prev => ({ ...prev, [row._rowIndex]: true }))
       
       const clienteData = {
-        cedula: row.cedula,
-        nombres: formatNombres(row.nombres),  // ✅ Aplicar formato Title Case y ya unificados (nombres + apellidos)
-        telefono: row.telefono,
-        email: row.email,
-        direccion: row.direccion,
-        fecha_nacimiento: convertirFechaParaBackend(row.fecha_nacimiento),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
-        ocupacion: row.ocupacion,
-        estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
+        cedula: blankIfNN(row.cedula),
+        nombres: formatNombres(blankIfNN(row.nombres)),  // ✅ Aplicar formato Title Case y ya unificados (nombres + apellidos)
+        telefono: blankIfNN(row.telefono),
+        email: blankIfNN(row.email).toLowerCase(),
+        direccion: blankIfNN(row.direccion),
+        fecha_nacimiento: convertirFechaParaBackend(blankIfNN(row.fecha_nacimiento)),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
+        ocupacion: blankIfNN(row.ocupacion),
+        estado: blankIfNN(row.estado).toUpperCase(), // ✅ Normalizar estado
         activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
-        notas: row.notas || 'NA'
+        notas: blankIfNN(row.notas) || 'NA'
       }
 
       try {
@@ -632,6 +639,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
   // 🔍 VALIDAR CAMPO INDIVIDUAL
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
+    // Regla NN: aceptar 'nn' como válido en cualquier campo
+    if (typeof value === 'string' && value.trim().toLowerCase() === 'nn') {
+      return { isValid: true, message: 'Valor omitido por NN' }
+    }
     switch (field) {
       case 'cedula':
         if (!value.trim()) return { isValid: false, message: 'Cédula requerida' }
@@ -983,16 +994,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       for (const row of validData) {
         try {
           const clienteData = {
-            cedula: row.cedula,
-            nombres: formatNombres(row.nombres),  // ✅ Aplicar formato Title Case al guardar
-            telefono: row.telefono,
-            email: row.email,
-            direccion: row.direccion,
-            fecha_nacimiento: convertirFechaParaBackend(row.fecha_nacimiento),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
-            ocupacion: row.ocupacion,
-            estado: row.estado.toUpperCase().trim(), // ✅ Normalizar estado
+            cedula: blankIfNN(row.cedula),
+            nombres: formatNombres(blankIfNN(row.nombres)),  // ✅ Aplicar formato Title Case al guardar
+            telefono: blankIfNN(row.telefono),
+            email: blankIfNN(row.email).toLowerCase(),
+            direccion: blankIfNN(row.direccion),
+            fecha_nacimiento: convertirFechaParaBackend(blankIfNN(row.fecha_nacimiento)),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
+            ocupacion: blankIfNN(row.ocupacion),
+            estado: blankIfNN(row.estado).toUpperCase(), // ✅ Normalizar estado
             activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
-            notas: row.notas || 'NA'
+            notas: blankIfNN(row.notas) || 'NA'
           }
           
           console.log(`🔄 Procesando fila ${row._rowIndex}:`, clienteData)

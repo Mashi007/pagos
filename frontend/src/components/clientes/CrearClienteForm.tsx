@@ -74,6 +74,12 @@ interface CrearClienteFormProps {
 export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated, onOpenEditExisting }: CrearClienteFormProps) {
   // Cierre global con ESC
   useEscapeClose(onClose, true)
+  // Normalizador: si el usuario coloca 'nn' (cualquier caso/espacios), convertir a vacío
+  const blankIfNN = (value: string | null | undefined): string => {
+    if (value == null) return ''
+    const trimmed = value.trim()
+    return trimmed.toLowerCase() === 'nn' ? '' : trimmed
+  }
   // ✅ Función para convertir DD/MM/YYYY a YYYY-MM-DD
   const convertirFechaAISO = (fechaDDMMYYYY: string): string => {
     // Si la fecha ya está en formato ISO (YYYY-MM-DD), devolverla tal cual
@@ -113,6 +119,12 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     const month = String(today.getMonth() + 1).padStart(2, '0')
     const year = today.getFullYear()
     return `${day}/${month}/${year}`
+  }
+
+  // Helper: detectar 'nn' (cualquier caso/espacios)
+  const isNN = (value: string | null | undefined): boolean => {
+    if (value == null) return false
+    return value.trim().toLowerCase() === 'nn'
   }
 
   const [formData, setFormData] = useState<FormData>({
@@ -279,6 +291,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   // ✅ Validaciones personalizadas para nombres y ocupacion
   // Regla: Mínimo 2 palabras, máximo 4 palabras en nombres+apellidos
   const validateNombres = (nombres: string): ValidationResult => {
+    if (isNN(nombres)) {
+      return { field: 'nombres', isValid: true, message: 'Valor omitido por NN' }
+    }
     if (!nombres || nombres.trim() === '') {
       return { field: 'nombres', isValid: false, message: 'Nombres y apellidos requeridos' }
     }
@@ -324,6 +339,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   }
   
   const validateOcupacion = (ocupacion: string): ValidationResult => {
+    if (isNN(ocupacion)) {
+      return { field: 'ocupacion', isValid: true, message: 'Valor omitido por NN' }
+    }
     if (!ocupacion || ocupacion.trim() === '') {
       return { field: 'ocupacion', isValid: false, message: 'Ocupación requerida' }
     }
@@ -344,19 +362,19 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   
   // ✅ Validación para dirección estructurada
   const validateDireccion = (): ValidationResult => {
-    if (!formData.callePrincipal || formData.callePrincipal.trim() === '') {
+    if ((!formData.callePrincipal || formData.callePrincipal.trim() === '') && !isNN(formData.callePrincipal)) {
       return { field: 'direccion', isValid: false, message: 'Calle Principal es requerida' }
     }
-    if (!formData.parroquia || formData.parroquia.trim() === '') {
+    if ((!formData.parroquia || formData.parroquia.trim() === '') && !isNN(formData.parroquia)) {
       return { field: 'direccion', isValid: false, message: 'Parroquia es requerida' }
     }
-    if (!formData.municipio || formData.municipio.trim() === '') {
+    if ((!formData.municipio || formData.municipio.trim() === '') && !isNN(formData.municipio)) {
       return { field: 'direccion', isValid: false, message: 'Municipio es requerido' }
     }
-    if (!formData.ciudad || formData.ciudad.trim() === '') {
+    if ((!formData.ciudad || formData.ciudad.trim() === '') && !isNN(formData.ciudad)) {
       return { field: 'direccion', isValid: false, message: 'Ciudad es requerida' }
     }
-    if (!formData.estadoDireccion || formData.estadoDireccion.trim() === '') {
+    if ((!formData.estadoDireccion || formData.estadoDireccion.trim() === '') && !isNN(formData.estadoDireccion)) {
       return { field: 'direccion', isValid: false, message: 'Estado es requerido' }
     }
     
@@ -365,6 +383,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
   // ✅ Validación personalizada para teléfono (10 dígitos, sin empezar por 0)
   const validateTelefono = (telefono: string): ValidationResult => {
+    if (isNN(telefono)) {
+      return { field: 'telefono', isValid: true, message: 'Valor omitido por NN' }
+    }
     if (!telefono || telefono.trim() === '') {
       return { field: 'telefono', isValid: false, message: 'Teléfono requerido' }
     }
@@ -391,6 +412,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   }
 
   const validateFechaNacimiento = (fecha: string): ValidationResult => {
+    if (isNN(fecha)) {
+      return { field: 'fechaNacimiento', isValid: true, message: 'Valor omitido por NN' }
+    }
     if (!fecha || fecha.trim() === '') {
       return { field: 'fechaNacimiento', isValid: false, message: 'Fecha de nacimiento requerida' }
     }
@@ -704,32 +728,32 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // ✅ VALIDACIÓN: Asegurar que campos de dirección requeridos NO estén vacíos
-    if (!formData.callePrincipal || !formData.callePrincipal.trim()) {
+    // ✅ VALIDACIÓN: Permitir vacío solo si el usuario ingresó 'NN'
+    if ((!formData.callePrincipal || !formData.callePrincipal.trim()) && !isNN(formData.callePrincipal)) {
       alert('⚠️ ERROR: Debe completar el campo Calle Principal')
       return
     }
-    if (!formData.parroquia || !formData.parroquia.trim()) {
+    if ((!formData.parroquia || !formData.parroquia.trim()) && !isNN(formData.parroquia)) {
       alert('⚠️ ERROR: Debe completar el campo Parroquia')
       return
     }
-    if (!formData.municipio || !formData.municipio.trim()) {
+    if ((!formData.municipio || !formData.municipio.trim()) && !isNN(formData.municipio)) {
       alert('⚠️ ERROR: Debe completar el campo Municipio')
       return
     }
-    if (!formData.ciudad || !formData.ciudad.trim()) {
+    if ((!formData.ciudad || !formData.ciudad.trim()) && !isNN(formData.ciudad)) {
       alert('⚠️ ERROR: Debe completar el campo Ciudad')
       return
     }
-    if (!formData.estadoDireccion || !formData.estadoDireccion.trim()) {
+    if ((!formData.estadoDireccion || !formData.estadoDireccion.trim()) && !isNN(formData.estadoDireccion)) {
       alert('⚠️ ERROR: Debe completar el campo Estado')
       return
     }
-    if (!formData.fechaNacimiento || !formData.fechaNacimiento.trim()) {
+    if ((!formData.fechaNacimiento || !formData.fechaNacimiento.trim()) && !isNN(formData.fechaNacimiento)) {
       alert('⚠️ ERROR: Debe completar el campo Fecha de Nacimiento')
       return
     }
-    if (!formData.ocupacion || !formData.ocupacion.trim()) {
+    if ((!formData.ocupacion || !formData.ocupacion.trim()) && !isNN(formData.ocupacion)) {
       alert('⚠️ ERROR: Debe completar el campo Ocupación')
       return
     }
@@ -741,34 +765,35 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     setIsSubmitting(true)
     
     try {
-      // ✅ Concatenar +58 con el número de teléfono
-      const telefonoCompleto = `+58${formData.telefono.replace(/\D/g, '').slice(0, 10)}`
+      // ✅ Normalizar 'nn'→'' y concatenar +58 con el número de teléfono
+      const telefonoLimpio = blankIfNN(formData.telefono).replace(/\D/g, '').slice(0, 10)
+      const telefonoCompleto = `+58${telefonoLimpio}`
       
-      // ✅ Formatear campos a Title Case antes de guardar
-      const nombresFormateado = toTitleCase(formData.nombres.trim())
-      const ocupacionFormateada = toTitleCase(formData.ocupacion.trim())
+      // ✅ Normalizar 'nn'→'' y formatear campos a Title Case antes de guardar
+      const nombresFormateado = toTitleCase(blankIfNN(formData.nombres))
+      const ocupacionFormateada = toTitleCase(blankIfNN(formData.ocupacion))
       
       // ✅ Construir dirección como JSON estructurado con formateo Title Case
       const direccionCompleta = JSON.stringify({
-        callePrincipal: toTitleCase(formData.callePrincipal.trim()),
-        calleTransversal: formData.calleTransversal.trim() ? toTitleCase(formData.calleTransversal.trim()) : null,
-        descripcion: formData.descripcion.trim() || null,  // ✅ Descripción sin formatear
-        parroquia: toTitleCase(formData.parroquia.trim()),
-        municipio: toTitleCase(formData.municipio.trim()),
-        ciudad: toTitleCase(formData.ciudad.trim()),
-        estado: toTitleCase(formData.estadoDireccion.trim())
+        callePrincipal: toTitleCase(blankIfNN(formData.callePrincipal)),
+        calleTransversal: blankIfNN(formData.calleTransversal) ? toTitleCase(blankIfNN(formData.calleTransversal)) : null,
+        descripcion: blankIfNN(formData.descripcion) || null,  // ✅ Descripción sin formatear si queda vacía
+        parroquia: toTitleCase(blankIfNN(formData.parroquia)),
+        municipio: toTitleCase(blankIfNN(formData.municipio)),
+        ciudad: toTitleCase(blankIfNN(formData.ciudad)),
+        estado: toTitleCase(blankIfNN(formData.estadoDireccion))
       })
       
       const clienteData = {
-        cedula: formatCedula(formData.cedula.trim()),  // ✅ Cédula con letra inicial en mayúscula
+        cedula: formatCedula(blankIfNN(formData.cedula)),  // ✅ Cédula con letra inicial en mayúscula
         nombres: nombresFormateado,  // ✅ nombres formateados con Title Case
         telefono: telefonoCompleto,  // ✅ Formato: +581234567890
-        email: formData.email.trim().toLowerCase(),  // Email en minúsculas
+        email: blankIfNN(formData.email).toLowerCase(),  // Email en minúsculas
         direccion: direccionCompleta,  // ✅ Dirección estructurada como JSON con Title Case
-        fecha_nacimiento: convertirFechaAISO(formData.fechaNacimiento), // ✅ Convertir DD/MM/YYYY → YYYY-MM-DD
+        fecha_nacimiento: convertirFechaAISO(blankIfNN(formData.fechaNacimiento)), // ✅ Convertir DD/MM/YYYY → YYYY-MM-DD
         ocupacion: ocupacionFormateada,  // ✅ Ocupación formateada con Title Case
         estado: formData.estado,
-        notas: formData.notas || 'NA'
+        notas: blankIfNN(formData.notas) || 'NA'
       }
 
       console.log('🔍 DEBUG - Datos a enviar al backend:', clienteData)
