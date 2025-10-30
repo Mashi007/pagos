@@ -533,7 +533,18 @@ def buscar_prestamos_por_cedula(
     current_user: User = Depends(get_current_user),
 ):
     """Buscar préstamos por cédula del cliente"""
-    prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
+    # Evitar seleccionar columnas nuevas que aún no existen en algunas BD
+    prestamos = (
+        db.query(
+            Prestamo.id,
+            Prestamo.producto,
+            Prestamo.total_financiamiento,
+            Prestamo.estado,
+            Prestamo.fecha_registro,
+        )
+        .filter(Prestamo.cedula == cedula)
+        .all()
+    )
     # Serializar de forma segura
     return [PrestamoResponse.model_validate(serializar_prestamo(p)) for p in prestamos]
 
@@ -556,9 +567,9 @@ def obtener_resumen_prestamos_cliente(
     total_saldo = Decimal("0.00")
     total_cuotas_mora = 0
 
-    for prestamo in prestamos:
+    for row in prestamos:
         # Obtener cuotas del préstamo
-        cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).all()
+        cuotas = db.query(Cuota).filter(Cuota.prestamo_id == row.id).all()
 
         # Calcular saldo pendiente (suma de capital_pendiente + interes_pendiente + monto_mora)
         saldo_pendiente = Decimal("0.00")
@@ -578,24 +589,23 @@ def obtener_resumen_prestamos_cliente(
 
         resumen_prestamos.append(
             {
-                "id": prestamo.id,
-                "modelo_vehiculo": getattr(prestamo, "modelo_vehiculo", None)
-                or prestamo.producto,
-                "total_financiamiento": float(prestamo.total_financiamiento),
+                "id": row.id,
+                # Usar producto como respaldo. Evitamos consultar modelo_vehiculo
+                # ya que puede no existir físicamente en la tabla todavía.
+                "modelo_vehiculo": row.producto,
+                "total_financiamiento": float(row.total_financiamiento),
                 "saldo_pendiente": float(saldo_pendiente),
                 "cuotas_en_mora": cuotas_en_mora,
-                "estado": prestamo.estado,
+                "estado": row.estado,
                 "fecha_registro": (
-                    prestamo.fecha_registro.isoformat()
-                    if prestamo.fecha_registro
-                    else None
+                    row.fecha_registro.isoformat() if row.fecha_registro else None
                 ),
             }
         )
 
     return {
         "tiene_prestamos": True,
-        "total_prestamos": len(prestamos),
+        "total_prestamos": len(resumen_prestamos),
         "total_saldo_pendiente": float(total_saldo),
         "total_cuotas_mora": total_cuotas_mora,
         "prestamos": resumen_prestamos,

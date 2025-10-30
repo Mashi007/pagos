@@ -42,6 +42,7 @@ class PrestamoCreate(PrestamoBase):
     analista: Optional[str] = Field(None, max_length=100)
     modelo_vehiculo: Optional[str] = Field(None, max_length=100)
     usuario_autoriza: Optional[str] = Field(None, max_length=100)
+    observaciones: Optional[str] = None
 
 
 class PrestamoUpdate(BaseModel):
