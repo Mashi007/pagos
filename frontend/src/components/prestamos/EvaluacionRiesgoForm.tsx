@@ -28,6 +28,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useAplicarCondicionesAprobacion, useUpdatePrestamo } from '@/hooks/usePrestamos'
 import { Prestamo } from '@/types'
 import { prestamoService } from '@/services/prestamoService'
+import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { clienteService } from '@/services/clienteService'
 import { toast } from 'sonner'
 
@@ -89,6 +90,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   // Permitir cerrar con Escape
   useEscapeClose(onClose, true)
   const { isAdmin } = usePermissions()
+  const { user } = useSimpleAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [isAprobando, setIsAprobando] = useState(false)
   const [resultado, setResultado] = useState<any>(null)
@@ -249,9 +251,10 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
       return
     }
     
+    const correo = user?.email || 'usuario@dominio'
     const confirmacion = window.confirm(
       '⚠️ CONFIRMACIÓN IMPORTANTE\n\n' +
-      '¿Confirma que la información ingresada refleja FIELMENTE los documentos presentados?\n\n' +
+      `Yo (correo: ${correo}) declaro que he revisado los documentos y que los mismos respaldan:\n` +
       '✓ Los ingresos coinciden con documentos\n' +
       '✓ Los gastos son verificables\n' +
       '✓ La información de empleo es correcta\n' +

@@ -16,6 +16,7 @@ from app.schemas.auditoria import (
     AuditoriaListResponse,
     AuditoriaResponse,
     AuditoriaStatsResponse,
+    AuditoriaCreate,
 )
 
 logger = logging.getLogger(__name__)
@@ -532,4 +533,51 @@ def estadisticas_auditoria(
         )
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas de auditoría: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
+@router.post("/auditoria/registrar", response_model=AuditoriaResponse)
+def registrar_evento_auditoria(
+    data: AuditoriaCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Registrar un evento genérico de auditoría (ej.: confirmación de advertencia)
+
+    Campos esperados en body: modulo, accion, descripcion, registro_id (opcional)
+    """
+    try:
+        audit = Auditoria(
+            usuario_id=current_user.id,
+            accion=data.accion,
+            entidad=data.modulo,
+            entidad_id=data.registro_id,
+            detalles=data.descripcion,
+            ip_address=None,
+            user_agent=None,
+            exito="EXITOSO",
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(audit)
+
+        item = {
+            "id": audit.id,
+            "usuario_id": audit.usuario_id,
+            "usuario_email": getattr(audit.usuario, "email", None),
+            "accion": audit.accion,
+            "modulo": getattr(audit, "entidad", None),
+            "tabla": getattr(audit, "entidad", None),
+            "registro_id": getattr(audit, "entidad_id", None),
+            "descripcion": getattr(audit, "detalles", None),
+            "ip_address": getattr(audit, "ip_address", None),
+            "user_agent": getattr(audit, "user_agent", None),
+            "resultado": getattr(audit, "exito", None) or "EXITOSO",
+            "mensaje_error": getattr(audit, "mensaje_error", None),
+            "fecha": getattr(audit, "fecha", None),
+        }
+        return AuditoriaResponse.model_validate(item)
+    except Exception as e:
+        logger.error(f"Error registrando auditoría: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")

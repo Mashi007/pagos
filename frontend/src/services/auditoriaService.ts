@@ -122,6 +122,17 @@ class AuditoriaService {
     }
   }
 
+  // Registrar evento genérico de auditoría (confirmaciones, acciones manuales)
+  async registrarEvento(params: {
+    modulo: string
+    accion: string
+    descripcion: string
+    registro_id?: number
+  }): Promise<Auditoria> {
+    const response = await apiClient.post<Auditoria>(`${this.baseUrl}/registrar`, params)
+    return response
+  }
+
   // Descargar archivo Excel
   async descargarExcel(filters?: Omit<AuditoriaFilters, 'skip' | 'limit' | 'ordenar_por' | 'orden'>): Promise<void> {
     try {
