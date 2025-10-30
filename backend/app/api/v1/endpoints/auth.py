@@ -309,5 +309,7 @@ async def logout(
 
         return {"message": "Sesión cerrada"}
     except Exception as e:
-        logging.getLogger(__name__).warning(f"No se pudo registrar auditoría LOGOUT: {e}")
+        logging.getLogger(__name__).warning(
+            f"No se pudo registrar auditoría LOGOUT: {e}"
+        )
         return {"message": "Sesión cerrada"}

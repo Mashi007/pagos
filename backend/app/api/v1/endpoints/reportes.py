@@ -295,7 +295,9 @@ def exportar_reporte_cartera(
 ):
     """Exporta reporte de cartera en Excel o PDF."""
     try:
-        logger.info(f"[reportes.exportar] Exportando reporte cartera en formato {formato}")
+        logger.info(
+            f"[reportes.exportar] Exportando reporte cartera en formato {formato}"
+        )
         # Obtener datos del reporte
         reporte = reporte_cartera(fecha_corte, db, current_user)
 
