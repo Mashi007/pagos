@@ -66,9 +66,11 @@ interface CrearClienteFormProps {
   onClose: () => void
   onSuccess: () => void
   onClienteCreated?: () => void
+  // Opcional: abrir edición desde el listado cuando detectamos duplicado
+  onOpenEditExisting?: (clienteId: number) => void
 }
 
-export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated }: CrearClienteFormProps) {
+export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated, onOpenEditExisting }: CrearClienteFormProps) {
   // ✅ Función para convertir DD/MM/YYYY a YYYY-MM-DD
   const convertirFechaAISO = (fechaDDMMYYYY: string): string => {
     // Si la fecha ya está en formato ISO (YYYY-MM-DD), devolverla tal cual
@@ -803,8 +805,28 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message
       }
-      
-      alert(`⚠️ ${errorMessage}`)
+
+      // Intentar extraer ID existente del mensaje
+      let existingId: number | null = null
+      const detailText: string = error.response?.data?.detail || ''
+      const match = detailText.match(/ID:\s*(\d+)/i)
+      if (match && match[1]) {
+        existingId = Number(match[1])
+      }
+
+      // Notificar y ofrecer abrir en edición
+      if (error.response?.status === 400) {
+        const wantsEdit = window.confirm(`⚠️ ${errorMessage}\n\n¿Deseas abrir el cliente existente para editarlo?`)
+        if (wantsEdit) {
+          // Cerrar el modal de creación antes de abrir edición
+          onClose()
+          if (existingId && onOpenEditExisting) {
+            onOpenEditExisting(existingId)
+          }
+        }
+      } else {
+        alert(`⚠️ ${errorMessage}`)
+      }
     } finally {
       // ✅ CORRECCIÓN: Siempre ejecutar setIsSubmitting(false) en finally
       // El manejo específico de duplicados ya se hizo en el catch block

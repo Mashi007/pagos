@@ -423,6 +423,17 @@ export function ClientesList() {
               queryClient.invalidateQueries({ queryKey: ['dashboard'] })
               queryClient.invalidateQueries({ queryKey: ['kpis'] })
             }}
+            onOpenEditExisting={async (clienteId: number) => {
+              try {
+                const clienteCompleto = await clienteService.getCliente(String(clienteId))
+                setClienteSeleccionado(clienteCompleto)
+                setShowEditarCliente(true)
+              } catch (e) {
+                // Fallback: abrir con ID solamente
+                setClienteSeleccionado({ id: clienteId })
+                setShowEditarCliente(true)
+              }
+            }}
           />
         )}
       </AnimatePresence>

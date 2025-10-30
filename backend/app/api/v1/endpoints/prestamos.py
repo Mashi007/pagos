@@ -341,7 +341,29 @@ def listar_prestamos(
     try:
         logger.info(f"Listar préstamos - Usuario: {current_user.email}")
 
-        query = db.query(Prestamo)
+        # Consulta segura: evitar columnas nuevas que podrían no existir en BD
+        query = db.query(
+            Prestamo.id,
+            Prestamo.cliente_id,
+            Prestamo.cedula,
+            Prestamo.nombres,
+            Prestamo.total_financiamiento,
+            Prestamo.fecha_requerimiento,
+            Prestamo.modalidad_pago,
+            Prestamo.numero_cuotas,
+            Prestamo.cuota_periodo,
+            Prestamo.tasa_interes,
+            Prestamo.fecha_base_calculo,
+            Prestamo.producto,
+            Prestamo.producto_financiero,
+            Prestamo.estado,
+            Prestamo.usuario_proponente,
+            Prestamo.usuario_aprobador,
+            Prestamo.observaciones,
+            Prestamo.fecha_registro,
+            Prestamo.fecha_aprobacion,
+            Prestamo.fecha_actualizacion,
+        )
 
         if search:
             search_pattern = f"%{search}%"
@@ -386,16 +408,42 @@ def listar_prestamos(
 
         # Serializar préstamos usando PrestamoResponse
         prestamos_serializados = []
-        for prestamo in prestamos:
+        for row in prestamos:
             try:
-                prestamo_data = serializar_prestamo(prestamo)
+                # Mapear fila segura a dict y complementar con None en columnas nuevas
+                prestamo_data = {
+                    "id": row.id,
+                    "cliente_id": row.cliente_id,
+                    "cedula": row.cedula,
+                    "nombres": row.nombres,
+                    "total_financiamiento": row.total_financiamiento,
+                    "fecha_requerimiento": row.fecha_requerimiento,
+                    "modalidad_pago": row.modalidad_pago,
+                    "numero_cuotas": row.numero_cuotas,
+                    "cuota_periodo": row.cuota_periodo,
+                    "tasa_interes": row.tasa_interes,
+                    "fecha_base_calculo": row.fecha_base_calculo,
+                    "producto": row.producto,
+                    "producto_financiero": row.producto_financiero,
+                    "concesionario": None,
+                    "analista": None,
+                    "modelo_vehiculo": None,
+                    "estado": row.estado,
+                    "usuario_proponente": row.usuario_proponente,
+                    "usuario_aprobador": row.usuario_aprobador,
+                    "usuario_autoriza": None,
+                    "observaciones": row.observaciones,
+                    "fecha_registro": row.fecha_registro,
+                    "fecha_aprobacion": row.fecha_aprobacion,
+                    "fecha_actualizacion": row.fecha_actualizacion,
+                }
                 prestamo_dict = PrestamoResponse.model_validate(
                     prestamo_data
                 ).model_dump()
                 prestamos_serializados.append(prestamo_dict)
             except Exception as e:
                 logger.error(
-                    f"Error serializando préstamo {prestamo.id}: {str(e)}",
+                    f"Error serializando préstamo en listar: {str(e)}",
                     exc_info=True,
                 )
                 # Continuar con el siguiente préstamo en lugar de fallar completamente
