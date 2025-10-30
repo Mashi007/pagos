@@ -394,7 +394,9 @@ def actualizar_plantilla(
             db.add(audit)
             db.commit()
         except Exception as e:
-            logger.warning(f"No se pudo registrar auditoría actualización plantilla: {e}")
+            logger.warning(
+                f"No se pudo registrar auditoría actualización plantilla: {e}"
+            )
 
         return plantilla_existente
 
