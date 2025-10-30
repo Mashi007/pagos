@@ -111,17 +111,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   const aplicarCondiciones = useAplicarCondicionesAprobacion()
   const updatePrestamo = useUpdatePrestamo()
 
-  // Reglas mínimas para considerar cada sección completa
-  const seccion1Completa =
-    (formData.ingresos_mensuales ?? 0) > 0 &&
-    (formData.gastos_fijos_mensuales ?? 0) >= 0 &&
-    (formData.otras_deudas ?? 0) >= 0
-
-  const seccion2Completa =
-    (formData.meses_trabajo ?? 0) >= 0 && !!formData.tipo_empleo && !!formData.sector_economico
-
-  // Se podrían agregar otras secciones si se vuelven obligatorias
-  const todasSeccionesCompletas = seccion1Completa && seccion2Completa
+  // (moved below formData) - reglas de completitud por sección
   
   // Calcular edad automáticamente desde la cédula del préstamo
   useEffect(() => {
@@ -254,6 +244,18 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     // Criterio 7: Capacidad de Maniobra (5 puntos - NO requiere campos adicionales)
     // Se calcula automáticamente: Saldo Residual = Ingresos - Gastos - Deudas - Cuota
   })
+
+  // Reglas mínimas para considerar cada sección completa
+  const seccion1Completa =
+    (formData.ingresos_mensuales ?? 0) > 0 &&
+    (formData.gastos_fijos_mensuales ?? 0) >= 0 &&
+    (formData.otras_deudas ?? 0) >= 0
+
+  const seccion2Completa =
+    (formData.meses_trabajo ?? 0) >= 0 && !!formData.tipo_empleo && !!formData.sector_economico
+
+  // TODO: Añadir secciones 3–5 como obligatorias (cuando definamos mínimos)
+  const todasSeccionesCompletas = seccion1Completa && seccion2Completa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

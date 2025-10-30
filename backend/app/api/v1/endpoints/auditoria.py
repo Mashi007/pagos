@@ -26,11 +26,13 @@ router = APIRouter()
 def _aplicar_filtros_auditoria(
     query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
 ):
-    # Aplicar filtros a la query de auditoría
+    # Aplicar filtros a la query de auditoría (usando columnas seguras)
     if usuario_email:
-        query = query.filter(Auditoria.usuario_email.ilike(f"%{usuario_email}%"))
+        query = query.join(User, User.id == Auditoria.usuario_id).filter(
+            User.email.ilike(f"%{usuario_email}%")
+        )
     if modulo:
-        query = query.filter(Auditoria.modulo == modulo)
+        query = query.filter(Auditoria.entidad == modulo)
     if accion:
         query = query.filter(Auditoria.accion == accion)
     if fecha_desde:
@@ -41,20 +43,9 @@ def _aplicar_filtros_auditoria(
 
 
 def _aplicar_ordenamiento_auditoria(query, ordenar_por, orden):
-    # Aplicar ordenamiento a la query de auditoría
-    if ordenar_por == "usuario_email":
-        order_field = Auditoria.usuario_email
-    elif ordenar_por == "modulo":
-        order_field = Auditoria.modulo
-    elif ordenar_por == "accion":
-        order_field = Auditoria.accion
-    else:
-        order_field = Auditoria.fecha
-
-    if orden == "asc":
-        return query.order_by(asc(order_field))
-    else:
-        return query.order_by(desc(order_field))
+    # Ordenar en SQL solo por fecha; el resto se ordena luego en memoria
+    order_field = Auditoria.fecha
+    return query.order_by(asc(order_field) if orden == "asc" else desc(order_field))
 
 
 def _calcular_paginacion_auditoria(total, limit, skip):
@@ -452,16 +443,10 @@ def estadisticas_auditoria(
 
         # Acciones por módulo (entidad)
         acciones_por_modulo = {}
-        acciones_por_modulo_rows = (
-            db.query(
-                getattr(Auditoria, "entidad").label("modulo"), func.count(Auditoria.id)
-            )
-            .group_by(getattr(Auditoria, "entidad"))
-            .all()
-        )
-        for modulo_val, cnt in acciones_por_modulo_rows:
-            key = modulo_val or "DESCONOCIDO"
-            acciones_por_modulo[key] = acciones_por_modulo.get(key, 0) + cnt
+        # Calcular acciones por módulo de forma segura
+        for r in db.query(Auditoria.entidad).all():
+            key = getattr(r, "entidad", None) or "DESCONOCIDO"
+            acciones_por_modulo[key] = acciones_por_modulo.get(key, 0) + 1
         acciones_por_modulo["PRESTAMOS"] = acciones_por_modulo.get("PRESTAMOS", 0) + (
             db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
         )

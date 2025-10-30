@@ -82,8 +82,11 @@ def calcular_cuotas(
 
 
 def obtener_datos_cliente(cedula: str, db: Session) -> Optional[Cliente]:
-    """Obtiene los datos del cliente por cédula"""
-    return db.query(Cliente).filter(Cliente.cedula == cedula).first()
+    """Obtiene los datos del cliente por cédula (normalizando mayúsculas/espacios)"""
+    if not cedula:
+        return None
+    ced_norm = str(cedula).strip().upper()
+    return db.query(Cliente).filter(Cliente.cedula == ced_norm).first()
 
 
 def verificar_permisos_edicion(prestamo: Prestamo, current_user: User):
@@ -494,7 +497,9 @@ def crear_prestamo(
         logger.info(f"Crear préstamo - Usuario: {current_user.email}")
 
         # 1. Verificar que el cliente existe
-        cliente = obtener_datos_cliente(prestamo_data.cedula, db)
+        # Normalizar cédula (mayúsculas/sin espacios) para buscar y guardar
+        cedula_norm = (prestamo_data.cedula or "").strip().upper()
+        cliente = obtener_datos_cliente(cedula_norm, db)
         if not cliente:
             raise HTTPException(
                 status_code=404,
@@ -543,7 +548,7 @@ def crear_prestamo(
         # 4. Crear el préstamo
         prestamo = Prestamo(
             cliente_id=cliente.id,
-            cedula=prestamo_data.cedula,
+            cedula=cedula_norm,
             nombres=cliente.nombres,
             total_financiamiento=prestamo_data.total_financiamiento,
             fecha_requerimiento=prestamo_data.fecha_requerimiento,

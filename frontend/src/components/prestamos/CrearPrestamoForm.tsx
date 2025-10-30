@@ -99,6 +99,9 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const [numeroCuotas, setNumeroCuotas] = useState<number>(12) // Valor por defecto: 12 cuotas
   const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(0)
 
+  // Errores de UI para marcar campos obligatorios visualmente
+  const [uiErrors, setUiErrors] = useState<{ concesionario?: boolean; analista?: boolean }>({})
+
   // Calcular anticipo como 30% del valor activo automáticamente
   useEffect(() => {
     if (valorActivo > 0) {
@@ -216,12 +219,11 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     }
     
     // Requeridos adicionales del formulario (producto/producto_financiero se completan automáticamente al enviar)
-    if (!formData.concesionario || String(formData.concesionario).trim() === '') {
-      errors.push('Debe seleccionar un Concesionario')
-    }
-    if (!formData.analista || String(formData.analista).trim() === '') {
-      errors.push('Debe seleccionar un Analista')
-    }
+    const faltaConcesionario = !formData.concesionario || String(formData.concesionario).trim() === ''
+    const faltaAnalista = !formData.analista || String(formData.analista).trim() === ''
+    if (faltaConcesionario) errors.push('Debe seleccionar un Concesionario')
+    if (faltaAnalista) errors.push('Debe seleccionar un Analista')
+    setUiErrors({ concesionario: faltaConcesionario, analista: faltaAnalista })
     if (!formData.modelo_vehiculo || String(formData.modelo_vehiculo).trim() === '') {
       errors.push('Debe seleccionar un Modelo de Vehículo')
     }
@@ -386,7 +388,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                   <Input
                     placeholder="Buscar por cédula..."
                     value={formData.cedula}
-                    onChange={(e) => setFormData({ ...formData, cedula: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, cedula: e.target.value.toUpperCase() })}
                     disabled={isReadOnly || isLoadingCliente}
                   />
                 </div>
@@ -705,7 +707,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                     <label className="block text-sm font-medium mb-1">
                       Concesionario
                     </label>
-                    <Select
+                  <Select
                       value={formData.concesionario ?? ''}
                       onValueChange={(value) => setFormData({ 
                         ...formData, 
@@ -713,7 +715,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       })}
                       disabled={isReadOnly}
                     >
-                      <SelectTrigger>
+                    <SelectTrigger className={uiErrors.concesionario ? 'border-red-500' : undefined}>
                         <SelectValue placeholder="Seleccionar concesionario" />
                       </SelectTrigger>
                       <SelectContent>
@@ -724,13 +726,16 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                         ))}
                       </SelectContent>
                     </Select>
+                  {uiErrors.concesionario && (
+                    <p className="mt-1 text-xs text-red-600">Seleccione un concesionario</p>
+                  )}
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium mb-1">
                       Analista
                     </label>
-                    <Select
+                  <Select
                       value={formData.analista ?? ''}
                       onValueChange={(value) => setFormData({ 
                         ...formData, 
@@ -738,7 +743,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       })}
                       disabled={isReadOnly}
                     >
-                      <SelectTrigger>
+                    <SelectTrigger className={uiErrors.analista ? 'border-red-500' : undefined}>
                         <SelectValue placeholder="Seleccionar analista" />
                       </SelectTrigger>
                       <SelectContent>
@@ -749,6 +754,9 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                         ))}
                       </SelectContent>
                     </Select>
+                  {uiErrors.analista && (
+                    <p className="mt-1 text-xs text-red-600">Seleccione un analista</p>
+                  )}
                   </div>
 
                   {/* Modelo movido arriba */}
