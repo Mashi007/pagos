@@ -196,6 +196,124 @@ def actualizar_pago(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
+# ============================================
+# NUEVO: Listado de últimos pagos por cédula
+# ============================================
+@router.get("/ultimos", response_model=dict)
+def listar_ultimos_pagos(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    cedula: Optional[str] = None,
+    estado: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Devuelve el último pago por cédula y métricas agregadas del balance general."""
+    try:
+        # Subconsulta: última fecha_registro por cédula
+        sub_ultimos = (
+            db.query(
+                Pago.cedula_cliente.label("cedula"),
+                func.max(Pago.fecha_registro).label("max_fecha"),
+            )
+            .group_by(Pago.cedula_cliente)
+            .subquery()
+        )
+
+        # Join para obtener el registro de pago completo de esa última fecha
+        pagos_ultimos_q = (
+            db.query(Pago)
+            .join(
+                sub_ultimos,
+                (Pago.cedula_cliente == sub_ultimos.c.cedula)
+                & (Pago.fecha_registro == sub_ultimos.c.max_fecha),
+            )
+        )
+
+        # Filtros
+        if cedula:
+            pagos_ultimos_q = pagos_ultimos_q.filter(Pago.cedula_cliente == cedula)
+        if estado:
+            pagos_ultimos_q = pagos_ultimos_q.filter(Pago.estado == estado)
+
+        # Total para paginación
+        total = pagos_ultimos_q.count()
+
+        # Paginación (ordenar por fecha_registro desc)
+        offset = (page - 1) * per_page
+        pagos_ultimos = (
+            pagos_ultimos_q.order_by(Pago.fecha_registro.desc())
+            .offset(offset)
+            .limit(per_page)
+            .all()
+        )
+
+        # Para cada cédula, calcular agregados sobre amortización (todas sus deudas)
+        items = []
+        from app.models.amortizacion import Cuota
+        from app.models.prestamo import Prestamo
+        from decimal import Decimal
+        from datetime import date
+
+        for pago in pagos_ultimos:
+            # Préstamos del cliente
+            prestamos_ids = [
+                p.id
+                for p in db.query(Prestamo.id).filter(Prestamo.cedula == pago.cedula_cliente).all()
+            ]
+
+            total_prestamos = len(prestamos_ids)
+
+            cuotas_atrasadas = 0
+            saldo_vencido: Decimal = Decimal("0.00")
+            if prestamos_ids:
+                cuotas_q = db.query(Cuota).filter(Cuota.prestamo_id.in_(prestamos_ids))
+                # Contar vencidas y no pagadas
+                cuotas_atrasadas = (
+                    db.query(func.count(Cuota.id))
+                    .filter(
+                        Cuota.prestamo_id.in_(prestamos_ids),
+                        Cuota.fecha_vencimiento < date.today(),
+                        Cuota.estado != "PAGADO",
+                    )
+                    .scalar()
+                    or 0
+                )
+                # Suma de saldos pendientes (capital+interes+mora) de no pagadas
+                for c in cuotas_q:
+                    if c.estado != "PAGADO":
+                        saldo_vencido += (
+                            (c.capital_pendiente or Decimal("0.00"))
+                            + (c.interes_pendiente or Decimal("0.00"))
+                            + (c.monto_mora or Decimal("0.00"))
+                        )
+
+            items.append(
+                {
+                    "cedula": pago.cedula_cliente,
+                    "pago_id": pago.id,
+                    "prestamo_id": pago.prestamo_id,
+                    "estado_pago": pago.estado,
+                    "monto_ultimo_pago": float(pago.monto_pagado),
+                    "fecha_ultimo_pago": pago.fecha_pago.isoformat() if pago.fecha_pago else None,
+                    "cuotas_atrasadas": int(cuotas_atrasadas),
+                    "saldo_vencido": float(saldo_vencido),
+                    "total_prestamos": total_prestamos,
+                }
+            )
+
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": (total + per_page - 1) // per_page if total > 0 else 0,
+        }
+    except Exception as e:
+        logger.error(f"Error en listar_ultimos_pagos: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
 def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
     """
     Aplica un pago a las cuotas correspondientes según la regla de negocio:

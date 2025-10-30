@@ -216,7 +216,7 @@ export function ModelosVehiculosConfig() {
           </Button>
           <Button onClick={() => {
             setEditingModelo(null)
-            setFormData({ modelo: '', activo: true })
+            setFormData({ modelo: '', activo: true, precio: 0 })
             setValidationError('')
             setShowCreateForm(true)
           }}>

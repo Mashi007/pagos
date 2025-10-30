@@ -213,7 +213,7 @@ export function ModelosVehiculos() {
         <div className="flex items-center space-x-2">
           <Button onClick={() => {
             setEditingModelo(null)
-            setFormData({ modelo: '', activo: true })
+            setFormData({ modelo: '', activo: true, precio: 0 })
             setValidationError('')
             setShowCreateForm(true)
           }}>
