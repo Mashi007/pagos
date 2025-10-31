@@ -51,6 +51,19 @@ app.use((req, res, next) => {
 });
 
 // ============================================
+// LOGGING MIDDLEWARE - Para debug de peticiones
+// ============================================
+app.use((req, res, next) => {
+  // Loggear todas las peticiones a /api (POST, GET, etc.)
+  if (req.path.startsWith('/api')) {
+    console.log(`📥 [${req.method}] Petición API recibida: ${req.path}`);
+    console.log(`   originalUrl: ${req.originalUrl || req.url}`);
+    console.log(`   headers.host: ${req.headers.host}`);
+  }
+  next();
+});
+
+// ============================================
 // PROXY /api -> Backend (Render)
 // ============================================
 // IMPORTANTE: Proxy debe ir ANTES de servir archivos estáticos
