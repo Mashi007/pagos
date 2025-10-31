@@ -73,52 +73,23 @@ app.use((req, res, next) => {
 // PROXY /api -> Backend (Render)
 // ============================================
 // IMPORTANTE: Proxy debe ir ANTES de servir archivos estáticos
-// Capturar SOLO las peticiones a /api (GET, POST, PUT, DELETE, etc.)
+// Usar app.use('/api', ...) para que Express maneje el routing
+// Esto asegura que SOLO rutas /api pasen por el proxy
 if (API_URL) {
   console.log(`➡️  Proxy de /api hacia: ${API_URL}`);
   const proxyMiddleware = createProxyMiddleware({
     target: API_URL,
     changeOrigin: true,
     xfwd: true,
-    logLevel: 'debug',
-    // Filtrar SOLO rutas que empiecen con /api
-    // Las rutas de la SPA (como /clientes) NO deben pasar por aquí
-    filter: (pathname, req) => {
-      const matches = pathname.startsWith('/api');
-      if (matches) {
-        console.log(`🔍 Filter: "${pathname}" -> MATCH (proxying)`);
-      } else {
-        // Log solo para rutas problemáticas (no deberían aparecer muchos)
-        if (pathname !== '/favicon.ico' && !pathname.startsWith('/_') && pathname !== '/') {
-          console.log(`🔍 Filter: "${pathname}" -> NO MATCH (es ruta de SPA, NO proxying)`);
-        }
-      }
-      return matches;
-    },
-    // IMPORTANTE: pathRewrite solo se ejecuta si filter devuelve true
-    // El path que llega es "/api/v1/clientes", lo mantenemos tal cual
+    logLevel: 'info', // Reducir verbosidad
+    // IMPORTANTE: Cuando usamos app.use('/api', ...), Express elimina el /api del req.path
+    // Ejemplo: /api/v1/clientes -> req.path = /v1/clientes
+    // Necesitamos reconstruirlo: /v1/clientes -> /api/v1/clientes
     pathRewrite: (path, req) => {
-      // Solo ejecutar si es ruta de API
-      if (!path.startsWith('/api')) {
-        console.warn(`⚠️  pathRewrite ejecutado para ruta no-API: "${path}"`);
-        return path;
-      }
-      
-      // Extraer solo el path sin query string
-      const pathOnly = path.split('?')[0];
-      
-      // Con filter, el path ya incluye /api, así que pathOnly es "/api/v1/clientes"
-      // Lo mantenemos tal cual
-      const rewritten = pathOnly;
-      
-      // Log detallado para debug (solo para rutas /api)
-      console.log(`🔄 Path rewrite (API):`);
-      console.log(`   Path recibido (con query?): "${path}"`);
-      console.log(`   Path sin query: "${pathOnly}"`);
-      console.log(`   req.url completo: "${req.url}"`);
-      console.log(`   req.originalUrl: "${req.originalUrl || req.url}"`);
-      console.log(`   Path reescrito: "${rewritten}"`);
-      
+      // El path que llega ya NO tiene /api (Express lo eliminó)
+      // Lo agregamos de vuelta para que el backend reciba /api/v1/...
+      const rewritten = `/api${path}`;
+      console.log(`🔄 Path rewrite: "${path}" -> "${rewritten}"`);
       return rewritten;
     },
     // Seguir redirects del backend (3xx)
@@ -178,13 +149,10 @@ if (API_URL) {
     }
   });
   
-  // Aplicar a todas las rutas que empiecen con /api
-  // IMPORTANTE: Debe ser ANTES de express.static y otros middlewares
-  // http-proxy-middleware devuelve un middleware que se puede usar directamente
-  
-  // IMPORTANTE: Usar el proxy directamente sin prefijo, usando filter para capturar /api/*
-  // Esto asegura que los callbacks (onProxyReq, onProxyRes) se ejecuten correctamente
-  app.use(proxyMiddleware);
+  // IMPORTANTE: Usar app.use('/api', ...) para que Express maneje el routing
+  // Esto asegura que SOLO rutas que empiecen con /api pasen por el proxy
+  // Las rutas como /clientes, /assets/*.js, etc. NO pasarán por aquí
+  app.use('/api', proxyMiddleware);
   
   // También registrar explícitamente para debug
   console.log('✅ Proxy middleware registrado para rutas /api/*');
@@ -193,11 +161,20 @@ if (API_URL) {
 }
 
 // Servir archivos estáticos con cache headers (DESPUÉS del proxy)
-app.use(express.static(path.join(__dirname, 'dist'), {
+// IMPORTANTE: Esto debe servir archivos .js, .css, .html, etc. con los MIME types correctos
+const staticOptions = {
   maxAge: '1d',
   etag: true,
-  lastModified: true
-}));
+  lastModified: true,
+  setHeaders: (res, filePath) => {
+    // Asegurar MIME types correctos para archivos JavaScript
+    if (filePath.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    }
+  }
+};
+
+app.use(express.static(path.join(__dirname, 'dist'), staticOptions));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -212,8 +189,8 @@ app.get('/health', (req, res) => {
 // Manejar SPA routing - todas las rutas sirven index.html (el proxy ya atendió /api/*)
 // IMPORTANTE: Esto debe ir DESPUÉS del proxy y express.static
 // Solo maneja rutas que NO son archivos estáticos ni APIs
-// Usar app.use para capturar TODOS los métodos HTTP, no solo GET
-app.use((req, res, next) => {
+// Usar app.get para que solo se ejecute en GET requests (evitar interceptar otros métodos)
+app.get('*', (req, res) => {
   // Solo procesar si NO es una ruta de API
   // Las rutas de API ya fueron manejadas por el proxy
   if (req.path.startsWith('/api')) {
@@ -222,8 +199,7 @@ app.use((req, res, next) => {
     return res.status(404).json({ error: 'API endpoint not found' });
   }
   
-  // Ignorar archivos estáticos (favicon, assets, etc.) - ya fueron servidos por express.static
-  // Si express.static no encontró el archivo, llegamos aquí
+  // Verificar si es un archivo estático - si express.static no lo encontró, llegamos aquí
   // Esto significa que es una ruta de la SPA (como /clientes, /dashboard, etc.)
   // React Router se encargará de manejar la ruta en el cliente
   console.log(`📄 Sirviendo index.html para ruta de SPA: ${req.method} ${req.path}`);
