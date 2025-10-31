@@ -77,7 +77,7 @@ app.use((req, res, next) => {
 // IMPORTANTE: Proxy debe ir ANTES de servir archivos estáticos
 // Usar app.use('/api', ...) para que Express maneje el routing
 // Esto asegura que SOLO rutas /api pasen por el proxy
-if (API_URL) {
+if (API_URL && API_URL !== 'http://localhost:8000') {
   console.log(`➡️  Proxy de /api hacia: ${API_URL}`);
   const proxyMiddleware = createProxyMiddleware({
     target: API_URL,
@@ -88,12 +88,13 @@ if (API_URL) {
     // Ejemplo: /api/v1/clientes -> req.path = /v1/clientes
     // Necesitamos reconstruirlo: /v1/clientes -> /api/v1/clientes
     pathRewrite: (path, req) => {
-      // Extraer solo el path sin query string (el path puede venir con ?query)
-      const pathOnly = path.split('?')[0];
-      // El path que llega ya NO tiene /api (Express lo eliminó)
-      // Lo agregamos de vuelta para que el backend reciba /api/v1/...
-      const rewritten = `/api${pathOnly}`;
-      console.log(`🔄 Path rewrite: "${path}" -> "${rewritten}"`);
+      // El path que llega ya NO tiene /api (Express lo eliminó cuando usamos app.use('/api', ...))
+      // Ejemplo: /api/v1/modelos-vehiculos -> path recibido = /v1/modelos-vehiculos
+      // Necesitamos agregar /api de vuelta: /v1/modelos-vehiculos -> /api/v1/modelos-vehiculos
+      // El query string se preserva automáticamente por http-proxy-middleware
+      const rewritten = `/api${path}`;
+      const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
+      console.log(`🔄 Path rewrite: "${path}" -> "${rewritten}"${queryString ? '?' + queryString : ''}`);
       return rewritten;
     },
     // Seguir redirects del backend (3xx)
