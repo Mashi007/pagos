@@ -54,31 +54,41 @@ app.use((req, res, next) => {
 // PROXY /api -> Backend (Render)
 // ============================================
 // IMPORTANTE: Proxy debe ir ANTES de servir archivos estáticos
+// Capturar TODAS las peticiones a /api (GET, POST, PUT, DELETE, etc.)
 if (API_URL) {
   console.log(`➡️  Proxy de /api hacia: ${API_URL}`);
-  app.use(
-    '/api',
-    createProxyMiddleware({
-      target: API_URL,
-      changeOrigin: true,
-      xfwd: true,
-      logLevel: 'debug',
-      onError: (err, req, res) => {
-        console.error('❌ Error en proxy:', err.message);
+  const proxyMiddleware = createProxyMiddleware({
+    target: API_URL,
+    changeOrigin: true,
+    xfwd: true,
+    logLevel: 'debug',
+    // Mantener el path completo (/api/v1/... se envía completo al backend)
+    onError: (err, req, res) => {
+      console.error(`❌ Error en proxy para ${req.method} ${req.originalUrl || req.url}:`, err.message);
+      if (!res.headersSent) {
         res.status(502).json({
           error: 'Proxy error',
           message: err.message,
-          target: API_URL
+          target: API_URL,
+          path: req.path,
+          originalUrl: req.originalUrl,
+          method: req.method
         });
-      },
-      onProxyReq: (proxyReq, req, res) => {
-        console.log(`➡️  Proxying ${req.method} ${req.path} -> ${API_URL}${req.path}`);
-      },
-      onProxyRes: (proxyRes, req, res) => {
-        console.log(`✅ Proxy response: ${proxyRes.statusCode} para ${req.path}`);
       }
-    })
-  );
+    },
+    onProxyReq: (proxyReq, req, res) => {
+      const targetUrl = `${API_URL}${req.originalUrl || req.url}`;
+      console.log(`➡️  [${req.method}] Proxying ${req.originalUrl || req.url} -> ${targetUrl}`);
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      const status = proxyRes.statusCode;
+      const emoji = status >= 200 && status < 300 ? '✅' : status >= 400 ? '❌' : '⚠️';
+      console.log(`${emoji} [${req.method}] Proxy response: ${status} para ${req.originalUrl || req.url}`);
+    }
+  });
+  
+  // Aplicar a todas las rutas que empiecen con /api
+  app.use('/api', proxyMiddleware);
 } else {
   console.warn('⚠️  API_URL no configurado. Proxy deshabilitado.');
 }
@@ -102,6 +112,11 @@ app.get('/health', (req, res) => {
 
 // Manejar SPA routing - todas las rutas sirven index.html (el proxy ya atendió /api/*)
 app.get('*', (req, res) => {
+  // Ignorar rutas de API (deberían ser capturadas por el proxy)
+  if (req.path.startsWith('/api')) {
+    console.warn(`⚠️  Ruta /api no capturada por proxy: ${req.path}`);
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
   // El proxy de /api maneja las APIs; aquí solo servimos la SPA
   console.log(`📄 Sirviendo index.html para ruta: ${req.path}`);
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
