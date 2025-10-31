@@ -75,6 +75,14 @@ if (API_URL) {
     changeOrigin: true,
     xfwd: true,
     logLevel: 'debug',
+    // Filtro explícito para capturar todas las peticiones que empiecen con /api
+    filter: (pathname, req) => {
+      const matches = pathname.startsWith('/api');
+      if (matches) {
+        console.log(`🎯 Proxy filtro MATCH: ${req.method} ${pathname}`);
+      }
+      return matches;
+    },
     // Mantener el path completo (/api/v1/... se envía completo al backend)
     onError: (err, req, res) => {
       console.error(`❌ Error en proxy para ${req.method} ${req.originalUrl || req.url}:`, err.message);
@@ -101,7 +109,12 @@ if (API_URL) {
   });
   
   // Aplicar a todas las rutas que empiecen con /api
+  // IMPORTANTE: Debe ser ANTES de express.static y otros middlewares
+  // http-proxy-middleware devuelve un middleware que se puede usar directamente
   app.use('/api', proxyMiddleware);
+  
+  // También registrar explícitamente para debug
+  console.log('✅ Proxy middleware registrado para rutas /api/*');
 } else {
   console.warn('⚠️  API_URL no configurado. Proxy deshabilitado.');
 }
