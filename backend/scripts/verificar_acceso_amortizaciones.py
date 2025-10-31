@@ -8,30 +8,142 @@ from pathlib import Path
 from datetime import date
 from decimal import Decimal
 
+# Configurar encoding UTF-8 para evitar errores de codificación
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 # Agregar el directorio raíz al path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.core.config import settings
-from app.db.session import SessionLocal
 from app.models.prestamo import Prestamo
 from app.models.amortizacion import Cuota
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, text, create_engine
+from sqlalchemy.orm import sessionmaker
+
+def safe_str(value):
+    """Convierte un valor a string de forma segura manejando errores de codificación"""
+    if value is None:
+        return "N/A"
+    try:
+        if isinstance(value, (bytes, bytearray)):
+            # Intentar decodificar como UTF-8, luego latin1 como fallback
+            try:
+                return value.decode('utf-8', errors='replace')
+            except:
+                return value.decode('latin1', errors='replace')
+        if isinstance(value, str):
+            # Si ya es string, verificar que es UTF-8 válido
+            value.encode('utf-8')
+            return value
+        return str(value)
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        try:
+            return str(value).encode('latin1', errors='replace').decode('latin1')
+        except:
+            return str(value).encode('ascii', errors='replace').decode('ascii')
+
+def create_safe_engine():
+    """Crea un engine con manejo robusto de codificación"""
+    import os
+    import urllib.parse
+    
+    # Obtener DATABASE_URL de forma segura
+    try:
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            database_url = getattr(settings, 'DATABASE_URL', None)
+        if not database_url:
+            database_url = "postgresql://user:password@localhost/pagos_db"
+    except:
+        database_url = "postgresql://user:password@localhost/pagos_db"
+    
+    # Intentar reparar la URL si tiene problemas de encoding
+    try:
+        # Si la URL tiene bytes inválidos, intentar decodificar como latin1
+        if isinstance(database_url, bytes):
+            database_url = database_url.decode('latin1', errors='replace')
+        
+        # Parsear y reconstruir la URL de forma segura
+        parsed = urllib.parse.urlparse(database_url)
+        
+        # Reconstruir la URL asegurando encoding correcto
+        if parsed.password:
+            # Codificar componentes de forma segura
+            safe_password = urllib.parse.quote(parsed.password, safe='')
+            safe_user = urllib.parse.quote(parsed.username or '', safe='')
+            safe_netloc = f"{safe_user}:{safe_password}@{parsed.hostname}"
+            if parsed.port:
+                safe_netloc += f":{parsed.port}"
+            
+            database_url = urllib.parse.urlunparse((
+                parsed.scheme,
+                safe_netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment
+            ))
+    except Exception as e:
+        print(f"[ADVERTENCIA] Error procesando DATABASE_URL: {e}")
+        # Usar URL por defecto si hay problemas
+        database_url = "postgresql://user:password@localhost/pagos_db"
+    
+    # Configurar psycopg2 para manejar encoding
+    connect_args = {}
+    if database_url.startswith('postgresql'):
+        connect_args = {
+            'client_encoding': 'UTF8',
+        }
+    
+    return create_engine(
+        database_url,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        echo=False,
+        connect_args=connect_args,
+    )
+
 
 def verificar_amortizaciones():
     """Verifica acceso a todas las amortizaciones"""
-    db = SessionLocal()
+    # Crear engine y session de forma segura
+    try:
+        safe_engine = create_safe_engine()
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=safe_engine)
+        db = SessionLocal()
+    except Exception as e:
+        print(f"[ERROR] No se pudo conectar a la base de datos: {e}")
+        print(f"Verifica que DATABASE_URL este correctamente configurada")
+        return
     
     try:
         print("=" * 80)
-        print("VERIFICACIÓN DE ACCESO A AMORTIZACIONES")
+        print("VERIFICACION DE ACCESO A AMORTIZACIONES")
         print("=" * 80)
-        db_name = settings.DATABASE_URL.split('@')[-1] if '@' in settings.DATABASE_URL else settings.DATABASE_URL
-        print(f"\nBase de datos: {db_name}")
+        
+        # Configurar encoding en la conexión
+        try:
+            db.execute(text("SET client_encoding TO 'UTF8'"))
+            db.commit()
+        except Exception as e:
+            print(f"[ADVERTENCIA] No se pudo configurar UTF-8 en conexion: {e}")
+        
+        # Obtener nombre de BD de forma segura
+        try:
+            db_name = settings.DATABASE_URL.split('@')[-1] if '@' in settings.DATABASE_URL else settings.DATABASE_URL
+            db_name_safe = safe_str(db_name) if db_name else "N/A"
+        except:
+            db_name_safe = "localhost/pagos_db"
+        
+        print(f"\nBase de datos: {db_name_safe}")
         print()
         
         # 1. Contar total de préstamos
         total_prestamos = db.query(Prestamo).count()
-        print(f"[OK] Total de préstamos en BD: {total_prestamos}")
+        print(f"[OK] Total de prestamos en BD: {total_prestamos}")
         
         # 2. Contar total de cuotas/amortizaciones
         total_cuotas = db.query(Cuota).count()
@@ -44,11 +156,11 @@ def verificar_amortizaciones():
             .distinct()
             .count()
         )
-        print(f"[OK] Préstamos con cuotas generadas: {prestamos_con_cuotas}")
+        print(f"[OK] Prestamos con cuotas generadas: {prestamos_con_cuotas}")
         
         # 4. Préstamos sin cuotas
         prestamos_sin_cuotas = total_prestamos - prestamos_con_cuotas
-        print(f"[ADVERTENCIA] Préstamos sin cuotas: {prestamos_sin_cuotas}")
+        print(f"[ADVERTENCIA] Prestamos sin cuotas: {prestamos_sin_cuotas}")
         
         # 5. Estadísticas por estado de préstamo
         print("\n" + "-" * 80)
@@ -68,7 +180,8 @@ def verificar_amortizaciones():
                 .filter(Prestamo.estado == estado)
                 .scalar() or 0
             )
-            print(f"  {estado:15s}: {count:4d} préstamos, {cuotas_estado:6d} cuotas")
+            estado_str = safe_str(estado) if estado else "N/A"
+            print(f"  {estado_str:15s}: {count:4d} prestamos, {cuotas_estado:6d} cuotas")
         
         # 6. Estadísticas por estado de cuotas
         print("\n" + "-" * 80)
@@ -83,7 +196,8 @@ def verificar_amortizaciones():
         
         for estado, count in cuotas_por_estado:
             porcentaje = (count / total_cuotas * 100) if total_cuotas > 0 else 0
-            print(f"  {estado:15s}: {count:6d} cuotas ({porcentaje:5.1f}%)")
+            estado_str = safe_str(estado) if estado else "N/A"
+            print(f"  {estado_str:15s}: {count:6d} cuotas ({porcentaje:5.1f}%)")
         
         # 7. Detalle de préstamos aprobados con sus cuotas
         print("\n" + "-" * 80)
@@ -114,10 +228,12 @@ def verificar_amortizaciones():
             )
             
             print(f"\n  Prestamo ID: {prestamo.id}")
-            print(f"     Cliente: {prestamo.nombres} (Cédula: {prestamo.cedula})")
-            print(f"     Monto: ${prestamo.total_financiamiento:,.2f}")
+            nombres_safe = safe_str(prestamo.nombres) if prestamo.nombres else "N/A"
+            cedula_safe = safe_str(prestamo.cedula) if prestamo.cedula else "N/A"
+            print(f"     Cliente: {nombres_safe} (Cedula: {cedula_safe})")
+            print(f"     Monto: ${float(prestamo.total_financiamiento):,.2f}")
             print(f"     Cuotas: {total_cuotas_p} total | {cuotas_pagadas} pagadas | {cuotas_pendientes} pendientes | {cuotas_vencidas} vencidas")
-            print(f"     Saldo pendiente: ${saldo_total:,.2f}")
+            print(f"     Saldo pendiente: ${float(saldo_total):,.2f}")
         
         # 8. Resumen de montos
         print("\n" + "-" * 80)

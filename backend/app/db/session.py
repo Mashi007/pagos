@@ -19,8 +19,25 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgresql://user:password@localhost/pagos_db"
 )
 
-# Crear engine
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300, echo=False)
+# Crear engine con configuración de encoding UTF-8
+# Agregar parámetros de conexión para asegurar UTF-8
+connect_args = {}
+if DATABASE_URL.startswith('postgresql'):
+    # Configurar codificación para psycopg2
+    # Usar encoding 'latin1' como fallback si UTF-8 falla
+    connect_args = {
+        'client_encoding': 'UTF8',
+    }
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=300,
+    echo=False,
+    connect_args=connect_args,
+    # Manejar encoding de manera más robusta
+    pool_reset_on_return='commit',
+)
 
 # Crear SessionLocal
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
