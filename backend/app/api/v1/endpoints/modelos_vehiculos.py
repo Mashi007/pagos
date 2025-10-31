@@ -20,6 +20,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@router.get("", response_model=ModeloVehiculoListResponse)
 @router.get("/", response_model=ModeloVehiculoListResponse)
 def listar_modelos_vehiculos(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),

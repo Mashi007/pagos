@@ -93,10 +93,10 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
       // El path que llega ya NO tiene /api (Express lo eliminó cuando usamos app.use('/api', ...))
       // Ejemplo: /api/v1/modelos-vehiculos -> path recibido = /v1/modelos-vehiculos
       // Necesitamos agregar /api de vuelta: /v1/modelos-vehiculos -> /api/v1/modelos-vehiculos
-      // El query string se preserva automáticamente por http-proxy-middleware
+      // El query string se preserva automáticamente por http-proxy-middleware - NO debemos agregarlo manualmente
       const rewritten = `/api${path}`;
-      const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
-      console.log(`🔄 Path rewrite: "${path}" -> "${rewritten}"${queryString ? '?' + queryString : ''}`);
+      // Solo loggear el path sin query string - el middleware lo maneja automáticamente
+      console.log(`🔄 Path rewrite: "${path}" -> "${rewritten}"`);
       return rewritten;
     },
     // Seguir redirects del backend (3xx)
@@ -118,17 +118,16 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
     },
     onProxyReq: (proxyReq, req, res) => {
       // Este callback se ejecuta DESPUÉS del pathRewrite
-      // El proxyReq ya tiene el path reescrito
-      // IMPORTANTE: El query string se preserva automáticamente por http-proxy-middleware
-      const queryString = req.url.split('?')[1] || '';
-      const targetUrl = `${API_URL}${proxyReq.path}${queryString ? '?' + queryString : ''}`;
+      // El proxyReq ya tiene el path reescrito y el query string se preserva automáticamente
+      // IMPORTANTE: NO debemos modificar el query string manualmente - http-proxy-middleware lo maneja
+      const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
       
       console.log(`➡️  [${req.method}] Proxying hacia backend`);
       console.log(`   Request original: ${req.originalUrl || req.url}`);
       console.log(`   req.path: ${req.path}`);
       console.log(`   proxyReq.path (reescrito): ${proxyReq.path}`);
       console.log(`   Query string: ${queryString || '(vacío)'}`);
-      console.log(`   Target URL completa: ${targetUrl}`);
+      // No construir targetUrl manualmente - el middleware lo hace correctamente
       
       // Log detallado de headers
       const authHeader = req.headers.authorization || req.headers.Authorization;
