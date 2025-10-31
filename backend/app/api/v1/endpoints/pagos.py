@@ -3,7 +3,7 @@ Endpoints para el módulo de Pagos
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Optional
 
@@ -67,9 +67,20 @@ def listar_pagos(
         pagos = query.offset(offset).limit(per_page).all()
 
         # Serializar pagos
-        pagos_serializados = [
-            PagoResponse.model_validate(pago).model_dump() for pago in pagos
-        ]
+        pagos_serializados = []
+        for pago in pagos:
+            try:
+                # Convertir fecha_pago si es DATE a datetime si es necesario
+                if hasattr(pago, 'fecha_pago') and pago.fecha_pago is not None:
+                    if isinstance(pago.fecha_pago, date) and not isinstance(pago.fecha_pago, datetime):
+                        # Si es date sin hora, convertir a datetime al inicio del día
+                        pago.fecha_pago = datetime.combine(pago.fecha_pago, time.min)
+                pagos_serializados.append(PagoResponse.model_validate(pago).model_dump())
+            except Exception as serialization_error:
+                logger.error(f"Error serializando pago ID {pago.id}: {serialization_error}", exc_info=True)
+                logger.error(f"Datos del pago problemático: cedula={pago.cedula_cliente}, fecha_pago={pago.fecha_pago}, tipo={type(pago.fecha_pago)}")
+                # Continuar con los demás pagos, pero loguear el error
+                continue
 
         return {
             "pagos": pagos_serializados,
@@ -79,8 +90,12 @@ def listar_pagos(
             "total_pages": (total + per_page - 1) // per_page if total > 0 else 0,
         }
     except Exception as e:
-        logger.error(f"Error en listar_pagos: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+        error_msg = str(e)
+        logger.error(f"Error en listar_pagos: {error_msg}", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error interno del servidor: {error_msg}"
+        )
 
 
 @router.post("/", response_model=PagoResponse)
