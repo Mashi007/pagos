@@ -92,9 +92,8 @@ def dashboard_kpis_principales(
 
     # ✅ KPIs adicionales de amortizaciones - usar filtros automáticos
     # Total de cuotas
-    total_cuotas_query = (
-        db.query(func.count(Cuota.id))
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+    total_cuotas_query = db.query(func.count(Cuota.id)).join(
+        Prestamo, Cuota.prestamo_id == Prestamo.id
     )
     total_cuotas_query = FiltrosDashboard.aplicar_filtros_cuota(
         total_cuotas_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
@@ -108,7 +107,12 @@ def dashboard_kpis_principales(
         .filter(Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"]))
     )
     cuotas_pendientes_query = FiltrosDashboard.aplicar_filtros_cuota(
-        cuotas_pendientes_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        cuotas_pendientes_query,
+        analista,
+        concesionario,
+        modelo,
+        fecha_inicio,
+        fecha_fin,
     )
     cuotas_pendientes = cuotas_pendientes_query.scalar() or 0
 
@@ -126,7 +130,9 @@ def dashboard_kpis_principales(
     # Saldo pendiente total (capital + interés + mora)
     saldo_pendiente_query = (
         db.query(
-            func.sum(Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora)
+            func.sum(
+                Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora
+            )
         )
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .filter(Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"]))
@@ -139,12 +145,14 @@ def dashboard_kpis_principales(
     # Monto total vencido (solo cuotas vencidas)
     monto_vencido_query = (
         db.query(
-            func.sum(Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora)
+            func.sum(
+                Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora
+            )
         )
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .filter(
             Cuota.fecha_vencimiento < fecha_corte,
-            Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"])
+            Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"]),
         )
     )
     monto_vencido_query = FiltrosDashboard.aplicar_filtros_cuota(
@@ -153,29 +161,27 @@ def dashboard_kpis_principales(
     monto_vencido = monto_vencido_query.scalar() or Decimal("0")
 
     # Total pagado en cuotas (capital + interés + mora)
-    total_pagado_cuotas_query = (
-        db.query(
-            func.sum(Cuota.capital_pagado + Cuota.interes_pagado + Cuota.mora_pagada)
-        )
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-    )
+    total_pagado_cuotas_query = db.query(
+        func.sum(Cuota.capital_pagado + Cuota.interes_pagado + Cuota.mora_pagada)
+    ).join(Prestamo, Cuota.prestamo_id == Prestamo.id)
     total_pagado_cuotas_query = FiltrosDashboard.aplicar_filtros_cuota(
-        total_pagado_cuotas_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        total_pagado_cuotas_query,
+        analista,
+        concesionario,
+        modelo,
+        fecha_inicio,
+        fecha_fin,
     )
     total_pagado_cuotas = total_pagado_cuotas_query.scalar() or Decimal("0")
 
     # Porcentaje de recuperación (total pagado / cartera total)
     porcentaje_recuperacion = (
-        float((total_pagado_cuotas / cartera_total) * 100)
-        if cartera_total > 0
-        else 0.0
+        float((total_pagado_cuotas / cartera_total) * 100) if cartera_total > 0 else 0.0
     )
 
     # Porcentaje de cuotas pagadas
     porcentaje_cuotas_pagadas = (
-        float((cuotas_pagadas / total_cuotas) * 100)
-        if total_cuotas > 0
-        else 0.0
+        float((cuotas_pagadas / total_cuotas) * 100) if total_cuotas > 0 else 0.0
     )
 
     return {
