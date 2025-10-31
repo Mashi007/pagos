@@ -82,9 +82,12 @@ export function PagosList() {
               try {
                 // Invalidar todas las queries relacionadas con pagos
                 await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+                await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // ✅ Invalidar KPIs específicamente
                 await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
                 await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
                 await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
+                // Refetch inmediato de KPIs y pagos
+                await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
                 await queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
                 toast.success('Datos actualizados correctamente')
               } catch (error) {
@@ -244,7 +247,8 @@ export function PagosList() {
                             <td className="px-4 py-3">${typeof pago.monto_pagado === 'number' ? pago.monto_pagado.toFixed(2) : parseFloat(String(pago.monto_pagado || 0)).toFixed(2)}</td>
                             <td className="px-4 py-3">{new Date(pago.fecha_pago).toLocaleDateString()}</td>
                             <td className="px-4 py-3">
-                              {pago.conciliado ? (
+                              {/* ✅ Usar verificado_concordancia si existe (columna "SI"/"NO" de BD), sino usar conciliado (boolean) */}
+                              {(pago.verificado_concordancia === 'SI' || pago.conciliado) ? (
                                 <Badge className="bg-green-500 text-white">SI</Badge>
                               ) : (
                                 <Badge className="bg-gray-500 text-white">NO</Badge>
@@ -333,11 +337,15 @@ export function PagosList() {
               
               // Invalidar queries de KPIs y dashboard que puedan depender de pagos
               console.log('🔀 Invalidando queries de KPIs y dashboard...')
+              await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // ✅ Invalidar específicamente pagos-kpis
               await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
               await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
               
               // Invalidar también la query de últimos pagos (resumen)
               await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
+              
+              // Refetch inmediato de KPIs para actualización en tiempo real
+              await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
               
               // Refetch de todas las queries relacionadas con pagos (no solo activas)
               // Esto asegura que las queries se actualicen incluso si no están montadas

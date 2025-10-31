@@ -6,9 +6,10 @@ export function usePagosKPIs(mes?: number, año?: number) {
   return useQuery({
     queryKey: ['pagos-kpis', mes, año],
     queryFn: () => pagoService.getKPIs(mes, año),
-    staleTime: 2 * 60 * 1000, // 2 minutos
+    staleTime: 0, // ✅ Sin cache - siempre datos frescos desde BD
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true, // ✅ Refrescar al enfocar ventana
+    refetchInterval: 30 * 1000, // ✅ Auto-refresh cada 30 segundos
   })
 }
 

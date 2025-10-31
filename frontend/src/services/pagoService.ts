@@ -12,6 +12,7 @@ export interface Pago {
   fecha_registro: string | Date | null
   fecha_conciliacion: string | Date | null
   conciliado: boolean
+  verificado_concordancia?: string | null  // SI/NO - Verificación de concordancia con módulo de pagos
   usuario_registro: string
   notas: string | null
   documento_nombre: string | null

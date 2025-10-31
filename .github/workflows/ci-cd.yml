@@ -48,15 +48,27 @@ jobs:
           cd ${{ env.BACKEND_DIR }}
           echo "🔍 Ejecutando flake8 - errores críticos..."
           echo "::group::Flake8 - Errores Críticos"
-          flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1 || true
+          # Ejecutar sin || true para que bloquee en errores críticos (sintaxis, funciones no definidas)
+          flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1 | tee flake8-critical-output.txt
+          FLAKE8_CRITICAL_EXIT=${PIPESTATUS[0]}
+          cat flake8-critical-output.txt
           echo "::endgroup::"
+          
           echo "🔍 Ejecutando flake8 - análisis completo..."
           echo "::group::Flake8 - Análisis Completo"
           flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
           echo "::endgroup::"
-          # También guardar en archivo para artifacts
+          
+          # Guardar en archivos para artifacts (siempre generar logs)
           flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics > flake8-critical.log 2>&1 || true
           flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics > flake8-full.log 2>&1
+          
+          # Fallar si hubo errores críticos
+          if [ $FLAKE8_CRITICAL_EXIT -ne 0 ]; then
+            echo "❌ ERROR: Errores críticos de Flake8 detectados (sintaxis, funciones no definidas)."
+            echo "Revisa flake8-critical.log para más detalles."
+            exit 1
+          fi
       
       - name: 🎨 Formateo con black
         run: |
@@ -88,10 +100,19 @@ jobs:
           cd ${{ env.BACKEND_DIR }}
           echo "📝 Verificando orden de imports con isort..."
           echo "::group::Isort - Verificación de Imports"
-          isort --check-only --diff app/ || true
+          # Generar log primero
+          isort --check-only --diff app/ > isort.log 2>&1
+          ISORT_EXIT_CODE=$?
+          # Mostrar output
+          cat isort.log
           echo "::endgroup::"
-          # También guardar en archivo para artifacts
-          isort --check-only --diff app/ > isort.log 2>&1 || true
+          
+          # Fallar si hay errores de imports
+          if [ $ISORT_EXIT_CODE -ne 0 ]; then
+            echo "❌ ERROR: Imports incorrectamente ordenados detectados."
+            echo "Ejecuta 'isort app/' localmente para corregir automáticamente."
+            exit 1
+          fi
       
       - name: 🔒 Verificación de tipos con mypy
         run: |
@@ -141,15 +162,51 @@ jobs:
       - name: 💾 Guardar logs completos del job
         if: always()
         run: |
+          cd ${{ env.BACKEND_DIR }}
           echo "## 📋 Resumen del Análisis de Calidad" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Linting: flake8 completado" >> $GITHUB_STEP_SUMMARY
+          
+          # Verificar errores críticos de Flake8
+          if [ -f "flake8-critical.log" ] && [ -s "flake8-critical.log" ]; then
+            ERROR_COUNT=$(grep -c "^app/" flake8-critical.log 2>/dev/null || echo "0")
+            if [ "$ERROR_COUNT" -gt 0 ]; then
+              echo "### ❌ Flake8 - Errores Críticos: $ERROR_COUNT" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              head -30 flake8-critical.log >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ Flake8: Sin errores críticos" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "✅ Flake8: Sin errores críticos" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Verificar errores de Isort
+          if [ -f "isort.log" ] && [ -s "isort.log" ]; then
+            if grep -q "ERROR:" isort.log 2>/dev/null || grep -q "^ERROR" isort.log 2>/dev/null; then
+              echo "### ❌ Isort - Imports Incorrectos Detectados" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              head -30 isort.log >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ Isort: Imports correctos" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "✅ Isort: Imports correctos" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ Formateo: black aplicado" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Imports: isort verificado" >> $GITHUB_STEP_SUMMARY
           echo "✅ Tipos: mypy verificado" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📅 Fecha: $(date)" >> $GITHUB_STEP_SUMMARY
           echo "🔗 Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 Logs completos disponibles en los artifacts del job." >> $GITHUB_STEP_SUMMARY
 
   # ========================================
   # 🧪 PRUEBAS BACKEND
