@@ -147,60 +147,6 @@ def list_concesionarios_no_auth(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
-@router.get("/", response_model=ConcesionarioListResponse)
-def list_concesionarios(
-    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
-    limit: int = Query(20, ge=1, le=1000, description="Limite de resultados"),
-    activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
-    search: Optional[str] = Query(None, description="Buscar por nombre"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    # Listar concesionarios con autenticacion
-    logger.info(
-        f"📥 [list_concesionarios] Petición recibida - skip={skip}, limit={limit}, activo={activo}, search={search}, user={current_user.email}"
-    )
-    try:
-        query = db.query(Concesionario)
-
-        if activo is not None:
-            query = query.filter(Concesionario.activo == activo)
-        if search:
-            query = query.filter(Concesionario.nombre.ilike(f"%{search}%"))
-
-        # Ordenar por ID
-        query = query.order_by(Concesionario.id)
-
-        # Obtener total
-        total = query.count()
-
-        # Aplicar paginacion
-        concesionarios = query.offset(skip).limit(limit).all()
-
-        # Calcular paginas
-        pages = (total + limit - 1) // limit if limit > 0 else 0
-        page = (skip // limit) + 1 if limit > 0 else 1
-
-        logger.info(
-            f"✅ Listando {len(concesionarios)} concesionarios de {total} totales (página {page}/{pages})"
-        )
-
-        response = ConcesionarioListResponse(
-            items=concesionarios,
-            total=total,
-            page=page,
-            size=limit,
-            pages=pages,
-        )
-
-        return response
-    except Exception as e:
-        logger.error(f"Error en list_concesionarios: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
-
-
 @router.get("/activos", response_model=List[ConcesionarioResponse])
 def list_concesionarios_activos(
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
