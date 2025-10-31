@@ -73,7 +73,7 @@ app.use((req, res, next) => {
 // PROXY /api -> Backend (Render)
 // ============================================
 // IMPORTANTE: Proxy debe ir ANTES de servir archivos estáticos
-// Capturar TODAS las peticiones a /api (GET, POST, PUT, DELETE, etc.)
+// Capturar SOLO las peticiones a /api (GET, POST, PUT, DELETE, etc.)
 if (API_URL) {
   console.log(`➡️  Proxy de /api hacia: ${API_URL}`);
   const proxyMiddleware = createProxyMiddleware({
@@ -81,17 +81,29 @@ if (API_URL) {
     changeOrigin: true,
     xfwd: true,
     logLevel: 'debug',
-    // Filtrar solo rutas que empiecen con /api
+    // Filtrar SOLO rutas que empiecen con /api
+    // Las rutas de la SPA (como /clientes) NO deben pasar por aquí
     filter: (pathname, req) => {
       const matches = pathname.startsWith('/api');
       if (matches) {
-        console.log(`🔍 Filter: "${pathname}" -> MATCH`);
+        console.log(`🔍 Filter: "${pathname}" -> MATCH (proxying)`);
+      } else {
+        // Log solo para rutas problemáticas (no deberían aparecer muchos)
+        if (pathname !== '/favicon.ico' && !pathname.startsWith('/_') && pathname !== '/') {
+          console.log(`🔍 Filter: "${pathname}" -> NO MATCH (es ruta de SPA, NO proxying)`);
+        }
       }
       return matches;
     },
-    // IMPORTANTE: Con filter, el path ya incluye /api, no necesitamos pathRewrite
+    // IMPORTANTE: pathRewrite solo se ejecuta si filter devuelve true
     // El path que llega es "/api/v1/clientes", lo mantenemos tal cual
     pathRewrite: (path, req) => {
+      // Solo ejecutar si es ruta de API
+      if (!path.startsWith('/api')) {
+        console.warn(`⚠️  pathRewrite ejecutado para ruta no-API: "${path}"`);
+        return path;
+      }
+      
       // Extraer solo el path sin query string
       const pathOnly = path.split('?')[0];
       
@@ -99,8 +111,8 @@ if (API_URL) {
       // Lo mantenemos tal cual
       const rewritten = pathOnly;
       
-      // Log detallado para debug
-      console.log(`🔄 Path rewrite:`);
+      // Log detallado para debug (solo para rutas /api)
+      console.log(`🔄 Path rewrite (API):`);
       console.log(`   Path recibido (con query?): "${path}"`);
       console.log(`   Path sin query: "${pathOnly}"`);
       console.log(`   req.url completo: "${req.url}"`);
@@ -198,15 +210,31 @@ app.get('/health', (req, res) => {
 });
 
 // Manejar SPA routing - todas las rutas sirven index.html (el proxy ya atendió /api/*)
-app.get('*', (req, res) => {
-  // Ignorar rutas de API (deberían ser capturadas por el proxy)
+// IMPORTANTE: Esto debe ir DESPUÉS del proxy y express.static
+// Solo maneja rutas que NO son archivos estáticos ni APIs
+// Usar app.use para capturar TODOS los métodos HTTP, no solo GET
+app.use((req, res, next) => {
+  // Solo procesar si NO es una ruta de API
+  // Las rutas de API ya fueron manejadas por el proxy
   if (req.path.startsWith('/api')) {
-    console.warn(`⚠️  Ruta /api no capturada por proxy: ${req.path}`);
+    // Esto no debería pasar si el proxy está funcionando correctamente
+    console.warn(`⚠️  Ruta /api no capturada por proxy: ${req.method} ${req.path}`);
     return res.status(404).json({ error: 'API endpoint not found' });
   }
-  // El proxy de /api maneja las APIs; aquí solo servimos la SPA
-  console.log(`📄 Sirviendo index.html para ruta: ${req.path}`);
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  
+  // Ignorar archivos estáticos (favicon, assets, etc.) - ya fueron servidos por express.static
+  // Si express.static no encontró el archivo, llegamos aquí
+  // Esto significa que es una ruta de la SPA (como /clientes, /dashboard, etc.)
+  // React Router se encargará de manejar la ruta en el cliente
+  console.log(`📄 Sirviendo index.html para ruta de SPA: ${req.method} ${req.path}`);
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'), (err) => {
+    if (err) {
+      console.error(`❌ Error sirviendo index.html para ${req.method} ${req.path}:`, err);
+      if (!res.headersSent) {
+        res.status(404).send('Página no encontrada');
+      }
+    }
+  });
 });
 
 const PORT = process.env.PORT || 3000;
