@@ -51,7 +51,7 @@ def dashboard_kpis_principales(
 
     # ✅ Cartera total - usar filtros automáticos
     cartera_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-        Prestamo.activo.is_(True)
+        Prestamo.estado == "APROBADO"
     )
     cartera_query = FiltrosDashboard.aplicar_filtros_prestamo(
         cartera_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
@@ -60,7 +60,7 @@ def dashboard_kpis_principales(
 
     # ✅ Clientes al día - usar filtros automáticos
     clientes_query = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
-        Prestamo.activo.is_(True)
+        Prestamo.estado == "APROBADO"
     )
     clientes_query = FiltrosDashboard.aplicar_filtros_prestamo(
         clientes_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
@@ -107,18 +107,23 @@ def kpis_analistas(
     """KPIs por analista"""
 
     # Analistas con más clientes
+    # CORREGIDO: Cliente no tiene analista_id, usar Prestamo.analista
     analistas_clientes = (
-        db.query(Analista.nombre, func.count(Cliente.id).label("total_clientes"))
-        .join(Cliente, Analista.id == Cliente.analista_id)
-        .group_by(Analista.id, Analista.nombre)
-        .order_by(func.count(Cliente.id).desc())
+        db.query(
+            Prestamo.analista.label("nombre_analista"),
+            func.count(func.distinct(Cliente.id)).label("total_clientes")
+        )
+        .join(Cliente, Prestamo.cedula == Cliente.cedula)
+        .filter(Prestamo.analista.isnot(None), Prestamo.analista != "")
+        .group_by(Prestamo.analista)
+        .order_by(func.count(func.distinct(Cliente.id)).desc())
         .limit(10)
         .all()
     )
 
     return {
         "analistas_clientes": [
-            {"nombre": analista.nombre, "total_clientes": analista.total_clientes}
+            {"nombre": analista.nombre_analista, "total_clientes": analista.total_clientes}
             for analista in analistas_clientes
         ]
     }
@@ -132,8 +137,11 @@ def kpis_cartera(
     """KPIs de cartera"""
 
     # Cartera por estado
+    # CORREGIDO: Cliente no tiene total_financiamiento, usar Prestamo.total_financiamiento
     cartera_estado = (
-        db.query(Cliente.estado, func.sum(Cliente.total_financiamiento).label("total"))
+        db.query(Cliente.estado, func.sum(Prestamo.total_financiamiento).label("total"))
+        .join(Prestamo, Cliente.cedula == Prestamo.cedula)
+        .filter(Prestamo.estado == "APROBADO")
         .group_by(Cliente.estado)
         .all()
     )

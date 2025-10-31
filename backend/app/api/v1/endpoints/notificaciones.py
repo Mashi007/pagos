@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.notificacion import Notificacion
 from app.models.notificacion_plantilla import NotificacionPlantilla
@@ -130,15 +131,21 @@ async def envio_masivo(
     """Envío masivo de notificaciones."""
     try:
         # Obtener clientes según filtros
-        query = db.query(Cliente).join(Prestamo, Cliente.id == Prestamo.cliente_id)
+        # CORREGIDO: Prestamo no tiene dias_mora, usar Cuota.dias_mora
+        query = (
+            db.query(Cliente)
+            .join(Prestamo, Cliente.id == Prestamo.cliente_id)
+            .join(Cuota, Prestamo.id == Cuota.prestamo_id)
+        )
 
         if request.tipo_cliente == "MOROSO":
-            query = query.filter(Prestamo.dias_mora > 0)
+            query = query.filter(Cuota.dias_mora > 0)
 
         if request.dias_mora_min:
-            query = query.filter(Prestamo.dias_mora >= request.dias_mora_min)
+            query = query.filter(Cuota.dias_mora >= request.dias_mora_min)
 
-        clientes = query.all()
+        # Obtener clientes únicos (puede haber múltiples cuotas por cliente)
+        clientes = query.distinct(Cliente.id).all()
 
         # Crear notificaciones masivas
         notificaciones_creadas = []

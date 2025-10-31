@@ -493,13 +493,13 @@ def dashboard_administrador(
         cuotas_pagadas_query = (
             db.query(func.count(Cuota.id))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(Cuota.estado == "PAGADO", Prestamo.activo.is_(True))
+            .filter(Cuota.estado == "PAGADO", Prestamo.estado == "APROBADO")
         )
         # 13. CUOTAS PENDIENTES
         cuotas_pendientes_query = (
             db.query(func.count(Cuota.id))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(Cuota.estado == "PENDIENTE", Prestamo.activo.is_(True))
+            .filter(Cuota.estado == "PENDIENTE", Prestamo.estado == "APROBADO")
         )
         # 14. CUOTAS ATRASADAS
         cuotas_atrasadas_query = (
@@ -609,7 +609,7 @@ def dashboard_administrador(
             .filter(
                 Cuota.fecha_vencimiento <= hoy,
                 Cuota.prestamo_id.in_(
-                    db.query(Prestamo.id).filter(Prestamo.activo.is_(True))
+                    db.query(Prestamo.id).filter(Prestamo.estado == "APROBADO")
                 ),
             )
             .scalar()
@@ -628,15 +628,24 @@ def dashboard_administrador(
         )  # Estimado 3% menos
 
         # 18. PROMEDIO DÍAS DE MORA
-        clientes_mora_detalle = (
-            db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).all()
+        # Calcular desde cuotas vencidas en lugar de usar campo inexistente
+        cuotas_vencidas_con_dias = (
+            db.query(
+                func.avg(
+                    func.date_part('day', hoy - Cuota.fecha_vencimiento)
+                ).label("dias_promedio")
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Cuota.fecha_vencimiento < hoy,
+                    Cuota.estado != "PAGADO",
+                    Prestamo.estado == "APROBADO",
+                )
+            )
+            .scalar()
         )
-        promedio_dias_mora = (
-            sum(c.dias_mora or 0 for c in clientes_mora_detalle)
-            / len(clientes_mora_detalle)
-            if clientes_mora_detalle
-            else 0
-        )
+        promedio_dias_mora = float(cuotas_vencidas_con_dias) if cuotas_vencidas_con_dias else 0.0
 
         # 19. PORCENTAJE CUMPLIMIENTO (clientes al día / total clientes)
         porcentaje_cumplimiento = (
@@ -667,7 +676,7 @@ def dashboard_administrador(
             cartera_mes_query = db.query(
                 func.sum(Prestamo.total_financiamiento)
             ).filter(
-                Prestamo.activo.is_(True), func.date(Prestamo.fecha_creacion) <= mes_fin
+                Prestamo.estado == "APROBADO", func.date(Prestamo.fecha_registro) <= mes_fin
             )
             cartera_mes_query = FiltrosDashboard.aplicar_filtros_prestamo(
                 cartera_mes_query,
@@ -831,9 +840,16 @@ def dashboard_analista(
     hoy = date.today()
 
     # KPIs para clientes asignados al analista
+    # Cliente NO tiene analista_id, usar JOIN con Prestamo.usuario_proponente
     clientes_asignados = (
         db.query(Cliente)
-        .filter(Cliente.activo, Cliente.analista_id == current_user.id)
+        .join(Prestamo, Prestamo.cedula == Cliente.cedula)
+        .filter(
+            Cliente.activo,
+            Prestamo.estado == "APROBADO",
+            Prestamo.usuario_proponente == current_user.email
+        )
+        .distinct()
         .all()
     )
 
@@ -850,32 +866,92 @@ def dashboard_analista(
             "fecha_consulta": hoy.isoformat(),
         }
 
-    cartera_total = sum(
-        float(cliente.total_financiamiento or 0) for cliente in clientes_asignados
+    # Calcular cartera total desde préstamos (Cliente NO tiene total_financiamiento)
+    cartera_total_query = (
+        db.query(func.sum(Prestamo.total_financiamiento))
+        .filter(
+            Prestamo.estado == "APROBADO",
+            Prestamo.usuario_proponente == current_user.email
+        )
+        .scalar()
     )
+    cartera_total = float(cartera_total_query or 0)
 
-    clientes_al_dia = len([c for c in clientes_asignados if (c.dias_mora or 0) == 0])
-    clientes_en_mora = len([c for c in clientes_asignados if (c.dias_mora or 0) > 0])
+    # Calcular clientes al día y en mora desde cuotas (Cliente NO tiene dias_mora)
+    clientes_cedulas = [c.cedula for c in clientes_asignados]
+    clientes_al_dia_query = (
+        db.query(func.count(func.distinct(Prestamo.cedula)))
+        .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            Prestamo.cedula.in_(clientes_cedulas),
+            Prestamo.estado == "APROBADO",
+            or_(
+                Cuota.estado == "PAGADO",
+                and_(Cuota.fecha_vencimiento >= hoy, Cuota.estado == "PENDIENTE")
+            )
+        )
+    )
+    clientes_al_dia = clientes_al_dia_query.scalar() or 0
+    
+    clientes_en_mora_query = (
+        db.query(func.count(func.distinct(Prestamo.cedula)))
+        .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            Prestamo.cedula.in_(clientes_cedulas),
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.estado != "PAGADO"
+        )
+    )
+    clientes_en_mora = clientes_en_mora_query.scalar() or 0
 
     porcentaje_mora = (
         (clientes_en_mora / len(clientes_asignados) * 100) if clientes_asignados else 0
     )
 
     # Top 5 clientes con mayor financiamiento (del analista)
-    top_clientes = sorted(
-        clientes_asignados,
-        key=lambda x: float(x.total_financiamiento or 0),
-        reverse=True,
-    )[:5]
+    # Calcular desde préstamos ya que Cliente NO tiene total_financiamiento
+    top_clientes_query = (
+        db.query(
+            Prestamo.cedula,
+            Cliente.nombres,
+            func.sum(Prestamo.total_financiamiento).label("total_financiamiento")
+        )
+        .join(Cliente, Prestamo.cedula == Cliente.cedula)
+        .filter(
+            Prestamo.estado == "APROBADO",
+            Prestamo.usuario_proponente == current_user.email
+        )
+        .group_by(Prestamo.cedula, Cliente.nombres)
+        .order_by(func.sum(Prestamo.total_financiamiento).desc())
+        .limit(5)
+        .all()
+    )
 
     top_clientes_data = []
-    for cliente in top_clientes:
+    for row in top_clientes_query:
+        # Calcular días de mora desde cuotas
+        dias_mora_query = (
+            db.query(
+                func.max(func.date_part('day', hoy - Cuota.fecha_vencimiento))
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.cedula == row.cedula,
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO"
+            )
+            .scalar()
+        )
+        dias_mora = int(dias_mora_query) if dias_mora_query else 0
+        
         top_clientes_data.append(
             {
-                "cedula": cliente.cedula,
-                "nombre": cliente.nombre,
-                "total_financiamiento": float(cliente.total_financiamiento or 0),
-                "dias_mora": cliente.dias_mora or 0,
+                "cedula": row.cedula,
+                "nombre": row.nombres,  # Corregido: usar nombres en lugar de nombre
+                "total_financiamiento": float(row.total_financiamiento or 0),
+                "dias_mora": dias_mora,
             }
         )
 
@@ -903,15 +979,24 @@ def resumen_general(
         total_clientes = db.query(Cliente).filter(Cliente.activo).count()
         total_prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
 
-        # Cartera total
-        cartera_total = db.query(func.sum(Cliente.total_financiamiento)).filter(
-            Cliente.activo, Cliente.total_financiamiento.isnot(None)
-        ).scalar() or Decimal("0")
+        # Cartera total (desde préstamos, Cliente NO tiene total_financiamiento)
+        cartera_total = (
+            db.query(func.sum(Prestamo.total_financiamiento))
+            .filter(Prestamo.estado == "APROBADO")
+            .scalar()
+        ) or Decimal("0")
 
-        # Clientes en mora
+        # Clientes en mora (desde cuotas, Cliente NO tiene dias_mora)
         clientes_mora = (
-            db.query(Cliente).filter(Cliente.activo, Cliente.dias_mora > 0).count()
-        )
+            db.query(func.count(func.distinct(Prestamo.cedula)))
+            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_vencimiento < date.today(),
+                Cuota.estado != "PAGADO"
+            )
+            .scalar()
+        ) or 0
 
         return {
             "total_clientes": total_clientes,

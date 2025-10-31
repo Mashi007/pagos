@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.constants import EstadoPrestamo
+from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
@@ -161,21 +162,28 @@ def reporte_cartera(
 
         distribucion_por_mora = []
         for rango in rangos_mora:
+            # CORREGIDO: Prestamo no tiene dias_mora ni monto_mora, usar Cuota
             cantidad = (
-                db.query(Prestamo)
+                db.query(func.count(func.distinct(Prestamo.id)))
+                .join(Cuota, Prestamo.id == Cuota.prestamo_id)
                 .filter(
                     Prestamo.estado == EstadoPrestamo.EN_MORA,
-                    Prestamo.dias_mora >= rango["min"],
-                    Prestamo.dias_mora <= rango["max"],
+                    Cuota.dias_mora >= rango["min"],
+                    Cuota.dias_mora <= rango["max"],
                 )
-                .count()
-            )
+                .scalar()
+            ) or 0
 
-            monto_mora = db.query(func.sum(Prestamo.monto_mora)).filter(
-                Prestamo.estado == EstadoPrestamo.EN_MORA,
-                Prestamo.dias_mora >= rango["min"],
-                Prestamo.dias_mora <= rango["max"],
-            ).scalar() or Decimal("0")
+            monto_mora = (
+                db.query(func.sum(Cuota.monto_mora))
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .filter(
+                    Prestamo.estado == EstadoPrestamo.EN_MORA,
+                    Cuota.dias_mora >= rango["min"],
+                    Cuota.dias_mora <= rango["max"],
+                )
+                .scalar()
+            ) or Decimal("0")
 
             distribucion_por_mora.append(
                 {

@@ -56,9 +56,10 @@ jobs:
       - name: 🎨 Formateo con black
         run: |
           cd ${{ env.BACKEND_DIR }}
-          echo "🎨 Ejecutando black..."
-          black app/ > black.log 2>&1 || true
-          cat black.log
+          echo "🎨 Ejecutando black (verificación)..."
+          black --check --diff app/ > black.log 2>&1 || true
+          echo "🎨 Log de black (verificación):"
+          cat black.log || echo "No hay cambios necesarios"
       
       - name: 🔧 Aplicar correcciones de Black automáticamente
         run: |
@@ -79,15 +80,36 @@ jobs:
         run: |
           cd ${{ env.BACKEND_DIR }}
           echo "📝 Verificando orden de imports con isort..."
-          isort --check-only app/ > isort.log 2>&1 || true
-          cat isort.log
+          isort --check-only --diff app/ > isort.log 2>&1 || true
+          echo "📝 Log de isort:"
+          cat isort.log || echo "Todos los imports están ordenados correctamente"
       
       - name: 🔒 Verificación de tipos con mypy
         run: |
           cd ${{ env.BACKEND_DIR }}
           echo "🔒 Ejecutando verificación de tipos con mypy..."
           mypy app/ --ignore-missing-imports > mypy.log 2>&1 || true
-          cat mypy.log
+          echo "🔒 Log de mypy:"
+          cat mypy.log || echo "No hay errores de tipos"
+      
+      # Verificar que los logs existan antes de subirlos
+      - name: 🔍 Verificar logs generados
+        if: always()
+        run: |
+          cd ${{ env.BACKEND_DIR }}
+          echo "🔍 Verificando archivos de log generados..."
+          ls -lh *.log 2>/dev/null || echo "⚠️ No se encontraron archivos .log"
+          echo ""
+          echo "📋 Archivos encontrados:"
+          for log in flake8-critical.log flake8-full.log black.log isort.log mypy.log; do
+            if [ -f "$log" ]; then
+              size=$(du -h "$log" | cut -f1)
+              lines=$(wc -l < "$log" 2>/dev/null || echo "0")
+              echo "  ✅ $log: $size ($lines líneas)"
+            else
+              echo "  ⚠️ $log: NO ENCONTRADO"
+            fi
+          done
       
       # Guardar TODOS los logs como artifacts descargables
       - name: 📊 Subir logs de calidad de código
@@ -102,6 +124,7 @@ jobs:
             ${{ env.BACKEND_DIR }}/black.log
             ${{ env.BACKEND_DIR }}/isort.log
             ${{ env.BACKEND_DIR }}/mypy.log
+          if-no-files-found: warn
       
       # Guardar output completo del job
       - name: 💾 Guardar logs completos del job

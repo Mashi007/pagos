@@ -33,7 +33,7 @@ class FiltrosDashboard:
         Aplica filtros comunes a queries de préstamos
 
         Uso:
-            query = db.query(Prestamo).filter(Prestamo.activo.is_(True))
+            query = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
             query = FiltrosDashboard.aplicar_filtros_prestamo(
                 query, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
