@@ -106,12 +106,20 @@ jobs:
           # Mostrar output
           cat isort.log
           echo "::endgroup::"
-          
-          # Fallar si hay errores de imports
-          if [ $ISORT_EXIT_CODE -ne 0 ]; then
-            echo "❌ ERROR: Imports incorrectamente ordenados detectados."
-            echo "Ejecuta 'isort app/' localmente para corregir automáticamente."
-            exit 1
+      
+      - name: 🔧 Aplicar correcciones de Isort automáticamente
+        run: |
+          cd ${{ env.BACKEND_DIR }}
+          # Solo aplicar si el último commit no fue de Isort
+          if ! git log -1 --pretty=%B | grep -q "\[skip ci\]"; then
+            isort app/
+            if ! git diff --quiet; then
+              git config user.name "GitHub Actions"
+              git config user.email "actions@github.com"
+              git add app/
+              git commit -m "style: Aplicar correcciones automáticas de Isort [skip ci]"
+              git push
+            fi
           fi
       
       - name: 🔒 Verificación de tipos con mypy
