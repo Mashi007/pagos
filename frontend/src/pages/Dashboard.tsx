@@ -287,7 +287,7 @@ export function Dashboard() {
   // ✅ Query de KPIs adicionales - usa filtros automáticos del hook
   const { data: kpisData, isLoading: loadingKpis } = useQuery({
     queryKey: ['kpis', filtros],
-    queryFn: async (): Promise<DashboardData> => {
+    queryFn: async (): Promise<any> => {
       try {
         const params = construirFiltrosObject()
         const queryParams = new URLSearchParams()
@@ -298,14 +298,13 @@ export function Dashboard() {
         const response = await apiClient.get(
           `/api/v1/kpis/dashboard${queryString ? '?' + queryString : ''}`
         )
-        return response as DashboardData
+        return response as any
       } catch (error) {
-        console.warn('Error cargando KPIs desde backend, usando datos mock:', error)
-        return mockData // Fallback a datos mock
+        console.warn('Error cargando KPIs desde backend:', error)
+        return null
       }
     },
     staleTime: 5 * 60 * 1000,
-    initialData: mockData, // Datos iniciales mientras carga
   })
 
   // ✅ Usar datos del backend si están disponibles, solo mock si hay error real
@@ -738,6 +737,161 @@ export function Dashboard() {
           isLoading={pagosStatsLoading}
         />
       )}
+
+      {/* KPIs de Amortizaciones y Cartera */}
+      {loadingKpis ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-6">
+                <div className="animate-pulse">
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                  <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : kpisData ? (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Cartera y Amortizaciones</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Cartera Total */}
+            <Card className="hover:shadow-lg transition-all">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
+                  <DollarSign className="mr-2 h-4 w-4 text-blue-600" />
+                  Cartera Total
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-900">
+                  {formatCurrency(kpisData.cartera_total || 0)}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Préstamos aprobados</p>
+              </CardContent>
+            </Card>
+
+            {/* Saldo Pendiente */}
+            <Card className="hover:shadow-lg transition-all">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
+                  <CreditCard className="mr-2 h-4 w-4 text-orange-600" />
+                  Saldo Pendiente
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  {formatCurrency(kpisData.saldo_pendiente || 0)}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Capital + Interés + Mora</p>
+              </CardContent>
+            </Card>
+
+            {/* Monto Vencido */}
+            <Card className="hover:shadow-lg transition-all">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
+                  <AlertTriangle className="mr-2 h-4 w-4 text-red-600" />
+                  Monto Vencido
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  {formatCurrency(kpisData.monto_vencido || 0)}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Cuotas vencidas</p>
+              </CardContent>
+            </Card>
+
+            {/* Total Pagado en Cuotas */}
+            <Card className="hover:shadow-lg transition-all">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
+                  <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                  Total Pagado
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {formatCurrency(kpisData.total_pagado_cuotas || 0)}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">En todas las cuotas</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Total Cuotas */}
+            <Card className="hover:shadow-lg transition-all">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
+                  <BarChart3 className="mr-2 h-4 w-4 text-purple-600" />
+                  Total Cuotas
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-900">
+                  {kpisData.total_cuotas || 0}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Todas las cuotas generadas</p>
+              </CardContent>
+            </Card>
+
+            {/* Cuotas Pagadas */}
+            <Card className="hover:shadow-lg transition-all">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
+                  <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                  Cuotas Pagadas
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {kpisData.cuotas_pagadas || 0}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {kpisData.porcentaje_cuotas_pagadas?.toFixed(1) || 0}% del total
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Cuotas Pendientes */}
+            <Card className="hover:shadow-lg transition-all">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
+                  <Clock className="mr-2 h-4 w-4 text-yellow-600" />
+                  Cuotas Pendientes
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600">
+                  {kpisData.cuotas_pendientes || 0}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Pendientes + Atrasadas</p>
+              </CardContent>
+            </Card>
+
+            {/* Porcentaje de Recuperación */}
+            <Card className="hover:shadow-lg transition-all">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
+                  <Target className="mr-2 h-4 w-4 text-blue-600" />
+                  Recuperación
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">
+                  {kpisData.porcentaje_recuperacion?.toFixed(1) || 0}%
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Sobre cartera total</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      ) : null}
 
       {/* Métricas Financieras Detalladas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

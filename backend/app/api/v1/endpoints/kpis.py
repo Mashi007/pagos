@@ -90,12 +90,109 @@ def dashboard_kpis_principales(
     )
     cuotas_vencidas = cuotas_query.scalar() or 0
 
+    # ✅ KPIs adicionales de amortizaciones - usar filtros automáticos
+    # Total de cuotas
+    total_cuotas_query = (
+        db.query(func.count(Cuota.id))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+    )
+    total_cuotas_query = FiltrosDashboard.aplicar_filtros_cuota(
+        total_cuotas_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+    total_cuotas = total_cuotas_query.scalar() or 0
+
+    # Cuotas pendientes (total)
+    cuotas_pendientes_query = (
+        db.query(func.count(Cuota.id))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"]))
+    )
+    cuotas_pendientes_query = FiltrosDashboard.aplicar_filtros_cuota(
+        cuotas_pendientes_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+    cuotas_pendientes = cuotas_pendientes_query.scalar() or 0
+
+    # Cuotas pagadas
+    cuotas_pagadas_query = (
+        db.query(func.count(Cuota.id))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(Cuota.estado == "PAGADO")
+    )
+    cuotas_pagadas_query = FiltrosDashboard.aplicar_filtros_cuota(
+        cuotas_pagadas_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+    cuotas_pagadas = cuotas_pagadas_query.scalar() or 0
+
+    # Saldo pendiente total (capital + interés + mora)
+    saldo_pendiente_query = (
+        db.query(
+            func.sum(Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora)
+        )
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"]))
+    )
+    saldo_pendiente_query = FiltrosDashboard.aplicar_filtros_cuota(
+        saldo_pendiente_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+    saldo_pendiente = saldo_pendiente_query.scalar() or Decimal("0")
+
+    # Monto total vencido (solo cuotas vencidas)
+    monto_vencido_query = (
+        db.query(
+            func.sum(Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora)
+        )
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            Cuota.fecha_vencimiento < fecha_corte,
+            Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"])
+        )
+    )
+    monto_vencido_query = FiltrosDashboard.aplicar_filtros_cuota(
+        monto_vencido_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+    monto_vencido = monto_vencido_query.scalar() or Decimal("0")
+
+    # Total pagado en cuotas (capital + interés + mora)
+    total_pagado_cuotas_query = (
+        db.query(
+            func.sum(Cuota.capital_pagado + Cuota.interes_pagado + Cuota.mora_pagada)
+        )
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+    )
+    total_pagado_cuotas_query = FiltrosDashboard.aplicar_filtros_cuota(
+        total_pagado_cuotas_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+    total_pagado_cuotas = total_pagado_cuotas_query.scalar() or Decimal("0")
+
+    # Porcentaje de recuperación (total pagado / cartera total)
+    porcentaje_recuperacion = (
+        float((total_pagado_cuotas / cartera_total) * 100)
+        if cartera_total > 0
+        else 0.0
+    )
+
+    # Porcentaje de cuotas pagadas
+    porcentaje_cuotas_pagadas = (
+        float((cuotas_pagadas / total_cuotas) * 100)
+        if total_cuotas > 0
+        else 0.0
+    )
+
     return {
         "cartera_total": float(cartera_total),
         "clientes_al_dia": clientes_al_dia,
         "pagos_mes": float(pagos_mes),
         "cuotas_vencidas": cuotas_vencidas,
         "fecha_corte": str(fecha_corte),
+        # Nuevos KPIs de amortizaciones
+        "total_cuotas": total_cuotas,
+        "cuotas_pendientes": cuotas_pendientes,
+        "cuotas_pagadas": cuotas_pagadas,
+        "saldo_pendiente": float(saldo_pendiente),
+        "monto_vencido": float(monto_vencido),
+        "total_pagado_cuotas": float(total_pagado_cuotas),
+        "porcentaje_recuperacion": porcentaje_recuperacion,
+        "porcentaje_cuotas_pagadas": porcentaje_cuotas_pagadas,
     }
 
 
