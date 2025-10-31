@@ -91,9 +91,9 @@ if (API_URL) {
       // Necesitamos extraer solo el path sin query string
       const pathOnly = path.split('?')[0]; // Remover query string si está presente
       
-      // Express eliminó /api del path, así que pathOnly es "/v1/clientes"
-      // Necesitamos agregar /api de vuelta
-      const rewritten = `/api${pathOnly}`;
+      // Con filter, el path ya incluye /api, así que pathOnly es "/api/v1/clientes"
+      // Lo mantenemos tal cual, sin agregar /api de nuevo
+      const rewritten = pathOnly;
       
       // Log detallado para debug
       console.log(`🔄 Path rewrite:`);
@@ -166,19 +166,9 @@ if (API_URL) {
   // IMPORTANTE: Debe ser ANTES de express.static y otros middlewares
   // http-proxy-middleware devuelve un middleware que se puede usar directamente
   
-  // IMPORTANTE: No usar wrapper, el middleware debe ejecutarse directamente
-  // El problema puede ser que el wrapper está impidiendo que el proxy funcione correctamente
-  app.use('/api', proxyMiddleware);
-  
-  // Log adicional para confirmar que se ejecuta
-  app.use('/api', (req, res, next) => {
-    // Este middleware se ejecuta DESPUÉS del proxy, solo para logging
-    // Si llegamos aquí, el proxy no manejó la petición
-    if (!res.headersSent) {
-      console.warn(`⚠️  Petición /api no manejada por proxy: ${req.method} ${req.path}`);
-    }
-    next();
-  });
+  // IMPORTANTE: Usar el proxy directamente sin prefijo, usando filter para capturar /api/*
+  // Esto asegura que los callbacks (onProxyReq, onProxyRes) se ejecuten correctamente
+  app.use(proxyMiddleware);
   
   // También registrar explícitamente para debug
   console.log('✅ Proxy middleware registrado para rutas /api/*');
