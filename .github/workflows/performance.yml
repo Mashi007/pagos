@@ -214,7 +214,7 @@ jobs:
         with:
           configPath: './frontend/.lighthouserc.json'
           uploadArtifacts: true
-          temporaryPublicStorage: true
+          temporaryPublicStorage: false
       
       - name: 📊 Subir reportes de performance frontend
         uses: actions/upload-artifact@v3
