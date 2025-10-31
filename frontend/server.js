@@ -7,7 +7,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const API_URL = process.env.VITE_API_BASE_URL || process.env.VITE_API_URL || 'http://localhost:8080';
+// URL del backend - Prioridad: VITE_API_BASE_URL > VITE_API_URL > localhost
+const API_URL = process.env.VITE_API_BASE_URL || process.env.VITE_API_URL || 'http://localhost:8000';
+
+// Log de la URL configurada para debug
+console.log(`🔍 API_URL configurado: ${API_URL || 'NO CONFIGURADO'}`);
+console.log(`🔍 VITE_API_BASE_URL: ${process.env.VITE_API_BASE_URL || 'NO SET'}`);
+console.log(`🔍 VITE_API_URL: ${process.env.VITE_API_URL || 'NO SET'}`);
 
 // ============================================
 // SECURITY HEADERS - OWASP Best Practices
