@@ -1,7 +1,7 @@
 import logging
 import traceback
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
@@ -98,6 +98,7 @@ def list_concesionarios_no_auth(
 
 @router.get("/", response_model=ConcesionarioListResponse)
 def list_concesionarios(
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(20, ge=1, le=1000, description="Limite de resultados"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
     search: Optional[str] = Query(None, description="Buscar por nombre"),
@@ -120,15 +121,16 @@ def list_concesionarios(
         total = query.count()
 
         # Aplicar paginacion
-        concesionarios = query.limit(limit).all()
+        concesionarios = query.offset(skip).limit(limit).all()
 
         # Calcular paginas
-        pages = (total + limit - 1) // limit
+        pages = (total + limit - 1) // limit if limit > 0 else 0
+        page = (skip // limit) + 1 if limit > 0 else 1
 
         return ConcesionarioListResponse(
-            items=[c.to_dict() for c in concesionarios],
+            items=concesionarios,
             total=total,
-            page=1,
+            page=page,
             size=limit,
             pages=pages,
         )
@@ -137,7 +139,7 @@ def list_concesionarios(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
-@router.get("/activos")
+@router.get("/activos", response_model=List[ConcesionarioResponse])
 def list_concesionarios_activos(
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
@@ -145,7 +147,7 @@ def list_concesionarios_activos(
     concesionarios = (
         db.query(Concesionario).filter(Concesionario.activo.is_(True)).all()
     )
-    return [c.to_dict() for c in concesionarios]
+    return concesionarios
 
 
 @router.get("/dropdown")

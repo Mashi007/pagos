@@ -21,8 +21,10 @@ router = APIRouter()
 
 @router.get("/", response_model=AnalistaListResponse)
 def listar_analistas(
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(100, ge=1, le=1000, description="Límite de resultados"),
     activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    search: Optional[str] = Query(None, description="Buscar por nombre"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -36,19 +38,24 @@ def listar_analistas(
         # Ordenar por ID
         query = query.order_by(Analista.id)
 
+        # Aplicar búsqueda si existe
+        if search:
+            query = query.filter(Analista.nombre.ilike(f"%{search}%"))
+
         # Contar total
         total = query.count()
 
         # Paginar
-        analistas = query.limit(limit).all()
+        analistas = query.offset(skip).limit(limit).all()
 
         # Calcular páginas
         pages = (total + limit - 1) // limit if limit > 0 else 0
+        page = (skip // limit) + 1 if limit > 0 else 1
 
         return AnalistaListResponse(
             items=analistas,
             total=total,
-            page=1,
+            page=page,
             size=limit,
             pages=pages,
         )
