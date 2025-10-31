@@ -188,7 +188,7 @@ def obtener_cobros_diarios(
                         and_(
                             Cuota.fecha_vencimiento == fecha_dia,
                             Cuota.estado != "PAGADO",
-                            Prestamo.activo.is_(True),
+                            Prestamo.estado == "APROBADO",
                         )
                     )
                 )
@@ -331,7 +331,8 @@ def dashboard_administrador(
         hoy = date.today()
 
         # Aplicar filtros base a queries de préstamos (usando clase centralizada)
-        base_prestamo_query = db.query(Prestamo).filter(Prestamo.activo.is_(True))
+        # Prestamo NO tiene campo 'activo', usar estado == "APROBADO"
+        base_prestamo_query = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
         base_prestamo_query = FiltrosDashboard.aplicar_filtros_prestamo(
             base_prestamo_query,
             analista,
@@ -355,7 +356,7 @@ def dashboard_administrador(
                 and_(
                     Cuota.fecha_vencimiento < hoy,
                     Cuota.estado != "PAGADO",
-                    Prestamo.activo.is_(True),
+                    Prestamo.estado == "APROBADO",
                 )
             )
         )
@@ -428,7 +429,7 @@ def dashboard_administrador(
                 and_(
                     Cuota.fecha_vencimiento < hoy,
                     Cuota.estado != "PAGADO",
-                    Prestamo.activo.is_(True),
+                    Prestamo.estado == "APROBADO",
                 )
             )
         )
@@ -508,7 +509,7 @@ def dashboard_administrador(
                 and_(
                     Cuota.estado == "ATRASADO",
                     Cuota.fecha_vencimiento < hoy,
-                    Prestamo.activo.is_(True),
+                    Prestamo.estado == "APROBADO",
                 )
             )
         )
@@ -900,7 +901,7 @@ def resumen_general(
     try:
         # Estadísticas básicas
         total_clientes = db.query(Cliente).filter(Cliente.activo).count()
-        total_prestamos = db.query(Prestamo).filter(Prestamo.activo).count()
+        total_prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
 
         # Cartera total
         cartera_total = db.query(func.sum(Cliente.total_financiamiento)).filter(
