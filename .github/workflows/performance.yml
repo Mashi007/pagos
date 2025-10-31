@@ -168,7 +168,7 @@ jobs:
           pytest test_performance.py -v --benchmark-only
       
       - name: 📊 Subir reportes de performance
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: backend-performance-reports
           path: |
@@ -217,7 +217,7 @@ jobs:
           temporaryPublicStorage: false
       
       - name: 📊 Subir reportes de performance frontend
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: frontend-performance-reports
           path: |
@@ -235,7 +235,7 @@ jobs:
     
     steps:
       - name: 📥 Descargar reportes
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: performance-reports
       
@@ -263,7 +263,7 @@ jobs:
           cat performance-summary.md
       
       - name: 📊 Subir reporte consolidado
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: performance-summary
           path: performance-summary.md

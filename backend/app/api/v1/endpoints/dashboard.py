@@ -565,16 +565,64 @@ def dashboard_administrador(
             fecha_inicio_periodo_anterior = hoy - timedelta(days=1)
             fecha_fin_periodo_anterior = hoy - timedelta(days=1)
 
-        # Cartera anterior (mes anterior)
-        # cartera_anterior_query no se usa actualmente, se calcula valor estimado
-        # cartera_anterior_query = db.query(
-        #     func.sum(Prestamo.total_financiamiento)
-        # ).filter(Prestamo.activo.is_(True))
-        if periodo in ["mes", "semana", "año"]:
-            # Para períodos anteriores, usar valores históricos estimados
-            # En producción, esto debería calcularse desde histórico de cartera
-            cartera_anterior_val = float(cartera_total) * 0.95  # Estimado 5% menos
-        else:
+        # Cartera anterior - Calcular desde BD histórica
+        if periodo == "mes":
+            # Mes anterior: cartera total al final del mes anterior
+            fecha_inicio_mes_anterior = fecha_inicio_periodo_anterior
+            fecha_fin_mes_anterior = fecha_fin_periodo_anterior
+            cartera_anterior_query = (
+                db.query(func.sum(Prestamo.total_financiamiento))
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    func.date(Prestamo.fecha_registro) <= fecha_fin_mes_anterior,
+                )
+            )
+            cartera_anterior_query = FiltrosDashboard.aplicar_filtros_prestamo(
+                cartera_anterior_query,
+                analista,
+                concesionario,
+                modelo,
+                None,  # No filtrar por fechas para obtener histórico
+                None,
+            )
+            cartera_anterior_val = float(cartera_anterior_query.scalar() or Decimal("0"))
+        elif periodo == "semana":
+            # Semana anterior: cartera al inicio de la semana anterior
+            cartera_anterior_query = (
+                db.query(func.sum(Prestamo.total_financiamiento))
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    func.date(Prestamo.fecha_registro) <= fecha_fin_periodo_anterior,
+                )
+            )
+            cartera_anterior_query = FiltrosDashboard.aplicar_filtros_prestamo(
+                cartera_anterior_query,
+                analista,
+                concesionario,
+                modelo,
+                None,
+                None,
+            )
+            cartera_anterior_val = float(cartera_anterior_query.scalar() or Decimal("0"))
+        elif periodo == "año":
+            # Año anterior: cartera al final del año anterior
+            cartera_anterior_query = (
+                db.query(func.sum(Prestamo.total_financiamiento))
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    func.date(Prestamo.fecha_registro) <= fecha_fin_periodo_anterior,
+                )
+            )
+            cartera_anterior_query = FiltrosDashboard.aplicar_filtros_prestamo(
+                cartera_anterior_query,
+                analista,
+                concesionario,
+                modelo,
+                None,
+                None,
+            )
+            cartera_anterior_val = float(cartera_anterior_query.scalar() or Decimal("0"))
+        else:  # dia
             cartera_anterior_val = float(cartera_total)
 
         # 16. TOTAL COBRADO EN EL PERÍODO ACTUAL
@@ -622,10 +670,35 @@ def dashboard_administrador(
             else 0
         )
 
-        # Tasa recuperación anterior (estimada)
-        tasa_recuperacion_anterior = max(
-            0, tasa_recuperacion - 3.0
-        )  # Estimado 3% menos
+        # Tasa recuperación anterior - Calcular desde BD histórica
+        cuotas_pagadas_anterior = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.estado == "PAGADO",
+                Prestamo.estado == "APROBADO",
+                func.date(Cuota.fecha_pago) >= fecha_inicio_periodo_anterior,
+                func.date(Cuota.fecha_pago) <= fecha_fin_periodo_anterior,
+            )
+            .scalar()
+            or 0
+        )
+        total_cuotas_esperadas_anterior = (
+            db.query(func.count(Cuota.id))
+            .filter(
+                Cuota.fecha_vencimiento <= fecha_fin_periodo_anterior,
+                Cuota.prestamo_id.in_(
+                    db.query(Prestamo.id).filter(Prestamo.estado == "APROBADO")
+                ),
+            )
+            .scalar()
+            or 0
+        )
+        tasa_recuperacion_anterior = (
+            (cuotas_pagadas_anterior / total_cuotas_esperadas_anterior * 100)
+            if total_cuotas_esperadas_anterior > 0
+            else 0
+        )
 
         # 18. PROMEDIO DÍAS DE MORA
         # Calcular desde cuotas vencidas en lugar de usar campo inexistente
@@ -760,11 +833,67 @@ def dashboard_administrador(
                 }
             )
 
-        # 22. DISTRIBUCIÓN DE INGRESOS (estimación)
-        # En producción esto debería calcularse desde el detalle de pagos y cuotas
-        ingresos_capital = float(total_cobrado_periodo) * 0.7  # Estimado 70% capital
-        ingresos_interes = float(total_cobrado_periodo) * 0.25  # Estimado 25% intereses
-        ingresos_mora = float(total_cobrado_periodo) * 0.05  # Estimado 5% mora
+        # 22. DISTRIBUCIÓN DE INGRESOS - Cálculo real desde BD
+        # Sumar capital_pagado, interes_pagado y mora_pagada de cuotas pagadas en el período
+        ingresos_capital_query = (
+            db.query(func.sum(Cuota.capital_pagado))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.fecha_pago.isnot(None),
+                func.date(Cuota.fecha_pago) >= fecha_inicio_periodo,
+                func.date(Cuota.fecha_pago) <= hoy,
+                Prestamo.estado == "APROBADO",
+            )
+        )
+        ingresos_capital_query = FiltrosDashboard.aplicar_filtros_cuota(
+            ingresos_capital_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
+        )
+        ingresos_capital = float(ingresos_capital_query.scalar() or Decimal("0"))
+
+        ingresos_interes_query = (
+            db.query(func.sum(Cuota.interes_pagado))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.fecha_pago.isnot(None),
+                func.date(Cuota.fecha_pago) >= fecha_inicio_periodo,
+                func.date(Cuota.fecha_pago) <= hoy,
+                Prestamo.estado == "APROBADO",
+            )
+        )
+        ingresos_interes_query = FiltrosDashboard.aplicar_filtros_cuota(
+            ingresos_interes_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
+        )
+        ingresos_interes = float(ingresos_interes_query.scalar() or Decimal("0"))
+
+        ingresos_mora_query = (
+            db.query(func.sum(Cuota.mora_pagada))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.fecha_pago.isnot(None),
+                func.date(Cuota.fecha_pago) >= fecha_inicio_periodo,
+                func.date(Cuota.fecha_pago) <= hoy,
+                Prestamo.estado == "APROBADO",
+            )
+        )
+        ingresos_mora_query = FiltrosDashboard.aplicar_filtros_cuota(
+            ingresos_mora_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
+        )
+        ingresos_mora = float(ingresos_mora_query.scalar() or Decimal("0"))
 
         return {
             "cartera_total": float(cartera_total),

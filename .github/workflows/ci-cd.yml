@@ -146,7 +146,7 @@ jobs:
       # Guardar TODOS los logs como artifacts descargables
       - name: 📊 Subir logs de calidad de código
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: code-quality-logs-${{ github.run_number }}
           retention-days: 90
