@@ -58,14 +58,36 @@ def dashboard_kpis_principales(
     )
     cartera_total = cartera_query.scalar() or Decimal("0")
 
-    # ✅ Clientes al día - usar filtros automáticos
-    clientes_query = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
-        Prestamo.estado == "APROBADO"
+    # ✅ Clientes al día - CORREGIDO: Un cliente está al día si tiene préstamos aprobados
+    # CON cuotas generadas y NO tiene cuotas vencidas sin pagar
+    # Primero: contar clientes con préstamos aprobados que tienen cuotas
+    clientes_con_cuotas_query = (
+        db.query(func.count(func.distinct(Prestamo.cedula)))
+        .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+        .filter(Prestamo.estado == "APROBADO")
     )
-    clientes_query = FiltrosDashboard.aplicar_filtros_prestamo(
-        clientes_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    clientes_con_cuotas_query = FiltrosDashboard.aplicar_filtros_prestamo(
+        clientes_con_cuotas_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
     )
-    clientes_al_dia = clientes_query.scalar() or 0
+    clientes_con_cuotas = clientes_con_cuotas_query.scalar() or 0
+
+    # Segundo: contar clientes en mora (con cuotas vencidas sin pagar)
+    clientes_en_mora_query = (
+        db.query(func.count(func.distinct(Prestamo.cedula)))
+        .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_vencimiento < fecha_corte,
+            Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"]),
+        )
+    )
+    clientes_en_mora_query = FiltrosDashboard.aplicar_filtros_cuota(
+        clientes_en_mora_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+    clientes_en_mora = clientes_en_mora_query.scalar() or 0
+
+    # Clientes al día = clientes con cuotas - clientes en mora
+    clientes_al_dia = max(0, clientes_con_cuotas - clientes_en_mora)
 
     # ✅ Pagos del mes - usar filtros automáticos
     pagos_query = db.query(func.sum(Pago.monto_pagado)).filter(
