@@ -54,7 +54,9 @@ def listar_modelos_vehiculos(
     pages = (total + limit - 1) // limit if limit > 0 else 0
     page = (skip // limit) + 1 if limit > 0 else 1
 
-    logger.info(f"✅ Listando {len(modelos)} modelos de vehículos de {total} totales (página {page}/{pages})")
+    logger.info(
+        f"✅ Listando {len(modelos)} modelos de vehículos de {total} totales (página {page}/{pages})"
+    )
 
     response = ModeloVehiculoListResponse(
         items=modelos,
