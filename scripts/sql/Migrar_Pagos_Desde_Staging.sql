@@ -58,9 +58,13 @@ WITH datos_limpios AS (
         END AS cedula_cliente_normalizada,
         
         -- Normalizar fecha_pago: convertir varios formatos
+        -- Si hay ERROR o valor inválido, usar fecha por defecto: 31/10/2025
         CASE 
-            WHEN fecha_pago IS NULL OR TRIM(COALESCE(fecha_pago::TEXT, '')) = '' 
-                 OR UPPER(TRIM(COALESCE(fecha_pago::TEXT, ''))) IN ('NN', 'N', 'NULL') THEN NULL
+            WHEN fecha_pago IS NULL 
+                 OR TRIM(COALESCE(fecha_pago::TEXT, '')) = '' 
+                 OR UPPER(TRIM(COALESCE(fecha_pago::TEXT, ''))) IN ('NN', 'N', 'NULL', 'ERROR', 'ERR')
+                 OR fecha_pago::TEXT ~ '[^0-9/\-]' THEN 
+                MAKE_DATE(2025, 10, 31)  -- Fecha por defecto: 31/10/2025
             WHEN fecha_pago::TEXT ~ '^\d{4}-\d{2}-\d{2}' THEN 
                 fecha_pago::DATE  -- Ya está en formato YYYY-MM-DD
             WHEN fecha_pago::TEXT ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
@@ -82,25 +86,28 @@ WITH datos_limpios AS (
                         )
                 END
             ELSE 
-                fecha_pago::DATE  -- Intentar conversión directa
+                MAKE_DATE(2025, 10, 31)  -- Si no coincide con ningún formato, usar fecha por defecto
         END AS fecha_pago_normalizada,
         
-        -- Normalizar monto_pagado: convertir 'nn' a NULL, luego a NUMERIC
+        -- Normalizar monto_pagado: convertir 'nn' a NULL, 'ERROR' a 0.00, luego a NUMERIC
         CASE 
             WHEN monto_pagado IS NULL 
                  OR TRIM(COALESCE(monto_pagado::TEXT, '')) = '' 
-                 OR UPPER(TRIM(COALESCE(monto_pagado::TEXT, ''))) IN ('NN', 'N', 'NULL', '0', '0.00') THEN NULL
+                 OR UPPER(TRIM(COALESCE(monto_pagado::TEXT, ''))) IN ('NN', 'N', 'NULL') THEN NULL
+            WHEN UPPER(TRIM(COALESCE(monto_pagado::TEXT, ''))) IN ('ERROR', 'ERR') THEN 
+                0.00  -- Valor por defecto para ERROR
+            WHEN TRIM(COALESCE(monto_pagado::TEXT, '')) IN ('0', '0.00') THEN NULL
             ELSE 
                 CAST(REPLACE(REPLACE(monto_pagado::TEXT, ',', ''), ' ', '') AS NUMERIC(12, 2))
         END AS monto_pagado_normalizado,
         
-        -- Normalizar numero_documento: quitar espacios, convertir 'nn' a NULL
+        -- Normalizar numero_documento: quitar espacios, convertir 'nn' a NULL, MANTENER 'ERROR' tal cual
         CASE 
             WHEN numero_documento IS NULL 
                  OR TRIM(COALESCE(numero_documento, '')) = '' 
                  OR UPPER(TRIM(COALESCE(numero_documento, ''))) IN ('NN', 'N', 'NULL') THEN NULL
             ELSE 
-                TRIM(numero_documento)
+                TRIM(numero_documento)  -- Mantener "ERROR" tal cual, no convertirlo
         END AS numero_documento_normalizado
         
     FROM public.pagos_staging
@@ -118,9 +125,10 @@ datos_validados AS (
     WHERE 
         -- Solo incluir registros válidos
         dc.cedula_cliente_normalizada IS NOT NULL
-        AND dc.fecha_pago_normalizada IS NOT NULL
+        -- fecha_pago_normalizada siempre será válida (tiene valor por defecto 31/10/2025 si es inválida)
         AND dc.monto_pagado_normalizado IS NOT NULL
-        AND dc.monto_pagado_normalizado > 0
+        AND dc.monto_pagado_normalizado >= 0  -- Permitir 0.00 para casos de ERROR
+        -- numero_documento puede ser "ERROR", se acepta tal cual (solo rechazamos NULL y 'nn')
         AND dc.numero_documento_normalizado IS NOT NULL
         AND c.id IS NOT NULL  -- Cliente debe existir
 )
@@ -186,8 +194,11 @@ FROM (
             ELSE UPPER(TRIM(cedula_cliente))
         END AS cedula_cliente,
         CASE 
-            WHEN fecha_pago IS NULL OR TRIM(COALESCE(fecha_pago::TEXT, '')) = '' 
-                 OR UPPER(TRIM(COALESCE(fecha_pago::TEXT, ''))) IN ('NN', 'N', 'NULL') THEN NULL
+            WHEN fecha_pago IS NULL 
+                 OR TRIM(COALESCE(fecha_pago::TEXT, '')) = '' 
+                 OR UPPER(TRIM(COALESCE(fecha_pago::TEXT, ''))) IN ('NN', 'N', 'NULL', 'ERROR', 'ERR')
+                 OR fecha_pago::TEXT ~ '[^0-9/\-]' THEN 
+                MAKE_DATE(2025, 10, 31)  -- Fecha por defecto: 31/10/2025
             WHEN fecha_pago::TEXT ~ '^\d{4}-\d{2}-\d{2}' THEN fecha_pago::DATE
             WHEN fecha_pago::TEXT ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
                 CASE 
@@ -204,12 +215,16 @@ FROM (
                             SPLIT_PART(fecha_pago::TEXT, '/', 2)::INTEGER
                         )
                 END
-            ELSE fecha_pago::DATE
+            ELSE 
+                MAKE_DATE(2025, 10, 31)  -- Fecha por defecto: 31/10/2025
         END AS fecha_pago_normalizada,
         CASE 
             WHEN monto_pagado IS NULL 
                  OR TRIM(COALESCE(monto_pagado::TEXT, '')) = '' 
-                 OR UPPER(TRIM(COALESCE(monto_pagado::TEXT, ''))) IN ('NN', 'N', 'NULL', '0', '0.00') THEN NULL
+                 OR UPPER(TRIM(COALESCE(monto_pagado::TEXT, ''))) IN ('NN', 'N', 'NULL') THEN NULL
+            WHEN UPPER(TRIM(COALESCE(monto_pagado::TEXT, ''))) IN ('ERROR', 'ERR') THEN 
+                0.00  -- Valor por defecto para ERROR
+            WHEN TRIM(COALESCE(monto_pagado::TEXT, '')) IN ('0', '0.00') THEN NULL
             ELSE 
                 CAST(REPLACE(REPLACE(monto_pagado::TEXT, ',', ''), ' ', '') AS NUMERIC(12, 2))
         END AS monto_pagado_normalizado,
@@ -217,7 +232,8 @@ FROM (
             WHEN numero_documento IS NULL 
                  OR TRIM(COALESCE(numero_documento, '')) = '' 
                  OR UPPER(TRIM(COALESCE(numero_documento, ''))) IN ('NN', 'N', 'NULL') THEN NULL
-            ELSE TRIM(numero_documento)
+            ELSE 
+                TRIM(numero_documento)  -- Mantener "ERROR" tal cual
         END AS numero_documento_normalizado,
         c.id AS cliente_existe
     FROM public.pagos_staging ps
@@ -233,8 +249,11 @@ FROM (
             ELSE UPPER(TRIM(ps.cedula_cliente))
         END
         AND p.fecha_pago = CASE 
-            WHEN ps.fecha_pago IS NULL OR TRIM(COALESCE(ps.fecha_pago::TEXT, '')) = '' 
-                 OR UPPER(TRIM(COALESCE(ps.fecha_pago::TEXT, ''))) IN ('NN', 'N', 'NULL') THEN NULL
+            WHEN ps.fecha_pago IS NULL 
+                 OR TRIM(COALESCE(ps.fecha_pago::TEXT, '')) = '' 
+                 OR UPPER(TRIM(COALESCE(ps.fecha_pago::TEXT, ''))) IN ('NN', 'N', 'NULL', 'ERROR', 'ERR')
+                 OR ps.fecha_pago::TEXT ~ '[^0-9/\-]' THEN 
+                MAKE_DATE(2025, 10, 31)  -- Fecha por defecto: 31/10/2025
             WHEN ps.fecha_pago::TEXT ~ '^\d{4}-\d{2}-\d{2}' THEN ps.fecha_pago::DATE
             WHEN ps.fecha_pago::TEXT ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
                 CASE 
@@ -251,7 +270,8 @@ FROM (
                             SPLIT_PART(ps.fecha_pago::TEXT, '/', 2)::INTEGER
                         )
                 END
-            ELSE ps.fecha_pago::DATE
+            ELSE 
+                MAKE_DATE(2025, 10, 31)  -- Fecha por defecto: 31/10/2025
         END
         AND p.numero_documento = CASE 
             WHEN ps.numero_documento IS NULL 

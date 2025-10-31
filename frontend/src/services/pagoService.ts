@@ -105,6 +105,52 @@ class PagoService {
     const queryString = params.toString()
     return await apiClient.get(`${this.baseUrl}/stats${queryString ? '?' + queryString : ''}`)
   }
+
+  // Obtener últimos pagos por cédula (resumen)
+  async getUltimosPagos(
+    page = 1,
+    perPage = 20,
+    filters?: {
+      cedula?: string
+      estado?: string
+    }
+  ): Promise<{
+    items: Array<{
+      cedula: string
+      pago_id: number
+      prestamo_id: number | null
+      estado_pago: string
+      monto_ultimo_pago: number
+      fecha_ultimo_pago: string | null
+      cuotas_atrasadas: number
+      saldo_vencido: number
+      total_prestamos: number
+    }>
+    total: number
+    page: number
+    per_page: number
+    total_pages: number
+  }> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      per_page: perPage.toString(),
+      ...(filters?.cedula && { cedula: filters.cedula }),
+      ...(filters?.estado && { estado: filters.estado }),
+    })
+    return await apiClient.get(`${this.baseUrl}/ultimos?${params.toString()}`)
+  }
+
+  // Descargar PDF de pendientes por cliente
+  async descargarPDFPendientes(cedula: string): Promise<Blob> {
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `/api/v1/reportes/cliente/${cedula}/pendientes.pdf`,
+      {
+        responseType: 'blob',
+      }
+    )
+    return response.data as Blob
+  }
 }
 
 export const pagoService = new PagoService()

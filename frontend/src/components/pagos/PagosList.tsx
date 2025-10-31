@@ -18,12 +18,15 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { pagoService, type Pago } from '@/services/pagoService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploader } from './ExcelUploader'
+import { PagosListResumen } from './PagosListResumen'
 import { toast } from 'sonner'
 
 export function PagosList() {
+  const [activeTab, setActiveTab] = useState('todos')
   const [page, setPage] = useState(1)
   const [perPage] = useState(20)
   const [filters, setFilters] = useState({
@@ -85,107 +88,123 @@ export function PagosList() {
         </div>
       </div>
 
-      {/* Filtros */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="w-5 h-5" />
-            Filtros de Búsqueda
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <Input
-              placeholder="Cédula de identidad"
-              value={filters.cedula}
-              onChange={e => handleFilterChange('cedula', e.target.value)}
-            />
-            <Select value={filters.estado || undefined} onValueChange={value => handleFilterChange('estado', value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PAGADO">Pagado</SelectItem>
-                <SelectItem value="PENDIENTE">Pendiente</SelectItem>
-                <SelectItem value="ATRASADO">Atrasado</SelectItem>
-                <SelectItem value="PARCIAL">Parcial</SelectItem>
-                <SelectItem value="ADELANTADO">Adelantado</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input
-              type="date"
-              placeholder="Fecha desde"
-              value={filters.fechaDesde}
-              onChange={e => handleFilterChange('fechaDesde', e.target.value)}
-            />
-            <Input
-              type="date"
-              placeholder="Fecha hasta"
-              value={filters.fechaHasta}
-              onChange={e => handleFilterChange('fechaHasta', e.target.value)}
-            />
-            <Input
-              placeholder="Analista"
-              value={filters.analista}
-              onChange={e => handleFilterChange('analista', e.target.value)}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      {/* Pestañas */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="mb-4">
+          <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
+          <TabsTrigger value="resumen">Resumen por Cliente</TabsTrigger>
+        </TabsList>
 
-      {/* Tabla de Pagos */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Pagos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-12">Cargando...</div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="px-4 py-3 text-left">ID</th>
-                      <th className="px-4 py-3 text-left">Cédula</th>
-                      <th className="px-4 py-3 text-left">ID Crédito</th>
-                      <th className="px-4 py-3 text-left">Estado</th>
-                      <th className="px-4 py-3 text-left">Cuotas Atrasadas</th>
-                      <th className="px-4 py-3 text-left">Monto</th>
-                      <th className="px-4 py-3 text-left">Fecha Pago</th>
-                      <th className="px-4 py-3 text-left">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data?.pagos?.map((pago: Pago) => (
-                      <tr key={pago.id} className="border-b hover:bg-gray-50">
-                        <td className="px-4 py-3">{pago.id}</td>
-                        <td className="px-4 py-3">{pago.cedula_cliente}</td>
-                        <td className="px-4 py-3">{pago.prestamo_id || 'N/A'}</td>
-                        <td className="px-4 py-3">{getEstadoBadge(pago.estado)}</td>
-                        <td className="px-4 py-3">0</td>
-                        <td className="px-4 py-3">${typeof pago.monto_pagado === 'number' ? pago.monto_pagado.toFixed(2) : parseFloat(String(pago.monto_pagado || 0)).toFixed(2)}</td>
-                        <td className="px-4 py-3">{new Date(pago.fecha_pago).toLocaleDateString()}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="outline" title="Registrar Pago">
-                              <DollarSign className="w-4 h-4" />
-                            </Button>
-                            <Button size="sm" variant="outline" title="Editar">
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {/* Tab: Todos los Pagos */}
+        <TabsContent value="todos">
+          {/* Filtros */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="w-5 h-5" />
+                Filtros de Búsqueda
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <Input
+                  placeholder="Cédula de identidad"
+                  value={filters.cedula}
+                  onChange={e => handleFilterChange('cedula', e.target.value)}
+                />
+                <Select value={filters.estado || undefined} onValueChange={value => handleFilterChange('estado', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PAGADO">Pagado</SelectItem>
+                    <SelectItem value="PENDIENTE">Pendiente</SelectItem>
+                    <SelectItem value="ATRASADO">Atrasado</SelectItem>
+                    <SelectItem value="PARCIAL">Parcial</SelectItem>
+                    <SelectItem value="ADELANTADO">Adelantado</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="date"
+                  placeholder="Fecha desde"
+                  value={filters.fechaDesde}
+                  onChange={e => handleFilterChange('fechaDesde', e.target.value)}
+                />
+                <Input
+                  type="date"
+                  placeholder="Fecha hasta"
+                  value={filters.fechaHasta}
+                  onChange={e => handleFilterChange('fechaHasta', e.target.value)}
+                />
+                <Input
+                  placeholder="Analista"
+                  value={filters.analista}
+                  onChange={e => handleFilterChange('analista', e.target.value)}
+                />
               </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+
+          {/* Tabla de Pagos */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Lista de Pagos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="text-center py-12">Cargando...</div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="px-4 py-3 text-left">ID</th>
+                          <th className="px-4 py-3 text-left">Cédula</th>
+                          <th className="px-4 py-3 text-left">ID Crédito</th>
+                          <th className="px-4 py-3 text-left">Estado</th>
+                          <th className="px-4 py-3 text-left">Cuotas Atrasadas</th>
+                          <th className="px-4 py-3 text-left">Monto</th>
+                          <th className="px-4 py-3 text-left">Fecha Pago</th>
+                          <th className="px-4 py-3 text-left">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data?.pagos?.map((pago: Pago) => (
+                          <tr key={pago.id} className="border-b hover:bg-gray-50">
+                            <td className="px-4 py-3">{pago.id}</td>
+                            <td className="px-4 py-3">{pago.cedula_cliente}</td>
+                            <td className="px-4 py-3">{pago.prestamo_id || 'N/A'}</td>
+                            <td className="px-4 py-3">{getEstadoBadge(pago.estado)}</td>
+                            <td className="px-4 py-3">0</td>
+                            <td className="px-4 py-3">${typeof pago.monto_pagado === 'number' ? pago.monto_pagado.toFixed(2) : parseFloat(String(pago.monto_pagado || 0)).toFixed(2)}</td>
+                            <td className="px-4 py-3">{new Date(pago.fecha_pago).toLocaleDateString()}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex gap-2">
+                                <Button size="sm" variant="outline" title="Registrar Pago">
+                                  <DollarSign className="w-4 h-4" />
+                                </Button>
+                                <Button size="sm" variant="outline" title="Editar">
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab: Resumen por Cliente */}
+        <TabsContent value="resumen">
+          <PagosListResumen />
+        </TabsContent>
+      </Tabs>
 
       {/* Registrar Pago Modal */}
       {showRegistrarPago && (
@@ -204,6 +223,9 @@ export function PagosList() {
               console.log('🔀 Invalidando queries de KPIs y dashboard...')
               await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
               await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
+              
+              // Invalidar también la query de últimos pagos (resumen)
+              await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
               
               // Refetch de todas las queries relacionadas con pagos (no solo activas)
               // Esto asegura que las queries se actualicen incluso si no están montadas
@@ -243,6 +265,9 @@ export function PagosList() {
               // Invalidar queries de KPIs y dashboard
               await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
               await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
+              
+              // Invalidar también la query de últimos pagos (resumen)
+              await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
               // Refetch de todas las queries relacionadas con pagos
               await queryClient.refetchQueries({ 
                 queryKey: ['pagos'],

@@ -282,8 +282,7 @@ def listar_ultimos_pagos(
             cuotas_atrasadas = 0
             saldo_vencido: Decimal = Decimal("0.00")
             if prestamos_ids:
-                cuotas_q = db.query(Cuota).filter(Cuota.prestamo_id.in_(prestamos_ids))
-                # Contar vencidas y no pagadas
+                # Contar cuotas vencidas y no pagadas (según regla: fecha_vencimiento < hoy y estado != PAGADO)
                 cuotas_atrasadas = (
                     db.query(func.count(Cuota.id))
                     .filter(
@@ -294,14 +293,23 @@ def listar_ultimos_pagos(
                     .scalar()
                     or 0
                 )
-                # Suma de saldos pendientes (capital+interes+mora) de no pagadas
-                for c in cuotas_q:
-                    if c.estado != "PAGADO":
-                        saldo_vencido += (
-                            (c.capital_pendiente or Decimal("0.00"))
-                            + (c.interes_pendiente or Decimal("0.00"))
-                            + (c.monto_mora or Decimal("0.00"))
+                # Suma optimizada de saldos pendientes (capital+interes+mora) de todas las cuotas no pagadas
+                # Usando func.sum para mejor performance
+                saldo_result = (
+                    db.query(
+                        func.sum(
+                            func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
+                            + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
+                            + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
                         )
+                    )
+                    .filter(
+                        Cuota.prestamo_id.in_(prestamos_ids),
+                        Cuota.estado != "PAGADO",
+                    )
+                    .scalar()
+                )
+                saldo_vencido = saldo_result if saldo_result else Decimal("0.00")
 
             items.append(
                 {
