@@ -23,7 +23,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/", response_model=dict)
+@router.get("", response_model=dict)
 def listar_clientes(
     page: int = Query(1, ge=1, description="Numero de pagina"),
     per_page: int = Query(20, ge=1, le=1000, description="Tamano de pagina"),
@@ -110,7 +110,7 @@ def obtener_cliente(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
-@router.post("/", response_model=None)
+@router.post("", response_model=None)
 def crear_cliente(
     cliente_data: ClienteCreate,
     db: Session = Depends(get_db),
