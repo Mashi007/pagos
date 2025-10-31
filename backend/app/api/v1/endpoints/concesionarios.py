@@ -127,16 +127,20 @@ def list_concesionarios(
         pages = (total + limit - 1) // limit if limit > 0 else 0
         page = (skip // limit) + 1 if limit > 0 else 1
 
-        return ConcesionarioListResponse(
+        logger.info(f"✅ Listando {len(concesionarios)} concesionarios de {total} totales (página {page}/{pages})")
+
+        response = ConcesionarioListResponse(
             items=concesionarios,
             total=total,
             page=page,
             size=limit,
             pages=pages,
         )
+
+        return response
     except Exception as e:
-        logger.error(f"Error en list_concesionarios: {e}")
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+        logger.error(f"Error en list_concesionarios: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/activos", response_model=List[ConcesionarioResponse])
@@ -144,10 +148,17 @@ def list_concesionarios_activos(
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """Listar solo concesionarios activos (para formularios)."""
-    concesionarios = (
-        db.query(Concesionario).filter(Concesionario.activo.is_(True)).all()
-    )
-    return concesionarios
+    try:
+        concesionarios = (
+            db.query(Concesionario).filter(Concesionario.activo.is_(True)).all()
+        )
+        logger.info(f"✅ Listando {len(concesionarios)} concesionarios activos")
+        return concesionarios
+    except Exception as e:
+        logger.error(f"Error listando concesionarios activos: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/dropdown")
