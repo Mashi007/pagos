@@ -50,13 +50,21 @@ def listar_modelos_vehiculos(
     # Paginar
     modelos = query.offset(skip).limit(limit).all()
 
-    return ModeloVehiculoListResponse(
+    # Calcular páginas
+    pages = (total + limit - 1) // limit if limit > 0 else 0
+    page = (skip // limit) + 1 if limit > 0 else 1
+
+    logger.info(f"✅ Listando {len(modelos)} modelos de vehículos de {total} totales (página {page}/{pages})")
+
+    response = ModeloVehiculoListResponse(
         items=modelos,
         total=total,
-        page=skip // limit + 1,
+        page=page,
         page_size=limit,
-        total_pages=(total + limit - 1) // limit,
+        total_pages=pages,
     )
+
+    return response
 
 
 @router.get("/activos", response_model=List[ModeloVehiculoResponse])
@@ -64,13 +72,20 @@ def listar_modelos_activos(
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """Listar solo modelos activos (para formularios)."""
-    # Solo modelos activos con precio definido (precio obligatorio para usar modelo)
-    modelos = (
-        db.query(ModeloVehiculo)
-        .filter(ModeloVehiculo.activo.is_(True), ModeloVehiculo.precio.isnot(None))
-        .all()
-    )
-    return modelos
+    try:
+        # Solo modelos activos con precio definido (precio obligatorio para usar modelo)
+        modelos = (
+            db.query(ModeloVehiculo)
+            .filter(ModeloVehiculo.activo.is_(True), ModeloVehiculo.precio.isnot(None))
+            .all()
+        )
+        logger.info(f"✅ Listando {len(modelos)} modelos activos con precio definido")
+        return modelos
+    except Exception as e:
+        logger.error(f"Error listando modelos activos: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/{modelo_id}", response_model=ModeloVehiculoResponse)
