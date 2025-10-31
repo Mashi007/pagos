@@ -100,27 +100,39 @@ def listar_pagos(
                 pago_dict = PagoResponse.model_validate(pago).model_dump()
                 
                 # ✅ Calcular cuotas atrasadas para este cliente
+                # IMPORTANTE: Revisa TODAS las cuotas de TODOS los préstamos activos del cliente
                 # Cuotas atrasadas = cuotas vencidas con pago incompleto (total_pagado < monto_cuota)
                 cuotas_atrasadas = 0
                 if pago.cedula_cliente:
-                    # Obtener préstamos del cliente
+                    # Obtener TODOS los préstamos APROBADOS del cliente (no solo del último pago)
                     prestamos_ids = [
                         p.id for p in db.query(Prestamo.id)
-                        .filter(Prestamo.cedula == pago.cedula_cliente)
+                        .filter(
+                            Prestamo.cedula == pago.cedula_cliente,
+                            Prestamo.estado == "APROBADO"  # ✅ Solo préstamos activos
+                        )
                         .all()
                     ]
                     
                     if prestamos_ids:
+                        # Contar TODAS las cuotas atrasadas de TODOS los préstamos del cliente
+                        # Filtros aplicados:
+                        # 1. Pertenece a algún préstamo del cliente
+                        # 2. Está vencida (fecha_vencimiento < hoy)
+                        # 3. No está completamente pagada (total_pagado < monto_cuota)
                         cuotas_atrasadas = (
                             db.query(func.count(Cuota.id))
+                            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                             .filter(
-                                Cuota.prestamo_id.in_(prestamos_ids),
-                                Cuota.fecha_vencimiento < hoy,
+                                Prestamo.id.in_(prestamos_ids),
+                                Prestamo.estado == "APROBADO",  # ✅ Solo préstamos activos
+                                Cuota.fecha_vencimiento < hoy,  # ✅ Vencida
                                 Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
                             )
                             .scalar()
                             or 0
                         )
+                        logger.debug(f"📊 [listar_pagos] Cliente {pago.cedula_cliente}: {len(prestamos_ids)} préstamos activos, {cuotas_atrasadas} cuotas atrasadas (todas las cuotas de todos los préstamos)")
                 
                 # Agregar cuotas_atrasadas al diccionario
                 pago_dict['cuotas_atrasadas'] = cuotas_atrasadas
@@ -332,11 +344,14 @@ def listar_ultimos_pagos(
         from app.models.prestamo import Prestamo
 
         for pago in pagos_ultimos:
-            # Préstamos del cliente
+            # ✅ Obtener TODOS los préstamos APROBADOS del cliente (no solo del último pago)
             prestamos_ids = [
                 p.id
                 for p in db.query(Prestamo.id)
-                .filter(Prestamo.cedula == pago.cedula_cliente)
+                .filter(
+                    Prestamo.cedula == pago.cedula_cliente,
+                    Prestamo.estado == "APROBADO"  # ✅ Solo préstamos activos
+                )
                 .all()
             ]
 
@@ -345,22 +360,27 @@ def listar_ultimos_pagos(
             cuotas_atrasadas = 0
             saldo_vencido: Decimal = Decimal("0.00")
             if prestamos_ids:
-                # Contar cuotas atrasadas según regla:
-                # - fecha_vencimiento < hoy (vencida)
-                # - total_pagado < monto_cuota (pago incompleto)
+                # ✅ IMPORTANTE: Contar TODAS las cuotas atrasadas de TODOS los préstamos activos del cliente
+                # Reglas aplicadas:
+                # 1. Pertenece a algún préstamo APROBADO del cliente
+                # 2. fecha_vencimiento < hoy (vencida)
+                # 3. total_pagado < monto_cuota (pago incompleto)
                 # Esto incluye cuotas con estado ATRASADO, PARCIAL, PENDIENTE que estén vencidas e incompletas
+                # NO solo las del último pago, sino TODAS las cuotas de la amortización de TODOS los préstamos
                 hoy = date.today()
                 cuotas_atrasadas = (
                     db.query(func.count(Cuota.id))
+                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                     .filter(
-                        Cuota.prestamo_id.in_(prestamos_ids),
-                        Cuota.fecha_vencimiento < hoy,
+                        Prestamo.id.in_(prestamos_ids),
+                        Prestamo.estado == "APROBADO",  # ✅ Solo préstamos activos
+                        Cuota.fecha_vencimiento < hoy,  # ✅ Vencida
                         Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Verificar que el pago NO esté completo
                     )
                     .scalar()
                     or 0
                 )
-                logger.info(f"📊 [ultimos_pagos] Cliente {pago.cedula_cliente}: {cuotas_atrasadas} cuotas atrasadas (vencidas e incompletas)")
+                logger.info(f"📊 [ultimos_pagos] Cliente {pago.cedula_cliente}: {len(prestamos_ids)} préstamos activos, {cuotas_atrasadas} cuotas atrasadas (TODAS las cuotas de TODOS los préstamos)")
                 # Suma optimizada de saldos pendientes (capital+interes+mora) de todas las cuotas no pagadas
                 # Usando func.sum para mejor performance
                 saldo_result = (

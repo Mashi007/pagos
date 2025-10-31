@@ -94,6 +94,10 @@ async def upload_conciliacion_excel(
                         pago.conciliado = True
                         pago.fecha_conciliacion = datetime.now()
                         
+                        # Marcar como verificado en concordancia (SI) cuando coincide el número de documento
+                        if hasattr(pago, 'verificado_concordancia'):
+                            pago.verificado_concordancia = 'SI'
+                        
                         db.commit()
                         db.refresh(pago)
                         

@@ -62,6 +62,11 @@ class Pago(Base):
     fecha_actualizacion = Column(
         DateTime, default=func.now(), onupdate=func.now(), nullable=False
     )
+    
+    # VERIFICACIÓN DE CONCORDANCIA CON MÓDULO DE PAGOS
+    verificado_concordancia = Column(
+        String(2), default="NO", nullable=False
+    )  # SI/NO - Se actualiza cuando el número de documento coincide en conciliación
 
     # cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True)
 

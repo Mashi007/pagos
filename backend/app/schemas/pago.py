@@ -117,6 +117,7 @@ class PagoResponse(PagoBase):
     usuario_registro: str
     activo: bool
     fecha_actualizacion: datetime | None = None
+    verificado_concordancia: str | None = None  # SI/NO - Verificación de concordancia con módulo de pagos
 
     @field_serializer("monto_pagado")
     @classmethod
