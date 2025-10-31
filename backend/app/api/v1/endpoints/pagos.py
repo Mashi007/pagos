@@ -1047,7 +1047,7 @@ def obtener_kpis_pagos(
             )
         else:
             logger.info(
-                f"✅ [kpis_pagos] No hay cuotas en mora detectadas (todas las cuotas están pagadas o no están vencidas)"
+                "✅ [kpis_pagos] No hay cuotas en mora detectadas (todas las cuotas están pagadas o no están vencidas)"
             )
         # 4. CLIENTES AL DÍA
         # Clientes únicos que tienen préstamos aprobados pero NO tienen cuotas vencidas sin pagar

@@ -568,7 +568,6 @@ def dashboard_administrador(
         # Cartera anterior - Calcular desde BD histórica
         if periodo == "mes":
             # Mes anterior: cartera total al final del mes anterior
-            fecha_inicio_mes_anterior = fecha_inicio_periodo_anterior
             fecha_fin_mes_anterior = fecha_fin_periodo_anterior
             cartera_anterior_query = db.query(
                 func.sum(Prestamo.total_financiamiento)

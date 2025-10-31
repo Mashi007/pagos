@@ -31,21 +31,24 @@ class ClienteService {
 
   // Obtener cliente por ID
   async getCliente(id: string): Promise<Cliente> {
-    const response = await apiClient.get<ApiResponse<Cliente>>(`${this.baseUrl}/${id}`)
-    return response.data
+    // El endpoint devuelve ClienteResponse directamente, sin envolver en ApiResponse
+    const response = await apiClient.get<Cliente>(`${this.baseUrl}/${id}`)
+    return response
   }
 
   // Crear nuevo cliente
   async createCliente(data: ClienteForm): Promise<Cliente> {
-    const response = await apiClient.post<ApiResponse<Cliente>>(this.baseUrl, data)
-    return response.data
+    // El endpoint devuelve ClienteResponse directamente
+    const response = await apiClient.post<Cliente>(this.baseUrl, data)
+    return response
   }
 
 
   // Actualizar cliente
   async updateCliente(id: string, data: Partial<ClienteForm>): Promise<Cliente> {
-    const response = await apiClient.put<ApiResponse<Cliente>>(`${this.baseUrl}/${id}`, data)
-    return response.data
+    // El endpoint devuelve ClienteResponse directamente
+    const response = await apiClient.put<Cliente>(`${this.baseUrl}/${id}`, data)
+    return response
   }
 
   // Eliminar cliente
