@@ -96,6 +96,21 @@ class PagoService {
     })
   }
 
+  // Cargar Excel de conciliación (2 columnas: Fecha de Depósito, Número de Documento)
+  async uploadConciliacion(file: File): Promise<{
+    pagos_conciliados: number
+    pagos_no_encontrados: number
+    documentos_no_encontrados: string[]
+    errores: number
+    errores_detalle: string[]
+  }> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return await apiClient.post(`${this.baseUrl}/conciliacion/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  }
+
   async getStats(filters?: {
     analista?: string
     concesionario?: string

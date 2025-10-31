@@ -23,9 +23,11 @@ interface RegistrarPagoFormProps {
   onClose: () => void
   onSuccess: () => void
   pagoInicial?: Partial<PagoCreate>
+  pagoId?: number  // ✅ Si está presente, es modo edición
 }
 
-export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial }: RegistrarPagoFormProps) {
+export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: RegistrarPagoFormProps) {
+  const isEditing = !!pagoId
   const [formData, setFormData] = useState<PagoCreate>({
     cedula_cliente: pagoInicial?.cedula_cliente || '',
     prestamo_id: pagoInicial?.prestamo_id || null,
@@ -79,13 +81,19 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial }: Registrar
 
     setIsSubmitting(true)
     try {
-      console.log('🔄 Iniciando registro de pago...', formData)
-      const result = await pagoService.createPago(formData)
-      console.log('✅ Pago registrado exitosamente:', result)
+      if (isEditing && pagoId) {
+        console.log('🔄 Iniciando actualización de pago...', { pagoId, formData })
+        const result = await pagoService.updatePago(pagoId, formData)
+        console.log('✅ Pago actualizado exitosamente:', result)
+      } else {
+        console.log('🔄 Iniciando registro de pago...', formData)
+        const result = await pagoService.createPago(formData)
+        console.log('✅ Pago registrado exitosamente:', result)
+      }
       onSuccess()
     } catch (error: any) {
-      console.error('❌ Error registrando pago:', error)
-      setErrors({ general: error.response?.data?.detail || error.message || 'Error al registrar el pago' })
+      console.error(`❌ Error ${isEditing ? 'actualizando' : 'registrando'} pago:`, error)
+      setErrors({ general: error.response?.data?.detail || error.message || `Error al ${isEditing ? 'actualizar' : 'registrar'} el pago` })
     } finally {
       setIsSubmitting(false)
     }
@@ -107,7 +115,7 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial }: Registrar
         >
           {/* Header */}
           <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
-            <h2 className="text-xl font-bold">Registrar Pago</h2>
+            <h2 className="text-xl font-bold">{isEditing ? 'Editar Pago' : 'Registrar Pago'}</h2>
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="w-5 h-5" />
             </Button>
@@ -294,12 +302,12 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial }: Registrar
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Registrando...
+                    {isEditing ? 'Actualizando...' : 'Registrando...'}
                   </>
                 ) : (
                   <>
                     <DollarSign className="w-4 h-4 mr-2" />
-                    Registrar Pago
+                    {isEditing ? 'Actualizar Pago' : 'Registrar Pago'}
                   </>
                 )}
               </Button>

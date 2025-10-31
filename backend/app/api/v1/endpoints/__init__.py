@@ -30,6 +30,7 @@ from . import (
     notificaciones,
     pagos,
     pagos_upload,
+    pagos_conciliacion,
     predictive_analyzer,
     predictive_token_analyzer,
     prestamos,

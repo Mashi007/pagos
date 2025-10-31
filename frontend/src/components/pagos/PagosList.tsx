@@ -6,7 +6,6 @@ import {
   Search,
   Plus,
   Calendar,
-  DollarSign,
   AlertCircle,
   Download,
   Upload,
@@ -21,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { pagoService, type Pago } from '@/services/pagoService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
-import { ExcelUploader } from './ExcelUploader'
+import { CargaMasivaMenu } from './CargaMasivaMenu'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { toast } from 'sonner'
@@ -38,7 +37,7 @@ export function PagosList() {
     analista: '',
   })
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
-  const [showExcelUploader, setShowExcelUploader] = useState(false)
+  const [pagoEditando, setPagoEditando] = useState<Pago | null>(null)
   const queryClient = useQueryClient()
 
   // Query para obtener pagos
@@ -78,10 +77,21 @@ export function PagosList() {
           <p className="text-gray-500 mt-1">Gestión de pagos de clientes</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => setShowExcelUploader(true)}>
-            <Upload className="w-5 h-5 mr-2" />
-            Cargar Excel
-          </Button>
+          <CargaMasivaMenu
+            onSuccess={async () => {
+              try {
+                // Invalidar todas las queries relacionadas con pagos
+                await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+                await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
+                await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
+                await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
+                await queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
+                toast.success('Datos actualizados correctamente')
+              } catch (error) {
+                console.error('❌ Error actualizando dashboard:', error)
+              }
+            }}
+          />
           <Button onClick={() => setShowRegistrarPago(true)}>
             <Plus className="w-5 h-5 mr-2" />
             Registrar Pago
@@ -215,6 +225,7 @@ export function PagosList() {
                           <th className="px-4 py-3 text-left">Cuotas Atrasadas</th>
                           <th className="px-4 py-3 text-left">Monto</th>
                           <th className="px-4 py-3 text-left">Fecha Pago</th>
+                          <th className="px-4 py-3 text-left">Conciliado</th>
                           <th className="px-4 py-3 text-left">Acciones</th>
                         </tr>
                       </thead>
@@ -233,14 +244,24 @@ export function PagosList() {
                             <td className="px-4 py-3">${typeof pago.monto_pagado === 'number' ? pago.monto_pagado.toFixed(2) : parseFloat(String(pago.monto_pagado || 0)).toFixed(2)}</td>
                             <td className="px-4 py-3">{new Date(pago.fecha_pago).toLocaleDateString()}</td>
                             <td className="px-4 py-3">
-                              <div className="flex gap-2">
-                                <Button size="sm" variant="outline" title="Registrar Pago">
-                                  <DollarSign className="w-4 h-4" />
-                                </Button>
-                                <Button size="sm" variant="outline" title="Editar">
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                              </div>
+                              {pago.conciliado ? (
+                                <Badge className="bg-green-500 text-white">SI</Badge>
+                              ) : (
+                                <Badge className="bg-gray-500 text-white">NO</Badge>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                title="Editar Pago"
+                                onClick={() => {
+                                  setPagoEditando(pago)
+                                  setShowRegistrarPago(true)
+                                }}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
                             </td>
                           </tr>
                         ))}
@@ -281,13 +302,29 @@ export function PagosList() {
         </TabsContent>
       </Tabs>
 
-      {/* Registrar Pago Modal */}
+      {/* Registrar/Editar Pago Modal */}
       {showRegistrarPago && (
         <RegistrarPagoForm
-          onClose={() => setShowRegistrarPago(false)}
+          pagoId={pagoEditando?.id}
+          pagoInicial={pagoEditando ? {
+            cedula_cliente: pagoEditando.cedula_cliente,
+            prestamo_id: pagoEditando.prestamo_id,
+            fecha_pago: typeof pagoEditando.fecha_pago === 'string' 
+              ? pagoEditando.fecha_pago.split('T')[0] 
+              : new Date(pagoEditando.fecha_pago).toISOString().split('T')[0],
+            monto_pagado: pagoEditando.monto_pagado,
+            numero_documento: pagoEditando.numero_documento,
+            institucion_bancaria: pagoEditando.institucion_bancaria,
+            notas: pagoEditando.notas || null,
+          } : undefined}
+          onClose={() => {
+            setShowRegistrarPago(false)
+            setPagoEditando(null)
+          }}
           onSuccess={async () => {
             console.log('🔄 onSuccess llamado - Iniciando actualización de dashboard...')
             setShowRegistrarPago(false)
+            setPagoEditando(null)
             
             try {
               // Invalidar todas las queries relacionadas con pagos primero
@@ -328,40 +365,6 @@ export function PagosList() {
         />
       )}
 
-      {/* Excel Uploader Modal */}
-      {showExcelUploader && (
-        <ExcelUploader
-          onClose={() => setShowExcelUploader(false)}
-          onSuccess={async () => {
-            setShowExcelUploader(false)
-            try {
-              // Invalidar todas las queries relacionadas con pagos
-              await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-              // Invalidar queries de KPIs y dashboard
-              await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
-              await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
-              
-              // Invalidar también la query de últimos pagos (resumen)
-              await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
-              // Refetch de todas las queries relacionadas con pagos
-              await queryClient.refetchQueries({ 
-                queryKey: ['pagos'],
-                exact: false
-              })
-              // Refetch de queries activas para actualización inmediata
-              await queryClient.refetchQueries({ 
-                queryKey: ['pagos'],
-                exact: false,
-                type: 'active'
-              })
-              toast.success('Pagos cargados exitosamente. El dashboard se ha actualizado.')
-            } catch (error) {
-              console.error('❌ Error actualizando dashboard después de carga Excel:', error)
-              toast.error('Pagos cargados, pero hubo un error al actualizar el dashboard')
-            }
-          }}
-        />
-      )}
     </div>
   )
 }
