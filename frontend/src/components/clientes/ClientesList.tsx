@@ -471,25 +471,31 @@ export function ClientesList() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {/* ✅ BOTÓN EDITAR - ACTIVO */}
+                        {/* ✅ BOTÓN EDITAR - ACTIVO Y FUNCIONAL */}
                         <Button 
                           variant="outline" 
                           size="sm"
                           title="Editar cliente"
-                          className="text-green-600 border-green-300 hover:text-green-700 hover:bg-green-50 hover:border-green-400"
-                          onClick={() => handleEditarCliente(cliente)}
+                          className="text-green-600 border-green-400 bg-green-50 hover:text-white hover:bg-green-600 hover:border-green-600 font-medium cursor-pointer transition-colors"
+                          onClick={() => {
+                            console.log('🟢 Botón Editar clickeado para cliente ID:', cliente.id)
+                            handleEditarCliente(cliente)
+                          }}
                         >
                           <Edit className="w-4 h-4 mr-1" />
                           Editar
                         </Button>
                         
-                        {/* ✅ BOTÓN ELIMINAR - ACTIVO */}
+                        {/* ✅ BOTÓN ELIMINAR - ACTIVO Y FUNCIONAL */}
                         <Button 
                           variant="outline" 
                           size="sm"
                           title="Eliminar cliente"
-                          className="text-red-600 border-red-300 hover:text-red-700 hover:bg-red-50 hover:border-red-400"
-                          onClick={() => handleEliminarCliente(cliente)}
+                          className="text-red-600 border-red-400 bg-red-50 hover:text-white hover:bg-red-600 hover:border-red-600 font-medium cursor-pointer transition-colors"
+                          onClick={() => {
+                            console.log('🔴 Botón Eliminar clickeado para cliente ID:', cliente.id)
+                            handleEliminarCliente(cliente)
+                          }}
                         >
                           <Trash2 className="w-4 h-4 mr-1" />
                           Eliminar
