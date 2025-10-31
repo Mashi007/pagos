@@ -13,10 +13,10 @@ from app.models.pago_auditoria import PagoAuditoria
 from app.models.prestamo_auditoria import PrestamoAuditoria
 from app.models.user import User
 from app.schemas.auditoria import (
+    AuditoriaCreate,
     AuditoriaListResponse,
     AuditoriaResponse,
     AuditoriaStatsResponse,
-    AuditoriaCreate,
 )
 
 logger = logging.getLogger(__name__)

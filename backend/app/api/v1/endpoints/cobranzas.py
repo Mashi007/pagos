@@ -21,10 +21,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.amortizacion import Cuota
+from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.user import User
-from app.models.auditoria import Auditoria
 from app.services.notificacion_automatica_service import NotificacionAutomaticaService
 
 router = APIRouter()

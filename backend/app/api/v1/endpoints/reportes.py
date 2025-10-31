@@ -1,21 +1,21 @@
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 from io import BytesIO
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 # Imports para Excel
 from pydantic import BaseModel
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
 
 # Imports para reportes PDF
 from reportlab.pdfgen import canvas
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
@@ -23,10 +23,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.core.constants import EstadoPrestamo
 from app.models.amortizacion import Cuota
+from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
-from app.models.auditoria import Auditoria
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
