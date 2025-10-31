@@ -38,6 +38,7 @@ export function ClientesList() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState<ClienteFilters>({})
   const [currentPage, setCurrentPage] = useState(1)
+  const [perPage, setPerPage] = useState(20) // Tamaño de página configurable
   const [showFilters, setShowFilters] = useState(false)
   const [showCrearCliente, setShowCrearCliente] = useState(false)
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null)
@@ -130,7 +131,7 @@ export function ClientesList() {
   } = useClientes(
     { ...filters, search: debouncedSearch },
     currentPage,
-    20
+    perPage
   )
 
   // Estadísticas de clientes
@@ -178,6 +179,11 @@ export function ClientesList() {
     setFilters({})
     setSearchTerm('')
     setCurrentPage(1)
+  }
+
+  const handlePerPageChange = (newPerPage: number) => {
+    setPerPage(newPerPage)
+    setCurrentPage(1) // Resetear a página 1 cuando cambia el tamaño
   }
 
   if (isLoading) {
@@ -380,29 +386,55 @@ export function ClientesList() {
       </Card>
 
       {/* Paginación */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-700">
-            Página {currentPage} de {totalPages}
+      {(totalPages > 1 || clientesData?.total) && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-gray-700">
+              Mostrando {((currentPage - 1) * perPage) + 1} - {Math.min(currentPage * perPage, clientesData?.total || 0)} de {clientesData?.total || 0} clientes
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-700 whitespace-nowrap">
+                Por página:
+              </label>
+              <select
+                value={perPage}
+                onChange={(e) => handlePerPageChange(Number(e.target.value))}
+                className="p-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+                <option value={500}>500</option>
+                <option value={1000}>1000</option>
+                <option value={2000}>2000</option>
+                <option value={5000}>5000</option>
+              </select>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-            >
-              Anterior
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-            >
-              Siguiente
-            </Button>
-          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <div className="text-sm text-gray-700 mr-2">
+                Página {currentPage} de {totalPages}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Siguiente
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

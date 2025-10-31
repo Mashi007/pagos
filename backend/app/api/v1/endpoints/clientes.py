@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 @router.get("", response_model=dict)
 def listar_clientes(
     page: int = Query(1, ge=1, description="Numero de pagina"),
-    per_page: int = Query(20, ge=1, le=1000, description="Tamano de pagina"),
+    per_page: int = Query(20, ge=1, le=5000, description="Tamano de pagina"),
     # Busqueda de texto
     search: Optional[str] = Query(
         None, description="Buscar por nombre, cedula o telefono"
