@@ -228,15 +228,13 @@ export function ClientesList() {
       </div>
 
       {/* KPIs de Clientes */}
-      {statsData && (
-        <ClientesKPIs
-          activos={statsData.activos}
-          inactivos={statsData.inactivos}
-          finalizados={statsData.finalizados}
-          total={statsData.total}
-          isLoading={statsLoading}
-        />
-      )}
+      <ClientesKPIs
+        activos={statsData?.activos || 0}
+        inactivos={statsData?.inactivos || 0}
+        finalizados={statsData?.finalizados || 0}
+        total={statsData?.total || 0}
+        isLoading={statsLoading}
+      />
 
       {/* Filtros y búsqueda */}
       <Card>
