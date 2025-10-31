@@ -812,10 +812,36 @@ def obtener_kpis_pagos(
             .scalar() or 0
         )
         
+        # ✅ DIAGNÓSTICO ADICIONAL: Contar clientes únicos con préstamos aprobados
+        clientes_unicos_aprobados = (
+            db.query(func.count(func.distinct(Prestamo.cedula)))
+            .filter(Prestamo.estado == "APROBADO")
+            .scalar() or 0
+        )
+        
+        # ✅ DIAGNÓSTICO ADICIONAL: Contar préstamos aprobados CON cuotas generadas
+        prestamos_con_cuotas = (
+            db.query(func.count(func.distinct(Prestamo.id)))
+            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .filter(Prestamo.estado == "APROBADO")
+            .scalar() or 0
+        )
+        
+        # ✅ DIAGNÓSTICO ADICIONAL: Contar cuotas de préstamos aprobados
+        cuotas_prestamos_aprobados = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(Prestamo.estado == "APROBADO")
+            .scalar() or 0
+        )
+        
         logger.info(
             f"🔍 [kpis_pagos] DIAGNÓSTICO PRE-CÁLCULO: "
             f"Préstamos aprobados={total_prestamos_aprobados}, "
+            f"Préstamos aprobados CON cuotas={prestamos_con_cuotas}, "
+            f"Clientes únicos aprobados={clientes_unicos_aprobados}, "
             f"Total cuotas={total_cuotas}, "
+            f"Cuotas de préstamos aprobados={cuotas_prestamos_aprobados}, "
             f"Cuotas vencidas={cuotas_vencidas}, "
             f"Cuotas pendientes={cuotas_pendientes}, "
             f"Fecha hoy={hoy}"
@@ -857,11 +883,43 @@ def obtener_kpis_pagos(
             .scalar() or 0
         )
         
+        # ✅ DIAGNÓSTICO ADICIONAL: Detalles de cuotas en mora
+        # Obtener algunos ejemplos de cuotas en mora para verificación
+        cuotas_mora_ejemplo = (
+            db.query(Cuota.id, Cuota.prestamo_id, Cuota.fecha_vencimiento, Cuota.total_pagado, Cuota.monto_cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,
+                Prestamo.estado == "APROBADO",
+            )
+            .limit(5)
+            .all()
+        )
+        
+        ejemplos_info = []
+        for c in cuotas_mora_ejemplo:
+            ejemplos_info.append(
+                f"Cuota ID {c.id} (Préstamo {c.prestamo_id}): "
+                f"Vencida {c.fecha_vencimiento}, "
+                f"Pagado ${float(c.total_pagado):.2f} de ${float(c.monto_cuota):.2f}"
+            )
+        
         logger.info(
             f"⚠️ [kpis_pagos] Clientes en mora: {clientes_en_mora} "
             f"(con {cuotas_en_mora_count} cuotas vencidas e incompletas), "
             f"Clientes aprobados sin cuotas={clientes_sin_cuotas}"
         )
+        
+        if ejemplos_info:
+            logger.info(
+                f"📋 [kpis_pagos] Ejemplos de cuotas en mora ({min(len(ejemplos_info), 3)}): "
+                + "; ".join(ejemplos_info[:3])
+            )
+        else:
+            logger.info(
+                f"✅ [kpis_pagos] No hay cuotas en mora detectadas (todas las cuotas están pagadas o no están vencidas)"
+            )
         # 4. CLIENTES AL DÍA
         # Clientes únicos que tienen préstamos aprobados pero NO tienen cuotas vencidas sin pagar
         # Es decir: clientes con préstamos aprobados que no están en la lista de clientes en mora

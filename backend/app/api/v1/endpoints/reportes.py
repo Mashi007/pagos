@@ -102,48 +102,91 @@ def reporte_cartera(
         if not fecha_corte:
             fecha_corte = date.today()
 
-        # Cartera total
-        cartera_total = db.query(func.sum(Prestamo.monto_total)).filter(
-            Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA])
+        # Cartera total: suma de total_financiamiento de préstamos APROBADOS
+        cartera_total = db.query(func.sum(Prestamo.total_financiamiento)).filter(
+            Prestamo.estado == "APROBADO"
         ).scalar() or Decimal("0")
 
-        # Capital pendiente
-        capital_pendiente = db.query(func.sum(Prestamo.saldo_pendiente)).filter(
-            Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA])
-        ).scalar() or Decimal("0")
+        logger.info(f"[reportes.cartera] Cartera total: {cartera_total}")
 
-        # Intereses pendientes
-        intereses_pendientes = cartera_total - capital_pendiente
+        # Capital pendiente: suma de capital_pendiente de todas las cuotas no pagadas
+        capital_pendiente = (
+            db.query(
+                func.sum(func.coalesce(Cuota.capital_pendiente, Decimal("0.00")))
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.estado != "PAGADO",
+            )
+            .scalar()
+        ) or Decimal("0")
 
-        # Mora total
-        mora_total = db.query(func.sum(Prestamo.monto_mora)).filter(
-            Prestamo.estado == EstadoPrestamo.EN_MORA
-        ).scalar() or Decimal("0")
+        logger.info(f"[reportes.cartera] Capital pendiente: {capital_pendiente}")
 
-        # Cantidad de préstamos
+        # Intereses pendientes: suma de interes_pendiente de todas las cuotas no pagadas
+        intereses_pendientes = (
+            db.query(
+                func.sum(func.coalesce(Cuota.interes_pendiente, Decimal("0.00")))
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.estado != "PAGADO",
+            )
+            .scalar()
+        ) or Decimal("0")
+
+        logger.info(f"[reportes.cartera] Intereses pendientes: {intereses_pendientes}")
+
+        # Mora total: suma de monto_mora de todas las cuotas con mora
+        mora_total = (
+            db.query(
+                func.sum(func.coalesce(Cuota.monto_mora, Decimal("0.00")))
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.monto_mora > Decimal("0.00"),
+            )
+            .scalar()
+        ) or Decimal("0")
+
+        logger.info(f"[reportes.cartera] Mora total: {mora_total}")
+
+        # Cantidad de préstamos APROBADOS
         cantidad_prestamos_activos = (
-            db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.ACTIVO).count()
+            db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
         )
 
+        logger.info(f"[reportes.cartera] Préstamos activos: {cantidad_prestamos_activos}")
+
+        # Préstamos con cuotas en mora
         cantidad_prestamos_mora = (
-            db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.EN_MORA).count()
-        )
+            db.query(func.count(func.distinct(Prestamo.id)))
+            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.monto_mora > Decimal("0.00"),
+            )
+            .scalar()
+        ) or 0
 
-        # Distribución por monto
+        logger.info(f"[reportes.cartera] Préstamos en mora: {cantidad_prestamos_mora}")
+
+        # Distribución por monto: usar total_financiamiento
         distribucion_por_monto_query = (
             db.query(
                 case(
-                    (Prestamo.monto_total <= 1000, "Hasta $1,000"),
-                    (Prestamo.monto_total <= 5000, "$1,001 - $5,000"),
-                    (Prestamo.monto_total <= 10000, "$5,001 - $10,000"),
+                    (Prestamo.total_financiamiento <= 1000, "Hasta $1,000"),
+                    (Prestamo.total_financiamiento <= 5000, "$1,001 - $5,000"),
+                    (Prestamo.total_financiamiento <= 10000, "$5,001 - $10,000"),
                     else_="Más de $10,000",
                 ).label("rango"),
                 func.count(Prestamo.id).label("cantidad"),
-                func.sum(Prestamo.monto_total).label("monto"),
+                func.sum(Prestamo.total_financiamiento).label("monto"),
             )
-            .filter(
-                Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA])
-            )
+            .filter(Prestamo.estado == "APROBADO")
             .group_by("rango")
             .all()
         )
@@ -231,11 +274,13 @@ def reporte_pagos(
         logger.info(
             f"[reportes.pagos] Generando reporte pagos desde {fecha_inicio} hasta {fecha_fin}"
         )
-        # Total de pagos
-        total_pagos = db.query(func.sum(Pago.monto)).filter(
+        # Total de pagos: usar monto_pagado
+        total_pagos = db.query(func.sum(Pago.monto_pagado)).filter(
             Pago.fecha_pago >= fecha_inicio,
             Pago.fecha_pago <= fecha_fin,
         ).scalar() or Decimal("0")
+
+        logger.info(f"[reportes.pagos] Total pagos: {total_pagos}")
 
         cantidad_pagos = (
             db.query(Pago)
@@ -246,27 +291,29 @@ def reporte_pagos(
             .count()
         )
 
-        # Pagos por método
+        # Pagos por método: usar monto_pagado y agrupar por institucion_bancaria
         pagos_por_metodo = (
             db.query(
-                Pago.metodo_pago,
+                func.coalesce(Pago.institucion_bancaria, "Sin especificar").label("metodo"),
                 func.count(Pago.id).label("cantidad"),
-                func.sum(Pago.monto).label("monto"),
+                func.sum(Pago.monto_pagado).label("monto"),
             )
             .filter(
                 Pago.fecha_pago >= fecha_inicio,
                 Pago.fecha_pago <= fecha_fin,
             )
-            .group_by(Pago.metodo_pago)
+            .group_by("metodo")
             .all()
         )
 
-        # Pagos por día
+        logger.info(f"[reportes.pagos] Pagos por método: {len(pagos_por_metodo)} métodos")
+
+        # Pagos por día: usar monto_pagado
         pagos_por_dia = (
             db.query(
                 func.date(Pago.fecha_pago).label("fecha"),
                 func.count(Pago.id).label("cantidad"),
-                func.sum(Pago.monto).label("monto"),
+                func.sum(Pago.monto_pagado).label("monto"),
             )
             .filter(
                 Pago.fecha_pago >= fecha_inicio,
@@ -275,6 +322,8 @@ def reporte_pagos(
             .group_by(func.date(Pago.fecha_pago))
             .all()
         )
+
+        logger.info(f"[reportes.pagos] Pagos por día: {len(pagos_por_dia)} días")
 
         resultado = ReportePagos(
             fecha_inicio=fecha_inicio,
@@ -454,21 +503,45 @@ def resumen_dashboard(
         total_prestamos = db.query(Prestamo).count()
         total_pagos = db.query(Pago).count()
 
-        # Cartera activa
-        cartera_activa = db.query(func.sum(Prestamo.saldo_pendiente)).filter(
-            Prestamo.estado.in_([EstadoPrestamo.ACTIVO, EstadoPrestamo.EN_MORA])
-        ).scalar() or Decimal("0")
+        # Cartera activa: calcular desde cuotas pendientes
+        cartera_activa = (
+            db.query(
+                func.sum(
+                    func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
+                    + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
+                    + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
+                )
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.estado != "PAGADO",
+            )
+            .scalar()
+        ) or Decimal("0")
 
-        # Mora
+        logger.info(f"[reportes.resumen] Cartera activa: {cartera_activa}")
+
+        # Mora: préstamos con cuotas en mora
         prestamos_mora = (
-            db.query(Prestamo).filter(Prestamo.estado == EstadoPrestamo.EN_MORA).count()
-        )
+            db.query(func.count(func.distinct(Prestamo.id)))
+            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.monto_mora > Decimal("0.00"),
+            )
+            .scalar()
+        ) or 0
 
-        # Pagos del mes
+        logger.info(f"[reportes.resumen] Préstamos en mora: {prestamos_mora}")
+
+        # Pagos del mes: usar monto_pagado
         fecha_inicio_mes = date.today().replace(day=1)
-        pagos_mes = db.query(func.sum(Pago.monto)).filter(
+        pagos_mes = db.query(func.sum(Pago.monto_pagado)).filter(
             Pago.fecha_pago >= fecha_inicio_mes
         ).scalar() or Decimal("0")
+
+        logger.info(f"[reportes.resumen] Pagos del mes: {pagos_mes}")
 
         return {
             "total_clientes": total_clientes,

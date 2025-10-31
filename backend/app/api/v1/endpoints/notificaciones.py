@@ -313,6 +313,66 @@ def listar_plantillas(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
+@router.get("/plantillas/verificar")
+def verificar_plantillas(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Verificar estado de conexión BD y existencia de plantillas"""
+    try:
+        # Verificar conexión a BD
+        total_plantillas = db.query(NotificacionPlantilla).count()
+        plantillas_activas = (
+            db.query(NotificacionPlantilla)
+            .filter(NotificacionPlantilla.activa.is_(True))
+            .count()
+        )
+        
+        # Tipos esperados para notificaciones automáticas
+        tipos_esperados = [
+            "PAGO_5_DIAS_ANTES",
+            "PAGO_3_DIAS_ANTES",
+            "PAGO_1_DIA_ANTES",
+            "PAGO_DIA_0",
+            "PAGO_1_DIA_ATRASADO",
+            "PAGO_3_DIAS_ATRASADO",
+            "PAGO_5_DIAS_ATRASADO",
+        ]
+        
+        # Verificar qué tipos existen
+        tipos_existentes = (
+            db.query(NotificacionPlantilla.tipo)
+            .filter(NotificacionPlantilla.activa.is_(True))
+            .distinct()
+            .all()
+        )
+        tipos_encontrados = [t[0] for t in tipos_existentes]
+        tipos_faltantes = [t for t in tipos_esperados if t not in tipos_encontrados]
+        
+        return {
+            "conexion_bd": True,
+            "total_plantillas": total_plantillas,
+            "plantillas_activas": plantillas_activas,
+            "tipos_esperados": tipos_esperados,
+            "tipos_encontrados": tipos_encontrados,
+            "tipos_faltantes": tipos_faltantes,
+            "plantillas_ok": len(tipos_faltantes) == 0,
+            "mensaje": (
+                "✅ Todas las plantillas necesarias están configuradas"
+                if len(tipos_faltantes) == 0
+                else f"⚠️ Faltan {len(tipos_faltantes)} plantillas: {', '.join(tipos_faltantes)}"
+            ),
+        }
+
+    except Exception as e:
+        logger.error(f"Error verificando plantillas: {e}")
+        return {
+            "conexion_bd": False,
+            "error": str(e),
+            "mensaje": "❌ Error de conexión a la base de datos",
+        }
+
+
 @router.post("/plantillas", response_model=NotificacionPlantillaResponse)
 def crear_plantilla(
     plantilla: NotificacionPlantillaCreate,
