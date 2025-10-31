@@ -124,15 +124,3 @@
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-
-/* Corregir advertencias de Firefox sobre propiedades webkit */
-html, body {
-  text-size-adjust: 100% !important;
-  -webkit-text-size-adjust: 100% !important;
-  -moz-text-size-adjust: 100% !important;
-}
-
-/* Prevenir advertencias de selectores inválidos */
-*, *::before, *::after {
-  box-sizing: border-box;
-}
