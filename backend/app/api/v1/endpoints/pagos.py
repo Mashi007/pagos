@@ -32,14 +32,14 @@ def healthcheck_pagos(
 ):
     """
     Verificación rápida del módulo de Pagos y conexión a BD.
-    
+
     Retorna métricas mínimas que confirman conectividad a la base de datos
     y disponibilidad de datos para alimentar el dashboard.
     """
     try:
         # Verificar conexión a BD con prueba de consulta
         total_pagos = db.query(func.count(Pago.id)).scalar() or 0
-        
+
         # Pagos del mes actual
         hoy = date.today()
         primer_dia_mes = date(hoy.year, hoy.month, 1)
@@ -49,20 +49,16 @@ def healthcheck_pagos(
             .scalar()
             or 0
         )
-        
+
         # Monto total pagado
-        monto_total = (
-            db.query(func.sum(Pago.monto_pagado)).scalar() or Decimal("0")
-        )
-        
+        monto_total = db.query(func.sum(Pago.monto_pagado)).scalar() or Decimal("0")
+
         # Pagos por estado
         pagos_por_estado = (
-            db.query(Pago.estado, func.count(Pago.id))
-            .group_by(Pago.estado)
-            .all()
+            db.query(Pago.estado, func.count(Pago.id)).group_by(Pago.estado).all()
         )
         estados_dict = {estado: count for estado, count in pagos_por_estado}
-        
+
         return {
             "status": "ok",
             "database": True,

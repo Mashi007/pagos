@@ -67,7 +67,12 @@ def dashboard_kpis_principales(
         .filter(Prestamo.estado == "APROBADO")
     )
     clientes_con_cuotas_query = FiltrosDashboard.aplicar_filtros_prestamo(
-        clientes_con_cuotas_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        clientes_con_cuotas_query,
+        analista,
+        concesionario,
+        modelo,
+        fecha_inicio,
+        fecha_fin,
     )
     clientes_con_cuotas = clientes_con_cuotas_query.scalar() or 0
 
