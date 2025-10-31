@@ -36,9 +36,15 @@ def listar_clientes(
     email: Optional[str] = Query(None, description="Filtrar por email"),
     telefono: Optional[str] = Query(None, description="Filtrar por teléfono"),
     ocupacion: Optional[str] = Query(None, description="Filtrar por ocupación"),
-    usuario_registro: Optional[str] = Query(None, description="Filtrar por usuario que registró"),
-    fecha_desde: Optional[str] = Query(None, description="Fecha de registro desde (YYYY-MM-DD)"),
-    fecha_hasta: Optional[str] = Query(None, description="Fecha de registro hasta (YYYY-MM-DD)"),
+    usuario_registro: Optional[str] = Query(
+        None, description="Filtrar por usuario que registró"
+    ),
+    fecha_desde: Optional[str] = Query(
+        None, description="Fecha de registro desde (YYYY-MM-DD)"
+    ),
+    fecha_hasta: Optional[str] = Query(
+        None, description="Fecha de registro hasta (YYYY-MM-DD)"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -63,36 +69,42 @@ def listar_clientes(
         # Filtros específicos
         if estado:
             query = query.filter(Cliente.estado == estado)
-        
+
         if cedula:
             query = query.filter(Cliente.cedula.ilike(f"%{cedula}%"))
-        
+
         if email:
             query = query.filter(Cliente.email.ilike(f"%{email}%"))
-        
+
         if telefono:
             query = query.filter(Cliente.telefono.ilike(f"%{telefono}%"))
-        
+
         if ocupacion:
             query = query.filter(Cliente.ocupacion.ilike(f"%{ocupacion}%"))
-        
+
         if usuario_registro:
-            query = query.filter(Cliente.usuario_registro.ilike(f"%{usuario_registro}%"))
+            query = query.filter(
+                Cliente.usuario_registro.ilike(f"%{usuario_registro}%")
+            )
 
         # Filtros de fecha de registro
         if fecha_desde:
             try:
                 fecha_desde_obj = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
-                query = query.filter(func.date(Cliente.fecha_registro) >= fecha_desde_obj)
+                query = query.filter(
+                    func.date(Cliente.fecha_registro) >= fecha_desde_obj
+                )
             except ValueError:
                 logger.warning(f"Fecha desde inválida: {fecha_desde}")
-        
+
         if fecha_hasta:
             try:
                 fecha_hasta_obj = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
                 # Para fecha hasta, incluir todo el día
                 fecha_hasta_obj = fecha_hasta_obj + timedelta(days=1)
-                query = query.filter(func.date(Cliente.fecha_registro) < fecha_hasta_obj)
+                query = query.filter(
+                    func.date(Cliente.fecha_registro) < fecha_hasta_obj
+                )
             except ValueError:
                 logger.warning(f"Fecha hasta inválida: {fecha_hasta}")
 
@@ -138,29 +150,19 @@ def obtener_estadisticas_clientes(
 ):
     # Obtener estadísticas de clientes directamente desde la BD
     try:
-        logger.info(f"Obteniendo estadísticas de clientes - Usuario: {current_user.email}")
+        logger.info(
+            f"Obteniendo estadísticas de clientes - Usuario: {current_user.email}"
+        )
 
         # Contar total de clientes
         total = db.query(Cliente).count()
 
         # Contar por estado
-        activos = (
-            db.query(Cliente)
-            .filter(Cliente.estado == "ACTIVO")
-            .count()
-        )
+        activos = db.query(Cliente).filter(Cliente.estado == "ACTIVO").count()
 
-        inactivos = (
-            db.query(Cliente)
-            .filter(Cliente.estado == "INACTIVO")
-            .count()
-        )
+        inactivos = db.query(Cliente).filter(Cliente.estado == "INACTIVO").count()
 
-        finalizados = (
-            db.query(Cliente)
-            .filter(Cliente.estado == "FINALIZADO")
-            .count()
-        )
+        finalizados = db.query(Cliente).filter(Cliente.estado == "FINALIZADO").count()
 
         return {
             "total": total,

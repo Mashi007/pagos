@@ -41,16 +41,25 @@ def listar_pagos(
     Listar pagos con filtros y paginación
     """
     try:
-        logger.info(f"📋 [listar_pagos] Iniciando consulta - página {page}, por página {per_page}")
-        
+        logger.info(
+            f"📋 [listar_pagos] Iniciando consulta - página {page}, por página {per_page}"
+        )
+
         # Verificar conexión a BD
         try:
             test_query = db.query(func.count(Pago.id)).scalar()
-            logger.info(f"✅ [listar_pagos] Conexión BD OK. Total pagos en BD: {test_query}")
+            logger.info(
+                f"✅ [listar_pagos] Conexión BD OK. Total pagos en BD: {test_query}"
+            )
         except Exception as db_error:
-            logger.error(f"❌ [listar_pagos] Error de conexión BD: {db_error}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Error de conexión a la base de datos: {str(db_error)}")
-        
+            logger.error(
+                f"❌ [listar_pagos] Error de conexión BD: {db_error}", exc_info=True
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error de conexión a la base de datos: {str(db_error)}",
+            )
+
         query = db.query(Pago)
 
         # Filtros
@@ -72,7 +81,9 @@ def listar_pagos(
 
         # Contar total antes de aplicar paginación
         total = query.count()
-        logger.info(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")
+        logger.info(
+            f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}"
+        )
 
         # Ordenar por fecha de registro descendente (más actual primero)
         # Si hay misma fecha_registro, ordenar por ID descendente como criterio secundario
@@ -87,18 +98,20 @@ def listar_pagos(
         pagos_serializados = []
         errores_serializacion = 0
         hoy = date.today()
-        
+
         for pago in pagos:
             try:
                 # Convertir fecha_pago si es DATE a datetime si es necesario
-                if hasattr(pago, 'fecha_pago') and pago.fecha_pago is not None:
-                    if isinstance(pago.fecha_pago, date) and not isinstance(pago.fecha_pago, datetime):
+                if hasattr(pago, "fecha_pago") and pago.fecha_pago is not None:
+                    if isinstance(pago.fecha_pago, date) and not isinstance(
+                        pago.fecha_pago, datetime
+                    ):
                         # Si es date sin hora, convertir a datetime al inicio del día
                         pago.fecha_pago = datetime.combine(pago.fecha_pago, time.min)
-                
+
                 # Validar con el schema
                 pago_dict = PagoResponse.model_validate(pago).model_dump()
-                
+
                 # ✅ Calcular cuotas atrasadas para este cliente
                 # IMPORTANTE: Revisa TODAS las cuotas de TODOS los préstamos activos del cliente
                 # Cuotas atrasadas = cuotas vencidas con pago incompleto (total_pagado < monto_cuota)
@@ -106,14 +119,15 @@ def listar_pagos(
                 if pago.cedula_cliente:
                     # Obtener TODOS los préstamos APROBADOS del cliente (no solo del último pago)
                     prestamos_ids = [
-                        p.id for p in db.query(Prestamo.id)
+                        p.id
+                        for p in db.query(Prestamo.id)
                         .filter(
                             Prestamo.cedula == pago.cedula_cliente,
-                            Prestamo.estado == "APROBADO"  # ✅ Solo préstamos activos
+                            Prestamo.estado == "APROBADO",  # ✅ Solo préstamos activos
                         )
                         .all()
                     ]
-                    
+
                     if prestamos_ids:
                         # Contar TODAS las cuotas atrasadas de TODOS los préstamos del cliente
                         # Filtros aplicados:
@@ -126,13 +140,15 @@ def listar_pagos(
                             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                             .filter(
                                 Prestamo.id.in_(prestamos_ids),
-                                Prestamo.estado == "APROBADO",  # ✅ Solo préstamos activos
+                                Prestamo.estado
+                                == "APROBADO",  # ✅ Solo préstamos activos
                                 Cuota.fecha_vencimiento < hoy,  # ✅ Vencida
-                                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+                                Cuota.total_pagado
+                                < Cuota.monto_cuota,  # ✅ Pago incompleto
                             )
                         )
                         cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
-                        
+
                         # Logging detallado para verificación (INFO para producción)
                         logger.info(
                             f"📊 [listar_pagos] Cliente {pago.cedula_cliente}: "
@@ -142,31 +158,50 @@ def listar_pagos(
                             f"CÁLCULO DINÁMICO DESDE BD ✅"
                         )
                     else:
-                        logger.debug(f"📊 [listar_pagos] Cliente {pago.cedula_cliente}: Sin préstamos APROBADOS")
+                        logger.debug(
+                            f"📊 [listar_pagos] Cliente {pago.cedula_cliente}: Sin préstamos APROBADOS"
+                        )
                 else:
-                    logger.debug(f"📊 [listar_pagos] Pago ID {pago.id}: Sin cédula de cliente")
-                
+                    logger.debug(
+                        f"📊 [listar_pagos] Pago ID {pago.id}: Sin cédula de cliente"
+                    )
+
                 # Agregar cuotas_atrasadas al diccionario
-                pago_dict['cuotas_atrasadas'] = cuotas_atrasadas
+                pago_dict["cuotas_atrasadas"] = cuotas_atrasadas
                 pagos_serializados.append(pago_dict)
             except Exception as serialization_error:
                 errores_serializacion += 1
                 # Log detallado del error y campos del pago
                 error_detail = str(serialization_error)
-                logger.error(f"❌ [listar_pagos] Error serializando pago ID {pago.id}: {error_detail}", exc_info=True)
+                logger.error(
+                    f"❌ [listar_pagos] Error serializando pago ID {pago.id}: {error_detail}",
+                    exc_info=True,
+                )
                 logger.error(f"   Datos del pago: cedula={pago.cedula_cliente}")
-                logger.error(f"   fecha_pago={pago.fecha_pago} (tipo: {type(pago.fecha_pago)})")
-                logger.error(f"   fecha_registro={getattr(pago, 'fecha_registro', 'N/A')} (tipo: {type(getattr(pago, 'fecha_registro', None))})")
-                logger.error(f"   fecha_actualizacion={getattr(pago, 'fecha_actualizacion', 'N/A')} (tipo: {type(getattr(pago, 'fecha_actualizacion', None))})")
-                logger.error(f"   fecha_conciliacion={getattr(pago, 'fecha_conciliacion', 'N/A')} (tipo: {type(getattr(pago, 'fecha_conciliacion', None))})")
+                logger.error(
+                    f"   fecha_pago={pago.fecha_pago} (tipo: {type(pago.fecha_pago)})"
+                )
+                logger.error(
+                    f"   fecha_registro={getattr(pago, 'fecha_registro', 'N/A')} (tipo: {type(getattr(pago, 'fecha_registro', None))})"
+                )
+                logger.error(
+                    f"   fecha_actualizacion={getattr(pago, 'fecha_actualizacion', 'N/A')} (tipo: {type(getattr(pago, 'fecha_actualizacion', None))})"
+                )
+                logger.error(
+                    f"   fecha_conciliacion={getattr(pago, 'fecha_conciliacion', 'N/A')} (tipo: {type(getattr(pago, 'fecha_conciliacion', None))})"
+                )
                 # Continuar con los demás pagos, pero loguear el error
                 continue
 
         if errores_serializacion > 0:
-            logger.warning(f"⚠️ [listar_pagos] {errores_serializacion} de {len(pagos)} pagos fallaron en serialización")
-        
-        logger.info(f"✅ [listar_pagos] Serializados exitosamente: {len(pagos_serializados)} pagos")
-        
+            logger.warning(
+                f"⚠️ [listar_pagos] {errores_serializacion} de {len(pagos)} pagos fallaron en serialización"
+            )
+
+        logger.info(
+            f"✅ [listar_pagos] Serializados exitosamente: {len(pagos_serializados)} pagos"
+        )
+
         return {
             "pagos": pagos_serializados,
             "total": total,
@@ -180,8 +215,7 @@ def listar_pagos(
         error_msg = str(e)
         logger.error(f"❌ [listar_pagos] Error general: {error_msg}", exc_info=True)
         raise HTTPException(
-            status_code=500, 
-            detail=f"Error interno del servidor: {error_msg}"
+            status_code=500, detail=f"Error interno del servidor: {error_msg}"
         )
 
 
@@ -362,7 +396,7 @@ def listar_ultimos_pagos(
                 for p in db.query(Prestamo.id)
                 .filter(
                     Prestamo.cedula == pago.cedula_cliente,
-                    Prestamo.estado == "APROBADO"  # ✅ Solo préstamos activos
+                    Prestamo.estado == "APROBADO",  # ✅ Solo préstamos activos
                 )
                 .all()
             ]
@@ -388,11 +422,12 @@ def listar_ultimos_pagos(
                         Prestamo.id.in_(prestamos_ids),
                         Prestamo.estado == "APROBADO",  # ✅ Solo préstamos activos
                         Cuota.fecha_vencimiento < hoy,  # ✅ Vencida
-                        Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Verificar que el pago NO esté completo
+                        Cuota.total_pagado
+                        < Cuota.monto_cuota,  # ✅ Verificar que el pago NO esté completo
                     )
                 )
                 cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
-                
+
                 # Logging detallado para verificación
                 logger.info(
                     f"📊 [ultimos_pagos] Cliente {pago.cedula_cliente}: "
@@ -661,27 +696,29 @@ def obtener_kpis_pagos(
 ):
     """
     KPIs específicos para el módulo de Pagos
-    
+
     Devuelve:
     - montoCobradoMes: Suma de todos los pagos del mes especificado
     - saldoPorCobrar: Suma de capital_pendiente + interes_pendiente + monto_mora de todas las cuotas no pagadas
     - clientesEnMora: Conteo de clientes únicos con cuotas vencidas y no pagadas
     - clientesAlDia: Conteo de clientes únicos sin cuotas vencidas sin pagar
-    
+
     Los KPIs son fijos por mes (mes/año especificados o mes/año actual)
     """
     try:
         from datetime import date, datetime
-        
+
         # Determinar mes y año (default: mes/año actual)
         hoy = date.today()
         mes_consulta = mes if mes is not None else hoy.month
         año_consulta = año if año is not None else hoy.year
-        
+
         # Validar mes
         if mes_consulta < 1 or mes_consulta > 12:
-            raise HTTPException(status_code=400, detail="El mes debe estar entre 1 y 12")
-        
+            raise HTTPException(
+                status_code=400, detail="El mes debe estar entre 1 y 12"
+            )
+
         # Fecha inicio y fin del mes
         fecha_inicio_mes = date(año_consulta, mes_consulta, 1)
         # Calcular último día del mes
@@ -689,32 +726,37 @@ def obtener_kpis_pagos(
             fecha_fin_mes = date(año_consulta + 1, 1, 1)
         else:
             fecha_fin_mes = date(año_consulta, mes_consulta + 1, 1)
-        
-        logger.info(f"📊 [kpis_pagos] Calculando KPIs para mes {mes_consulta}/{año_consulta}")
-        logger.info(f"📅 [kpis_pagos] Rango de fechas: {fecha_inicio_mes} a {fecha_fin_mes}")
-        
+
+        logger.info(
+            f"📊 [kpis_pagos] Calculando KPIs para mes {mes_consulta}/{año_consulta}"
+        )
+        logger.info(
+            f"📅 [kpis_pagos] Rango de fechas: {fecha_inicio_mes} a {fecha_fin_mes}"
+        )
+
         # 1. MONTO COBRADO EN EL MES
         # Suma de todos los pagos del mes especificado (DATOS REALES DESDE BD)
-        monto_cobrado_mes_query = (
-            db.query(func.sum(Pago.monto_pagado))
-            .filter(
-                Pago.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
-                Pago.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
-            )
+        monto_cobrado_mes_query = db.query(func.sum(Pago.monto_pagado)).filter(
+            Pago.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
+            Pago.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
         )
         monto_cobrado_mes = monto_cobrado_mes_query.scalar() or Decimal("0.00")
-        
+
         # Log detallado para verificación
         total_pagos_mes = (
             db.query(func.count(Pago.id))
             .filter(
-                Pago.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
+                Pago.fecha_pago
+                >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
                 Pago.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
-        logger.info(f"💰 [kpis_pagos] Monto cobrado en el mes: ${monto_cobrado_mes:,.2f} (de {total_pagos_mes} pagos)")
-        
+        logger.info(
+            f"💰 [kpis_pagos] Monto cobrado en el mes: ${monto_cobrado_mes:,.2f} (de {total_pagos_mes} pagos)"
+        )
+
         # 2. SALDO POR COBRAR
         # Suma de capital_pendiente + interes_pendiente + monto_mora de todas las cuotas no pagadas (DATOS REALES DESDE BD)
         saldo_por_cobrar_query = (
@@ -732,7 +774,7 @@ def obtener_kpis_pagos(
             )
         )
         saldo_por_cobrar = saldo_por_cobrar_query.scalar() or Decimal("0.00")
-        
+
         # Log detallado para verificación
         total_cuotas_pendientes = (
             db.query(func.count(Cuota.id))
@@ -741,10 +783,13 @@ def obtener_kpis_pagos(
                 Cuota.estado != "PAGADO",
                 Prestamo.estado == "APROBADO",
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
-        logger.info(f"💳 [kpis_pagos] Saldo por cobrar: ${saldo_por_cobrar:,.2f} (de {total_cuotas_pendientes} cuotas pendientes)")
-        
+        logger.info(
+            f"💳 [kpis_pagos] Saldo por cobrar: ${saldo_por_cobrar:,.2f} (de {total_cuotas_pendientes} cuotas pendientes)"
+        )
+
         # 3. CLIENTES EN MORA
         # Clientes únicos con cuotas vencidas Y con pago incompleto (total_pagado < monto_cuota) (DATOS REALES DESDE BD)
         # Esto asegura que pagos parciales cuenten como mora si están vencidos
@@ -758,7 +803,7 @@ def obtener_kpis_pagos(
             )
         )
         clientes_en_mora = clientes_en_mora_query.scalar() or 0
-        
+
         # Log detallado para verificación
         cuotas_en_mora_count = (
             db.query(func.count(Cuota.id))
@@ -768,15 +813,18 @@ def obtener_kpis_pagos(
                 Cuota.total_pagado < Cuota.monto_cuota,
                 Prestamo.estado == "APROBADO",
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
-        logger.info(f"⚠️ [kpis_pagos] Clientes en mora: {clientes_en_mora} (con {cuotas_en_mora_count} cuotas vencidas e incompletas)")
-        
+        logger.info(
+            f"⚠️ [kpis_pagos] Clientes en mora: {clientes_en_mora} (con {cuotas_en_mora_count} cuotas vencidas e incompletas)"
+        )
+
         # 4. CLIENTES AL DÍA
         # Clientes únicos que tienen préstamos aprobados pero NO tienen cuotas vencidas sin pagar
         # Es decir: clientes con préstamos aprobados que no están en la lista de clientes en mora
         # O clientes que tienen todas sus cuotas vencidas pagadas o no tienen cuotas vencidas
-        
+
         # Primero obtener todos los clientes con préstamos aprobados
         todos_clientes_aprobados = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
@@ -784,13 +832,15 @@ def obtener_kpis_pagos(
             .scalar()
             or 0
         )
-        
+
         # Clientes al día = total clientes aprobados - clientes en mora
         # (Un cliente al día es uno que tiene préstamos aprobados pero no está en mora)
         clientes_al_dia = max(0, todos_clientes_aprobados - clientes_en_mora)
-        
-        logger.info(f"✅ [kpis_pagos] Clientes al día: {clientes_al_dia} (de {todos_clientes_aprobados} totales)")
-        
+
+        logger.info(
+            f"✅ [kpis_pagos] Clientes al día: {clientes_al_dia} (de {todos_clientes_aprobados} totales)"
+        )
+
         return {
             "montoCobradoMes": float(monto_cobrado_mes),
             "saldoPorCobrar": float(saldo_por_cobrar),
@@ -803,7 +853,9 @@ def obtener_kpis_pagos(
         raise
     except Exception as e:
         logger.error(f"❌ [kpis_pagos] Error obteniendo KPIs: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno al obtener KPIs: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno al obtener KPIs: {str(e)}"
+        )
 
 
 @router.get("/stats")

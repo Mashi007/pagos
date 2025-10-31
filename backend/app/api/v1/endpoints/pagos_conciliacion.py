@@ -26,11 +26,11 @@ async def upload_conciliacion_excel(
 ):
     """
     Procesar conciliación masiva desde archivo Excel
-    
+
     Formato esperado (2 columnas):
     - Fecha de Depósito
     - Número de Documento
-    
+
     El sistema compara el número de documento del Excel con los pagos existentes.
     Si encuentra una coincidencia exacta, marca el pago como conciliado.
     """
@@ -50,7 +50,7 @@ async def upload_conciliacion_excel(
             "Fecha de Depósito",
             "Número de Documento",
         ]
-        
+
         # Verificar que todas las columnas requeridas existan
         if not all(col in df.columns for col in required_columns):
             raise HTTPException(
@@ -69,9 +69,13 @@ async def upload_conciliacion_excel(
         for index, row in df.iterrows():
             try:
                 numero_documento = str(row["Número de Documento"]).strip()
-                
+
                 # Validar que el número de documento no esté vacío
-                if not numero_documento or numero_documento.lower() in ['nan', 'none', '']:
+                if not numero_documento or numero_documento.lower() in [
+                    "nan",
+                    "none",
+                    "",
+                ]:
                     errores.append(f"Fila {index + 2}: Número de documento vacío")
                     continue
 
@@ -93,25 +97,34 @@ async def upload_conciliacion_excel(
                         # Marcar como conciliado
                         pago.conciliado = True
                         pago.fecha_conciliacion = datetime.now()
-                        
+
                         # Marcar como verificado en concordancia (SI) cuando coincide el número de documento
-                        if hasattr(pago, 'verificado_concordancia'):
-                            pago.verificado_concordancia = 'SI'
-                        
+                        if hasattr(pago, "verificado_concordancia"):
+                            pago.verificado_concordancia = "SI"
+
                         db.commit()
                         db.refresh(pago)
-                        
+
                         pagos_conciliados += 1
-                        logger.info(f"✅ [conciliacion] Pago ID {pago.id} conciliado (documento: {numero_documento})")
+                        logger.info(
+                            f"✅ [conciliacion] Pago ID {pago.id} conciliado (documento: {numero_documento})"
+                        )
                     else:
-                        logger.info(f"ℹ️ [conciliacion] Pago ID {pago.id} ya estaba conciliado (documento: {numero_documento})")
+                        logger.info(
+                            f"ℹ️ [conciliacion] Pago ID {pago.id} ya estaba conciliado (documento: {numero_documento})"
+                        )
                 else:
                     # Documento no encontrado en el sistema
                     pagos_no_encontrados.append(numero_documento)
-                    logger.warning(f"⚠️ [conciliacion] Documento no encontrado: {numero_documento}")
+                    logger.warning(
+                        f"⚠️ [conciliacion] Documento no encontrado: {numero_documento}"
+                    )
 
             except Exception as e:
-                logger.error(f"❌ [conciliacion] Error procesando fila {index + 2}: {e}", exc_info=True)
+                logger.error(
+                    f"❌ [conciliacion] Error procesando fila {index + 2}: {e}",
+                    exc_info=True,
+                )
                 errores.append(f"Fila {index + 2}: {str(e)}")
 
         logger.info(
@@ -122,7 +135,9 @@ async def upload_conciliacion_excel(
         return {
             "pagos_conciliados": pagos_conciliados,
             "pagos_no_encontrados": len(pagos_no_encontrados),
-            "documentos_no_encontrados": pagos_no_encontrados[:20],  # Mostrar solo primeros 20
+            "documentos_no_encontrados": pagos_no_encontrados[
+                :20
+            ],  # Mostrar solo primeros 20
             "errores": len(errores),
             "errores_detalle": errores[:10],  # Mostrar solo primeros 10 errores
         }
@@ -132,6 +147,6 @@ async def upload_conciliacion_excel(
     except Exception as e:
         logger.error(f"❌ [conciliacion] Error procesando archivo: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500, detail=f"Error procesando archivo de conciliación: {str(e)}"
+            status_code=500,
+            detail=f"Error procesando archivo de conciliación: {str(e)}",
         )
-

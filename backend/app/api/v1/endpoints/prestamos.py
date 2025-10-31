@@ -339,8 +339,12 @@ def listar_prestamos(
     analista: Optional[str] = Query(None, description="Filtrar por analista"),
     concesionario: Optional[str] = Query(None, description="Filtrar por concesionario"),
     modelo: Optional[str] = Query(None, description="Filtrar por modelo de vehículo"),
-    fecha_inicio: Optional[date] = Query(None, description="Fecha de inicio (fecha_registro)"),
-    fecha_fin: Optional[date] = Query(None, description="Fecha de fin (fecha_registro)"),
+    fecha_inicio: Optional[date] = Query(
+        None, description="Fecha de inicio (fecha_registro)"
+    ),
+    fecha_fin: Optional[date] = Query(
+        None, description="Fecha de fin (fecha_registro)"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

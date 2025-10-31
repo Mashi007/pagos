@@ -502,20 +502,22 @@ def generar_pdf_pendientes_cliente(
     """
     try:
         hoy = date.today()
-        
+
         # Obtener cliente
         cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
-        
+
         # Obtener todos los préstamos del cliente
         prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
         if not prestamos:
-            raise HTTPException(status_code=404, detail="Cliente no tiene préstamos registrados")
-        
+            raise HTTPException(
+                status_code=404, detail="Cliente no tiene préstamos registrados"
+            )
+
         # Preparar datos para el PDF
         datos_prestamos = []
-        
+
         for prestamo in prestamos:
             # Obtener cuotas del préstamo
             cuotas = (
@@ -524,62 +526,82 @@ def generar_pdf_pendientes_cliente(
                 .order_by(Cuota.numero_cuota)
                 .all()
             )
-            
+
             # Cuotas pendientes/vencidas
             cuotas_pendientes = [
                 {
                     "numero": c.numero_cuota,
-                    "fecha_vencimiento": c.fecha_vencimiento.strftime("%d/%m/%Y") if c.fecha_vencimiento else "N/A",
+                    "fecha_vencimiento": (
+                        c.fecha_vencimiento.strftime("%d/%m/%Y")
+                        if c.fecha_vencimiento
+                        else "N/A"
+                    ),
                     "monto_cuota": float(c.monto_cuota),
                     "total_pagado": float(c.total_pagado or Decimal("0.00")),
                     "capital_pendiente": float(c.capital_pendiente or Decimal("0.00")),
                     "interes_pendiente": float(c.interes_pendiente or Decimal("0.00")),
                     "monto_mora": float(c.monto_mora or Decimal("0.00")),
                     "estado": c.estado,
-                    "vencida": c.fecha_vencimiento < hoy if c.fecha_vencimiento else False,
+                    "vencida": (
+                        c.fecha_vencimiento < hoy if c.fecha_vencimiento else False
+                    ),
                 }
                 for c in cuotas
                 if c.estado != "PAGADO"
             ]
-            
+
             # Obtener modelo de vehículo si existe
             modelo_vehiculo = "N/A"
-            if hasattr(prestamo, 'modelo_vehiculo_id') and prestamo.modelo_vehiculo_id:
+            if hasattr(prestamo, "modelo_vehiculo_id") and prestamo.modelo_vehiculo_id:
                 from app.models.modelo_vehiculo import ModeloVehiculo
-                modelo = db.query(ModeloVehiculo).filter(ModeloVehiculo.id == prestamo.modelo_vehiculo_id).first()
+
+                modelo = (
+                    db.query(ModeloVehiculo)
+                    .filter(ModeloVehiculo.id == prestamo.modelo_vehiculo_id)
+                    .first()
+                )
                 if modelo:
-                    modelo_vehiculo = f"{modelo.marca} {modelo.modelo} {modelo.ano or ''}".strip()
-            
-            datos_prestamos.append({
-                "prestamo_id": prestamo.id,
-                "total_financiamiento": float(prestamo.total_financiamiento or Decimal("0.00")),
-                "numero_cuotas": prestamo.numero_cuotas or 0,
-                "modalidad": prestamo.modalidad_pago or "N/A",
-                "estado": prestamo.estado or "N/A",
-                "modelo_vehiculo": modelo_vehiculo,
-                "cuotas_pendientes": cuotas_pendientes,
-            })
-        
+                    modelo_vehiculo = (
+                        f"{modelo.marca} {modelo.modelo} {modelo.ano or ''}".strip()
+                    )
+
+            datos_prestamos.append(
+                {
+                    "prestamo_id": prestamo.id,
+                    "total_financiamiento": float(
+                        prestamo.total_financiamiento or Decimal("0.00")
+                    ),
+                    "numero_cuotas": prestamo.numero_cuotas or 0,
+                    "modalidad": prestamo.modalidad_pago or "N/A",
+                    "estado": prestamo.estado or "N/A",
+                    "modelo_vehiculo": modelo_vehiculo,
+                    "cuotas_pendientes": cuotas_pendientes,
+                }
+            )
+
         # Generar PDF
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5 * inch)
         story = []
         styles = getSampleStyleSheet()
-        
+
         # Título
-        title = Paragraph(f"<b>REPORTE DE PENDIENTES - {cliente.nombres or 'Cliente'}</b>", styles["Title"])
+        title = Paragraph(
+            f"<b>REPORTE DE PENDIENTES - {cliente.nombres or 'Cliente'}</b>",
+            styles["Title"],
+        )
         story.append(title)
-        
+
         # Información del cliente
         info_cliente = Paragraph(
             f"<b>Cédula:</b> {cliente.cedula}<br/>"
             f"<b>Nombre:</b> {cliente.nombres or 'N/A'}<br/>"
             f"<b>Fecha de Generación:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}",
-            styles["Normal"]
+            styles["Normal"],
         )
         story.append(info_cliente)
         story.append(Spacer(1, 0.3 * inch))
-        
+
         # Por cada préstamo
         for datos_prestamo in datos_prestamos:
             # Encabezado del préstamo
@@ -587,82 +609,116 @@ def generar_pdf_pendientes_cliente(
                 f"<b>PRÉSTAMO ID #{datos_prestamo['prestamo_id']}</b> - "
                 f"Total: ${datos_prestamo['total_financiamiento']:,.2f} - "
                 f"Modelo: {datos_prestamo['modelo_vehiculo']}",
-                styles["Heading2"]
+                styles["Heading2"],
             )
             story.append(header_prestamo)
-            
+
             # Información del préstamo
             info_prestamo = Paragraph(
                 f"Modalidad: {datos_prestamo['modalidad']} | "
                 f"Cuotas Totales: {datos_prestamo['numero_cuotas']} | "
                 f"Estado: {datos_prestamo['estado']}",
-                styles["Normal"]
+                styles["Normal"],
             )
             story.append(info_prestamo)
             story.append(Spacer(1, 0.2 * inch))
-            
+
             # Tabla de cuotas pendientes
-            if datos_prestamo['cuotas_pendientes']:
+            if datos_prestamo["cuotas_pendientes"]:
                 table_data = [
-                    ["Cuota", "Fecha Venc.", "Monto Cuota", "Pagado", "Capital Pend.", "Interés Pend.", "Mora", "Estado"]
+                    [
+                        "Cuota",
+                        "Fecha Venc.",
+                        "Monto Cuota",
+                        "Pagado",
+                        "Capital Pend.",
+                        "Interés Pend.",
+                        "Mora",
+                        "Estado",
+                    ]
                 ]
-                
-                for cuota in datos_prestamo['cuotas_pendientes']:
-                    fecha_venc = cuota['fecha_vencimiento']
-                    if cuota['vencida']:
-                        fecha_venc = f"<b><font color='red'>{fecha_venc} (VENCIDA)</font></b>"
-                    
-                    table_data.append([
-                        str(cuota['numero']),
-                        fecha_venc,
-                        f"${cuota['monto_cuota']:,.2f}",
-                        f"${cuota['total_pagado']:,.2f}",
-                        f"${cuota['capital_pendiente']:,.2f}",
-                        f"${cuota['interes_pendiente']:,.2f}",
-                        f"${cuota['monto_mora']:,.2f}",
-                        cuota['estado'],
-                    ])
-                
+
+                for cuota in datos_prestamo["cuotas_pendientes"]:
+                    fecha_venc = cuota["fecha_vencimiento"]
+                    if cuota["vencida"]:
+                        fecha_venc = (
+                            f"<b><font color='red'>{fecha_venc} (VENCIDA)</font></b>"
+                        )
+
+                    table_data.append(
+                        [
+                            str(cuota["numero"]),
+                            fecha_venc,
+                            f"${cuota['monto_cuota']:,.2f}",
+                            f"${cuota['total_pagado']:,.2f}",
+                            f"${cuota['capital_pendiente']:,.2f}",
+                            f"${cuota['interes_pendiente']:,.2f}",
+                            f"${cuota['monto_mora']:,.2f}",
+                            cuota["estado"],
+                        ]
+                    )
+
                 # Crear tabla
-                table = Table(table_data, colWidths=[0.5*inch, 1*inch, 1*inch, 1*inch, 1*inch, 1*inch, 0.8*inch, 1*inch])
+                table = Table(
+                    table_data,
+                    colWidths=[
+                        0.5 * inch,
+                        1 * inch,
+                        1 * inch,
+                        1 * inch,
+                        1 * inch,
+                        1 * inch,
+                        0.8 * inch,
+                        1 * inch,
+                    ],
+                )
                 table.setStyle(
-                    TableStyle([
-                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#366092")),
-                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                        ("FONTSIZE", (0, 0), (-1, 0), 8),
-                        ("FONTSIZE", (0, 1), (-1, -1), 7),
-                        ("GRID", (0, 0), (-1, -1), 1, colors.black),
-                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-                    ])
+                    TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#366092")),
+                            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                            ("FONTSIZE", (0, 0), (-1, 0), 8),
+                            ("FONTSIZE", (0, 1), (-1, -1), 7),
+                            ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                            (
+                                "ROWBACKGROUNDS",
+                                (0, 1),
+                                (-1, -1),
+                                [colors.white, colors.lightgrey],
+                            ),
+                        ]
+                    )
                 )
                 story.append(table)
             else:
-                story.append(Paragraph("<i>No hay cuotas pendientes para este préstamo</i>", styles["Normal"]))
-            
+                story.append(
+                    Paragraph(
+                        "<i>No hay cuotas pendientes para este préstamo</i>",
+                        styles["Normal"],
+                    )
+                )
+
             story.append(Spacer(1, 0.3 * inch))
-        
+
         # Construir PDF
         doc.build(story)
         buffer.seek(0)
-        
+
         # Devolver como StreamingResponse
         filename = f"pendientes_{cedula}_{hoy.strftime('%Y%m%d')}.pdf"
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="{filename}"'
-            }
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error generando PDF pendientes para cliente {cedula}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error al generar PDF: {str(e)}"
+        logger.error(
+            f"Error generando PDF pendientes para cliente {cedula}: {e}", exc_info=True
         )
+        raise HTTPException(status_code=500, detail=f"Error al generar PDF: {str(e)}")
