@@ -31,6 +31,8 @@ def listar_modelos_vehiculos(
     current_user: User = Depends(get_current_user),
 ):
     """Listar modelos de vehículos con filtros"""
+    logger.info(f"🔍 ENDPOINT EJECUTADO: listar_modelos_vehiculos - Usuario: {current_user.email if current_user else 'N/A'}")
+    logger.info(f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}")
 
     query = db.query(ModeloVehiculo)
 
