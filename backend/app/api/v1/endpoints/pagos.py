@@ -41,22 +41,38 @@ def listar_pagos(
     Listar pagos con filtros y paginación
     """
     try:
+        logger.info(f"📋 [listar_pagos] Iniciando consulta - página {page}, por página {per_page}")
+        
+        # Verificar conexión a BD
+        try:
+            test_query = db.query(func.count(Pago.id)).scalar()
+            logger.info(f"✅ [listar_pagos] Conexión BD OK. Total pagos en BD: {test_query}")
+        except Exception as db_error:
+            logger.error(f"❌ [listar_pagos] Error de conexión BD: {db_error}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Error de conexión a la base de datos: {str(db_error)}")
+        
         query = db.query(Pago)
 
         # Filtros
         if cedula:
             query = query.filter(Pago.cedula_cliente == cedula)
+            logger.info(f"🔍 [listar_pagos] Filtro cédula: {cedula}")
         if estado:
             query = query.filter(Pago.estado == estado)
+            logger.info(f"🔍 [listar_pagos] Filtro estado: {estado}")
         if fecha_desde:
             query = query.filter(Pago.fecha_pago >= fecha_desde)
+            logger.info(f"🔍 [listar_pagos] Filtro fecha_desde: {fecha_desde}")
         if fecha_hasta:
             query = query.filter(Pago.fecha_pago <= fecha_hasta)
+            logger.info(f"🔍 [listar_pagos] Filtro fecha_hasta: {fecha_hasta}")
         if analista:
             query = query.join(Prestamo).filter(Prestamo.usuario_proponente == analista)
+            logger.info(f"🔍 [listar_pagos] Filtro analista: {analista}")
 
         # Contar total antes de aplicar paginación
         total = query.count()
+        logger.info(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")
 
         # Ordenar por fecha de registro descendente (más actual primero)
         # Si hay misma fecha_registro, ordenar por ID descendente como criterio secundario
@@ -65,9 +81,11 @@ def listar_pagos(
         # Paginación
         offset = (page - 1) * per_page
         pagos = query.offset(offset).limit(per_page).all()
+        logger.info(f"📄 [listar_pagos] Pagos obtenidos de BD: {len(pagos)}")
 
         # Serializar pagos
         pagos_serializados = []
+        errores_serializacion = 0
         for pago in pagos:
             try:
                 # Convertir fecha_pago si es DATE a datetime si es necesario
@@ -75,13 +93,22 @@ def listar_pagos(
                     if isinstance(pago.fecha_pago, date) and not isinstance(pago.fecha_pago, datetime):
                         # Si es date sin hora, convertir a datetime al inicio del día
                         pago.fecha_pago = datetime.combine(pago.fecha_pago, time.min)
-                pagos_serializados.append(PagoResponse.model_validate(pago).model_dump())
+                
+                # Validar con el schema
+                pago_dict = PagoResponse.model_validate(pago).model_dump()
+                pagos_serializados.append(pago_dict)
             except Exception as serialization_error:
-                logger.error(f"Error serializando pago ID {pago.id}: {serialization_error}", exc_info=True)
-                logger.error(f"Datos del pago problemático: cedula={pago.cedula_cliente}, fecha_pago={pago.fecha_pago}, tipo={type(pago.fecha_pago)}")
+                errores_serializacion += 1
+                logger.error(f"❌ [listar_pagos] Error serializando pago ID {pago.id}: {serialization_error}", exc_info=True)
+                logger.error(f"   Datos del pago: cedula={pago.cedula_cliente}, fecha_pago={pago.fecha_pago}, tipo={type(pago.fecha_pago)}")
                 # Continuar con los demás pagos, pero loguear el error
                 continue
 
+        if errores_serializacion > 0:
+            logger.warning(f"⚠️ [listar_pagos] {errores_serializacion} de {len(pagos)} pagos fallaron en serialización")
+        
+        logger.info(f"✅ [listar_pagos] Serializados exitosamente: {len(pagos_serializados)} pagos")
+        
         return {
             "pagos": pagos_serializados,
             "total": total,
@@ -89,9 +116,11 @@ def listar_pagos(
             "per_page": per_page,
             "total_pages": (total + per_page - 1) // per_page if total > 0 else 0,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         error_msg = str(e)
-        logger.error(f"Error en listar_pagos: {error_msg}", exc_info=True)
+        logger.error(f"❌ [listar_pagos] Error general: {error_msg}", exc_info=True)
         raise HTTPException(
             status_code=500, 
             detail=f"Error interno del servidor: {error_msg}"

@@ -41,7 +41,7 @@ export function PagosList() {
   const queryClient = useQueryClient()
 
   // Query para obtener pagos
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, isError } = useQuery({
     queryKey: ['pagos', page, perPage, filters],
     queryFn: () => pagoService.getAllPagos(page, perPage, filters),
     staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualización inmediata)
@@ -152,9 +152,54 @@ export function PagosList() {
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <div className="text-center py-12">Cargando...</div>
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p className="text-gray-500">Cargando pagos...</p>
+                </div>
+              ) : isError ? (
+                <div className="text-center py-12">
+                  <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                  <p className="text-red-600 font-semibold mb-2">Error al cargar los pagos</p>
+                  <p className="text-gray-600 text-sm">
+                    {error instanceof Error ? error.message : 'Error desconocido'}
+                  </p>
+                  <Button 
+                    className="mt-4" 
+                    onClick={() => queryClient.refetchQueries({ queryKey: ['pagos'] })}
+                  >
+                    Reintentar
+                  </Button>
+                </div>
+              ) : !data?.pagos || data.pagos.length === 0 ? (
+                <div className="text-center py-12">
+                  <CreditCard className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 font-semibold mb-2">No se encontraron pagos</p>
+                  <p className="text-gray-500 text-sm">
+                    {data?.total === 0 
+                      ? 'No hay pagos registrados en el sistema.'
+                      : 'No hay pagos que coincidan con los filtros aplicados.'}
+                  </p>
+                  {(filters.cedula || filters.estado || filters.fechaDesde || filters.fechaHasta || filters.analista) && (
+                    <Button 
+                      className="mt-4" 
+                      variant="outline"
+                      onClick={() => setFilters({
+                        cedula: '',
+                        estado: '',
+                        fechaDesde: '',
+                        fechaHasta: '',
+                        analista: '',
+                      })}
+                    >
+                      Limpiar Filtros
+                    </Button>
+                  )}
+                </div>
               ) : (
                 <>
+                  <div className="mb-4 text-sm text-gray-600">
+                    Mostrando {data.pagos.length} de {data.total} pagos (Página {data.page} de {data.total_pages})
+                  </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
@@ -170,7 +215,7 @@ export function PagosList() {
                         </tr>
                       </thead>
                       <tbody>
-                        {data?.pagos?.map((pago: Pago) => (
+                        {data.pagos.map((pago: Pago) => (
                           <tr key={pago.id} className="border-b hover:bg-gray-50">
                             <td className="px-4 py-3">{pago.id}</td>
                             <td className="px-4 py-3">{pago.cedula_cliente}</td>
@@ -194,6 +239,28 @@ export function PagosList() {
                       </tbody>
                     </table>
                   </div>
+                  {/* Paginación */}
+                  {data.total_pages > 1 && (
+                    <div className="flex justify-between items-center mt-4">
+                      <Button
+                        variant="outline"
+                        disabled={page === 1}
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                      >
+                        Anterior
+                      </Button>
+                      <span className="text-sm text-gray-600">
+                        Página {data.page} de {data.total_pages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        disabled={page >= data.total_pages}
+                        onClick={() => setPage(p => Math.min(data.total_pages, p + 1))}
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+                  )}
                 </>
               )}
             </CardContent>
