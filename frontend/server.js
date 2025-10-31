@@ -86,9 +86,11 @@ if (API_URL) {
     // Ejemplo: /api/v1/clientes -> req.path = /v1/clientes
     // Necesitamos reconstruirlo: /v1/clientes -> /api/v1/clientes
     pathRewrite: (path, req) => {
+      // Extraer solo el path sin query string (el path puede venir con ?query)
+      const pathOnly = path.split('?')[0];
       // El path que llega ya NO tiene /api (Express lo eliminó)
       // Lo agregamos de vuelta para que el backend reciba /api/v1/...
-      const rewritten = `/api${path}`;
+      const rewritten = `/api${pathOnly}`;
       console.log(`🔄 Path rewrite: "${path}" -> "${rewritten}"`);
       return rewritten;
     },
@@ -112,22 +114,20 @@ if (API_URL) {
     onProxyReq: (proxyReq, req, res) => {
       // Este callback se ejecuta DESPUÉS del pathRewrite
       // El proxyReq ya tiene el path reescrito
-      const targetUrl = `${API_URL}${proxyReq.path}`;
+      // IMPORTANTE: El query string se preserva automáticamente por http-proxy-middleware
+      const queryString = req.url.split('?')[1] || '';
+      const targetUrl = `${API_URL}${proxyReq.path}${queryString ? '?' + queryString : ''}`;
       
       console.log(`➡️  [${req.method}] Proxying hacia backend`);
       console.log(`   Request original: ${req.originalUrl || req.url}`);
       console.log(`   req.path: ${req.path}`);
       console.log(`   proxyReq.path (reescrito): ${proxyReq.path}`);
+      console.log(`   Query string: ${queryString || '(vacío)'}`);
       console.log(`   Target URL completa: ${targetUrl}`);
       
       // Log detallado de headers
       const authHeader = req.headers.authorization || req.headers.Authorization;
       console.log(`   Authorization header: ${authHeader ? 'PRESENTE (' + authHeader.substring(0, 20) + '...)' : 'AUSENTE'}`);
-      console.log(`   Todos los headers de auth:`, {
-        'authorization': req.headers.authorization,
-        'Authorization': req.headers.Authorization,
-        'cookie': req.headers.cookie ? 'PRESENTE' : 'AUSENTE'
-      });
       
       // Asegurar que los headers se copien correctamente
       if (authHeader) {
