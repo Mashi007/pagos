@@ -32,6 +32,13 @@ def listar_clientes(
         None, description="Buscar por nombre, cedula o telefono"
     ),
     estado: Optional[str] = Query(None, description="Filtrar por estado"),
+    cedula: Optional[str] = Query(None, description="Filtrar por cédula exacta"),
+    email: Optional[str] = Query(None, description="Filtrar por email"),
+    telefono: Optional[str] = Query(None, description="Filtrar por teléfono"),
+    ocupacion: Optional[str] = Query(None, description="Filtrar por ocupación"),
+    usuario_registro: Optional[str] = Query(None, description="Filtrar por usuario que registró"),
+    fecha_desde: Optional[str] = Query(None, description="Fecha de registro desde (YYYY-MM-DD)"),
+    fecha_hasta: Optional[str] = Query(None, description="Fecha de registro hasta (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -42,6 +49,7 @@ def listar_clientes(
         # Query base
         query = db.query(Cliente)
 
+        # Búsqueda general (nombres, cédula, teléfono)
         if search:
             search_pattern = f"%{search}%"
             query = query.filter(
@@ -52,8 +60,44 @@ def listar_clientes(
                 )
             )
 
+        # Filtros específicos
         if estado:
             query = query.filter(Cliente.estado == estado)
+        
+        if cedula:
+            query = query.filter(Cliente.cedula.ilike(f"%{cedula}%"))
+        
+        if email:
+            query = query.filter(Cliente.email.ilike(f"%{email}%"))
+        
+        if telefono:
+            query = query.filter(Cliente.telefono.ilike(f"%{telefono}%"))
+        
+        if ocupacion:
+            query = query.filter(Cliente.ocupacion.ilike(f"%{ocupacion}%"))
+        
+        if usuario_registro:
+            query = query.filter(Cliente.usuario_registro.ilike(f"%{usuario_registro}%"))
+
+        # Filtros de fecha de registro
+        if fecha_desde:
+            try:
+                from datetime import datetime
+                fecha_desde_obj = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
+                query = query.filter(Cliente.fecha_registro >= fecha_desde_obj)
+            except ValueError:
+                logger.warning(f"Fecha desde inválida: {fecha_desde}")
+        
+        if fecha_hasta:
+            try:
+                from datetime import datetime
+                fecha_hasta_obj = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
+                # Para fecha hasta, incluir todo el día (sumar 1 día y restar 1 segundo)
+                from datetime import timedelta
+                fecha_hasta_obj = fecha_hasta_obj + timedelta(days=1) - timedelta(seconds=1)
+                query = query.filter(Cliente.fecha_registro <= fecha_hasta_obj)
+            except ValueError:
+                logger.warning(f"Fecha hasta inválida: {fecha_hasta}")
 
         # Ordenamiento por fecha de registro descendente (más recientes primero)
         query = query.order_by(Cliente.fecha_registro.desc())

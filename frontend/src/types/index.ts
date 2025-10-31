@@ -152,6 +152,10 @@ export interface ClienteFilters {
   cedula?: string
   estado?: 'ACTIVO' | 'INACTIVO' | 'MORA' | 'FINALIZADO'
   estado_financiero?: string
+  email?: string
+  telefono?: string
+  ocupacion?: string
+  usuario_registro?: string
   fecha_desde?: string
   fecha_hasta?: string
   per_page?: number
