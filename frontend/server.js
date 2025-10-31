@@ -87,12 +87,24 @@ if (API_URL) {
     // Necesitamos agregarlo de vuelta para que el backend reciba /api/v1/auth/login completo
     // Cuando el proxy recibe /v1/auth/login, lo reescribimos a /api/v1/auth/login
     pathRewrite: (path, req) => {
-      // path ya viene sin /api (porque Express lo eliminó con app.use('/api', ...))
-      // Necesitamos agregarlo de vuelta para que el backend reciba /api/v1/auth/login
+      // IMPORTANTE: path NO incluye el query string (viene por separado en req.url)
+      // Express eliminó /api del path, así que path es "/v1/clientes"
+      // Necesitamos agregar /api de vuelta
       const rewritten = `/api${path}`;
-      console.log(`🔄 Path rewrite: "${path}" -> "${rewritten}" (originalUrl: ${req.originalUrl || req.url})`);
+      
+      // Log detallado para debug
+      console.log(`🔄 Path rewrite:`);
+      console.log(`   Path recibido: "${path}"`);
+      console.log(`   req.url completo: "${req.url}"`);
+      console.log(`   req.originalUrl: "${req.originalUrl || req.url}"`);
+      console.log(`   Path reescrito: "${rewritten}"`);
+      
       return rewritten;
     },
+    // Seguir redirects del backend (3xx)
+    followRedirects: true,
+    // No cambiar el protocolo
+    secure: true,
     onError: (err, req, res) => {
       console.error(`❌ Error en proxy para ${req.method} ${req.originalUrl || req.url}:`, err.message);
       if (!res.headersSent) {
@@ -107,8 +119,21 @@ if (API_URL) {
       }
     },
     onProxyReq: (proxyReq, req, res) => {
-      const targetUrl = `${API_URL}${req.originalUrl || req.url}`;
-      console.log(`➡️  [${req.method}] Proxying ${req.originalUrl || req.url} -> ${targetUrl}`);
+      // Este callback se ejecuta DESPUÉS del pathRewrite
+      // El proxyReq ya tiene el path reescrito
+      const targetUrl = `${API_URL}${proxyReq.path}`;
+      
+      console.log(`➡️  [${req.method}] Proxying hacia backend`);
+      console.log(`   Request original: ${req.originalUrl || req.url}`);
+      console.log(`   req.path: ${req.path}`);
+      console.log(`   proxyReq.path (reescrito): ${proxyReq.path}`);
+      console.log(`   Target URL completa: ${targetUrl}`);
+      console.log(`   Headers Authorization: ${req.headers.authorization ? 'PRESENTE' : 'AUSENTE'}`);
+      
+      // Asegurar que los headers se copien correctamente
+      if (req.headers.authorization) {
+        proxyReq.setHeader('Authorization', req.headers.authorization);
+      }
     },
     onProxyRes: (proxyRes, req, res) => {
       const status = proxyRes.statusCode;
