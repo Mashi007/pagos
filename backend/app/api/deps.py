@@ -43,10 +43,11 @@ def get_current_user(
 
     # Logging detallado para diagnóstico
     logger = logging.getLogger(__name__)
+    logger.info("🔐 get_current_user llamado - inicio de validación")
 
     try:
         token = credentials.credentials
-        logger.info(f"Validando token JWT - Longitud: {len(token)}")
+        logger.info(f"✅ Token recibido - Longitud: {len(token)}")
 
         payload = decode_token(token)
         logger.info(f"Payload keys: {list(payload.keys())}")
