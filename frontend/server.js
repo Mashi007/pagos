@@ -81,18 +81,22 @@ if (API_URL) {
     changeOrigin: true,
     xfwd: true,
     logLevel: 'debug',
-    // NO necesitamos filtro: app.use('/api', ...) ya garantiza que solo rutas /api/* lleguen aquí
-    // Express elimina el prefijo /api antes de pasar al middleware, así que pathname será /v1/auth/login
-    // IMPORTANTE: Cuando usas app.use('/api', ...), Express elimina /api del path
-    // Necesitamos agregarlo de vuelta para que el backend reciba /api/v1/auth/login completo
-    // Cuando el proxy recibe /v1/auth/login, lo reescribimos a /api/v1/auth/login
+    // Filtrar solo rutas que empiecen con /api
+    filter: (pathname, req) => {
+      const matches = pathname.startsWith('/api');
+      if (matches) {
+        console.log(`🔍 Filter: "${pathname}" -> MATCH`);
+      }
+      return matches;
+    },
+    // IMPORTANTE: Con filter, el path ya incluye /api, no necesitamos pathRewrite
+    // El path que llega es "/api/v1/clientes", lo mantenemos tal cual
     pathRewrite: (path, req) => {
-      // PROBLEMA DETECTADO: path viene con query string incluido en algunos casos
-      // Necesitamos extraer solo el path sin query string
-      const pathOnly = path.split('?')[0]; // Remover query string si está presente
+      // Extraer solo el path sin query string
+      const pathOnly = path.split('?')[0];
       
       // Con filter, el path ya incluye /api, así que pathOnly es "/api/v1/clientes"
-      // Lo mantenemos tal cual, sin agregar /api de nuevo
+      // Lo mantenemos tal cual
       const rewritten = pathOnly;
       
       // Log detallado para debug
