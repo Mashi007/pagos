@@ -149,7 +149,19 @@ if (API_URL) {
   // Aplicar a todas las rutas que empiecen con /api
   // IMPORTANTE: Debe ser ANTES de express.static y otros middlewares
   // http-proxy-middleware devuelve un middleware que se puede usar directamente
-  app.use('/api', proxyMiddleware);
+  
+  // Wrapper para capturar errores silenciosos
+  app.use('/api', (req, res, next) => {
+    console.log(`🔄 Proxy middleware ejecutándose para: ${req.method} ${req.path}`);
+    try {
+      proxyMiddleware(req, res, next);
+    } catch (error) {
+      console.error(`❌ Error al ejecutar proxy middleware:`, error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal proxy error', message: error.message });
+      }
+    }
+  });
   
   // También registrar explícitamente para debug
   console.log('✅ Proxy middleware registrado para rutas /api/*');
