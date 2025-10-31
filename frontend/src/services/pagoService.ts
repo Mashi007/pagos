@@ -4,13 +4,15 @@ export interface Pago {
   id: number
   cedula_cliente: string
   prestamo_id: number | null
-  fecha_pago: string
-  fecha_registro: string
+  fecha_pago: string | Date
   monto_pagado: number
   numero_documento: string
   institucion_bancaria: string | null
   estado: string
+  fecha_registro: string | Date | null
+  fecha_conciliacion: string | Date | null
   conciliado: boolean
+  usuario_registro: string
   notas: string | null
   documento_nombre: string | null
   documento_tipo: string | null
@@ -81,8 +83,8 @@ class PagoService {
     return await apiClient.put(`${this.baseUrl}/${id}`, data)
   }
 
-  async getAuditoria(pagoId: number): Promise<any[]> {
-    return await apiClient.get(`${this.baseUrl}/auditoria/${pagoId}`)
+  async deletePago(id: number): Promise<void> {
+    return await apiClient.delete(`${this.baseUrl}/${id}`)
   }
 
   async uploadExcel(file: File): Promise<any> {
@@ -117,6 +119,23 @@ class PagoService {
     
     const queryString = params.toString()
     return await apiClient.get(`${this.baseUrl}/stats${queryString ? '?' + queryString : ''}`)
+  }
+
+  // Obtener KPIs de pagos (mes y año específicos o actual)
+  async getKPIs(mes?: number, año?: number): Promise<{
+    montoCobradoMes: number
+    saldoPorCobrar: number
+    clientesEnMora: number
+    clientesAlDia: number
+    mes: number
+    año: number
+  }> {
+    const params = new URLSearchParams()
+    if (mes !== undefined) params.append('mes', mes.toString())
+    if (año !== undefined) params.append('año', año.toString())
+    
+    const queryString = params.toString()
+    return await apiClient.get(`${this.baseUrl}/kpis${queryString ? '?' + queryString : ''}`)
   }
 
   // Obtener últimos pagos por cédula (resumen)

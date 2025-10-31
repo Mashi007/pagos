@@ -579,6 +579,131 @@ def registrar_auditoria_pago(
     db.commit()
 
 
+@router.get("/kpis")
+def obtener_kpis_pagos(
+    mes: Optional[int] = Query(None, description="Mes (1-12), default: mes actual"),
+    año: Optional[int] = Query(None, description="Año, default: año actual"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    KPIs específicos para el módulo de Pagos
+    
+    Devuelve:
+    - montoCobradoMes: Suma de todos los pagos del mes especificado
+    - saldoPorCobrar: Suma de capital_pendiente + interes_pendiente + monto_mora de todas las cuotas no pagadas
+    - clientesEnMora: Conteo de clientes únicos con cuotas vencidas y no pagadas
+    - clientesAlDia: Conteo de clientes únicos sin cuotas vencidas sin pagar
+    
+    Los KPIs son fijos por mes (mes/año especificados o mes/año actual)
+    """
+    try:
+        from datetime import date, datetime
+        
+        # Determinar mes y año (default: mes/año actual)
+        hoy = date.today()
+        mes_consulta = mes if mes is not None else hoy.month
+        año_consulta = año if año is not None else hoy.year
+        
+        # Validar mes
+        if mes_consulta < 1 or mes_consulta > 12:
+            raise HTTPException(status_code=400, detail="El mes debe estar entre 1 y 12")
+        
+        # Fecha inicio y fin del mes
+        fecha_inicio_mes = date(año_consulta, mes_consulta, 1)
+        # Calcular último día del mes
+        if mes_consulta == 12:
+            fecha_fin_mes = date(año_consulta + 1, 1, 1)
+        else:
+            fecha_fin_mes = date(año_consulta, mes_consulta + 1, 1)
+        
+        logger.info(f"📊 [kpis_pagos] Calculando KPIs para mes {mes_consulta}/{año_consulta}")
+        
+        # 1. MONTO COBRADO EN EL MES
+        # Suma de todos los pagos del mes especificado
+        monto_cobrado_mes = (
+            db.query(func.sum(Pago.monto_pagado))
+            .filter(
+                Pago.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
+                Pago.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
+            )
+            .scalar()
+            or Decimal("0.00")
+        )
+        
+        logger.info(f"💰 [kpis_pagos] Monto cobrado en el mes: {monto_cobrado_mes}")
+        
+        # 2. SALDO POR COBRAR
+        # Suma de capital_pendiente + interes_pendiente + monto_mora de todas las cuotas no pagadas
+        saldo_por_cobrar = (
+            db.query(
+                func.sum(
+                    func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
+                    + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
+                    + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
+                )
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.estado != "PAGADO",
+                Prestamo.estado == "APROBADO",
+            )
+            .scalar()
+            or Decimal("0.00")
+        )
+        
+        logger.info(f"💳 [kpis_pagos] Saldo por cobrar: {saldo_por_cobrar}")
+        
+        # 3. CLIENTES EN MORA
+        # Clientes únicos (distinct cedula) con cuotas vencidas (fecha_vencimiento < hoy) y no pagadas
+        clientes_en_mora = (
+            db.query(func.count(func.distinct(Prestamo.cedula)))
+            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+                Prestamo.estado == "APROBADO",
+            )
+            .scalar()
+            or 0
+        )
+        
+        logger.info(f"⚠️ [kpis_pagos] Clientes en mora: {clientes_en_mora}")
+        
+        # 4. CLIENTES AL DÍA
+        # Clientes únicos que tienen préstamos aprobados pero NO tienen cuotas vencidas sin pagar
+        # Es decir: clientes con préstamos aprobados que no están en la lista de clientes en mora
+        # O clientes que tienen todas sus cuotas vencidas pagadas o no tienen cuotas vencidas
+        
+        # Primero obtener todos los clientes con préstamos aprobados
+        todos_clientes_aprobados = (
+            db.query(func.count(func.distinct(Prestamo.cedula)))
+            .filter(Prestamo.estado == "APROBADO")
+            .scalar()
+            or 0
+        )
+        
+        # Clientes al día = total clientes aprobados - clientes en mora
+        # (Un cliente al día es uno que tiene préstamos aprobados pero no está en mora)
+        clientes_al_dia = max(0, todos_clientes_aprobados - clientes_en_mora)
+        
+        logger.info(f"✅ [kpis_pagos] Clientes al día: {clientes_al_dia} (de {todos_clientes_aprobados} totales)")
+        
+        return {
+            "montoCobradoMes": float(monto_cobrado_mes),
+            "saldoPorCobrar": float(saldo_por_cobrar),
+            "clientesEnMora": clientes_en_mora,
+            "clientesAlDia": clientes_al_dia,
+            "mes": mes_consulta,
+            "año": año_consulta,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ [kpis_pagos] Error obteniendo KPIs: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno al obtener KPIs: {str(e)}")
+
+
 @router.get("/stats")
 def obtener_estadisticas_pagos(
     analista: Optional[str] = Query(None, description="Filtrar por analista"),

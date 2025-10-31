@@ -23,6 +23,7 @@ import { pagoService, type Pago } from '@/services/pagoService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploader } from './ExcelUploader'
 import { PagosListResumen } from './PagosListResumen'
+import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { toast } from 'sonner'
 
 export function PagosList() {
@@ -87,6 +88,9 @@ export function PagosList() {
           </Button>
         </div>
       </div>
+
+      {/* KPIs de Pagos */}
+      <PagosKPIsNuevo />
 
       {/* Pestañas */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
