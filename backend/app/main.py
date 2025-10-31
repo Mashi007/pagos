@@ -121,6 +121,7 @@ app = FastAPI(
     description="API para gestión de pagos y préstamos",
     version="1.0.0",
     lifespan=lifespan,
+    redirect_slashes=False,  # Desactivar redirects automáticos de barras finales
 )
 
 # ============================================
