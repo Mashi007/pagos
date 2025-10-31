@@ -7,13 +7,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-// URL del backend - Prioridad: VITE_API_BASE_URL > VITE_API_URL > localhost
-const API_URL = process.env.VITE_API_BASE_URL || process.env.VITE_API_URL || 'http://localhost:8000';
+// URL del backend - Prioridad: API_BASE_URL (runtime) > VITE_API_BASE_URL (build-time fallback) > VITE_API_URL > localhost
+// IMPORTANTE: En Render, usar API_BASE_URL (sin VITE_ prefix) para runtime de Node.js
+const API_URL = process.env.API_BASE_URL || process.env.VITE_API_BASE_URL || process.env.VITE_API_URL || 'http://localhost:8000';
 
 // Log de la URL configurada para debug
 console.log(`🔍 API_URL configurado: ${API_URL || 'NO CONFIGURADO'}`);
-console.log(`🔍 VITE_API_BASE_URL: ${process.env.VITE_API_BASE_URL || 'NO SET'}`);
-console.log(`🔍 VITE_API_URL: ${process.env.VITE_API_URL || 'NO SET'}`);
+console.log(`🔍 API_BASE_URL (runtime): ${process.env.API_BASE_URL || 'NO SET'}`);
+console.log(`🔍 VITE_API_BASE_URL (build-time): ${process.env.VITE_API_BASE_URL || 'NO SET'}`);
+console.log(`🔍 VITE_API_URL (build-time): ${process.env.VITE_API_URL || 'NO SET'}`);
 
 // ============================================
 // SECURITY HEADERS - OWASP Best Practices

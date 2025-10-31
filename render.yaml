@@ -39,3 +39,5 @@ services:
         value: 18.17.0
       - key: VITE_API_URL
         value: https://pagos-f2qf.onrender.com
+      - key: API_BASE_URL
+        value: https://pagos-f2qf.onrender.com
