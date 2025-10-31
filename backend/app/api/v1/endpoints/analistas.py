@@ -52,13 +52,17 @@ def listar_analistas(
         pages = (total + limit - 1) // limit if limit > 0 else 0
         page = (skip // limit) + 1 if limit > 0 else 1
 
-        return AnalistaListResponse(
+        logger.info(f"✅ Listando {len(analistas)} analistas de {total} totales (página {page}/{pages})")
+        
+        response = AnalistaListResponse(
             items=analistas,
             total=total,
             page=page,
             size=limit,
             pages=pages,
         )
+        
+        return response
 
     except Exception as e:
         logger.error(f"Error listando analistas: {e}")
