@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -189,8 +190,19 @@ def update_user(
                 detail="No tienes permisos para actualizar este usuario",
             )
 
-        # Actualizar campos
+        # Validar email único si se está actualizando
         update_data = user_data.model_dump(exclude_unset=True)
+        if "email" in update_data and update_data["email"] != user.email:
+            existing_user = db.query(User).filter(
+                User.email == update_data["email"],
+                User.id != user_id
+            ).first()
+            if existing_user:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El email ya está registrado por otro usuario"
+                )
+        
         logger.info(f"Actualizando usuario {user_id} con campos: {list(update_data.keys())}")
         
         for field, value in update_data.items():
@@ -210,26 +222,59 @@ def update_user(
             elif field == "is_admin":
                 # Actualizar tanto is_admin como rol
                 setattr(user, "is_admin", value)
-                setattr(user, "rol", "ADMIN" if value else "USER")
+                # Actualizar rol según is_admin - solo valores válidos: ADMIN o USER
+                nuevo_rol = "ADMIN" if value else "USER"
+                setattr(user, "rol", nuevo_rol)
+                logger.debug(f"Actualizado is_admin={value}, rol={nuevo_rol}")
             elif field == "rol":
-                # Ignorar campo rol directamente, se maneja con is_admin
+                # Ignorar campo rol directamente, se maneja automáticamente con is_admin
+                logger.debug("Campo 'rol' ignorado, se maneja con is_admin")
                 continue
-            else:
-                # Actualizar otros campos válidos
+            elif field in ["email", "nombre", "apellido", "cargo", "is_active"]:
+                # Campos válidos del modelo User que se pueden actualizar directamente
                 try:
+                    # Validación especial para email (ya validado arriba)
+                    if field == "email" and value:
+                        value = value.lower().strip()  # Normalizar email
                     setattr(user, field, value)
                     logger.debug(f"Campo '{field}' actualizado correctamente")
                 except Exception as field_error:
-                    logger.error(f"Error actualizando campo '{field}': {field_error}")
+                    logger.error(f"Error actualizando campo '{field}': {field_error}", exc_info=True)
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Error al actualizar campo '{field}': {str(field_error)}"
                     )
+            else:
+                # Campo no reconocido - omitir con advertencia
+                logger.warning(f"Campo '{field}' no se puede actualizar directamente, omitiendo...")
+                continue
 
-        db.commit()
-        db.refresh(user)
+        # Intentar commit con manejo de errores de BD
+        try:
+            db.commit()
+            db.refresh(user)
+            logger.info(f"Usuario {user_id} actualizado exitosamente")
+        except Exception as commit_error:
+            db.rollback()
+            logger.error(f"Error en commit al actualizar usuario {user_id}: {commit_error}", exc_info=True)
+            # Verificar si es un error de constraint (ej: email duplicado, rol inválido)
+            error_str = str(commit_error).lower()
+            if "unique constraint" in error_str or "duplicate" in error_str:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El email ya está registrado por otro usuario"
+                )
+            elif "check constraint" in error_str or "invalid" in error_str:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Error de validación: {str(commit_error)}"
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error al guardar cambios: {str(commit_error)}"
+                )
         
-        logger.info(f"Usuario {user_id} actualizado exitosamente")
         return user
 
     except HTTPException:
@@ -239,6 +284,8 @@ def update_user(
         error_detail = f"Error actualizando usuario: {str(e)}"
         logger.error(error_detail, exc_info=True)
         # Incluir más detalles en el error para debugging
+        error_trace = traceback.format_exc()
+        logger.error(f"Traceback completo:\n{error_trace}")
         raise HTTPException(
             status_code=500, 
             detail=f"Error interno del servidor: {str(e)}"
