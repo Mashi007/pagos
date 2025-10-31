@@ -87,14 +87,18 @@ if (API_URL) {
     // Necesitamos agregarlo de vuelta para que el backend reciba /api/v1/auth/login completo
     // Cuando el proxy recibe /v1/auth/login, lo reescribimos a /api/v1/auth/login
     pathRewrite: (path, req) => {
-      // IMPORTANTE: path NO incluye el query string (viene por separado en req.url)
-      // Express eliminó /api del path, así que path es "/v1/clientes"
+      // PROBLEMA DETECTADO: path viene con query string incluido en algunos casos
+      // Necesitamos extraer solo el path sin query string
+      const pathOnly = path.split('?')[0]; // Remover query string si está presente
+      
+      // Express eliminó /api del path, así que pathOnly es "/v1/clientes"
       // Necesitamos agregar /api de vuelta
-      const rewritten = `/api${path}`;
+      const rewritten = `/api${pathOnly}`;
       
       // Log detallado para debug
       console.log(`🔄 Path rewrite:`);
-      console.log(`   Path recibido: "${path}"`);
+      console.log(`   Path recibido (con query?): "${path}"`);
+      console.log(`   Path sin query: "${pathOnly}"`);
       console.log(`   req.url completo: "${req.url}"`);
       console.log(`   req.originalUrl: "${req.originalUrl || req.url}"`);
       console.log(`   Path reescrito: "${rewritten}"`);
