@@ -50,16 +50,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Servir archivos estáticos con cache headers
-app.use(express.static(path.join(__dirname, 'dist'), {
-  maxAge: '1d',
-  etag: true,
-  lastModified: true
-}));
-
 // ============================================
 // PROXY /api -> Backend (Render)
 // ============================================
+// IMPORTANTE: Proxy debe ir ANTES de servir archivos estáticos
 if (API_URL) {
   console.log(`➡️  Proxy de /api hacia: ${API_URL}`);
   app.use(
@@ -68,9 +62,33 @@ if (API_URL) {
       target: API_URL,
       changeOrigin: true,
       xfwd: true,
+      logLevel: 'debug',
+      onError: (err, req, res) => {
+        console.error('❌ Error en proxy:', err.message);
+        res.status(502).json({
+          error: 'Proxy error',
+          message: err.message,
+          target: API_URL
+        });
+      },
+      onProxyReq: (proxyReq, req, res) => {
+        console.log(`➡️  Proxying ${req.method} ${req.path} -> ${API_URL}${req.path}`);
+      },
+      onProxyRes: (proxyRes, req, res) => {
+        console.log(`✅ Proxy response: ${proxyRes.statusCode} para ${req.path}`);
+      }
     })
   );
+} else {
+  console.warn('⚠️  API_URL no configurado. Proxy deshabilitado.');
 }
+
+// Servir archivos estáticos con cache headers (DESPUÉS del proxy)
+app.use(express.static(path.join(__dirname, 'dist'), {
+  maxAge: '1d',
+  etag: true,
+  lastModified: true
+}));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
