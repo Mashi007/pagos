@@ -308,8 +308,9 @@ export function Dashboard() {
     initialData: mockData, // Datos iniciales mientras carga
   })
 
-  // Usar datos del backend si están disponibles, sino usar mock
-  const data: DashboardData = dashboardData || mockData
+  // ✅ Usar datos del backend si están disponibles, solo mock si hay error real
+  // dashboardData será undefined mientras carga, pero luego tendrá datos o mockData si hubo error
+  const data: DashboardData = dashboardData ?? mockData
   const isLoadingData = loadingDashboard || loadingKpis
 
   const calcularVariacion = (actual: number, anterior?: number) => {

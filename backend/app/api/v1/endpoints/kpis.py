@@ -111,7 +111,7 @@ def kpis_analistas(
     analistas_clientes = (
         db.query(
             Prestamo.analista.label("nombre_analista"),
-            func.count(func.distinct(Cliente.id)).label("total_clientes")
+            func.count(func.distinct(Cliente.id)).label("total_clientes"),
         )
         .join(Cliente, Prestamo.cedula == Cliente.cedula)
         .filter(Prestamo.analista.isnot(None), Prestamo.analista != "")
@@ -123,7 +123,10 @@ def kpis_analistas(
 
     return {
         "analistas_clientes": [
-            {"nombre": analista.nombre_analista, "total_clientes": analista.total_clientes}
+            {
+                "nombre": analista.nombre_analista,
+                "total_clientes": analista.total_clientes,
+            }
             for analista in analistas_clientes
         ]
     }
@@ -166,13 +169,13 @@ def kpis_prestamos(
 ):
     """
     KPIs específicos para el componente PrestamosKPIs
-    
+
     Devuelve:
     - totalFinanciamiento: Suma de todos los total_financiamiento
     - totalPrestamos: Conteo total de préstamos
     - promedioMonto: Promedio del monto financiado
     - totalCarteraVigente: Suma de total_financiamiento solo de préstamos APROBADOS
-    
+
     ✅ SOPORTA FILTROS AUTOMÁTICOS mediante FiltrosDashboard
     """
     try:
@@ -181,35 +184,38 @@ def kpis_prestamos(
         base_query = FiltrosDashboard.aplicar_filtros_prestamo(
             base_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        
+
         # Total financiamiento (suma de todos los préstamos)
         total_financiamiento_query = base_query.with_entities(
             func.sum(Prestamo.total_financiamiento)
         )
         total_financiamiento = total_financiamiento_query.scalar() or Decimal("0")
-        
+
         # Total préstamos (conteo)
         total_prestamos_query = base_query.with_entities(func.count(Prestamo.id))
         total_prestamos = total_prestamos_query.scalar() or 0
-        
+
         # Promedio monto
         promedio_monto = (
             float(total_financiamiento / total_prestamos)
             if total_prestamos > 0
             else 0.0
         )
-        
+
         # Cartera vigente (solo préstamos APROBADOS)
         cartera_vigente_query = base_query.filter(Prestamo.estado == "APROBADO")
         cartera_vigente_query = FiltrosDashboard.aplicar_filtros_prestamo(
-            cartera_vigente_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            cartera_vigente_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
         )
-        total_cartera_vigente = (
-            cartera_vigente_query.with_entities(
-                func.sum(Prestamo.total_financiamiento)
-            ).scalar() or Decimal("0")
-        )
-        
+        total_cartera_vigente = cartera_vigente_query.with_entities(
+            func.sum(Prestamo.total_financiamiento)
+        ).scalar() or Decimal("0")
+
         return {
             "totalFinanciamiento": float(total_financiamiento),
             "totalPrestamos": total_prestamos,
