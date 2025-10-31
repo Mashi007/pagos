@@ -1,14 +1,17 @@
-import { useState } from 'react'
-import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { usePrestamos, useDeletePrestamo, prestamoKeys } from '@/hooks/usePrestamos'
+import { usePrestamos, useDeletePrestamo, prestamoKeys, type PrestamoFilters } from '@/hooks/usePrestamos'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useConcesionariosActivos } from '@/hooks/useConcesionarios'
+import { useAnalistasActivos } from '@/hooks/useAnalistas'
+import { useModelosVehiculosActivos } from '@/hooks/useModelosVehiculos'
 import { CrearPrestamoForm } from './CrearPrestamoForm'
 import { PrestamosKPIs } from './PrestamosKPIs'
 import { EvaluacionRiesgoForm } from './EvaluacionRiesgoForm'
@@ -18,8 +21,17 @@ import { formatDate } from '@/utils'
 
 export function PrestamosList() {
   const [page, setPage] = useState(1)
-  const [search, setSearch] = useState('')
-  const [estado, setEstado] = useState<string | undefined>(undefined)
+  const [filters, setFilters] = useState<PrestamoFilters>({
+    search: '',
+    estado: undefined,
+    cedula: '',
+    analista: undefined,
+    concesionario: undefined,
+    modelo: undefined,
+    fecha_inicio: undefined,
+    fecha_fin: undefined,
+  })
+  const [showFilters, setShowFilters] = useState(false)
   const [showCrearPrestamo, setShowCrearPrestamo] = useState(false)
   const [showEvaluacion, setShowEvaluacion] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
@@ -31,9 +43,55 @@ export function PrestamosList() {
   const [deletePrestamoId, setDeletePrestamoId] = useState<number | null>(null)
 
   const queryClient = useQueryClient()
-  const { data, isLoading, error } = usePrestamos({ search, estado }, page)
+  const { data, isLoading, error } = usePrestamos(filters, page)
   const deletePrestamo = useDeletePrestamo()
   const { canEditPrestamo, canDeletePrestamo, canApprovePrestamo, canViewEvaluacionRiesgo } = usePermissions()
+  
+  // Obtener opciones para los selects
+  const { data: concesionarios = [] } = useConcesionariosActivos()
+  const { data: analistas = [] } = useAnalistasActivos()
+  const { data: modelosVehiculos = [] } = useModelosVehiculosActivos()
+
+  // Función para limpiar filtros
+  const handleClearFilters = () => {
+    setFilters({
+      search: '',
+      estado: undefined,
+      cedula: '',
+      analista: undefined,
+      concesionario: undefined,
+      modelo: undefined,
+      fecha_inicio: undefined,
+      fecha_fin: undefined,
+    })
+    setPage(1)
+  }
+
+  // Contar filtros activos
+  const activeFiltersCount = [
+    filters.search,
+    filters.estado,
+    filters.cedula,
+    filters.analista,
+    filters.concesionario,
+    filters.modelo,
+    filters.fecha_inicio,
+    filters.fecha_fin,
+  ].filter(Boolean).length
+
+  // Efecto para resetear página cuando cambien los filtros
+  useEffect(() => {
+    setPage(1)
+  }, [
+    filters.search,
+    filters.estado,
+    filters.cedula,
+    filters.analista,
+    filters.concesionario,
+    filters.modelo,
+    filters.fecha_inicio,
+    filters.fecha_fin,
+  ])
 
   const getEstadoBadge = (estado: string) => {
     const badges = {
@@ -190,32 +248,213 @@ export function PrestamosList() {
 
       {/* Filtros y búsqueda */}
       <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Filter className="h-5 w-5 text-gray-600" />
+              <CardTitle>Filtros de Búsqueda</CardTitle>
+              {activeFiltersCount > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {activeFiltersCount} {activeFiltersCount === 1 ? 'filtro activo' : 'filtros activos'}
+                </Badge>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {activeFiltersCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={handleClearFilters}>
+                  <X className="h-4 w-4 mr-1" />
+                  Limpiar
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFilters(!showFilters)}
+              >
+                {showFilters ? 'Ocultar' : 'Mostrar'} filtros
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
         <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                <Input
-                  placeholder="Buscar por nombre, cédula..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
+          <div className="space-y-4">
+            {/* Fila 1: Búsqueda general */}
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                  <Input
+                    placeholder="Buscar por nombre..."
+                    value={filters.search || ''}
+                    onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                    className="pl-10"
+                  />
+                </div>
               </div>
             </div>
-            <Select value={estado || 'ALL'} onValueChange={(value) => setEstado(value === 'ALL' ? undefined : value)}>
-              <SelectTrigger className="w-[200px]">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Todos los estados</SelectItem>
-                <SelectItem value="DRAFT">🔵 Borrador</SelectItem>
-                <SelectItem value="EN_REVISION">🟡 En Revisión</SelectItem>
-                <SelectItem value="APROBADO">🟢 Aprobado</SelectItem>
-                <SelectItem value="RECHAZADO">🔴 Rechazado</SelectItem>
-              </SelectContent>
-            </Select>
+
+            {/* Filtros expandibles */}
+            {showFilters && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 pt-4 border-t">
+                {/* Cédula */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Cédula de identidad
+                  </label>
+                  <Input
+                    placeholder="Cédula de identidad"
+                    value={filters.cedula || ''}
+                    onChange={(e) => setFilters({ ...filters, cedula: e.target.value })}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        setPage(1)
+                      }
+                    }}
+                  />
+                </div>
+
+                {/* Estado */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Estado
+                  </label>
+                  <Select
+                    value={filters.estado || 'ALL'}
+                    onValueChange={(value) =>
+                      setFilters({ ...filters, estado: value === 'ALL' ? undefined : value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Todos los estados</SelectItem>
+                      <SelectItem value="DRAFT">🔵 Borrador</SelectItem>
+                      <SelectItem value="EN_REVISION">🟡 En Revisión</SelectItem>
+                      <SelectItem value="EVALUADO">🔷 Evaluado</SelectItem>
+                      <SelectItem value="APROBADO">🟢 Aprobado</SelectItem>
+                      <SelectItem value="RECHAZADO">🔴 Rechazado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Fecha Inicio */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Fecha Inicio
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Input
+                      type="date"
+                      placeholder="dd / mm / aaaa"
+                      value={filters.fecha_inicio || ''}
+                      onChange={(e) =>
+                        setFilters({ ...filters, fecha_inicio: e.target.value || undefined })
+                      }
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
+                {/* Fecha Fin */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Fecha Fin
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Input
+                      type="date"
+                      placeholder="dd / mm / aaaa"
+                      value={filters.fecha_fin || ''}
+                      onChange={(e) =>
+                        setFilters({ ...filters, fecha_fin: e.target.value || undefined })
+                      }
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
+                {/* Analista */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Analista
+                  </label>
+                  <Select
+                    value={filters.analista || 'ALL'}
+                    onValueChange={(value) =>
+                      setFilters({ ...filters, analista: value === 'ALL' ? undefined : value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Analista" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Todos los analistas</SelectItem>
+                      {analistas.map((analista) => (
+                        <SelectItem key={analista.id} value={analista.nombre}>
+                          {analista.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Concesionario */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Concesionario
+                  </label>
+                  <Select
+                    value={filters.concesionario || 'ALL'}
+                    onValueChange={(value) =>
+                      setFilters({
+                        ...filters,
+                        concesionario: value === 'ALL' ? undefined : value,
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Concesionario" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Todos los concesionarios</SelectItem>
+                      {concesionarios.map((concesionario) => (
+                        <SelectItem key={concesionario.id} value={concesionario.nombre}>
+                          {concesionario.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Modelo de Vehículo */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    Modelo de Vehículo
+                  </label>
+                  <Select
+                    value={filters.modelo || 'ALL'}
+                    onValueChange={(value) =>
+                      setFilters({ ...filters, modelo: value === 'ALL' ? undefined : value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Modelo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Todos los modelos</SelectItem>
+                      {modelosVehiculos.map((modelo) => (
+                        <SelectItem key={modelo.id} value={modelo.nombre}>
+                          {modelo.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -21,9 +21,21 @@ export const prestamoKeys = {
   auditoria: (prestamoId: number) => [...prestamoKeys.all, 'auditoria', prestamoId] as const,
 }
 
+// Tipo para filtros de préstamos
+export interface PrestamoFilters {
+  search?: string
+  estado?: string
+  cedula?: string
+  analista?: string
+  concesionario?: string
+  modelo?: string
+  fecha_inicio?: string
+  fecha_fin?: string
+}
+
 // Hook para obtener lista de préstamos
 export function usePrestamos(
-  filters?: { search?: string; estado?: string },
+  filters?: PrestamoFilters,
   page: number = 1,
   perPage: number = DEFAULT_PER_PAGE
 ) {

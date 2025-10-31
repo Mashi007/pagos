@@ -335,6 +335,12 @@ def listar_prestamos(
     per_page: int = Query(20, ge=1, le=1000),
     search: Optional[str] = Query(None),
     estado: Optional[str] = Query(None),
+    cedula: Optional[str] = Query(None, description="Filtrar por cédula"),
+    analista: Optional[str] = Query(None, description="Filtrar por analista"),
+    concesionario: Optional[str] = Query(None, description="Filtrar por concesionario"),
+    modelo: Optional[str] = Query(None, description="Filtrar por modelo de vehículo"),
+    fecha_inicio: Optional[date] = Query(None, description="Fecha de inicio (fecha_registro)"),
+    fecha_fin: Optional[date] = Query(None, description="Fecha de fin (fecha_registro)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -377,6 +383,28 @@ def listar_prestamos(
 
         if estado:
             query = query.filter(Prestamo.estado == estado)
+
+        if cedula:
+            # Normalizar cédula para búsqueda
+            cedula_normalizada = cedula.strip().upper()
+            query = query.filter(Prestamo.cedula == cedula_normalizada)
+
+        if analista:
+            query = query.filter(Prestamo.analista == analista)
+
+        if concesionario:
+            query = query.filter(Prestamo.concesionario == concesionario)
+
+        if modelo:
+            query = query.filter(Prestamo.modelo_vehiculo == modelo)
+
+        if fecha_inicio:
+            query = query.filter(Prestamo.fecha_registro >= fecha_inicio)
+
+        if fecha_fin:
+            # Incluir todo el día de fecha_fin
+            fecha_fin_completa = datetime.combine(fecha_fin, datetime.max.time())
+            query = query.filter(Prestamo.fecha_registro <= fecha_fin_completa)
 
         # Paginación
         try:

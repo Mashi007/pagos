@@ -11,7 +11,8 @@ import {
   Phone,
   Mail,
   User,
-  AlertCircle
+  AlertCircle,
+  Calendar
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -269,25 +270,145 @@ export function ClientesList() {
               exit={{ opacity: 0, height: 0 }}
               className="mt-4 pt-4 border-t"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-2 block">
-                    Estado
-                  </label>
-                  <select
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    value={filters.estado || ''}
-                    onChange={(e) => handleFilterChange('estado', e.target.value || undefined)}
-                  >
-                    <option value="">Todos</option>
-                    <option value="ACTIVO">Activo</option>
-                    <option value="MORA">Mora</option>
-                    <option value="INACTIVO">Inactivo</option>
-                  </select>
-                </div>
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <Filter className="w-4 h-4" />
+                  Filtros de Búsqueda
+                </h3>
                 
-                <div className="flex items-end col-span-2">
-                  <Button variant="outline" onClick={clearFilters} className="w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {/* Cédula de identidad */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Cédula de identidad
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="Cédula de identidad"
+                      value={filters.cedula || ''}
+                      onChange={(e) => handleFilterChange('cedula', e.target.value || undefined)}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Estado */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Estado
+                    </label>
+                    <select
+                      className="w-full p-2 border border-gray-300 rounded-md bg-white"
+                      value={filters.estado || ''}
+                      onChange={(e) => handleFilterChange('estado', e.target.value || undefined)}
+                    >
+                      <option value="">Todos</option>
+                      <option value="ACTIVO">Activo</option>
+                      <option value="INACTIVO">Inactivo</option>
+                      <option value="FINALIZADO">Finalizado</option>
+                    </select>
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Email
+                    </label>
+                    <Input
+                      type="email"
+                      placeholder="Email"
+                      value={filters.email || ''}
+                      onChange={(e) => handleFilterChange('email', e.target.value || undefined)}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Teléfono */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Teléfono
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="Teléfono"
+                      value={filters.telefono || ''}
+                      onChange={(e) => handleFilterChange('telefono', e.target.value || undefined)}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Ocupación */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Ocupación
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="Ocupación"
+                      value={filters.ocupacion || ''}
+                      onChange={(e) => handleFilterChange('ocupacion', e.target.value || undefined)}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Usuario que registró */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Usuario que registró
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="Usuario que registró"
+                      value={filters.usuario_registro || ''}
+                      onChange={(e) => handleFilterChange('usuario_registro', e.target.value || undefined)}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Fecha Desde */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Fecha desde
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <Input
+                        type="date"
+                        placeholder="dd / mm / aaaa"
+                        value={filters.fecha_desde || ''}
+                        onChange={(e) => {
+                          const fecha = e.target.value
+                          // Convertir de YYYY-MM-DD a formato para backend
+                          handleFilterChange('fecha_desde', fecha || undefined)
+                        }}
+                        className="pl-10 w-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fecha Hasta */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Fecha hasta
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <Input
+                        type="date"
+                        placeholder="dd / mm / aaaa"
+                        value={filters.fecha_hasta || ''}
+                        onChange={(e) => {
+                          const fecha = e.target.value
+                          handleFilterChange('fecha_hasta', fecha || undefined)
+                        }}
+                        className="pl-10 w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Botón Limpiar Filtros */}
+                <div className="flex justify-end pt-2">
+                  <Button variant="outline" onClick={clearFilters}>
                     Limpiar Filtros
                   </Button>
                 </div>

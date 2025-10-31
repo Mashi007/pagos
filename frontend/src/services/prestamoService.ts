@@ -27,11 +27,27 @@ class PrestamoService {
 
   // Obtener lista de préstamos con filtros y paginación
   async getPrestamos(
-    filters?: { search?: string; estado?: string },
+    filters?: {
+      search?: string
+      estado?: string
+      cedula?: string
+      analista?: string
+      concesionario?: string
+      modelo?: string
+      fecha_inicio?: string
+      fecha_fin?: string
+    },
     page: number = 1,
     perPage: number = DEFAULT_PER_PAGE
   ): Promise<PaginatedResponse<Prestamo>> {
-    const params = { ...filters, page, per_page: perPage }
+    const params: any = { ...filters, page, per_page: perPage }
+    // Convertir fechas a formato ISO si existen
+    if (params.fecha_inicio) {
+      params.fecha_inicio = params.fecha_inicio
+    }
+    if (params.fecha_fin) {
+      params.fecha_fin = params.fecha_fin
+    }
     const url = buildUrl(this.baseUrl, params)
     
     const response = await apiClient.get<any>(url)

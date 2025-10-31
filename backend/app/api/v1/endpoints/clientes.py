@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
@@ -82,20 +82,17 @@ def listar_clientes(
         # Filtros de fecha de registro
         if fecha_desde:
             try:
-                from datetime import datetime
                 fecha_desde_obj = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
-                query = query.filter(Cliente.fecha_registro >= fecha_desde_obj)
+                query = query.filter(func.date(Cliente.fecha_registro) >= fecha_desde_obj)
             except ValueError:
                 logger.warning(f"Fecha desde inválida: {fecha_desde}")
         
         if fecha_hasta:
             try:
-                from datetime import datetime
                 fecha_hasta_obj = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
-                # Para fecha hasta, incluir todo el día (sumar 1 día y restar 1 segundo)
-                from datetime import timedelta
-                fecha_hasta_obj = fecha_hasta_obj + timedelta(days=1) - timedelta(seconds=1)
-                query = query.filter(Cliente.fecha_registro <= fecha_hasta_obj)
+                # Para fecha hasta, incluir todo el día
+                fecha_hasta_obj = fecha_hasta_obj + timedelta(days=1)
+                query = query.filter(func.date(Cliente.fecha_registro) < fecha_hasta_obj)
             except ValueError:
                 logger.warning(f"Fecha hasta inválida: {fecha_hasta}")
 
