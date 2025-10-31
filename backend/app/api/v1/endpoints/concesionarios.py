@@ -106,7 +106,9 @@ def list_concesionarios(
     current_user: User = Depends(get_current_user),
 ):
     # Listar concesionarios con autenticacion
-    logger.info(f"📥 [list_concesionarios] Petición recibida - skip={skip}, limit={limit}, activo={activo}, search={search}, user={current_user.email}")
+    logger.info(
+        f"📥 [list_concesionarios] Petición recibida - skip={skip}, limit={limit}, activo={activo}, search={search}, user={current_user.email}"
+    )
     try:
         query = db.query(Concesionario)
 
