@@ -132,11 +132,27 @@ if (API_URL) {
       console.log(`   req.path: ${req.path}`);
       console.log(`   proxyReq.path (reescrito): ${proxyReq.path}`);
       console.log(`   Target URL completa: ${targetUrl}`);
-      console.log(`   Headers Authorization: ${req.headers.authorization ? 'PRESENTE' : 'AUSENTE'}`);
+      
+      // Log detallado de headers
+      const authHeader = req.headers.authorization || req.headers.Authorization;
+      console.log(`   Authorization header: ${authHeader ? 'PRESENTE (' + authHeader.substring(0, 20) + '...)' : 'AUSENTE'}`);
+      console.log(`   Todos los headers de auth:`, {
+        'authorization': req.headers.authorization,
+        'Authorization': req.headers.Authorization,
+        'cookie': req.headers.cookie ? 'PRESENTE' : 'AUSENTE'
+      });
       
       // Asegurar que los headers se copien correctamente
-      if (req.headers.authorization) {
-        proxyReq.setHeader('Authorization', req.headers.authorization);
+      if (authHeader) {
+        proxyReq.setHeader('Authorization', authHeader);
+        console.log(`   ✅ Header Authorization copiado al proxy`);
+      } else {
+        console.warn(`   ⚠️  NO hay header Authorization - el backend devolverá 401/404`);
+      }
+      
+      // Copiar otros headers importantes
+      if (req.headers.cookie) {
+        proxyReq.setHeader('Cookie', req.headers.cookie);
       }
     },
     onProxyRes: (proxyRes, req, res) => {
