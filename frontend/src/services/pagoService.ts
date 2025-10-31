@@ -17,6 +17,7 @@ export interface Pago {
   documento_nombre: string | null
   documento_tipo: string | null
   documento_ruta: string | null
+  cuotas_atrasadas?: number  // ✅ Campo calculado: cuotas vencidas con pago incompleto
 }
 
 export interface PagoCreate {

@@ -86,6 +86,8 @@ def listar_pagos(
         # Serializar pagos
         pagos_serializados = []
         errores_serializacion = 0
+        hoy = date.today()
+        
         for pago in pagos:
             try:
                 # Convertir fecha_pago si es DATE a datetime si es necesario
@@ -96,6 +98,32 @@ def listar_pagos(
                 
                 # Validar con el schema
                 pago_dict = PagoResponse.model_validate(pago).model_dump()
+                
+                # ✅ Calcular cuotas atrasadas para este cliente
+                # Cuotas atrasadas = cuotas vencidas con pago incompleto (total_pagado < monto_cuota)
+                cuotas_atrasadas = 0
+                if pago.cedula_cliente:
+                    # Obtener préstamos del cliente
+                    prestamos_ids = [
+                        p.id for p in db.query(Prestamo.id)
+                        .filter(Prestamo.cedula == pago.cedula_cliente)
+                        .all()
+                    ]
+                    
+                    if prestamos_ids:
+                        cuotas_atrasadas = (
+                            db.query(func.count(Cuota.id))
+                            .filter(
+                                Cuota.prestamo_id.in_(prestamos_ids),
+                                Cuota.fecha_vencimiento < hoy,
+                                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+                            )
+                            .scalar()
+                            or 0
+                        )
+                
+                # Agregar cuotas_atrasadas al diccionario
+                pago_dict['cuotas_atrasadas'] = cuotas_atrasadas
                 pagos_serializados.append(pago_dict)
             except Exception as serialization_error:
                 errores_serializacion += 1
@@ -317,17 +345,22 @@ def listar_ultimos_pagos(
             cuotas_atrasadas = 0
             saldo_vencido: Decimal = Decimal("0.00")
             if prestamos_ids:
-                # Contar cuotas vencidas y no pagadas (según regla: fecha_vencimiento < hoy y estado != PAGADO)
+                # Contar cuotas atrasadas según regla:
+                # - fecha_vencimiento < hoy (vencida)
+                # - total_pagado < monto_cuota (pago incompleto)
+                # Esto incluye cuotas con estado ATRASADO, PARCIAL, PENDIENTE que estén vencidas e incompletas
+                hoy = date.today()
                 cuotas_atrasadas = (
                     db.query(func.count(Cuota.id))
                     .filter(
                         Cuota.prestamo_id.in_(prestamos_ids),
-                        Cuota.fecha_vencimiento < date.today(),
-                        Cuota.estado != "PAGADO",
+                        Cuota.fecha_vencimiento < hoy,
+                        Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Verificar que el pago NO esté completo
                     )
                     .scalar()
                     or 0
                 )
+                logger.info(f"📊 [ultimos_pagos] Cliente {pago.cedula_cliente}: {cuotas_atrasadas} cuotas atrasadas (vencidas e incompletas)")
                 # Suma optimizada de saldos pendientes (capital+interes+mora) de todas las cuotas no pagadas
                 # Usando func.sum para mejor performance
                 saldo_result = (
@@ -655,13 +688,14 @@ def obtener_kpis_pagos(
         logger.info(f"💳 [kpis_pagos] Saldo por cobrar: {saldo_por_cobrar}")
         
         # 3. CLIENTES EN MORA
-        # Clientes únicos (distinct cedula) con cuotas vencidas (fecha_vencimiento < hoy) y no pagadas
+        # Clientes únicos con cuotas vencidas Y con pago incompleto (total_pagado < monto_cuota)
+        # Esto asegura que pagos parciales cuenten como mora si están vencidos
         clientes_en_mora = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
                 Prestamo.estado == "APROBADO",
             )
             .scalar()
