@@ -101,6 +101,14 @@ class ClienteService {
     return response.data
   }
 
+  // Obtener estadísticas generales de todos los clientes
+  async getStats(): Promise<{ total: number; activos: number; inactivos: number; finalizados: number }> {
+    const response = await apiClient.get<ApiResponse<{ total: number; activos: number; inactivos: number; finalizados: number }>>(
+      `${this.baseUrl}/stats`
+    )
+    return response.data
+  }
+
   // Cambiar estado de cliente
   async cambiarEstado(clienteId: string, estado: Cliente['estado']): Promise<Cliente> {
     const response = await apiClient.patch<ApiResponse<Cliente>>(

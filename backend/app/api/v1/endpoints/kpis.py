@@ -3,7 +3,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -152,3 +152,72 @@ def kpis_cartera(
             for estado, total in cartera_estado
         ]
     }
+
+
+@router.get("/prestamos")
+def kpis_prestamos(
+    analista: Optional[str] = Query(None, description="Filtrar por analista"),
+    concesionario: Optional[str] = Query(None, description="Filtrar por concesionario"),
+    modelo: Optional[str] = Query(None, description="Filtrar por modelo"),
+    fecha_inicio: Optional[date] = Query(None, description="Fecha inicio"),
+    fecha_fin: Optional[date] = Query(None, description="Fecha fin"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    KPIs específicos para el componente PrestamosKPIs
+    
+    Devuelve:
+    - totalFinanciamiento: Suma de todos los total_financiamiento
+    - totalPrestamos: Conteo total de préstamos
+    - promedioMonto: Promedio del monto financiado
+    - totalCarteraVigente: Suma de total_financiamiento solo de préstamos APROBADOS
+    
+    ✅ SOPORTA FILTROS AUTOMÁTICOS mediante FiltrosDashboard
+    """
+    try:
+        # Base query para todos los préstamos
+        base_query = db.query(Prestamo)
+        base_query = FiltrosDashboard.aplicar_filtros_prestamo(
+            base_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+        
+        # Total financiamiento (suma de todos los préstamos)
+        total_financiamiento_query = base_query.with_entities(
+            func.sum(Prestamo.total_financiamiento)
+        )
+        total_financiamiento = total_financiamiento_query.scalar() or Decimal("0")
+        
+        # Total préstamos (conteo)
+        total_prestamos_query = base_query.with_entities(func.count(Prestamo.id))
+        total_prestamos = total_prestamos_query.scalar() or 0
+        
+        # Promedio monto
+        promedio_monto = (
+            float(total_financiamiento / total_prestamos)
+            if total_prestamos > 0
+            else 0.0
+        )
+        
+        # Cartera vigente (solo préstamos APROBADOS)
+        cartera_vigente_query = base_query.filter(Prestamo.estado == "APROBADO")
+        cartera_vigente_query = FiltrosDashboard.aplicar_filtros_prestamo(
+            cartera_vigente_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+        total_cartera_vigente = (
+            cartera_vigente_query.with_entities(
+                func.sum(Prestamo.total_financiamiento)
+            ).scalar() or Decimal("0")
+        )
+        
+        return {
+            "totalFinanciamiento": float(total_financiamiento),
+            "totalPrestamos": total_prestamos,
+            "promedioMonto": promedio_monto,
+            "totalCarteraVigente": float(total_cartera_vigente),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo KPIs de préstamos: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno al obtener KPIs: {str(e)}"
+        )

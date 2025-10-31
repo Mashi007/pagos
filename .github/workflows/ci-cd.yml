@@ -47,19 +47,26 @@ jobs:
         run: |
           cd ${{ env.BACKEND_DIR }}
           echo "🔍 Ejecutando flake8 - errores críticos..."
-          flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics > flake8-critical.log 2>&1 || true
+          echo "::group::Flake8 - Errores Críticos"
+          flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics 2>&1 || true
+          echo "::endgroup::"
           echo "🔍 Ejecutando flake8 - análisis completo..."
+          echo "::group::Flake8 - Análisis Completo"
+          flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          echo "::endgroup::"
+          # También guardar en archivo para artifacts
+          flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics > flake8-critical.log 2>&1 || true
           flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics > flake8-full.log 2>&1
-          cat flake8-critical.log
-          cat flake8-full.log
       
       - name: 🎨 Formateo con black
         run: |
           cd ${{ env.BACKEND_DIR }}
           echo "🎨 Ejecutando black (verificación)..."
+          echo "::group::Black - Verificación de Formato"
+          black --check --diff app/ || true
+          echo "::endgroup::"
+          # También guardar en archivo para artifacts
           black --check --diff app/ > black.log 2>&1 || true
-          echo "🎨 Log de black (verificación):"
-          cat black.log || echo "No hay cambios necesarios"
       
       - name: 🔧 Aplicar correcciones de Black automáticamente
         run: |
@@ -80,17 +87,21 @@ jobs:
         run: |
           cd ${{ env.BACKEND_DIR }}
           echo "📝 Verificando orden de imports con isort..."
+          echo "::group::Isort - Verificación de Imports"
+          isort --check-only --diff app/ || true
+          echo "::endgroup::"
+          # También guardar en archivo para artifacts
           isort --check-only --diff app/ > isort.log 2>&1 || true
-          echo "📝 Log de isort:"
-          cat isort.log || echo "Todos los imports están ordenados correctamente"
       
       - name: 🔒 Verificación de tipos con mypy
         run: |
           cd ${{ env.BACKEND_DIR }}
           echo "🔒 Ejecutando verificación de tipos con mypy..."
+          echo "::group::Mypy - Verificación de Tipos"
+          mypy app/ --ignore-missing-imports || true
+          echo "::endgroup::"
+          # También guardar en archivo para artifacts
           mypy app/ --ignore-missing-imports > mypy.log 2>&1 || true
-          echo "🔒 Log de mypy:"
-          cat mypy.log || echo "No hay errores de tipos"
       
       # Verificar que los logs existan antes de subirlos
       - name: 🔍 Verificar logs generados

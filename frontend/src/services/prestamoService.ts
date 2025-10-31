@@ -127,6 +127,25 @@ class PrestamoService {
     )
     return response
   }
+
+  // Obtener KPIs de préstamos
+  async getKPIs(filters?: {
+    analista?: string
+    concesionario?: string
+    modelo?: string
+    fecha_inicio?: string
+    fecha_fin?: string
+  }): Promise<{
+    totalFinanciamiento: number
+    totalPrestamos: number
+    promedioMonto: number
+    totalCarteraVigente: number
+  }> {
+    const params = filters || {}
+    const url = buildUrl('/api/v1/kpis/prestamos', params)
+    const response = await apiClient.get<any>(url)
+    return response
+  }
 }
 
 export const prestamoService = new PrestamoService()

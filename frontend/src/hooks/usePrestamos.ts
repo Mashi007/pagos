@@ -211,3 +211,28 @@ export function useAplicarCondicionesAprobacion() {
   })
 }
 
+// Tipo para los KPIs de préstamos
+export interface PrestamosKPIsData {
+  totalFinanciamiento: number
+  totalPrestamos: number
+  promedioMonto: number
+  totalCarteraVigente: number
+}
+
+// Hook para obtener KPIs de préstamos
+export function usePrestamosKPIs(filters?: {
+  analista?: string
+  concesionario?: string
+  modelo?: string
+  fecha_inicio?: string
+  fecha_fin?: string
+}) {
+  return useQuery({
+    queryKey: [...prestamoKeys.all, 'kpis', filters],
+    queryFn: () => prestamoService.getKPIs(filters),
+    staleTime: STALE_TIME_MEDIUM, // 5 minutos
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+  })
+}
+

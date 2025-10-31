@@ -170,7 +170,7 @@ export function PrestamosList() {
   return (
     <div className="space-y-6">
       {/* KPIs */}
-      {data && data.data && <PrestamosKPIs prestamos={data.data} />}
+      <PrestamosKPIs />
 
       {/* Encabezado */}
       <div className="flex justify-between items-center">

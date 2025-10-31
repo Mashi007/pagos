@@ -90,6 +90,49 @@ def listar_clientes(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
+@router.get("/stats")
+def obtener_estadisticas_clientes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Obtener estadísticas de clientes directamente desde la BD
+    try:
+        logger.info(f"Obteniendo estadísticas de clientes - Usuario: {current_user.email}")
+
+        # Contar total de clientes
+        total = db.query(Cliente).count()
+
+        # Contar por estado
+        activos = (
+            db.query(Cliente)
+            .filter(Cliente.estado == "ACTIVO")
+            .count()
+        )
+
+        inactivos = (
+            db.query(Cliente)
+            .filter(Cliente.estado == "INACTIVO")
+            .count()
+        )
+
+        finalizados = (
+            db.query(Cliente)
+            .filter(Cliente.estado == "FINALIZADO")
+            .count()
+        )
+
+        return {
+            "total": total,
+            "activos": activos,
+            "inactivos": inactivos,
+            "finalizados": finalizados,
+        }
+
+    except Exception as e:
+        logger.error(f"Error en obtener_estadisticas_clientes: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
 @router.get("/{cliente_id}", response_model=ClienteResponse)
 def obtener_cliente(
     cliente_id: int = Path(..., description="ID del cliente"),
