@@ -117,8 +117,27 @@ export function Usuarios() {
       setIsSubmitting(true)
       
       if (editingUsuario) {
-        // Actualizar usuario existente
-        await userService.actualizarUsuario(editingUsuario.id, formData)
+        // Actualizar usuario existente - construir UserUpdate correctamente
+        const updateData: any = {
+          email: formData.email,
+          nombre: formData.nombre,
+          apellido: formData.apellido,
+          is_admin: formData.is_admin,
+          is_active: formData.is_active,
+        }
+        
+        // Incluir cargo solo si el usuario original tenía cargo (no el default)
+        // Como no hay campo para editar cargo, mantenemos el valor original si existe
+        if (editingUsuario.cargo && editingUsuario.cargo !== 'Usuario') {
+          updateData.cargo = editingUsuario.cargo
+        }
+        
+        // Incluir password solo si se proporcionó uno nuevo (no vacío)
+        if (formData.password && formData.password.trim() !== '') {
+          updateData.password = formData.password
+        }
+        
+        await userService.actualizarUsuario(editingUsuario.id, updateData)
         toast.success('Usuario actualizado exitosamente')
       } else {
         // Crear nuevo usuario
@@ -145,6 +164,7 @@ export function Usuarios() {
       apellido: '',
       is_admin: false,  // Cambio clave: rol → is_admin
       password: '',
+      cargo: 'Usuario', // Valor por defecto
       is_active: true
     })
   }
