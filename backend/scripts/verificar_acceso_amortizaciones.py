@@ -20,8 +20,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from app.core.config import settings
 from app.models.prestamo import Prestamo
 from app.models.amortizacion import Cuota
-from sqlalchemy import func, desc, text, create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import func, desc, text, create_engine  # type: ignore
+from sqlalchemy.orm import sessionmaker  # type: ignore
 
 def safe_str(value):
     """Convierte un valor a string de forma segura manejando errores de codificación"""

@@ -68,7 +68,8 @@ $excludedFolders = @(
     "frontend",
     "scripts",
     "node_modules",
-    ".git"
+    ".git",
+    ".venv"
 )
 
 # Archivos que no deben moverse

@@ -22,7 +22,8 @@ $allowedMdFolders = @(
     "backend",
     "frontend",
     "node_modules",
-    ".git"
+    ".git",
+    ".venv"
 )
 
 # Carpetas permitidas para archivos .sql

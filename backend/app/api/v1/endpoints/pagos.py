@@ -735,7 +735,12 @@ def obtener_kpis_pagos(
         )
 
         # 1. MONTO COBRADO EN EL MES
-        # Suma de todos los pagos del mes especificado (DATOS REALES DESDE BD)
+        # Suma de todos los pagos del mes especificado (DATOS REALES DESDE BD - SIN VALORES HARDCODEADOS)
+        logger.info(
+            f"🔍 [kpis_pagos] Consultando pagos del {mes_consulta}/{año_consulta} "
+            f"(desde {fecha_inicio_mes} hasta {fecha_fin_mes})"
+        )
+        
         monto_cobrado_mes_query = db.query(func.sum(Pago.monto_pagado)).filter(
             Pago.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
             Pago.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
@@ -753,12 +758,37 @@ def obtener_kpis_pagos(
             .scalar()
             or 0
         )
-        logger.info(
-            f"💰 [kpis_pagos] Monto cobrado en el mes: ${monto_cobrado_mes:,.2f} (de {total_pagos_mes} pagos)"
+        
+        # ✅ DIAGNÓSTICO: Verificar algunos pagos reales del mes
+        pagos_ejemplo_mes = (
+            db.query(Pago.id, Pago.monto_pagado, Pago.fecha_pago, Pago.cedula_cliente)
+            .filter(
+                Pago.fecha_pago
+                >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
+                Pago.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
+            )
+            .limit(5)
+            .all()
         )
+        
+        logger.info(
+            f"💰 [kpis_pagos] Monto cobrado en el mes: ${monto_cobrado_mes:,.2f} "
+            f"(de {total_pagos_mes} pagos - DATOS REALES DESDE BD)"
+        )
+        
+        if pagos_ejemplo_mes:
+            ejemplos_pagos = "; ".join([
+                f"Pago ID {p.id}: ${float(p.monto_pagado):,.2f} ({p.fecha_pago.date()})"
+                for p in pagos_ejemplo_mes[:3]
+            ])
+            logger.info(f"📋 [kpis_pagos] Ejemplos de pagos del mes: {ejemplos_pagos}")
+        else:
+            logger.info(
+                f"⚠️ [kpis_pagos] No se encontraron pagos en el mes {mes_consulta}/{año_consulta}"
+            )
 
         # 2. SALDO POR COBRAR
-        # Suma de capital_pendiente + interes_pendiente + monto_mora de todas las cuotas no pagadas (DATOS REALES DESDE BD)
+        # Suma de capital_pendiente + interes_pendiente + monto_mora de todas las cuotas no pagadas (DATOS REALES DESDE BD - SIN VALORES HARDCODEADOS)
         saldo_por_cobrar_query = (
             db.query(
                 func.sum(
@@ -786,9 +816,38 @@ def obtener_kpis_pagos(
             .scalar()
             or 0
         )
-        logger.info(
-            f"💳 [kpis_pagos] Saldo por cobrar: ${saldo_por_cobrar:,.2f} (de {total_cuotas_pendientes} cuotas pendientes)"
+        
+        # ✅ DIAGNÓSTICO: Verificar algunas cuotas pendientes reales
+        cuotas_pendientes_ejemplo = (
+            db.query(
+                Cuota.id,
+                Cuota.prestamo_id,
+                Cuota.capital_pendiente,
+                Cuota.interes_pendiente,
+                Cuota.monto_mora,
+                Cuota.estado,
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.estado != "PAGADO",
+                Prestamo.estado == "APROBADO",
+            )
+            .limit(5)
+            .all()
         )
+        
+        logger.info(
+            f"💳 [kpis_pagos] Saldo por cobrar: ${saldo_por_cobrar:,.2f} "
+            f"(de {total_cuotas_pendientes} cuotas pendientes - DATOS REALES DESDE BD)"
+        )
+        
+        if cuotas_pendientes_ejemplo:
+            ejemplos_cuotas = "; ".join([
+                f"Cuota ID {c.id} (Préstamo {c.prestamo_id}): "
+                f"${float(c.capital_pendiente + c.interes_pendiente + (c.monto_mora or 0)):,.2f} ({c.estado})"
+                for c in cuotas_pendientes_ejemplo[:3]
+            ])
+            logger.info(f"📋 [kpis_pagos] Ejemplos de cuotas pendientes: {ejemplos_cuotas}")
 
         # 3. CLIENTES EN MORA
         # Clientes únicos con cuotas vencidas Y con pago incompleto (total_pagado < monto_cuota) (DATOS REALES DESDE BD)
@@ -962,6 +1021,17 @@ def obtener_kpis_pagos(
             f"{todos_clientes_aprobados} totales aprobados, "
             f"{clientes_en_mora} en mora)"
         )
+        
+        # ✅ LOG FINAL CONFIRMANDO QUE SON DATOS REALES
+        logger.info(
+            f"✅ [kpis_pagos] ===== KPIs CALCULADOS CON DATOS REALES DE BD ===== "
+            f"Monto Cobrado=${float(monto_cobrado_mes):,.2f}, "
+            f"Saldo por Cobrar=${float(saldo_por_cobrar):,.2f}, "
+            f"Clientes en Mora={clientes_en_mora}, "
+            f"Clientes al Día={clientes_al_dia} "
+            f"(Mes: {mes_consulta}/{año_consulta})"
+        )
+        
         return {
             "montoCobradoMes": float(monto_cobrado_mes),
             "saldoPorCobrar": float(saldo_por_cobrar),
