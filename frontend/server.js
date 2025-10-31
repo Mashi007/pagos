@@ -8,7 +8,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 // URL del backend - Prioridad: API_BASE_URL (runtime) > VITE_API_BASE_URL (build-time fallback) > VITE_API_URL > localhost
-// IMPORTANTE: En Render, usar API_BASE_URL (sin VITE_ prefix) para runtime de Node.js
+// ⚠️ IMPORTANTE: En Render, DEBE estar configurada la variable API_BASE_URL (SIN prefijo VITE_)
+// Las variables VITE_* solo funcionan durante el build, NO en runtime de Node.js
+// Si falta API_BASE_URL, el proxy no funcionará y verás 404 en las peticiones /api/*
 const API_URL = process.env.API_BASE_URL || process.env.VITE_API_BASE_URL || process.env.VITE_API_URL || 'http://localhost:8000';
 
 // Log de la URL configurada para debug
