@@ -153,6 +153,7 @@ export default function UsuariosConfig() {
           email: emailValidation.formattedValue || formData.email.toLowerCase(),
           nombre: formData.nombre,
           apellido: formData.apellido,
+          cargo: formData.cargo, // Incluir cargo para preservarlo
           is_admin: formData.is_admin,  // Cambio clave: rol → is_admin
           is_active: formData.is_active
         }
@@ -194,6 +195,7 @@ export default function UsuariosConfig() {
       email: usuario.email.toLowerCase(), // Normalizar a minúsculas
       nombre: usuario.nombre,
       apellido: usuario.apellido,
+      cargo: usuario.cargo || 'Usuario', // Preservar cargo existente
       is_admin: usuario.is_admin,  // Cambio clave: rol → is_admin
       password: '', // No pre-llenar password
       is_active: usuario.is_active
@@ -528,6 +530,22 @@ export default function UsuariosConfig() {
                       autoComplete="off"
                     />
                   </div>
+                </div>
+
+                {/* Cargo */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Cargo
+                  </label>
+                  <Input
+                    value={formData.cargo || ''}
+                    onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
+                    placeholder="Ej: Gerente, Analista, etc."
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Cargo del usuario en la empresa (opcional)
+                  </p>
                 </div>
 
                 {/* Rol */}

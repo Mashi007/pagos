@@ -190,7 +190,15 @@ def update_user(
             )
 
         # Actualizar campos
-        for field, value in user_data.model_dump(exclude_unset=True).items():
+        update_data = user_data.model_dump(exclude_unset=True)
+        logger.info(f"Actualizando usuario {user_id} con campos: {list(update_data.keys())}")
+        
+        for field, value in update_data.items():
+            # Verificar que el campo existe en el modelo User
+            if not hasattr(user, field):
+                logger.warning(f"Campo '{field}' no existe en el modelo User, omitiendo...")
+                continue
+                
             if field == "password" and value:
                 # Validar contraseña si se está cambiando
                 is_valid, message = validate_password_strength(value)
@@ -203,20 +211,38 @@ def update_user(
                 # Actualizar tanto is_admin como rol
                 setattr(user, "is_admin", value)
                 setattr(user, "rol", "ADMIN" if value else "USER")
+            elif field == "rol":
+                # Ignorar campo rol directamente, se maneja con is_admin
+                continue
             else:
-                setattr(user, field, value)
+                # Actualizar otros campos válidos
+                try:
+                    setattr(user, field, value)
+                    logger.debug(f"Campo '{field}' actualizado correctamente")
+                except Exception as field_error:
+                    logger.error(f"Error actualizando campo '{field}': {field_error}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Error al actualizar campo '{field}': {str(field_error)}"
+                    )
 
         db.commit()
         db.refresh(user)
-
+        
+        logger.info(f"Usuario {user_id} actualizado exitosamente")
         return user
 
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error actualizando usuario: {e}")
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+        error_detail = f"Error actualizando usuario: {str(e)}"
+        logger.error(error_detail, exc_info=True)
+        # Incluir más detalles en el error para debugging
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.delete("/{user_id}")
