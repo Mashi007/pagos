@@ -25,16 +25,17 @@ def verificar_amortizaciones():
         print("=" * 80)
         print("VERIFICACIÓN DE ACCESO A AMORTIZACIONES")
         print("=" * 80)
-        print(f"\n📊 Base de datos: {settings.DATABASE_URL.split('@')[-1] if '@' in settings.DATABASE_URL else 'N/A'}")
+        db_name = settings.DATABASE_URL.split('@')[-1] if '@' in settings.DATABASE_URL else settings.DATABASE_URL
+        print(f"\nBase de datos: {db_name}")
         print()
         
         # 1. Contar total de préstamos
         total_prestamos = db.query(Prestamo).count()
-        print(f"✅ Total de préstamos en BD: {total_prestamos}")
+        print(f"[OK] Total de préstamos en BD: {total_prestamos}")
         
         # 2. Contar total de cuotas/amortizaciones
         total_cuotas = db.query(Cuota).count()
-        print(f"✅ Total de cuotas/amortizaciones en BD: {total_cuotas}")
+        print(f"[OK] Total de cuotas/amortizaciones en BD: {total_cuotas}")
         
         # 3. Préstamos con cuotas
         prestamos_con_cuotas = (
@@ -43,11 +44,11 @@ def verificar_amortizaciones():
             .distinct()
             .count()
         )
-        print(f"✅ Préstamos con cuotas generadas: {prestamos_con_cuotas}")
+        print(f"[OK] Préstamos con cuotas generadas: {prestamos_con_cuotas}")
         
         # 4. Préstamos sin cuotas
         prestamos_sin_cuotas = total_prestamos - prestamos_con_cuotas
-        print(f"⚠️  Préstamos sin cuotas: {prestamos_sin_cuotas}")
+        print(f"[ADVERTENCIA] Préstamos sin cuotas: {prestamos_sin_cuotas}")
         
         # 5. Estadísticas por estado de préstamo
         print("\n" + "-" * 80)
@@ -112,7 +113,7 @@ def verificar_amortizaciones():
                 for c in cuotas_prestamo
             )
             
-            print(f"\n  📋 Préstamo ID: {prestamo.id}")
+            print(f"\n  Prestamo ID: {prestamo.id}")
             print(f"     Cliente: {prestamo.nombres} (Cédula: {prestamo.cedula})")
             print(f"     Monto: ${prestamo.total_financiamiento:,.2f}")
             print(f"     Cuotas: {total_cuotas_p} total | {cuotas_pagadas} pagadas | {cuotas_pendientes} pendientes | {cuotas_vencidas} vencidas")
@@ -166,17 +167,17 @@ def verificar_amortizaciones():
         
         # 9. Verificación de acceso completo
         print("\n" + "=" * 80)
-        print("✅ VERIFICACIÓN COMPLETA")
+        print("VERIFICACION COMPLETA")
         print("=" * 80)
-        print(f"✅ Acceso a tabla 'prestamos': OK ({total_prestamos} registros)")
-        print(f"✅ Acceso a tabla 'cuotas': OK ({total_cuotas} registros)")
-        print(f"✅ Relación prestamos-cuotas: OK ({prestamos_con_cuotas} préstamos con cuotas)")
-        print(f"✅ Cálculos y agregaciones: OK")
-        print("\n🎉 ACCESO COMPLETO A AMORTIZACIONES CONFIRMADO")
+        print(f"[OK] Acceso a tabla 'prestamos': OK ({total_prestamos} registros)")
+        print(f"[OK] Acceso a tabla 'cuotas': OK ({total_cuotas} registros)")
+        print(f"[OK] Relacion prestamos-cuotas: OK ({prestamos_con_cuotas} prestamos con cuotas)")
+        print(f"[OK] Calculos y agregaciones: OK")
+        print("\n[EXITO] ACCESO COMPLETO A AMORTIZACIONES CONFIRMADO")
         print("=" * 80)
         
     except Exception as e:
-        print(f"\n❌ ERROR al acceder a las amortizaciones:")
+        print(f"\n[ERROR] ERROR al acceder a las amortizaciones:")
         print(f"   {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
