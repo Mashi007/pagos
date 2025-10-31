@@ -107,16 +107,16 @@ class PagoResponse(PagoBase):
     """Schema para respuesta de un pago"""
 
     id: int
-    fecha_registro: datetime
+    fecha_registro: datetime | None = None
     estado: str
     conciliado: bool
-    fecha_conciliacion: datetime | None
-    documento_nombre: str | None
-    documento_tipo: str | None
-    documento_ruta: str | None
+    fecha_conciliacion: datetime | None = None
+    documento_nombre: str | None = None
+    documento_tipo: str | None = None
+    documento_ruta: str | None = None
     usuario_registro: str
     activo: bool
-    fecha_actualizacion: datetime
+    fecha_actualizacion: datetime | None = None
 
     @field_serializer("monto_pagado")
     @classmethod

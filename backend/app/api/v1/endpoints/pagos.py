@@ -99,8 +99,14 @@ def listar_pagos(
                 pagos_serializados.append(pago_dict)
             except Exception as serialization_error:
                 errores_serializacion += 1
-                logger.error(f"❌ [listar_pagos] Error serializando pago ID {pago.id}: {serialization_error}", exc_info=True)
-                logger.error(f"   Datos del pago: cedula={pago.cedula_cliente}, fecha_pago={pago.fecha_pago}, tipo={type(pago.fecha_pago)}")
+                # Log detallado del error y campos del pago
+                error_detail = str(serialization_error)
+                logger.error(f"❌ [listar_pagos] Error serializando pago ID {pago.id}: {error_detail}", exc_info=True)
+                logger.error(f"   Datos del pago: cedula={pago.cedula_cliente}")
+                logger.error(f"   fecha_pago={pago.fecha_pago} (tipo: {type(pago.fecha_pago)})")
+                logger.error(f"   fecha_registro={getattr(pago, 'fecha_registro', 'N/A')} (tipo: {type(getattr(pago, 'fecha_registro', None))})")
+                logger.error(f"   fecha_actualizacion={getattr(pago, 'fecha_actualizacion', 'N/A')} (tipo: {type(getattr(pago, 'fecha_actualizacion', None))})")
+                logger.error(f"   fecha_conciliacion={getattr(pago, 'fecha_conciliacion', 'N/A')} (tipo: {type(getattr(pago, 'fecha_conciliacion', None))})")
                 # Continuar con los demás pagos, pero loguear el error
                 continue
 
