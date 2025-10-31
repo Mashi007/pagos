@@ -127,7 +127,9 @@ def list_concesionarios(
         pages = (total + limit - 1) // limit if limit > 0 else 0
         page = (skip // limit) + 1 if limit > 0 else 1
 
-        logger.info(f"✅ Listando {len(concesionarios)} concesionarios de {total} totales (página {page}/{pages})")
+        logger.info(
+            f"✅ Listando {len(concesionarios)} concesionarios de {total} totales (página {page}/{pages})"
+        )
 
         response = ConcesionarioListResponse(
             items=concesionarios,
@@ -140,7 +142,9 @@ def list_concesionarios(
         return response
     except Exception as e:
         logger.error(f"Error en list_concesionarios: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/activos", response_model=List[ConcesionarioResponse])
