@@ -25,6 +25,65 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@router.get("/health")
+def healthcheck_pagos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Verificación rápida del módulo de Pagos y conexión a BD.
+    
+    Retorna métricas mínimas que confirman conectividad a la base de datos
+    y disponibilidad de datos para alimentar el dashboard.
+    """
+    try:
+        # Verificar conexión a BD con prueba de consulta
+        total_pagos = db.query(func.count(Pago.id)).scalar() or 0
+        
+        # Pagos del mes actual
+        hoy = date.today()
+        primer_dia_mes = date(hoy.year, hoy.month, 1)
+        pagos_mes = (
+            db.query(func.count(Pago.id))
+            .filter(Pago.fecha_pago >= primer_dia_mes)
+            .scalar()
+            or 0
+        )
+        
+        # Monto total pagado
+        monto_total = (
+            db.query(func.sum(Pago.monto_pagado)).scalar() or Decimal("0")
+        )
+        
+        # Pagos por estado
+        pagos_por_estado = (
+            db.query(Pago.estado, func.count(Pago.id))
+            .group_by(Pago.estado)
+            .all()
+        )
+        estados_dict = {estado: count for estado, count in pagos_por_estado}
+        
+        return {
+            "status": "ok",
+            "database": True,
+            "metrics": {
+                "total_pagos": int(total_pagos),
+                "pagos_mes_actual": int(pagos_mes),
+                "monto_total_pagado": float(monto_total),
+                "pagos_por_estado": estados_dict,
+            },
+            "fecha_consulta": hoy.isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Healthcheck pagos error: {e}")
+        return {
+            "status": "error",
+            "database": False,
+            "error": str(e),
+            "mensaje": "❌ Error de conexión o consulta a la base de datos",
+        }
+
+
 @router.get("/", response_model=dict)
 def listar_pagos(
     page: int = Query(1, ge=1),
