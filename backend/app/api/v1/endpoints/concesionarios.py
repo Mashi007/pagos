@@ -147,7 +147,6 @@ def list_concesionarios_no_auth(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
-<<<<<<< HEAD
 @router.get("/", response_model=ConcesionarioListResponse)
 def list_concesionarios(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
