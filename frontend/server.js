@@ -162,6 +162,10 @@ if (API_URL) {
 
 // Servir archivos estáticos con cache headers (DESPUÉS del proxy)
 // IMPORTANTE: Esto debe servir archivos .js, .css, .html, etc. con los MIME types correctos
+// Estos archivos son PARTE DE LA SPA (React), NO del backend
+const distPath = path.join(__dirname, 'dist');
+console.log(`📁 Directorio de archivos estáticos: ${distPath}`);
+
 const staticOptions = {
   maxAge: '1d',
   etag: true,
@@ -171,10 +175,25 @@ const staticOptions = {
     if (filePath.endsWith('.js')) {
       res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
     }
-  }
+    // Log cuando se sirve un archivo estático (solo para debugging)
+    if (filePath.includes('/assets/')) {
+      console.log(`📦 Sirviendo archivo estático: ${filePath}`);
+    }
+  },
+  // Callback cuando no se encuentra el archivo
+  fallthrough: true // Continuar al siguiente middleware si el archivo no existe
 };
 
-app.use(express.static(path.join(__dirname, 'dist'), staticOptions));
+// Middleware para loggear peticiones de archivos estáticos
+app.use((req, res, next) => {
+  // Solo loggear archivos estáticos (assets, favicon, etc.)
+  if (req.path.startsWith('/assets/') || req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.svg')) {
+    console.log(`📦 Frontend: Petición de archivo estático recibida: ${req.method} ${req.path}`);
+  }
+  next();
+});
+
+app.use(express.static(distPath, staticOptions));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -189,7 +208,7 @@ app.get('/health', (req, res) => {
 // Manejar SPA routing - todas las rutas sirven index.html (el proxy ya atendió /api/*)
 // IMPORTANTE: Esto debe ir DESPUÉS del proxy y express.static
 // Solo maneja rutas que NO son archivos estáticos ni APIs
-// Usar app.get para que solo se ejecute en GET requests (evitar interceptar otros métodos)
+// IMPORTANTE: NO es una página estática - es una SPA que hace peticiones dinámicas al backend
 app.get('*', (req, res) => {
   // Solo procesar si NO es una ruta de API
   // Las rutas de API ya fueron manejadas por el proxy
@@ -199,11 +218,14 @@ app.get('*', (req, res) => {
     return res.status(404).json({ error: 'API endpoint not found' });
   }
   
-  // Verificar si es un archivo estático - si express.static no lo encontró, llegamos aquí
-  // Esto significa que es una ruta de la SPA (como /clientes, /dashboard, etc.)
-  // React Router se encargará de manejar la ruta en el cliente
-  console.log(`📄 Sirviendo index.html para ruta de SPA: ${req.method} ${req.path}`);
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'), (err) => {
+  // Si llegamos aquí, express.static NO encontró el archivo
+  // Esto puede ser:
+  // 1. Una ruta de la SPA (como /clientes, /dashboard) → servir index.html
+  // 2. Un archivo estático que no existe → servir index.html también (SPA routing)
+  // React Router manejará la ruta en el cliente
+  console.log(`📄 Frontend (SPA): Sirviendo index.html para ruta: ${req.method} ${req.path}`);
+  const indexPath = path.join(__dirname, 'dist', 'index.html');
+  res.sendFile(indexPath, (err) => {
     if (err) {
       console.error(`❌ Error sirviendo index.html para ${req.method} ${req.path}:`, err);
       if (!res.headersSent) {
