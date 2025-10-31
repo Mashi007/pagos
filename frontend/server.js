@@ -83,7 +83,16 @@ if (API_URL) {
       }
       return matches;
     },
-    // Mantener el path completo (/api/v1/... se envía completo al backend)
+    // IMPORTANTE: Cuando usas app.use('/api', ...), Express elimina /api del path
+    // Necesitamos agregarlo de vuelta para que el backend reciba /api/v1/auth/login completo
+    // Cuando el proxy recibe /v1/auth/login, lo reescribimos a /api/v1/auth/login
+    pathRewrite: (path, req) => {
+      // path ya viene sin /api (porque Express lo eliminó)
+      // Necesitamos agregarlo de vuelta
+      const rewritten = `/api${path}`;
+      console.log(`🔄 Path rewrite: ${req.originalUrl || req.url} -> ${rewritten}`);
+      return rewritten;
+    },
     onError: (err, req, res) => {
       console.error(`❌ Error en proxy para ${req.method} ${req.originalUrl || req.url}:`, err.message);
       if (!res.headersSent) {
