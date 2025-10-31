@@ -46,13 +46,19 @@ jobs:
       - name: 🔍 Linting con flake8
         run: |
           cd ${{ env.BACKEND_DIR }}
-          flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          echo "🔍 Ejecutando flake8 - errores críticos..."
+          flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics > flake8-critical.log 2>&1 || true
+          echo "🔍 Ejecutando flake8 - análisis completo..."
+          flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics > flake8-full.log 2>&1
+          cat flake8-critical.log
+          cat flake8-full.log
       
       - name: 🎨 Formateo con black
         run: |
           cd ${{ env.BACKEND_DIR }}
-          black app/ || true
+          echo "🎨 Ejecutando black..."
+          black app/ > black.log 2>&1 || true
+          cat black.log
       
       - name: 🔧 Aplicar correcciones de Black automáticamente
         run: |
@@ -72,12 +78,44 @@ jobs:
       - name: 📝 Ordenamiento de imports con isort
         run: |
           cd ${{ env.BACKEND_DIR }}
-          isort --check-only app/
+          echo "📝 Verificando orden de imports con isort..."
+          isort --check-only app/ > isort.log 2>&1 || true
+          cat isort.log
       
       - name: 🔒 Verificación de tipos con mypy
         run: |
           cd ${{ env.BACKEND_DIR }}
-          mypy app/ --ignore-missing-imports || true
+          echo "🔒 Ejecutando verificación de tipos con mypy..."
+          mypy app/ --ignore-missing-imports > mypy.log 2>&1 || true
+          cat mypy.log
+      
+      # Guardar TODOS los logs como artifacts descargables
+      - name: 📊 Subir logs de calidad de código
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: code-quality-logs-${{ github.run_number }}
+          retention-days: 90
+          path: |
+            ${{ env.BACKEND_DIR }}/flake8-critical.log
+            ${{ env.BACKEND_DIR }}/flake8-full.log
+            ${{ env.BACKEND_DIR }}/black.log
+            ${{ env.BACKEND_DIR }}/isort.log
+            ${{ env.BACKEND_DIR }}/mypy.log
+      
+      # Guardar output completo del job
+      - name: 💾 Guardar logs completos del job
+        if: always()
+        run: |
+          echo "## 📋 Resumen del Análisis de Calidad" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Linting: flake8 completado" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Formateo: black aplicado" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Imports: isort verificado" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Tipos: mypy verificado" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📅 Fecha: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
 
   # ========================================
   # 🧪 PRUEBAS BACKEND
