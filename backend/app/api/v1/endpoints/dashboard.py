@@ -914,16 +914,13 @@ def dashboard_administrador(
                 if mes_fecha.month == 12:
                     mes_fin = date(mes_fecha.year + 1, 1, 1) - timedelta(days=1)
                 else:
-                    mes_fin = date(mes_fecha.year, mes_fecha.month + 1, 1) - timedelta(days=1)
-                cobrado_mes_anterior = (
-                    db.query(func.sum(Pago.monto_pagado))
-                    .filter(
-                        func.date(Pago.fecha_pago) >= mes_inicio,
-                        func.date(Pago.fecha_pago) <= mes_fin,
+                    mes_fin = date(mes_fecha.year, mes_fecha.month + 1, 1) - timedelta(
+                        days=1
                     )
-                    .scalar()
-                    or Decimal("0")
-                )
+                cobrado_mes_anterior = db.query(func.sum(Pago.monto_pagado)).filter(
+                    func.date(Pago.fecha_pago) >= mes_inicio,
+                    func.date(Pago.fecha_pago) <= mes_fin,
+                ).scalar() or Decimal("0")
                 if float(cobrado_mes_anterior) > 0:
                     meses_anteriores.append(float(cobrado_mes_anterior))
             if meses_anteriores:
