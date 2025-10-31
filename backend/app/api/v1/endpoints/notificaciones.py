@@ -327,7 +327,7 @@ def verificar_plantillas(
             .filter(NotificacionPlantilla.activa.is_(True))
             .count()
         )
-        
+
         # Tipos esperados para notificaciones automáticas
         tipos_esperados = [
             "PAGO_5_DIAS_ANTES",
@@ -338,7 +338,7 @@ def verificar_plantillas(
             "PAGO_3_DIAS_ATRASADO",
             "PAGO_5_DIAS_ATRASADO",
         ]
-        
+
         # Verificar qué tipos existen
         tipos_existentes = (
             db.query(NotificacionPlantilla.tipo)
@@ -348,7 +348,7 @@ def verificar_plantillas(
         )
         tipos_encontrados = [t[0] for t in tipos_existentes]
         tipos_faltantes = [t for t in tipos_esperados if t not in tipos_encontrados]
-        
+
         return {
             "conexion_bd": True,
             "total_plantillas": total_plantillas,

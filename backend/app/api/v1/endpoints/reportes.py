@@ -111,9 +111,7 @@ def reporte_cartera(
 
         # Capital pendiente: suma de capital_pendiente de todas las cuotas no pagadas
         capital_pendiente = (
-            db.query(
-                func.sum(func.coalesce(Cuota.capital_pendiente, Decimal("0.00")))
-            )
+            db.query(func.sum(func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado == "APROBADO",
@@ -126,9 +124,7 @@ def reporte_cartera(
 
         # Intereses pendientes: suma de interes_pendiente de todas las cuotas no pagadas
         intereses_pendientes = (
-            db.query(
-                func.sum(func.coalesce(Cuota.interes_pendiente, Decimal("0.00")))
-            )
+            db.query(func.sum(func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado == "APROBADO",
@@ -141,9 +137,7 @@ def reporte_cartera(
 
         # Mora total: suma de monto_mora de todas las cuotas con mora
         mora_total = (
-            db.query(
-                func.sum(func.coalesce(Cuota.monto_mora, Decimal("0.00")))
-            )
+            db.query(func.sum(func.coalesce(Cuota.monto_mora, Decimal("0.00"))))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado == "APROBADO",
@@ -159,7 +153,9 @@ def reporte_cartera(
             db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
         )
 
-        logger.info(f"[reportes.cartera] Préstamos activos: {cantidad_prestamos_activos}")
+        logger.info(
+            f"[reportes.cartera] Préstamos activos: {cantidad_prestamos_activos}"
+        )
 
         # Préstamos con cuotas en mora
         cantidad_prestamos_mora = (
@@ -294,7 +290,9 @@ def reporte_pagos(
         # Pagos por método: usar monto_pagado y agrupar por institucion_bancaria
         pagos_por_metodo = (
             db.query(
-                func.coalesce(Pago.institucion_bancaria, "Sin especificar").label("metodo"),
+                func.coalesce(Pago.institucion_bancaria, "Sin especificar").label(
+                    "metodo"
+                ),
                 func.count(Pago.id).label("cantidad"),
                 func.sum(Pago.monto_pagado).label("monto"),
             )
@@ -306,7 +304,9 @@ def reporte_pagos(
             .all()
         )
 
-        logger.info(f"[reportes.pagos] Pagos por método: {len(pagos_por_metodo)} métodos")
+        logger.info(
+            f"[reportes.pagos] Pagos por método: {len(pagos_por_metodo)} métodos"
+        )
 
         # Pagos por día: usar monto_pagado
         pagos_por_dia = (

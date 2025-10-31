@@ -812,30 +812,33 @@ def obtener_kpis_pagos(
             db.query(func.count(Cuota.id)).filter(Cuota.estado != "PAGADO").scalar()
             or 0
         )
-        
+
         # ✅ DIAGNÓSTICO ADICIONAL: Contar clientes únicos con préstamos aprobados
         clientes_unicos_aprobados = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
             .filter(Prestamo.estado == "APROBADO")
-            .scalar() or 0
+            .scalar()
+            or 0
         )
-        
+
         # ✅ DIAGNÓSTICO ADICIONAL: Contar préstamos aprobados CON cuotas generadas
         prestamos_con_cuotas = (
             db.query(func.count(func.distinct(Prestamo.id)))
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(Prestamo.estado == "APROBADO")
-            .scalar() or 0
+            .scalar()
+            or 0
         )
-        
+
         # ✅ DIAGNÓSTICO ADICIONAL: Contar cuotas de préstamos aprobados
         cuotas_prestamos_aprobados = (
             db.query(func.count(Cuota.id))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(Prestamo.estado == "APROBADO")
-            .scalar() or 0
+            .scalar()
+            or 0
         )
-        
+
         logger.info(
             f"🔍 [kpis_pagos] DIAGNÓSTICO PRE-CÁLCULO: "
             f"Préstamos aprobados={total_prestamos_aprobados}, "
@@ -882,11 +885,17 @@ def obtener_kpis_pagos(
             .scalar()
             or 0
         )
-        
+
         # ✅ DIAGNÓSTICO ADICIONAL: Detalles de cuotas en mora
         # Obtener algunos ejemplos de cuotas en mora para verificación
         cuotas_mora_ejemplo = (
-            db.query(Cuota.id, Cuota.prestamo_id, Cuota.fecha_vencimiento, Cuota.total_pagado, Cuota.monto_cuota)
+            db.query(
+                Cuota.id,
+                Cuota.prestamo_id,
+                Cuota.fecha_vencimiento,
+                Cuota.total_pagado,
+                Cuota.monto_cuota,
+            )
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Cuota.fecha_vencimiento < hoy,
@@ -896,7 +905,7 @@ def obtener_kpis_pagos(
             .limit(5)
             .all()
         )
-        
+
         ejemplos_info = []
         for c in cuotas_mora_ejemplo:
             ejemplos_info.append(
@@ -904,13 +913,13 @@ def obtener_kpis_pagos(
                 f"Vencida {c.fecha_vencimiento}, "
                 f"Pagado ${float(c.total_pagado):.2f} de ${float(c.monto_cuota):.2f}"
             )
-        
+
         logger.info(
             f"⚠️ [kpis_pagos] Clientes en mora: {clientes_en_mora} "
             f"(con {cuotas_en_mora_count} cuotas vencidas e incompletas), "
             f"Clientes aprobados sin cuotas={clientes_sin_cuotas}"
         )
-        
+
         if ejemplos_info:
             logger.info(
                 f"📋 [kpis_pagos] Ejemplos de cuotas en mora ({min(len(ejemplos_info), 3)}): "
