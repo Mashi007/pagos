@@ -883,6 +883,28 @@ def obtener_kpis_pagos(
             or 0
         )
         
+        # ✅ DIAGNÓSTICO ADICIONAL: Detalles de cuotas en mora
+        # Obtener algunos ejemplos de cuotas en mora para verificación
+        cuotas_mora_ejemplo = (
+            db.query(Cuota.id, Cuota.prestamo_id, Cuota.fecha_vencimiento, Cuota.total_pagado, Cuota.monto_cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,
+                Prestamo.estado == "APROBADO",
+            )
+            .limit(5)
+            .all()
+        )
+        
+        ejemplos_info = []
+        for c in cuotas_mora_ejemplo:
+            ejemplos_info.append(
+                f"Cuota ID {c.id} (Préstamo {c.prestamo_id}): "
+                f"Vencida {c.fecha_vencimiento}, "
+                f"Pagado ${float(c.total_pagado):.2f} de ${float(c.monto_cuota):.2f}"
+            )
+        
         logger.info(
             f"⚠️ [kpis_pagos] Clientes en mora: {clientes_en_mora} "
             f"(con {cuotas_en_mora_count} cuotas vencidas e incompletas), "
