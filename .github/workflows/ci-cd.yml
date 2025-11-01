@@ -86,6 +86,8 @@ jobs:
           # Solo aplicar si el último commit no fue de Black
           LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
           if ! echo "$LAST_COMMIT_MSG" | grep -qi "black"; then
+            # Sincronizar con remoto antes de aplicar cambios para evitar divergencias
+            git pull --rebase origin main || echo "⚠️ No se pudo hacer pull (puede ser normal si no hay cambios remotos)"
             black app/
             if ! git diff --quiet; then
               git config user.name "GitHub Actions"
@@ -121,6 +123,8 @@ jobs:
           # Solo aplicar si el último commit no fue de Isort
           LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
           if ! echo "$LAST_COMMIT_MSG" | grep -qi "isort"; then
+            # Sincronizar con remoto antes de aplicar cambios para evitar divergencias
+            git pull --rebase origin main || echo "⚠️ No se pudo hacer pull (puede ser normal si no hay cambios remotos)"
             # Aplicar correcciones
             isort app/
             if ! git diff --quiet; then
