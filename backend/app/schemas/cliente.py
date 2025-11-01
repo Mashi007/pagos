@@ -48,39 +48,34 @@ class ClienteBase(BaseModel):
         """Validar formato de teléfono: +58 seguido de 10 dígitos, primero NO puede ser 0"""
         if not v:
             raise ValueError("Teléfono requerido")
-        
+
         # Limpiar espacios
         telefono_limpio = v.strip()
-        
+
         # Validar longitud exacta (13 caracteres: +58 + 10 dígitos)
         if len(telefono_limpio) != 13:
             raise ValueError(
                 f"Teléfono debe tener exactamente 13 caracteres (formato: +58XXXXXXXXXX). "
                 f"Recibido: {len(telefono_limpio)} caracteres"
             )
-        
+
         # Validar que empiece por +58
         if not telefono_limpio.startswith("+58"):
-            raise ValueError(
-                "Teléfono debe empezar por '+58'. Ejemplo: +581234567890"
-            )
-        
+            raise ValueError("Teléfono debe empezar por '+58'. Ejemplo: +581234567890")
+
         # Validar que después de +58 tenga exactamente 10 dígitos
         digitos = telefono_limpio[3:]  # Todo después de "+58"
         if not re.match(r"^[0-9]{10}$", digitos):
-            raise ValueError(
-                "Después de '+58' deben ir exactamente 10 dígitos numéricos. "
-                f"Recibido: '{digitos}'"
-            )
-        
+            raise ValueError("Después de '+58' deben ir exactamente 10 dígitos numéricos. " f"Recibido: '{digitos}'")
+
         # Validar que el primer dígito después de +58 NO sea 0
         if digitos[0] == "0":
             raise ValueError(
-                "El primer dígito después de '+58' NO puede ser 0. "
-                "El número debe empezar por 1-9. Ejemplo: +581234567890"
+                "El primer dígito después de '+58' NO puede ser 0. " "El número debe empezar por 1-9. Ejemplo: +581234567890"
             )
-        
+
         return telefono_limpio
+
     email: EmailStr = Field(..., description="Validado por validadores")
     direccion: str = Field(
         ...,
