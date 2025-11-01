@@ -340,7 +340,9 @@ def dashboard_kpis_principales(
         .filter(Cliente.estado == "ACTIVO")
         .with_entities(func.sum(Prestamo.total_financiamiento))
     )
-    total_financiamiento_activo = total_financiamiento_activo_query.scalar() or Decimal("0")
+    total_financiamiento_activo = total_financiamiento_activo_query.scalar() or Decimal(
+        "0"
+    )
 
     # Total Financiamiento - Estado INACTIVO
     total_financiamiento_inactivo_query = (
@@ -349,7 +351,9 @@ def dashboard_kpis_principales(
         .filter(Cliente.estado == "INACTIVO")
         .with_entities(func.sum(Prestamo.total_financiamiento))
     )
-    total_financiamiento_inactivo = total_financiamiento_inactivo_query.scalar() or Decimal("0")
+    total_financiamiento_inactivo = (
+        total_financiamiento_inactivo_query.scalar() or Decimal("0")
+    )
 
     # Total Financiamiento - Estado FINALIZADO
     total_financiamiento_finalizado_query = (
@@ -358,7 +362,9 @@ def dashboard_kpis_principales(
         .filter(Cliente.estado == "FINALIZADO")
         .with_entities(func.sum(Prestamo.total_financiamiento))
     )
-    total_financiamiento_finalizado = total_financiamiento_finalizado_query.scalar() or Decimal("0")
+    total_financiamiento_finalizado = (
+        total_financiamiento_finalizado_query.scalar() or Decimal("0")
+    )
 
     return {
         "cartera_total": float(cartera_total),
