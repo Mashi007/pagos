@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -29,11 +29,14 @@ import {
   User,
   LogOut,
   Menu,
+  Minimize2,
+  Maximize2,
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { useSidebarCounts } from '@/hooks/useSidebarCounts'
 
 interface SidebarProps {
   isOpen: boolean
@@ -55,6 +58,25 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const { user, logout, refreshUser } = useSimpleAuth()
   const [openSubmenus, setOpenSubmenus] = useState<string[]>([])
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [isCompact, setIsCompact] = useState(() => {
+    // Obtener preferencia guardada en localStorage
+    const saved = localStorage.getItem('sidebar-compact')
+    return saved === 'true'
+  })
+  const { counts } = useSidebarCounts()
+
+  // Guardar preferencia en localStorage cuando cambie
+  useEffect(() => {
+    localStorage.setItem('sidebar-compact', String(isCompact))
+  }, [isCompact])
+
+  const toggleCompact = () => {
+    setIsCompact(!isCompact)
+    // Si se está compactando, cerrar submenús
+    if (!isCompact) {
+      setOpenSubmenus([])
+    }
+  }
 
   // Variables derivadas del usuario
   const userInitials = user ? `${user.nombre?.charAt(0) || ''}${user.apellido?.charAt(0) || ''}`.toUpperCase() : 'U'
@@ -98,11 +120,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       title: 'Pagos',
       href: '/pagos',
       icon: CreditCard,
+      badge: counts.pagosPendientes > 0 ? String(counts.pagosPendientes) : undefined,
     },
     {
       title: 'Cobranzas',
       href: '/cobranzas',
       icon: AlertTriangle,
+      badge: counts.cuotasEnMora > 0 ? String(counts.cuotasEnMora) : undefined,
     },
     {
       title: 'Reportes',
@@ -114,7 +138,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       icon: Wrench,
       isSubmenu: true,
       children: [
-        { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
+        { 
+          title: 'Notificaciones', 
+          href: '/notificaciones', 
+          icon: Bell,
+          badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
+        },
         // Solo Admin: Plantillas de notificaciones
         ...(user?.is_admin ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: Mail }] : []),
         { title: 'Programador', href: '/scheduler', icon: Calendar },
@@ -210,32 +239,54 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         variants={sidebarVariants}
         initial="closed"
         animate={isOpen ? "open" : "closed"}
-        className="fixed left-0 top-0 z-50 h-screen w-64 bg-gradient-to-b from-slate-50 to-blue-50/30 border-r border-blue-200/50 shadow-xl lg:relative lg:translate-x-0 lg:h-full"
+        className={cn(
+          "fixed left-0 top-0 z-50 h-screen bg-gradient-to-b from-slate-50 to-blue-50/30 border-r border-blue-200/50 shadow-xl lg:relative lg:translate-x-0 lg:h-full transition-all duration-300",
+          isCompact ? "w-20" : "w-64"
+        )}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-blue-300/40 bg-gradient-to-br from-blue-700 via-blue-600 to-blue-700 shadow-inner">
-            <div className="flex items-center justify-center w-full">
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ 
-                  type: "spring", 
-                  stiffness: 200, 
-                  damping: 15,
-                  delay: 0.1 
-                }}
-                whileHover={{ scale: 1.05 }}
-                className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-2xl p-3.5 ring-2 ring-white/40 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:shadow-blue-500/20 hover:ring-white/60"
-              >
-                <img 
-                  src="/logo-compact.svg" 
-                  alt="RAPICREDIT Logo" 
-                  className="w-full h-full object-contain select-none"
-                />
-              </motion.div>
-            </div>
-            <div className="flex items-center space-x-2">
+          <div className={cn(
+            "flex items-center border-b border-blue-300/40 bg-gradient-to-br from-blue-700 via-blue-600 to-blue-700 shadow-inner",
+            isCompact ? "justify-center p-3" : "justify-between p-4"
+          )}>
+            {!isCompact && (
+              <div className="flex items-center justify-center w-full">
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ 
+                    type: "spring", 
+                    stiffness: 200, 
+                    damping: 15,
+                    delay: 0.1 
+                  }}
+                  whileHover={{ scale: 1.05 }}
+                  className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-2xl p-3.5 ring-2 ring-white/40 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:shadow-blue-500/20 hover:ring-white/60"
+                >
+                  <img 
+                    src="/logo-compact.svg" 
+                    alt="RAPICREDIT Logo" 
+                    className="w-full h-full object-contain select-none"
+                  />
+                </motion.div>
+              </div>
+            )}
+            {isCompact && (
+              <div className="flex items-center justify-center">
+                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-xl p-2 ring-1 ring-white/40">
+                  <img 
+                    src="/logo-compact.svg" 
+                    alt="RAPICREDIT Logo" 
+                    className="w-full h-full object-contain select-none"
+                  />
+                </div>
+              </div>
+            )}
+            <div className={cn(
+              "flex items-center",
+              isCompact ? "hidden" : "space-x-2"
+            )}>
               {onToggle && (
                 <Button
                   variant="ghost"
@@ -255,11 +306,30 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                 <X className="h-5 w-5" />
               </Button>
             </div>
+            {/* Botón toggle modo compacto - solo desktop */}
+            <div className="hidden lg:block">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleCompact}
+                className="text-white hover:bg-blue-800/50"
+                title={isCompact ? "Expandir sidebar" : "Compactar sidebar"}
+              >
+                {isCompact ? (
+                  <Maximize2 className="h-4 w-4" />
+                ) : (
+                  <Minimize2 className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </div>
 
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto py-4">
-            <div className="px-3 space-y-1">
+            <div className={cn(
+              "space-y-1",
+              isCompact ? "px-2" : "px-3"
+            )}>
               {filteredMenuItems.map((item, index) => (
                 <motion.div
                   key={item.href || item.title}
@@ -274,18 +344,25 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                       <button
                         onClick={() => toggleSubmenu(item.title)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                          "text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm"
+                          "w-full flex items-center justify-between rounded-lg text-sm font-medium transition-all duration-200",
+                          "text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm",
+                          isCompact ? "justify-center px-2 py-2" : "px-3 py-2"
                         )}
+                        title={isCompact ? item.title : undefined}
                       >
-                        <div className="flex items-center space-x-3">
+                        <div className={cn(
+                          "flex items-center",
+                          isCompact ? "justify-center" : "space-x-3"
+                        )}>
                           <item.icon className="h-5 w-5" />
-                          <span>{item.title}</span>
+                          {!isCompact && <span>{item.title}</span>}
                         </div>
-                        {openSubmenus.includes(item.title) ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
+                        {!isCompact && (
+                          openSubmenus.includes(item.title) ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )
                         )}
                       </button>
                       
@@ -299,7 +376,10 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                             transition={{ duration: 0.2 }}
                             className="overflow-hidden"
                           >
-                            <div className="ml-6 mt-1 space-y-1">
+                            <div className={cn(
+                              "mt-1 space-y-1",
+                              isCompact ? "ml-0" : "ml-6"
+                            )}>
                               {item.children.map((child) => (
                                 <NavLink
                                   key={child.href}
@@ -311,15 +391,29 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                   }}
                                   className={({ isActive }) =>
                                     cn(
-                                      "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                                      "flex items-center rounded-lg text-sm font-medium transition-all duration-200",
                                       isActive || isActiveRoute(child.href!)
                                         ? "bg-blue-600 text-white shadow-md shadow-blue-500/30"
-                                        : "text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm"
+                                        : "text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm",
+                                      isCompact ? "justify-center px-2 py-2" : "space-x-3 px-3 py-2"
                                     )
                                   }
+                                  title={isCompact ? child.title : undefined}
                                 >
                                   <child.icon className="h-4 w-4" />
-                                  <span>{child.title}</span>
+                                  {!isCompact && (
+                                    <>
+                                      <span>{child.title}</span>
+                                      {child.badge && (
+                                        <Badge 
+                                          variant="destructive" 
+                                          className="ml-auto text-xs min-w-[20px] h-5 flex items-center justify-center px-1.5"
+                                        >
+                                          {child.badge}
+                                        </Badge>
+                                      )}
+                                    </>
+                                  )}
                                 </NavLink>
                               ))}
                             </div>
@@ -329,36 +423,46 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                     </div>
                   ) : (
                     // Renderizar item normal
-                    <NavLink
-                      to={item.href!}
-                      onClick={() => {
-                        // Cerrar sidebar en móvil al hacer click
-                        if (window.innerWidth < 1024) {
-                          onClose()
+                    <div className="relative">
+                      <NavLink
+                        to={item.href!}
+                        onClick={() => {
+                          // Cerrar sidebar en móvil al hacer click
+                          if (window.innerWidth < 1024) {
+                            onClose()
+                          }
+                        }}
+                        className={({ isActive }) =>
+                          cn(
+                            "flex items-center rounded-lg text-sm font-medium transition-all duration-200",
+                            isActive || isActiveRoute(item.href!)
+                              ? "bg-blue-600 text-white shadow-md shadow-blue-500/30"
+                              : "text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm",
+                            isCompact ? "justify-center px-2 py-2" : "justify-between px-3 py-2"
+                          )
                         }
-                      }}
-                      className={({ isActive }) =>
-                        cn(
-                          "flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                          isActive || isActiveRoute(item.href!)
-                            ? "bg-blue-600 text-white shadow-md shadow-blue-500/30"
-                            : "text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm"
-                        )
-                      }
-                    >
-                      <div className="flex items-center space-x-3">
-                        <item.icon className="h-5 w-5" />
-                        <span>{item.title}</span>
-                      </div>
-                      {item.badge && (
-                        <Badge
-                          variant={item.badge === 'NUEVO' ? 'success' : 'destructive'}
-                          className="text-xs"
-                        >
-                          {item.badge}
-                        </Badge>
+                        title={isCompact ? item.title : undefined}
+                      >
+                        <div className={cn(
+                          "flex items-center",
+                          isCompact ? "justify-center" : "space-x-3"
+                        )}>
+                          <item.icon className="h-5 w-5" />
+                          {!isCompact && <span>{item.title}</span>}
+                        </div>
+                        {!isCompact && item.badge && (
+                          <Badge
+                            variant="destructive"
+                            className="text-xs min-w-[20px] h-5 flex items-center justify-center px-1.5"
+                          >
+                            {item.badge}
+                          </Badge>
+                        )}
+                      </NavLink>
+                      {isCompact && item.badge && (
+                        <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white z-10" />
                       )}
-                    </NavLink>
+                    </div>
                   )}
                 </motion.div>
               ))}
@@ -366,28 +470,39 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           </nav>
 
           {/* Footer con información de usuario */}
-          <div className="p-4 border-t border-blue-200/60 bg-white/50">
+          <div className={cn(
+            "border-t border-blue-200/60 bg-white/50",
+            isCompact ? "p-2" : "p-4"
+          )}>
             {/* Perfil de Usuario */}
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-blue-50 transition-all duration-200 text-left border border-blue-100/50 hover:border-blue-200 hover:shadow-sm"
+                className={cn(
+                  "w-full flex items-center rounded-lg hover:bg-blue-50 transition-all duration-200 text-left border border-blue-100/50 hover:border-blue-200 hover:shadow-sm",
+                  isCompact ? "justify-center p-2" : "space-x-3 p-3"
+                )}
+                title={isCompact ? userName : undefined}
               >
                 <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 shadow-md">
                   {userInitials}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-slate-900 truncate">
-                    {userName}
-                  </div>
-                  <div className="text-xs text-slate-600 truncate">
-                    {userRoleDisplay}
-                  </div>
-                </div>
-                <ChevronDown className={cn(
-                  "h-4 w-4 text-slate-500 transition-transform flex-shrink-0",
-                  showUserMenu && "transform rotate-180"
-                )} />
+                {!isCompact && (
+                  <>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-slate-900 truncate">
+                        {userName}
+                      </div>
+                      <div className="text-xs text-slate-600 truncate">
+                        {userRoleDisplay}
+                      </div>
+                    </div>
+                    <ChevronDown className={cn(
+                      "h-4 w-4 text-slate-500 transition-transform flex-shrink-0",
+                      showUserMenu && "transform rotate-180"
+                    )} />
+                  </>
+                )}
               </button>
 
               {/* Menú desplegable del usuario */}
