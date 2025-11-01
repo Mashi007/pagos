@@ -21,8 +21,8 @@ export function Auditoria() {
   // Filtros
   const [filtros, setFiltros] = useState({
     usuario_email: '',
-    modulo: '',
-    accion: '',
+    modulo: 'ALL',
+    accion: 'ALL',
     fecha_desde: '',
     fecha_hasta: '',
     ordenar_por: 'fecha',
@@ -50,7 +50,13 @@ export function Auditoria() {
       const params = {
         skip: (currentPage - 1) * pageSize,
         limit: pageSize,
-        ...filtros
+        usuario_email: filtros.usuario_email,
+        modulo: filtros.modulo === 'ALL' ? '' : filtros.modulo,
+        accion: filtros.accion === 'ALL' ? '' : filtros.accion,
+        fecha_desde: filtros.fecha_desde || undefined,
+        fecha_hasta: filtros.fecha_hasta || undefined,
+        ordenar_por: filtros.ordenar_por,
+        orden: filtros.orden
       }
       
       console.log('📡 Llamando a API: /api/v1/auditoria')
@@ -85,8 +91,8 @@ export function Auditoria() {
   const handleLimpiarFiltros = () => {
     setFiltros({
       usuario_email: '',
-      modulo: '',
-      accion: '',
+      modulo: 'ALL',
+      accion: 'ALL',
       fecha_desde: '',
       fecha_hasta: '',
       ordenar_por: 'fecha',
@@ -97,7 +103,14 @@ export function Auditoria() {
 
   const handleExportarExcel = async () => {
     try {
-      await auditoriaService.descargarExcel(filtros)
+      const paramsExport = {
+        usuario_email: filtros.usuario_email || undefined,
+        modulo: filtros.modulo === 'ALL' ? undefined : filtros.modulo,
+        accion: filtros.accion === 'ALL' ? undefined : filtros.accion,
+        fecha_desde: filtros.fecha_desde || undefined,
+        fecha_hasta: filtros.fecha_hasta || undefined,
+      }
+      await auditoriaService.descargarExcel(paramsExport)
       toast.success('✅ Auditoría exportada exitosamente')
     } catch (err) {
       toast.error('❌ Error al exportar auditoría')
@@ -241,7 +254,7 @@ export function Auditoria() {
                   <SelectValue placeholder="Seleccionar módulo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos los módulos</SelectItem>
+                  <SelectItem value="ALL">Todos los módulos</SelectItem>
                   <SelectItem value="USUARIOS">Usuarios</SelectItem>
                   <SelectItem value="CLIENTES">Clientes</SelectItem>
                   <SelectItem value="PRESTAMOS">Préstamos</SelectItem>
@@ -261,7 +274,7 @@ export function Auditoria() {
                   <SelectValue placeholder="Seleccionar acción" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas las acciones</SelectItem>
+                  <SelectItem value="ALL">Todas las acciones</SelectItem>
                   <SelectItem value="CREAR">Crear</SelectItem>
                   <SelectItem value="ACTUALIZAR">Actualizar</SelectItem>
                   <SelectItem value="ELIMINAR">Eliminar</SelectItem>
