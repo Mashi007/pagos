@@ -53,13 +53,12 @@ def registrar_auditoria(
         auditoria = Auditoria.registrar(
             usuario_id=usuario.id,
             accion=accion,
-            modulo=modulo,
-            tabla=tabla,
-            registro_id=registro_id,
-            descripcion=descripcion,
+            entidad=modulo,
+            entidad_id=registro_id,
+            detalles=descripcion,
             ip_address=ip_address,
             user_agent=user_agent,
-            resultado=resultado,
+            exito=(resultado == "SUCCESS"),
             mensaje_error=mensaje_error,
         )
 

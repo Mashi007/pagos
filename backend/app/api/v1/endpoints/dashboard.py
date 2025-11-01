@@ -337,9 +337,9 @@ def dashboard_administrador(
             db.query(func.sum(Cuota.monto_cuota))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
-                and_(
-                    Cuota.fecha_vencimiento < hoy,
-                    Cuota.estado != "PAGADO",
+            and_(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
                     Prestamo.estado == "APROBADO",
                 )
             )
@@ -524,8 +524,8 @@ def dashboard_administrador(
             fecha_fin,
         )
 
-        cuotas_pagadas = cuotas_pagadas_query.scalar() or 0
         # Variables calculadas pero no usadas actualmente en la respuesta
+        # cuotas_pagadas = cuotas_pagadas_query.scalar() or 0
         # cuotas_pendientes = cuotas_pendientes_query.scalar() or 0
         # cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
 
@@ -546,7 +546,7 @@ def dashboard_administrador(
             fecha_fin_periodo_anterior = date(hoy.year - 1, 12, 31)
         else:  # dia
             fecha_inicio_periodo = hoy
-            fecha_inicio_periodo_anterior = hoy - timedelta(days=1)
+            # fecha_inicio_periodo_anterior = hoy - timedelta(days=1)  # No se usa en período día
             fecha_fin_periodo_anterior = hoy - timedelta(days=1)
 
         # Cartera anterior - Calcular desde BD histórica
@@ -623,7 +623,7 @@ def dashboard_administrador(
         total_cobrado_mes_query = db.query(func.sum(Pago.monto_pagado)).filter(
             func.date(Pago.fecha_pago) >= primer_dia_mes,
             func.date(Pago.fecha_pago) <= ultimo_dia_mes,
-            Pago.conciliado == True,  # ✅ Solo pagos conciliados
+            Pago.conciliado.is_(True),  # ✅ Solo pagos conciliados
         )
         if analista or concesionario or modelo:
             total_cobrado_mes_query = total_cobrado_mes_query.join(
@@ -652,7 +652,7 @@ def dashboard_administrador(
         total_cobrado_anterior_query = db.query(func.sum(Pago.monto_pagado)).filter(
             func.date(Pago.fecha_pago) >= primer_dia_mes_anterior,
             func.date(Pago.fecha_pago) <= ultimo_dia_mes_anterior,
-            Pago.conciliado == True,  # ✅ Solo pagos conciliados
+            Pago.conciliado.is_(True),  # ✅ Solo pagos conciliados
         )
         if analista or concesionario or modelo:
             total_cobrado_anterior_query = total_cobrado_anterior_query.join(
@@ -853,7 +853,7 @@ def dashboard_administrador(
             cobrado_mes_query = db.query(func.sum(Pago.monto_pagado)).filter(
                 func.date(Pago.fecha_pago) >= mes_inicio,
                 func.date(Pago.fecha_pago) <= mes_fin,
-                Pago.conciliado == True,  # ✅ Solo pagos conciliados
+                Pago.conciliado.is_(True),  # ✅ Solo pagos conciliados
             )
             if analista or concesionario or modelo:
                 cobrado_mes_query = cobrado_mes_query.join(
@@ -891,7 +891,7 @@ def dashboard_administrador(
 
             # ✅ Cuotas pagadas del mes (para calcular morosidad correctamente)
             cuotas_pagadas_mes_query = (
-                db.query(func.count(Cuota.id))
+            db.query(func.count(Cuota.id))
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .filter(
                     Cuota.estado == "PAGADO",

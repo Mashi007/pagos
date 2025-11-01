@@ -1,7 +1,7 @@
 import io
 import logging
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import asc, desc, func
@@ -245,36 +245,36 @@ def exportar_auditoria(
         ).order_by(desc(Auditoria.fecha))
         registros_general = query_general.all()
 
-        registros_prestamos = db.query(PrestamoAuditoria).order_by(
+        query_prestamos = db.query(PrestamoAuditoria).order_by(
             desc(PrestamoAuditoria.fecha_cambio)
         )
-        registros_pagos = db.query(PagoAuditoria).order_by(
+        query_pagos = db.query(PagoAuditoria).order_by(
             desc(PagoAuditoria.fecha_cambio)
         )
 
         # Filtros aproximados para detalladas
         if accion:
-            registros_prestamos = registros_prestamos.filter(
+            query_prestamos = query_prestamos.filter(
                 PrestamoAuditoria.accion == accion
             )
-            registros_pagos = registros_pagos.filter(PagoAuditoria.accion == accion)
+            query_pagos = query_pagos.filter(PagoAuditoria.accion == accion)
         if fecha_desde:
-            registros_prestamos = registros_prestamos.filter(
+            query_prestamos = query_prestamos.filter(
                 PrestamoAuditoria.fecha_cambio >= fecha_desde
             )
-            registros_pagos = registros_pagos.filter(
+            query_pagos = query_pagos.filter(
                 PagoAuditoria.fecha_cambio >= fecha_desde
             )
         if fecha_hasta:
-            registros_prestamos = registros_prestamos.filter(
+            query_prestamos = query_prestamos.filter(
                 PrestamoAuditoria.fecha_cambio <= fecha_hasta
             )
-            registros_pagos = registros_pagos.filter(
+            query_pagos = query_pagos.filter(
                 PagoAuditoria.fecha_cambio <= fecha_hasta
             )
         # modulo/usuario_email no siempre disponibles en detalladas; modulo lo mapeamos
-        registros_prestamos = registros_prestamos.all()
-        registros_pagos = registros_pagos.all()
+        registros_prestamos: List[PrestamoAuditoria] = query_prestamos.all()
+        registros_pagos: List[PagoAuditoria] = query_pagos.all()
 
         # Unificar
         unified = []
@@ -442,7 +442,7 @@ def estadisticas_auditoria(
         )
 
         # Acciones por módulo (entidad)
-        acciones_por_modulo = {}
+        acciones_por_modulo: dict[str, int] = {}
         # Calcular acciones por módulo de forma segura
         for r in db.query(Auditoria.entidad).all():
             key = getattr(r, "entidad", None) or "DESCONOCIDO"

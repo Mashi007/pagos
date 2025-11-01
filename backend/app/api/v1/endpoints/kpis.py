@@ -244,7 +244,7 @@ def dashboard_kpis_principales(
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(pago_cuotas, pago_cuotas.c.cuota_id == Cuota.id)
         .join(Pago, pago_cuotas.c.pago_id == Pago.id)
-        .filter(Pago.conciliado == True)
+        .filter(Pago.conciliado.is_(True))
     )
     # Aplicar filtros de préstamo (los filtros de cuota requieren join con Prestamo, ya está)
     if analista or concesionario or modelo:
@@ -279,7 +279,7 @@ def dashboard_kpis_principales(
             ~Cuota.id.in_(
                 db.query(pago_cuotas.c.cuota_id)
                 .join(Pago, pago_cuotas.c.pago_id == Pago.id)
-                .filter(Pago.conciliado == True)
+                .filter(Pago.conciliado.is_(True))
             )
         )
     )
