@@ -304,11 +304,11 @@ async def upload_logo(
         }
         extension = content_type_to_ext.get(logo.content_type, ".svg")
 
-        # Crear directorio de logos si no existe
-        # Guardar en el directorio de archivos estáticos del frontend
-        # En producción, esto debería estar en el directorio público del frontend
-        base_dir = Path(__file__).parent.parent.parent.parent.parent  # Raíz del proyecto
-        logos_dir = base_dir / "frontend" / "public" / "logos"
+        # Crear directorio de logos en el directorio de uploads del backend
+        from app.core.config import settings
+        
+        uploads_dir = Path(settings.UPLOAD_DIR) if hasattr(settings, 'UPLOAD_DIR') else Path("uploads")
+        logos_dir = uploads_dir / "logos"
         logos_dir.mkdir(parents=True, exist_ok=True)
 
         # Nombre del archivo: logo-custom.{ext}
@@ -325,13 +325,57 @@ async def upload_logo(
             "message": "Logo cargado exitosamente",
             "status": "success",
             "filename": logo_filename,
-            "path": f"/logos/{logo_filename}",
+            "path": f"/api/v1/configuracion/logo/{logo_filename}",
+            "url": f"/api/v1/configuracion/logo/{logo_filename}",
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error al subir logo: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al subir logo: {str(e)}")
+
+
+@router.get("/logo/{filename}")
+async def obtener_logo(
+    filename: str,
+):
+    """Obtener logo de la empresa"""
+    try:
+        from fastapi.responses import FileResponse
+        from app.core.config import settings
+        
+        # Validar que el archivo sea del tipo correcto
+        if not filename.startswith("logo-custom") or not any(
+            filename.endswith(ext) for ext in [".svg", ".png", ".jpg", ".jpeg"]
+        ):
+            raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
+
+        uploads_dir = Path(settings.UPLOAD_DIR) if hasattr(settings, 'UPLOAD_DIR') else Path("uploads")
+        logo_path = uploads_dir / "logos" / filename
+
+        if not logo_path.exists():
+            raise HTTPException(status_code=404, detail="Logo no encontrado")
+
+        # Determinar content type
+        content_type_map = {
+            ".svg": "image/svg+xml",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+        }
+        ext = Path(filename).suffix.lower()
+        media_type = content_type_map.get(ext, "application/octet-stream")
+
+        return FileResponse(
+            path=str(logo_path),
+            media_type=media_type,
+            filename=filename,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo logo: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error obteniendo logo: {str(e)}")
 
 
 # ============================================

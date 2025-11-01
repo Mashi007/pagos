@@ -24,10 +24,11 @@ export function Logo({ className, size = 'md' }: LogoProps) {
   const [hasChecked, setHasChecked] = useState(false)
 
   useEffect(() => {
-    // Intentar cargar el logo personalizado
+    // Intentar cargar el logo personalizado desde el API
     const checkCustomLogo = async () => {
       for (const ext of LOGO_EXTENSIONS) {
-        const logoPath = `/logos/logo-custom${ext}`
+        const filename = `logo-custom${ext}`
+        const logoPath = `/api/v1/configuracion/logo/${filename}`
         try {
           // Usar timestamp para evitar caché
           const img = new Image()
