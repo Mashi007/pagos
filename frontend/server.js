@@ -96,8 +96,9 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
       // Necesitamos agregar /api de vuelta: /v1/modelos-vehiculos -> /api/v1/modelos-vehiculos
       // El query string se preserva automáticamente por http-proxy-middleware - NO debemos agregarlo manualmente
       const rewritten = `/api${path}`;
-      // Solo loggear el path sin query string - el middleware lo maneja automáticamente
+      const fullUrl = `${API_URL}${rewritten}${req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''}`;
       console.log(`🔄 Path rewrite: "${path}" -> "${rewritten}"`);
+      console.log(`🔗 URL completa del backend: ${fullUrl}`);
       return rewritten;
     },
     // Seguir redirects del backend (3xx)
@@ -122,13 +123,16 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
       // El proxyReq ya tiene el path reescrito y el query string se preserva automáticamente
       // IMPORTANTE: NO debemos modificar el query string manualmente - http-proxy-middleware lo maneja
       const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
+      const targetUrl = `${API_URL}${proxyReq.path}${queryString ? '?' + queryString : ''}`;
       
       console.log(`➡️  [${req.method}] Proxying hacia backend`);
       console.log(`   Request original: ${req.originalUrl || req.url}`);
       console.log(`   req.path: ${req.path}`);
       console.log(`   proxyReq.path (reescrito): ${proxyReq.path}`);
+      console.log(`   Target URL completa: ${targetUrl}`);
       console.log(`   Query string: ${queryString || '(vacío)'}`);
-      // No construir targetUrl manualmente - el middleware lo hace correctamente
+      console.log(`   Host del proxyReq: ${proxyReq.getHeader('host')}`);
+      console.log(`   Target host: ${new URL(API_URL).host}`);
       
       // Log detallado de headers
       const authHeader = req.headers.authorization || req.headers.Authorization;
@@ -151,6 +155,24 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
       const status = proxyRes.statusCode;
       const emoji = status >= 200 && status < 300 ? '✅' : status >= 400 ? '❌' : '⚠️';
       console.log(`${emoji} [${req.method}] Proxy response: ${status} para ${req.originalUrl || req.url}`);
+      if (status === 404) {
+        console.error(`   ❌ ERROR 404 - El backend no encontró la ruta: ${API_URL}${proxyRes.req?.path || req.path}`);
+        console.error(`   Verifica que el endpoint existe en el backend y que la ruta sea correcta`);
+      }
+    },
+    onProxyError: (err, req, res) => {
+      console.error(`❌ ERROR en proxy durante la petición: ${err.message}`);
+      console.error(`   URL: ${req.originalUrl || req.url}`);
+      console.error(`   Target: ${API_URL}`);
+      console.error(`   Stack: ${err.stack}`);
+      if (!res.headersSent) {
+        res.status(502).json({
+          error: 'Proxy error',
+          message: err.message,
+          target: API_URL,
+          path: req.path
+        });
+      }
     }
   });
   
