@@ -20,6 +20,7 @@ import {
   X,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Wrench,
   Building,
   Car,
@@ -29,8 +30,6 @@ import {
   User,
   LogOut,
   Menu,
-  Minimize,
-  Maximize,
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -316,9 +315,9 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                 title={isCompact ? "Expandir sidebar" : "Compactar sidebar"}
               >
                 {isCompact ? (
-                  <Maximize className="h-4 w-4" />
+                  <ChevronRight className="h-4 w-4" />
                 ) : (
-                  <Minimize className="h-4 w-4" />
+                  <ChevronLeft className="h-4 w-4" />
                 )}
               </Button>
             </div>

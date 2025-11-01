@@ -5,7 +5,6 @@ import {
   CreditCard,
   Target,
   TrendingUp,
-  ChevronLeft,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -46,9 +45,9 @@ export function DashboardCobranza() {
   const construirParamsDashboard = () => construirParams(periodo)
 
   // Cargar datos del dashboard
-  const { data: dashboardData, isLoading: loadingDashboard, refetch } = useQuery<DashboardData>({
+  const { data: dashboardData, isLoading: loadingDashboard, refetch } = useQuery({
     queryKey: ['dashboard-cobranza', periodo, filtros],
-    queryFn: async (): Promise<DashboardData> => {
+    queryFn: async () => {
       try {
         const params = construirParamsDashboard()
         const response = await apiClient.get<DashboardData>(`/api/v1/dashboard/admin?${params}`)
@@ -62,7 +61,7 @@ export function DashboardCobranza() {
             totalCobrado: 0,
             tasaRecuperacion: 0,
           },
-        }
+        } as DashboardData
       }
     },
     staleTime: 5 * 60 * 1000,
@@ -107,8 +106,7 @@ export function DashboardCobranza() {
             size="sm"
             onClick={() => navigate('/dashboard/menu')}
           >
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Volver al Menú
+            ← Volver al Menú
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">KPIs de Cobranza</h1>

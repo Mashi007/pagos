@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { ChevronLeft } from 'lucide-react'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
 import { DashboardFiltrosPanel } from '@/components/dashboard/DashboardFiltrosPanel'
@@ -20,9 +19,9 @@ export function DashboardPagos() {
   const { construirFiltrosObject } = useDashboardFiltros(filtros)
 
   // Cargar opciones de filtros
-  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>({
+  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
-    queryFn: async (): Promise<{ analistas: string[]; concesionarios: string[]; modelos: string[] }> => {
+    queryFn: async () => {
       const response = await apiClient.get<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>('/api/v1/dashboard/opciones-filtros')
       return response
     },
@@ -59,8 +58,7 @@ export function DashboardPagos() {
             size="sm"
             onClick={() => navigate('/dashboard/menu')}
           >
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Volver al Menú
+            ← Volver al Menú
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">KPIs de Pagos</h1>

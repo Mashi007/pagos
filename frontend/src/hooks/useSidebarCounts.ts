@@ -32,7 +32,7 @@ export function useSidebarCounts() {
 
         // Procesar KPIs de pagos
         if (kpisResponse.status === 'fulfilled') {
-          const kpisData = kpisResponse.value.data
+          const kpisData = kpisResponse.value as any
           // Cuotas pendientes como pagos pendientes
           pagosPendientes = kpisData?.cuotas_pendientes || 0
           // Clientes en mora como cuotas en mora
@@ -41,7 +41,7 @@ export function useSidebarCounts() {
 
         // Procesar estadísticas de notificaciones
         if (notificacionesResponse.status === 'fulfilled') {
-          const notifData = notificacionesResponse.value.data
+          const notifData = notificacionesResponse.value as any
           notificacionesNoLeidas = notifData?.no_leidas || 0
         }
 

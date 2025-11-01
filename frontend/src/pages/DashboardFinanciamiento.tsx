@@ -6,7 +6,6 @@ import {
   Activity,
   Clock,
   CheckCircle,
-  ChevronLeft,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -33,7 +32,7 @@ export function DashboardFinanciamiento() {
   const { construirFiltrosObject } = useDashboardFiltros(filtros)
 
   // Cargar opciones de filtros
-  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>({
+  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
     queryFn: async () => {
       const response = await apiClient.get<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>('/api/v1/dashboard/opciones-filtros')
@@ -42,9 +41,9 @@ export function DashboardFinanciamiento() {
   })
 
   // Cargar KPIs
-  const { data: kpisData, isLoading: loadingKpis, refetch } = useQuery<KPIsData>({
+  const { data: kpisData, isLoading: loadingKpis, refetch } = useQuery({
     queryKey: ['kpis-financiamiento', filtros],
-    queryFn: async (): Promise<KPIsData> => {
+    queryFn: async () => {
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
@@ -59,7 +58,7 @@ export function DashboardFinanciamiento() {
         total_financiamiento_activo: response.total_financiamiento_activo || 0,
         total_financiamiento_inactivo: response.total_financiamiento_inactivo || 0,
         total_financiamiento_finalizado: response.total_financiamiento_finalizado || 0,
-      }
+      } as KPIsData
     },
     staleTime: 5 * 60 * 1000,
   })
@@ -85,8 +84,7 @@ export function DashboardFinanciamiento() {
             size="sm"
             onClick={() => navigate('/dashboard/menu')}
           >
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Volver al Menú
+            ← Volver al Menú
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">KPIs de Financiamiento</h1>

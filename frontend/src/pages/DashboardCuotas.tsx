@@ -7,7 +7,6 @@ import {
   Shield,
   AlertTriangle,
   Users,
-  ChevronLeft,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -44,9 +43,9 @@ export function DashboardCuotas() {
   })
 
   // Cargar KPIs
-  const { data: kpisData, isLoading: loadingKpis, refetch } = useQuery<KPIsData>({
+  const { data: kpisData, isLoading: loadingKpis, refetch } = useQuery({
     queryKey: ['kpis-cuotas', filtros],
-    queryFn: async (): Promise<KPIsData> => {
+    queryFn: async () => {
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
@@ -63,7 +62,7 @@ export function DashboardCuotas() {
         total_cuotas_conciliadas: response.total_cuotas_conciliadas || 0,
         cuotas_atrasadas_mes: response.cuotas_atrasadas_mes || 0,
         total_cuotas_impagas_2mas: response.total_cuotas_impagas_2mas || 0,
-      }
+      } as KPIsData
     },
     staleTime: 5 * 60 * 1000,
   })
@@ -89,8 +88,7 @@ export function DashboardCuotas() {
             size="sm"
             onClick={() => navigate('/dashboard/menu')}
           >
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Volver al Menú
+            ← Volver al Menú
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">KPIs de Cuotas</h1>

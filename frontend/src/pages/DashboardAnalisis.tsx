@@ -70,7 +70,7 @@ export function DashboardAnalisis() {
   // Cargar opciones de filtros
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
-    queryFn: async (): Promise<{ analistas: string[]; concesionarios: string[]; modelos: string[] }> => {
+    queryFn: async () => {
       const response = await apiClient.get<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>('/api/v1/dashboard/opciones-filtros')
       return response
     },
@@ -81,7 +81,7 @@ export function DashboardAnalisis() {
   // Cargar datos del dashboard
   const { data: dashboardData, isLoading: loadingDashboard, refetch } = useQuery({
     queryKey: ['dashboard-analisis', periodo, filtros],
-    queryFn: async (): Promise<DashboardData> => {
+    queryFn: async () => {
       try {
         const params = construirParamsDashboard()
         const response = await apiClient.get<DashboardData>(`/api/v1/dashboard/admin?${params}`)
@@ -97,7 +97,7 @@ export function DashboardAnalisis() {
   // Cargar cobros diarios
   const { data: cobrosDiariosData, isLoading: loadingCobrosDiarios } = useQuery({
     queryKey: ['cobros-diarios', filtros],
-    queryFn: async (): Promise<CobrosDiariosResponse> => {
+    queryFn: async () => {
       try {
         const params = construirFiltrosObject()
         const queryParams = new URLSearchParams()
@@ -109,7 +109,7 @@ export function DashboardAnalisis() {
         return response
       } catch (error) {
         console.warn('Error cargando cobros diarios:', error)
-        return { datos: [] }
+        return { datos: [] } as CobrosDiariosResponse
       }
     },
     staleTime: 5 * 60 * 1000,
@@ -170,8 +170,7 @@ export function DashboardAnalisis() {
             size="sm"
             onClick={() => navigate('/dashboard/menu')}
           >
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Volver al Menú
+            ← Volver al Menú
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Análisis y Gráficos</h1>
