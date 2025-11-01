@@ -297,6 +297,15 @@ class ClienteResponse(ClienteBase):
     activo: bool
     usuario_registro: str  # Email del usuario que registró
 
+    # Sobrescribir campo telefono para permitir datos históricos
+    # (en lectura, aceptamos formatos no estándar para no romper datos existentes)
+    telefono: str = Field(
+        ...,
+        min_length=10,  # Mínimo 10 caracteres (formato nacional corto)
+        max_length=20,  # Máximo 20 caracteres (permite formatos variados)
+        description="Teléfono del cliente (formato flexible para lectura de datos históricos)",
+    )
+
     # Sobrescribir validador de telefono para permitir datos históricos
     # (en lectura, aceptamos formatos no estándar para no romper datos existentes)
     @field_validator("telefono", mode="before")
