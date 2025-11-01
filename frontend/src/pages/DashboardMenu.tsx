@@ -8,7 +8,7 @@ import {
   TrendingUp,
   Activity,
   Shield,
-  ArrowRight,
+  ChevronRight,
   LayoutDashboard,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -158,7 +158,7 @@ export function DashboardMenu() {
                     <div className={`p-3 rounded-lg ${category.bgColor}`}>
                       <Icon className={`h-6 w-6 ${category.color}`} />
                     </div>
-                    <ArrowRight className="h-5 w-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                    <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
                   </div>
                   <CardTitle className="text-xl">{category.title}</CardTitle>
                   <CardDescription className="mt-2">

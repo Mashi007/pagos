@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowLeft } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
 import { DashboardFiltrosPanel } from '@/components/dashboard/DashboardFiltrosPanel'
@@ -20,11 +20,11 @@ export function DashboardPagos() {
   const { construirFiltrosObject } = useDashboardFiltros(filtros)
 
   // Cargar opciones de filtros
-  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
+  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>({
     queryKey: ['opciones-filtros'],
-    queryFn: async () => {
-      const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
-      return response as { analistas: string[]; concesionarios: string[]; modelos: string[] }
+    queryFn: async (): Promise<{ analistas: string[]; concesionarios: string[]; modelos: string[] }> => {
+      const response = await apiClient.get<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>('/api/v1/dashboard/opciones-filtros')
+      return response
     },
   })
 
@@ -59,7 +59,7 @@ export function DashboardPagos() {
             size="sm"
             onClick={() => navigate('/dashboard/menu')}
           >
-            <ArrowLeft className="mr-2 h-4 w-4" />
+            <ChevronLeft className="mr-2 h-4 w-4" />
             Volver al Menú
           </Button>
           <div>

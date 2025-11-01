@@ -7,7 +7,7 @@ import {
   Shield,
   AlertTriangle,
   Users,
-  ArrowLeft,
+  ChevronLeft,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -35,25 +35,25 @@ export function DashboardCuotas() {
   const { construirFiltrosObject } = useDashboardFiltros(filtros)
 
   // Cargar opciones de filtros
-  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
+  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>({
     queryKey: ['opciones-filtros'],
     queryFn: async () => {
-      const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
-      return response as { analistas: string[]; concesionarios: string[]; modelos: string[] }
+      const response = await apiClient.get<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>('/api/v1/dashboard/opciones-filtros')
+      return response
     },
   })
 
   // Cargar KPIs
   const { data: kpisData, isLoading: loadingKpis, refetch } = useQuery<KPIsData>({
     queryKey: ['kpis-cuotas', filtros],
-    queryFn: async () => {
+    queryFn: async (): Promise<KPIsData> => {
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
       const queryString = queryParams.toString()
-      const response = await apiClient.get(
+      const response = await apiClient.get<KPIsData>(
         `/api/v1/kpis/dashboard${queryString ? '?' + queryString : ''}`
       )
       return {
@@ -89,7 +89,7 @@ export function DashboardCuotas() {
             size="sm"
             onClick={() => navigate('/dashboard/menu')}
           >
-            <ArrowLeft className="mr-2 h-4 w-4" />
+            <ChevronLeft className="mr-2 h-4 w-4" />
             Volver al Menú
           </Button>
           <div>

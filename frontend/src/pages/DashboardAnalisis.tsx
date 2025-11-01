@@ -68,11 +68,11 @@ export function DashboardAnalisis() {
   const { construirParams, construirFiltrosObject } = useDashboardFiltros(filtros)
 
   // Cargar opciones de filtros
-  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
+  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>({
     queryKey: ['opciones-filtros'],
-    queryFn: async () => {
-      const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
-      return response as { analistas: string[]; concesionarios: string[]; modelos: string[] }
+    queryFn: async (): Promise<{ analistas: string[]; concesionarios: string[]; modelos: string[] }> => {
+      const response = await apiClient.get<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>('/api/v1/dashboard/opciones-filtros')
+      return response
     },
   })
 
@@ -81,14 +81,14 @@ export function DashboardAnalisis() {
   // Cargar datos del dashboard
   const { data: dashboardData, isLoading: loadingDashboard, refetch } = useQuery<DashboardData>({
     queryKey: ['dashboard-analisis', periodo, filtros],
-    queryFn: async () => {
+    queryFn: async (): Promise<DashboardData> => {
       try {
         const params = construirParamsDashboard()
-        const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`)
-        return response as DashboardData
+        const response = await apiClient.get<DashboardData>(`/api/v1/dashboard/admin?${params}`)
+        return response
       } catch (error) {
         console.warn('Error cargando dashboard:', error)
-        return {}
+        return {} as DashboardData
       }
     },
     staleTime: 5 * 60 * 1000,
@@ -97,7 +97,7 @@ export function DashboardAnalisis() {
   // Cargar cobros diarios
   const { data: cobrosDiariosData, isLoading: loadingCobrosDiarios } = useQuery<CobrosDiariosResponse>({
     queryKey: ['cobros-diarios', filtros],
-    queryFn: async () => {
+    queryFn: async (): Promise<CobrosDiariosResponse> => {
       try {
         const params = construirFiltrosObject()
         const queryParams = new URLSearchParams()
@@ -105,8 +105,8 @@ export function DashboardAnalisis() {
         Object.entries(params).forEach(([key, value]) => {
           if (value) queryParams.append(key, value.toString())
         })
-        const response = await apiClient.get(`/api/v1/dashboard/cobros-diarios?${queryParams.toString()}`)
-        return response as CobrosDiariosResponse
+        const response = await apiClient.get<CobrosDiariosResponse>(`/api/v1/dashboard/cobros-diarios?${queryParams.toString()}`)
+        return response
       } catch (error) {
         console.warn('Error cargando cobros diarios:', error)
         return { datos: [] }

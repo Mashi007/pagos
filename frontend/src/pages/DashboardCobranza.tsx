@@ -5,7 +5,7 @@ import {
   CreditCard,
   Target,
   TrendingUp,
-  ArrowLeft,
+  ChevronLeft,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -35,11 +35,11 @@ export function DashboardCobranza() {
   const { construirParams, construirFiltrosObject } = useDashboardFiltros(filtros)
 
   // Cargar opciones de filtros
-  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
+  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>({
     queryKey: ['opciones-filtros'],
     queryFn: async () => {
-      const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
-      return response as { analistas: string[]; concesionarios: string[]; modelos: string[] }
+      const response = await apiClient.get<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>('/api/v1/dashboard/opciones-filtros')
+      return response
     },
   })
 
@@ -48,11 +48,11 @@ export function DashboardCobranza() {
   // Cargar datos del dashboard
   const { data: dashboardData, isLoading: loadingDashboard, refetch } = useQuery<DashboardData>({
     queryKey: ['dashboard-cobranza', periodo, filtros],
-    queryFn: async () => {
+    queryFn: async (): Promise<DashboardData> => {
       try {
         const params = construirParamsDashboard()
-        const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`)
-        return response as DashboardData
+        const response = await apiClient.get<DashboardData>(`/api/v1/dashboard/admin?${params}`)
+        return response
       } catch (error) {
         console.warn('Error cargando dashboard:', error)
         return {
@@ -107,7 +107,7 @@ export function DashboardCobranza() {
             size="sm"
             onClick={() => navigate('/dashboard/menu')}
           >
-            <ArrowLeft className="mr-2 h-4 w-4" />
+            <ChevronLeft className="mr-2 h-4 w-4" />
             Volver al Menú
           </Button>
           <div>
