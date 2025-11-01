@@ -209,6 +209,11 @@ class CobranzasService {
     
     return await apiClient.get(url)
   }
+
+  // Procesar notificaciones de atrasos
+  async procesarNotificacionesAtrasos(): Promise<{ mensaje: string, estadisticas: any }> {
+    return await apiClient.post(`${this.baseUrl}/notificaciones/atrasos`)
+  }
 }
 
 export const cobranzasService = new CobranzasService()

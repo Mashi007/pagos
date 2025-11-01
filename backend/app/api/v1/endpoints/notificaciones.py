@@ -638,6 +638,8 @@ async def enviar_notificacion_con_plantilla(
         nueva_notif = Notificacion(
             cliente_id=cliente_id,
             tipo=plantilla.tipo,
+            canal="EMAIL",
+            asunto=asunto,
             mensaje=cuerpo,
             estado="PENDIENTE",
         )

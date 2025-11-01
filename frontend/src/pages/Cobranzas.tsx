@@ -10,7 +10,9 @@ import {
   DollarSign,
   Users,
   Download,
-  BarChart3
+  BarChart3,
+  Bell,
+  Loader2
 } from 'lucide-react'
 import { cobranzasService } from '@/services/cobranzasService'
 import { useQuery } from '@tanstack/react-query'
@@ -21,6 +23,7 @@ import { toast } from 'sonner'
 export function Cobranzas() {
   const [tabActiva, setTabActiva] = useState('resumen')
   const [filtroDiasRetraso, setFiltroDiasRetraso] = useState<number | undefined>(undefined)
+  const [procesandoNotificaciones, setProcesandoNotificaciones] = useState(false)
 
   // Query para resumen
   const { data: resumen, isLoading: cargandoResumen } = useQuery({
@@ -111,6 +114,19 @@ export function Cobranzas() {
     return 'bg-red-100 text-red-800'
   }
 
+  // Procesar notificaciones de atrasos
+  const procesarNotificaciones = async () => {
+    setProcesandoNotificaciones(true)
+    try {
+      const resultado = await cobranzasService.procesarNotificacionesAtrasos()
+      toast.success(`Notificaciones procesadas: ${resultado.estadisticas?.enviadas || 0} enviadas`)
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || 'Error al procesar notificaciones')
+    } finally {
+      setProcesandoNotificaciones(false)
+    }
+  }
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -121,6 +137,23 @@ export function Cobranzas() {
             Seguimiento de pagos atrasados y cartera vencida
           </p>
         </div>
+        <Button 
+          onClick={procesarNotificaciones}
+          disabled={procesandoNotificaciones}
+          className="flex items-center gap-2"
+        >
+          {procesandoNotificaciones ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Procesando...
+            </>
+          ) : (
+            <>
+              <Bell className="h-4 w-4" />
+              Procesar Notificaciones Ahora
+            </>
+          )}
+        </Button>
       </div>
 
       {/* KPIs Resumen */}

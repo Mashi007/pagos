@@ -178,6 +178,8 @@ class NotificacionAutomaticaService:
             nueva_notif = Notificacion(
                 cliente_id=cliente.id,
                 tipo=plantilla.tipo,
+                canal="EMAIL",
+                asunto=asunto,
                 mensaje=cuerpo,
                 estado="PENDIENTE",
             )

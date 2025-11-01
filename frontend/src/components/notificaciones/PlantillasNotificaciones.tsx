@@ -8,13 +8,21 @@ import { Tabs } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { useSearchClientes } from '@/hooks/useClientes'
 import { SearchableSelect } from '@/components/ui/searchable-select'
+import toast from 'react-hot-toast'
+import { Upload, Search, Eye, EyeOff, FileText } from 'lucide-react'
 
 type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
 
 export function PlantillasNotificaciones() {
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
+  const [plantillasFiltradas, setPlantillasFiltradas] = useState<NotificacionPlantilla[]>([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<NotificacionPlantilla | null>(null)
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroTipo, setFiltroTipo] = useState('')
+  const [filtroActiva, setFiltroActiva] = useState<boolean | null>(null)
+  const [mostrarHTML, setMostrarHTML] = useState(true)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [nombre, setNombre] = useState('')
   const [tipo, setTipo] = useState('')
   const [activa, setActiva] = useState(true)
@@ -49,6 +57,9 @@ export function PlantillasNotificaciones() {
     try {
       const data = await notificacionService.listarPlantillas(undefined, false)
       setPlantillas(data)
+      setPlantillasFiltradas(data)
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || 'Error al cargar plantillas')
     } finally {
       setLoading(false)
     }
@@ -57,6 +68,29 @@ export function PlantillasNotificaciones() {
   useEffect(() => {
     cargar()
   }, [])
+
+  // Filtrar plantillas
+  useEffect(() => {
+    let filtradas = [...plantillas]
+    
+    if (busqueda) {
+      filtradas = filtradas.filter(p => 
+        p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+        p.tipo.toLowerCase().includes(busqueda.toLowerCase()) ||
+        p.asunto?.toLowerCase().includes(busqueda.toLowerCase())
+      )
+    }
+    
+    if (filtroTipo) {
+      filtradas = filtradas.filter(p => p.tipo === filtroTipo)
+    }
+    
+    if (filtroActiva !== null) {
+      filtradas = filtradas.filter(p => Boolean(p.activa) === filtroActiva)
+    }
+    
+    setPlantillasFiltradas(filtradas)
+  }, [plantillas, busqueda, filtroTipo, filtroActiva])
 
   const limpiar = () => {
     setSelected(null)
@@ -100,7 +134,7 @@ export function PlantillasNotificaciones() {
       }, 0)
     }
 
-    if (focus === 'asunto') return insertarVariable(), insertInto(asuntoRef.current, setAsunto, asunto)
+    if (focus === 'asunto') return insertInto(asuntoRef.current, setAsunto, asunto)
     if (focus === 'encabezado') return insertInto(encRef.current, setEncabezado, encabezado)
     if (focus === 'cuerpo') return insertInto(cuerpoRef.current, setCuerpo, cuerpo)
     if (focus === 'firma') return insertInto(firmaRef.current, setFirma, firma)
@@ -162,68 +196,247 @@ export function PlantillasNotificaciones() {
   const guardar = async () => {
     const error = validarObligatorias()
     if (error) {
-      alert(error)
+      toast.error(error)
       return
     }
 
-    const payload = {
-      nombre,
-      tipo,
-      asunto,
-      cuerpo: cuerpoFinal,
-      activa,
+    if (!nombre.trim() || !tipo || !asunto.trim() || !cuerpoFinal.trim()) {
+      toast.error('Complete todos los campos obligatorios')
+      return
     }
 
-    if (selected?.id) {
-      await notificacionService.actualizarPlantilla(selected.id, payload)
-    } else {
-      await notificacionService.crearPlantilla(payload)
+    try {
+      const payload = {
+        nombre,
+        tipo,
+        asunto,
+        cuerpo: cuerpoFinal,
+        activa,
+      }
+
+      if (selected?.id) {
+        await notificacionService.actualizarPlantilla(selected.id, payload)
+        toast.success('Plantilla actualizada exitosamente')
+      } else {
+        await notificacionService.crearPlantilla(payload)
+        toast.success('Plantilla creada exitosamente')
+      }
+      await cargar()
+      limpiar()
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || 'Error al guardar plantilla')
     }
-    await cargar()
-    alert('Plantilla guardada')
   }
 
   const eliminar = async () => {
-    if (!selected?.id) return
-    if (!confirm('¿Eliminar plantilla?')) return
-    await notificacionService.eliminarPlantilla(selected.id)
-    limpiar()
-    await cargar()
+    if (!selected?.id) {
+      toast.error('Seleccione una plantilla para eliminar')
+      return
+    }
+    
+    if (!window.confirm(`¿Eliminar plantilla "${selected.nombre}"?`)) return
+    
+    try {
+      await notificacionService.eliminarPlantilla(selected.id)
+      toast.success('Plantilla eliminada exitosamente')
+      limpiar()
+      await cargar()
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || 'Error al eliminar plantilla')
+    }
   }
 
   const exportar = async () => {
-    if (!selected?.id) return
-    const data = await notificacionService.exportarPlantilla(selected.id)
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `plantilla_${selected.nombre}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    if (!selected?.id) {
+      toast.error('Seleccione una plantilla para exportar')
+      return
+    }
+    
+    try {
+      const data = await notificacionService.exportarPlantilla(selected.id)
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `plantilla_${selected.nombre.replace(/[^a-z0-9]/gi, '_')}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Plantilla exportada exitosamente')
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || 'Error al exportar plantilla')
+    }
+  }
+
+  const importar = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text)
+      
+      if (!data.nombre || !data.tipo || !data.asunto || !data.cuerpo) {
+        toast.error('Archivo JSON inválido: faltan campos obligatorios')
+        return
+      }
+
+      setNombre(data.nombre)
+      setTipo(data.tipo)
+      setAsunto(data.asunto)
+      setCuerpo(data.cuerpo || '')
+      setEncabezado('')
+      setFirma('')
+      setActiva(Boolean(data.activa))
+      setSelected(null)
+      
+      toast.success('Plantilla importada. Revise y guarde cuando esté lista.')
+    } catch (error: any) {
+      toast.error('Error al leer el archivo JSON: ' + (error.message || 'Formato inválido'))
+    }
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   const enviarPrueba = async () => {
-    if (!selected?.id) return alert('Selecciona o guarda la plantilla primero')
-    if (!clienteIdPrueba) return alert('Indica un cliente de prueba')
+    if (!selected?.id && !nombre.trim()) {
+      toast.error('Guarde o seleccione una plantilla primero')
+      return
+    }
+    
+    if (!clienteIdPrueba) {
+      toast.error('Seleccione un cliente de prueba')
+      return
+    }
+
     try {
-      await notificacionService.enviarConPlantilla(selected.id, { cliente_id: Number(clienteIdPrueba), variables: variablesPrueba })
-      alert('Prueba enviada')
-    } catch (e) {
-      alert('No se pudo enviar la prueba')
+      if (!selected?.id) {
+        // Guardar primero si es nueva
+        const error = validarObligatorias()
+        if (error) {
+          toast.error(error)
+          return
+        }
+        const nueva = await notificacionService.crearPlantilla({
+          nombre,
+          tipo,
+          asunto,
+          cuerpo: cuerpoFinal,
+          activa: false, // No activar automáticamente al probar
+        })
+        await notificacionService.enviarConPlantilla(nueva.id, { 
+          cliente_id: Number(clienteIdPrueba), 
+          variables: variablesPrueba 
+        })
+        await cargar()
+      } else {
+        await notificacionService.enviarConPlantilla(selected.id, { 
+          cliente_id: Number(clienteIdPrueba), 
+          variables: variablesPrueba 
+        })
+      }
+      toast.success('Email de prueba enviado exitosamente')
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || 'Error al enviar prueba')
     }
   }
+
+  // Reemplazar variables en vista previa con datos de ejemplo
+  const cuerpoPreview = useMemo(() => {
+    let preview = cuerpoFinal
+    const ejemplos: Record<string, string> = {
+      nombre: 'Juan Pérez',
+      monto: '500.00',
+      fecha_vencimiento: '15/11/2025',
+      numero_cuota: '3',
+      credito_id: '123',
+      cedula: 'V-12345678',
+      dias_atraso: '2',
+    }
+    Object.entries(ejemplos).forEach(([key, val]) => {
+      preview = preview.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val)
+    })
+    return preview
+  }, [cuerpoFinal])
+
+  const asuntoPreview = useMemo(() => {
+    let preview = asunto
+    const ejemplos: Record<string, string> = {
+      nombre: 'Juan Pérez',
+      monto: '500.00',
+      fecha_vencimiento: '15/11/2025',
+      numero_cuota: '3',
+      credito_id: '123',
+      cedula: 'V-12345678',
+      dias_atraso: '2',
+    }
+    Object.entries(ejemplos).forEach(([key, val]) => {
+      preview = preview.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val)
+    })
+    return preview
+  }, [asunto])
 
   return (
     <div className="grid grid-cols-12 gap-4">
       <div className="col-span-4 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Plantillas</h2>
-          <Button onClick={limpiar} variant="secondary">Nueva</Button>
+          <div className="flex gap-2">
+            <Button onClick={importar} variant="outline" size="sm" title="Importar plantilla">
+              <Upload className="h-4 w-4" />
+            </Button>
+            <input ref={fileInputRef} type="file" accept=".json" onChange={handleImportFile} className="hidden" />
+            <Button onClick={limpiar} variant="secondary" size="sm">Nueva</Button>
+          </div>
         </div>
-        <div className="border rounded-lg divide-y max-h-[70vh] overflow-auto">
+        
+        {/* Búsqueda y filtros */}
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input 
+              value={busqueda} 
+              onChange={e => setBusqueda(e.target.value)}
+              placeholder="Buscar plantillas..." 
+              className="pl-10"
+            />
+          </div>
+          <div className="flex gap-2">
+            <select 
+              value={filtroTipo} 
+              onChange={e => setFiltroTipo(e.target.value)}
+              className="flex-1 border rounded px-2 py-1 text-sm"
+            >
+              <option value="">Todos los tipos</option>
+              {tiposSugeridos.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select 
+              value={filtroActiva === null ? '' : String(filtroActiva)} 
+              onChange={e => setFiltroActiva(e.target.value === '' ? null : e.target.value === 'true')}
+              className="border rounded px-2 py-1 text-sm"
+            >
+              <option value="">Todas</option>
+              <option value="true">Solo activas</option>
+              <option value="false">Solo inactivas</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="border rounded-lg divide-y max-h-[60vh] overflow-auto">
           {loading && <div className="p-3 text-sm text-gray-500">Cargando...</div>}
-          {!loading && plantillas.map(p => (
+          {!loading && plantillasFiltradas.length === 0 && (
+            <div className="p-3 text-sm text-gray-500 text-center">
+              {busqueda || filtroTipo || filtroActiva !== null 
+                ? 'No se encontraron plantillas con los filtros seleccionados'
+                : 'No hay plantillas. Cree una nueva.'}
+            </div>
+          )}
+          {!loading && plantillasFiltradas.map(p => (
             <button key={p.id} onClick={() => seleccionar(p)} className={`w-full text-left p-3 hover:bg-gray-50 ${selected?.id===p.id?'bg-gray-50':''}`}>
               <div className="flex items-center justify-between">
                 <div>
@@ -294,17 +507,41 @@ export function PlantillasNotificaciones() {
           <div className="flex gap-2">
             <Button onClick={guardar}>{selected ? 'Actualizar' : 'Guardar'}</Button>
             {selected && <Button variant="destructive" onClick={eliminar}>Eliminar</Button>}
-            {selected && <Button variant="secondary" onClick={exportar}>Exportar</Button>}
+            {selected && (
+              <>
+                <Button variant="secondary" onClick={exportar} title="Exportar a JSON">
+                  <FileText className="h-4 w-4 mr-1" />
+                  Exportar
+                </Button>
+              </>
+            )}
           </div>
         </Card>
 
         <Card className="p-4 space-y-3">
-          <h3 className="font-semibold">Vista previa</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold">Vista previa</h3>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setMostrarHTML(!mostrarHTML)}
+              title={mostrarHTML ? "Ver texto plano" : "Ver HTML renderizado"}
+            >
+              {mostrarHTML ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </Button>
+          </div>
           <div className="border rounded p-3 bg-white">
-            <div className="text-sm text-gray-600">Asunto:</div>
-            <div className="font-medium mb-2">{asunto || '(sin asunto)'}</div>
-            <hr />
-            <pre className="whitespace-pre-wrap text-sm mt-2">{cuerpoFinal || '(sin contenido)'}</pre>
+            <div className="text-sm text-gray-600 mb-1">Asunto:</div>
+            <div className="font-medium mb-3 text-sm">{asuntoPreview || '(sin asunto)'}</div>
+            <hr className="mb-3" />
+            {mostrarHTML ? (
+              <div 
+                className="text-sm prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{ __html: cuerpoPreview.replace(/\n/g, '<br>') }}
+              />
+            ) : (
+              <pre className="whitespace-pre-wrap text-sm mt-2">{cuerpoFinal || '(sin contenido)'}</pre>
+            )}
           </div>
 
           <div className="flex items-end gap-3">
