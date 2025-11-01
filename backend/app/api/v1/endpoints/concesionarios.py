@@ -38,9 +38,11 @@ def list_concesionarios(
     logger.info("=" * 80)
     logger.info(f"🔍 ENDPOINT EJECUTADO: list_concesionarios")
     logger.info(f"👤 Usuario: {current_user.email if current_user else 'N/A'}")
-    logger.info(f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}")
+    logger.info(
+        f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}"
+    )
     logger.info("=" * 80)
-    
+
     try:
         query = db.query(Concesionario)
 
