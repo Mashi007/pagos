@@ -100,26 +100,35 @@ jobs:
           cd ${{ env.BACKEND_DIR }}
           echo "📝 Verificando orden de imports con isort..."
           echo "::group::Isort - Verificación de Imports"
-          # Generar log primero
-          isort --check-only --diff app/ > isort.log 2>&1
-          ISORT_EXIT_CODE=$?
+          # Generar log primero - NO fallar el pipeline aquí
+          isort --check-only --diff app/ > isort.log 2>&1 || true
+          ISORT_EXIT_CODE=${PIPESTATUS[0]}
           # Mostrar output
           cat isort.log
           echo "::endgroup::"
+          # NO hacer exit aquí - permitir que la corrección automática se ejecute
       
       - name: 🔧 Aplicar correcciones de Isort automáticamente
         run: |
           cd ${{ env.BACKEND_DIR }}
+          echo "🔧 Aplicando correcciones automáticas de Isort..."
           # Solo aplicar si el último commit no fue de Isort
           if ! git log -1 --pretty=%B | grep -q "\[skip ci\]"; then
+            # Aplicar correcciones
             isort app/
             if ! git diff --quiet; then
+              echo "📝 Correcciones de Isort aplicadas. Haciendo commit..."
               git config user.name "GitHub Actions"
               git config user.email "actions@github.com"
               git add app/
               git commit -m "style: Aplicar correcciones automáticas de Isort [skip ci]"
               git push
+              echo "✅ Correcciones de Isort commiteadas y pusheadas"
+            else
+              echo "✅ No se requieren correcciones de Isort"
             fi
+          else
+            echo "⏭️  Último commit fue de Isort, saltando corrección automática"
           fi
       
       - name: 🔒 Verificación de tipos con mypy
