@@ -79,11 +79,13 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
 
           <div className="hidden lg:block">
             <div className="flex items-center space-x-3">
-              <img 
-                src="/logo-compact.svg" 
-                alt="RAPICREDIT Logo" 
-                className="w-8 h-8"
-              />
+              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-md p-1.5">
+                <img 
+                  src="/logo-compact.svg" 
+                  alt="RAPICREDIT Logo" 
+                  className="w-full h-full object-contain"
+                />
+              </div>
               <h1 className="text-xl font-semibold text-gray-900">
                 RAPICREDIT
               </h1>

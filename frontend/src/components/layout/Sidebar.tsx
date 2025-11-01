@@ -67,7 +67,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   }
 
   const getRoleColor = (isAdmin: boolean) => {
-    return isAdmin ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+    return isAdmin ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-blue-100 text-blue-800 border border-blue-200'
   }
 
   const toggleSubmenu = (title: string) => {
@@ -210,20 +210,22 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         variants={sidebarVariants}
         initial="closed"
         animate={isOpen ? "open" : "closed"}
-        className="fixed left-0 top-0 z-50 h-screen w-64 bg-white border-r border-gray-200 shadow-lg lg:relative lg:translate-x-0 lg:h-full"
+        className="fixed left-0 top-0 z-50 h-screen w-64 bg-gradient-to-b from-slate-50 to-blue-50/30 border-r border-blue-200/50 shadow-xl lg:relative lg:translate-x-0 lg:h-full"
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <div className="flex items-center justify-between p-4 border-b border-blue-200/60 bg-gradient-to-r from-blue-600 to-blue-700">
             <div className="flex items-center space-x-3">
-              <img 
-                src="/logo-compact.svg" 
-                alt="RAPICREDIT Logo" 
-                className="w-10 h-10"
-              />
+              <div className="w-12 h-12 bg-white/95 rounded-lg flex items-center justify-center shadow-lg p-1.5">
+                <img 
+                  src="/logo-compact.svg" 
+                  alt="RAPICREDIT Logo" 
+                  className="w-full h-full object-contain"
+                />
+              </div>
               <div>
-                <h2 className="font-bold text-gray-900 text-sm">RAPICREDIT</h2>
-                <p className="text-xs text-gray-500">Sistema v1.0</p>
+                <h2 className="font-bold text-white text-sm">RAPICREDIT</h2>
+                <p className="text-xs text-blue-100">Sistema v1.0</p>
               </div>
             </div>
             <div className="flex items-center space-x-2">
@@ -232,7 +234,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                   variant="ghost"
                   size="icon"
                   onClick={onToggle}
-                  className="lg:hidden"
+                  className="lg:hidden text-white hover:bg-blue-800/50"
                 >
                   <Menu className="h-5 w-5" />
                 </Button>
@@ -241,7 +243,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                 variant="ghost"
                 size="icon"
                 onClick={onClose}
-                className="lg:hidden"
+                className="lg:hidden text-white hover:bg-blue-800/50"
               >
                 <X className="h-5 w-5" />
               </Button>
@@ -265,8 +267,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                       <button
                         onClick={() => toggleSubmenu(item.title)}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                          "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                          "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                          "text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm"
                         )}
                       >
                         <div className="flex items-center space-x-3">
@@ -302,10 +304,10 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                   }}
                                   className={({ isActive }) =>
                                     cn(
-                                      "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                                      "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                                       isActive || isActiveRoute(child.href!)
-                                        ? "bg-primary text-primary-foreground shadow-sm"
-                                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                        ? "bg-blue-600 text-white shadow-md shadow-blue-500/30"
+                                        : "text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm"
                                     )
                                   }
                                 >
@@ -330,10 +332,10 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                       }}
                       className={({ isActive }) =>
                         cn(
-                          "flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                          "flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                           isActive || isActiveRoute(item.href!)
-                            ? "bg-primary text-primary-foreground shadow-sm"
-                            : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                            ? "bg-blue-600 text-white shadow-md shadow-blue-500/30"
+                            : "text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm"
                         )
                       }
                     >
@@ -357,26 +359,26 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           </nav>
 
           {/* Footer con información de usuario */}
-          <div className="p-4 border-t border-gray-200">
+          <div className="p-4 border-t border-blue-200/60 bg-white/50">
             {/* Perfil de Usuario */}
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 transition-colors text-left"
+                className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-blue-50 transition-all duration-200 text-left border border-blue-100/50 hover:border-blue-200 hover:shadow-sm"
               >
-                <div className="w-10 h-10 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 shadow-md">
                   {userInitials}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-gray-900 truncate">
+                  <div className="text-sm font-medium text-slate-900 truncate">
                     {userName}
                   </div>
-                  <div className="text-xs text-gray-500 truncate">
+                  <div className="text-xs text-slate-600 truncate">
                     {userRoleDisplay}
                   </div>
                 </div>
                 <ChevronDown className={cn(
-                  "h-4 w-4 text-gray-500 transition-transform flex-shrink-0",
+                  "h-4 w-4 text-slate-500 transition-transform flex-shrink-0",
                   showUserMenu && "transform rotate-180"
                 )} />
               </button>
@@ -391,14 +393,14 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                     transition={{ duration: 0.2 }}
                     className="overflow-hidden"
                   >
-                    <div className="mt-2 bg-white rounded-lg border border-gray-200 shadow-lg">
-                      <div className="p-4 border-b border-gray-200">
+                    <div className="mt-2 bg-white rounded-lg border border-blue-200 shadow-xl shadow-blue-500/10">
+                      <div className="p-4 border-b border-blue-100 bg-gradient-to-r from-blue-50 to-slate-50">
                         <div className="flex items-center space-x-3">
-                          <div className="w-12 h-12 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-lg font-medium">
+                          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-full flex items-center justify-center text-lg font-medium shadow-md">
                             {userInitials}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-medium text-gray-900 truncate">
+                            <div className="font-medium text-slate-900 truncate">
                               {userName}
                             </div>
                             <Badge className={cn("mt-1", getRoleColor(user?.is_admin || false))}>
@@ -409,11 +411,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                       </div>
 
                       <div className="py-2">
-                        <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2">
+                        <button className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center space-x-2">
                           <User className="h-4 w-4" />
                           <span>Mi Perfil</span>
                         </button>
-                        <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2">
+                        <button className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center space-x-2">
                           <Settings className="h-4 w-4" />
                           <span>Configuración</span>
                         </button>
@@ -427,17 +429,17 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                 // Error silencioso para evitar loops de logging
                               }
                             }}
-                            className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 flex items-center space-x-2"
+                            className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 transition-colors flex items-center space-x-2"
                           >
                             <span>🔄 Actualizar Rol</span>
                           </button>
                         )}
                       </div>
 
-                      <div className="border-t border-gray-200 py-2">
+                      <div className="border-t border-blue-100 py-2">
                         <button
                           onClick={handleLogout}
-                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-2"
                         >
                           <LogOut className="h-4 w-4" />
                           <span>Cerrar Sesión</span>

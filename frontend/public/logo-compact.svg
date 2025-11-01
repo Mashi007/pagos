@@ -1,31 +1,34 @@
 <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="rGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#1E40AF;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#1E3A8A;stop-opacity:1" />
-    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.1"/>
+    </filter>
   </defs>
   
-  <!-- Letra R estilizada en azul oscuro -->
-  <g transform="translate(6, 4)">
-    <!-- Cuerpo principal de la R -->
-    <path d="M0 0 L0 26 L8 26 L8 14 L12 14 L16 26 L22 26 L16 12 L18 0 Z" 
-          fill="url(#rGradient)" 
+  <!-- Letra R estilizada en azul oscuro profesional -->
+  <g transform="translate(5, 3)" filter="url(#shadow)">
+    <!-- Cuerpo vertical principal de la R -->
+    <path d="M2 2 L2 24 L6 24 L6 15 L10 15 L14 24 L20 24 L14 11 L17 2 Z" 
+          fill="#1E40AF" 
           stroke="none"/>
     
-    <!-- Pierna diagonal de la R -->
-    <path d="M8 14 L14 8 L18 8 L12 14 Z" 
-          fill="url(#rGradient)"/>
+    <!-- Loop superior redondeado de la R -->
+    <path d="M6 15 Q6 8 12 8 Q15 8 17 10 L14 11 L10 15 Z" 
+          fill="#1E40AF"/>
+    
+    <!-- Pierna diagonal de la R con punta -->
+    <path d="M6 15 L11 9 L15 9 L10 15 Z" 
+          fill="#1E40AF"/>
     
     <!-- Esquina superior izquierda puntiaguda -->
-    <path d="M0 0 L4 0 L0 4 Z" 
-          fill="url(#rGradient)"/>
+    <path d="M2 2 L5 2 L2 5 Z" 
+          fill="#1E40AF"/>
     
-    <!-- Esquina inferior derecha puntiaguda -->
-    <path d="M16 26 L22 26 L22 20 Z" 
-          fill="url(#rGradient)"/>
+    <!-- Punta inferior derecha -->
+    <path d="M17 24 L20 24 L20 20 Z" 
+          fill="#1E40AF"/>
   </g>
   
-  <!-- Círculo naranja pequeño -->
-  <circle cx="12" cy="32" r="3" fill="#F97316"/>
+  <!-- Círculo naranja pequeño debajo y a la izquierda -->
+  <circle cx="9" cy="32" r="3.5" fill="#F97316" filter="url(#shadow)"/>
 </svg>
