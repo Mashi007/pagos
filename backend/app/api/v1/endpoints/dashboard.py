@@ -542,7 +542,6 @@ def dashboard_administrador(
             fecha_fin_periodo_anterior = fecha_inicio_periodo - timedelta(days=1)
         elif periodo == "año":
             fecha_inicio_periodo = date(hoy.year, 1, 1)
-            fecha_inicio_periodo_anterior = date(hoy.year - 1, 1, 1)
             fecha_fin_periodo_anterior = date(hoy.year - 1, 12, 31)
         else:  # dia
             fecha_inicio_periodo = hoy

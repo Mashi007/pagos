@@ -36,7 +36,7 @@ def list_concesionarios(
 ):
     """Listar concesionarios con filtros"""
     logger.info("=" * 80)
-    logger.info(f"🔍 ENDPOINT EJECUTADO: list_concesionarios")
+    logger.info("🔍 ENDPOINT EJECUTADO: list_concesionarios")
     logger.info(f"👤 Usuario: {current_user.email if current_user else 'N/A'}")
     logger.info(
         f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}"

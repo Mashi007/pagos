@@ -197,10 +197,10 @@ app.include_router(health.router, prefix="/api/v1", tags=["health"])
 # Log detallado de rutas registradas
 logger.info("✅ Todos los routers registrados correctamente")
 logger.info(
-    f"📋 Router modelos_vehiculos registrado con prefix: /api/v1/modelos-vehiculos"
+    "📋 Router modelos_vehiculos registrado con prefix: /api/v1/modelos-vehiculos"
 )
-logger.info(f"📋 Router analistas registrado con prefix: /api/v1/analistas")
-logger.info(f"📋 Router concesionarios registrado con prefix: /api/v1/concesionarios")
+logger.info("📋 Router analistas registrado con prefix: /api/v1/analistas")
+logger.info("📋 Router concesionarios registrado con prefix: /api/v1/concesionarios")
 
 
 @app.get("/", include_in_schema=False)

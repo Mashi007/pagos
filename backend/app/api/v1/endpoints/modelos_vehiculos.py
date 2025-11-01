@@ -34,7 +34,7 @@ def listar_modelos_vehiculos(
 ):
     """Listar modelos de vehículos con filtros"""
     logger.info("=" * 80)
-    logger.info(f"🔍 ENDPOINT EJECUTADO: listar_modelos_vehiculos")
+    logger.info("🔍 ENDPOINT EJECUTADO: listar_modelos_vehiculos")
     logger.info(f"👤 Usuario: {current_user.email if current_user else 'N/A'}")
     logger.info(
         f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}"
