@@ -617,7 +617,9 @@ def dashboard_administrador(
         año_actual = hoy.year
         mes_actual = hoy.month
         primer_dia_mes = date(año_actual, mes_actual, 1)
-        ultimo_dia_mes = date(año_actual, mes_actual, monthrange(año_actual, mes_actual)[1])
+        ultimo_dia_mes = date(
+            año_actual, mes_actual, monthrange(año_actual, mes_actual)[1]
+        )
 
         # Total cobrado del mes actual (solo pagos conciliados)
         total_cobrado_mes_query = db.query(func.sum(Pago.monto_pagado)).filter(
@@ -647,7 +649,9 @@ def dashboard_administrador(
             mes_anterior = mes_actual - 1
             año_anterior = año_actual
         primer_dia_mes_anterior = date(año_anterior, mes_anterior, 1)
-        ultimo_dia_mes_anterior = date(año_anterior, mes_anterior, monthrange(año_anterior, mes_anterior)[1])
+        ultimo_dia_mes_anterior = date(
+            año_anterior, mes_anterior, monthrange(año_anterior, mes_anterior)[1]
+        )
 
         total_cobrado_anterior_query = db.query(func.sum(Pago.monto_pagado)).filter(
             func.date(Pago.fecha_pago) >= primer_dia_mes_anterior,
@@ -733,9 +737,7 @@ def dashboard_administrador(
 
         # Tasa de recuperación mensual = (cuotas pagadas del mes / cuotas planificadas del mes) * 100
         tasa_recuperacion = (
-            (cuotas_pagadas_mes / total_cuotas_mes * 100)
-            if total_cuotas_mes > 0
-            else 0
+            (cuotas_pagadas_mes / total_cuotas_mes * 100) if total_cuotas_mes > 0 else 0
         )
 
         # Tasa recuperación mes anterior - Calcular desde BD histórica
@@ -944,9 +946,9 @@ def dashboard_administrador(
 
         # 22. ANÁLISIS DE MOROSIDAD - Cálculo real desde BD
         # Total Financiamiento: Suma de todos los préstamos aprobados
-        total_financiamiento_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-            Prestamo.estado == "APROBADO"
-        )
+        total_financiamiento_query = db.query(
+            func.sum(Prestamo.total_financiamiento)
+        ).filter(Prestamo.estado == "APROBADO")
         total_financiamiento_query = FiltrosDashboard.aplicar_filtros_prestamo(
             total_financiamiento_query,
             analista,
@@ -955,7 +957,9 @@ def dashboard_administrador(
             fecha_inicio,
             fecha_fin,
         )
-        total_financiamiento_operaciones = float(total_financiamiento_query.scalar() or Decimal("0"))
+        total_financiamiento_operaciones = float(
+            total_financiamiento_query.scalar() or Decimal("0")
+        )
 
         # Cartera Cobrada: Suma de TODOS los pagos (conciliados y no conciliados)
         cartera_cobrada_query = db.query(func.sum(Pago.monto_pagado))
@@ -974,7 +978,9 @@ def dashboard_administrador(
         cartera_cobrada_total = float(cartera_cobrada_query.scalar() or Decimal("0"))
 
         # Morosidad (Diferencia): Total Financiamiento - Cartera Cobrada
-        morosidad_diferencia = max(0, total_financiamiento_operaciones - cartera_cobrada_total)
+        morosidad_diferencia = max(
+            0, total_financiamiento_operaciones - cartera_cobrada_total
+        )
 
         # Mantener nombres de variables para compatibilidad con frontend
         ingresos_capital = total_financiamiento_operaciones
