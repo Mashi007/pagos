@@ -42,13 +42,18 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     queryKey: ['cuotas-prestamo', prestamo.id],
     queryFn: () => prestamoService.getCuotasPrestamo(prestamo.id),
     enabled: prestamo.estado === 'APROBADO',
+    staleTime: 0, // Siempre refetch para obtener datos actualizados
+    refetchOnMount: true, // Refetch al montar el componente
+    refetchOnWindowFocus: true, // Refetch al enfocar la ventana
   })
 
   const getEstadoBadge = (estado: string) => {
     const badges = {
       PENDIENTE: 'bg-yellow-100 text-yellow-800',
-      PAGADA: 'bg-green-100 text-green-800',
-      VENCIDA: 'bg-red-100 text-red-800',
+      PAGADO: 'bg-green-100 text-green-800',  // ✅ Corregido: BD usa "PAGADO" no "PAGADA"
+      PAGADA: 'bg-green-100 text-green-800',   // Mantener compatibilidad
+      ATRASADO: 'bg-red-100 text-red-800',     // ✅ Agregado: BD también usa "ATRASADO"
+      VENCIDA: 'bg-red-100 text-red-800',      // Mantener compatibilidad
       PARCIAL: 'bg-blue-100 text-blue-800',
     }
     return badges[estado as keyof typeof badges] || badges.PENDIENTE
@@ -57,8 +62,10 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   const getEstadoLabel = (estado: string) => {
     const labels: Record<string, string> = {
       PENDIENTE: 'Pendiente',
-      PAGADA: 'Pagada',
-      VENCIDA: 'Vencida',
+      PAGADO: 'Pagado',      // ✅ Corregido: BD usa "PAGADO"
+      PAGADA: 'Pagada',      // Mantener compatibilidad
+      ATRASADO: 'Atrasado',  // ✅ Agregado: BD también usa "ATRASADO"
+      VENCIDA: 'Vencida',    // Mantener compatibilidad
       PARCIAL: 'Parcial',
     }
     return labels[estado] || estado
@@ -294,7 +301,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
               <CardContent className="pt-4">
                 <p className="text-sm text-gray-600">Pagadas</p>
                 <p className="text-2xl font-bold text-gray-700">
-                  {cuotas.filter((c: Cuota) => c.estado === 'PAGADA').length} / {cuotas.length}
+                  {cuotas.filter((c: Cuota) => c.estado === 'PAGADO' || c.estado === 'PAGADA').length} / {cuotas.length}
                 </p>
               </CardContent>
             </Card>
