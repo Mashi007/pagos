@@ -342,7 +342,6 @@ async def obtener_logo(
     """Obtener logo de la empresa"""
     try:
         from fastapi.responses import FileResponse
-
         from app.core.config import settings
 
         # Validar que el archivo sea del tipo correcto
