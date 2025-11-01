@@ -42,10 +42,9 @@ class ClienteBase(BaseModel):
         description="Teléfono del cliente (formato: +58XXXXXXXXXX, 13 caracteres)",
     )
 
-    @field_validator("telefono", mode="before")
-    @classmethod
-    def validate_telefono_format(cls, v: str) -> str:
-        """Validar formato de teléfono: +58 seguido de 10 dígitos, primero NO puede ser 0"""
+    @staticmethod
+    def _validar_formato_telefono(v: str) -> str:
+        """Lógica de validación de teléfono: +58 seguido de 10 dígitos, primero NO puede ser 0"""
         if not v:
             raise ValueError("Teléfono requerido")
 
@@ -75,6 +74,12 @@ class ClienteBase(BaseModel):
             )
 
         return telefono_limpio
+
+    @field_validator("telefono", mode="before")
+    @classmethod
+    def validate_telefono_format(cls, v: str) -> str:
+        """Validar formato de teléfono: +58 seguido de 10 dígitos, primero NO puede ser 0"""
+        return cls._validar_formato_telefono(v)
 
     email: EmailStr = Field(..., description="Validado por validadores")
     direccion: str = Field(
@@ -280,8 +285,8 @@ class ClienteUpdate(BaseModel):
     def validate_telefono_on_update(cls, v: Optional[str]) -> Optional[str]:
         """Validar formato de teléfono en actualización (si se proporciona)"""
         if v:
-            # Reutilizar la validación de ClienteBase
-            return ClienteBase.validate_telefono_format(v)
+            # Reutilizar la lógica de validación de ClienteBase
+            return ClienteBase._validar_formato_telefono(v)
         return v
 
 
