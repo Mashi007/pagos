@@ -184,7 +184,7 @@ def obtener_cuotas_pendientes(
         db.query(Cuota)
         .filter(
             Cuota.prestamo_id == prestamo_id,
-            Cuota.estado.in_(["PENDIENTE", "VENCIDA", "PARCIAL"]),
+            Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"]),  # ✅ Corregido: BD usa "ATRASADO" no "VENCIDA"
         )
         .order_by(Cuota.numero_cuota)
         .all()
@@ -214,7 +214,7 @@ def obtener_cuotas_vencidas(
         .filter(
             Cuota.prestamo_id == prestamo_id,
             Cuota.fecha_vencimiento < fecha_hoy.isoformat(),
-            Cuota.estado != "PAGADA",
+            Cuota.estado != "PAGADO",  # ✅ Corregido: BD usa "PAGADO" no "PAGADA"
         )
         .order_by(Cuota.numero_cuota)
         .all()

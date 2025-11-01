@@ -40,14 +40,43 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   // Cargar cuotas del préstamo
   const { data: cuotas, isLoading, error } = useQuery({
     queryKey: ['cuotas-prestamo', prestamo.id],
-    queryFn: () => prestamoService.getCuotasPrestamo(prestamo.id),
+    queryFn: async () => {
+      const data = await prestamoService.getCuotasPrestamo(prestamo.id)
+      // 🔍 DEBUG: Verificar qué estados están llegando
+      console.log('📊 Cuotas recibidas del backend:', data)
+      console.log('📊 Estados encontrados:', data?.map((c: Cuota) => c.estado))
+      return data
+    },
     enabled: prestamo.estado === 'APROBADO',
     staleTime: 0, // Siempre refetch para obtener datos actualizados
     refetchOnMount: true, // Refetch al montar el componente
     refetchOnWindowFocus: true, // Refetch al enfocar la ventana
   })
 
+  // Función para determinar el estado correcto basado en los datos
+  const determinarEstadoReal = (cuota: Cuota): string => {
+    // Si total_pagado >= monto_cuota, debería ser PAGADO
+    if (cuota.total_pagado >= cuota.monto_cuota) {
+      return 'PAGADO'
+    }
+    // Si tiene algún pago pero no completo
+    if (cuota.total_pagado > 0) {
+      // Verificar si está vencida
+      const hoy = new Date()
+      const fechaVencimiento = new Date(cuota.fecha_vencimiento)
+      if (fechaVencimiento < hoy) {
+        return 'ATRASADO'
+      }
+      return 'PARCIAL'
+    }
+    // Si no hay pago, devolver el estado original o PENDIENTE
+    return cuota.estado || 'PENDIENTE'
+  }
+
   const getEstadoBadge = (estado: string) => {
+    // Normalizar estado a mayúsculas para comparación
+    const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
+    
     const badges = {
       PENDIENTE: 'bg-yellow-100 text-yellow-800',
       PAGADO: 'bg-green-100 text-green-800',  // ✅ Corregido: BD usa "PAGADO" no "PAGADA"
@@ -56,10 +85,13 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
       VENCIDA: 'bg-red-100 text-red-800',      // Mantener compatibilidad
       PARCIAL: 'bg-blue-100 text-blue-800',
     }
-    return badges[estado as keyof typeof badges] || badges.PENDIENTE
+    return badges[estadoNormalizado as keyof typeof badges] || badges.PENDIENTE
   }
 
   const getEstadoLabel = (estado: string) => {
+    // Normalizar estado a mayúsculas para comparación
+    const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
+    
     const labels: Record<string, string> = {
       PENDIENTE: 'Pendiente',
       PAGADO: 'Pagado',      // ✅ Corregido: BD usa "PAGADO"
@@ -68,7 +100,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
       VENCIDA: 'Vencida',    // Mantener compatibilidad
       PARCIAL: 'Parcial',
     }
-    return labels[estado] || estado
+    return labels[estadoNormalizado] || estado
   }
 
   const exportarExcel = async () => {
@@ -234,29 +266,42 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
               </TableRow>
             </TableHeader>
             <TableBody>
-              {cuotasVisibles.map((cuota: Cuota) => (
-                <TableRow key={cuota.id}>
-                  <TableCell className="font-medium">{cuota.numero_cuota}</TableCell>
-                  <TableCell>{formatDate(cuota.fecha_vencimiento)}</TableCell>
-                  <TableCell className="text-right">
-                    ${cuota.monto_capital.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    ${cuota.monto_interes.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold">
-                    ${cuota.monto_cuota.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-right text-gray-600">
-                    ${cuota.saldo_capital_final.toFixed(2)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={getEstadoBadge(cuota.estado)}>
-                      {getEstadoLabel(cuota.estado)}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {cuotasVisibles.map((cuota: Cuota) => {
+                // Determinar el estado real basado en los datos
+                const estadoReal = determinarEstadoReal(cuota)
+                
+                return (
+                  <TableRow key={cuota.id}>
+                    <TableCell className="font-medium">{cuota.numero_cuota}</TableCell>
+                    <TableCell>{formatDate(cuota.fecha_vencimiento)}</TableCell>
+                    <TableCell className="text-right">
+                      ${cuota.monto_capital.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      ${cuota.monto_interes.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      ${cuota.monto_cuota.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right text-gray-600">
+                      ${cuota.saldo_capital_final.toFixed(2)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getEstadoBadge(estadoReal)}>
+                        {getEstadoLabel(estadoReal)}
+                      </Badge>
+                      {/* 🔍 DEBUG: Mostrar información de depuración */}
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-gray-400 mt-1">
+                          <div>Estado BD: {cuota.estado || 'NULL'}</div>
+                          <div>Estado Real: {estadoReal}</div>
+                          <div>Pagado: ${cuota.total_pagado.toFixed(2)} / ${cuota.monto_cuota.toFixed(2)}</div>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
               {!showFullTable && cuotas.length > 5 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-4">
