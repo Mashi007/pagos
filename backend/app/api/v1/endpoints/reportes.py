@@ -363,35 +363,288 @@ def exportar_reporte_cartera(
         )
         # Obtener datos del reporte
         reporte = reporte_cartera(fecha_corte, db, current_user)
+        
+        # Obtener variables adicionales para el Excel
+        cantidad_prestamos_activos = (
+            db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
+        )
+        
+        cantidad_prestamos_mora = (
+            db.query(func.count(func.distinct(Prestamo.id)))
+            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.monto_mora > Decimal("0.00"),
+            )
+            .scalar()
+        ) or 0
+        
+        # Obtener distribuciones para las hojas
+        distribucion_por_monto_query = (
+            db.query(
+                case(
+                    (Prestamo.total_financiamiento <= 1000, "Hasta $1,000"),
+                    (Prestamo.total_financiamiento <= 5000, "$1,001 - $5,000"),
+                    (Prestamo.total_financiamiento <= 10000, "$5,001 - $10,000"),
+                    else_="Más de $10,000",
+                ).label("rango"),
+                func.count(Prestamo.id).label("cantidad"),
+                func.sum(Prestamo.total_financiamiento).label("monto"),
+            )
+            .filter(Prestamo.estado == "APROBADO")
+            .group_by("rango")
+            .all()
+        )
+        
+        distribucion_por_monto = [
+            {
+                "rango": item.rango,
+                "cantidad": item.cantidad,
+                "monto": float(item.monto) if item.monto else 0.0,
+            }
+            for item in distribucion_por_monto_query
+        ]
+        
+        # Distribución por mora
+        rangos_mora = [
+            {"min": 1, "max": 30, "label": "1-30 días"},
+            {"min": 31, "max": 60, "label": "31-60 días"},
+            {"min": 61, "max": 90, "label": "61-90 días"},
+            {"min": 91, "max": 999999, "label": "Más de 90 días"},
+        ]
+        
+        distribucion_por_mora = []
+        for rango in rangos_mora:
+            cantidad = (
+                db.query(func.count(func.distinct(Prestamo.id)))
+                .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.monto_mora > Decimal("0.00"),
+                    Cuota.dias_mora >= rango["min"],
+                    Cuota.dias_mora <= rango["max"],
+                )
+                .scalar()
+            ) or 0
+
+            monto_mora = (
+                db.query(func.sum(Cuota.monto_mora))
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.monto_mora > Decimal("0.00"),
+                    Cuota.dias_mora >= rango["min"],
+                    Cuota.dias_mora <= rango["max"],
+                )
+                .scalar()
+            ) or Decimal("0")
+
+            distribucion_por_mora.append(
+                {
+                    "rango": rango["label"],
+                    "cantidad": cantidad,
+                    "monto_total": float(monto_mora),
+                }
+            )
 
         if formato.lower() == "excel":
-            # Crear archivo Excel
+            # Crear archivo Excel con datos reales detallados
             from openpyxl import Workbook
+            from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
             wb = Workbook()
-            ws = wb.active
-            ws.title = "Reporte Cartera"
+            
+            # ============================================
+            # HOJA 1: RESUMEN EJECUTIVO
+            # ============================================
+            ws_resumen = wb.active
+            ws_resumen.title = "Resumen Ejecutivo"
+
+            # Estilos
+            header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            header_font = Font(bold=True, color="FFFFFF", size=14)
+            title_font = Font(bold=True, size=16)
+            label_font = Font(bold=True)
+            border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
+
+            # Encabezado
+            ws_resumen.merge_cells("A1:B1")
+            ws_resumen["A1"] = "REPORTE DE CARTERA"
+            ws_resumen["A1"].font = title_font
+            ws_resumen["A1"].alignment = Alignment(horizontal="center", vertical="center")
+            ws_resumen.row_dimensions[1].height = 30
+
+            ws_resumen["A2"] = f"Fecha de Corte: {reporte.fecha_corte}"
+            ws_resumen["A2"].font = Font(size=12)
+            ws_resumen["A3"] = f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+            ws_resumen["A3"].font = Font(size=10, italic=True)
+
+            # Datos principales con formato
+            row = 5
+            datos_resumen = [
+                ("Cartera Total:", reporte.cartera_total),
+                ("Capital Pendiente:", reporte.capital_pendiente),
+                ("Intereses Pendientes:", reporte.intereses_pendientes),
+                ("Mora Total:", reporte.mora_total),
+                ("Préstamos Activos:", cantidad_prestamos_activos),
+                ("Préstamos en Mora:", cantidad_prestamos_mora),
+            ]
+
+            for label, value in datos_resumen:
+                ws_resumen[f"A{row}"] = label
+                ws_resumen[f"A{row}"].font = label_font
+                if isinstance(value, Decimal):
+                    ws_resumen[f"B{row}"] = float(value)
+                    ws_resumen[f"B{row}"].number_format = '"$"#,##0.00'
+                else:
+                    ws_resumen[f"B{row}"] = value
+                ws_resumen[f"B{row}"].font = Font(bold=True)
+                row += 1
+
+            # Ajustar anchos
+            ws_resumen.column_dimensions["A"].width = 25
+            ws_resumen.column_dimensions["B"].width = 20
+
+            # ============================================
+            # HOJA 2: DISTRIBUCIÓN POR MONTO
+            # ============================================
+            ws_monto = wb.create_sheet("Distribución por Monto")
+            
+            # Encabezados
+            headers = ["Rango de Monto", "Cantidad Préstamos", "Monto Total"]
+            for col_idx, header in enumerate(headers, 1):
+                cell = ws_monto.cell(row=1, column=col_idx, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = border
+            
+            # Datos
+            for row_idx, item in enumerate(distribucion_por_monto, 2):
+                ws_monto.cell(row=row_idx, column=1, value=item["rango"]).border = border
+                ws_monto.cell(row=row_idx, column=2, value=item["cantidad"]).border = border
+                cell_monto = ws_monto.cell(row=row_idx, column=3, value=float(item["monto"]))
+                cell_monto.number_format = '"$"#,##0.00'
+                cell_monto.border = border
+
+            # Totales
+            total_row = len(distribucion_por_monto) + 3
+            ws_monto.cell(row=total_row, column=1, value="TOTAL:").font = Font(bold=True)
+            ws_monto.cell(row=total_row, column=2, value=sum(item["cantidad"] for item in distribucion_por_monto)).font = Font(bold=True)
+            total_cell = ws_monto.cell(row=total_row, column=3, value=sum(item["monto"] for item in distribucion_por_monto))
+            total_cell.number_format = '"$"#,##0.00'
+            total_cell.font = Font(bold=True)
+
+            # Ajustar anchos
+            ws_monto.column_dimensions["A"].width = 20
+            ws_monto.column_dimensions["B"].width = 20
+            ws_monto.column_dimensions["C"].width = 20
+
+            # ============================================
+            # HOJA 3: DISTRIBUCIÓN POR MORA
+            # ============================================
+            ws_mora = wb.create_sheet("Distribución por Mora")
+            
+            # Encabezados
+            headers_mora = ["Rango de Días", "Cantidad Préstamos", "Monto Total Mora"]
+            for col_idx, header in enumerate(headers_mora, 1):
+                cell = ws_mora.cell(row=1, column=col_idx, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = border
+            
+            # Datos
+            for row_idx, item in enumerate(distribucion_por_mora, 2):
+                ws_mora.cell(row=row_idx, column=1, value=item["rango"]).border = border
+                ws_mora.cell(row=row_idx, column=2, value=item["cantidad"]).border = border
+                cell_mora = ws_mora.cell(row=row_idx, column=3, value=float(item["monto_total"]))
+                cell_mora.number_format = '"$"#,##0.00'
+                cell_mora.border = border
+
+            # Totales
+            total_row_mora = len(distribucion_por_mora) + 3
+            ws_mora.cell(row=total_row_mora, column=1, value="TOTAL:").font = Font(bold=True)
+            ws_mora.cell(row=total_row_mora, column=2, value=sum(item["cantidad"] for item in distribucion_por_mora)).font = Font(bold=True)
+            total_cell_mora = ws_mora.cell(row=total_row_mora, column=3, value=float(sum(item["monto_total"] for item in distribucion_por_mora)))
+            total_cell_mora.number_format = '"$"#,##0.00'
+            total_cell_mora.font = Font(bold=True)
+
+            # Ajustar anchos
+            ws_mora.column_dimensions["A"].width = 20
+            ws_mora.column_dimensions["B"].width = 20
+            ws_mora.column_dimensions["C"].width = 20
+
+            # ============================================
+            # HOJA 4: PRÉSTAMOS DETALLADOS (DATOS REALES)
+            # ============================================
+            ws_detalle = wb.create_sheet("Préstamos Detallados")
+            
+            # Obtener préstamos reales desde BD
+            prestamos_detalle = (
+                db.query(
+                    Prestamo.id,
+                    Prestamo.cedula,
+                    Prestamo.nombres,
+                    Prestamo.total_financiamiento,
+                    Prestamo.estado,
+                    Prestamo.modalidad_pago,
+                    Prestamo.numero_cuotas,
+                    Prestamo.usuario_proponente.label("analista"),
+                    func.sum(func.coalesce(Cuota.capital_pendiente, Decimal("0.00")) + 
+                            func.coalesce(Cuota.interes_pendiente, Decimal("0.00")) + 
+                            func.coalesce(Cuota.monto_mora, Decimal("0.00"))).label("saldo_pendiente"),
+                    func.count(Cuota.id).label("cuotas_pendientes"),
+                )
+                .join(Cuota, Cuota.prestamo_id == Prestamo.id, isouter=True)
+                .filter(Prestamo.estado == "APROBADO")
+                .group_by(Prestamo.id)
+                .order_by(Prestamo.id)
+                .all()
+            )
+
+            logger.info(f"[reportes.exportar] Obteniendo {len(prestamos_detalle)} préstamos para detalle")
 
             # Encabezados
-            ws["A1"] = "REPORTE DE CARTERA"
-            ws["A2"] = f"Fecha de Corte: {reporte.fecha_corte}"
+            headers_detalle = [
+                "ID Préstamo", "Cédula", "Cliente", "Total Financiamiento",
+                "Saldo Pendiente", "Cuotas Pendientes", "Modalidad",
+                "Analista", "Estado"
+            ]
+            for col_idx, header in enumerate(headers_detalle, 1):
+                cell = ws_detalle.cell(row=1, column=col_idx, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = border
+            
+            # Datos de préstamos
+            for row_idx, prestamo in enumerate(prestamos_detalle, 2):
+                ws_detalle.cell(row=row_idx, column=1, value=prestamo.id).border = border
+                ws_detalle.cell(row=row_idx, column=2, value=prestamo.cedula).border = border
+                ws_detalle.cell(row=row_idx, column=3, value=prestamo.nombres or "").border = border
+                cell_total = ws_detalle.cell(row=row_idx, column=4, value=float(prestamo.total_financiamiento))
+                cell_total.number_format = '"$"#,##0.00'
+                cell_total.border = border
+                cell_saldo = ws_detalle.cell(row=row_idx, column=5, value=float(prestamo.saldo_pendiente or Decimal("0")))
+                cell_saldo.number_format = '"$"#,##0.00'
+                cell_saldo.border = border
+                ws_detalle.cell(row=row_idx, column=6, value=prestamo.cuotas_pendientes or 0).border = border
+                ws_detalle.cell(row=row_idx, column=7, value=prestamo.modalidad_pago or "").border = border
+                ws_detalle.cell(row=row_idx, column=8, value=prestamo.analista or "").border = border
+                ws_detalle.cell(row=row_idx, column=9, value=prestamo.estado or "").border = border
 
-            # Datos principales
-            ws["A4"] = "Cartera Total:"
-            ws["B4"] = f"${reporte.cartera_total:,.2f}"
-
-            ws["A5"] = "Capital Pendiente:"
-            ws["B5"] = f"${reporte.capital_pendiente:,.2f}"
-
-            ws["A6"] = "Intereses Pendientes:"
-            ws["B6"] = f"${reporte.intereses_pendientes:,.2f}"
-
-            ws["A7"] = "Mora Total:"
-            ws["B7"] = f"${reporte.mora_total:,.2f}"
+            # Ajustar anchos
+            column_widths = [12, 15, 30, 18, 18, 15, 15, 25, 12]
+            for idx, width in enumerate(column_widths, 1):
+                ws_detalle.column_dimensions[chr(64 + idx)].width = width
 
             # Guardar en memoria
-            from io import BytesIO
-
             output = BytesIO()
             wb.save(output)
             output.seek(0)

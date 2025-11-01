@@ -16,7 +16,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from sqlalchemy import case, func
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -100,6 +100,9 @@ def obtener_clientes_atrasados(
         hoy = date.today()
 
         # Cuotas vencidas (fecha_vencimiento < hoy y estado != PAGADO)
+        # Excluir admin del listado
+        from app.core.config import settings
+        
         query = (
             db.query(
                 Cliente.cedula,
@@ -112,7 +115,13 @@ def obtener_clientes_atrasados(
             )
             .join(Prestamo, Prestamo.cedula == Cliente.cedula)
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
+            .outerjoin(User, User.email == Prestamo.usuario_proponente)
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
+                or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
+            )
             .group_by(
                 Cliente.cedula,
                 Cliente.nombres,
@@ -224,6 +233,9 @@ def obtener_cobranzas_por_analista(
     try:
         hoy = date.today()
 
+        # Excluir admin del listado de analistas
+        from app.core.config import settings
+        
         query = (
             db.query(
                 Prestamo.usuario_proponente.label("nombre_analista"),
@@ -232,10 +244,13 @@ def obtener_cobranzas_por_analista(
             )
             .join(Cliente, Cliente.cedula == Prestamo.cedula)
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .outerjoin(User, User.email == Prestamo.usuario_proponente)
             .filter(
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente.isnot(None),
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
+                or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
             )
             .group_by(Prestamo.usuario_proponente)
             .having(func.count(func.distinct(Cliente.cedula)) > 0)
@@ -488,7 +503,18 @@ def informe_clientes_atrasados(
             )
             .join(Prestamo, Prestamo.cedula == Cliente.cedula)
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
+            .outerjoin(User, User.email == Prestamo.usuario_proponente)
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+            )
+        )
+        
+        # Excluir admin siempre
+        from app.core.config import settings
+        query = query.filter(
+            Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
+            or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
         )
 
         if analista:
@@ -584,7 +610,9 @@ def informe_rendimiento_analista(
     try:
         hoy = date.today()
 
-        # Estadísticas por analista
+        # Estadísticas por analista - Excluir admin
+        from app.core.config import settings
+        
         query = (
             db.query(
                 Prestamo.usuario_proponente.label("analista"),
@@ -604,10 +632,13 @@ def informe_rendimiento_analista(
             )
             .join(Cliente, Cliente.cedula == Prestamo.cedula)
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .outerjoin(User, User.email == Prestamo.usuario_proponente)
             .filter(
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente.isnot(None),
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
+                or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
             )
             .group_by(Prestamo.usuario_proponente)
         )
@@ -734,13 +765,228 @@ def informe_montos_vencidos_periodo(
 # ============================================
 
 
+@router.get("/informes/por-categoria-dias")
+def informe_por_categoria_dias(
+    analista: Optional[str] = Query(None, description="Filtrar por analista"),
+    formato: str = Query("json", description="Formato: json, pdf, excel"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Informe por categorías de días de vencimiento:
+    - 3 días antes de vencimiento
+    - 1 día antes
+    - Día de pago (día 0)
+    - 3 días atrasado
+    - 1 mes atrasado (30 días)
+    - 2 meses atrasado (60 días)
+    - 3 o más meses atrasado (90+ días)
+    """
+    try:
+        hoy = date.today()
+        from app.core.config import settings
+
+        # Obtener todas las cuotas no pagadas próximas a vencer o atrasadas
+        # Filtro: desde 3 días antes hasta cualquier fecha futura
+        fecha_limite_inicio = hoy - timedelta(days=3)
+        
+        cuotas_query = (
+            db.query(
+                Cliente.cedula,
+                Cliente.nombres,
+                Prestamo.usuario_proponente.label("analista"),
+                Cuota.id.label("cuota_id"),
+                Cuota.numero_cuota,
+                Cuota.fecha_vencimiento,
+                Cuota.monto_cuota,
+                Cuota.estado,
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cedula == Cliente.cedula)
+            .outerjoin(User, User.email == Prestamo.usuario_proponente)
+            .filter(
+                Cuota.estado != "PAGADO",
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
+                or_(User.is_admin.is_(False), User.is_admin.is_(None)),
+                # Incluir cuotas desde 3 días antes hasta cualquier fecha futura
+                Cuota.fecha_vencimiento >= fecha_limite_inicio,
+            )
+        )
+        
+        if analista:
+            cuotas_query = cuotas_query.filter(
+                Prestamo.usuario_proponente == analista
+            )
+        
+        resultados_raw = cuotas_query.all()
+        
+        # Categorizar en Python para mayor flexibilidad
+        resultados = []
+        for row in resultados_raw:
+            if row.fecha_vencimiento:
+                dias_diferencia = (row.fecha_vencimiento - hoy).days
+                
+                # Determinar categoría
+                if dias_diferencia == -3:
+                    categoria = "3 días antes de vencimiento"
+                elif dias_diferencia == -1:
+                    categoria = "1 día antes de vencimiento"
+                elif dias_diferencia == 0:
+                    categoria = "Día de pago"
+                elif 0 < dias_diferencia <= 3:
+                    categoria = "3 días atrasado"
+                elif 3 < dias_diferencia <= 30:
+                    categoria = "1 mes atrasado"
+                elif 30 < dias_diferencia <= 60:
+                    categoria = "2 meses atrasado"
+                elif dias_diferencia > 60:
+                    categoria = "3 o más meses atrasado"
+                else:
+                    # Si está más de 3 días antes, no incluirlo
+                    continue
+                
+                resultados.append({
+                    "categoria_dias": categoria,
+                    "cedula": row.cedula,
+                    "nombres": row.nombres,
+                    "analista": row.analista or "Sin analista",
+                    "cuota_id": row.cuota_id,
+                    "numero_cuota": row.numero_cuota,
+                    "fecha_vencimiento": row.fecha_vencimiento,
+                    "monto_cuota": row.monto_cuota,
+                    "estado": row.estado,
+                    "dias_diferencia": dias_diferencia,
+                })
+        
+        # Agrupar por categoría y analista
+        datos_por_categoria = {}
+        datos_por_analista = {}
+        
+        for row in resultados:
+            categoria = row["categoria_dias"]
+            analista_nombre = row["analista"]
+            dias_diff = row["dias_diferencia"]
+            
+            # Agrupar por categoría
+            if categoria not in datos_por_categoria:
+                datos_por_categoria[categoria] = {
+                    "categoria": categoria,
+                    "cantidad_cuotas": 0,
+                    "monto_total": 0.0,
+                    "clientes_unicos": set(),
+                    "cuotas": [],
+                }
+            
+            datos_por_categoria[categoria]["cantidad_cuotas"] += 1
+            datos_por_categoria[categoria]["monto_total"] += float(row["monto_cuota"] or 0)
+            datos_por_categoria[categoria]["clientes_unicos"].add(row["cedula"])
+            datos_por_categoria[categoria]["cuotas"].append({
+                "cedula": row["cedula"],
+                "nombres": row["nombres"],
+                "analista": analista_nombre,
+                "numero_cuota": row["numero_cuota"],
+                "fecha_vencimiento": row["fecha_vencimiento"].isoformat() if row["fecha_vencimiento"] else None,
+                "monto": float(row["monto_cuota"] or 0),
+                "estado": row["estado"],
+                "dias_diferencia": int(dias_diff),
+            })
+            
+            # Agrupar por analista
+            if analista_nombre not in datos_por_analista:
+                datos_por_analista[analista_nombre] = {
+                    "analista": analista_nombre,
+                    "categorias": {},
+                }
+            
+            if categoria not in datos_por_analista[analista_nombre]["categorias"]:
+                datos_por_analista[analista_nombre]["categorias"][categoria] = {
+                    "cantidad_cuotas": 0,
+                    "monto_total": 0.0,
+                }
+            
+            datos_por_analista[analista_nombre]["categorias"][categoria]["cantidad_cuotas"] += 1
+            datos_por_analista[analista_nombre]["categorias"][categoria]["monto_total"] += float(row["monto_cuota"] or 0)
+        
+        # Convertir sets a listas y ordenar
+        orden_categorias = {
+            "3 días antes de vencimiento": 1,
+            "1 día antes de vencimiento": 2,
+            "Día de pago": 3,
+            "3 días atrasado": 4,
+            "1 mes atrasado": 5,
+            "2 meses atrasado": 6,
+            "3 o más meses atrasado": 7,
+        }
+        
+        datos_categoria_final = []
+        for cat, datos in datos_por_categoria.items():
+            datos_categoria_final.append({
+                "categoria": cat,
+                "cantidad_cuotas": datos["cantidad_cuotas"],
+                "monto_total": round(datos["monto_total"], 2),
+                "clientes_unicos": len(datos["clientes_unicos"]),
+                "orden": orden_categorias.get(cat, 99),
+            })
+        
+        datos_categoria_final.sort(key=lambda x: x["orden"])
+        
+        # Preparar datos por analista
+        datos_analista_final = []
+        for analista_nombre, datos in datos_por_analista.items():
+            total_cuotas = sum(c["cantidad_cuotas"] for c in datos["categorias"].values())
+            total_monto = sum(c["monto_total"] for c in datos["categorias"].values())
+            
+            categorias_ordenadas = []
+            for cat in orden_categorias.keys():
+                if cat in datos["categorias"]:
+                    categorias_ordenadas.append({
+                        "categoria": cat,
+                        "cantidad_cuotas": datos["categorias"][cat]["cantidad_cuotas"],
+                        "monto_total": round(datos["categorias"][cat]["monto_total"], 2),
+                    })
+            
+            datos_analista_final.append({
+                "analista": analista_nombre,
+                "total_cuotas": total_cuotas,
+                "total_monto": round(total_monto, 2),
+                "categorias": categorias_ordenadas,
+            })
+        
+        datos_analista_final.sort(key=lambda x: x["total_monto"], reverse=True)
+        
+        if formato.lower() == "json":
+            return {
+                "titulo": "Informe por Categorías de Días y Analista",
+                "fecha_generacion": datetime.now().isoformat(),
+                "fecha_corte": hoy.isoformat(),
+                "por_categoria": datos_categoria_final,
+                "por_analista": datos_analista_final,
+                "resumen": {
+                    "total_cuotas": sum(c["cantidad_cuotas"] for c in datos_categoria_final),
+                    "total_monto": round(sum(c["monto_total"] for c in datos_categoria_final), 2),
+                    "total_categorias": len(datos_categoria_final),
+                    "total_analistas": len(datos_analista_final),
+                },
+            }
+        elif formato.lower() == "excel":
+            return _generar_excel_categoria_dias(datos_categoria_final, datos_analista_final)
+        elif formato.lower() == "pdf":
+            return _generar_pdf_categoria_dias(datos_categoria_final, datos_analista_final)
+        else:
+            raise HTTPException(status_code=400, detail="Formato no válido")
+
+    except Exception as e:
+        logger.error(f"Error generando informe por categoría días: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
 @router.get("/informes/antiguedad-saldos")
 def informe_antiguedad_saldos(
     formato: str = Query("json", description="Formato: json, pdf, excel"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Informe de distribución de mora por rangos de antigüedad"""
+    """Informe de distribución de mora por rangos de antigüedad (legacy - usar /por-categoria-dias)"""
     try:
         hoy = date.today()
 
@@ -860,17 +1106,22 @@ def informe_resumen_ejecutivo(
             or 0
         )
 
-        # Top 5 analistas con más mora
+        # Top 5 analistas con más mora - Excluir admin
+        from app.core.config import settings
+        
         top_analistas = (
             db.query(
                 Prestamo.usuario_proponente.label("analista"),
                 func.sum(Cuota.monto_cuota).label("monto_total"),
             )
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .outerjoin(User, User.email == Prestamo.usuario_proponente)
             .filter(
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente.isnot(None),
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
+                or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
             )
             .group_by(Prestamo.usuario_proponente)
             .order_by(func.sum(Cuota.monto_cuota).desc())
@@ -1514,6 +1765,205 @@ def _generar_pdf_antiguedad_saldos(datos: List[Dict]) -> StreamingResponse:
         media_type="application/pdf",
         headers={
             "Content-Disposition": f"attachment; filename=informe_antiguedad_saldos_{fecha}.pdf"
+        },
+    )
+
+
+def _generar_excel_categoria_dias(
+    datos_categoria: List[Dict], datos_analista: List[Dict]
+) -> StreamingResponse:
+    """Genera archivo Excel para informe por categoría de días"""
+    buffer = BytesIO()
+    wb = Workbook()
+    wb.remove(wb.active)
+
+    fecha = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Hoja 1: Por Categoría
+    ws1 = wb.create_sheet("Por Categoría")
+    headers1 = ["Categoría", "Cantidad Cuotas", "Monto Total", "Clientes Únicos"]
+    ws1.append(headers1)
+
+    # Estilo de encabezados
+    header_fill = PatternFill(
+        start_color="366092", end_color="366092", fill_type="solid"
+    )
+    header_font = Font(bold=True, color="FFFFFF")
+
+    for col in range(1, len(headers1) + 1):
+        cell = ws1.cell(row=1, column=col)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center")
+
+    for registro in datos_categoria:
+        ws1.append(
+            [
+                registro.get("categoria", ""),
+                registro.get("cantidad_cuotas", 0),
+                registro.get("monto_total", 0.0),
+                registro.get("clientes_unicos", 0),
+            ]
+        )
+
+    # Hoja 2: Por Analista
+    ws2 = wb.create_sheet("Por Analista")
+    ws2.append(["Analista", "Total Cuotas", "Total Monto"])
+    
+    # Encabezados de categorías (debe coincidir con los nombres del endpoint)
+    categorias_headers_map = {
+        "3 días antes de vencimiento": "3 días antes",
+        "1 día antes de vencimiento": "1 día antes",
+        "Día de pago": "Día de pago",
+        "3 días atrasado": "3 días atrasado",
+        "1 mes atrasado": "1 mes atrasado",
+        "2 meses atrasado": "2 meses atrasado",
+        "3 o más meses atrasado": "3+ meses atrasado",
+    }
+    
+    categorias_headers = list(categorias_headers_map.values())
+    header_row = ["Analista", "Total Cuotas", "Total Monto"] + categorias_headers
+    ws2.append(header_row)
+    
+    for col in range(1, len(header_row) + 1):
+        cell = ws2.cell(row=2, column=col)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center")
+
+    for analista_data in datos_analista:
+        row_data = [
+            analista_data.get("analista", ""),
+            analista_data.get("total_cuotas", 0),
+            analista_data.get("total_monto", 0.0),
+        ]
+        
+        # Crear diccionario de categorías por nombre completo
+        categorias_dict = {
+            c.get("categoria", ""): c for c in analista_data.get("categorias", [])
+        }
+        
+        # Mapear nombres completos a headers cortos
+        for cat_completa, cat_corta in categorias_headers_map.items():
+            if cat_completa in categorias_dict:
+                row_data.append(categorias_dict[cat_completa].get("cantidad_cuotas", 0))
+            else:
+                row_data.append(0)
+        
+        ws2.append(row_data)
+
+    wb.save(buffer)
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename=informe_categoria_dias_{fecha}.xlsx"
+        },
+    )
+
+
+def _generar_pdf_categoria_dias(
+    datos_categoria: List[Dict], datos_analista: List[Dict]
+) -> StreamingResponse:
+    """Genera archivo PDF para informe por categoría de días"""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    story = []
+    styles = getSampleStyleSheet()
+
+    fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    title = Paragraph("Informe por Categorías de Días y Analista", styles["Title"])
+    story.append(title)
+    story.append(Spacer(1, 0.2 * inch))
+
+    story.append(Paragraph(f"<b>Fecha de generación:</b> {fecha}", styles["Normal"]))
+    story.append(Spacer(1, 0.3 * inch))
+
+    # Sección 1: Por Categoría
+    story.append(Paragraph("<b>Por Categoría de Días</b>", styles["Heading2"]))
+    story.append(Spacer(1, 0.2 * inch))
+
+    table_data = [["Categoría", "Cuotas", "Monto Total", "Clientes"]]
+    for registro in datos_categoria:
+        table_data.append(
+            [
+                registro.get("categoria", ""),
+                str(registro.get("cantidad_cuotas", 0)),
+                f"${registro.get('monto_total', 0):,.2f}",
+                str(registro.get("clientes_unicos", 0)),
+            ]
+        )
+
+    table = Table(table_data)
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#366092")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+            ]
+        )
+    )
+    story.append(table)
+    story.append(Spacer(1, 0.4 * inch))
+
+    # Sección 2: Por Analista
+    story.append(Paragraph("<b>Por Analista</b>", styles["Heading2"]))
+    story.append(Spacer(1, 0.2 * inch))
+
+    for analista_data in datos_analista:
+        analista_nombre = analista_data.get("analista", "Sin analista")
+        total_cuotas = analista_data.get("total_cuotas", 0)
+        total_monto = analista_data.get("total_monto", 0.0)
+        
+        story.append(
+            Paragraph(
+                f"<b>{analista_nombre}</b> - Total: {total_cuotas} cuotas, ${total_monto:,.2f}",
+                styles["Normal"],
+            )
+        )
+        
+        categorias_data = analista_data.get("categorias", [])
+        if categorias_data:
+            cat_table_data = [["Categoría", "Cuotas", "Monto"]]
+            for cat in categorias_data:
+                cat_table_data.append(
+                    [
+                        cat.get("categoria", ""),
+                        str(cat.get("cantidad_cuotas", 0)),
+                        f"${cat.get('monto_total', 0):,.2f}",
+                    ]
+                )
+            
+            cat_table = Table(cat_table_data, colWidths=[3 * inch, 1.5 * inch, 1.5 * inch])
+            cat_table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                        ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ]
+                )
+            )
+            story.append(cat_table)
+        
+        story.append(Spacer(1, 0.2 * inch))
+
+    doc.build(story)
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=informe_categoria_dias_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         },
     )
 
