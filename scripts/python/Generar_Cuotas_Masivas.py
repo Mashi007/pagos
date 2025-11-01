@@ -11,14 +11,74 @@ import sys
 from datetime import date, datetime
 from decimal import Decimal
 
-# Agregar el directorio raíz al path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+# Manejar encoding para Windows
+if sys.platform == "win32":
+    import codecs
+    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.buffer, "strict")
+    sys.stderr = codecs.getwriter("utf-8")(sys.stderr.buffer, "strict")
+
+# Agregar el directorio backend al path (donde está la estructura app/)
+backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../backend"))
+sys.path.insert(0, backend_dir)
 
 from sqlalchemy.orm import Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+import urllib.parse
 
+# Importar desde app
 from app.db.session import SessionLocal
 from app.models.prestamo import Prestamo
 from app.services.prestamo_amortizacion_service import generar_tabla_amortizacion
+
+# Función helper para crear sesión segura con manejo de encoding
+def create_safe_session():
+    """Crea una sesión de base de datos con manejo robusto de encoding"""
+    try:
+        from app.core.config import settings
+        database_url = os.getenv("DATABASE_URL", getattr(settings, 'DATABASE_URL', None))
+    except:
+        database_url = os.getenv("DATABASE_URL")
+    
+    if not database_url:
+        # Usar SessionLocal como fallback
+        return SessionLocal()
+    
+    # Intentar decodificar DATABASE_URL si es bytes
+    if isinstance(database_url, bytes):
+        try:
+            database_url = database_url.decode('utf-8')
+        except UnicodeDecodeError:
+            database_url = database_url.decode('latin1')
+    
+    # Parsear y codificar correctamente
+    try:
+        parsed = urllib.parse.urlparse(database_url)
+        if parsed.password:
+            # Re-codificar componentes de manera segura
+            password = urllib.parse.quote(parsed.password, safe='')
+            username = urllib.parse.quote(parsed.username or '', safe='')
+            database_url = f"{parsed.scheme}://{username}:{password}@{parsed.hostname}"
+            if parsed.port:
+                database_url += f":{parsed.port}"
+            database_url += parsed.path
+    except Exception:
+        pass  # Si falla, usar la URL original
+    
+    connect_args = {}
+    if database_url.startswith("postgresql"):
+        connect_args = {"client_encoding": "UTF8"}
+    
+    engine = create_engine(
+        database_url,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        echo=False,
+        connect_args=connect_args,
+        pool_reset_on_return="commit",
+    )
+    
+    return sessionmaker(autocommit=False, autoflush=False, bind=engine)()
 
 logger = None
 try:
@@ -109,7 +169,11 @@ def generar_cuotas_prestamo(prestamo: Prestamo, db: Session) -> tuple[bool, int,
 
 def main():
     """Función principal"""
-    db: Session = SessionLocal()
+    try:
+        db: Session = create_safe_session()
+    except Exception:
+        # Fallback a SessionLocal si create_safe_session falla
+        db: Session = SessionLocal()
     
     try:
         log_info("=" * 60)
