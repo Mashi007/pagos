@@ -232,6 +232,7 @@ def crear_cliente(
         # Sincronizar estado y activo (crear siempre con ACTIVO=True)
         cliente_dict["estado"] = "ACTIVO"
         cliente_dict["activo"] = True
+        # Usuario que registra el cliente
         cliente_dict["usuario_registro"] = current_user.email
 
         # Crear nuevo cliente
