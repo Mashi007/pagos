@@ -6,12 +6,8 @@ import {
   Calendar,
   BarChart3,
   Activity,
-  Shield,
   ChevronRight,
-  LayoutDashboard,
 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 
 interface KpiCategory {
@@ -154,29 +150,6 @@ export function DashboardMenu() {
           )
         })}
       </div>
-
-      {/* Información adicional compacta */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
-      >
-        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <Shield className="h-5 w-5 text-blue-600 flex-shrink-0" />
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">
-                  Filtros Globales Disponibles
-                </h3>
-                <p className="text-xs text-gray-600 mt-0.5">
-                  Todas las páginas incluyen filtros por Analista, Concesionario, Modelo y Fechas que se aplican automáticamente a todos los KPIs y gráficos.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
     </div>
   )
 }

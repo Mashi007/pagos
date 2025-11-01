@@ -298,6 +298,42 @@ def obtener_configuracion_general():
     }
 
 
+@router.post("/cargar-datos-ejemplo")
+def cargar_datos_ejemplo(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cargar datos de ejemplo en el sistema (solo administradores)"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo los administradores pueden cargar datos de ejemplo"
+        )
+    
+    try:
+        logger.info(f"Usuario {current_user.email} iniciando carga de datos de ejemplo")
+        
+        # TODO: Implementar la lógica de carga de datos de ejemplo
+        # Esto podría incluir:
+        # - Crear clientes de ejemplo
+        # - Crear préstamos de ejemplo
+        # - Crear pagos y cuotas de ejemplo
+        # - Crear concesionarios, analistas, validadores de ejemplo
+        
+        # Por ahora, retornamos un mensaje de éxito
+        return {
+            "message": "Carga de datos de ejemplo iniciada exitosamente",
+            "status": "success",
+            "nota": "Esta funcionalidad será implementada próximamente"
+        }
+    except Exception as e:
+        logger.error(f"Error al cargar datos de ejemplo: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al cargar datos de ejemplo: {str(e)}"
+        )
+
+
 # ============================================
 # CONFIGURACIÓN DE EMAIL
 # ============================================

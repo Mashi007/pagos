@@ -36,6 +36,7 @@ import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useSidebarCounts } from '@/hooks/useSidebarCounts'
+import { Logo } from '@/components/ui/Logo'
 
 interface SidebarProps {
   isOpen: boolean
@@ -261,24 +262,16 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                     delay: 0.1 
                   }}
                   whileHover={{ scale: 1.05 }}
-                  className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-2xl p-3 ring-4 ring-white/60 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:shadow-blue-400/30 hover:ring-white/80"
+                  className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-2xl p-2.5 ring-4 ring-white/70 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:shadow-blue-400/40 hover:ring-white/90"
                 >
-                  <img 
-                    src="/logo-compact.svg" 
-                    alt="RAPICREDIT Logo" 
-                    className="w-full h-full object-contain select-none drop-shadow-lg"
-                  />
+                  <Logo size="lg" className="drop-shadow-xl brightness-110 contrast-125" />
                 </motion.div>
               </div>
             )}
             {isCompact && (
               <div className="flex items-center justify-center">
-                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-xl p-2 ring-2 ring-white/60">
-                  <img 
-                    src="/logo-compact.svg" 
-                    alt="RAPICREDIT Logo" 
-                    className="w-full h-full object-contain select-none drop-shadow-md"
-                  />
+                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-xl p-1.5 ring-2 ring-white/70">
+                  <Logo size="md" className="drop-shadow-lg brightness-110 contrast-125" />
                 </div>
               </div>
             )}

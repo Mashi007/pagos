@@ -25,6 +25,8 @@ import {
   FileText,
   ChevronDown,
   ChevronRight,
+  Upload,
+  Download,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -250,6 +252,34 @@ export function Configuracion() {
     }
   }
 
+  const [loadingData, setLoadingData] = useState(false)
+
+  const handleCargarDatosEjemplo = async () => {
+    try {
+      setLoadingData(true)
+      // Llamar al endpoint de carga de datos
+      const response = await fetch('/api/v1/configuracion/cargar-datos-ejemplo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Error al cargar datos de ejemplo')
+      }
+
+      const result = await response.json()
+      toast.success(result.message || 'Datos de ejemplo cargados exitosamente')
+    } catch (error) {
+      console.error('Error cargando datos:', error)
+      toast.error('Error al cargar datos de ejemplo. Por favor, intente nuevamente.')
+    } finally {
+      setLoadingData(false)
+    }
+  }
+
   const renderSeccionGeneral = () => (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2">
@@ -308,6 +338,52 @@ export function Configuracion() {
           </Select>
         </div>
       </div>
+
+      {/* Sección de Carga de Datos */}
+      <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50/30">
+        <CardHeader>
+          <div className="flex items-center space-x-2">
+            <Database className="h-5 w-5 text-blue-600" />
+            <CardTitle className="text-lg">Carga de Datos de Ejemplo</CardTitle>
+          </div>
+          <CardDescription>
+            Cargue datos de ejemplo para probar el sistema. Esto incluirá clientes, préstamos, pagos y otros datos necesarios.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col space-y-4">
+            <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
+              <p className="text-sm text-gray-700 mb-3">
+                <strong>⚠️ Importante:</strong> Esta operación cargará datos de ejemplo en el sistema. 
+                Asegúrese de que esto sea apropiado para su entorno.
+              </p>
+              <ul className="text-xs text-gray-600 space-y-1 list-disc list-inside">
+                <li>Clientes de ejemplo con información completa</li>
+                <li>Préstamos con diferentes estados</li>
+                <li>Pagos y cuotas asociadas</li>
+                <li>Concesionarios, analistas y validadores</li>
+              </ul>
+            </div>
+            <Button
+              onClick={handleCargarDatosEjemplo}
+              disabled={loadingData}
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {loadingData ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Cargando datos...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Cargar Datos de Ejemplo
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 

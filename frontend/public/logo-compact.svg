@@ -1,32 +1,68 @@
 <svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- Filtro de sombra suave -->
-    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.1"/>
+    <!-- Filtro de sombra más pronunciada para la R -->
+    <filter id="shadowR" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+    
+    <!-- Filtro de sombra para el círculo naranja -->
+    <filter id="shadowDot" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+    
+    <!-- Efecto glow sutil para la R -->
+    <filter id="glowR">
+      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Efecto glow para el punto naranja -->
+    <filter id="glowDot">
+      <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
     </filter>
   </defs>
   
-  <!-- Letra R estilizada - diseño limpio y geométrico -->
-  <g filter="url(#shadow)">
-    <!-- Tallo vertical principal -->
-    <rect x="8" y="6" width="7" height="26" rx="1" fill="#1E3A8A"/>
+  <!-- Letra R estilizada - MÁS GRANDE Y MÁS GRUESA para mejor visibilidad -->
+  <g filter="url(#shadowR)" id="letterR">
+    <!-- Tallo vertical principal - MÁS GRUESO (8px en lugar de 7px) -->
+    <rect x="7" y="5" width="9" height="28" rx="1.5" fill="#0F172A"/>
     
-    <!-- Parte superior curva de la R -->
-    <path d="M 15 6 L 15 13 Q 15 10 19 10 Q 23 10 24 12 L 24 16 Q 24 14 22 14 L 20 14 Q 18 14 17 15 L 15 17 Z" 
-          fill="#1E3A8A"/>
+    <!-- Borde blanco sutil en el tallo para definir mejor los bordes -->
+    <rect x="7" y="5" width="9" height="28" rx="1.5" fill="none" stroke="#E0E7FF" stroke-width="0.5" opacity="0.6"/>
     
-    <!-- Pierna diagonal de la R -->
-    <path d="M 15 18 L 22 12 L 28 12 L 20 18 L 20 20 L 26 26 L 32 26 L 24 20 L 22 20 Z" 
-          fill="#1E3A8A"/>
+    <!-- Parte superior curva de la R - MÁS GRANDE -->
+    <path d="M 16 5 L 16 14 Q 16 9 21 9 Q 26 9 27.5 11.5 L 27.5 17 Q 27.5 14.5 25 14.5 L 22 14.5 Q 20 14.5 18.5 15.5 L 16 18 Z" 
+          fill="#0F172A"/>
     
-    <!-- Punta inferior derecha -->
-    <path d="M 26 26 L 32 26 L 30 24 L 28 24 Z" 
-          fill="#1E3A8A"/>
+    <!-- Borde sutil en la parte superior -->
+    <path d="M 16 5 L 16 14 Q 16 9 21 9 Q 26 9 27.5 11.5 L 27.5 17 Q 27.5 14.5 25 14.5 L 22 14.5 Q 20 14.5 18.5 15.5 L 16 18 Z" 
+          fill="none" stroke="#E0E7FF" stroke-width="0.5" opacity="0.6"/>
+    
+    <!-- Pierna diagonal de la R - MÁS GRUESA Y EXTENDIDA -->
+    <path d="M 16 19 L 24 11 L 30 11 L 21 19 L 21 21 L 28 27 L 34 27 L 25 21 L 23 21 Z" 
+          fill="#0F172A"/>
+    
+    <!-- Borde sutil en la pierna -->
+    <path d="M 16 19 L 24 11 L 30 11 L 21 19 L 21 21 L 28 27 L 34 27 L 25 21 L 23 21 Z" 
+          fill="none" stroke="#E0E7FF" stroke-width="0.5" opacity="0.6"/>
+    
+    <!-- Punta inferior derecha - MÁS PRONUNCIADA -->
+    <path d="M 28 27 L 34 27 L 32 24 L 30 24 Z" 
+          fill="#0F172A"/>
   </g>
   
-  <!-- Círculo naranja vibrante -->
-  <circle cx="12" cy="40" r="5" fill="#F97316" filter="url(#shadow)"/>
-  
-  <!-- Círculo naranja interno para profundidad -->
-  <circle cx="12" cy="40" r="3.5" fill="#FB923C"/>
+  <!-- Círculo naranja vibrante - MÁS GRANDE Y MÁS VISIBLE -->
+  <g filter="url(#shadowDot)">
+    <circle cx="11" cy="41" r="6" fill="#EA580C" filter="url(#glowDot)"/>
+    <circle cx="11" cy="41" r="4.5" fill="#F97316"/>
+    <!-- Punto brillante interno -->
+    <circle cx="10" cy="40" r="1.5" fill="#FB923C" opacity="0.8"/>
+  </g>
 </svg>
