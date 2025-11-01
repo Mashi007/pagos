@@ -341,7 +341,9 @@ async def upload_logo(
         # Crear directorio de logos si no existe
         # Guardar en el directorio de archivos estáticos del frontend
         # En producción, esto debería estar en el directorio público del frontend
-        base_dir = Path(__file__).parent.parent.parent.parent.parent  # Raíz del proyecto
+        base_dir = Path(
+            __file__
+        ).parent.parent.parent.parent.parent  # Raíz del proyecto
         logos_dir = base_dir / "frontend" / "public" / "logos"
         logos_dir.mkdir(parents=True, exist_ok=True)
 
@@ -353,9 +355,7 @@ async def upload_logo(
         with open(logo_path, "wb") as f:
             f.write(contents)
 
-        logger.info(
-            f"Logo subido por usuario {current_user.email}: {logo_filename}"
-        )
+        logger.info(f"Logo subido por usuario {current_user.email}: {logo_filename}")
 
         return {
             "message": "Logo cargado exitosamente",
@@ -367,9 +367,7 @@ async def upload_logo(
         raise
     except Exception as e:
         logger.error(f"Error al subir logo: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Error al subir logo: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error al subir logo: {str(e)}")
 
 
 # ============================================
