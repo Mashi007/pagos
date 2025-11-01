@@ -3,10 +3,9 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, cast, func, or_
-from sqlalchemy.orm import Session
-from sqlalchemy.sql.sqltypes import DATE
+from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[import-untyped]
+from sqlalchemy import and_, cast, func, or_  # type: ignore[import-untyped]
+from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.models.amortizacion import Cuota
@@ -179,17 +178,15 @@ def obtener_cobros_diarios(
         datos_diarios = []
 
         for fecha_dia in fechas:
-            # Total a cobrar (cuotas vencidas y pendientes de ese día)
+            # ✅ Total a cobrar: TODAS las cuotas programadas con fecha_vencimiento = fecha_dia
+            # (incluye todas las cuotas, pagadas o no, porque es el monto programado para ese día)
             try:
                 cuotas_dia_query = (
                     db.query(func.sum(Cuota.monto_cuota))
                     .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                     .filter(
-                        and_(
-                            Cuota.fecha_vencimiento == fecha_dia,
-                            Cuota.estado != "PAGADO",
-                            Prestamo.estado == "APROBADO",
-                        )
+                        Cuota.fecha_vencimiento == fecha_dia,
+                        Prestamo.estado == "APROBADO",
                     )
                 )
                 cuotas_dia_query = FiltrosDashboard.aplicar_filtros_cuota(
@@ -214,35 +211,21 @@ def obtener_cobros_diarios(
                 )
                 total_a_cobrar = 0.0
 
-            # Total cobrado ese día
+            # ✅ Total cobrado: TODOS los pagos realizados con fecha_pago = fecha_dia
+            # (suma monto_pagado de todos los registros en tabla Pago donde fecha_pago = fecha_dia)
             try:
                 pagos_dia_query = db.query(func.sum(Pago.monto_pagado)).filter(
                     func.date(Pago.fecha_pago) == fecha_dia
                 )
-                if analista or concesionario or modelo:
-                    pagos_dia_query = pagos_dia_query.join(
-                        Prestamo, Pago.prestamo_id == Prestamo.id
-                    )
-                # Aplicar filtros de préstamo pero no de fecha de pago (ya está filtrada)
-                if analista or concesionario or modelo:
-                    if analista:
-                        pagos_dia_query = pagos_dia_query.filter(
-                            or_(
-                                Prestamo.analista == analista,
-                                Prestamo.producto_financiero == analista,
-                            )
-                        )
-                    if concesionario:
-                        pagos_dia_query = pagos_dia_query.filter(
-                            Prestamo.concesionario == concesionario
-                        )
-                    if modelo:
-                        pagos_dia_query = pagos_dia_query.filter(
-                            or_(
-                                Prestamo.producto == modelo,
-                                Prestamo.modelo_vehiculo == modelo,
-                            )
-                        )
+                # Aplicar filtros usando FiltrosDashboard (necesita join con Prestamo si hay filtros)
+                pagos_dia_query = FiltrosDashboard.aplicar_filtros_pago(
+                    pagos_dia_query,
+                    analista,
+                    concesionario,
+                    modelo,
+                    None,  # No aplicar filtros de fecha_inicio/fecha_fin aquí (ya filtrado por fecha_dia)
+                    None,
+                )
                 total_cobrado = float(pagos_dia_query.scalar() or Decimal("0"))
             except Exception:
                 logger.error(

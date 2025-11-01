@@ -758,85 +758,85 @@ export function Dashboard() {
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Cartera y Amortizaciones</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Cartera Total */}
+            {/* Total Financiamiento */}
             <Card className="hover:shadow-lg transition-all">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
                   <DollarSign className="mr-2 h-4 w-4 text-blue-600" />
-                  Cartera Total
+                  Total Financiamiento
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-gray-900">
-                  {formatCurrency(kpisData.cartera_total || 0)}
+                  {formatCurrency(kpisData.total_financiamiento || 0)}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Préstamos aprobados</p>
+                <p className="text-xs text-gray-500 mt-1">Total préstamos</p>
               </CardContent>
             </Card>
 
-            {/* Saldo Pendiente */}
+            {/* Total Financiamiento - ACTIVO */}
             <Card className="hover:shadow-lg transition-all">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
-                  <CreditCard className="mr-2 h-4 w-4 text-orange-600" />
-                  Saldo Pendiente
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-orange-600">
-                  {formatCurrency(kpisData.saldo_pendiente || 0)}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Capital + Interés + Mora</p>
-              </CardContent>
-            </Card>
-
-            {/* Monto Vencido */}
-            <Card className="hover:shadow-lg transition-all">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
-                  <AlertTriangle className="mr-2 h-4 w-4 text-red-600" />
-                  Monto Vencido
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">
-                  {formatCurrency(kpisData.monto_vencido || 0)}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Cuotas vencidas</p>
-              </CardContent>
-            </Card>
-
-            {/* Total Pagado en Cuotas */}
-            <Card className="hover:shadow-lg transition-all">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
-                  <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
-                  Total Pagado
+                  <Activity className="mr-2 h-4 w-4 text-green-600" />
+                  Financiamiento Activo
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
-                  {formatCurrency(kpisData.total_pagado_cuotas || 0)}
+                  {formatCurrency(kpisData.total_financiamiento_activo || 0)}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">En todas las cuotas</p>
+                <p className="text-xs text-gray-500 mt-1">Estado activo</p>
+              </CardContent>
+            </Card>
+
+            {/* Total Financiamiento - INACTIVO */}
+            <Card className="hover:shadow-lg transition-all">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
+                  <Clock className="mr-2 h-4 w-4 text-orange-600" />
+                  Financiamiento Inactivo
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  {formatCurrency(kpisData.total_financiamiento_inactivo || 0)}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Estado inactivo</p>
+              </CardContent>
+            </Card>
+
+            {/* Total Financiamiento - FINALIZADO */}
+            <Card className="hover:shadow-lg transition-all">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
+                  <CheckCircle className="mr-2 h-4 w-4 text-purple-600" />
+                  Financiamiento Finalizado
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-purple-600">
+                  {formatCurrency(kpisData.total_financiamiento_finalizado || 0)}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Estado finalizado</p>
               </CardContent>
             </Card>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Total Cuotas */}
+            {/* Total Cuotas a Cobrar en el Mes */}
             <Card className="hover:shadow-lg transition-all">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
-                  <BarChart3 className="mr-2 h-4 w-4 text-purple-600" />
-                  Total Cuotas
+                  <Calendar className="mr-2 h-4 w-4 text-purple-600" />
+                  Cuotas a Cobrar (Mes)
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-gray-900">
-                  {kpisData.total_cuotas || 0}
+                  {kpisData.total_cuotas_mes || 0}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Todas las cuotas generadas</p>
+                <p className="text-xs text-gray-500 mt-1">Mes en curso</p>
               </CardContent>
             </Card>
 
@@ -858,35 +858,53 @@ export function Dashboard() {
               </CardContent>
             </Card>
 
-            {/* Cuotas Pendientes */}
+            {/* Total Cuotas Conciliadas */}
             <Card className="hover:shadow-lg transition-all">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
-                  <Clock className="mr-2 h-4 w-4 text-yellow-600" />
-                  Cuotas Pendientes
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">
-                  {kpisData.cuotas_pendientes || 0}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Pendientes + Atrasadas</p>
-              </CardContent>
-            </Card>
-
-            {/* Porcentaje de Recuperación */}
-            <Card className="hover:shadow-lg transition-all">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
-                  <Target className="mr-2 h-4 w-4 text-blue-600" />
-                  Recuperación
+                  <Shield className="mr-2 h-4 w-4 text-blue-600" />
+                  Cuotas Conciliadas
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-blue-600">
-                  {kpisData.porcentaje_recuperacion?.toFixed(1) || 0}%
+                  {kpisData.total_cuotas_conciliadas || 0}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Sobre cartera total</p>
+                <p className="text-xs text-gray-500 mt-1">Con pagos conciliados</p>
+              </CardContent>
+            </Card>
+
+            {/* Cuotas Atrasadas del Mes */}
+            <Card className="hover:shadow-lg transition-all">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
+                  <AlertTriangle className="mr-2 h-4 w-4 text-red-600" />
+                  Cuotas Atrasadas (Mes)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  {kpisData.cuotas_atrasadas_mes || 0}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Sin pagar ni conciliar</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* KPI adicional: Cuotas Impagas 2+ por Cliente */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="hover:shadow-lg transition-all">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
+                  <Users className="mr-2 h-4 w-4 text-orange-600" />
+                  Cuotas Impagas (2+)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  {kpisData.total_cuotas_impagas_2mas || 0}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">2 o más por cliente</p>
               </CardContent>
             </Card>
           </div>

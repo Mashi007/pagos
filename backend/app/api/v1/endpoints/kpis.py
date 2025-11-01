@@ -1,14 +1,15 @@
 import logging
+from calendar import monthrange
 from datetime import date
 from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
+from sqlalchemy import and_, distinct, func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models.amortizacion import Cuota
+from app.models.amortizacion import Cuota, pago_cuotas
 from app.models.analista import Analista
 from app.models.cliente import Cliente
 from app.models.pago import Pago
@@ -211,6 +212,154 @@ def dashboard_kpis_principales(
         float((cuotas_pagadas / total_cuotas) * 100) if total_cuotas > 0 else 0.0
     )
 
+    # ✅ NUEVOS KPIs: Cuotas del Mes Actual y Conciliadas
+    # Obtener mes actual
+    hoy = fecha_corte if isinstance(fecha_corte, date) else date.today()
+    año_actual = hoy.year
+    mes_actual = hoy.month
+    primer_dia_mes = date(año_actual, mes_actual, 1)
+    ultimo_dia_mes = date(año_actual, mes_actual, monthrange(año_actual, mes_actual)[1])
+
+    # 1. Total de cuotas a cobrar en el mes (fecha_vencimiento en el mes actual)
+    cuotas_mes_query = (
+        db.query(func.count(Cuota.id))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            func.date(Cuota.fecha_vencimiento) >= primer_dia_mes,
+            func.date(Cuota.fecha_vencimiento) <= ultimo_dia_mes,
+        )
+    )
+    cuotas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(
+        cuotas_mes_query, analista, concesionario, modelo, None, None
+    )
+    total_cuotas_mes = cuotas_mes_query.scalar() or 0
+
+    # 2. Cuotas pagadas (ya existe, solo confirmamos)
+    # cuotas_pagadas ya está calculado arriba
+
+    # 3. Total de cuotas conciliadas
+    # Cuotas que tienen pagos conciliados asociados (a través de pago_cuotas)
+    cuotas_conciliadas_query = (
+        db.query(func.count(func.distinct(Cuota.id)))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(pago_cuotas, pago_cuotas.c.cuota_id == Cuota.id)
+        .join(Pago, pago_cuotas.c.pago_id == Pago.id)
+        .filter(Pago.conciliado == True)
+    )
+    # Aplicar filtros de préstamo (los filtros de cuota requieren join con Prestamo, ya está)
+    if analista or concesionario or modelo:
+        if analista:
+            cuotas_conciliadas_query = cuotas_conciliadas_query.filter(
+                or_(
+                    Prestamo.analista == analista,
+                    Prestamo.producto_financiero == analista,
+                )
+            )
+        if concesionario:
+            cuotas_conciliadas_query = cuotas_conciliadas_query.filter(
+                Prestamo.concesionario == concesionario
+            )
+        if modelo:
+            cuotas_conciliadas_query = cuotas_conciliadas_query.filter(
+                or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
+            )
+    total_cuotas_conciliadas = cuotas_conciliadas_query.scalar() or 0
+
+    # 4. Cuotas atrasadas del mes actual (no pagadas ni conciliadas)
+    # Cuotas del mes que no están pagadas y no tienen pagos conciliados
+    cuotas_atrasadas_mes_query = (
+        db.query(func.count(Cuota.id))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            func.date(Cuota.fecha_vencimiento) >= primer_dia_mes,
+            func.date(Cuota.fecha_vencimiento) <= ultimo_dia_mes,
+            Cuota.estado != "PAGADO",
+        )
+        .filter(
+            ~Cuota.id.in_(
+                db.query(pago_cuotas.c.cuota_id)
+                .join(Pago, pago_cuotas.c.pago_id == Pago.id)
+                .filter(Pago.conciliado == True)
+            )
+        )
+    )
+    cuotas_atrasadas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(
+        cuotas_atrasadas_mes_query, analista, concesionario, modelo, None, None
+    )
+    cuotas_atrasadas_mes = cuotas_atrasadas_mes_query.scalar() or 0
+
+    # 5. Total de cuotas impagas 2 o más por cliente
+    # Contar clientes que tienen 2 o más cuotas impagas
+    clientes_cuotas_impagas_query = (
+        db.query(Prestamo.cedula, func.count(Cuota.id).label("cantidad_impagas"))
+        .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+        .filter(Cuota.estado != "PAGADO")
+        .group_by(Prestamo.cedula)
+        .having(func.count(Cuota.id) >= 2)
+    )
+    # Aplicar filtros
+    if analista:
+        clientes_cuotas_impagas_query = clientes_cuotas_impagas_query.filter(
+            or_(
+                Prestamo.analista == analista,
+                Prestamo.producto_financiero == analista,
+            )
+        )
+    if concesionario:
+        clientes_cuotas_impagas_query = clientes_cuotas_impagas_query.filter(
+            Prestamo.concesionario == concesionario
+        )
+    if modelo:
+        clientes_cuotas_impagas_query = clientes_cuotas_impagas_query.filter(
+            or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
+        )
+    # Contar total de cuotas impagas de estos clientes
+    clientes_con_impagas = clientes_cuotas_impagas_query.all()
+    total_cuotas_impagas_2mas = sum(
+        cantidad for cedula, cantidad in clientes_con_impagas
+    )
+
+    # ✅ NUEVOS KPIs: Total Financiamiento por Estado de Cliente
+    # Helper function para crear query base con filtros
+    def crear_query_prestamo_base():
+        query = db.query(Prestamo)
+        return FiltrosDashboard.aplicar_filtros_prestamo(
+            query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+
+    # Total Financiamiento (suma de todos los préstamos)
+    total_financiamiento_query = crear_query_prestamo_base().with_entities(
+        func.sum(Prestamo.total_financiamiento)
+    )
+    total_financiamiento = total_financiamiento_query.scalar() or Decimal("0")
+
+    # Total Financiamiento - Estado ACTIVO
+    total_financiamiento_activo_query = (
+        crear_query_prestamo_base()
+        .join(Cliente, Prestamo.cedula == Cliente.cedula)
+        .filter(Cliente.estado == "ACTIVO")
+        .with_entities(func.sum(Prestamo.total_financiamiento))
+    )
+    total_financiamiento_activo = total_financiamiento_activo_query.scalar() or Decimal("0")
+
+    # Total Financiamiento - Estado INACTIVO
+    total_financiamiento_inactivo_query = (
+        crear_query_prestamo_base()
+        .join(Cliente, Prestamo.cedula == Cliente.cedula)
+        .filter(Cliente.estado == "INACTIVO")
+        .with_entities(func.sum(Prestamo.total_financiamiento))
+    )
+    total_financiamiento_inactivo = total_financiamiento_inactivo_query.scalar() or Decimal("0")
+
+    # Total Financiamiento - Estado FINALIZADO
+    total_financiamiento_finalizado_query = (
+        crear_query_prestamo_base()
+        .join(Cliente, Prestamo.cedula == Cliente.cedula)
+        .filter(Cliente.estado == "FINALIZADO")
+        .with_entities(func.sum(Prestamo.total_financiamiento))
+    )
+    total_financiamiento_finalizado = total_financiamiento_finalizado_query.scalar() or Decimal("0")
+
     return {
         "cartera_total": float(cartera_total),
         "clientes_al_dia": clientes_al_dia,
@@ -226,6 +375,16 @@ def dashboard_kpis_principales(
         "total_pagado_cuotas": float(total_pagado_cuotas),
         "porcentaje_recuperacion": porcentaje_recuperacion,
         "porcentaje_cuotas_pagadas": porcentaje_cuotas_pagadas,
+        # ✅ Nuevos KPIs de financiamiento por estado
+        "total_financiamiento": float(total_financiamiento),
+        "total_financiamiento_activo": float(total_financiamiento_activo),
+        "total_financiamiento_inactivo": float(total_financiamiento_inactivo),
+        "total_financiamiento_finalizado": float(total_financiamiento_finalizado),
+        # ✅ Nuevos KPIs de cuotas del mes y conciliación
+        "total_cuotas_mes": total_cuotas_mes,
+        "total_cuotas_conciliadas": total_cuotas_conciliadas,
+        "cuotas_atrasadas_mes": cuotas_atrasadas_mes,
+        "total_cuotas_impagas_2mas": total_cuotas_impagas_2mas,
     }
 
 
