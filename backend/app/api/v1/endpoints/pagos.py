@@ -317,7 +317,20 @@ def crear_pago(
         )
 
         # Aplicar pago a cuotas
-        cuotas_completadas = aplicar_pago_a_cuotas(nuevo_pago, db, current_user)
+        try:
+            cuotas_completadas = aplicar_pago_a_cuotas(nuevo_pago, db, current_user)
+            logger.info(
+                f"✅ [crear_pago] Pago ID {nuevo_pago.id}: "
+                f"{cuotas_completadas} cuota(s) completada(s)"
+            )
+        except Exception as e:
+            logger.error(
+                f"❌ [crear_pago] Error aplicando pago a cuotas: {str(e)}",
+                exc_info=True
+            )
+            # No fallar el registro del pago si falla la aplicación a cuotas
+            # El pago se registra pero las cuotas no se actualizan
+            cuotas_completadas = 0
 
         # Actualizar estado del pago según regla de negocio:
         # - Si el pago no tiene préstamo asociado, mantener estado por defecto "PAGADO"
@@ -340,6 +353,56 @@ def crear_pago(
         db.rollback()
         raise HTTPException(
             status_code=500, detail=f"Error interno del servidor: {str(e)}"
+        )
+
+
+@router.post("/{pago_id}/aplicar-cuotas", response_model=dict)
+def aplicar_pago_manualmente(
+    pago_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Reaplicar un pago a las cuotas del préstamo asociado.
+    Útil cuando un pago fue registrado pero no se aplicó correctamente a las cuotas.
+    """
+    try:
+        pago = db.query(Pago).filter(Pago.id == pago_id).first()
+        if not pago:
+            raise HTTPException(status_code=404, detail="Pago no encontrado")
+
+        if not pago.prestamo_id:
+            raise HTTPException(
+                status_code=400,
+                detail="El pago no tiene un préstamo asociado (prestamo_id es NULL)"
+            )
+
+        logger.info(
+            f"🔄 [aplicar_pago_manualmente] Reaplicando pago ID {pago_id} "
+            f"al préstamo {pago.prestamo_id}"
+        )
+
+        # Reaplicar el pago a las cuotas
+        cuotas_completadas = aplicar_pago_a_cuotas(pago, db, current_user)
+
+        return {
+            "success": True,
+            "message": f"Pago aplicado exitosamente. {cuotas_completadas} cuota(s) completada(s)",
+            "pago_id": pago_id,
+            "prestamo_id": pago.prestamo_id,
+            "cuotas_completadas": cuotas_completadas,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"❌ [aplicar_pago_manualmente] Error: {str(e)}",
+            exc_info=True
+        )
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al aplicar pago a cuotas: {str(e)}"
         )
 
 
@@ -549,9 +612,18 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
         int: Número de cuotas que se completaron completamente con este pago
     """
     if not pago.prestamo_id:
+        logger.warning(
+            f"⚠️ [aplicar_pago_a_cuotas] Pago ID {pago.id} no tiene prestamo_id. "
+            f"No se aplicará a cuotas."
+        )
         return 0
 
     from datetime import date
+
+    logger.info(
+        f"🔄 [aplicar_pago_a_cuotas] Aplicando pago ID {pago.id} "
+        f"(monto: ${pago.monto_pagado}, prestamo_id: {pago.prestamo_id})"
+    )
 
     # Obtener TODAS las cuotas no pagadas del préstamo, ordenadas por número
     # (incluyendo PENDIENTE, ATRASADO, PARCIAL para aplicar pagos secuenciales)
@@ -564,6 +636,18 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
         .order_by(Cuota.numero_cuota)
         .all()
     )
+
+    logger.info(
+        f"📋 [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id}: "
+        f"{len(cuotas)} cuotas no pagadas encontradas"
+    )
+
+    if len(cuotas) == 0:
+        logger.warning(
+            f"⚠️ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} no tiene cuotas pendientes. "
+            f"No se aplicará el pago."
+        )
+        return 0
 
     saldo_restante = pago.monto_pagado
     cuotas_completadas = 0  # Contador de cuotas completadas con este pago
@@ -641,10 +725,19 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
                 cuota.estado = "PENDIENTE"
 
         saldo_restante -= monto_aplicar
+        logger.debug(
+            f"  💰 [aplicar_pago_a_cuotas] Cuota #{cuota.numero_cuota}: "
+            f"Aplicado ${monto_aplicar}, Saldo restante: ${saldo_restante}, "
+            f"Estado: {cuota.estado}"
+        )
 
     # Si queda saldo después de aplicar a todas las cuotas pendientes, es un pago adelantado
     # Aplicar el exceso a la siguiente cuota que esté PENDIENTE
     if saldo_restante > Decimal("0.00"):
+        logger.info(
+            f"📊 [aplicar_pago_a_cuotas] Saldo restante: ${saldo_restante}. "
+            f"Aplicando a siguiente cuota pendiente..."
+        )
         # Buscar la siguiente cuota pendiente (la primera que no esté pagada)
         siguiente_cuota = (
             db.query(Cuota)
@@ -708,8 +801,24 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
                     siguiente_cuota.estado = "ATRASADO"
                 else:
                     siguiente_cuota.estado = "ADELANTADO"
+                logger.debug(
+                    f"  💰 [aplicar_pago_a_cuotas] Cuota #{siguiente_cuota.numero_cuota} "
+                    f"(exceso): Aplicado ${monto_aplicar_exceso}, Estado: {siguiente_cuota.estado}"
+                )
 
-    db.commit()
+    try:
+        db.commit()
+        logger.info(
+            f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id} aplicado exitosamente. "
+            f"Cuotas completadas: {cuotas_completadas}"
+        )
+    except Exception as e:
+        logger.error(
+            f"❌ [aplicar_pago_a_cuotas] Error al guardar cambios en BD: {str(e)}",
+            exc_info=True
+        )
+        db.rollback()
+        raise
 
     # Retornar número de cuotas completadas con este pago
     return cuotas_completadas
