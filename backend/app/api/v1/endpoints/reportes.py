@@ -363,12 +363,12 @@ def exportar_reporte_cartera(
         )
         # Obtener datos del reporte
         reporte = reporte_cartera(fecha_corte, db, current_user)
-        
+
         # Obtener variables adicionales para el Excel
         cantidad_prestamos_activos = (
             db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
         )
-        
+
         cantidad_prestamos_mora = (
             db.query(func.count(func.distinct(Prestamo.id)))
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
@@ -378,7 +378,7 @@ def exportar_reporte_cartera(
             )
             .scalar()
         ) or 0
-        
+
         # Obtener distribuciones para las hojas
         distribucion_por_monto_query = (
             db.query(
@@ -395,7 +395,7 @@ def exportar_reporte_cartera(
             .group_by("rango")
             .all()
         )
-        
+
         distribucion_por_monto = [
             {
                 "rango": item.rango,
@@ -404,7 +404,7 @@ def exportar_reporte_cartera(
             }
             for item in distribucion_por_monto_query
         ]
-        
+
         # Distribución por mora
         rangos_mora = [
             {"min": 1, "max": 30, "label": "1-30 días"},
@@ -412,7 +412,7 @@ def exportar_reporte_cartera(
             {"min": 61, "max": 90, "label": "61-90 días"},
             {"min": 91, "max": 999999, "label": "Más de 90 días"},
         ]
-        
+
         distribucion_por_mora = []
         for rango in rangos_mora:
             cantidad = (
@@ -453,7 +453,7 @@ def exportar_reporte_cartera(
             from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
             wb = Workbook()
-            
+
             # ============================================
             # HOJA 1: RESUMEN EJECUTIVO
             # ============================================
@@ -461,27 +461,33 @@ def exportar_reporte_cartera(
             ws_resumen.title = "Resumen Ejecutivo"
 
             # Estilos
-            header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            header_fill = PatternFill(
+                start_color="366092", end_color="366092", fill_type="solid"
+            )
             header_font = Font(bold=True, color="FFFFFF", size=14)
             title_font = Font(bold=True, size=16)
             label_font = Font(bold=True)
             border = Border(
-                left=Side(style='thin'),
-                right=Side(style='thin'),
-                top=Side(style='thin'),
-                bottom=Side(style='thin')
+                left=Side(style="thin"),
+                right=Side(style="thin"),
+                top=Side(style="thin"),
+                bottom=Side(style="thin"),
             )
 
             # Encabezado
             ws_resumen.merge_cells("A1:B1")
             ws_resumen["A1"] = "REPORTE DE CARTERA"
             ws_resumen["A1"].font = title_font
-            ws_resumen["A1"].alignment = Alignment(horizontal="center", vertical="center")
+            ws_resumen["A1"].alignment = Alignment(
+                horizontal="center", vertical="center"
+            )
             ws_resumen.row_dimensions[1].height = 30
 
             ws_resumen["A2"] = f"Fecha de Corte: {reporte.fecha_corte}"
             ws_resumen["A2"].font = Font(size=12)
-            ws_resumen["A3"] = f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+            ws_resumen["A3"] = (
+                f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+            )
             ws_resumen["A3"].font = Font(size=10, italic=True)
 
             # Datos principales con formato
@@ -514,7 +520,7 @@ def exportar_reporte_cartera(
             # HOJA 2: DISTRIBUCIÓN POR MONTO
             # ============================================
             ws_monto = wb.create_sheet("Distribución por Monto")
-            
+
             # Encabezados
             headers = ["Rango de Monto", "Cantidad Préstamos", "Monto Total"]
             for col_idx, header in enumerate(headers, 1):
@@ -523,20 +529,36 @@ def exportar_reporte_cartera(
                 cell.fill = header_fill
                 cell.alignment = Alignment(horizontal="center", vertical="center")
                 cell.border = border
-            
+
             # Datos
             for row_idx, item in enumerate(distribucion_por_monto, 2):
-                ws_monto.cell(row=row_idx, column=1, value=item["rango"]).border = border
-                ws_monto.cell(row=row_idx, column=2, value=item["cantidad"]).border = border
-                cell_monto = ws_monto.cell(row=row_idx, column=3, value=float(item["monto"]))
+                ws_monto.cell(row=row_idx, column=1, value=item["rango"]).border = (
+                    border
+                )
+                ws_monto.cell(row=row_idx, column=2, value=item["cantidad"]).border = (
+                    border
+                )
+                cell_monto = ws_monto.cell(
+                    row=row_idx, column=3, value=float(item["monto"])
+                )
                 cell_monto.number_format = '"$"#,##0.00'
                 cell_monto.border = border
 
             # Totales
             total_row = len(distribucion_por_monto) + 3
-            ws_monto.cell(row=total_row, column=1, value="TOTAL:").font = Font(bold=True)
-            ws_monto.cell(row=total_row, column=2, value=sum(item["cantidad"] for item in distribucion_por_monto)).font = Font(bold=True)
-            total_cell = ws_monto.cell(row=total_row, column=3, value=sum(item["monto"] for item in distribucion_por_monto))
+            ws_monto.cell(row=total_row, column=1, value="TOTAL:").font = Font(
+                bold=True
+            )
+            ws_monto.cell(
+                row=total_row,
+                column=2,
+                value=sum(item["cantidad"] for item in distribucion_por_monto),
+            ).font = Font(bold=True)
+            total_cell = ws_monto.cell(
+                row=total_row,
+                column=3,
+                value=sum(item["monto"] for item in distribucion_por_monto),
+            )
             total_cell.number_format = '"$"#,##0.00'
             total_cell.font = Font(bold=True)
 
@@ -549,7 +571,7 @@ def exportar_reporte_cartera(
             # HOJA 3: DISTRIBUCIÓN POR MORA
             # ============================================
             ws_mora = wb.create_sheet("Distribución por Mora")
-            
+
             # Encabezados
             headers_mora = ["Rango de Días", "Cantidad Préstamos", "Monto Total Mora"]
             for col_idx, header in enumerate(headers_mora, 1):
@@ -558,20 +580,34 @@ def exportar_reporte_cartera(
                 cell.fill = header_fill
                 cell.alignment = Alignment(horizontal="center", vertical="center")
                 cell.border = border
-            
+
             # Datos
             for row_idx, item in enumerate(distribucion_por_mora, 2):
                 ws_mora.cell(row=row_idx, column=1, value=item["rango"]).border = border
-                ws_mora.cell(row=row_idx, column=2, value=item["cantidad"]).border = border
-                cell_mora = ws_mora.cell(row=row_idx, column=3, value=float(item["monto_total"]))
+                ws_mora.cell(row=row_idx, column=2, value=item["cantidad"]).border = (
+                    border
+                )
+                cell_mora = ws_mora.cell(
+                    row=row_idx, column=3, value=float(item["monto_total"])
+                )
                 cell_mora.number_format = '"$"#,##0.00'
                 cell_mora.border = border
 
             # Totales
             total_row_mora = len(distribucion_por_mora) + 3
-            ws_mora.cell(row=total_row_mora, column=1, value="TOTAL:").font = Font(bold=True)
-            ws_mora.cell(row=total_row_mora, column=2, value=sum(item["cantidad"] for item in distribucion_por_mora)).font = Font(bold=True)
-            total_cell_mora = ws_mora.cell(row=total_row_mora, column=3, value=float(sum(item["monto_total"] for item in distribucion_por_mora)))
+            ws_mora.cell(row=total_row_mora, column=1, value="TOTAL:").font = Font(
+                bold=True
+            )
+            ws_mora.cell(
+                row=total_row_mora,
+                column=2,
+                value=sum(item["cantidad"] for item in distribucion_por_mora),
+            ).font = Font(bold=True)
+            total_cell_mora = ws_mora.cell(
+                row=total_row_mora,
+                column=3,
+                value=float(sum(item["monto_total"] for item in distribucion_por_mora)),
+            )
             total_cell_mora.number_format = '"$"#,##0.00'
             total_cell_mora.font = Font(bold=True)
 
@@ -584,7 +620,7 @@ def exportar_reporte_cartera(
             # HOJA 4: PRÉSTAMOS DETALLADOS (DATOS REALES)
             # ============================================
             ws_detalle = wb.create_sheet("Préstamos Detallados")
-            
+
             # Obtener préstamos reales desde BD
             prestamos_detalle = (
                 db.query(
@@ -596,9 +632,11 @@ def exportar_reporte_cartera(
                     Prestamo.modalidad_pago,
                     Prestamo.numero_cuotas,
                     Prestamo.usuario_proponente.label("analista"),
-                    func.sum(func.coalesce(Cuota.capital_pendiente, Decimal("0.00")) + 
-                            func.coalesce(Cuota.interes_pendiente, Decimal("0.00")) + 
-                            func.coalesce(Cuota.monto_mora, Decimal("0.00"))).label("saldo_pendiente"),
+                    func.sum(
+                        func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
+                        + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
+                        + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
+                    ).label("saldo_pendiente"),
                     func.count(Cuota.id).label("cuotas_pendientes"),
                 )
                 .join(Cuota, Cuota.prestamo_id == Prestamo.id, isouter=True)
@@ -608,13 +646,21 @@ def exportar_reporte_cartera(
                 .all()
             )
 
-            logger.info(f"[reportes.exportar] Obteniendo {len(prestamos_detalle)} préstamos para detalle")
+            logger.info(
+                f"[reportes.exportar] Obteniendo {len(prestamos_detalle)} préstamos para detalle"
+            )
 
             # Encabezados
             headers_detalle = [
-                "ID Préstamo", "Cédula", "Cliente", "Total Financiamiento",
-                "Saldo Pendiente", "Cuotas Pendientes", "Modalidad",
-                "Analista", "Estado"
+                "ID Préstamo",
+                "Cédula",
+                "Cliente",
+                "Total Financiamiento",
+                "Saldo Pendiente",
+                "Cuotas Pendientes",
+                "Modalidad",
+                "Analista",
+                "Estado",
             ]
             for col_idx, header in enumerate(headers_detalle, 1):
                 cell = ws_detalle.cell(row=1, column=col_idx, value=header)
@@ -622,22 +668,42 @@ def exportar_reporte_cartera(
                 cell.fill = header_fill
                 cell.alignment = Alignment(horizontal="center", vertical="center")
                 cell.border = border
-            
+
             # Datos de préstamos
             for row_idx, prestamo in enumerate(prestamos_detalle, 2):
-                ws_detalle.cell(row=row_idx, column=1, value=prestamo.id).border = border
-                ws_detalle.cell(row=row_idx, column=2, value=prestamo.cedula).border = border
-                ws_detalle.cell(row=row_idx, column=3, value=prestamo.nombres or "").border = border
-                cell_total = ws_detalle.cell(row=row_idx, column=4, value=float(prestamo.total_financiamiento))
+                ws_detalle.cell(row=row_idx, column=1, value=prestamo.id).border = (
+                    border
+                )
+                ws_detalle.cell(row=row_idx, column=2, value=prestamo.cedula).border = (
+                    border
+                )
+                ws_detalle.cell(
+                    row=row_idx, column=3, value=prestamo.nombres or ""
+                ).border = border
+                cell_total = ws_detalle.cell(
+                    row=row_idx, column=4, value=float(prestamo.total_financiamiento)
+                )
                 cell_total.number_format = '"$"#,##0.00'
                 cell_total.border = border
-                cell_saldo = ws_detalle.cell(row=row_idx, column=5, value=float(prestamo.saldo_pendiente or Decimal("0")))
+                cell_saldo = ws_detalle.cell(
+                    row=row_idx,
+                    column=5,
+                    value=float(prestamo.saldo_pendiente or Decimal("0")),
+                )
                 cell_saldo.number_format = '"$"#,##0.00'
                 cell_saldo.border = border
-                ws_detalle.cell(row=row_idx, column=6, value=prestamo.cuotas_pendientes or 0).border = border
-                ws_detalle.cell(row=row_idx, column=7, value=prestamo.modalidad_pago or "").border = border
-                ws_detalle.cell(row=row_idx, column=8, value=prestamo.analista or "").border = border
-                ws_detalle.cell(row=row_idx, column=9, value=prestamo.estado or "").border = border
+                ws_detalle.cell(
+                    row=row_idx, column=6, value=prestamo.cuotas_pendientes or 0
+                ).border = border
+                ws_detalle.cell(
+                    row=row_idx, column=7, value=prestamo.modalidad_pago or ""
+                ).border = border
+                ws_detalle.cell(
+                    row=row_idx, column=8, value=prestamo.analista or ""
+                ).border = border
+                ws_detalle.cell(
+                    row=row_idx, column=9, value=prestamo.estado or ""
+                ).border = border
 
             # Ajustar anchos
             column_widths = [12, 15, 30, 18, 18, 15, 15, 25, 12]
