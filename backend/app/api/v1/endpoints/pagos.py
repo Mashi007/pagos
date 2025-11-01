@@ -568,11 +568,21 @@ def listar_ultimos_pagos(
                 )
                 saldo_vencido = saldo_result if saldo_result else Decimal("0.00")
 
+            # ✅ Si el pago no tiene prestamo_id, intentar obtener el primer préstamo aprobado del cliente
+            prestamo_id_mostrar = pago.prestamo_id
+            if not prestamo_id_mostrar and prestamos_ids:
+                # Si el pago no tiene prestamo_id, usar el primer préstamo aprobado del cliente
+                prestamo_id_mostrar = prestamos_ids[0]
+                logger.info(
+                    f"⚠️ [ultimos_pagos] Pago ID {pago.id} no tiene prestamo_id. "
+                    f"Usando primer préstamo aprobado del cliente: {prestamo_id_mostrar}"
+                )
+            
             items.append(
                 {
                     "cedula": pago.cedula_cliente,
                     "pago_id": pago.id,
-                    "prestamo_id": pago.prestamo_id,
+                    "prestamo_id": prestamo_id_mostrar,  # ✅ Usar prestamo_id del pago o del primer préstamo aprobado
                     "estado_pago": pago.estado,
                     "monto_ultimo_pago": float(pago.monto_pagado),
                     "fecha_ultimo_pago": (
@@ -580,7 +590,7 @@ def listar_ultimos_pagos(
                     ),
                     "cuotas_atrasadas": int(cuotas_atrasadas),
                     "saldo_vencido": float(saldo_vencido),
-                    "total_prestamos": total_prestamos,
+                    "total_prestamos": int(total_prestamos),
                 }
             )
 
