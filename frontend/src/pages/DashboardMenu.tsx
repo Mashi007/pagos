@@ -5,13 +5,13 @@ import {
   CreditCard,
   Calendar,
   BarChart3,
-  TrendingUp,
   Activity,
   Shield,
   ChevronRight,
   LayoutDashboard,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 
 interface KpiCategory {
@@ -20,88 +20,61 @@ interface KpiCategory {
   description: string
   icon: typeof DollarSign
   color: string
+  hoverColor: string
   bgColor: string
   route: string
-  metrics: string[]
 }
 
 const categories: KpiCategory[] = [
   {
     id: 'financiamiento',
     title: 'Financiamiento',
-    description: 'KPIs relacionados con el financiamiento total y por estado',
+    description: 'Total y por estado',
     icon: DollarSign,
     color: 'text-blue-600',
+    hoverColor: 'hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300',
     bgColor: 'bg-blue-50',
     route: '/dashboard/financiamiento',
-    metrics: [
-      'Total Financiamiento',
-      'Financiamiento Activo',
-      'Financiamiento Inactivo',
-      'Financiamiento Finalizado',
-    ],
   },
   {
     id: 'cuotas',
     title: 'Cuotas y Amortizaciones',
-    description: 'Gestión de cuotas, pagos y estados de amortización',
+    description: 'Gestión de cuotas y pagos',
     icon: Calendar,
     color: 'text-purple-600',
+    hoverColor: 'hover:bg-purple-50 hover:text-purple-700 hover:border-purple-300',
     bgColor: 'bg-purple-50',
     route: '/dashboard/cuotas',
-    metrics: [
-      'Cuotas a Cobrar (Mes)',
-      'Cuotas Pagadas',
-      'Cuotas Conciliadas',
-      'Cuotas Atrasadas',
-      'Cuotas Impagas (2+)',
-    ],
   },
   {
     id: 'cobranza',
     title: 'Cobranza',
-    description: 'Métricas de recaudación y cumplimiento de metas',
+    description: 'Recaudación y metas',
     icon: CreditCard,
     color: 'text-green-600',
+    hoverColor: 'hover:bg-green-50 hover:text-green-700 hover:border-green-300',
     bgColor: 'bg-green-50',
     route: '/dashboard/cobranza',
-    metrics: [
-      'Total Cobrado Mes',
-      'Tasa de Recuperación Mensual',
-      'Meta Mensual',
-      'Avance de Meta',
-    ],
   },
   {
     id: 'analisis',
     title: 'Análisis y Gráficos',
-    description: 'Visualizaciones y análisis detallados',
+    description: 'Visualizaciones detalladas',
     icon: BarChart3,
     color: 'text-orange-600',
+    hoverColor: 'hover:bg-orange-50 hover:text-orange-700 hover:border-orange-300',
     bgColor: 'bg-orange-50',
     route: '/dashboard/analisis',
-    metrics: [
-      'Análisis de Morosidad',
-      'Evolución Mensual',
-      'Cobros Diarios',
-      'Distribución de Ingresos',
-    ],
   },
   {
     id: 'pagos',
     title: 'Pagos',
-    description: 'KPIs de pagos y transacciones',
+    description: 'KPIs de transacciones',
     icon: Activity,
     color: 'text-indigo-600',
+    hoverColor: 'hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300',
     bgColor: 'bg-indigo-50',
     route: '/dashboard/pagos',
-    metrics: [
-      'Total Pagos',
-      'Pagos del Día',
-      'Total Pagado',
-      'Cuotas Pagadas',
-      'Cuotas Pendientes',
-    ],
   },
 ]
 
@@ -121,92 +94,83 @@ export function DashboardMenu() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard Ejecutivo</h1>
           <p className="text-gray-600 mt-1">
-            Bienvenido, {userName} • Selecciona una categoría de KPIs para explorar
+            Bienvenido, {userName} • Selecciona una categoría para ver los KPIs detallados
           </p>
         </div>
-        <motion.div
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <LayoutDashboard className="h-4 w-4" />
-            <span>Vista General</span>
-          </button>
-        </motion.div>
       </motion.div>
 
-      {/* Grid de Categorías */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Grid de Botones Compactos */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {categories.map((category, index) => {
           const Icon = category.icon
           return (
-            <motion.div
+            <motion.button
               key={category.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              whileHover={{ y: -4 }}
-              className="cursor-pointer"
+              transition={{ delay: index * 0.05 }}
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => navigate(category.route)}
+              className={`
+                group relative
+                flex items-center justify-between
+                px-6 py-4
+                bg-white border-2 border-gray-200 rounded-xl
+                shadow-sm
+                transition-all duration-200
+                ${category.hoverColor}
+                hover:shadow-md
+                text-left
+              `}
             >
-              <Card className="h-full hover:shadow-xl transition-all duration-200 border-l-4 border-l-transparent hover:border-l-blue-500">
-                <CardHeader>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className={`p-3 rounded-lg ${category.bgColor}`}>
-                      <Icon className={`h-6 w-6 ${category.color}`} />
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
-                  </div>
-                  <CardTitle className="text-xl">{category.title}</CardTitle>
-                  <CardDescription className="mt-2">
+              <div className="flex items-center space-x-4 flex-1">
+                <div className={`
+                  p-3 rounded-lg 
+                  ${category.bgColor}
+                  group-hover:scale-110
+                  transition-transform duration-200
+                `}>
+                  <Icon className={`h-6 w-6 ${category.color}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-900">
+                    {category.title}
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-0.5">
                     {category.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-700 mb-3">
-                      Métricas incluidas:
-                    </p>
-                    <ul className="space-y-1.5">
-                      {category.metrics.map((metric, idx) => (
-                        <li
-                          key={idx}
-                          className="text-sm text-gray-600 flex items-center"
-                        >
-                          <div className="h-1.5 w-1.5 rounded-full bg-gray-400 mr-2" />
-                          {metric}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className={`
+                h-5 w-5 
+                text-gray-400 
+                group-hover:text-gray-600
+                group-hover:translate-x-1
+                transition-all duration-200
+                flex-shrink-0 ml-4
+              `} />
+            </motion.button>
           )
         })}
       </div>
 
-      {/* Información adicional */}
+      {/* Información adicional compacta */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.6 }}
+        transition={{ delay: 0.3 }}
       >
         <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-          <CardContent className="p-6">
-            <div className="flex items-start space-x-4">
-              <Shield className="h-6 w-6 text-blue-600 mt-1 flex-shrink-0" />
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-3">
+              <Shield className="h-5 w-5 text-blue-600 flex-shrink-0" />
               <div>
-                <h3 className="font-semibold text-gray-900 mb-1">
+                <h3 className="text-sm font-semibold text-gray-900">
                   Filtros Globales Disponibles
                 </h3>
-                <p className="text-sm text-gray-600">
-                  Todas las páginas de KPIs incluyen filtros por Analista, Concesionario,
-                  Modelo y Rango de Fechas. Los filtros se aplican automáticamente a todos
-                  los KPIs y gráficos en la página seleccionada.
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Todas las páginas incluyen filtros por Analista, Concesionario, Modelo y Fechas que se aplican automáticamente a todos los KPIs y gráficos.
                 </p>
               </div>
             </div>
