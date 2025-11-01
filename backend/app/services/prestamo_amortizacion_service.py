@@ -67,7 +67,9 @@ def generar_tabla_amortizacion(
             fecha_vencimiento = fecha_base + relativedelta(months=numero_cuota)
         else:
             # Para QUINCENAL y SEMANAL usar días fijos (timedelta)
-            fecha_vencimiento = fecha_base + timedelta(days=intervalo_dias * numero_cuota)
+            fecha_vencimiento = fecha_base + timedelta(
+                days=intervalo_dias * numero_cuota
+            )
 
         # Método Francés (cuota fija)
         monto_cuota = prestamo.cuota_periodo
