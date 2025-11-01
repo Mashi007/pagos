@@ -1,66 +1,57 @@
 """
 Script para regenerar todas las cuotas con fechas corregidas
 Usa la lógica corregida con relativedelta para mantener el mismo día del mes en pagos MENSUAL
+
+Uso:
+    python scripts/python/Regenerar_Cuotas_Fechas_Correctas.py
 """
 
 import os
 import sys
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
-# Agregar el directorio backend al path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'backend'))
+# Manejar encoding para Windows
+if sys.platform == "win32":
+    import codecs
+    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.buffer, "strict")
+    sys.stderr = codecs.getwriter("utf-8")(sys.stderr.buffer, "strict")
 
-# Configurar encoding UTF-8 para Windows
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+# Agregar el directorio backend al path (donde está la estructura app/)
+backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../backend"))
+sys.path.insert(0, backend_dir)
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session
+
+# Importar desde app
+from app.db.session import SessionLocal
 from app.models.prestamo import Prestamo
 from app.models.amortizacion import Cuota
 from app.services.prestamo_amortizacion_service import generar_tabla_amortizacion
-import logging
 
-# Configurar logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger = None
+try:
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+except Exception:
+    pass
 
 
-def create_safe_session():
-    """Crea una sesión de base de datos con manejo robusto de encoding"""
-    database_url = os.getenv('DATABASE_URL')
-    
-    if not database_url:
-        raise ValueError("DATABASE_URL no está definida en las variables de entorno")
-    
-    # Manejar encoding en DATABASE_URL
-    if isinstance(database_url, bytes):
-        try:
-            database_url = database_url.decode('utf-8')
-        except UnicodeDecodeError:
-            database_url = database_url.decode('latin1')
-    
-    # Asegurar que el encoding esté configurado en la URL
-    if '?' in database_url:
-        if 'client_encoding' not in database_url:
-            database_url += '&client_encoding=UTF8'
-    else:
-        database_url += '?client_encoding=UTF8'
-    
-    engine = create_engine(
-        database_url,
-        pool_pre_ping=True,
-        connect_args={"options": "-c client_encoding=UTF8"}
-    )
-    
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    return SessionLocal()
+def log_info(message: str):
+    """Log helper"""
+    print(f"[INFO] {message}")
+    if logger:
+        logger.info(message)
+
+
+def log_error(message: str, exc: Exception = None):
+    """Error log helper"""
+    print(f"[ERROR] {message}")
+    if exc:
+        print(f"        Exception: {str(exc)}")
+    if logger:
+        logger.error(message, exc_info=exc)
 
 
 def regenerar_cuotas_prestamo(prestamo: Prestamo, db: Session) -> tuple[bool, int, str]:
@@ -87,11 +78,11 @@ def regenerar_cuotas_prestamo(prestamo: Prestamo, db: Session) -> tuple[bool, in
             return False, 0, f"Préstamo {prestamo.id}: numero_cuotas <= 0"
         
         # Convertir fecha_base_calculo a date si es necesario
-        if isinstance(prestamo.fecha_base_calculo, str):
-            from dateutil.parser import parse as date_parse
-            fecha_base = date_parse(prestamo.fecha_base_calculo).date()
-        else:
-            fecha_base = prestamo.fecha_base_calculo
+        fecha_base = prestamo.fecha_base_calculo
+        if isinstance(fecha_base, str):
+            fecha_base = datetime.fromisoformat(fecha_base).date()
+        elif isinstance(fecha_base, datetime):
+            fecha_base = fecha_base.date()
         
         # Eliminar cuotas existentes (la función generar_tabla_amortizacion ya lo hace)
         # pero lo hacemos explícito para contar cuántas había
@@ -102,7 +93,7 @@ def regenerar_cuotas_prestamo(prestamo: Prestamo, db: Session) -> tuple[bool, in
         
         cantidad = len(cuotas_nuevas)
         
-        logger.info(
+        log_info(
             f"Préstamo {prestamo.id}: Regeneradas {cantidad} cuotas "
             f"(tenía {cuotas_anteriores}). Fecha base: {fecha_base}"
         )
@@ -110,7 +101,7 @@ def regenerar_cuotas_prestamo(prestamo: Prestamo, db: Session) -> tuple[bool, in
         return True, cantidad, f"OK: {cantidad} cuotas regeneradas"
         
     except Exception as e:
-        logger.error(f"Error regenerando cuotas del préstamo {prestamo.id}: {str(e)}", exc_info=True)
+        log_error(f"Error regenerando cuotas del préstamo {prestamo.id}: {str(e)}", e)
         return False, 0, f"Error: {str(e)}"
 
 
@@ -122,7 +113,7 @@ def main():
     print("=" * 80)
     print()
     
-    db = create_safe_session()
+    db = SessionLocal()
     
     try:
         # Obtener todos los préstamos aprobados con fecha_base_calculo
@@ -164,7 +155,7 @@ def main():
                 db.commit()
             except Exception as e:
                 db.rollback()
-                logger.error(f"Error en commit para préstamo {prestamo.id}: {str(e)}")
+                log_error(f"Error en commit para préstamo {prestamo.id}: {str(e)}", e)
                 fallidos += 1
                 errores.append(f"Préstamo {prestamo.id}: Error en commit - {str(e)}")
         
@@ -188,17 +179,15 @@ def main():
             print()
         
         print("Proceso completado.")
+        return 0 if fallidos == 0 else 1
         
     except Exception as e:
-        logger.error(f"Error crítico: {str(e)}", exc_info=True)
+        log_error(f"Error crítico: {str(e)}", e)
         print(f"ERROR CRÍTICO: {str(e)}")
         return 1
     finally:
         db.close()
-    
-    return 0 if fallidos == 0 else 1
 
 
 if __name__ == '__main__':
     sys.exit(main())
-
