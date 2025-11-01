@@ -12,11 +12,11 @@ export function Welcome() {
       <header className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center">
-            <div className="flex items-center justify-center w-14 h-14 bg-white rounded-xl shadow-xl p-2.5 border-2 border-gray-100">
+            <div className="flex items-center justify-center w-14 h-14 bg-white rounded-xl shadow-xl p-2.5 border-2 border-gray-100 ring-2 ring-gray-50">
               <img 
                 src="/logo-compact.svg" 
                 alt="RAPICREDIT Logo" 
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain drop-shadow-md"
               />
             </div>
             <span className="ml-3 text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-700 bg-clip-text text-transparent">
@@ -41,11 +41,11 @@ export function Welcome() {
             transition={{ duration: 0.8, type: "spring" }}
             className="mb-12"
           >
-            <div className="inline-flex items-center justify-center w-28 h-28 bg-white rounded-2xl shadow-2xl mb-8 p-5 border-2 border-gray-100">
+            <div className="inline-flex items-center justify-center w-28 h-28 bg-white rounded-2xl shadow-2xl mb-8 p-5 border-4 border-white/80 ring-4 ring-gray-100/50">
               <img 
                 src="/logo-compact.svg" 
                 alt="RAPICREDIT" 
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain drop-shadow-lg"
               />
             </div>
             

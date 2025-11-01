@@ -261,23 +261,23 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                     delay: 0.1 
                   }}
                   whileHover={{ scale: 1.05 }}
-                  className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-2xl p-3.5 ring-2 ring-white/40 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:shadow-blue-500/20 hover:ring-white/60"
+                  className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-2xl p-3 ring-4 ring-white/60 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:shadow-blue-400/30 hover:ring-white/80"
                 >
                   <img 
                     src="/logo-compact.svg" 
                     alt="RAPICREDIT Logo" 
-                    className="w-full h-full object-contain select-none"
+                    className="w-full h-full object-contain select-none drop-shadow-lg"
                   />
                 </motion.div>
               </div>
             )}
             {isCompact && (
               <div className="flex items-center justify-center">
-                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-xl p-2 ring-1 ring-white/40">
+                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-xl p-2 ring-2 ring-white/60">
                   <img 
                     src="/logo-compact.svg" 
                     alt="RAPICREDIT Logo" 
-                    className="w-full h-full object-contain select-none"
+                    className="w-full h-full object-contain select-none drop-shadow-md"
                   />
                 </div>
               </div>
