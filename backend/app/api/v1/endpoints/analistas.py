@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# ALTERNATIVA: Registrar tanto "/" como "" para compatibilidad
+@router.get("", response_model=AnalistaListResponse)
 @router.get("/", response_model=AnalistaListResponse)
 def listar_analistas(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
@@ -28,7 +30,13 @@ def listar_analistas(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Listar analistas con filtros
+    """Listar analistas con filtros"""
+    logger.info("=" * 80)
+    logger.info(f"🔍 ENDPOINT EJECUTADO: listar_analistas")
+    logger.info(f"👤 Usuario: {current_user.email if current_user else 'N/A'}")
+    logger.info(f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}")
+    logger.info("=" * 80)
+    
     try:
         query = db.query(Analista)
 

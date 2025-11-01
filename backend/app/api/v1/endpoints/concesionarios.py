@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# ALTERNATIVA: Registrar tanto "/" como "" para compatibilidad
+@router.get("", response_model=ConcesionarioListResponse)
 @router.get("/", response_model=ConcesionarioListResponse)
 def list_concesionarios(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
@@ -33,6 +35,12 @@ def list_concesionarios(
     current_user: User = Depends(get_current_user),
 ):
     """Listar concesionarios con filtros"""
+    logger.info("=" * 80)
+    logger.info(f"🔍 ENDPOINT EJECUTADO: list_concesionarios")
+    logger.info(f"👤 Usuario: {current_user.email if current_user else 'N/A'}")
+    logger.info(f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}")
+    logger.info("=" * 80)
+    
     try:
         query = db.query(Concesionario)
 

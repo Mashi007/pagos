@@ -153,9 +153,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/v1/usuarios", tags=["usuarios"])
 app.include_router(clientes.router, prefix="/api/v1/clientes", tags=["clientes"])
-app.include_router(
-    concesionarios.router, prefix="/api/v1/concesionarios", tags=["concesionarios"]
-)
+# Concesionarios movido después junto con analistas y modelos_vehiculos
 app.include_router(prestamos.router, prefix="/api/v1/prestamos", tags=["prestamos"])
 app.include_router(pagos.router, prefix="/api/v1/pagos", tags=["pagos"])
 app.include_router(pagos_upload.router, prefix="/api/v1/pagos", tags=["pagos"])
@@ -180,13 +178,17 @@ app.include_router(auditoria.router, prefix="/api/v1", tags=["auditoria"])
 app.include_router(
     configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"]
 )
-# IMPORTANTE: Registrar modelos_vehiculos ANTES de otros routers para evitar conflictos
+# IMPORTANTE: Registrar estos routers ANTES de otros para evitar conflictos de rutas
+# Orden: modelos_vehiculos → analistas → concesionarios
 app.include_router(
     modelos_vehiculos.router,
     prefix="/api/v1/modelos-vehiculos",
     tags=["modelos-vehiculos"],
 )
 app.include_router(analistas.router, prefix="/api/v1/analistas", tags=["analistas"])
+app.include_router(
+    concesionarios.router, prefix="/api/v1/concesionarios", tags=["concesionarios"]
+)
 app.include_router(
     validadores.router, prefix="/api/v1/validadores", tags=["validadores"]
 )
