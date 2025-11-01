@@ -612,9 +612,7 @@ def probar_validadores(
                 from app.services.validators_service import ValidadorTelefono
 
                 pais = datos_prueba.get("pais_telefono", "VE")
-                resultado_telefono = ValidadorTelefono.validar_y_formatear_telefono(
-                    datos_prueba["telefono"], pais
-                )
+                resultado_telefono = ValidadorTelefono.validar_y_formatear_telefono(datos_prueba["telefono"], pais)
                 if resultado_telefono.get("valido"):
                     validos += 1
                 else:
