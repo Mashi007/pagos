@@ -165,11 +165,34 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
   console.warn('⚠️  API_URL no configurado. Proxy deshabilitado.');
 }
 
+// ============================================
+// VALIDACIONES PREVIAS
+// ============================================
+// Validar que el directorio dist existe antes de configurar el servidor
+const distPath = path.join(__dirname, 'dist');
+const indexPath = path.join(distPath, 'index.html');
+
+if (!existsSync(distPath)) {
+  console.error(`❌ ERROR CRÍTICO: Directorio dist no encontrado en: ${distPath}`);
+  console.error('   Asegúrate de que el build se completó correctamente.');
+  process.exit(1);
+}
+
+if (!existsSync(indexPath)) {
+  console.error(`❌ ERROR CRÍTICO: index.html no encontrado en: ${indexPath}`);
+  console.error('   Asegúrate de que el build se completó correctamente.');
+  process.exit(1);
+}
+
+console.log(`📁 Directorio de archivos estáticos: ${distPath}`);
+console.log(`✅ Validaciones previas completadas`);
+
+// ============================================
+// SERVIR ARCHIVOS ESTÁTICOS
+// ============================================
 // Servir archivos estáticos con cache headers (DESPUÉS del proxy)
 // IMPORTANTE: Esto debe servir archivos .js, .css, .html, etc. con los MIME types correctos
 // Estos archivos son PARTE DE LA SPA (React), NO del backend
-const distPath = path.join(__dirname, 'dist');
-console.log(`📁 Directorio de archivos estáticos: ${distPath}`);
 
 const staticOptions = {
   maxAge: '1d',
@@ -229,7 +252,6 @@ app.get('*', (req, res) => {
   // 2. Un archivo estático que no existe → servir index.html también (SPA routing)
   // React Router manejará la ruta en el cliente
   console.log(`📄 Frontend (SPA): Sirviendo index.html para ruta: ${req.method} ${req.path}`);
-  const indexPath = path.join(__dirname, 'dist', 'index.html');
   res.sendFile(indexPath, (err) => {
     if (err) {
       console.error(`❌ Error sirviendo index.html para ${req.method} ${req.path}:`, err);
@@ -240,23 +262,10 @@ app.get('*', (req, res) => {
   });
 });
 
+// ============================================
+// INICIALIZACIÓN DEL SERVIDOR
+// ============================================
 const PORT = process.env.PORT || 3000;
-
-// Validar que el directorio dist existe antes de iniciar
-const distPath = path.join(__dirname, 'dist');
-
-if (!existsSync(distPath)) {
-  console.error(`❌ ERROR CRÍTICO: Directorio dist no encontrado en: ${distPath}`);
-  console.error('   Asegúrate de que el build se completó correctamente.');
-  process.exit(1);
-}
-
-const indexPath = path.join(distPath, 'index.html');
-if (!existsSync(indexPath)) {
-  console.error(`❌ ERROR CRÍTICO: index.html no encontrado en: ${indexPath}`);
-  console.error('   Asegúrate de que el build se completó correctamente.');
-  process.exit(1);
-}
 
 // Iniciar servidor con manejo de errores
 const server = app.listen(PORT, '0.0.0.0', () => {
