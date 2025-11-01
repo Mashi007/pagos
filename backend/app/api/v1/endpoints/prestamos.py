@@ -412,7 +412,7 @@ def listar_prestamos(
 
         # Paginación
         try:
-        total = query.count()
+            total = query.count()
         except Exception as e:
             logger.error(f"Error contando préstamos: {str(e)}", exc_info=True)
             # Hacer rollback si hay error de transacción
@@ -424,12 +424,12 @@ def listar_prestamos(
 
         skip = (page - 1) * per_page
         try:
-        prestamos = (
-            query.order_by(Prestamo.fecha_registro.desc())
-            .offset(skip)
-            .limit(per_page)
-            .all()
-        )
+            prestamos = (
+                query.order_by(Prestamo.fecha_registro.desc())
+                .offset(skip)
+                .limit(per_page)
+                .all()
+            )
         except Exception as e:
             logger.error(f"Error obteniendo préstamos: {str(e)}", exc_info=True)
             # Hacer rollback si hay error de transacción
