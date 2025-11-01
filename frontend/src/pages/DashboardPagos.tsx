@@ -22,8 +22,8 @@ export function DashboardPagos() {
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
     queryFn: async () => {
-      const response = await apiClient.get<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>('/api/v1/dashboard/opciones-filtros')
-      return response
+      const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
+      return response as { analistas: string[]; concesionarios: string[]; modelos: string[] }
     },
   })
 

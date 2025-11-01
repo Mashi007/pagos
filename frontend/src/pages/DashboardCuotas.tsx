@@ -34,11 +34,11 @@ export function DashboardCuotas() {
   const { construirFiltrosObject } = useDashboardFiltros(filtros)
 
   // Cargar opciones de filtros
-  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>({
+  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
     queryFn: async () => {
-      const response = await apiClient.get<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>('/api/v1/dashboard/opciones-filtros')
-      return response
+      const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
+      return response as { analistas: string[]; concesionarios: string[]; modelos: string[] }
     },
   })
 
@@ -52,9 +52,9 @@ export function DashboardCuotas() {
         if (value) queryParams.append(key, value.toString())
       })
       const queryString = queryParams.toString()
-      const response = await apiClient.get<KPIsData>(
+      const response = await apiClient.get(
         `/api/v1/kpis/dashboard${queryString ? '?' + queryString : ''}`
-      )
+      ) as KPIsData
       return {
         total_cuotas_mes: response.total_cuotas_mes || 0,
         cuotas_pagadas: response.cuotas_pagadas || 0,

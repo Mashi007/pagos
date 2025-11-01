@@ -34,11 +34,11 @@ export function DashboardCobranza() {
   const { construirParams, construirFiltrosObject } = useDashboardFiltros(filtros)
 
   // Cargar opciones de filtros
-  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>({
+  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
     queryFn: async () => {
-      const response = await apiClient.get<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>('/api/v1/dashboard/opciones-filtros')
-      return response
+      const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
+      return response as { analistas: string[]; concesionarios: string[]; modelos: string[] }
     },
   })
 
@@ -50,7 +50,7 @@ export function DashboardCobranza() {
     queryFn: async () => {
       try {
         const params = construirParamsDashboard()
-        const response = await apiClient.get<DashboardData>(`/api/v1/dashboard/admin?${params}`)
+        const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`) as DashboardData
         return response
       } catch (error) {
         console.warn('Error cargando dashboard:', error)

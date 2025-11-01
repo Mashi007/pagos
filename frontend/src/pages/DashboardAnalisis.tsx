@@ -70,8 +70,8 @@ export function DashboardAnalisis() {
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
     queryFn: async () => {
-      const response = await apiClient.get<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>('/api/v1/dashboard/opciones-filtros')
-      return response
+      const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
+      return response as { analistas: string[]; concesionarios: string[]; modelos: string[] }
     },
   })
 
@@ -83,7 +83,7 @@ export function DashboardAnalisis() {
     queryFn: async () => {
       try {
         const params = construirParamsDashboard()
-        const response = await apiClient.get<DashboardData>(`/api/v1/dashboard/admin?${params}`)
+        const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`) as DashboardData
         return response
       } catch (error) {
         console.warn('Error cargando dashboard:', error)
@@ -104,7 +104,7 @@ export function DashboardAnalisis() {
         Object.entries(params).forEach(([key, value]) => {
           if (value) queryParams.append(key, value.toString())
         })
-        const response = await apiClient.get<CobrosDiariosResponse>(`/api/v1/dashboard/cobros-diarios?${queryParams.toString()}`)
+        const response = await apiClient.get(`/api/v1/dashboard/cobros-diarios?${queryParams.toString()}`) as CobrosDiariosResponse
         return response
       } catch (error) {
         console.warn('Error cargando cobros diarios:', error)

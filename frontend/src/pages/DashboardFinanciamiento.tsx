@@ -35,8 +35,8 @@ export function DashboardFinanciamiento() {
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
     queryFn: async () => {
-      const response = await apiClient.get<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>('/api/v1/dashboard/opciones-filtros')
-      return response
+      const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
+      return response as { analistas: string[]; concesionarios: string[]; modelos: string[] }
     },
   })
 
@@ -50,9 +50,9 @@ export function DashboardFinanciamiento() {
         if (value) queryParams.append(key, value.toString())
       })
       const queryString = queryParams.toString()
-      const response = await apiClient.get<KPIsData>(
+      const response = await apiClient.get(
         `/api/v1/kpis/dashboard${queryString ? '?' + queryString : ''}`
-      )
+      ) as KPIsData
       return {
         total_financiamiento: response.total_financiamiento || 0,
         total_financiamiento_activo: response.total_financiamiento_activo || 0,
