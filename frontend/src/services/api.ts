@@ -159,7 +159,12 @@ class ApiClient {
       
       switch (status) {
         case 400:
-          toast.error(data.message || 'Datos inválidos')
+          // Error de validación o cliente duplicado (misma cédula y mismo nombre)
+          if (typeof data?.detail === 'string') {
+            toast.error(data.detail)
+          } else {
+            toast.error(data?.message || 'Error de validación')
+          }
           break
         case 401:
           // No mostrar toast si está siendo manejado por el interceptor de refresh
@@ -173,6 +178,9 @@ class ApiClient {
         case 404:
           toast.error('Recurso no encontrado')
           break
+        case 409:
+          toast.error(data?.message || 'Conflicto de datos. Verifica la información.')
+          break
         case 422:
           // Errores de validación
           if (data.detail && Array.isArray(data.detail)) {
@@ -185,17 +193,6 @@ class ApiClient {
           break
         case 500:
           toast.error('Error interno del servidor')
-          break
-        case 409:
-          toast.error(data?.message || 'Conflicto de datos. Verifica la información.')
-          break
-        case 400:
-          // Error de validación o cliente duplicado (misma cédula y mismo nombre)
-          if (typeof data?.detail === 'string') {
-            toast.error(data.detail)
-          } else {
-            toast.error(data?.message || 'Error de validación')
-          }
           break
         case 503:
           // NO mostrar toast genérico para errores 503 de duplicados
