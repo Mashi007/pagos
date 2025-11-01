@@ -184,7 +184,9 @@ def obtener_cuotas_pendientes(
         db.query(Cuota)
         .filter(
             Cuota.prestamo_id == prestamo_id,
-            Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"]),  # ✅ Corregido: BD usa "ATRASADO" no "VENCIDA"
+            Cuota.estado.in_(
+                ["PENDIENTE", "ATRASADO", "PARCIAL"]
+            ),  # ✅ Corregido: BD usa "ATRASADO" no "VENCIDA"
         )
         .order_by(Cuota.numero_cuota)
         .all()
