@@ -839,14 +839,13 @@ def dashboard_administrador(
             )
 
         # 22. DISTRIBUCIÓN DE INGRESOS - Cálculo real desde BD
-        # Sumar capital_pagado, interes_pagado y mora_pagada de cuotas pagadas en el período
+        # Sumar capital_pagado, interes_pagado y mora_pagada de TODAS las cuotas pagadas
+        # (histórico completo, no solo del período actual para mostrar distribución real)
         ingresos_capital_query = (
             db.query(func.sum(Cuota.capital_pagado))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
-                Cuota.fecha_pago.isnot(None),
-                func.date(Cuota.fecha_pago) >= fecha_inicio_periodo,
-                func.date(Cuota.fecha_pago) <= hoy,
+                Cuota.capital_pagado > 0,  # Solo cuotas con capital pagado
                 Prestamo.estado == "APROBADO",
             )
         )
@@ -864,9 +863,7 @@ def dashboard_administrador(
             db.query(func.sum(Cuota.interes_pagado))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
-                Cuota.fecha_pago.isnot(None),
-                func.date(Cuota.fecha_pago) >= fecha_inicio_periodo,
-                func.date(Cuota.fecha_pago) <= hoy,
+                Cuota.interes_pagado > 0,  # Solo cuotas con interés pagado
                 Prestamo.estado == "APROBADO",
             )
         )
@@ -884,9 +881,7 @@ def dashboard_administrador(
             db.query(func.sum(Cuota.mora_pagada))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
-                Cuota.fecha_pago.isnot(None),
-                func.date(Cuota.fecha_pago) >= fecha_inicio_periodo,
-                func.date(Cuota.fecha_pago) <= hoy,
+                Cuota.mora_pagada > 0,  # Solo cuotas con mora pagada
                 Prestamo.estado == "APROBADO",
             )
         )

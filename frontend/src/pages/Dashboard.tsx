@@ -400,19 +400,19 @@ export function Dashboard() {
   const evolucionMensual = (data.evolucion_mensual && data.evolucion_mensual.length > 0) 
     ? data.evolucion_mensual 
     : mockEvolucionMensual
-  const datosIngresos = data.financieros && data.financieros.ingresosCapital > 0 ? [
-    { name: 'Capital', value: data.financieros.ingresosCapital, color: '#3b82f6' },
-    { name: 'Intereses', value: data.financieros.ingresosInteres, color: '#10b981' },
-    { name: 'Mora', value: data.financieros.ingresosMora, color: '#ef4444' },
-  ] : (mockData.financieros ? [
-    { name: 'Capital', value: mockData.financieros.ingresosCapital || 0, color: '#3b82f6' },
-    { name: 'Intereses', value: mockData.financieros.ingresosInteres || 0, color: '#10b981' },
-    { name: 'Mora', value: mockData.financieros.ingresosMora || 0, color: '#ef4444' },
-  ] : [
-    { name: 'Capital', value: 0, color: '#3b82f6' },
-    { name: 'Intereses', value: 0, color: '#10b981' },
-    { name: 'Mora', value: 0, color: '#ef4444' },
-  ])
+  
+  // ✅ Solo mostrar datos reales - filtrar valores en 0
+  const ingresosCapital = data.financieros?.ingresosCapital || 0
+  const ingresosInteres = data.financieros?.ingresosInteres || 0
+  const ingresosMora = data.financieros?.ingresosMora || 0
+  const totalIngresos = ingresosCapital + ingresosInteres + ingresosMora
+  
+  // Solo mostrar gráfico si hay datos reales (total > 0)
+  const datosIngresos = totalIngresos > 0 ? [
+    ...(ingresosCapital > 0 ? [{ name: 'Capital', value: ingresosCapital, color: '#3b82f6' }] : []),
+    ...(ingresosInteres > 0 ? [{ name: 'Intereses', value: ingresosInteres, color: '#10b981' }] : []),
+    ...(ingresosMora > 0 ? [{ name: 'Mora', value: ingresosMora, color: '#ef4444' }] : []),
+  ] : []
 
   return (
     <div className="space-y-6">
@@ -1054,87 +1054,127 @@ export function Dashboard() {
         </Card>
 
         {/* Distribución de Ingresos - Gráfico de Barras */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <BarChart3 className="mr-2 h-5 w-5" />
-              Distribución de Ingresos
-            </CardTitle>
-            <CardDescription>Desglose por tipo de ingreso</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={datosIngresos}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                <Legend />
-                <Bar dataKey="value" fill="#8884d8" name="Monto">
-                  {datosIngresos.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        {datosIngresos.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BarChart3 className="mr-2 h-5 w-5" />
+                Distribución de Ingresos
+              </CardTitle>
+              <CardDescription>Desglose por tipo de ingreso</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={datosIngresos}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                  <Legend />
+                  <Bar dataKey="value" fill="#8884d8" name="Monto">
+                    {datosIngresos.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BarChart3 className="mr-2 h-5 w-5" />
+                Distribución de Ingresos
+              </CardTitle>
+              <CardDescription>Desglose por tipo de ingreso</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-center h-64 text-gray-500">
+                No hay datos de ingresos disponibles para el período seleccionado
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Métricas Detalladas */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Ingresos por Tipo - Gráfico de Pastel */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <PieChart className="mr-2 h-5 w-5" />
-              Ingresos por Tipo
-            </CardTitle>
-            <CardDescription>Desglose de ingresos por categoría</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <RechartsPieChart>
-                <Pie
-                  data={datosIngresos}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {datosIngresos.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                <Legend />
-              </RechartsPieChart>
-            </ResponsiveContainer>
-            <div className="mt-4 space-y-2">
-              <div className="flex justify-between items-center p-2 bg-blue-50 rounded-lg">
-                <span className="text-sm font-medium text-blue-900">Capital</span>
-                <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                  {formatCurrency(data.financieros?.ingresosCapital || 0)}
-                </Badge>
+        {datosIngresos.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <PieChart className="mr-2 h-5 w-5" />
+                Ingresos por Tipo
+              </CardTitle>
+              <CardDescription>Desglose de ingresos por categoría</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <RechartsPieChart>
+                  <Pie
+                    data={datosIngresos}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {datosIngresos.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                  <Legend />
+                </RechartsPieChart>
+              </ResponsiveContainer>
+              <div className="mt-4 space-y-2">
+                {ingresosCapital > 0 && (
+                  <div className="flex justify-between items-center p-2 bg-blue-50 rounded-lg">
+                    <span className="text-sm font-medium text-blue-900">Capital</span>
+                    <Badge variant="outline" className="bg-blue-100 text-blue-800">
+                      {formatCurrency(ingresosCapital)}
+                    </Badge>
+                  </div>
+                )}
+                {ingresosInteres > 0 && (
+                  <div className="flex justify-between items-center p-2 bg-green-50 rounded-lg">
+                    <span className="text-sm font-medium text-green-900">Intereses</span>
+                    <Badge variant="outline" className="bg-green-100 text-green-800">
+                      {formatCurrency(ingresosInteres)}
+                    </Badge>
+                  </div>
+                )}
+                {ingresosMora > 0 && (
+                  <div className="flex justify-between items-center p-2 bg-red-50 rounded-lg">
+                    <span className="text-sm font-medium text-red-900">Mora</span>
+                    <Badge variant="outline" className="bg-red-100 text-red-800">
+                      {formatCurrency(ingresosMora)}
+                    </Badge>
+                  </div>
+                )}
               </div>
-              <div className="flex justify-between items-center p-2 bg-green-50 rounded-lg">
-                <span className="text-sm font-medium text-green-900">Intereses</span>
-                <Badge variant="outline" className="bg-green-100 text-green-800">
-                  {formatCurrency(data.financieros?.ingresosInteres || 0)}
-                </Badge>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <PieChart className="mr-2 h-5 w-5" />
+                Ingresos por Tipo
+              </CardTitle>
+              <CardDescription>Desglose de ingresos por categoría</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-center h-64 text-gray-500">
+                No hay datos de ingresos disponibles para el período seleccionado
               </div>
-              <div className="flex justify-between items-center p-2 bg-red-50 rounded-lg">
-                <span className="text-sm font-medium text-red-900">Mora</span>
-                <Badge variant="outline" className="bg-red-100 text-red-800">
-                  {formatCurrency(data.financieros?.ingresosMora || 0)}
-                </Badge>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Métricas de Cobranza - Gráfico de Barras */}
         <Card>
