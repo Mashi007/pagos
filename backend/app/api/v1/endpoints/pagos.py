@@ -577,7 +577,7 @@ def listar_ultimos_pagos(
                     f"⚠️ [ultimos_pagos] Pago ID {pago.id} no tiene prestamo_id. "
                     f"Usando primer préstamo aprobado del cliente: {prestamo_id_mostrar}"
                 )
-            
+
             items.append(
                 {
                     "cedula": pago.cedula_cliente,
