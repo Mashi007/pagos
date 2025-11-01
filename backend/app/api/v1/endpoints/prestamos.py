@@ -904,8 +904,31 @@ def obtener_cuotas_prestamo(
 
     cuotas = obtener_cuotas_service(prestamo_id, db)
 
-    return [
-        {
+    resultado = []
+    estados_encontrados = []
+    
+    for c in cuotas:
+        # Determinar estado real basado en total_pagado y monto_cuota
+        estado_real = c.estado
+        if c.total_pagado >= c.monto_cuota:
+            # Si está completamente pagado pero el estado no es PAGADO, corregirlo
+            if c.estado != "PAGADO":
+                logger.warning(
+                    f"⚠️ [obtener_cuotas_prestamo] Préstamo {prestamo_id}, Cuota {c.numero_cuota}: "
+                    f"Inconsistencia detectada - total_pagado ({c.total_pagado}) >= monto_cuota ({c.monto_cuota}) "
+                    f"pero estado BD es '{c.estado}'"
+                )
+                estado_real = "PAGADO"
+        elif c.total_pagado > 0 and c.fecha_vencimiento < date.today():
+            # Tiene pago parcial y está vencida
+            if c.estado not in ["ATRASADO", "PARCIAL"]:
+                logger.warning(
+                    f"⚠️ [obtener_cuotas_prestamo] Préstamo {prestamo_id}, Cuota {c.numero_cuota}: "
+                    f"Tiene pago parcial ({c.total_pagado}) y está vencida pero estado es '{c.estado}'"
+                )
+                estado_real = "ATRASADO"
+        
+        cuota_dict = {
             "id": c.id,
             "numero_cuota": c.numero_cuota,
             "fecha_vencimiento": c.fecha_vencimiento,
@@ -919,12 +942,20 @@ def obtener_cuotas_prestamo(
             "total_pagado": float(c.total_pagado),
             "capital_pendiente": float(c.capital_pendiente),
             "interes_pendiente": float(c.interes_pendiente),
-            "estado": c.estado,
+            "estado": estado_real,  # Usar estado corregido si hay inconsistencia
             "dias_mora": c.dias_mora,
             "monto_mora": float(c.monto_mora),
         }
-        for c in cuotas
-    ]
+        resultado.append(cuota_dict)
+        estados_encontrados.append(f"{c.numero_cuota}:{estado_real}(BD:{c.estado})")
+    
+    # 🔍 LOG: Verificar estados devueltos
+    logger.info(
+        f"📊 [obtener_cuotas_prestamo] Préstamo {prestamo_id}: "
+        f"{len(resultado)} cuotas. Estados: {estados_encontrados[:10]}"
+    )
+    
+    return resultado
 
 
 def actualizar_cuotas_segun_plazo_maximo(
