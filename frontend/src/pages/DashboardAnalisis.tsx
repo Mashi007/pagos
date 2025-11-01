@@ -5,7 +5,7 @@ import {
   BarChart3,
   PieChart,
   LineChart,
-  ArrowLeft,
+  ChevronLeft,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -68,7 +68,7 @@ export function DashboardAnalisis() {
   const { construirParams, construirFiltrosObject } = useDashboardFiltros(filtros)
 
   // Cargar opciones de filtros
-  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>({
+  const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
     queryFn: async (): Promise<{ analistas: string[]; concesionarios: string[]; modelos: string[] }> => {
       const response = await apiClient.get<{ analistas: string[]; concesionarios: string[]; modelos: string[] }>('/api/v1/dashboard/opciones-filtros')
@@ -79,7 +79,7 @@ export function DashboardAnalisis() {
   const construirParamsDashboard = () => construirParams(periodo)
 
   // Cargar datos del dashboard
-  const { data: dashboardData, isLoading: loadingDashboard, refetch } = useQuery<DashboardData>({
+  const { data: dashboardData, isLoading: loadingDashboard, refetch } = useQuery({
     queryKey: ['dashboard-analisis', periodo, filtros],
     queryFn: async (): Promise<DashboardData> => {
       try {
@@ -95,7 +95,7 @@ export function DashboardAnalisis() {
   })
 
   // Cargar cobros diarios
-  const { data: cobrosDiariosData, isLoading: loadingCobrosDiarios } = useQuery<CobrosDiariosResponse>({
+  const { data: cobrosDiariosData, isLoading: loadingCobrosDiarios } = useQuery({
     queryKey: ['cobros-diarios', filtros],
     queryFn: async (): Promise<CobrosDiariosResponse> => {
       try {
@@ -170,7 +170,7 @@ export function DashboardAnalisis() {
             size="sm"
             onClick={() => navigate('/dashboard/menu')}
           >
-            <ArrowLeft className="mr-2 h-4 w-4" />
+            <ChevronLeft className="mr-2 h-4 w-4" />
             Volver al Menú
           </Button>
           <div>

@@ -76,6 +76,7 @@ declare module 'lucide-react' {
   export const EyeOff: any
   export const ChevronDown: any
   export const ChevronUp: any
+  export const ChevronLeft: any
   export const RotateCcw: any
   export const Activity: any
   export const Building: any
