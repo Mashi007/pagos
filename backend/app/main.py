@@ -180,18 +180,23 @@ app.include_router(auditoria.router, prefix="/api/v1", tags=["auditoria"])
 app.include_router(
     configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"]
 )
-app.include_router(analistas.router, prefix="/api/v1/analistas", tags=["analistas"])
+# IMPORTANTE: Registrar modelos_vehiculos ANTES de otros routers para evitar conflictos
 app.include_router(
     modelos_vehiculos.router,
     prefix="/api/v1/modelos-vehiculos",
     tags=["modelos-vehiculos"],
 )
+app.include_router(analistas.router, prefix="/api/v1/analistas", tags=["analistas"])
 app.include_router(
     validadores.router, prefix="/api/v1/validadores", tags=["validadores"]
 )
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 
+# Log detallado de rutas registradas
 logger.info("✅ Todos los routers registrados correctamente")
+logger.info(f"📋 Router modelos_vehiculos registrado con prefix: /api/v1/modelos-vehiculos")
+logger.info(f"📋 Router analistas registrado con prefix: /api/v1/analistas")
+logger.info(f"📋 Router concesionarios registrado con prefix: /api/v1/concesionarios")
 
 
 @app.get("/", include_in_schema=False)

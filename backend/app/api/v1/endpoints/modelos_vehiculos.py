@@ -20,6 +20,8 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+# ALTERNATIVA: Registrar tanto "/" como "" para compatibilidad
+@router.get("", response_model=ModeloVehiculoListResponse)
 @router.get("/", response_model=ModeloVehiculoListResponse)
 def listar_modelos_vehiculos(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
@@ -31,12 +33,11 @@ def listar_modelos_vehiculos(
     current_user: User = Depends(get_current_user),
 ):
     """Listar modelos de vehículos con filtros"""
-    logger.info(
-        f"🔍 ENDPOINT EJECUTADO: listar_modelos_vehiculos - Usuario: {current_user.email if current_user else 'N/A'}"
-    )
-    logger.info(
-        f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}"
-    )
+    logger.info("=" * 80)
+    logger.info(f"🔍 ENDPOINT EJECUTADO: listar_modelos_vehiculos")
+    logger.info(f"👤 Usuario: {current_user.email if current_user else 'N/A'}")
+    logger.info(f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}")
+    logger.info("=" * 80)
 
     query = db.query(ModeloVehiculo)
 
