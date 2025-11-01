@@ -84,7 +84,8 @@ jobs:
         run: |
           cd ${{ env.BACKEND_DIR }}
           # Solo aplicar si el último commit no fue de Black
-          if ! git log -1 --pretty=%B | grep -q "\[skip ci\]"; then
+          LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
+          if ! echo "$LAST_COMMIT_MSG" | grep -qi "black"; then
             black app/
             if ! git diff --quiet; then
               git config user.name "GitHub Actions"
@@ -92,7 +93,12 @@ jobs:
               git add app/
               git commit -m "style: Aplicar correcciones automáticas de Black [skip ci]"
               git push
+              echo "✅ Correcciones de Black commiteadas y pusheadas"
+            else
+              echo "✅ No se requieren correcciones de Black"
             fi
+          else
+            echo "⏭️  Último commit fue de Black, saltando corrección automática"
           fi
       
       - name: 📝 Ordenamiento de imports con isort
@@ -113,7 +119,8 @@ jobs:
           cd ${{ env.BACKEND_DIR }}
           echo "🔧 Aplicando correcciones automáticas de Isort..."
           # Solo aplicar si el último commit no fue de Isort
-          if ! git log -1 --pretty=%B | grep -q "\[skip ci\]"; then
+          LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
+          if ! echo "$LAST_COMMIT_MSG" | grep -qi "isort"; then
             # Aplicar correcciones
             isort app/
             if ! git diff --quiet; then
