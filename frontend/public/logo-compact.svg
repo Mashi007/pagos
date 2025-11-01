@@ -1,34 +1,28 @@
-<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.1"/>
-    </filter>
-  </defs>
-  
-  <!-- Letra R estilizada en azul oscuro profesional -->
-  <g transform="translate(5, 3)" filter="url(#shadow)">
-    <!-- Cuerpo vertical principal de la R -->
-    <path d="M2 2 L2 24 L6 24 L6 15 L10 15 L14 24 L20 24 L14 11 L17 2 Z" 
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <!-- Letra R estilizada optimizada -->
+  <g>
+    <!-- Cuerpo principal vertical de la R -->
+    <path d="M6 4 L6 28 L12 28 L12 18 L16 18 L22 28 L30 28 L22 14 L26 4 Z" 
           fill="#1E40AF" 
           stroke="none"/>
     
-    <!-- Loop superior redondeado de la R -->
-    <path d="M6 15 Q6 8 12 8 Q15 8 17 10 L14 11 L10 15 Z" 
+    <!-- Loop superior de la R -->
+    <path d="M12 18 Q12 10 20 10 Q24 10 26 12 L22 14 L16 18 Z" 
           fill="#1E40AF"/>
     
-    <!-- Pierna diagonal de la R con punta -->
-    <path d="M6 15 L11 9 L15 9 L10 15 Z" 
+    <!-- Pierna diagonal de la R -->
+    <path d="M12 18 L20 10 L26 10 L18 18 Z" 
           fill="#1E40AF"/>
     
     <!-- Esquina superior izquierda puntiaguda -->
-    <path d="M2 2 L5 2 L2 5 Z" 
+    <path d="M6 4 L10 4 L6 8 Z" 
           fill="#1E40AF"/>
     
     <!-- Punta inferior derecha -->
-    <path d="M17 24 L20 24 L20 20 Z" 
+    <path d="M26 28 L30 28 L30 24 Z" 
           fill="#1E40AF"/>
   </g>
   
-  <!-- Círculo naranja pequeño debajo y a la izquierda -->
-  <circle cx="9" cy="32" r="3.5" fill="#F97316" filter="url(#shadow)"/>
+  <!-- Círculo naranja -->
+  <circle cx="12" cy="38" r="4" fill="#F97316"/>
 </svg>

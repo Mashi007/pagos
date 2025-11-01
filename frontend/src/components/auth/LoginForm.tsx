@@ -127,7 +127,7 @@ export function LoginForm() {
           className="mx-auto"
         >
           {/* Logo de Rapicredit */}
-          <div className={`w-${LOGO_SIZE_LARGE} h-${LOGO_SIZE_LARGE} mx-auto mb-${SPACING_SMALL} bg-white rounded-2xl flex items-center justify-center shadow-2xl p-3`}>
+          <div className={`w-${LOGO_SIZE_LARGE} h-${LOGO_SIZE_LARGE} mx-auto mb-${SPACING_SMALL} bg-white rounded-2xl flex items-center justify-center shadow-2xl p-4 border-2 border-gray-100`}>
             <img 
               src="/logo-compact.svg" 
               alt="RAPICREDIT Logo" 

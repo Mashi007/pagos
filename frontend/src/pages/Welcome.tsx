@@ -12,7 +12,7 @@ export function Welcome() {
       <header className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center">
-            <div className="flex items-center justify-center w-12 h-12 bg-white rounded-xl shadow-lg p-2">
+            <div className="flex items-center justify-center w-14 h-14 bg-white rounded-xl shadow-xl p-2.5 border-2 border-gray-100">
               <img 
                 src="/logo-compact.svg" 
                 alt="RAPICREDIT Logo" 
@@ -41,7 +41,7 @@ export function Welcome() {
             transition={{ duration: 0.8, type: "spring" }}
             className="mb-12"
           >
-            <div className="inline-flex items-center justify-center w-24 h-24 bg-white rounded-2xl shadow-2xl mb-8 p-4">
+            <div className="inline-flex items-center justify-center w-28 h-28 bg-white rounded-2xl shadow-2xl mb-8 p-5 border-2 border-gray-100">
               <img 
                 src="/logo-compact.svg" 
                 alt="RAPICREDIT" 

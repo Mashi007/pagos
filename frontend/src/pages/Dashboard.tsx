@@ -401,17 +401,37 @@ export function Dashboard() {
     ? data.evolucion_mensual 
     : mockEvolucionMensual
   
-  // ✅ Solo mostrar datos reales - filtrar valores en 0
-  const ingresosCapital = data.financieros?.ingresosCapital || 0
-  const ingresosInteres = data.financieros?.ingresosInteres || 0
-  const ingresosMora = data.financieros?.ingresosMora || 0
-  const totalIngresos = ingresosCapital + ingresosInteres + ingresosMora
+  // ✅ Análisis de Morosidad - Calcular porcentajes
+  const totalFinanciamiento = data.financieros?.ingresosCapital || 0  // Total Financiamiento
+  const carteraCobrada = data.financieros?.ingresosInteres || 0       // Cartera Cobrada
+  const morosidadDiferencia = data.financieros?.ingresosMora || 0    // Morosidad (Diferencia)
+  const base = totalFinanciamiento  // Base para calcular porcentajes (Total Financiamiento)
+  
+  // Calcular porcentajes sobre el Total Financiamiento
+  const porcentajeFinanciamiento = base > 0 ? 100 : 0  // Total Financiamiento siempre es 100% (base)
+  const porcentajeCobrado = base > 0 ? (carteraCobrada / base * 100) : 0
+  const porcentajeMorosidad = base > 0 ? (morosidadDiferencia / base * 100) : 0
   
   // Solo mostrar gráfico si hay datos reales (total > 0)
-  const datosIngresos = totalIngresos > 0 ? [
-    ...(ingresosCapital > 0 ? [{ name: 'Capital', value: ingresosCapital, color: '#3b82f6' }] : []),
-    ...(ingresosInteres > 0 ? [{ name: 'Intereses', value: ingresosInteres, color: '#10b981' }] : []),
-    ...(ingresosMora > 0 ? [{ name: 'Mora', value: ingresosMora, color: '#ef4444' }] : []),
+  const datosAnalisisMorosidad = totalFinanciamiento > 0 ? [
+    { 
+      name: 'Total Financiamiento', 
+      value: totalFinanciamiento, 
+      color: '#3b82f6',
+      porcentaje: porcentajeFinanciamiento
+    },
+    { 
+      name: 'Cartera Cobrada', 
+      value: carteraCobrada, 
+      color: '#10b981',
+      porcentaje: porcentajeCobrado
+    },
+    { 
+      name: 'Morosidad', 
+      value: morosidadDiferencia, 
+      color: '#ef4444',
+      porcentaje: porcentajeMorosidad
+    },
   ] : []
 
   return (
@@ -920,7 +940,9 @@ export function Dashboard() {
               <CreditCard className="mr-2 h-5 w-5 text-green-600" />
               Total Cobrado
             </CardTitle>
-            <CardDescription>Recaudación del período actual</CardDescription>
+            <CardDescription>
+              {new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase())}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600 mb-2">
@@ -946,14 +968,16 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Tasa de Recuperación */}
+        {/* Tasa de Recuperación Mensual */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
               <Target className="mr-2 h-5 w-5 text-blue-600" />
-              Tasa de Recuperación
+              Tasa de Recuperación Mensual
             </CardTitle>
-            <CardDescription>Eficiencia en cobranza</CardDescription>
+            <CardDescription>
+              {new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase())}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600 mb-2">
@@ -986,7 +1010,9 @@ export function Dashboard() {
               <Activity className="mr-2 h-5 w-5 text-purple-600" />
               Meta Mensual
             </CardTitle>
-            <CardDescription>Avance hacia la meta de recaudación</CardDescription>
+            <CardDescription>
+              {new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase())}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -1071,26 +1097,56 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Distribución de Ingresos - Gráfico de Barras */}
-        {datosIngresos.length > 0 ? (
+        {/* Análisis de Morosidad - Gráfico de Barras */}
+        {datosAnalisisMorosidad.length > 0 ? (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
                 <BarChart3 className="mr-2 h-5 w-5" />
-                Distribución de Ingresos
+                Análisis de Morosidad
               </CardTitle>
-              <CardDescription>Desglose por tipo de ingreso</CardDescription>
+              <CardDescription>Total Financiamiento vs Cartera Cobrada</CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={datosIngresos}>
+                <BarChart data={datosAnalisisMorosidad}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
                   <YAxis />
-                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                  <Tooltip 
+                    formatter={(value: number, name: string, props: any) => {
+                      const porcentaje = props.payload.porcentaje || 0
+                      return [
+                        `${formatCurrency(value)} (${porcentaje.toFixed(1)}%)`,
+                        name
+                      ]
+                    }}
+                  />
                   <Legend />
-                  <Bar dataKey="value" fill="#8884d8" name="Monto">
-                    {datosIngresos.map((entry, index) => (
+                  <Bar 
+                    dataKey="value" 
+                    fill="#8884d8" 
+                    name="Monto"
+                    label={(props: any) => {
+                      // En Recharts, el payload completo está en props.payload
+                      const porcentaje = props.payload?.porcentaje || 0
+                      const color = props.payload?.color || '#000'
+                      return (
+                        <text
+                          x={props.x + (props.width || 0) / 2}
+                          y={props.y}
+                          dy={-8}
+                          fill={color}
+                          fontSize={12}
+                          fontWeight="bold"
+                          textAnchor="middle"
+                        >
+                          {`${porcentaje.toFixed(1)}%`}
+                        </text>
+                      )
+                    }}
+                  >
+                    {datosAnalisisMorosidad.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Bar>
@@ -1103,13 +1159,13 @@ export function Dashboard() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <BarChart3 className="mr-2 h-5 w-5" />
-                Distribución de Ingresos
+                Análisis de Morosidad
               </CardTitle>
-              <CardDescription>Desglose por tipo de ingreso</CardDescription>
+              <CardDescription>Total Financiamiento vs Cartera Cobrada</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-center h-64 text-gray-500">
-                No hay datos de ingresos disponibles para el período seleccionado
+                No hay datos disponibles para el período seleccionado
               </div>
             </CardContent>
           </Card>
@@ -1118,21 +1174,21 @@ export function Dashboard() {
 
       {/* Métricas Detalladas */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Ingresos por Tipo - Gráfico de Pastel */}
-        {datosIngresos.length > 0 ? (
+        {/* Análisis de Morosidad - Gráfico de Pastel */}
+        {datosAnalisisMorosidad.length > 0 ? (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
                 <PieChart className="mr-2 h-5 w-5" />
-                Ingresos por Tipo
+                Análisis de Morosidad
               </CardTitle>
-              <CardDescription>Desglose de ingresos por categoría</CardDescription>
+              <CardDescription>Distribución por tipo</CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={250}>
                 <RechartsPieChart>
                   <Pie
-                    data={datosIngresos}
+                    data={datosAnalisisMorosidad}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
@@ -1141,7 +1197,7 @@ export function Dashboard() {
                     fill="#8884d8"
                     dataKey="value"
                   >
-                    {datosIngresos.map((entry, index) => (
+                    {datosAnalisisMorosidad.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
@@ -1150,27 +1206,27 @@ export function Dashboard() {
                 </RechartsPieChart>
               </ResponsiveContainer>
               <div className="mt-4 space-y-2">
-                {ingresosCapital > 0 && (
+                {totalFinanciamiento > 0 && (
                   <div className="flex justify-between items-center p-2 bg-blue-50 rounded-lg">
-                    <span className="text-sm font-medium text-blue-900">Capital</span>
+                    <span className="text-sm font-medium text-blue-900">Total Financiamiento</span>
                     <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                      {formatCurrency(ingresosCapital)}
+                      {formatCurrency(totalFinanciamiento)} ({porcentajeFinanciamiento.toFixed(1)}%)
                     </Badge>
                   </div>
                 )}
-                {ingresosInteres > 0 && (
+                {carteraCobrada > 0 && (
                   <div className="flex justify-between items-center p-2 bg-green-50 rounded-lg">
-                    <span className="text-sm font-medium text-green-900">Intereses</span>
+                    <span className="text-sm font-medium text-green-900">Cartera Cobrada</span>
                     <Badge variant="outline" className="bg-green-100 text-green-800">
-                      {formatCurrency(ingresosInteres)}
+                      {formatCurrency(carteraCobrada)} ({porcentajeCobrado.toFixed(1)}%)
                     </Badge>
                   </div>
                 )}
-                {ingresosMora > 0 && (
+                {morosidadDiferencia > 0 && (
                   <div className="flex justify-between items-center p-2 bg-red-50 rounded-lg">
-                    <span className="text-sm font-medium text-red-900">Mora</span>
+                    <span className="text-sm font-medium text-red-900">Morosidad</span>
                     <Badge variant="outline" className="bg-red-100 text-red-800">
-                      {formatCurrency(ingresosMora)}
+                      {formatCurrency(morosidadDiferencia)} ({porcentajeMorosidad.toFixed(1)}%)
                     </Badge>
                   </div>
                 )}
@@ -1182,13 +1238,13 @@ export function Dashboard() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <PieChart className="mr-2 h-5 w-5" />
-                Ingresos por Tipo
+                Análisis de Morosidad
               </CardTitle>
-              <CardDescription>Desglose de ingresos por categoría</CardDescription>
+              <CardDescription>Distribución por tipo</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-center h-64 text-gray-500">
-                No hay datos de ingresos disponibles para el período seleccionado
+                No hay datos disponibles para el período seleccionado
               </div>
             </CardContent>
           </Card>

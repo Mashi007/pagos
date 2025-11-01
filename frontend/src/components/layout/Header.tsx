@@ -79,7 +79,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
 
           <div className="hidden lg:block">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-md p-1.5">
+              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-lg p-2 border border-gray-200">
                 <img 
                   src="/logo-compact.svg" 
                   alt="RAPICREDIT Logo" 

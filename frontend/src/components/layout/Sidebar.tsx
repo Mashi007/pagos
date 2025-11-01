@@ -215,17 +215,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-blue-200/60 bg-gradient-to-r from-blue-600 to-blue-700">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-white/95 rounded-lg flex items-center justify-center shadow-lg p-1.5">
+            <div className="flex items-center">
+              <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-2xl p-2.5 border-2 border-white/20">
                 <img 
                   src="/logo-compact.svg" 
                   alt="RAPICREDIT Logo" 
                   className="w-full h-full object-contain"
                 />
-              </div>
-              <div>
-                <h2 className="font-bold text-white text-sm">RAPICREDIT</h2>
-                <p className="text-xs text-blue-100">Sistema v1.0</p>
               </div>
             </div>
             <div className="flex items-center space-x-2">
