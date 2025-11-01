@@ -6,8 +6,10 @@ services:
     plan: free
     branch: main
     autoDeploy: true
+    rootDir: frontend
     buildCommand: npm install && npm run build
     startCommand: npm run render-start
+    healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
         value: 18.17.0
@@ -15,3 +17,5 @@ services:
         value: https://pagos-f2qf.onrender.com
       - key: API_BASE_URL
         value: https://pagos-f2qf.onrender.com
+      - key: NODE_ENV
+        value: production

@@ -223,7 +223,8 @@ app.use((req, res, next) => {
 
 app.use(express.static(distPath, staticOptions));
 
-// Health check endpoint
+// Health check endpoint - IMPORTANTE para Render
+// Render usa esto para verificar que el servicio está vivo
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
@@ -231,6 +232,11 @@ app.get('/health', (req, res) => {
     service: 'rapicredit-frontend',
     version: '1.0.1'
   });
+});
+
+// También responder a HEAD requests (usado por Render)
+app.head('/health', (req, res) => {
+  res.status(200).end();
 });
 
 // Manejar SPA routing - todas las rutas sirven index.html (el proxy ya atendió /api/*)
@@ -267,34 +273,60 @@ app.get('*', (req, res) => {
 // ============================================
 const PORT = process.env.PORT || 3000;
 
-// Iniciar servidor con manejo de errores
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log('🚀 ==========================================');
-  console.log('🚀 Servidor SPA rapicredit-frontend iniciado');
-  console.log('🚀 ==========================================');
-  console.log(`📡 Puerto: ${PORT}`);
-  console.log(`📁 Directorio: ${distPath}`);
-  console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 API URL: ${API_URL || 'No configurado'}`);
-  console.log('✅ Servidor listo para recibir requests');
-});
+// Validar que PORT está configurado
+if (!process.env.PORT) {
+  console.warn(`⚠️  PORT no configurado, usando puerto por defecto: ${PORT}`);
+} else {
+  console.log(`✅ PORT configurado: ${PORT}`);
+}
 
-// Manejar errores del servidor
-server.on('error', (err) => {
-  console.error('❌ ERROR al iniciar servidor:', err);
-  if (err.code === 'EADDRINUSE') {
-    console.error(`   Puerto ${PORT} ya está en uso`);
-  }
+// Iniciar servidor con manejo de errores
+try {
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log('🚀 ==========================================');
+    console.log('🚀 Servidor SPA rapicredit-frontend iniciado');
+    console.log('🚀 ==========================================');
+    console.log(`📡 Puerto: ${PORT}`);
+    console.log(`📁 Directorio: ${distPath}`);
+    console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔗 API URL: ${API_URL || 'No configurado'}`);
+    console.log(`✅ Servidor escuchando en 0.0.0.0:${PORT}`);
+    console.log('✅ Servidor listo para recibir requests');
+  });
+
+  // Manejar errores del servidor
+  server.on('error', (err) => {
+    console.error('❌ ERROR al iniciar servidor:', err);
+    console.error(`   Código: ${err.code}`);
+    console.error(`   Mensaje: ${err.message}`);
+    if (err.code === 'EADDRINUSE') {
+      console.error(`   Puerto ${PORT} ya está en uso`);
+    }
+    process.exit(1);
+  });
+
+  // Health check para Render
+  server.on('listening', () => {
+    const address = server.address();
+    console.log(`✅ Servidor escuchando correctamente en puerto ${address.port}`);
+  });
+} catch (error) {
+  console.error('❌ ERROR CRÍTICO al crear servidor:', error);
+  console.error(error.stack);
   process.exit(1);
-});
+}
 
 // Manejar errores no capturados
 process.on('uncaughtException', (err) => {
   console.error('❌ ERROR no capturado:', err);
+  console.error('Stack trace:', err.stack);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ PROMESA RECHAZADA NO MANEJADA:', reason);
+  if (reason instanceof Error) {
+    console.error('Stack trace:', reason.stack);
+  }
   process.exit(1);
 });
