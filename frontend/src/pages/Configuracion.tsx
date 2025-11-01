@@ -40,6 +40,7 @@ import { AnalistasConfig } from '@/components/configuracion/AnalistasConfig'
 import { ModelosVehiculosConfig } from '@/components/configuracion/ModelosVehiculosConfig'
 import { EmailConfig } from '@/components/configuracion/EmailConfig'
 import { configuracionGeneralService, ConfiguracionGeneral } from '@/services/configuracionGeneralService'
+import { apiClient } from '@/services/api'
 import { toast } from 'sonner'
 import UsuariosConfig from '@/components/configuracion/UsuariosConfig'
 
@@ -252,31 +253,72 @@ export function Configuracion() {
     }
   }
 
-  const [loadingData, setLoadingData] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
 
-  const handleCargarDatosEjemplo = async () => {
+  const handleCargarLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validar tipo de archivo
+    const allowedTypes = ['image/svg+xml', 'image/png', 'image/jpeg', 'image/jpg']
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Formato no válido. Use SVG, PNG o JPG')
+      return
+    }
+
+    // Validar tamaño (máximo 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('El archivo es demasiado grande. Máximo 2MB')
+      return
+    }
+
     try {
-      setLoadingData(true)
-      // Llamar al endpoint de carga de datos
-      const response = await fetch('/api/v1/configuracion/cargar-datos-ejemplo', {
+      setUploadingLogo(true)
+
+      // Crear FormData para enviar el archivo
+      const formData = new FormData()
+      formData.append('logo', file)
+
+      // Subir logo usando fetch directamente para FormData (axios puede tener problemas con FormData)
+      const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
+      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/v1/configuracion/upload-logo`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${token}`,
+          // NO establecer Content-Type, el navegador lo hace automáticamente para FormData
         },
+        body: formData,
       })
 
       if (!response.ok) {
-        throw new Error('Error al cargar datos de ejemplo')
+        const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }))
+        throw new Error(errorData.detail || `Error ${response.status}`)
       }
 
       const result = await response.json()
-      toast.success(result.message || 'Datos de ejemplo cargados exitosamente')
-    } catch (error) {
-      console.error('Error cargando datos:', error)
-      toast.error('Error al cargar datos de ejemplo. Por favor, intente nuevamente.')
+
+      toast.success(result.message || 'Logo cargado exitosamente')
+      
+      // Mostrar preview del logo
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+
+      // Recargar página para aplicar nuevo logo
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
+    } catch (error: any) {
+      console.error('Error cargando logo:', error)
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Error desconocido'
+      toast.error(`Error al cargar logo: ${errorMessage}`)
     } finally {
-      setLoadingData(false)
+      setUploadingLogo(false)
+      // Limpiar input
+      event.target.value = ''
     }
   }
 
@@ -339,48 +381,67 @@ export function Configuracion() {
         </div>
       </div>
 
-      {/* Sección de Carga de Datos */}
+      {/* Sección de Carga de Logo */}
       <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50/30">
         <CardHeader>
           <div className="flex items-center space-x-2">
-            <Database className="h-5 w-5 text-blue-600" />
-            <CardTitle className="text-lg">Carga de Datos de Ejemplo</CardTitle>
+            <Upload className="h-5 w-5 text-blue-600" />
+            <CardTitle className="text-lg">Cargar Logo de la Empresa</CardTitle>
           </div>
           <CardDescription>
-            Cargue datos de ejemplo para probar el sistema. Esto incluirá clientes, préstamos, pagos y otros datos necesarios.
+            Suba un nuevo logo para la empresa. El logo se mostrará en el sidebar, login y otras páginas del sistema.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col space-y-4">
             <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
               <p className="text-sm text-gray-700 mb-3">
-                <strong>⚠️ Importante:</strong> Esta operación cargará datos de ejemplo en el sistema. 
-                Asegúrese de que esto sea apropiado para su entorno.
+                <strong>📋 Formatos soportados:</strong> SVG, PNG, JPG
               </p>
-              <ul className="text-xs text-gray-600 space-y-1 list-disc list-inside">
-                <li>Clientes de ejemplo con información completa</li>
-                <li>Préstamos con diferentes estados</li>
-                <li>Pagos y cuotas asociadas</li>
-                <li>Concesionarios, analistas y validadores</li>
-              </ul>
+              <p className="text-xs text-gray-600">
+                <strong>📏 Tamaño máximo:</strong> 2MB. Se recomienda usar SVG para mejor calidad.
+              </p>
             </div>
-            <Button
-              onClick={handleCargarDatosEjemplo}
-              disabled={loadingData}
-              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {loadingData ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Cargando datos...
-                </>
-              ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Cargar Datos de Ejemplo
-                </>
-              )}
-            </Button>
+            
+            {/* Preview del logo actual o nuevo */}
+            {logoPreview && (
+              <div className="flex items-center justify-center p-4 bg-white rounded-lg border border-blue-200">
+                <img 
+                  src={logoPreview} 
+                  alt="Vista previa del logo" 
+                  className="max-h-24 max-w-48 object-contain"
+                />
+              </div>
+            )}
+
+            {/* Input de archivo */}
+            <div className="flex flex-col space-y-2">
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer bg-white/50 hover:bg-blue-50/50 transition-colors">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  {uploadingLogo ? (
+                    <>
+                      <RefreshCw className="w-8 h-8 mb-2 text-blue-600 animate-spin" />
+                      <p className="text-sm text-gray-600">Subiendo logo...</p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-8 h-8 mb-2 text-blue-600" />
+                      <p className="mb-2 text-sm text-gray-600">
+                        <span className="font-semibold">Haga clic para seleccionar</span> o arrastre el archivo aquí
+                      </p>
+                      <p className="text-xs text-gray-500">SVG, PNG o JPG (MAX. 2MB)</p>
+                    </>
+                  )}
+                </div>
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg"
+                  onChange={handleCargarLogo}
+                  disabled={uploadingLogo}
+                />
+              </label>
+            </div>
           </div>
         </CardContent>
       </Card>

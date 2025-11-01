@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { cn } from '@/utils'
 
 interface LogoProps {
@@ -15,7 +16,55 @@ const sizeMap = {
 // Generar IDs únicos para evitar conflictos si hay múltiples logos en la página
 const uniqueId = `logo-${Math.random().toString(36).substr(2, 9)}`
 
+// Extensiones posibles del logo personalizado
+const LOGO_EXTENSIONS = ['.svg', '.png', '.jpg', '.jpeg']
+
 export function Logo({ className, size = 'md' }: LogoProps) {
+  const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(null)
+  const [hasChecked, setHasChecked] = useState(false)
+
+  useEffect(() => {
+    // Intentar cargar el logo personalizado
+    const checkCustomLogo = async () => {
+      for (const ext of LOGO_EXTENSIONS) {
+        const logoPath = `/logos/logo-custom${ext}`
+        try {
+          // Usar timestamp para evitar caché
+          const img = new Image()
+          await new Promise((resolve, reject) => {
+            img.onload = () => {
+              setCustomLogoUrl(`${logoPath}?t=${Date.now()}`)
+              resolve(true)
+            }
+            img.onerror = reject
+            img.src = logoPath
+          })
+          break
+        } catch {
+          // Continuar con la siguiente extensión
+          continue
+        }
+      }
+      setHasChecked(true)
+    }
+
+    checkCustomLogo()
+  }, [])
+
+  // Si hay logo personalizado, mostrar imagen
+  if (customLogoUrl) {
+    return (
+      <img
+        src={customLogoUrl}
+        alt="Logo de la empresa"
+        className={cn(sizeMap[size], className, 'object-contain')}
+        role="img"
+      />
+    )
+  }
+
+  // Si ya verificamos y no hay logo personalizado, mostrar SVG por defecto
+  // También mostrar SVG mientras verificamos (hasChecked === false)
   return (
     <svg 
       className={cn(sizeMap[size], className)}

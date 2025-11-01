@@ -1,8 +1,9 @@
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -298,38 +299,76 @@ def obtener_configuracion_general():
     }
 
 
-@router.post("/cargar-datos-ejemplo")
-def cargar_datos_ejemplo(
+@router.post("/upload-logo")
+async def upload_logo(
+    logo: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Cargar datos de ejemplo en el sistema (solo administradores)"""
+    """Subir logo de la empresa (solo administradores)"""
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Solo los administradores pueden cargar datos de ejemplo",
+            detail="Solo los administradores pueden subir el logo",
         )
 
     try:
-        logger.info(f"Usuario {current_user.email} iniciando carga de datos de ejemplo")
+        # Validar tipo de archivo
+        allowed_types = ["image/svg+xml", "image/png", "image/jpeg", "image/jpg"]
+        if logo.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail="Formato no válido. Use SVG, PNG o JPG",
+            )
 
-        # TODO: Implementar la lógica de carga de datos de ejemplo
-        # Esto podría incluir:
-        # - Crear clientes de ejemplo
-        # - Crear préstamos de ejemplo
-        # - Crear pagos y cuotas de ejemplo
-        # - Crear concesionarios, analistas, validadores de ejemplo
+        # Validar tamaño (máximo 2MB)
+        contents = await logo.read()
+        if len(contents) > 2 * 1024 * 1024:
+            raise HTTPException(
+                status_code=400,
+                detail="El archivo es demasiado grande. Máximo 2MB",
+            )
 
-        # Por ahora, retornamos un mensaje de éxito
-        return {
-            "message": "Carga de datos de ejemplo iniciada exitosamente",
-            "status": "success",
-            "nota": "Esta funcionalidad será implementada próximamente",
+        # Determinar extensión basada en content_type
+        content_type_to_ext = {
+            "image/svg+xml": ".svg",
+            "image/png": ".png",
+            "image/jpeg": ".jpg",
+            "image/jpg": ".jpg",
         }
+        extension = content_type_to_ext.get(logo.content_type, ".svg")
+
+        # Crear directorio de logos si no existe
+        # Guardar en el directorio de archivos estáticos del frontend
+        # En producción, esto debería estar en el directorio público del frontend
+        base_dir = Path(__file__).parent.parent.parent.parent.parent  # Raíz del proyecto
+        logos_dir = base_dir / "frontend" / "public" / "logos"
+        logos_dir.mkdir(parents=True, exist_ok=True)
+
+        # Nombre del archivo: logo-custom.{ext}
+        logo_filename = f"logo-custom{extension}"
+        logo_path = logos_dir / logo_filename
+
+        # Guardar archivo
+        with open(logo_path, "wb") as f:
+            f.write(contents)
+
+        logger.info(
+            f"Logo subido por usuario {current_user.email}: {logo_filename}"
+        )
+
+        return {
+            "message": "Logo cargado exitosamente",
+            "status": "success",
+            "filename": logo_filename,
+            "path": f"/logos/{logo_filename}",
+        }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error al cargar datos de ejemplo: {str(e)}")
+        logger.error(f"Error al subir logo: {str(e)}", exc_info=True)
         raise HTTPException(
-            status_code=500, detail=f"Error al cargar datos de ejemplo: {str(e)}"
+            status_code=500, detail=f"Error al subir logo: {str(e)}"
         )
 
 
