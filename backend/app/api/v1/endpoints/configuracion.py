@@ -164,6 +164,41 @@ def obtener_configuracion_por_clave(
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
+@router.get("/sistema/categoria/{categoria}")
+def obtener_configuracion_por_categoria(
+    categoria: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener todas las configuraciones de una categoría específica"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden ver configuración por categoría",
+        )
+
+    try:
+        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == categoria.upper()).all()
+
+        return {
+            "categoria": categoria.upper(),
+            "configuraciones": [
+                {
+                    "clave": config.clave,
+                    "valor": config.valor,
+                    "descripcion": config.descripcion,
+                    "fecha_actualizacion": config.fecha_actualizacion,
+                }
+                for config in configs
+            ],
+            "total": len(configs),
+        }
+
+    except Exception as e:
+        logger.error(f"Error obteniendo configuración por categoría: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
+
 @router.put("/sistema/{clave}")
 def actualizar_configuracion(
     clave: str,
@@ -548,6 +583,111 @@ def actualizar_configuracion_general(
         "message": "Configuración general actualizada exitosamente",
         "configuracion": update_data,
     }
+
+
+# ============================================
+# VALIDADORES (Proxy para mantener compatibilidad)
+# ============================================
+
+
+@router.post("/validadores/probar")
+def probar_validadores(
+    datos_prueba: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Probar múltiples validadores con datos de ejemplo"""
+    try:
+        from datetime import datetime
+
+        resultados = {}
+        total_validados = 0
+        validos = 0
+        invalidos = 0
+
+        # Probar teléfono si está presente
+        if datos_prueba.get("telefono"):
+            total_validados += 1
+            try:
+                from app.services.validators_service import ValidadorTelefono
+
+                pais = datos_prueba.get("pais_telefono", "VE")
+                resultado_telefono = ValidadorTelefono.validar_y_formatear_telefono(
+                    datos_prueba["telefono"], pais
+                )
+                if resultado_telefono.get("valido"):
+                    validos += 1
+                else:
+                    invalidos += 1
+                resultados["telefono"] = resultado_telefono
+            except Exception as e:
+                invalidos += 1
+                resultados["telefono"] = {"valido": False, "error": str(e)}
+
+        # Probar cédula si está presente
+        if datos_prueba.get("cedula"):
+            total_validados += 1
+            try:
+                from app.services.validators_service import ValidadorCedula
+
+                pais = datos_prueba.get("pais_cedula", "VE")
+                resultado_cedula = ValidadorCedula.validar_y_formatear_cedula(datos_prueba["cedula"])
+                if resultado_cedula.get("valido"):
+                    validos += 1
+                else:
+                    invalidos += 1
+                resultados["cedula"] = resultado_cedula
+            except Exception as e:
+                invalidos += 1
+                resultados["cedula"] = {"valido": False, "error": str(e)}
+
+        # Probar fecha si está presente
+        if datos_prueba.get("fecha"):
+            total_validados += 1
+            try:
+                from app.services.validators_service import ValidadorFecha
+
+                resultado_fecha = ValidadorFecha.validar_y_formatear_fecha(datos_prueba["fecha"])
+                if resultado_fecha.get("valido"):
+                    validos += 1
+                else:
+                    invalidos += 1
+                resultados["fecha"] = resultado_fecha
+            except Exception as e:
+                invalidos += 1
+                resultados["fecha"] = {"valido": False, "error": str(e)}
+
+        # Probar email si está presente
+        if datos_prueba.get("email"):
+            total_validados += 1
+            try:
+                from app.services.validators_service import ValidadorEmail
+
+                resultado_email = ValidadorEmail.validar_y_formatear_email(datos_prueba["email"])
+                if resultado_email.get("valido"):
+                    validos += 1
+                else:
+                    invalidos += 1
+                resultados["email"] = resultado_email
+            except Exception as e:
+                invalidos += 1
+                resultados["email"] = {"valido": False, "error": str(e)}
+
+        return {
+            "titulo": "Prueba de Validadores",
+            "fecha_prueba": datetime.now().isoformat(),
+            "datos_entrada": datos_prueba,
+            "resultados": resultados,
+            "resumen": {
+                "total_validados": total_validados,
+                "validos": validos,
+                "invalidos": invalidos,
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Error probando validadores: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
 # ============================================
