@@ -185,8 +185,12 @@ jobs:
           
           # Verificar errores críticos de Flake8
           if [ -f "flake8-critical.log" ] && [ -s "flake8-critical.log" ]; then
-            ERROR_COUNT=$(grep -c "^app/" flake8-critical.log 2>/dev/null || echo "0")
-            if [ "$ERROR_COUNT" -gt 0 ]; then
+            # Contar líneas que empiezan con "app/" y limpiar el resultado
+            ERROR_COUNT=$(grep -c "^app/" flake8-critical.log 2>/dev/null | tr -d '\n\r ' || echo "0")
+            # Convertir a número entero (eliminar cualquier carácter no numérico)
+            ERROR_COUNT=$(echo "$ERROR_COUNT" | grep -oE '[0-9]+' | head -1 || echo "0")
+            # Validar que sea un número antes de comparar
+            if [ -n "$ERROR_COUNT" ] && [ "$ERROR_COUNT" -gt 0 ] 2>/dev/null; then
               echo "### ❌ Flake8 - Errores Críticos: $ERROR_COUNT" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               echo '```' >> $GITHUB_STEP_SUMMARY
@@ -202,13 +206,15 @@ jobs:
           
           # Verificar errores de Isort
           if [ -f "isort.log" ] && [ -s "isort.log" ]; then
-            if grep -q "ERROR:" isort.log 2>/dev/null || grep -q "^ERROR" isort.log 2>/dev/null; then
+            # Isort genera "ERROR:" cuando hay imports incorrectos
+            if grep -qi "ERROR:" isort.log 2>/dev/null || grep -qE "^ERROR|Imports are incorrectly sorted" isort.log 2>/dev/null; then
               echo "### ❌ Isort - Imports Incorrectos Detectados" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               echo '```' >> $GITHUB_STEP_SUMMARY
               head -30 isort.log >> $GITHUB_STEP_SUMMARY
               echo '```' >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
+              echo "⚠️ Nota: Estos errores fueron corregidos automáticamente por el workflow." >> $GITHUB_STEP_SUMMARY
             else
               echo "✅ Isort: Imports correctos" >> $GITHUB_STEP_SUMMARY
             fi
