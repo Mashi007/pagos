@@ -906,7 +906,7 @@ def obtener_cuotas_prestamo(
 
     resultado = []
     estados_encontrados = []
-    
+
     for c in cuotas:
         # Determinar estado real basado en total_pagado y monto_cuota
         estado_real = c.estado
@@ -927,7 +927,7 @@ def obtener_cuotas_prestamo(
                     f"Tiene pago parcial ({c.total_pagado}) y está vencida pero estado es '{c.estado}'"
                 )
                 estado_real = "ATRASADO"
-        
+
         cuota_dict = {
             "id": c.id,
             "numero_cuota": c.numero_cuota,
@@ -948,13 +948,13 @@ def obtener_cuotas_prestamo(
         }
         resultado.append(cuota_dict)
         estados_encontrados.append(f"{c.numero_cuota}:{estado_real}(BD:{c.estado})")
-    
+
     # 🔍 LOG: Verificar estados devueltos
     logger.info(
         f"📊 [obtener_cuotas_prestamo] Préstamo {prestamo_id}: "
         f"{len(resultado)} cuotas. Estados: {estados_encontrados[:10]}"
     )
-    
+
     return resultado
 
 
