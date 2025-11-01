@@ -2,7 +2,7 @@
 # Uso: .\scripts\analizar_sql_no_usados.ps1 [-DryRun] [-Eliminar]
 
 param(
-    [switch]$DryRun = $true,           # Por defecto solo muestra, no elimina
+    [switch]$DryRun = $false,           # Por defecto no hace dry run
     [switch]$Eliminar = $false,         # Si está presente, elimina los archivos
     [string]$SqlFolder = "scripts\sql" # Carpeta de archivos SQL
 )
@@ -157,7 +157,7 @@ if ($archivosConReferencias.Count -gt 0 -and $archivosConReferencias.Count -le 5
 
 # Eliminar archivos si se solicita
 if ($archivosNoUsados.Count -gt 0) {
-    if ($Eliminar -and -not $DryRun) {
+    if ($Eliminar) {
         Write-Host "`nELIMINANDO $($archivosNoUsados.Count) archivos no usados..." -ForegroundColor $Warning
         
         $eliminados = 0

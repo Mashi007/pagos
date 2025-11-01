@@ -405,7 +405,7 @@ def crear_plantilla(
                 entidad="NOTIFICACION_PLANTILLA",
                 entidad_id=nueva_plantilla.id,
                 detalles=f"Creó plantilla {nueva_plantilla.nombre}",
-                exito="EXITOSO",
+                exito=True,
             )
             db.add(audit)
             db.commit()
@@ -456,7 +456,7 @@ def actualizar_plantilla(
                 entidad="NOTIFICACION_PLANTILLA",
                 entidad_id=plantilla_id,
                 detalles=f"Actualizó plantilla {plantilla_existente.nombre}",
-                exito="EXITOSO",
+                exito=True,
             )
             db.add(audit)
             db.commit()
@@ -505,7 +505,7 @@ def eliminar_plantilla(
                 entidad="NOTIFICACION_PLANTILLA",
                 entidad_id=plantilla_id_ref,
                 detalles=f"Eliminó plantilla {nombre_ref}",
-                exito="EXITOSO",
+                exito=True,
             )
             db.add(audit)
             db.commit()
@@ -581,7 +581,7 @@ def exportar_plantilla(
                 entidad="NOTIFICACION_PLANTILLA",
                 entidad_id=plantilla.id,
                 detalles=f"Exportó plantilla {plantilla.nombre}",
-                exito="EXITOSO",
+                exito=True,
             )
             db.add(audit)
             db.commit()

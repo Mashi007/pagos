@@ -412,7 +412,7 @@ def exportar_reporte_cartera(
                     entidad="REPORTES",
                     entidad_id=None,
                     detalles=f"Exportó cartera en Excel (fecha_corte={reporte.fecha_corte})",
-                    exito="EXITOSO",
+                    exito=True,
                 )
                 db.add(audit)
                 db.commit()
@@ -469,7 +469,7 @@ def exportar_reporte_cartera(
                     entidad="REPORTES",
                     entidad_id=None,
                     detalles=f"Exportó cartera en PDF (fecha_corte={reporte.fecha_corte})",
-                    exito="EXITOSO",
+                    exito=True,
                 )
                 db.add(audit)
                 db.commit()

@@ -940,7 +940,7 @@ def informe_resumen_ejecutivo(
                     entidad="COBRANZAS",
                     entidad_id=None,
                     detalles="Exportó Resumen Ejecutivo en Excel",
-                    exito="EXITOSO",
+                    exito=True,
                 )
                 db.add(audit)
                 db.commit()
@@ -959,7 +959,7 @@ def informe_resumen_ejecutivo(
                     entidad="COBRANZAS",
                     entidad_id=None,
                     detalles="Exportó Resumen Ejecutivo en PDF",
-                    exito="EXITOSO",
+                    exito=True,
                 )
                 db.add(audit)
                 db.commit()

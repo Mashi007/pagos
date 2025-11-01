@@ -345,7 +345,7 @@ def exportar_auditoria(
                 entidad="AUDITORIA",
                 entidad_id=None,
                 detalles=detalles,
-                exito="EXITOSO",
+                exito=True,
             )
             db.add(audit)
             db.commit()
