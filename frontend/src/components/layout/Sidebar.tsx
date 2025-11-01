@@ -214,15 +214,26 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-blue-200/60 bg-gradient-to-r from-blue-600 to-blue-700">
-            <div className="flex items-center">
-              <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-2xl p-2.5 border-2 border-white/20">
+          <div className="flex items-center justify-between p-4 border-b border-blue-300/40 bg-gradient-to-br from-blue-700 via-blue-600 to-blue-700 shadow-inner">
+            <div className="flex items-center justify-center w-full">
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ 
+                  type: "spring", 
+                  stiffness: 200, 
+                  damping: 15,
+                  delay: 0.1 
+                }}
+                whileHover={{ scale: 1.05 }}
+                className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-2xl p-3.5 ring-2 ring-white/40 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:shadow-blue-500/20 hover:ring-white/60"
+              >
                 <img 
                   src="/logo-compact.svg" 
                   alt="RAPICREDIT Logo" 
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-contain select-none"
                 />
-              </div>
+              </motion.div>
             </div>
             <div className="flex items-center space-x-2">
               {onToggle && (

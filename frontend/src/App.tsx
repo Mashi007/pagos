@@ -25,6 +25,12 @@ const BORDER_WIDTH = 2
 const Welcome = lazy(() => import('@/pages/Welcome').then(module => ({ default: module.Welcome })))
 const Login = lazy(() => import('@/pages/Login').then(module => ({ default: module.Login })))
 const Dashboard = lazy(() => import('@/pages/Dashboard').then(module => ({ default: module.Dashboard })))
+const DashboardMenu = lazy(() => import('@/pages/DashboardMenu').then(module => ({ default: module.DashboardMenu })))
+const DashboardFinanciamiento = lazy(() => import('@/pages/DashboardFinanciamiento').then(module => ({ default: module.DashboardFinanciamiento })))
+const DashboardCuotas = lazy(() => import('@/pages/DashboardCuotas').then(module => ({ default: module.DashboardCuotas })))
+const DashboardCobranza = lazy(() => import('@/pages/DashboardCobranza').then(module => ({ default: module.DashboardCobranza })))
+const DashboardAnalisis = lazy(() => import('@/pages/DashboardAnalisis').then(module => ({ default: module.DashboardAnalisis })))
+const DashboardPagos = lazy(() => import('@/pages/DashboardPagos').then(module => ({ default: module.DashboardPagos })))
 const Clientes = lazy(() => import('@/pages/Clientes').then(module => ({ default: module.Clientes })))
 const Prestamos = lazy(() => import('@/pages/Prestamos').then(module => ({ default: module.Prestamos })))
 const Amortizacion = lazy(() => import('@/pages/Amortizacion').then(module => ({ default: module.Amortizacion })))
@@ -141,8 +147,14 @@ function App() {
           }
         >
           {/* Dashboard */}
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
+          <Route index element={<Navigate to="/dashboard/menu" replace />} />
+          <Route path="dashboard" element={<Navigate to="/dashboard/menu" replace />} />
+          <Route path="dashboard/menu" element={<DashboardMenu />} />
+          <Route path="dashboard/financiamiento" element={<DashboardFinanciamiento />} />
+          <Route path="dashboard/cuotas" element={<DashboardCuotas />} />
+          <Route path="dashboard/cobranza" element={<DashboardCobranza />} />
+          <Route path="dashboard/analisis" element={<DashboardAnalisis />} />
+          <Route path="dashboard/pagos" element={<DashboardPagos />} />
 
           {/* Clientes */}
           <Route path="clientes" element={<Clientes />} />
