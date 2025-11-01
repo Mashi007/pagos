@@ -109,7 +109,8 @@ jobs:
           echo "📝 Verificando orden de imports con isort..."
           echo "::group::Isort - Verificación de Imports"
           # Generar log primero - NO fallar el pipeline aquí
-          isort --check-only --diff app/ > isort.log 2>&1 || true
+          # Usar --profile black explícitamente para asegurar compatibilidad
+          isort --profile black --check-only --diff app/ > isort.log 2>&1 || true
           ISORT_EXIT_CODE=${PIPESTATUS[0]}
           # Mostrar output
           cat isort.log
@@ -125,8 +126,8 @@ jobs:
           if ! echo "$LAST_COMMIT_MSG" | grep -qi "isort"; then
             # Sincronizar con remoto antes de aplicar cambios para evitar divergencias
             git pull --rebase origin main || echo "⚠️ No se pudo hacer pull (puede ser normal si no hay cambios remotos)"
-            # Aplicar correcciones
-            isort app/
+            # Aplicar correcciones - usar --profile black explícitamente para compatibilidad
+            isort --profile black app/
             if ! git diff --quiet; then
               echo "📝 Correcciones de Isort aplicadas. Haciendo commit..."
               git config user.name "GitHub Actions"
