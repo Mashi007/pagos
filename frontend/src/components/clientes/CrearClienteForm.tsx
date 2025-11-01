@@ -909,15 +909,18 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
             {cliente ? 'Editar Cliente' : 'Nuevo Cliente'}
           </h2>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowExcelUploader(true)}
-              className="flex items-center gap-2"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              Cargar Excel
-            </Button>
+            {/* Solo mostrar "Cargar Excel" en modo crear, no en modo editar */}
+            {!cliente && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowExcelUploader(true)}
+                className="flex items-center gap-2"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Cargar Excel
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
