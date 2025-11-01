@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -240,13 +241,51 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
+
+// Validar que el directorio dist existe antes de iniciar
+const distPath = path.join(__dirname, 'dist');
+
+if (!existsSync(distPath)) {
+  console.error(`❌ ERROR CRÍTICO: Directorio dist no encontrado en: ${distPath}`);
+  console.error('   Asegúrate de que el build se completó correctamente.');
+  process.exit(1);
+}
+
+const indexPath = path.join(distPath, 'index.html');
+if (!existsSync(indexPath)) {
+  console.error(`❌ ERROR CRÍTICO: index.html no encontrado en: ${indexPath}`);
+  console.error('   Asegúrate de que el build se completó correctamente.');
+  process.exit(1);
+}
+
+// Iniciar servidor con manejo de errores
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('🚀 ==========================================');
   console.log('🚀 Servidor SPA rapicredit-frontend iniciado');
   console.log('🚀 ==========================================');
   console.log(`📡 Puerto: ${PORT}`);
-  console.log(`📁 Directorio: ${path.join(__dirname, 'dist')}`);
+  console.log(`📁 Directorio: ${distPath}`);
   console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 API URL: ${API_URL || 'No configurado'}`);
   console.log('✅ Servidor listo para recibir requests');
+});
+
+// Manejar errores del servidor
+server.on('error', (err) => {
+  console.error('❌ ERROR al iniciar servidor:', err);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`   Puerto ${PORT} ya está en uso`);
+  }
+  process.exit(1);
+});
+
+// Manejar errores no capturados
+process.on('uncaughtException', (err) => {
+  console.error('❌ ERROR no capturado:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ PROMESA RECHAZADA NO MANEJADA:', reason);
+  process.exit(1);
 });
