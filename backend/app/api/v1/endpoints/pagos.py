@@ -326,7 +326,7 @@ def crear_pago(
         except Exception as e:
             logger.error(
                 f"❌ [crear_pago] Error aplicando pago a cuotas: {str(e)}",
-                exc_info=True
+                exc_info=True,
             )
             # No fallar el registro del pago si falla la aplicación a cuotas
             # El pago se registra pero las cuotas no se actualizan
@@ -374,7 +374,7 @@ def aplicar_pago_manualmente(
         if not pago.prestamo_id:
             raise HTTPException(
                 status_code=400,
-                detail="El pago no tiene un préstamo asociado (prestamo_id es NULL)"
+                detail="El pago no tiene un préstamo asociado (prestamo_id es NULL)",
             )
 
         logger.info(
@@ -395,14 +395,10 @@ def aplicar_pago_manualmente(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            f"❌ [aplicar_pago_manualmente] Error: {str(e)}",
-            exc_info=True
-        )
+        logger.error(f"❌ [aplicar_pago_manualmente] Error: {str(e)}", exc_info=True)
         db.rollback()
         raise HTTPException(
-            status_code=500,
-            detail=f"Error al aplicar pago a cuotas: {str(e)}"
+            status_code=500, detail=f"Error al aplicar pago a cuotas: {str(e)}"
         )
 
 
@@ -815,7 +811,7 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
     except Exception as e:
         logger.error(
             f"❌ [aplicar_pago_a_cuotas] Error al guardar cambios en BD: {str(e)}",
-            exc_info=True
+            exc_info=True,
         )
         db.rollback()
         raise
