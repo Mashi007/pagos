@@ -244,29 +244,13 @@ def obtener_estadisticas_notificaciones(
     """Obtener estadísticas de notificaciones."""
     try:
         from sqlalchemy import func
-        
+
         # Usar func.count() sobre el ID para evitar problemas con columnas faltantes
         total = db.query(func.count(Notificacion.id)).scalar() or 0
-        enviadas = (
-            db.query(func.count(Notificacion.id))
-            .filter(Notificacion.estado == "ENVIADA")
-            .scalar() or 0
-        )
-        pendientes = (
-            db.query(func.count(Notificacion.id))
-            .filter(Notificacion.estado == "PENDIENTE")
-            .scalar() or 0
-        )
-        fallidas = (
-            db.query(func.count(Notificacion.id))
-            .filter(Notificacion.estado == "FALLIDA")
-            .scalar() or 0
-        )
-        no_leidas = (
-            db.query(func.count(Notificacion.id))
-            .filter(Notificacion.leida == False)
-            .scalar() or 0
-        )
+        enviadas = db.query(func.count(Notificacion.id)).filter(Notificacion.estado == "ENVIADA").scalar() or 0
+        pendientes = db.query(func.count(Notificacion.id)).filter(Notificacion.estado == "PENDIENTE").scalar() or 0
+        fallidas = db.query(func.count(Notificacion.id)).filter(Notificacion.estado == "FALLIDA").scalar() or 0
+        no_leidas = db.query(func.count(Notificacion.id)).filter(Notificacion.leida == False).scalar() or 0
 
         return {
             "total": total,

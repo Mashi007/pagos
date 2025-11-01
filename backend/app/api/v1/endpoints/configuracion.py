@@ -306,8 +306,8 @@ async def upload_logo(
 
         # Crear directorio de logos en el directorio de uploads del backend
         from app.core.config import settings
-        
-        uploads_dir = Path(settings.UPLOAD_DIR) if hasattr(settings, 'UPLOAD_DIR') else Path("uploads")
+
+        uploads_dir = Path(settings.UPLOAD_DIR) if hasattr(settings, "UPLOAD_DIR") else Path("uploads")
         logos_dir = uploads_dir / "logos"
         logos_dir.mkdir(parents=True, exist_ok=True)
 
@@ -343,14 +343,14 @@ async def obtener_logo(
     try:
         from fastapi.responses import FileResponse
         from app.core.config import settings
-        
+
         # Validar que el archivo sea del tipo correcto
         if not filename.startswith("logo-custom") or not any(
             filename.endswith(ext) for ext in [".svg", ".png", ".jpg", ".jpeg"]
         ):
             raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
 
-        uploads_dir = Path(settings.UPLOAD_DIR) if hasattr(settings, 'UPLOAD_DIR') else Path("uploads")
+        uploads_dir = Path(settings.UPLOAD_DIR) if hasattr(settings, "UPLOAD_DIR") else Path("uploads")
         logo_path = uploads_dir / "logos" / filename
 
         if not logo_path.exists():
