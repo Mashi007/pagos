@@ -37,9 +37,7 @@ logger = logging.getLogger(__name__)
 # ============================================
 # FUNCIONES AUXILIARES
 # ============================================
-def calcular_cuotas(
-    total: Decimal, modalidad: str, plazo_maximo_meses: Optional[int] = None
-) -> tuple[int, Decimal]:
+def calcular_cuotas(total: Decimal, modalidad: str, plazo_maximo_meses: Optional[int] = None) -> tuple[int, Decimal]:
     """
     Calcula el número de cuotas según la modalidad de pago.
 
@@ -99,13 +97,9 @@ def verificar_permisos_edicion(prestamo: Prestamo, current_user: User):
             )
 
 
-def puede_cambiar_estado(
-    prestamo: Prestamo, nuevo_estado: str, current_user: User
-) -> bool:
+def puede_cambiar_estado(prestamo: Prestamo, nuevo_estado: str, current_user: User) -> bool:
     """Verifica si el usuario puede cambiar el estado del préstamo"""
-    return current_user.is_admin or (
-        prestamo.estado == "DRAFT" and nuevo_estado == "EN_REVISION"
-    )
+    return current_user.is_admin or (prestamo.estado == "DRAFT" and nuevo_estado == "EN_REVISION")
 
 
 def aplicar_cambios_prestamo(prestamo: Prestamo, prestamo_data: PrestamoUpdate):
@@ -142,9 +136,7 @@ def aplicar_cambios_prestamo(prestamo: Prestamo, prestamo_data: PrestamoUpdate):
 def actualizar_monto_y_cuotas(prestamo: Prestamo, monto: Decimal):
     """Actualiza monto y recalcula cuotas"""
     prestamo.total_financiamiento = monto
-    prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(
-        prestamo.total_financiamiento, prestamo.modalidad_pago
-    )
+    prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(prestamo.total_financiamiento, prestamo.modalidad_pago)
 
 
 def procesar_cambio_estado(
@@ -166,12 +158,8 @@ def procesar_cambio_estado(
 
         # Aplicar condiciones desde evaluación de riesgo (FASE 2)
         if plazo_maximo_meses:
-            numero_cuotas, cuota_periodo = actualizar_cuotas_segun_plazo_maximo(
-                prestamo, plazo_maximo_meses, db
-            )
-            logger.info(
-                f"Cuotas ajustadas según análisis de riesgo: {numero_cuotas} cuotas"
-            )
+            numero_cuotas, cuota_periodo = actualizar_cuotas_segun_plazo_maximo(prestamo, plazo_maximo_meses, db)
+            logger.info(f"Cuotas ajustadas según análisis de riesgo: {numero_cuotas} cuotas")
 
         # Aplicar tasa de interés desde evaluación
         if tasa_interes:
@@ -191,9 +179,7 @@ def procesar_cambio_estado(
                     fecha = prestamo.fecha_base_calculo
 
                 generar_amortizacion(prestamo, fecha, db)
-                logger.info(
-                    f"Tabla de amortización generada para préstamo {prestamo.id} con fecha de desembolso: {fecha}"
-                )
+                logger.info(f"Tabla de amortización generada para préstamo {prestamo.id} con fecha de desembolso: {fecha}")
             except Exception as e:
                 logger.error(f"Error generando amortización: {str(e)}")
                 # No fallar el préstamo si falla la generación de cuotas
@@ -307,21 +293,13 @@ def obtener_estadisticas_prestamos(
     """Obtener estadísticas de préstamos"""
     try:
         total_prestamos = db.query(Prestamo).count()
-        prestamos_por_estado = (
-            db.query(Prestamo.estado, db.func.count(Prestamo.id))
-            .group_by(Prestamo.estado)
-            .all()
-        )
+        prestamos_por_estado = db.query(Prestamo.estado, db.func.count(Prestamo.id)).group_by(Prestamo.estado).all()
 
-        total_financiado = db.query(
-            db.func.sum(Prestamo.total_financiamiento)
-        ).scalar() or Decimal("0.00")
+        total_financiado = db.query(db.func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0.00")
 
         return {
             "total_prestamos": total_prestamos,
-            "prestamos_por_estado": {
-                estado: count for estado, count in prestamos_por_estado
-            },
+            "prestamos_por_estado": {estado: count for estado, count in prestamos_por_estado},
             "total_financiado": float(total_financiado),
         }
     except Exception as e:
@@ -339,12 +317,8 @@ def listar_prestamos(
     analista: Optional[str] = Query(None, description="Filtrar por analista"),
     concesionario: Optional[str] = Query(None, description="Filtrar por concesionario"),
     modelo: Optional[str] = Query(None, description="Filtrar por modelo de vehículo"),
-    fecha_inicio: Optional[date] = Query(
-        None, description="Fecha de inicio (fecha_registro)"
-    ),
-    fecha_fin: Optional[date] = Query(
-        None, description="Fecha de fin (fecha_registro)"
-    ),
+    fecha_inicio: Optional[date] = Query(None, description="Fecha de inicio (fecha_registro)"),
+    fecha_fin: Optional[date] = Query(None, description="Fecha de fin (fecha_registro)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -424,12 +398,7 @@ def listar_prestamos(
 
         skip = (page - 1) * per_page
         try:
-            prestamos = (
-                query.order_by(Prestamo.fecha_registro.desc())
-                .offset(skip)
-                .limit(per_page)
-                .all()
-            )
+            prestamos = query.order_by(Prestamo.fecha_registro.desc()).offset(skip).limit(per_page).all()
         except Exception as e:
             logger.error(f"Error obteniendo préstamos: {str(e)}", exc_info=True)
             # Hacer rollback si hay error de transacción
@@ -470,9 +439,7 @@ def listar_prestamos(
                     "fecha_aprobacion": row.fecha_aprobacion,
                     "fecha_actualizacion": row.fecha_actualizacion,
                 }
-                prestamo_dict = PrestamoResponse.model_validate(
-                    prestamo_data
-                ).model_dump()
+                prestamo_dict = PrestamoResponse.model_validate(prestamo_data).model_dump()
                 prestamos_serializados.append(prestamo_dict)
             except Exception as e:
                 logger.error(
@@ -503,15 +470,8 @@ def listar_prestamos(
         logger.error(f"Error en listar_prestamos: {error_msg}", exc_info=True)
 
         # Mensaje más descriptivo si es un error de esquema de BD
-        if "column" in error_msg.lower() and (
-            "does not exist" in error_msg.lower()
-            or "no such column" in error_msg.lower()
-        ):
-            detail_msg = (
-                f"Error de esquema de base de datos. "
-                f"Es posible que falten migraciones. "
-                f"Error: {error_msg}"
-            )
+        if "column" in error_msg.lower() and ("does not exist" in error_msg.lower() or "no such column" in error_msg.lower()):
+            detail_msg = f"Error de esquema de base de datos. " f"Es posible que falten migraciones. " f"Error: {error_msg}"
             logger.error(detail_msg)
             raise HTTPException(status_code=500, detail=detail_msg)
 
@@ -558,24 +518,15 @@ def crear_prestamo(
         # 3. Determinar número de cuotas y cuota por período
         # Si el frontend envía numero_cuotas y cuota_periodo, usarlos
         # Si no, calcularlos automáticamente según modalidad
-        if (
-            prestamo_data.numero_cuotas is not None
-            and prestamo_data.cuota_periodo is not None
-        ):
+        if prestamo_data.numero_cuotas is not None and prestamo_data.cuota_periodo is not None:
             # Usar los valores enviados desde el frontend
             numero_cuotas = prestamo_data.numero_cuotas
             cuota_periodo = prestamo_data.cuota_periodo
-            logger.info(
-                f"Usando valores enviados: {numero_cuotas} cuotas, ${cuota_periodo} por período"
-            )
+            logger.info(f"Usando valores enviados: {numero_cuotas} cuotas, ${cuota_periodo} por período")
         else:
             # Calcular automáticamente según modalidad
-            numero_cuotas, cuota_periodo = calcular_cuotas(
-                prestamo_data.total_financiamiento, prestamo_data.modalidad_pago
-            )
-            logger.info(
-                f"Calculados automáticamente: {numero_cuotas} cuotas, ${cuota_periodo} por período"
-            )
+            numero_cuotas, cuota_periodo = calcular_cuotas(prestamo_data.total_financiamiento, prestamo_data.modalidad_pago)
+            logger.info(f"Calculados automáticamente: {numero_cuotas} cuotas, ${cuota_periodo} por período")
 
         # 4. Crear el préstamo
         prestamo = Prestamo(
@@ -679,9 +630,7 @@ def obtener_resumen_prestamos_cliente(
         cuotas_en_mora = 0
 
         for cuota in cuotas:
-            saldo_pendiente += (
-                cuota.capital_pendiente + cuota.interes_pendiente + cuota.monto_mora
-            )
+            saldo_pendiente += cuota.capital_pendiente + cuota.interes_pendiente + cuota.monto_mora
 
             # Contar cuotas en mora (vencidas y no pagadas)
             if cuota.fecha_vencimiento < date.today() and cuota.estado != "PAGADO":
@@ -700,9 +649,7 @@ def obtener_resumen_prestamos_cliente(
                 "saldo_pendiente": float(saldo_pendiente),
                 "cuotas_en_mora": cuotas_en_mora,
                 "estado": row.estado,
-                "fecha_registro": (
-                    row.fecha_registro.isoformat() if row.fecha_registro else None
-                ),
+                "fecha_registro": (row.fecha_registro.isoformat() if row.fecha_registro else None),
             }
         )
 
@@ -791,9 +738,7 @@ def actualizar_prestamo(
         aplicar_cambios_prestamo(prestamo, prestamo_data)
 
         # 5. Procesar cambio de estado si aplica
-        if prestamo_data.estado is not None and puede_cambiar_estado(
-            prestamo, prestamo_data.estado, current_user
-        ):
+        if prestamo_data.estado is not None and puede_cambiar_estado(prestamo, prestamo_data.estado, current_user):
             procesar_cambio_estado(prestamo, prestamo_data.estado, current_user, db)
 
         # 6. Guardar cambios
@@ -840,9 +785,7 @@ def eliminar_prestamo(
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
     # Eliminar registros de auditoría asociados
-    db.query(PrestamoAuditoria).filter(
-        PrestamoAuditoria.prestamo_id == prestamo_id
-    ).delete()
+    db.query(PrestamoAuditoria).filter(PrestamoAuditoria.prestamo_id == prestamo_id).delete()
 
     db.delete(prestamo)
     db.commit()
@@ -868,14 +811,10 @@ def generar_amortizacion_prestamo(
         )
 
     if not prestamo.fecha_base_calculo:
-        raise HTTPException(
-            status_code=400, detail="El préstamo no tiene fecha base de cálculo"
-        )
+        raise HTTPException(status_code=400, detail="El préstamo no tiene fecha base de cálculo")
 
     try:
-        cuotas_generadas = generar_amortizacion(
-            prestamo, prestamo.fecha_base_calculo, db
-        )
+        cuotas_generadas = generar_amortizacion(prestamo, prestamo.fecha_base_calculo, db)
 
         return {
             "message": "Tabla de amortización generada exitosamente",
@@ -884,9 +823,7 @@ def generar_amortizacion_prestamo(
         }
     except Exception as e:
         logger.error(f"Error generando amortización: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error generando tabla de amortización: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error generando tabla de amortización: {str(e)}")
 
 
 @router.get("/{prestamo_id}/cuotas", response_model=list[dict])
@@ -966,9 +903,7 @@ def actualizar_cuotas_segun_plazo_maximo(
     determinado por la evaluación de riesgo.
     """
     # Recalcular cuotas con plazo máximo
-    numero_cuotas, cuota_periodo = calcular_cuotas(
-        prestamo.total_financiamiento, prestamo.modalidad_pago, plazo_maximo_meses
-    )
+    numero_cuotas, cuota_periodo = calcular_cuotas(prestamo.total_financiamiento, prestamo.modalidad_pago, plazo_maximo_meses)
 
     # Actualizar préstamo
     prestamo.numero_cuotas = numero_cuotas
@@ -1015,9 +950,7 @@ def evaluar_riesgo_prestamo(
 
     # IMPORTANTE: Tomar la cuota del préstamo desde la base de datos
     if "cuota_mensual" not in datos_evaluacion or not datos_evaluacion["cuota_mensual"]:
-        datos_evaluacion["cuota_mensual"] = (
-            float(prestamo.cuota_periodo) if prestamo.cuota_periodo else 0
-        )
+        datos_evaluacion["cuota_mensual"] = float(prestamo.cuota_periodo) if prestamo.cuota_periodo else 0
 
     # AGREGAR: Obtener edad del cliente desde la base de datos en años y meses
     if "edad" not in datos_evaluacion or not datos_evaluacion["edad"]:
@@ -1032,9 +965,7 @@ def evaluar_riesgo_prestamo(
             años = hoy.year - nacimiento.year
 
             # Calcular meses
-            if hoy.month < nacimiento.month or (
-                hoy.month == nacimiento.month and hoy.day < nacimiento.day
-            ):
+            if hoy.month < nacimiento.month or (hoy.month == nacimiento.month and hoy.day < nacimiento.day):
                 años -= 1
 
             # Calcular meses adicionales
@@ -1059,16 +990,13 @@ def evaluar_riesgo_prestamo(
             datos_evaluacion["edad_meses"] = meses
 
             logger.info(
-                f"Edad calculada desde BD: {años} años y {meses} meses "
-                f"(fecha_nacimiento: {cliente.fecha_nacimiento})"
+                f"Edad calculada desde BD: {años} años y {meses} meses " f"(fecha_nacimiento: {cliente.fecha_nacimiento})"
             )
         else:
             datos_evaluacion["edad"] = 25.0  # Valor por defecto si no se encuentra
             datos_evaluacion["edad_años"] = 25
             datos_evaluacion["edad_meses"] = 0
-            logger.warning(
-                f"No se encontró fecha de nacimiento para cédula {prestamo.cedula}, usando valor por defecto"
-            )
+            logger.warning(f"No se encontró fecha de nacimiento para cédula {prestamo.cedula}, usando valor por defecto")
 
     # Log para debugging
     logger.info(
@@ -1083,9 +1011,7 @@ def evaluar_riesgo_prestamo(
         if prestamo.estado in ["DRAFT", "EN_REVISION"]:
             prestamo.estado = "EVALUADO"
             db.commit()
-            logger.info(
-                f"Préstamo {prestamo_id} cambiado a estado EVALUADO después de evaluación de riesgo"
-            )
+            logger.info(f"Préstamo {prestamo_id} cambiado a estado EVALUADO después de evaluación de riesgo")
 
         # IMPORTANTE: La evaluación solo genera SUGERENCIAS
         # El humano (admin) debe decidir si aprobar o rechazar
@@ -1105,8 +1031,7 @@ def evaluar_riesgo_prestamo(
             "puntuacion_total": float(evaluacion.puntuacion_total or 0),
             "clasificacion_riesgo": evaluacion.clasificacion_riesgo,
             "decision_final": evaluacion.decision_final,
-            "requiere_aprobacion_manual": evaluacion.decision_final
-            == "APROBADO_AUTOMATICO",
+            "requiere_aprobacion_manual": evaluacion.decision_final == "APROBADO_AUTOMATICO",
             "mensaje": (
                 "✅ Préstamo candidato para aprobación. Debe ser aprobado manualmente con tasa sugerida."
                 if evaluacion.decision_final == "APROBADO_AUTOMATICO"
@@ -1135,11 +1060,7 @@ def evaluar_riesgo_prestamo(
                 # Criterio 2: Estabilidad Laboral (23 puntos)
                 "antiguedad_trabajo": {
                     "puntos": float(evaluacion.antiguedad_trabajo_puntos or 0),
-                    "meses": (
-                        float(evaluacion.meses_trabajo)
-                        if evaluacion.meses_trabajo
-                        else 0
-                    ),
+                    "meses": (float(evaluacion.meses_trabajo) if evaluacion.meses_trabajo else 0),
                 },
                 "tipo_empleo": {
                     "puntos": float(evaluacion.tipo_empleo_puntos or 0),
@@ -1185,9 +1106,7 @@ def evaluar_riesgo_prestamo(
                 # Criterio 7: Capacidad de Maniobra (5 puntos)
                 "capacidad_maniobra": {
                     "puntos": float(evaluacion.enganche_garantias_puntos or 0),
-                    "porcentaje_residual": float(
-                        evaluacion.enganche_garantias_calculo or 0
-                    ),
+                    "porcentaje_residual": float(evaluacion.enganche_garantias_calculo or 0),
                 },
             },
         }
@@ -1241,9 +1160,7 @@ def aplicar_condiciones_aprobacion(
 
         # Aplicar plazo máximo y recalcular cuotas (SI VIENE)
         if "plazo_maximo" in condiciones:
-            actualizar_cuotas_segun_plazo_maximo(
-                prestamo, condiciones["plazo_maximo"], db
-            )
+            actualizar_cuotas_segun_plazo_maximo(prestamo, condiciones["plazo_maximo"], db)
 
         # Aplicar tasa de interés (SI VIENE)
         if "tasa_interes" in condiciones:
@@ -1267,11 +1184,7 @@ def aplicar_condiciones_aprobacion(
                 current_user,
                 db,
                 plazo_maximo_meses=condiciones.get("plazo_maximo"),
-                tasa_interes=(
-                    Decimal(str(condiciones.get("tasa_interes", 0)))
-                    if "tasa_interes" in condiciones
-                    else None
-                ),
+                tasa_interes=(Decimal(str(condiciones.get("tasa_interes", 0))) if "tasa_interes" in condiciones else None),
                 fecha_base_calculo=prestamo.fecha_base_calculo,
             )
 
@@ -1304,6 +1217,4 @@ def aplicar_condiciones_aprobacion(
     except Exception as e:
         logger.error(f"Error aplicando condiciones: {str(e)}")
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Error aplicando condiciones: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error aplicando condiciones: {str(e)}")

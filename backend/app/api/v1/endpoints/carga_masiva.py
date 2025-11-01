@@ -55,9 +55,7 @@ async def subir_archivo(
     try:
         # Validar tipo de archivo
         if not archivo.filename.endswith((".xlsx", ".xls")):
-            raise HTTPException(
-                status_code=400, detail="Solo se permiten archivos Excel (.xlsx, .xls)"
-            )
+            raise HTTPException(status_code=400, detail="Solo se permiten archivos Excel (.xlsx, .xls)")
 
         # Leer contenido del archivo
         await archivo.read()
@@ -76,9 +74,7 @@ async def subir_archivo(
 
     except Exception as e:
         logger.error(f"Error procesando archivo: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error procesando archivo: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error procesando archivo: {str(e)}")
 
 
 # ============================================
@@ -106,6 +102,4 @@ async def dashboard_carga_masiva(
 
     except Exception as e:
         logger.error(f"Error obteniendo dashboard: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error obteniendo dashboard: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error obteniendo dashboard: {str(e)}")

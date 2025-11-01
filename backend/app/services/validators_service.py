@@ -58,22 +58,12 @@ class ValidadorTelefono:
         return config
 
     @staticmethod
-    def _formatear_telefono_con_codigo(
-        telefono_limpio: str, config: Dict[str, Any]
-    ) -> str:
+    def _formatear_telefono_con_codigo(telefono_limpio: str, config: Dict[str, Any]) -> str:
         """Formatear teléfono que ya tiene código de país"""
-        return (
-            config["codigo_pais"]
-            + " "
-            + telefono_limpio[3:6]
-            + " "
-            + telefono_limpio[6:]
-        )
+        return config["codigo_pais"] + " " + telefono_limpio[3:6] + " " + telefono_limpio[6:]
 
     @staticmethod
-    def _formatear_telefono_con_plus(
-        telefono_limpio: str, config: Dict[str, Any]
-    ) -> str:
+    def _formatear_telefono_con_plus(telefono_limpio: str, config: Dict[str, Any]) -> str:
         """Formatear teléfono que ya tiene + y código (ejemplo: +581234567890)"""
         # Eliminar el + y el código de país (58)
         # telefono_limpio = "+581234567890"
@@ -125,9 +115,7 @@ class ValidadorTelefono:
         }
 
     @staticmethod
-    def _validar_formato_final(
-        numero_formateado: str, config: Dict[str, Any], telefono_original: str
-    ) -> Dict[str, Any]:
+    def _validar_formato_final(numero_formateado: str, config: Dict[str, Any], telefono_original: str) -> Dict[str, Any]:
         """Validar formato final del teléfono"""
         if re.match(config["patron_completo"], numero_formateado):
             return {
@@ -151,9 +139,7 @@ class ValidadorTelefono:
             }
 
     @staticmethod
-    def _determinar_formato_telefono(
-        telefono_limpio: str, config: Dict[str, Any], telefono: str
-    ) -> Dict[str, Any]:
+    def _determinar_formato_telefono(telefono_limpio: str, config: Dict[str, Any], telefono: str) -> Dict[str, Any]:
         """Determinar y procesar formato del teléfono"""
         codigo_sin_plus = config["codigo_pais"].replace("+", "")
 
@@ -161,23 +147,17 @@ class ValidadorTelefono:
         if telefono_limpio.startswith(codigo_sin_plus):
             if not telefono_limpio.startswith("+"):
                 telefono_limpio = "+" + telefono_limpio
-            numero_formateado = ValidadorTelefono._formatear_telefono_con_plus(
-                telefono_limpio, config
-            )
+            numero_formateado = ValidadorTelefono._formatear_telefono_con_plus(telefono_limpio, config)
             return {"numero_formateado": numero_formateado, "error": None}
 
         # Ya tiene + y código
         if telefono_limpio.startswith(config["codigo_pais"]):
-            numero_formateado = ValidadorTelefono._formatear_telefono_con_plus(
-                telefono_limpio, config
-            )
+            numero_formateado = ValidadorTelefono._formatear_telefono_con_plus(telefono_limpio, config)
             return {"numero_formateado": numero_formateado, "error": None}
 
         # Solo número local
         if len(telefono_limpio) == config["longitud_sin_codigo"]:
-            resultado_local = ValidadorTelefono._formatear_telefono_local(
-                telefono_limpio, config, "VENEZUELA", telefono
-            )
+            resultado_local = ValidadorTelefono._formatear_telefono_local(telefono_limpio, config, "VENEZUELA", telefono)
             if "error" in resultado_local:
                 return {"numero_formateado": None, "error": resultado_local["error"]}
             return {
@@ -201,9 +181,7 @@ class ValidadorTelefono:
         }
 
     @staticmethod
-    def validar_y_formatear_telefono(
-        telefono: str, pais: str = "VENEZUELA"
-    ) -> Dict[str, Any]:
+    def validar_y_formatear_telefono(telefono: str, pais: str = "VENEZUELA") -> Dict[str, Any]:
         """
         Validar y formatear teléfono según país
 
@@ -240,22 +218,16 @@ class ValidadorTelefono:
 
             # 5. Agregar código de país si no tiene
             codigo_sin_plus = config["codigo_pais"].replace("+", "")
-            if not telefono_limpio.startswith("+") and not telefono_limpio.startswith(
-                codigo_sin_plus
-            ):
+            if not telefono_limpio.startswith("+") and not telefono_limpio.startswith(codigo_sin_plus):
                 telefono_limpio = codigo_sin_plus + telefono_limpio
 
             # 6. Determinar formato y procesar
-            resultado = ValidadorTelefono._determinar_formato_telefono(
-                telefono_limpio, config, telefono
-            )
+            resultado = ValidadorTelefono._determinar_formato_telefono(telefono_limpio, config, telefono)
             if resultado["error"]:
                 return resultado["error"]
 
             # 7. Validar formato final
-            return ValidadorTelefono._validar_formato_final(
-                resultado["numero_formateado"], config, telefono
-            )
+            return ValidadorTelefono._validar_formato_final(resultado["numero_formateado"], config, telefono)
 
         except Exception as e:
             logger.error(f"Error validando teléfono: {e}")
@@ -288,9 +260,7 @@ class ValidadorCedula:
     }
 
     @staticmethod
-    def validar_y_formatear_cedula(
-        cedula: str, pais: str = "VENEZUELA"
-    ) -> Dict[str, Any]:
+    def validar_y_formatear_cedula(cedula: str, pais: str = "VENEZUELA") -> Dict[str, Any]:
         """
         Validar y formatear cédula según país
 
@@ -383,9 +353,7 @@ class ValidadorFecha:
     """Validador y formateador de fechas"""
 
     @staticmethod
-    def _validar_rangos_fecha(
-        dia: int, mes: int, año: int, fecha: str
-    ) -> Optional[Dict[str, Any]]:
+    def _validar_rangos_fecha(dia: int, mes: int, año: int, fecha: str) -> Optional[Dict[str, Any]]:
         """Validar rangos de día, mes y año"""
         if año < 1000 or año > 9999:
             return {
@@ -417,9 +385,7 @@ class ValidadorFecha:
         return None
 
     @staticmethod
-    def _validar_fecha_real(
-        dia: int, mes: int, año: int, fecha: str
-    ) -> Optional[Dict[str, Any]]:
+    def _validar_fecha_real(dia: int, mes: int, año: int, fecha: str) -> Optional[Dict[str, Any]]:
         """Validar que la fecha sea real (ej. no existe 31 de febrero)"""
         from datetime import datetime
 
@@ -494,16 +460,12 @@ class ValidadorFecha:
                 año = int(año_str)
 
                 # Validar rangos de día, mes y año
-                error_rangos = ValidadorFecha._validar_rangos_fecha(
-                    dia, mes, año, fecha
-                )
+                error_rangos = ValidadorFecha._validar_rangos_fecha(dia, mes, año, fecha)
                 if error_rangos:
                     return error_rangos
 
                 # Validar que la fecha sea real
-                error_fecha_real = ValidadorFecha._validar_fecha_real(
-                    dia, mes, año, fecha
-                )
+                error_fecha_real = ValidadorFecha._validar_fecha_real(dia, mes, año, fecha)
                 if error_fecha_real:
                     return error_fecha_real
 
@@ -702,10 +664,7 @@ class ValidadorNombre:
                 if len(palabra) > 40:
                     return {
                         "valido": False,
-                        "error": (
-                            f"La palabra '{palabra[:20]}...' excede 40 caracteres "
-                            f"({len(palabra)} caracteres)"
-                        ),
+                        "error": (f"La palabra '{palabra[:20]}...' excede 40 caracteres " f"({len(palabra)} caracteres)"),
                         "valor_original": texto,
                         "valor_formateado": None,
                         "formato_esperado": "Cada palabra máximo 40 caracteres",
@@ -756,9 +715,7 @@ class ValidadorMonto:
     }
 
     @staticmethod
-    def _crear_respuesta_error(
-        monto: Any, error: str, formato_esperado: str, sugerencia: str
-    ) -> Dict[str, Any]:
+    def _crear_respuesta_error(monto: Any, error: str, formato_esperado: str, sugerencia: str) -> Dict[str, Any]:
         """Crear respuesta de error estandarizada"""
         return {
             "valido": False,
@@ -795,9 +752,7 @@ class ValidadorMonto:
         return config_moneda
 
     @staticmethod
-    def _procesar_formato_europeo_con_separadores(
-        monto_limpio: str, monto: Any
-    ) -> Dict[str, Any]:
+    def _procesar_formato_europeo_con_separadores(monto_limpio: str, monto: Any) -> Dict[str, Any]:
         """Procesar formato europeo con punto y coma (ej: 1.500,50)"""
         ultimo_coma = monto_limpio.rindex(",")
         ultimo_punto = monto_limpio.rindex(".")
@@ -815,10 +770,7 @@ class ValidadorMonto:
                     "valor_original": monto,
                     "valor_formateado": None,
                     "formato_esperado": "Número decimal (1-20000)",
-                    "sugerencia": (
-                        "Los decimales deben ser 1-2 dígitos. "
-                        "Ejemplo: '10.500,50' o '10500,50'"
-                    ),
+                    "sugerencia": ("Los decimales deben ser 1-2 dígitos. " "Ejemplo: '10.500,50' o '10500,50'"),
                     "monto_limpio": None,
                 }
 
@@ -831,9 +783,7 @@ class ValidadorMonto:
                     "valor_original": monto,
                     "valor_formateado": None,
                     "formato_esperado": "Número decimal (1-20000)",
-                    "sugerencia": (
-                        "Use formato válido. Ejemplo: '10.500,50' " "o '10500,50'"
-                    ),
+                    "sugerencia": ("Use formato válido. Ejemplo: '10.500,50' " "o '10500,50'"),
                     "monto_limpio": None,
                 }
 
@@ -863,9 +813,7 @@ class ValidadorMonto:
                             "valor_original": monto,
                             "valor_formateado": None,
                             "formato_esperado": "Punto cada 3 dígitos desde la derecha",
-                            "sugerencia": (
-                                "Cada grupo después del primer punto debe tener 3 dígitos"
-                            ),
+                            "sugerencia": ("Cada grupo después del primer punto debe tener 3 dígitos"),
                             "monto_limpio": None,
                         }
 
@@ -879,10 +827,7 @@ class ValidadorMonto:
                 "valor_original": monto,
                 "valor_formateado": None,
                 "formato_esperado": "Número decimal (1-20000)",
-                "sugerencia": (
-                    "Use formato europeo. Ejemplos: '1500,50' o '1.500,50'. "
-                    "NO use coma para miles"
-                ),
+                "sugerencia": ("Use formato europeo. Ejemplos: '1500,50' o '1.500,50'. " "NO use coma para miles"),
                 "monto_limpio": None,
             }
 
@@ -891,9 +836,7 @@ class ValidadorMonto:
         """Procesar string de monto según su formato"""
         if "," in monto_limpio and "." in monto_limpio:
             # Formato europeo completo
-            resultado = ValidadorMonto._procesar_formato_europeo_con_separadores(
-                monto_limpio, monto
-            )
+            resultado = ValidadorMonto._procesar_formato_europeo_con_separadores(monto_limpio, monto)
             if not resultado["valido"]:
                 return resultado
             return {"valido": True, "monto_limpio": resultado["monto_limpio"]}
@@ -937,19 +880,14 @@ class ValidadorMonto:
             return {"valido": True, "monto_limpio": monto_limpio}
 
     @staticmethod
-    def _validar_rangos(
-        monto_decimal: Decimal, config_moneda: Dict[str, Any], monto: Any
-    ) -> Optional[Dict[str, Any]]:
+    def _validar_rangos(monto_decimal: Decimal, config_moneda: Dict[str, Any], monto: Any) -> Optional[Dict[str, Any]]:
         """Validar rango mínimo y máximo"""
         # Validar rango mínimo (1.00)
         if monto_decimal < config_moneda["minimo"]:
             return ValidadorMonto._crear_respuesta_error(
                 monto=monto,
                 error=f"El monto mínimo es {config_moneda['simbolo']}1.00",
-                formato_esperado=(
-                    f"Rango: {config_moneda['simbolo']}1.00 - "
-                    f"{config_moneda['simbolo']}20,000.00"
-                ),
+                formato_esperado=(f"Rango: {config_moneda['simbolo']}1.00 - " f"{config_moneda['simbolo']}20,000.00"),
                 sugerencia=(
                     f"Use un monto mínimo de {config_moneda['simbolo']}1.00. "
                     f"Ejemplo: '{config_moneda['simbolo']}1.00' o "
@@ -961,10 +899,7 @@ class ValidadorMonto:
             return ValidadorMonto._crear_respuesta_error(
                 monto=monto,
                 error=f"El monto máximo es {config_moneda['simbolo']}20,000.00",
-                formato_esperado=(
-                    f"Rango: {config_moneda['simbolo']}1.00 - "
-                    f"{config_moneda['simbolo']}20,000.00"
-                ),
+                formato_esperado=(f"Rango: {config_moneda['simbolo']}1.00 - " f"{config_moneda['simbolo']}20,000.00"),
                 sugerencia=(
                     f"Use un monto máximo de {config_moneda['simbolo']}20,000.00. "
                     f"Ejemplo: '{config_moneda['simbolo']}20000' o "
@@ -1073,9 +1008,7 @@ class ValidadorMonto:
             try:
                 if isinstance(monto, str):
                     monto_limpio = re.sub(r"[^\d.,]", "", monto)
-                    resultado = ValidadorMonto._procesar_string_monto(
-                        monto_limpio, monto
-                    )
+                    resultado = ValidadorMonto._procesar_string_monto(monto_limpio, monto)
                     if not resultado["valido"]:
                         return resultado
                     monto_decimal = Decimal(resultado["monto_limpio"])
@@ -1098,9 +1031,7 @@ class ValidadorMonto:
                 return error
 
             # Crear respuesta exitosa
-            return ValidadorMonto._crear_respuesta_exitosa(
-                monto, monto_decimal, moneda, config_moneda
-            )
+            return ValidadorMonto._crear_respuesta_exitosa(monto, monto_decimal, moneda, config_moneda)
 
         except Exception as e:
             logger.error(f"Error validando monto: {e}")
@@ -1114,9 +1045,7 @@ class ValidadorMonto:
             }
 
 
-def _validar_campo_cliente(
-    campo: str, valor: Any, validador_func, resultados: Dict[str, Any]
-) -> None:
+def _validar_campo_cliente(campo: str, valor: Any, validador_func, resultados: Dict[str, Any]) -> None:
     """Validar un campo específico del cliente"""
     resultado = validador_func(valor)
     if resultado["valido"]:

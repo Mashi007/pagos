@@ -29,18 +29,14 @@ class Pago(Base):
     prestamo_id = Column(Integer, nullable=True, index=True)  # ID del crédito
     numero_cuota = Column(Integer, nullable=True)  # Número de cuota asociada (opcional)
     fecha_pago = Column(DateTime, nullable=False)  # Fecha de pago (manual)
-    fecha_registro = Column(
-        DateTime, default=func.now(), nullable=False
-    )  # Fecha de registro (automático)
+    fecha_registro = Column(DateTime, default=func.now(), nullable=False)  # Fecha de registro (automático)
     monto_pagado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
     numero_documento = Column(String(DOCUMENTO_LENGTH), nullable=False, index=True)
     institucion_bancaria = Column(String(100), nullable=True)  # Institución bancaria
 
     # DOCUMENTO ADJUNTO
     documento_nombre = Column(String(DOCUMENTO_NOMBRE_LENGTH), nullable=True)
-    documento_tipo = Column(
-        String(DOCUMENTO_TIPO_LENGTH), nullable=True
-    )  # PNG, JPG, PDF
+    documento_tipo = Column(String(DOCUMENTO_TIPO_LENGTH), nullable=True)  # PNG, JPG, PDF
     documento_tamaño = Column(Integer, nullable=True)  # bytes
     documento_ruta = Column(String(DOCUMENTO_RUTA_LENGTH), nullable=True)
 
@@ -49,19 +45,13 @@ class Pago(Base):
     fecha_conciliacion = Column(DateTime, nullable=True)
 
     # ESTADO DEL PAGO
-    estado = Column(
-        String(20), default="PAGADO", nullable=False, index=True
-    )  # PENDIENTE, PAGADO, PARCIAL, ADELANTADO
+    estado = Column(String(20), default="PAGADO", nullable=False, index=True)  # PENDIENTE, PAGADO, PARCIAL, ADELANTADO
 
     # CONTROL Y AUDITORÍA
     activo = Column(Boolean, default=True, nullable=False)
     notas = Column(Text, nullable=True)
-    usuario_registro = Column(
-        String(100), nullable=False
-    )  # Email del usuario que registró el pago
-    fecha_actualizacion = Column(
-        DateTime, default=func.now(), onupdate=func.now(), nullable=False
-    )
+    usuario_registro = Column(String(100), nullable=False)  # Email del usuario que registró el pago
+    fecha_actualizacion = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
 
     # VERIFICACIÓN DE CONCORDANCIA CON MÓDULO DE PAGOS
     verificado_concordancia = Column(

@@ -50,16 +50,11 @@ def healthcheck_cobranzas(
 
         # Métricas clave de cobranzas para dashboard
         cuotas_vencidas = (
-            db.query(func.count(Cuota.id))
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
-            .scalar()
-            or 0
+            db.query(func.count(Cuota.id)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar() or 0
         )
 
         monto_vencido = (
-            db.query(func.sum(Cuota.monto_cuota))
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
-            .scalar()
+            db.query(func.sum(Cuota.monto_cuota)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar()
             or 0.0
         )
 
@@ -75,16 +70,12 @@ def healthcheck_cobranzas(
         }
     except Exception as e:
         logger.error(f"Healthcheck cobranzas error: {e}")
-        raise HTTPException(
-            status_code=500, detail="Error de conexión o consulta a la base de datos"
-        )
+        raise HTTPException(status_code=500, detail="Error de conexión o consulta a la base de datos")
 
 
 @router.get("/clientes-atrasados")
 def obtener_clientes_atrasados(
-    dias_retraso: Optional[int] = Query(
-        None, description="Días de retraso para filtrar"
-    ),
+    dias_retraso: Optional[int] = Query(None, description="Días de retraso para filtrar"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -120,9 +111,7 @@ def obtener_clientes_atrasados(
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
-                or_(
-                    User.is_admin.is_(False), User.is_admin.is_(None)
-                ),  # Excluir admins
+                or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
             )
             .group_by(
                 Cliente.cedula,
@@ -149,14 +138,8 @@ def obtener_clientes_atrasados(
                     "analista": row.analista,
                     "prestamo_id": row.prestamo_id,
                     "cuotas_vencidas": row.cuotas_vencidas,
-                    "total_adeudado": (
-                        float(row.total_adeudado) if row.total_adeudado else 0.0
-                    ),
-                    "fecha_primera_vencida": (
-                        row.fecha_primera_vencida.isoformat()
-                        if row.fecha_primera_vencida
-                        else None
-                    ),
+                    "total_adeudado": (float(row.total_adeudado) if row.total_adeudado else 0.0),
+                    "fecha_primera_vencida": (row.fecha_primera_vencida.isoformat() if row.fecha_primera_vencida else None),
                 }
             )
 
@@ -209,9 +192,7 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
                     "nombres": row.nombres,
                     "analista": row.analista,
                     "prestamo_id": row.prestamo_id,
-                    "total_adeudado": (
-                        float(row.total_adeudado) if row.total_adeudado else 0.0
-                    ),
+                    "total_adeudado": (float(row.total_adeudado) if row.total_adeudado else 0.0),
                 }
             )
 
@@ -252,9 +233,7 @@ def obtener_cobranzas_por_analista(
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente.isnot(None),
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
-                or_(
-                    User.is_admin.is_(False), User.is_admin.is_(None)
-                ),  # Excluir admins
+                or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
             )
             .group_by(Prestamo.usuario_proponente)
             .having(func.count(func.distinct(Cliente.cedula)) > 0)
@@ -322,14 +301,8 @@ def obtener_clientes_por_analista(
                     "telefono": row.telefono,
                     "prestamo_id": row.prestamo_id,
                     "cuotas_vencidas": row.cuotas_vencidas,
-                    "total_adeudado": (
-                        float(row.total_adeudado) if row.total_adeudado else 0.0
-                    ),
-                    "fecha_primera_vencida": (
-                        row.fecha_primera_vencida.isoformat()
-                        if row.fecha_primera_vencida
-                        else None
-                    ),
+                    "total_adeudado": (float(row.total_adeudado) if row.total_adeudado else 0.0),
+                    "fecha_primera_vencida": (row.fecha_primera_vencida.isoformat() if row.fecha_primera_vencida else None),
                 }
             )
 
@@ -396,17 +369,12 @@ def obtener_resumen_cobranzas(
 
         # Total de cuotas vencidas
         total_cuotas_vencidas = (
-            db.query(func.count(Cuota.id))
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
-            .scalar()
-            or 0
+            db.query(func.count(Cuota.id)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar() or 0
         )
 
         # Monto total adeudado
         monto_total_adeudado = (
-            db.query(func.sum(Cuota.monto_cuota))
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
-            .scalar()
+            db.query(func.sum(Cuota.monto_cuota)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar()
             or 0.0
         )
 
@@ -468,12 +436,8 @@ def disparar_notificaciones_atrasos(
 
 @router.get("/informes/clientes-atrasados")
 def informe_clientes_atrasados(
-    dias_retraso_min: Optional[int] = Query(
-        None, description="Días mínimos de retraso"
-    ),
-    dias_retraso_max: Optional[int] = Query(
-        None, description="Días máximos de retraso"
-    ),
+    dias_retraso_min: Optional[int] = Query(None, description="Días mínimos de retraso"),
+    dias_retraso_max: Optional[int] = Query(None, description="Días máximos de retraso"),
     analista: Optional[str] = Query(None, description="Filtrar por analista"),
     formato: str = Query("json", description="Formato: json, pdf, excel"),
     db: Session = Depends(get_db),
@@ -554,25 +518,13 @@ def informe_clientes_atrasados(
                         "prestamo_id": row.prestamo_id,
                         "total_financiamiento": float(row.total_financiamiento),
                         "cuotas_vencidas": row.cuotas_vencidas,
-                        "total_adeudado": (
-                            float(row.total_adeudado) if row.total_adeudado else 0.0
-                        ),
+                        "total_adeudado": (float(row.total_adeudado) if row.total_adeudado else 0.0),
                         "fecha_primera_vencida": (
-                            row.fecha_primera_vencida.isoformat()
-                            if row.fecha_primera_vencida
-                            else None
+                            row.fecha_primera_vencida.isoformat() if row.fecha_primera_vencida else None
                         ),
-                        "fecha_ultima_vencida": (
-                            row.fecha_ultima_vencida.isoformat()
-                            if row.fecha_ultima_vencida
-                            else None
-                        ),
+                        "fecha_ultima_vencida": (row.fecha_ultima_vencida.isoformat() if row.fecha_ultima_vencida else None),
                         "dias_retraso": dias_retraso,
-                        "monto_mas_30_dias": (
-                            float(row.monto_mas_30_dias)
-                            if row.monto_mas_30_dias
-                            else 0.0
-                        ),
+                        "monto_mas_30_dias": (float(row.monto_mas_30_dias) if row.monto_mas_30_dias else 0.0),
                     }
                 )
 
@@ -581,9 +533,7 @@ def informe_clientes_atrasados(
                 "titulo": "Informe de Clientes Atrasados",
                 "fecha_generacion": datetime.now().isoformat(),
                 "total_registros": len(datos_filtrados),
-                "total_adeudado": sum(
-                    d.get("total_adeudado", 0) for d in datos_filtrados
-                ),
+                "total_adeudado": sum(d.get("total_adeudado", 0) for d in datos_filtrados),
                 "datos": datos_filtrados,
             }
         elif formato.lower() == "excel":
@@ -591,9 +541,7 @@ def informe_clientes_atrasados(
         elif formato.lower() == "pdf":
             return _generar_pdf_clientes_atrasados(datos_filtrados)
         else:
-            raise HTTPException(
-                status_code=400, detail="Formato no válido. Use: json, excel o pdf"
-            )
+            raise HTTPException(status_code=400, detail="Formato no válido. Use: json, excel o pdf")
 
     except Exception as e:
         logger.error(f"Error generando informe clientes atrasados: {e}")
@@ -643,9 +591,7 @@ def informe_rendimiento_analista(
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente.isnot(None),
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
-                or_(
-                    User.is_admin.is_(False), User.is_admin.is_(None)
-                ),  # Excluir admins
+                or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
             )
             .group_by(Prestamo.usuario_proponente)
         )
@@ -659,17 +605,9 @@ def informe_rendimiento_analista(
                     "analista": row.analista,
                     "total_clientes": row.total_clientes,
                     "total_prestamos": row.total_prestamos,
-                    "monto_total_adeudado": (
-                        float(row.monto_total_adeudado)
-                        if row.monto_total_adeudado
-                        else 0.0
-                    ),
+                    "monto_total_adeudado": (float(row.monto_total_adeudado) if row.monto_total_adeudado else 0.0),
                     "total_cuotas_vencidas": row.total_cuotas_vencidas,
-                    "promedio_dias_retraso": (
-                        float(row.promedio_dias_retraso)
-                        if row.promedio_dias_retraso
-                        else 0.0
-                    ),
+                    "promedio_dias_retraso": (float(row.promedio_dias_retraso) if row.promedio_dias_retraso else 0.0),
                 }
             )
 
@@ -750,9 +688,7 @@ def informe_montos_vencidos_periodo(
                 "fecha_inicio": fecha_inicio.isoformat() if fecha_inicio else None,
                 "fecha_fin": fecha_fin.isoformat() if fecha_fin else None,
                 "total_meses": len(datos_periodo),
-                "monto_total_acumulado": sum(
-                    d.get("monto_total", 0) for d in datos_periodo
-                ),
+                "monto_total_acumulado": sum(d.get("monto_total", 0) for d in datos_periodo),
                 "datos": datos_periodo,
             }
         elif formato.lower() == "excel":
@@ -885,9 +821,7 @@ def informe_por_categoria_dias(
                 }
 
             datos_por_categoria[categoria]["cantidad_cuotas"] += 1
-            datos_por_categoria[categoria]["monto_total"] += float(
-                row["monto_cuota"] or 0
-            )
+            datos_por_categoria[categoria]["monto_total"] += float(row["monto_cuota"] or 0)
             datos_por_categoria[categoria]["clientes_unicos"].add(row["cedula"])
             datos_por_categoria[categoria]["cuotas"].append(
                 {
@@ -895,11 +829,7 @@ def informe_por_categoria_dias(
                     "nombres": row["nombres"],
                     "analista": analista_nombre,
                     "numero_cuota": row["numero_cuota"],
-                    "fecha_vencimiento": (
-                        row["fecha_vencimiento"].isoformat()
-                        if row["fecha_vencimiento"]
-                        else None
-                    ),
+                    "fecha_vencimiento": (row["fecha_vencimiento"].isoformat() if row["fecha_vencimiento"] else None),
                     "monto": float(row["monto_cuota"] or 0),
                     "estado": row["estado"],
                     "dias_diferencia": int(dias_diff),
@@ -919,12 +849,8 @@ def informe_por_categoria_dias(
                     "monto_total": 0.0,
                 }
 
-            datos_por_analista[analista_nombre]["categorias"][categoria][
-                "cantidad_cuotas"
-            ] += 1
-            datos_por_analista[analista_nombre]["categorias"][categoria][
-                "monto_total"
-            ] += float(row["monto_cuota"] or 0)
+            datos_por_analista[analista_nombre]["categorias"][categoria]["cantidad_cuotas"] += 1
+            datos_por_analista[analista_nombre]["categorias"][categoria]["monto_total"] += float(row["monto_cuota"] or 0)
 
         # Convertir sets a listas y ordenar
         orden_categorias = {
@@ -954,9 +880,7 @@ def informe_por_categoria_dias(
         # Preparar datos por analista
         datos_analista_final = []
         for analista_nombre, datos in datos_por_analista.items():
-            total_cuotas = sum(
-                c["cantidad_cuotas"] for c in datos["categorias"].values()
-            )
+            total_cuotas = sum(c["cantidad_cuotas"] for c in datos["categorias"].values())
             total_monto = sum(c["monto_total"] for c in datos["categorias"].values())
 
             categorias_ordenadas = []
@@ -965,12 +889,8 @@ def informe_por_categoria_dias(
                     categorias_ordenadas.append(
                         {
                             "categoria": cat,
-                            "cantidad_cuotas": datos["categorias"][cat][
-                                "cantidad_cuotas"
-                            ],
-                            "monto_total": round(
-                                datos["categorias"][cat]["monto_total"], 2
-                            ),
+                            "cantidad_cuotas": datos["categorias"][cat]["cantidad_cuotas"],
+                            "monto_total": round(datos["categorias"][cat]["monto_total"], 2),
                         }
                     )
 
@@ -993,24 +913,16 @@ def informe_por_categoria_dias(
                 "por_categoria": datos_categoria_final,
                 "por_analista": datos_analista_final,
                 "resumen": {
-                    "total_cuotas": sum(
-                        c["cantidad_cuotas"] for c in datos_categoria_final
-                    ),
-                    "total_monto": round(
-                        sum(c["monto_total"] for c in datos_categoria_final), 2
-                    ),
+                    "total_cuotas": sum(c["cantidad_cuotas"] for c in datos_categoria_final),
+                    "total_monto": round(sum(c["monto_total"] for c in datos_categoria_final), 2),
                     "total_categorias": len(datos_categoria_final),
                     "total_analistas": len(datos_analista_final),
                 },
             }
         elif formato.lower() == "excel":
-            return _generar_excel_categoria_dias(
-                datos_categoria_final, datos_analista_final
-            )
+            return _generar_excel_categoria_dias(datos_categoria_final, datos_analista_final)
         elif formato.lower() == "pdf":
-            return _generar_pdf_categoria_dias(
-                datos_categoria_final, datos_analista_final
-            )
+            return _generar_pdf_categoria_dias(datos_categoria_final, datos_analista_final)
         else:
             raise HTTPException(status_code=400, detail="Formato no válido")
 
@@ -1082,9 +994,7 @@ def informe_antiguedad_saldos(
             "91-180 días": 4,
             "Más de 180 días": 5,
         }
-        datos_antiguedad.sort(
-            key=lambda x: orden_rangos.get(x["rango_antiguedad"], 999)
-        )
+        datos_antiguedad.sort(key=lambda x: orden_rangos.get(x["rango_antiguedad"], 999))
 
         if formato.lower() == "json":
             total_monto = sum(d.get("monto_total", 0) for d in datos_antiguedad)
@@ -1124,16 +1034,11 @@ def informe_resumen_ejecutivo(
 
         # Resumen general
         total_cuotas_vencidas = (
-            db.query(func.count(Cuota.id))
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
-            .scalar()
-            or 0
+            db.query(func.count(Cuota.id)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar() or 0
         )
 
         monto_total_adeudado = (
-            db.query(func.sum(Cuota.monto_cuota))
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
-            .scalar()
+            db.query(func.sum(Cuota.monto_cuota)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar()
             or 0.0
         )
 
@@ -1160,9 +1065,7 @@ def informe_resumen_ejecutivo(
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente.isnot(None),
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
-                or_(
-                    User.is_admin.is_(False), User.is_admin.is_(None)
-                ),  # Excluir admins
+                or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
             )
             .group_by(Prestamo.usuario_proponente)
             .order_by(func.sum(Cuota.monto_cuota).desc())
@@ -1195,9 +1098,7 @@ def informe_resumen_ejecutivo(
                 "monto_total_adeudado": float(monto_total_adeudado),
                 "clientes_atrasados": clientes_atrasados,
                 "promedio_deuda_cliente": (
-                    float(monto_total_adeudado / clientes_atrasados)
-                    if clientes_atrasados > 0
-                    else 0.0
+                    float(monto_total_adeudado / clientes_atrasados) if clientes_atrasados > 0 else 0.0
                 ),
             },
             "top_analistas": [
@@ -1211,9 +1112,7 @@ def informe_resumen_ejecutivo(
                 {
                     "cedula": row.cedula,
                     "nombres": row.nombres,
-                    "total_adeudado": (
-                        float(row.total_adeudado) if row.total_adeudado else 0.0
-                    ),
+                    "total_adeudado": (float(row.total_adeudado) if row.total_adeudado else 0.0),
                     "cuotas_vencidas": row.cuotas_vencidas,
                 }
                 for row in top_clientes
@@ -1237,9 +1136,7 @@ def informe_resumen_ejecutivo(
                 db.add(audit)
                 db.commit()
             except Exception as e:
-                logger.warning(
-                    f"No se pudo registrar auditoría exportación cobranzas (Excel): {e}"
-                )
+                logger.warning(f"No se pudo registrar auditoría exportación cobranzas (Excel): {e}")
             return respuesta
         elif formato.lower() == "pdf":
             respuesta = _generar_pdf_resumen_ejecutivo(datos_resumen)
@@ -1256,9 +1153,7 @@ def informe_resumen_ejecutivo(
                 db.add(audit)
                 db.commit()
             except Exception as e:
-                logger.warning(
-                    f"No se pudo registrar auditoría exportación cobranzas (PDF): {e}"
-                )
+                logger.warning(f"No se pudo registrar auditoría exportación cobranzas (PDF): {e}")
             return respuesta
         else:
             raise HTTPException(status_code=400, detail="Formato no válido")
@@ -1280,9 +1175,7 @@ def _generar_excel_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
     ws.title = "Clientes Atrasados"
 
     # Estilos
-    header_fill = PatternFill(
-        start_color="366092", end_color="366092", fill_type="solid"
-    )
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF", size=12)
 
     # Encabezados
@@ -1338,9 +1231,7 @@ def _generar_excel_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
     total_row = len(datos) + 3
     ws.cell(row=total_row, column=7, value="TOTAL:")
     ws.cell(row=total_row, column=7).font = Font(bold=True)
-    ws.cell(
-        row=total_row, column=8, value=sum(d.get("total_adeudado", 0) for d in datos)
-    )
+    ws.cell(row=total_row, column=8, value=sum(d.get("total_adeudado", 0) for d in datos))
     ws.cell(row=total_row, column=8).font = Font(bold=True)
 
     output = BytesIO()
@@ -1351,9 +1242,7 @@ def _generar_excel_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f"attachment; filename=informe_clientes_atrasados_{fecha}.xlsx"
-        },
+        headers={"Content-Disposition": f"attachment; filename=informe_clientes_atrasados_{fecha}.xlsx"},
     )
 
 
@@ -1363,9 +1252,7 @@ def _generar_excel_rendimiento_analista(datos: List[Dict]) -> StreamingResponse:
     ws = wb.active
     ws.title = "Rendimiento Analista"
 
-    header_fill = PatternFill(
-        start_color="366092", end_color="366092", fill_type="solid"
-    )
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF", size=12)
 
     headers = [
@@ -1407,9 +1294,7 @@ def _generar_excel_rendimiento_analista(datos: List[Dict]) -> StreamingResponse:
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f"attachment; filename=informe_rendimiento_analista_{fecha}.xlsx"
-        },
+        headers={"Content-Disposition": f"attachment; filename=informe_rendimiento_analista_{fecha}.xlsx"},
     )
 
 
@@ -1419,9 +1304,7 @@ def _generar_excel_montos_periodo(datos: List[Dict]) -> StreamingResponse:
     ws = wb.active
     ws.title = "Montos por Período"
 
-    header_fill = PatternFill(
-        start_color="366092", end_color="366092", fill_type="solid"
-    )
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF", size=12)
 
     headers = ["Mes", "Cantidad Cuotas", "Monto Total", "Clientes Únicos"]
@@ -1454,9 +1337,7 @@ def _generar_excel_montos_periodo(datos: List[Dict]) -> StreamingResponse:
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f"attachment; filename=informe_montos_periodo_{fecha}.xlsx"
-        },
+        headers={"Content-Disposition": f"attachment; filename=informe_montos_periodo_{fecha}.xlsx"},
     )
 
 
@@ -1466,9 +1347,7 @@ def _generar_excel_antiguedad_saldos(datos: List[Dict]) -> StreamingResponse:
     ws = wb.active
     ws.title = "Antigüedad Saldos"
 
-    header_fill = PatternFill(
-        start_color="366092", end_color="366092", fill_type="solid"
-    )
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF", size=12)
 
     headers = ["Rango Antigüedad", "Cantidad Cuotas", "Monto Total", "Clientes Únicos"]
@@ -1497,9 +1376,7 @@ def _generar_excel_antiguedad_saldos(datos: List[Dict]) -> StreamingResponse:
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f"attachment; filename=informe_antiguedad_saldos_{fecha}.xlsx"
-        },
+        headers={"Content-Disposition": f"attachment; filename=informe_antiguedad_saldos_{fecha}.xlsx"},
     )
 
 
@@ -1511,9 +1388,7 @@ def _generar_excel_resumen_ejecutivo(datos: Dict) -> StreamingResponse:
     ws1 = wb.active
     ws1.title = "Resumen General"
 
-    header_fill = PatternFill(
-        start_color="366092", end_color="366092", fill_type="solid"
-    )
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF", size=14)
 
     ws1["A1"] = "RESUMEN EJECUTIVO DE COBRANZAS"
@@ -1531,9 +1406,7 @@ def _generar_excel_resumen_ejecutivo(datos: Dict) -> StreamingResponse:
     ws1.cell(row=row, column=1, value="Clientes Atrasados:").font = Font(bold=True)
     ws1.cell(row=row, column=2, value=resumen.get("clientes_atrasados", 0))
     row += 1
-    ws1.cell(row=row, column=1, value="Promedio Deuda por Cliente:").font = Font(
-        bold=True
-    )
+    ws1.cell(row=row, column=1, value="Promedio Deuda por Cliente:").font = Font(bold=True)
     ws1.cell(row=row, column=2, value=resumen.get("promedio_deuda_cliente", 0))
 
     # Hoja 2: Top Analistas
@@ -1572,9 +1445,7 @@ def _generar_excel_resumen_ejecutivo(datos: Dict) -> StreamingResponse:
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f"attachment; filename=informe_resumen_ejecutivo_{fecha}.xlsx"
-        },
+        headers={"Content-Disposition": f"attachment; filename=informe_resumen_ejecutivo_{fecha}.xlsx"},
     )
 
 
@@ -1596,17 +1467,13 @@ def _generar_pdf_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
     story.append(Spacer(1, 0.2 * inch))
 
     # Fecha de generación
-    fecha_gen = Paragraph(
-        f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M')}", styles["Normal"]
-    )
+    fecha_gen = Paragraph(f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M')}", styles["Normal"])
     story.append(fecha_gen)
     story.append(Spacer(1, 0.3 * inch))
 
     # Tabla de datos
     if datos:
-        table_data = [
-            ["Cédula", "Nombres", "Analista", "Cuotas", "Adeudado", "Días Retraso"]
-        ]
+        table_data = [["Cédula", "Nombres", "Analista", "Cuotas", "Adeudado", "Días Retraso"]]
         for registro in datos[:100]:  # Limitar a 100 registros por página
             table_data.append(
                 [
@@ -1639,9 +1506,7 @@ def _generar_pdf_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
         # Total
         story.append(Spacer(1, 0.2 * inch))
         total_adeudado = sum(d.get("total_adeudado", 0) for d in datos)
-        total = Paragraph(
-            f"<b>Total Adeudado: ${total_adeudado:,.2f}</b>", styles["Normal"]
-        )
+        total = Paragraph(f"<b>Total Adeudado: ${total_adeudado:,.2f}</b>", styles["Normal"])
         story.append(total)
 
     doc.build(story)
@@ -1651,9 +1516,7 @@ def _generar_pdf_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
     return StreamingResponse(
         buffer,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename=informe_clientes_atrasados_{fecha}.pdf"
-        },
+        headers={"Content-Disposition": f"attachment; filename=informe_clientes_atrasados_{fecha}.pdf"},
     )
 
 
@@ -1669,9 +1532,7 @@ def _generar_pdf_rendimiento_analista(datos: List[Dict]) -> StreamingResponse:
     story.append(Spacer(1, 0.2 * inch))
 
     if datos:
-        table_data = [
-            ["Analista", "Clientes", "Préstamos", "Monto Adeudado", "Promedio Días"]
-        ]
+        table_data = [["Analista", "Clientes", "Préstamos", "Monto Adeudado", "Promedio Días"]]
         for registro in datos:
             table_data.append(
                 [
@@ -1704,9 +1565,7 @@ def _generar_pdf_rendimiento_analista(datos: List[Dict]) -> StreamingResponse:
     return StreamingResponse(
         buffer,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename=informe_rendimiento_analista_{fecha}.pdf"
-        },
+        headers={"Content-Disposition": f"attachment; filename=informe_rendimiento_analista_{fecha}.pdf"},
     )
 
 
@@ -1754,9 +1613,7 @@ def _generar_pdf_montos_periodo(datos: List[Dict]) -> StreamingResponse:
     return StreamingResponse(
         buffer,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename=informe_montos_periodo_{fecha}.pdf"
-        },
+        headers={"Content-Disposition": f"attachment; filename=informe_montos_periodo_{fecha}.pdf"},
     )
 
 
@@ -1804,15 +1661,11 @@ def _generar_pdf_antiguedad_saldos(datos: List[Dict]) -> StreamingResponse:
     return StreamingResponse(
         buffer,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename=informe_antiguedad_saldos_{fecha}.pdf"
-        },
+        headers={"Content-Disposition": f"attachment; filename=informe_antiguedad_saldos_{fecha}.pdf"},
     )
 
 
-def _generar_excel_categoria_dias(
-    datos_categoria: List[Dict], datos_analista: List[Dict]
-) -> StreamingResponse:
+def _generar_excel_categoria_dias(datos_categoria: List[Dict], datos_analista: List[Dict]) -> StreamingResponse:
     """Genera archivo Excel para informe por categoría de días"""
     buffer = BytesIO()
     wb = Workbook()
@@ -1826,9 +1679,7 @@ def _generar_excel_categoria_dias(
     ws1.append(headers1)
 
     # Estilo de encabezados
-    header_fill = PatternFill(
-        start_color="366092", end_color="366092", fill_type="solid"
-    )
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF")
 
     for col in range(1, len(headers1) + 1):
@@ -1880,9 +1731,7 @@ def _generar_excel_categoria_dias(
         ]
 
         # Crear diccionario de categorías por nombre completo
-        categorias_dict = {
-            c.get("categoria", ""): c for c in analista_data.get("categorias", [])
-        }
+        categorias_dict = {c.get("categoria", ""): c for c in analista_data.get("categorias", [])}
 
         # Mapear nombres completos a headers cortos
         for cat_completa, cat_corta in categorias_headers_map.items():
@@ -1899,15 +1748,11 @@ def _generar_excel_categoria_dias(
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f"attachment; filename=informe_categoria_dias_{fecha}.xlsx"
-        },
+        headers={"Content-Disposition": f"attachment; filename=informe_categoria_dias_{fecha}.xlsx"},
     )
 
 
-def _generar_pdf_categoria_dias(
-    datos_categoria: List[Dict], datos_analista: List[Dict]
-) -> StreamingResponse:
+def _generar_pdf_categoria_dias(datos_categoria: List[Dict], datos_analista: List[Dict]) -> StreamingResponse:
     """Genera archivo PDF para informe por categoría de días"""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
@@ -1981,9 +1826,7 @@ def _generar_pdf_categoria_dias(
                     ]
                 )
 
-            cat_table = Table(
-                cat_table_data, colWidths=[3 * inch, 1.5 * inch, 1.5 * inch]
-            )
+            cat_table = Table(cat_table_data, colWidths=[3 * inch, 1.5 * inch, 1.5 * inch])
             cat_table.setStyle(
                 TableStyle(
                     [
@@ -2085,7 +1928,5 @@ def _generar_pdf_resumen_ejecutivo(datos: Dict) -> StreamingResponse:
     return StreamingResponse(
         buffer,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename=informe_resumen_ejecutivo_{fecha}.pdf"
-        },
+        headers={"Content-Disposition": f"attachment; filename=informe_resumen_ejecutivo_{fecha}.pdf"},
     )

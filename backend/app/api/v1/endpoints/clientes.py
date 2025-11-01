@@ -28,23 +28,15 @@ def listar_clientes(
     page: int = Query(1, ge=1, description="Numero de pagina"),
     per_page: int = Query(20, ge=1, le=5000, description="Tamano de pagina"),
     # Busqueda de texto
-    search: Optional[str] = Query(
-        None, description="Buscar por nombre, cedula o telefono"
-    ),
+    search: Optional[str] = Query(None, description="Buscar por nombre, cedula o telefono"),
     estado: Optional[str] = Query(None, description="Filtrar por estado"),
     cedula: Optional[str] = Query(None, description="Filtrar por cédula exacta"),
     email: Optional[str] = Query(None, description="Filtrar por email"),
     telefono: Optional[str] = Query(None, description="Filtrar por teléfono"),
     ocupacion: Optional[str] = Query(None, description="Filtrar por ocupación"),
-    usuario_registro: Optional[str] = Query(
-        None, description="Filtrar por usuario que registró"
-    ),
-    fecha_desde: Optional[str] = Query(
-        None, description="Fecha de registro desde (YYYY-MM-DD)"
-    ),
-    fecha_hasta: Optional[str] = Query(
-        None, description="Fecha de registro hasta (YYYY-MM-DD)"
-    ),
+    usuario_registro: Optional[str] = Query(None, description="Filtrar por usuario que registró"),
+    fecha_desde: Optional[str] = Query(None, description="Fecha de registro desde (YYYY-MM-DD)"),
+    fecha_hasta: Optional[str] = Query(None, description="Fecha de registro hasta (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -83,17 +75,13 @@ def listar_clientes(
             query = query.filter(Cliente.ocupacion.ilike(f"%{ocupacion}%"))
 
         if usuario_registro:
-            query = query.filter(
-                Cliente.usuario_registro.ilike(f"%{usuario_registro}%")
-            )
+            query = query.filter(Cliente.usuario_registro.ilike(f"%{usuario_registro}%"))
 
         # Filtros de fecha de registro
         if fecha_desde:
             try:
                 fecha_desde_obj = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
-                query = query.filter(
-                    func.date(Cliente.fecha_registro) >= fecha_desde_obj
-                )
+                query = query.filter(func.date(Cliente.fecha_registro) >= fecha_desde_obj)
             except ValueError:
                 logger.warning(f"Fecha desde inválida: {fecha_desde}")
 
@@ -102,9 +90,7 @@ def listar_clientes(
                 fecha_hasta_obj = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
                 # Para fecha hasta, incluir todo el día
                 fecha_hasta_obj = fecha_hasta_obj + timedelta(days=1)
-                query = query.filter(
-                    func.date(Cliente.fecha_registro) < fecha_hasta_obj
-                )
+                query = query.filter(func.date(Cliente.fecha_registro) < fecha_hasta_obj)
             except ValueError:
                 logger.warning(f"Fecha hasta inválida: {fecha_hasta}")
 
@@ -150,9 +136,7 @@ def obtener_estadisticas_clientes(
 ):
     # Obtener estadísticas de clientes directamente desde la BD
     try:
-        logger.info(
-            f"Obteniendo estadísticas de clientes - Usuario: {current_user.email}"
-        )
+        logger.info(f"Obteniendo estadísticas de clientes - Usuario: {current_user.email}")
 
         # Contar total de clientes
         total = db.query(Cliente).count()
@@ -211,9 +195,7 @@ def crear_cliente(
         nombres_normalizados = (cliente_data.nombres or "").strip().lower()
 
         # 1) Bloquear por cédula duplicada
-        existente_cedula = (
-            db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
-        )
+        existente_cedula = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
         if existente_cedula:
             logger.warning(
                 f"❌ Intento de crear cliente con cédula ya registrada: {cliente_data.cedula} "
@@ -229,11 +211,7 @@ def crear_cliente(
 
         # 2) Bloquear por nombre completo duplicado (case-insensitive)
         if nombres_normalizados:
-            existente_nombre = (
-                db.query(Cliente)
-                .filter(func.lower(Cliente.nombres) == nombres_normalizados)
-                .first()
-            )
+            existente_nombre = db.query(Cliente).filter(func.lower(Cliente.nombres) == nombres_normalizados).first()
             if existente_nombre:
                 logger.warning(
                     f"❌ Intento de crear cliente con nombre ya registrado: {cliente_data.nombres} "
@@ -271,9 +249,7 @@ def crear_cliente(
         error_detail = f"{str(e)}: {traceback.format_exc()}"
         logger.error(f"Error en crear_cliente: {error_detail}")
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.put("/{cliente_id}", response_model=ClienteResponse)
@@ -300,11 +276,7 @@ def actualizar_cliente(
             nuevos_nombres = update_data.get("nombres", cliente.nombres)
 
             # 1) Bloquear por cédula duplicada en otro cliente
-            otro_con_misma_cedula = (
-                db.query(Cliente)
-                .filter(Cliente.cedula == nueva_cedula, Cliente.id != cliente_id)
-                .first()
-            )
+            otro_con_misma_cedula = db.query(Cliente).filter(Cliente.cedula == nueva_cedula, Cliente.id != cliente_id).first()
             if otro_con_misma_cedula:
                 logger.warning(
                     f"❌ Intento de actualizar cliente {cliente_id} a cédula duplicada: {nueva_cedula} "

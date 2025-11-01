@@ -15,9 +15,7 @@ from sqlalchemy.orm import sessionmaker
 logger = logging.getLogger(__name__)
 
 # Configuración de la base de datos
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://user:password@localhost/pagos_db"
-)
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/pagos_db")
 
 # Crear engine con configuración de encoding UTF-8
 # Agregar parámetros de conexión para asegurar UTF-8
@@ -76,9 +74,7 @@ def get_db() -> Generator:
         logger.error(f"Error de base de datos: {type(e).__name__}: {str(e)}")
 
         # Crear HTTPException para errores de DB
-        raise HTTPException(
-            status_code=500, detail="Error de conexión a la base de datos"
-        )
+        raise HTTPException(status_code=500, detail="Error de conexión a la base de datos")
     finally:
         if db:
             try:

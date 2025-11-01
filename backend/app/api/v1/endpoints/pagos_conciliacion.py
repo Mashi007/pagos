@@ -37,9 +37,7 @@ async def upload_conciliacion_excel(
     try:
         # Validar extensión
         if not file.filename.endswith((".xlsx", ".xls")):
-            raise HTTPException(
-                status_code=400, detail="El archivo debe ser Excel (.xlsx o .xls)"
-            )
+            raise HTTPException(status_code=400, detail="El archivo debe ser Excel (.xlsx o .xls)")
 
         # Leer archivo Excel
         contents = await file.read()
@@ -85,11 +83,7 @@ async def upload_conciliacion_excel(
                 documentos_procesados.add(numero_documento)
 
                 # Buscar pago por número de documento (coincidencia exacta)
-                pago = (
-                    db.query(Pago)
-                    .filter(Pago.numero_documento == numero_documento)
-                    .first()
-                )
+                pago = db.query(Pago).filter(Pago.numero_documento == numero_documento).first()
 
                 if pago:
                     # Verificar que el pago no esté ya conciliado
@@ -106,19 +100,13 @@ async def upload_conciliacion_excel(
                         db.refresh(pago)
 
                         pagos_conciliados += 1
-                        logger.info(
-                            f"✅ [conciliacion] Pago ID {pago.id} conciliado (documento: {numero_documento})"
-                        )
+                        logger.info(f"✅ [conciliacion] Pago ID {pago.id} conciliado (documento: {numero_documento})")
                     else:
-                        logger.info(
-                            f"ℹ️ [conciliacion] Pago ID {pago.id} ya estaba conciliado (documento: {numero_documento})"
-                        )
+                        logger.info(f"ℹ️ [conciliacion] Pago ID {pago.id} ya estaba conciliado (documento: {numero_documento})")
                 else:
                     # Documento no encontrado en el sistema
                     pagos_no_encontrados.append(numero_documento)
-                    logger.warning(
-                        f"⚠️ [conciliacion] Documento no encontrado: {numero_documento}"
-                    )
+                    logger.warning(f"⚠️ [conciliacion] Documento no encontrado: {numero_documento}")
 
             except Exception as e:
                 logger.error(
@@ -135,9 +123,7 @@ async def upload_conciliacion_excel(
         return {
             "pagos_conciliados": pagos_conciliados,
             "pagos_no_encontrados": len(pagos_no_encontrados),
-            "documentos_no_encontrados": pagos_no_encontrados[
-                :20
-            ],  # Mostrar solo primeros 20
+            "documentos_no_encontrados": pagos_no_encontrados[:20],  # Mostrar solo primeros 20
             "errores": len(errores),
             "errores_detalle": errores[:10],  # Mostrar solo primeros 10 errores
         }

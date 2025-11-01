@@ -30,6 +30,4 @@ def get_intermittent_failure_analysis(
 
     except Exception as e:
         logger.error(f"Error obteniendo análisis de fallos intermitentes: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

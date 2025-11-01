@@ -34,9 +34,7 @@ def listar_analistas(
     logger.info("=" * 80)
     logger.info("🔍 ENDPOINT EJECUTADO: listar_analistas")
     logger.info(f"👤 Usuario: {current_user.email if current_user else 'N/A'}")
-    logger.info(
-        f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}"
-    )
+    logger.info(f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}")
     logger.info("=" * 80)
 
     try:
@@ -62,9 +60,7 @@ def listar_analistas(
         pages = (total + limit - 1) // limit if limit > 0 else 0
         page = (skip // limit) + 1 if limit > 0 else 1
 
-        logger.info(
-            f"✅ Listando {len(analistas)} analistas de {total} totales (página {page}/{pages})"
-        )
+        logger.info(f"✅ Listando {len(analistas)} analistas de {total} totales (página {page}/{pages})")
 
         response = AnalistaListResponse(
             items=analistas,
@@ -78,9 +74,7 @@ def listar_analistas(
 
     except Exception as e:
         logger.error(f"Error listando analistas: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/activos", response_model=List[AnalistaResponse])
@@ -94,9 +88,7 @@ def listar_analistas_activos(
         return analistas
     except Exception as e:
         logger.error(f"Error listando analistas activos: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/{analista_id}", response_model=AnalistaResponse)
@@ -118,9 +110,7 @@ def obtener_analista(
         raise
     except Exception as e:
         logger.error(f"Error obteniendo analista: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.post("/", response_model=AnalistaResponse, status_code=status.HTTP_201_CREATED)
@@ -144,9 +134,7 @@ def crear_analista(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creando analista: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.put("/{analista_id}", response_model=AnalistaResponse)
@@ -180,9 +168,7 @@ def actualizar_analista(
     except Exception as e:
         db.rollback()
         logger.error(f"Error actualizando analista: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.delete("/{analista_id}")
@@ -206,6 +192,4 @@ def eliminar_analista(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Error al eliminar analista: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error al eliminar analista: {str(e)}")

@@ -76,9 +76,7 @@ def crear_cuotas_prestamo(
 @router.get("/prestamo/{prestamo_id}/cuotas", response_model=List[CuotaResponse])
 def obtener_cuotas_prestamo(
     prestamo_id: int,
-    estado: Optional[str] = Query(
-        None, description="Filtrar por estado: PENDIENTE, PAGADA, VENCIDA, PARCIAL"
-    ),
+    estado: Optional[str] = Query(None, description="Filtrar por estado: PENDIENTE, PAGADA, VENCIDA, PARCIAL"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -111,9 +109,7 @@ def obtener_cuota(
     # Obtiene el detalle de una cuota específica
     cuota = db.query(Cuota).filter(Cuota.id == cuota_id).first()
     if not cuota:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Cuota no encontrada"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cuota no encontrada")
 
     # Agregar propiedades calculadas
     cuota.esta_vencida = cuota.esta_vencida
@@ -123,9 +119,7 @@ def obtener_cuota(
     return cuota
 
 
-@router.post(
-    "/prestamo/{prestamo_id}/recalcular-mora", response_model=RecalcularMoraResponse
-)
+@router.post("/prestamo/{prestamo_id}/recalcular-mora", response_model=RecalcularMoraResponse)
 def recalcular_mora(
     prestamo_id: int,
     request: RecalcularMoraRequest,
@@ -146,16 +140,10 @@ def recalcular_mora(
     fecha_calculo = request.fecha_calculo or date.today()
 
     try:
-        resultado = AmortizacionService.recalcular_mora(
-            db, prestamo_id, tasa_mora, fecha_calculo
-        )
+        resultado = AmortizacionService.recalcular_mora(db, prestamo_id, tasa_mora, fecha_calculo)
 
         # Obtener cuotas con mora
-        cuotas_con_mora = (
-            db.query(Cuota)
-            .filter(Cuota.prestamo_id == prestamo_id, Cuota.monto_mora > 0)
-            .all()
-        )
+        cuotas_con_mora = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id, Cuota.monto_mora > 0).all()
 
         cuotas_detalle = [
             {
@@ -180,9 +168,7 @@ def recalcular_mora(
         )
 
 
-@router.get(
-    "/prestamo/{prestamo_id}/estado-cuenta", response_model=EstadoCuentaResponse
-)
+@router.get("/prestamo/{prestamo_id}/estado-cuenta", response_model=EstadoCuentaResponse)
 def obtener_estado_cuenta(
     prestamo_id: int,
     db: Session = Depends(get_db),
@@ -200,10 +186,7 @@ def obtener_estado_cuenta(
 
     # Obtener cuotas por estado
     cuotas_pagadas = (
-        db.query(Cuota)
-        .filter(Cuota.prestamo_id == prestamo_id, Cuota.estado == "PAGADA")
-        .order_by(Cuota.numero_cuota)
-        .all()
+        db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id, Cuota.estado == "PAGADA").order_by(Cuota.numero_cuota).all()
     )
 
     cuotas_vencidas = (
@@ -261,9 +244,7 @@ def obtener_estado_cuenta(
     )
 
 
-@router.post(
-    "/prestamo/{prestamo_id}/proyectar-pago", response_model=ProyeccionPagoResponse
-)
+@router.post("/prestamo/{prestamo_id}/proyectar-pago", response_model=ProyeccionPagoResponse)
 def proyectar_pago(
     prestamo_id: int,
     request: ProyeccionPagoRequest,
@@ -368,9 +349,7 @@ def obtener_informacion_adicional(
     # Calcular estadísticas
     cuotas_pagadas = len([c for c in todas_cuotas if c.estado == "PAGADA"])
     cuotas_totales = len(todas_cuotas)
-    porcentaje_avance = (
-        round((cuotas_pagadas / cuotas_totales * 100), 2) if cuotas_totales > 0 else 0
-    )
+    porcentaje_avance = round((cuotas_pagadas / cuotas_totales * 100), 2) if cuotas_totales > 0 else 0
 
     # Próximo vencimiento
     proxima_cuota = (
@@ -414,9 +393,7 @@ def obtener_informacion_adicional(
             "total_pagado": float(total_pagado),
             "saldo_pendiente": float(prestamo.saldo_pendiente),
             "porcentaje_pagado": (
-                round((float(total_pagado) / float(prestamo.monto_total) * 100), 2)
-                if prestamo.monto_total > 0
-                else 0
+                round((float(total_pagado) / float(prestamo.monto_total) * 100), 2) if prestamo.monto_total > 0 else 0
             ),
         },
         "proximo_vencimiento": proximo_vencimiento,
@@ -440,12 +417,7 @@ def obtener_tabla_visual(
         )
 
     # Obtener cuotas ordenadas
-    cuotas = (
-        db.query(Cuota)
-        .filter(Cuota.prestamo_id == prestamo_id)
-        .order_by(Cuota.numero_cuota)
-        .all()
-    )
+    cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota).all()
 
     # Formatear para tabla visual
     tabla_visual = []
@@ -481,9 +453,7 @@ def obtener_tabla_visual(
                 "estado_visual": f"{emoji} {cuota.estado}",
                 "color": color,
                 "dias_mora": cuota.dias_mora if cuota.dias_mora > 0 else None,
-                "monto_mora": (
-                    float(cuota.monto_mora) if cuota.monto_mora > 0 else None
-                ),
+                "monto_mora": (float(cuota.monto_mora) if cuota.monto_mora > 0 else None),
                 "porcentaje_pagado": float(cuota.porcentaje_pagado),
                 "fecha_pago_real": cuota.fecha_pago,
             }

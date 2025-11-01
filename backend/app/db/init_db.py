@@ -55,9 +55,7 @@ def create_admin_user() -> None:
         db = SessionLocal()
 
         # Check if admin user exists
-        admin_user = (
-            db.query(User).filter(User.email == "itmaster@rapicreditca.com").first()
-        )
+        admin_user = db.query(User).filter(User.email == "itmaster@rapicreditca.com").first()
 
         if not admin_user:
             # Create admin user

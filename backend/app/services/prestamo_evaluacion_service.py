@@ -666,12 +666,8 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
     referencia1_cal = int(datos_evaluacion.get("referencia1_calificacion", 0))
     referencia2_cal = int(datos_evaluacion.get("referencia2_calificacion", 0))
     referencia3_cal = int(datos_evaluacion.get("referencia3_calificacion", 0))
-    puntos_3 = (
-        Decimal(referencia1_cal) + Decimal(referencia2_cal) + Decimal(referencia3_cal)
-    )
-    desc_referencias = (
-        f"Ref1:{referencia1_cal} Ref2:{referencia2_cal} Ref3:{referencia3_cal}"
-    )
+    puntos_3 = Decimal(referencia1_cal) + Decimal(referencia2_cal) + Decimal(referencia3_cal)
+    desc_referencias = f"Ref1:{referencia1_cal} Ref2:{referencia2_cal} Ref3:{referencia3_cal}"
 
     # Criterio 4: Arraigo Geográfico (7 puntos - SIN situación de vivienda)
     # puntos_4a ELIMINADO - solo familia y trabajo
@@ -731,17 +727,11 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
             tipo_empleo_puntos=puntos_2b,
             sector_economico_puntos=puntos_2c,
             referencia1_calificacion=referencia1_cal,
-            referencia1_observaciones=datos_evaluacion.get(
-                "referencia1_observaciones", ""
-            ),
+            referencia1_observaciones=datos_evaluacion.get("referencia1_observaciones", ""),
             referencia2_calificacion=referencia2_cal,
-            referencia2_observaciones=datos_evaluacion.get(
-                "referencia2_observaciones", ""
-            ),
+            referencia2_observaciones=datos_evaluacion.get("referencia2_observaciones", ""),
             referencia3_calificacion=referencia3_cal,
-            referencia3_observaciones=datos_evaluacion.get(
-                "referencia3_observaciones", ""
-            ),
+            referencia3_observaciones=datos_evaluacion.get("referencia3_observaciones", ""),
             referencias_puntos=puntos_3,
             arraigo_vivienda_puntos=puntos_4a,
             arraigo_familiar_puntos=puntos_4b,
@@ -775,9 +765,7 @@ def calcular_evaluacion_completa(datos_evaluacion: Dict) -> PrestamoEvaluacion:
 
     # Criterio 7: Capacidad de Maniobra (5 puntos)
     # Usa los mismos datos del Criterio 1: ingresos, gastos_fijos, otras_deudas, cuota
-    saldo_residual, porcentaje_residual = calcular_capacidad_maniobra(
-        ingresos, gastos_fijos, otras_deudas, cuota
-    )
+    saldo_residual, porcentaje_residual = calcular_capacidad_maniobra(ingresos, gastos_fijos, otras_deudas, cuota)
     puntos_7 = evaluar_capacidad_maniobra_puntos(porcentaje_residual)
 
     # Puntuación total
@@ -888,11 +876,7 @@ def crear_evaluacion_prestamo(
     evaluacion = calcular_evaluacion_completa(datos_evaluacion)
 
     # Buscar evaluación existente
-    eval_existente = (
-        db.query(PrestamoEvaluacion)
-        .filter(PrestamoEvaluacion.prestamo_id == evaluacion.prestamo_id)
-        .first()
-    )
+    eval_existente = db.query(PrestamoEvaluacion).filter(PrestamoEvaluacion.prestamo_id == evaluacion.prestamo_id).first()
 
     if eval_existente:
         # Actualizar

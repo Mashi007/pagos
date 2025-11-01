@@ -21,9 +21,7 @@ class ModeloVehiculo(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=True)
-    updated_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
     fecha_actualizacion = Column(DateTime(timezone=True), nullable=True)
     actualizado_por = Column(String(100), nullable=True)
 
@@ -38,10 +36,6 @@ class ModeloVehiculo(Base):
             "precio": float(self.precio) if self.precio is not None else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "fecha_actualizacion": (
-                self.fecha_actualizacion.isoformat()
-                if self.fecha_actualizacion
-                else None
-            ),
+            "fecha_actualizacion": (self.fecha_actualizacion.isoformat() if self.fecha_actualizacion else None),
             "actualizado_por": self.actualizado_por,
         }

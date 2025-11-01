@@ -10,12 +10,8 @@ from pydantic import BaseModel, Field, field_serializer, field_validator
 # ============================================
 class PrestamoBase(BaseModel):
     cedula: str = Field(..., max_length=20, description="Cédula del cliente")
-    total_financiamiento: Decimal = Field(
-        ..., gt=0, description="Monto total del préstamo"
-    )
-    modalidad_pago: str = Field(
-        ..., max_length=20, description="MENSUAL, QUINCENAL, SEMANAL"
-    )
+    total_financiamiento: Decimal = Field(..., gt=0, description="Monto total del préstamo")
+    modalidad_pago: str = Field(..., max_length=20, description="MENSUAL, QUINCENAL, SEMANAL")
 
     @field_validator("modalidad_pago")
     @classmethod
@@ -32,12 +28,8 @@ class PrestamoCreate(PrestamoBase):
     fecha_requerimiento: date
     producto: str = Field(..., max_length=100)
     producto_financiero: str = Field(..., max_length=100)
-    numero_cuotas: Optional[int] = (
-        None  # Si se envía, se usa; si no, se calcula automáticamente
-    )
-    cuota_periodo: Optional[Decimal] = (
-        None  # Si se envía, se usa; si no, se calcula automáticamente
-    )
+    numero_cuotas: Optional[int] = None  # Si se envía, se usa; si no, se calcula automáticamente
+    cuota_periodo: Optional[Decimal] = None  # Si se envía, se usa; si no, se calcula automáticamente
     concesionario: str = Field(..., max_length=100)
     analista: str = Field(..., max_length=100)
     modelo_vehiculo: str = Field(..., max_length=100)

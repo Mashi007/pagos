@@ -60,9 +60,7 @@ def healthcheck_reportes(
         }
     except Exception as e:
         logger.error(f"[reportes.health] Error: {e}")
-        raise HTTPException(
-            status_code=500, detail="Error de conexión o consulta a la base de datos"
-        )
+        raise HTTPException(status_code=500, detail="Error de conexión o consulta a la base de datos")
 
 
 class ReporteCartera(BaseModel):
@@ -149,13 +147,9 @@ def reporte_cartera(
         logger.info(f"[reportes.cartera] Mora total: {mora_total}")
 
         # Cantidad de préstamos APROBADOS
-        cantidad_prestamos_activos = (
-            db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
-        )
+        cantidad_prestamos_activos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
 
-        logger.info(
-            f"[reportes.cartera] Préstamos activos: {cantidad_prestamos_activos}"
-        )
+        logger.info(f"[reportes.cartera] Préstamos activos: {cantidad_prestamos_activos}")
 
         # Préstamos con cuotas en mora
         cantidad_prestamos_mora = (
@@ -253,9 +247,7 @@ def reporte_cartera(
 
     except Exception as e:
         logger.error(f"Error generando reporte de cartera: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/pagos", response_model=ReportePagos)
@@ -267,9 +259,7 @@ def reporte_pagos(
 ):
     """Genera reporte de pagos en un rango de fechas."""
     try:
-        logger.info(
-            f"[reportes.pagos] Generando reporte pagos desde {fecha_inicio} hasta {fecha_fin}"
-        )
+        logger.info(f"[reportes.pagos] Generando reporte pagos desde {fecha_inicio} hasta {fecha_fin}")
         # Total de pagos: usar monto_pagado
         total_pagos = db.query(func.sum(Pago.monto_pagado)).filter(
             Pago.fecha_pago >= fecha_inicio,
@@ -290,9 +280,7 @@ def reporte_pagos(
         # Pagos por método: usar monto_pagado y agrupar por institucion_bancaria
         pagos_por_metodo = (
             db.query(
-                func.coalesce(Pago.institucion_bancaria, "Sin especificar").label(
-                    "metodo"
-                ),
+                func.coalesce(Pago.institucion_bancaria, "Sin especificar").label("metodo"),
                 func.count(Pago.id).label("cantidad"),
                 func.sum(Pago.monto_pagado).label("monto"),
             )
@@ -304,9 +292,7 @@ def reporte_pagos(
             .all()
         )
 
-        logger.info(
-            f"[reportes.pagos] Pagos por método: {len(pagos_por_metodo)} métodos"
-        )
+        logger.info(f"[reportes.pagos] Pagos por método: {len(pagos_por_metodo)} métodos")
 
         # Pagos por día: usar monto_pagado
         pagos_por_dia = (
@@ -330,23 +316,15 @@ def reporte_pagos(
             fecha_fin=fecha_fin,
             total_pagos=total_pagos,
             cantidad_pagos=cantidad_pagos,
-            pagos_por_metodo=[
-                {"metodo": item[0], "cantidad": item[1], "monto": item[2]}
-                for item in pagos_por_metodo
-            ],
-            pagos_por_dia=[
-                {"fecha": item[0], "cantidad": item[1], "monto": item[2]}
-                for item in pagos_por_dia
-            ],
+            pagos_por_metodo=[{"metodo": item[0], "cantidad": item[1], "monto": item[2]} for item in pagos_por_metodo],
+            pagos_por_dia=[{"fecha": item[0], "cantidad": item[1], "monto": item[2]} for item in pagos_por_dia],
         )
         logger.info("[reportes.pagos] Reporte generado correctamente")
         return resultado
 
     except Exception as e:
         logger.error(f"Error generando reporte de pagos: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/exportar/cartera")
@@ -358,16 +336,12 @@ def exportar_reporte_cartera(
 ):
     """Exporta reporte de cartera en Excel o PDF."""
     try:
-        logger.info(
-            f"[reportes.exportar] Exportando reporte cartera en formato {formato}"
-        )
+        logger.info(f"[reportes.exportar] Exportando reporte cartera en formato {formato}")
         # Obtener datos del reporte
         reporte = reporte_cartera(fecha_corte, db, current_user)
 
         # Obtener variables adicionales para el Excel
-        cantidad_prestamos_activos = (
-            db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
-        )
+        cantidad_prestamos_activos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
 
         cantidad_prestamos_mora = (
             db.query(func.count(func.distinct(Prestamo.id)))
@@ -461,9 +435,7 @@ def exportar_reporte_cartera(
             ws_resumen.title = "Resumen Ejecutivo"
 
             # Estilos
-            header_fill = PatternFill(
-                start_color="366092", end_color="366092", fill_type="solid"
-            )
+            header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
             header_font = Font(bold=True, color="FFFFFF", size=14)
             title_font = Font(bold=True, size=16)
             label_font = Font(bold=True)
@@ -478,16 +450,12 @@ def exportar_reporte_cartera(
             ws_resumen.merge_cells("A1:B1")
             ws_resumen["A1"] = "REPORTE DE CARTERA"
             ws_resumen["A1"].font = title_font
-            ws_resumen["A1"].alignment = Alignment(
-                horizontal="center", vertical="center"
-            )
+            ws_resumen["A1"].alignment = Alignment(horizontal="center", vertical="center")
             ws_resumen.row_dimensions[1].height = 30
 
             ws_resumen["A2"] = f"Fecha de Corte: {reporte.fecha_corte}"
             ws_resumen["A2"].font = Font(size=12)
-            ws_resumen["A3"] = (
-                f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
-            )
+            ws_resumen["A3"] = f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
             ws_resumen["A3"].font = Font(size=10, italic=True)
 
             # Datos principales con formato
@@ -532,23 +500,15 @@ def exportar_reporte_cartera(
 
             # Datos
             for row_idx, item in enumerate(distribucion_por_monto, 2):
-                ws_monto.cell(row=row_idx, column=1, value=item["rango"]).border = (
-                    border
-                )
-                ws_monto.cell(row=row_idx, column=2, value=item["cantidad"]).border = (
-                    border
-                )
-                cell_monto = ws_monto.cell(
-                    row=row_idx, column=3, value=float(item["monto"])
-                )
+                ws_monto.cell(row=row_idx, column=1, value=item["rango"]).border = border
+                ws_monto.cell(row=row_idx, column=2, value=item["cantidad"]).border = border
+                cell_monto = ws_monto.cell(row=row_idx, column=3, value=float(item["monto"]))
                 cell_monto.number_format = '"$"#,##0.00'
                 cell_monto.border = border
 
             # Totales
             total_row = len(distribucion_por_monto) + 3
-            ws_monto.cell(row=total_row, column=1, value="TOTAL:").font = Font(
-                bold=True
-            )
+            ws_monto.cell(row=total_row, column=1, value="TOTAL:").font = Font(bold=True)
             ws_monto.cell(
                 row=total_row,
                 column=2,
@@ -584,20 +544,14 @@ def exportar_reporte_cartera(
             # Datos
             for row_idx, item in enumerate(distribucion_por_mora, 2):
                 ws_mora.cell(row=row_idx, column=1, value=item["rango"]).border = border
-                ws_mora.cell(row=row_idx, column=2, value=item["cantidad"]).border = (
-                    border
-                )
-                cell_mora = ws_mora.cell(
-                    row=row_idx, column=3, value=float(item["monto_total"])
-                )
+                ws_mora.cell(row=row_idx, column=2, value=item["cantidad"]).border = border
+                cell_mora = ws_mora.cell(row=row_idx, column=3, value=float(item["monto_total"]))
                 cell_mora.number_format = '"$"#,##0.00'
                 cell_mora.border = border
 
             # Totales
             total_row_mora = len(distribucion_por_mora) + 3
-            ws_mora.cell(row=total_row_mora, column=1, value="TOTAL:").font = Font(
-                bold=True
-            )
+            ws_mora.cell(row=total_row_mora, column=1, value="TOTAL:").font = Font(bold=True)
             ws_mora.cell(
                 row=total_row_mora,
                 column=2,
@@ -646,9 +600,7 @@ def exportar_reporte_cartera(
                 .all()
             )
 
-            logger.info(
-                f"[reportes.exportar] Obteniendo {len(prestamos_detalle)} préstamos para detalle"
-            )
+            logger.info(f"[reportes.exportar] Obteniendo {len(prestamos_detalle)} préstamos para detalle")
 
             # Encabezados
             headers_detalle = [
@@ -671,18 +623,10 @@ def exportar_reporte_cartera(
 
             # Datos de préstamos
             for row_idx, prestamo in enumerate(prestamos_detalle, 2):
-                ws_detalle.cell(row=row_idx, column=1, value=prestamo.id).border = (
-                    border
-                )
-                ws_detalle.cell(row=row_idx, column=2, value=prestamo.cedula).border = (
-                    border
-                )
-                ws_detalle.cell(
-                    row=row_idx, column=3, value=prestamo.nombres or ""
-                ).border = border
-                cell_total = ws_detalle.cell(
-                    row=row_idx, column=4, value=float(prestamo.total_financiamiento)
-                )
+                ws_detalle.cell(row=row_idx, column=1, value=prestamo.id).border = border
+                ws_detalle.cell(row=row_idx, column=2, value=prestamo.cedula).border = border
+                ws_detalle.cell(row=row_idx, column=3, value=prestamo.nombres or "").border = border
+                cell_total = ws_detalle.cell(row=row_idx, column=4, value=float(prestamo.total_financiamiento))
                 cell_total.number_format = '"$"#,##0.00'
                 cell_total.border = border
                 cell_saldo = ws_detalle.cell(
@@ -692,18 +636,10 @@ def exportar_reporte_cartera(
                 )
                 cell_saldo.number_format = '"$"#,##0.00'
                 cell_saldo.border = border
-                ws_detalle.cell(
-                    row=row_idx, column=6, value=prestamo.cuotas_pendientes or 0
-                ).border = border
-                ws_detalle.cell(
-                    row=row_idx, column=7, value=prestamo.modalidad_pago or ""
-                ).border = border
-                ws_detalle.cell(
-                    row=row_idx, column=8, value=prestamo.analista or ""
-                ).border = border
-                ws_detalle.cell(
-                    row=row_idx, column=9, value=prestamo.estado or ""
-                ).border = border
+                ws_detalle.cell(row=row_idx, column=6, value=prestamo.cuotas_pendientes or 0).border = border
+                ws_detalle.cell(row=row_idx, column=7, value=prestamo.modalidad_pago or "").border = border
+                ws_detalle.cell(row=row_idx, column=8, value=prestamo.analista or "").border = border
+                ws_detalle.cell(row=row_idx, column=9, value=prestamo.estado or "").border = border
 
             # Ajustar anchos
             column_widths = [12, 15, 30, 18, 18, 15, 15, 25, 12]
@@ -718,9 +654,7 @@ def exportar_reporte_cartera(
             response = StreamingResponse(
                 output,
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                headers={
-                    "Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.xlsx"
-                },
+                headers={"Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.xlsx"},
             )
             logger.info("[reportes.exportar] Excel generado correctamente")
             # Auditoría de exportación
@@ -736,9 +670,7 @@ def exportar_reporte_cartera(
                 db.add(audit)
                 db.commit()
             except Exception as e:
-                logger.warning(
-                    f"No se pudo registrar auditoría de exportación (Excel): {e}"
-                )
+                logger.warning(f"No se pudo registrar auditoría de exportación (Excel): {e}")
             return response
 
         elif formato.lower() == "pdf":
@@ -759,13 +691,9 @@ def exportar_reporte_cartera(
             y = 680
             c.drawString(100, y, f"Cartera Total: ${reporte.cartera_total:,.2f}")
             y -= 20
-            c.drawString(
-                100, y, f"Capital Pendiente: ${reporte.capital_pendiente:,.2f}"
-            )
+            c.drawString(100, y, f"Capital Pendiente: ${reporte.capital_pendiente:,.2f}")
             y -= 20
-            c.drawString(
-                100, y, f"Intereses Pendientes: ${reporte.intereses_pendientes:,.2f}"
-            )
+            c.drawString(100, y, f"Intereses Pendientes: ${reporte.intereses_pendientes:,.2f}")
             y -= 20
             c.drawString(100, y, f"Mora Total: ${reporte.mora_total:,.2f}")
 
@@ -775,9 +703,7 @@ def exportar_reporte_cartera(
             response = StreamingResponse(
                 output,
                 media_type="application/pdf",
-                headers={
-                    "Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.pdf"
-                },
+                headers={"Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.pdf"},
             )
             logger.info("[reportes.exportar] PDF generado correctamente")
             # Auditoría de exportación
@@ -793,21 +719,15 @@ def exportar_reporte_cartera(
                 db.add(audit)
                 db.commit()
             except Exception as e:
-                logger.warning(
-                    f"No se pudo registrar auditoría de exportación (PDF): {e}"
-                )
+                logger.warning(f"No se pudo registrar auditoría de exportación (PDF): {e}")
             return response
 
         else:
-            raise HTTPException(
-                status_code=400, detail="Formato no soportado. Use 'excel' o 'pdf'"
-            )
+            raise HTTPException(status_code=400, detail="Formato no soportado. Use 'excel' o 'pdf'")
 
     except Exception as e:
         logger.error(f"Error exportando reporte: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/dashboard/resumen")
@@ -856,9 +776,7 @@ def resumen_dashboard(
 
         # Pagos del mes: usar monto_pagado
         fecha_inicio_mes = date.today().replace(day=1)
-        pagos_mes = db.query(func.sum(Pago.monto_pagado)).filter(
-            Pago.fecha_pago >= fecha_inicio_mes
-        ).scalar() or Decimal("0")
+        pagos_mes = db.query(func.sum(Pago.monto_pagado)).filter(Pago.fecha_pago >= fecha_inicio_mes).scalar() or Decimal("0")
 
         logger.info(f"[reportes.resumen] Pagos del mes: {pagos_mes}")
 
@@ -874,9 +792,7 @@ def resumen_dashboard(
 
     except Exception as e:
         logger.error(f"Error obteniendo resumen: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 # ============================================
@@ -903,40 +819,27 @@ def generar_pdf_pendientes_cliente(
         # Obtener todos los préstamos del cliente
         prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
         if not prestamos:
-            raise HTTPException(
-                status_code=404, detail="Cliente no tiene préstamos registrados"
-            )
+            raise HTTPException(status_code=404, detail="Cliente no tiene préstamos registrados")
 
         # Preparar datos para el PDF
         datos_prestamos = []
 
         for prestamo in prestamos:
             # Obtener cuotas del préstamo
-            cuotas = (
-                db.query(Cuota)
-                .filter(Cuota.prestamo_id == prestamo.id)
-                .order_by(Cuota.numero_cuota)
-                .all()
-            )
+            cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
 
             # Cuotas pendientes/vencidas
             cuotas_pendientes = [
                 {
                     "numero": c.numero_cuota,
-                    "fecha_vencimiento": (
-                        c.fecha_vencimiento.strftime("%d/%m/%Y")
-                        if c.fecha_vencimiento
-                        else "N/A"
-                    ),
+                    "fecha_vencimiento": (c.fecha_vencimiento.strftime("%d/%m/%Y") if c.fecha_vencimiento else "N/A"),
                     "monto_cuota": float(c.monto_cuota),
                     "total_pagado": float(c.total_pagado or Decimal("0.00")),
                     "capital_pendiente": float(c.capital_pendiente or Decimal("0.00")),
                     "interes_pendiente": float(c.interes_pendiente or Decimal("0.00")),
                     "monto_mora": float(c.monto_mora or Decimal("0.00")),
                     "estado": c.estado,
-                    "vencida": (
-                        c.fecha_vencimiento < hoy if c.fecha_vencimiento else False
-                    ),
+                    "vencida": (c.fecha_vencimiento < hoy if c.fecha_vencimiento else False),
                 }
                 for c in cuotas
                 if c.estado != "PAGADO"
@@ -947,22 +850,14 @@ def generar_pdf_pendientes_cliente(
             if hasattr(prestamo, "modelo_vehiculo_id") and prestamo.modelo_vehiculo_id:
                 from app.models.modelo_vehiculo import ModeloVehiculo
 
-                modelo = (
-                    db.query(ModeloVehiculo)
-                    .filter(ModeloVehiculo.id == prestamo.modelo_vehiculo_id)
-                    .first()
-                )
+                modelo = db.query(ModeloVehiculo).filter(ModeloVehiculo.id == prestamo.modelo_vehiculo_id).first()
                 if modelo:
-                    modelo_vehiculo = (
-                        f"{modelo.marca} {modelo.modelo} {modelo.ano or ''}".strip()
-                    )
+                    modelo_vehiculo = f"{modelo.marca} {modelo.modelo} {modelo.ano or ''}".strip()
 
             datos_prestamos.append(
                 {
                     "prestamo_id": prestamo.id,
-                    "total_financiamiento": float(
-                        prestamo.total_financiamiento or Decimal("0.00")
-                    ),
+                    "total_financiamiento": float(prestamo.total_financiamiento or Decimal("0.00")),
                     "numero_cuotas": prestamo.numero_cuotas or 0,
                     "modalidad": prestamo.modalidad_pago or "N/A",
                     "estado": prestamo.estado or "N/A",
@@ -1033,9 +928,7 @@ def generar_pdf_pendientes_cliente(
                 for cuota in datos_prestamo["cuotas_pendientes"]:
                     fecha_venc = cuota["fecha_vencimiento"]
                     if cuota["vencida"]:
-                        fecha_venc = (
-                            f"<b><font color='red'>{fecha_venc} (VENCIDA)</font></b>"
-                        )
+                        fecha_venc = f"<b><font color='red'>{fecha_venc} (VENCIDA)</font></b>"
 
                     table_data.append(
                         [
@@ -1110,7 +1003,5 @@ def generar_pdf_pendientes_cliente(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            f"Error generando PDF pendientes para cliente {cedula}: {e}", exc_info=True
-        )
+        logger.error(f"Error generando PDF pendientes para cliente {cedula}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al generar PDF: {str(e)}")

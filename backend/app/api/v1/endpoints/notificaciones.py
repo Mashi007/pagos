@@ -70,9 +70,7 @@ async def enviar_notificacion(
     """Enviar notificación individual."""
     try:
         # Obtener cliente
-        cliente = (
-            db.query(Cliente).filter(Cliente.id == notificacion.cliente_id).first()
-        )
+        cliente = db.query(Cliente).filter(Cliente.id == notificacion.cliente_id).first()
 
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -116,9 +114,7 @@ async def enviar_notificacion(
     except Exception as e:
         db.rollback()
         logger.error(f"Error enviando notificación: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.post("/envio-masivo")
@@ -133,9 +129,7 @@ async def envio_masivo(
         # Obtener clientes según filtros
         # CORREGIDO: Prestamo no tiene dias_mora, usar Cuota.dias_mora
         query = (
-            db.query(Cliente)
-            .join(Prestamo, Cliente.id == Prestamo.cliente_id)
-            .join(Cuota, Prestamo.id == Cuota.prestamo_id)
+            db.query(Cliente).join(Prestamo, Cliente.id == Prestamo.cliente_id).join(Cuota, Prestamo.id == Cuota.prestamo_id)
         )
 
         if request.tipo_cliente == "MOROSO":
@@ -194,9 +188,7 @@ async def envio_masivo(
     except Exception as e:
         db.rollback()
         logger.error(f"Error en envío masivo: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/", response_model=list[NotificacionResponse])
@@ -219,9 +211,7 @@ def listar_notificaciones(
 
     except Exception as e:
         logger.error(f"Error listando notificaciones: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/{notificacion_id}", response_model=NotificacionResponse)
@@ -232,9 +222,7 @@ def obtener_notificacion(
 ):
     """Obtener notificación específica."""
     try:
-        notificacion = (
-            db.query(Notificacion).filter(Notificacion.id == notificacion_id).first()
-        )
+        notificacion = db.query(Notificacion).filter(Notificacion.id == notificacion_id).first()
 
         if not notificacion:
             raise HTTPException(status_code=404, detail="Notificación no encontrada")
@@ -245,9 +233,7 @@ def obtener_notificacion(
         raise
     except Exception as e:
         logger.error(f"Error obteniendo notificación: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/estadisticas/resumen")
@@ -258,15 +244,9 @@ def obtener_estadisticas_notificaciones(
     """Obtener estadísticas de notificaciones."""
     try:
         total = db.query(Notificacion).count()
-        enviadas = (
-            db.query(Notificacion).filter(Notificacion.estado == "ENVIADA").count()
-        )
-        pendientes = (
-            db.query(Notificacion).filter(Notificacion.estado == "PENDIENTE").count()
-        )
-        fallidas = (
-            db.query(Notificacion).filter(Notificacion.estado == "FALLIDA").count()
-        )
+        enviadas = db.query(Notificacion).filter(Notificacion.estado == "ENVIADA").count()
+        pendientes = db.query(Notificacion).filter(Notificacion.estado == "PENDIENTE").count()
+        fallidas = db.query(Notificacion).filter(Notificacion.estado == "FALLIDA").count()
 
         return {
             "total": total,
@@ -278,9 +258,7 @@ def obtener_estadisticas_notificaciones(
 
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 # ============================================
@@ -322,11 +300,7 @@ def verificar_plantillas(
     try:
         # Verificar conexión a BD
         total_plantillas = db.query(NotificacionPlantilla).count()
-        plantillas_activas = (
-            db.query(NotificacionPlantilla)
-            .filter(NotificacionPlantilla.activa.is_(True))
-            .count()
-        )
+        plantillas_activas = db.query(NotificacionPlantilla).filter(NotificacionPlantilla.activa.is_(True)).count()
 
         # Tipos esperados para notificaciones automáticas
         tipos_esperados = [
@@ -340,12 +314,7 @@ def verificar_plantillas(
         ]
 
         # Verificar qué tipos existen
-        tipos_existentes = (
-            db.query(NotificacionPlantilla.tipo)
-            .filter(NotificacionPlantilla.activa.is_(True))
-            .distinct()
-            .all()
-        )
+        tipos_existentes = db.query(NotificacionPlantilla.tipo).filter(NotificacionPlantilla.activa.is_(True)).distinct().all()
         tipos_encontrados = [t[0] for t in tipos_existentes]
         tipos_faltantes = [t for t in tipos_esperados if t not in tipos_encontrados]
 
@@ -382,15 +351,9 @@ def crear_plantilla(
     """Crear nueva plantilla de notificación"""
     try:
         # Verificar si ya existe una plantilla con el mismo nombre
-        existe = (
-            db.query(NotificacionPlantilla)
-            .filter(NotificacionPlantilla.nombre == plantilla.nombre)
-            .first()
-        )
+        existe = db.query(NotificacionPlantilla).filter(NotificacionPlantilla.nombre == plantilla.nombre).first()
         if existe:
-            raise HTTPException(
-                status_code=400, detail="Ya existe una plantilla con este nombre"
-            )
+            raise HTTPException(status_code=400, detail="Ya existe una plantilla con este nombre")
 
         nueva_plantilla = NotificacionPlantilla(**plantilla.model_dump())
         db.add(nueva_plantilla)
@@ -431,11 +394,7 @@ def actualizar_plantilla(
 ):
     """Actualizar plantilla de notificación"""
     try:
-        plantilla_existente = (
-            db.query(NotificacionPlantilla)
-            .filter(NotificacionPlantilla.id == plantilla_id)
-            .first()
-        )
+        plantilla_existente = db.query(NotificacionPlantilla).filter(NotificacionPlantilla.id == plantilla_id).first()
 
         if not plantilla_existente:
             raise HTTPException(status_code=404, detail="Plantilla no encontrada")
@@ -461,9 +420,7 @@ def actualizar_plantilla(
             db.add(audit)
             db.commit()
         except Exception as e:
-            logger.warning(
-                f"No se pudo registrar auditoría actualización plantilla: {e}"
-            )
+            logger.warning(f"No se pudo registrar auditoría actualización plantilla: {e}")
 
         return plantilla_existente
 
@@ -483,11 +440,7 @@ def eliminar_plantilla(
 ):
     """Eliminar plantilla de notificación"""
     try:
-        plantilla = (
-            db.query(NotificacionPlantilla)
-            .filter(NotificacionPlantilla.id == plantilla_id)
-            .first()
-        )
+        plantilla = db.query(NotificacionPlantilla).filter(NotificacionPlantilla.id == plantilla_id).first()
 
         if not plantilla:
             raise HTTPException(status_code=404, detail="Plantilla no encontrada")
@@ -530,11 +483,7 @@ def obtener_plantilla(
 ):
     """Obtener plantilla específica"""
     try:
-        plantilla = (
-            db.query(NotificacionPlantilla)
-            .filter(NotificacionPlantilla.id == plantilla_id)
-            .first()
-        )
+        plantilla = db.query(NotificacionPlantilla).filter(NotificacionPlantilla.id == plantilla_id).first()
 
         if not plantilla:
             raise HTTPException(status_code=404, detail="Plantilla no encontrada")
@@ -556,11 +505,7 @@ def exportar_plantilla(
 ):
     """Exporta una plantilla en formato JSON y registra auditoría"""
     try:
-        plantilla = (
-            db.query(NotificacionPlantilla)
-            .filter(NotificacionPlantilla.id == plantilla_id)
-            .first()
-        )
+        plantilla = db.query(NotificacionPlantilla).filter(NotificacionPlantilla.id == plantilla_id).first()
         if not plantilla:
             raise HTTPException(status_code=404, detail="Plantilla no encontrada")
 
@@ -608,11 +553,7 @@ async def enviar_notificacion_con_plantilla(
     """Enviar notificación usando una plantilla"""
     try:
         # Obtener plantilla
-        plantilla = (
-            db.query(NotificacionPlantilla)
-            .filter(NotificacionPlantilla.id == plantilla_id)
-            .first()
-        )
+        plantilla = db.query(NotificacionPlantilla).filter(NotificacionPlantilla.id == plantilla_id).first()
 
         if not plantilla:
             raise HTTPException(status_code=404, detail="Plantilla no encontrada")
@@ -671,9 +612,7 @@ async def enviar_notificacion_con_plantilla(
     except Exception as e:
         db.rollback()
         logger.error(f"Error enviando notificación con plantilla: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 # ============================================
@@ -682,9 +621,7 @@ async def enviar_notificacion_con_plantilla(
 
 
 @router.post("/automaticas/procesar")
-def procesar_notificaciones_automaticas(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def procesar_notificaciones_automaticas(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Procesar todas las notificaciones automáticas pendientes
     Este endpoint debe ser llamado por un scheduler (cron job)
@@ -700,6 +637,4 @@ def procesar_notificaciones_automaticas(
 
     except Exception as e:
         logger.error(f"Error procesando notificaciones automáticas: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

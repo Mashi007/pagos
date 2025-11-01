@@ -30,6 +30,4 @@ def get_alerts_system(
 
     except Exception as e:
         logger.error(f"Error obteniendo sistema de alertas: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

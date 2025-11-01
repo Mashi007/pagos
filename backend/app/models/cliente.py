@@ -22,23 +22,15 @@ class Cliente(Base):
     # misma cédula
     cedula = Column(String(CEDULA_LENGTH), nullable=False, index=True)
 
-    nombres = Column(
-        String(NAME_LENGTH), nullable=False
-    )  # 2-4 palabras (nombres + apellidos unificados)
-    telefono = Column(
-        String(PHONE_LENGTH), nullable=False, index=True
-    )  # Validado por validadores
-    email = Column(
-        String(EMAIL_LENGTH), nullable=False, index=True
-    )  # Validado por validadores
+    nombres = Column(String(NAME_LENGTH), nullable=False)  # 2-4 palabras (nombres + apellidos unificados)
+    telefono = Column(String(PHONE_LENGTH), nullable=False, index=True)  # Validado por validadores
+    email = Column(String(EMAIL_LENGTH), nullable=False, index=True)  # Validado por validadores
     direccion = Column(Text, nullable=False)  # Libre
     fecha_nacimiento = Column(Date, nullable=False)  # Validado por validadores
     ocupacion = Column(String(OCCUPATION_LENGTH), nullable=False)  # Texto libre
 
     # Estado y control - OBLIGATORIOS
-    estado = Column(
-        String(STATE_LENGTH), nullable=False, default="ACTIVO", index=True
-    )  # Activo/Inactivo/Finalizado
+    estado = Column(String(STATE_LENGTH), nullable=False, default="ACTIVO", index=True)  # Activo/Inactivo/Finalizado
     activo = Column(Boolean, nullable=False, default=True, index=True)
 
     # Auditoría - OBLIGATORIOS
@@ -48,14 +40,10 @@ class Cliente(Base):
     fecha_actualizacion = Column(
         TIMESTAMP, nullable=False, default=func.now(), onupdate=func.now()
     )  # Automático - Se actualiza al editar cualquier campo
-    usuario_registro = Column(
-        String(USER_LENGTH), nullable=False
-    )  # Email del usuario logueado (automático)
+    usuario_registro = Column(String(USER_LENGTH), nullable=False)  # Email del usuario logueado (automático)
 
     # Notas - OBLIGATORIO con default 'NA'
-    notas = Column(
-        Text, nullable=False, default="NA"
-    )  # Obligatorio pero puede ser "NA"
+    notas = Column(Text, nullable=False, default="NA")  # Obligatorio pero puede ser "NA"
 
     # ============================================
     # RELACIONES CON OTROS MODELOS

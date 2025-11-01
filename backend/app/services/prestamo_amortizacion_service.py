@@ -67,9 +67,7 @@ def generar_tabla_amortizacion(
             fecha_vencimiento = fecha_base + relativedelta(months=numero_cuota)
         else:
             # Para QUINCENAL y SEMANAL usar días fijos (timedelta)
-            fecha_vencimiento = fecha_base + timedelta(
-                days=intervalo_dias * numero_cuota
-            )
+            fecha_vencimiento = fecha_base + timedelta(days=intervalo_dias * numero_cuota)
 
         # Método Francés (cuota fija)
         monto_cuota = prestamo.cuota_periodo
@@ -125,9 +123,7 @@ def generar_tabla_amortizacion(
                 f"Diferencia={diferencia}"
             )
 
-        logger.info(
-            f"Tabla de amortización generada: {prestamo.numero_cuotas} cuotas para préstamo {prestamo.id}"
-        )
+        logger.info(f"Tabla de amortización generada: {prestamo.numero_cuotas} cuotas para préstamo {prestamo.id}")
     except Exception as e:
         db.rollback()
         logger.error(f"Error generando tabla de amortización: {str(e)}")
@@ -169,12 +165,7 @@ def obtener_cuotas_prestamo(
     Returns:
         Lista de cuotas ordenadas por número
     """
-    return (
-        db.query(Cuota)
-        .filter(Cuota.prestamo_id == prestamo_id)
-        .order_by(Cuota.numero_cuota)
-        .all()
-    )
+    return db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota).all()
 
 
 def obtener_cuotas_pendientes(
@@ -195,9 +186,7 @@ def obtener_cuotas_pendientes(
         db.query(Cuota)
         .filter(
             Cuota.prestamo_id == prestamo_id,
-            Cuota.estado.in_(
-                ["PENDIENTE", "ATRASADO", "PARCIAL"]
-            ),  # ✅ Corregido: BD usa "ATRASADO" no "VENCIDA"
+            Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"]),  # ✅ Corregido: BD usa "ATRASADO" no "VENCIDA"
         )
         .order_by(Cuota.numero_cuota)
         .all()

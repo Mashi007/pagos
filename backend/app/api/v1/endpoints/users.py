@@ -59,9 +59,7 @@ def create_user(
 ):
     # Crear un nuevo usuario (verificar permiso)
     if not has_permission(bool(current_user.is_admin), Permission.USER_CREATE):
-        raise HTTPException(
-            status_code=403, detail="No tienes permisos para crear usuarios"
-        )
+        raise HTTPException(status_code=403, detail="No tienes permisos para crear usuarios")
     # - email: Email único del usuario
     # - nombre: Nombre del usuario
     # - apellido: Apellido del usuario
@@ -81,8 +79,7 @@ def create_user(
     # Validar fortaleza de contraseña
     password_length = len(user_data.password) if user_data.password else 0
     logger.info(
-        f"Creando usuario: email={user_data.email}, "
-        f"password length={password_length}, is_admin={user_data.is_admin}"
+        f"Creando usuario: email={user_data.email}, " f"password length={password_length}, is_admin={user_data.is_admin}"
     )
     is_valid, message = validate_password_strength(user_data.password)
     if not is_valid:
@@ -121,16 +118,12 @@ def list_users(
     try:
         # Verificar permiso para listar usuarios
         if not has_permission(bool(current_user.is_admin), Permission.USER_READ):
-            raise HTTPException(
-                status_code=403, detail="No tienes permisos para ver usuarios"
-            )
+            raise HTTPException(status_code=403, detail="No tienes permisos para ver usuarios")
 
         users = db.query(User).offset(skip).limit(limit).all()
         total = db.query(User).count()
 
-        return UserListResponse(
-            items=users, total=total, page=skip // limit + 1, page_size=limit
-        )
+        return UserListResponse(items=users, total=total, page=skip // limit + 1, page_size=limit)
 
     except HTTPException:
         raise
@@ -156,9 +149,7 @@ def get_user(
         if not has_permission(bool(current_user.is_admin), Permission.USER_READ):
             # Si no tiene permiso general, solo puede verse a sí mismo
             if current_user.id != user_id:
-                raise HTTPException(
-                    status_code=403, detail="No tienes permisos para ver este usuario"
-                )
+                raise HTTPException(status_code=403, detail="No tienes permisos para ver este usuario")
 
         return user
 
@@ -193,36 +184,26 @@ def update_user(
         # Validar email único si se está actualizando
         update_data = user_data.model_dump(exclude_unset=True)
         if "email" in update_data and update_data["email"] != user.email:
-            existing_user = (
-                db.query(User)
-                .filter(User.email == update_data["email"], User.id != user_id)
-                .first()
-            )
+            existing_user = db.query(User).filter(User.email == update_data["email"], User.id != user_id).first()
             if existing_user:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="El email ya está registrado por otro usuario",
                 )
 
-        logger.info(
-            f"Actualizando usuario {user_id} con campos: {list(update_data.keys())}"
-        )
+        logger.info(f"Actualizando usuario {user_id} con campos: {list(update_data.keys())}")
 
         for field, value in update_data.items():
             # Verificar que el campo existe en el modelo User
             if not hasattr(user, field):
-                logger.warning(
-                    f"Campo '{field}' no existe en el modelo User, omitiendo..."
-                )
+                logger.warning(f"Campo '{field}' no existe en el modelo User, omitiendo...")
                 continue
 
             if field == "password" and value:
                 # Validar contraseña si se está cambiando
                 is_valid, message = validate_password_strength(value)
                 if not is_valid:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST, detail=message
-                    )
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
                 setattr(user, "hashed_password", get_password_hash(value))
             elif field == "is_admin":
                 # Actualizar tanto is_admin como rol
@@ -254,9 +235,7 @@ def update_user(
                     )
             else:
                 # Campo no reconocido - omitir con advertencia
-                logger.warning(
-                    f"Campo '{field}' no se puede actualizar directamente, omitiendo..."
-                )
+                logger.warning(f"Campo '{field}' no se puede actualizar directamente, omitiendo...")
                 continue
 
         # Intentar commit con manejo de errores de BD
@@ -299,9 +278,7 @@ def update_user(
         # Incluir más detalles en el error para debugging
         error_trace = traceback.format_exc()
         logger.error(f"Traceback completo:\n{error_trace}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.delete("/{user_id}")
@@ -312,9 +289,7 @@ def delete_user(
 ):
     # Eliminar usuario (solo ADMIN)
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Solo administradores pueden eliminar usuarios"
-        )
+        raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar usuarios")
     try:
         user = db.query(User).filter(User.id == user_id).first()
 

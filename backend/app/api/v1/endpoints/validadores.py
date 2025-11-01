@@ -30,9 +30,7 @@ def obtener_configuracion_validadores(
 ):
     """Obtener configuración de validadores disponibles."""
     try:
-        logger.info(
-            f"Obteniendo configuración de validadores - Usuario: {current_user.email}"
-        )
+        logger.info(f"Obteniendo configuración de validadores - Usuario: {current_user.email}")
 
         # Estructura que espera el frontend
         return {
@@ -87,10 +85,7 @@ def obtener_configuracion_validadores(
                 "requisitos": {
                     "formato": "Sistema europeo estricto: coma (,) para decimales, punto (.) para miles",
                     "separador_decimal": "Coma (,) OBLIGATORIA para decimales",
-                    "separador_miles": (
-                        "Punto (.) OBLIGATORIO si el número es mayor a 999 "
-                        "(cada 3 dígitos desde derecha)"
-                    ),
+                    "separador_miles": ("Punto (.) OBLIGATORIO si el número es mayor a 999 " "(cada 3 dígitos desde derecha)"),
                     "reglas": {
                         "formato_valido": "1.000,12 o 10.500,25",
                         "formato_invalido": (
@@ -101,10 +96,7 @@ def obtener_configuracion_validadores(
                         ),
                     },
                     "ejemplos": {
-                        "validos": (
-                            "1.000,12 (mil con decimales), 1.500,50 (con miles), "
-                            "10.500,25 (grandes con miles)"
-                        ),
+                        "validos": ("1.000,12 (mil con decimales), 1.500,50 (con miles), " "10.500,25 (grandes con miles)"),
                         "invalidos": (
                             "1500.50 (punto decimal), 1,500.50 (coma miles), "
                             "1500,50 (sin miles > 999), 20000 (sin miles > 999)"
@@ -238,13 +230,9 @@ def validar_campo(
         resultado = {}
 
         if tipo == "cedula":
-            resultado = ValidadorCedula.validar_y_formatear_cedula(
-                request.valor, request.pais
-            )
+            resultado = ValidadorCedula.validar_y_formatear_cedula(request.valor, request.pais)
         elif tipo == "telefono":
-            resultado = ValidadorTelefono.validar_y_formatear_telefono(
-                request.valor, request.pais
-            )
+            resultado = ValidadorTelefono.validar_y_formatear_telefono(request.valor, request.pais)
         elif tipo == "nombre" or tipo == "apellido":
             resultado = ValidadorNombre.validar_y_formatear_nombre(request.valor)
         elif tipo == "email":

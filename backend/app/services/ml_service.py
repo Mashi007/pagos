@@ -98,11 +98,7 @@ class MLService:
 
             # Mapear predicción a nivel de riesgo
             risk_levels = ["Bajo", "Medio", "Alto"]
-            risk_level = (
-                risk_levels[prediction]
-                if prediction < len(risk_levels)
-                else "Desconocido"
-            )
+            risk_level = risk_levels[prediction] if prediction < len(risk_levels) else "Desconocido"
 
             # Obtener confianza (probabilidad máxima)
             confidence = float(np.max(probability))

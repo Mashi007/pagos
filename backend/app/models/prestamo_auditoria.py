@@ -27,9 +27,7 @@ class PrestamoAuditoria(Base):
     valor_nuevo = Column(Text, nullable=False)  # Valor después del cambio
 
     # Contexto del cambio
-    accion = Column(
-        String(50), nullable=False
-    )  # "CREAR", "EDITAR", "APROBAR", "RECHAZAR", "CAMBIO_ESTADO"
+    accion = Column(String(50), nullable=False)  # "CREAR", "EDITAR", "APROBAR", "RECHAZAR", "CAMBIO_ESTADO"
     estado_anterior = Column(String(20), nullable=True)  # Si cambió el estado
     estado_nuevo = Column(String(20), nullable=True)  # Nuevo estado
 

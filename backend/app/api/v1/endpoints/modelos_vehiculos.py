@@ -36,9 +36,7 @@ def listar_modelos_vehiculos(
     logger.info("=" * 80)
     logger.info("🔍 ENDPOINT EJECUTADO: listar_modelos_vehiculos")
     logger.info(f"👤 Usuario: {current_user.email if current_user else 'N/A'}")
-    logger.info(
-        f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}"
-    )
+    logger.info(f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}")
     logger.info("=" * 80)
 
     query = db.query(ModeloVehiculo)
@@ -63,9 +61,7 @@ def listar_modelos_vehiculos(
     pages = (total + limit - 1) // limit if limit > 0 else 0
     page = (skip // limit) + 1 if limit > 0 else 1
 
-    logger.info(
-        f"✅ Listando {len(modelos)} modelos de vehículos de {total} totales (página {page}/{pages})"
-    )
+    logger.info(f"✅ Listando {len(modelos)} modelos de vehículos de {total} totales (página {page}/{pages})")
 
     response = ModeloVehiculoListResponse(
         items=modelos,
@@ -79,24 +75,16 @@ def listar_modelos_vehiculos(
 
 
 @router.get("/activos", response_model=List[ModeloVehiculoResponse])
-def listar_modelos_activos(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def listar_modelos_activos(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Listar solo modelos activos (para formularios)."""
     try:
         # Solo modelos activos con precio definido (precio obligatorio para usar modelo)
-        modelos = (
-            db.query(ModeloVehiculo)
-            .filter(ModeloVehiculo.activo.is_(True), ModeloVehiculo.precio.isnot(None))
-            .all()
-        )
+        modelos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo.is_(True), ModeloVehiculo.precio.isnot(None)).all()
         logger.info(f"✅ Listando {len(modelos)} modelos activos con precio definido")
         return modelos
     except Exception as e:
         logger.error(f"Error listando modelos activos: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/{modelo_id}", response_model=ModeloVehiculoResponse)
@@ -125,16 +113,10 @@ def crear_modelo_vehiculo(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores")
     # Verificar si ya existe
-    existing = (
-        db.query(ModeloVehiculo)
-        .filter(ModeloVehiculo.modelo == modelo_data.modelo)
-        .first()
-    )
+    existing = db.query(ModeloVehiculo).filter(ModeloVehiculo.modelo == modelo_data.modelo).first()
 
     if existing:
-        raise HTTPException(
-            status_code=400, detail="Ya existe un modelo con ese nombre"
-        )
+        raise HTTPException(status_code=400, detail="Ya existe un modelo con ese nombre")
 
     modelo = ModeloVehiculo(**modelo_data.dict())
     db.add(modelo)
@@ -166,9 +148,7 @@ def actualizar_modelo_vehiculo(
     # Actualizar timestamp manualmente
     modelo.updated_at = datetime.utcnow()
     modelo.fecha_actualizacion = datetime.utcnow()
-    modelo.actualizado_por = (
-        current_user.email if getattr(current_user, "email", None) else None
-    )
+    modelo.actualizado_por = current_user.email if getattr(current_user, "email", None) else None
 
     db.commit()
     db.refresh(modelo)
@@ -210,16 +190,12 @@ def importar_modelos_vehiculos(
         import pandas as pd
 
         if not archivo.filename.lower().endswith((".xlsx", ".xls")):
-            raise HTTPException(
-                status_code=400, detail="Formato inválido. Use Excel .xlsx/.xls"
-            )
+            raise HTTPException(status_code=400, detail="Formato inválido. Use Excel .xlsx/.xls")
 
         df = pd.read_excel(archivo.file)
         columnas = {c.lower().strip() for c in df.columns}
         if "modelo" not in columnas or "precio" not in columnas:
-            raise HTTPException(
-                status_code=400, detail="Columnas requeridas: modelo, precio"
-            )
+            raise HTTPException(status_code=400, detail="Columnas requeridas: modelo, precio")
 
         creados = 0
         actualizados = 0
@@ -231,19 +207,13 @@ def importar_modelos_vehiculos(
                 continue
             fecha_act = row.get("fecha_actualizacion")
 
-            existente = (
-                db.query(ModeloVehiculo).filter(ModeloVehiculo.modelo == nombre).first()
-            )
+            existente = db.query(ModeloVehiculo).filter(ModeloVehiculo.modelo == nombre).first()
             if existente:
                 existente.precio = precio_val
                 existente.fecha_actualizacion = (
-                    pd.to_datetime(fecha_act).to_pydatetime()
-                    if pd.notna(fecha_act)
-                    else datetime.utcnow()
+                    pd.to_datetime(fecha_act).to_pydatetime() if pd.notna(fecha_act) else datetime.utcnow()
                 )
-                existente.actualizado_por = (
-                    current_user.email if getattr(current_user, "email", None) else None
-                )
+                existente.actualizado_por = current_user.email if getattr(current_user, "email", None) else None
                 actualizados += 1
             else:
                 nuevo = ModeloVehiculo(
@@ -251,11 +221,7 @@ def importar_modelos_vehiculos(
                     activo=True,
                     precio=precio_val,
                     fecha_actualizacion=datetime.utcnow(),
-                    actualizado_por=(
-                        current_user.email
-                        if getattr(current_user, "email", None)
-                        else None
-                    ),
+                    actualizado_por=(current_user.email if getattr(current_user, "email", None) else None),
                 )
                 db.add(nuevo)
                 creados += 1

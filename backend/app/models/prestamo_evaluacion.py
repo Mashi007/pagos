@@ -13,9 +13,7 @@ class PrestamoEvaluacion(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     prestamo_id = Column(Integer, nullable=False, index=True)
-    cedula = Column(
-        String(20), nullable=False, index=True
-    )  # Cédula del cliente para consultas directas
+    cedula = Column(String(20), nullable=False, index=True)  # Cédula del cliente para consultas directas
 
     # ============================================
     # CRITERIO 1: CAPACIDAD DE PAGO (33 puntos)

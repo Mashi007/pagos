@@ -28,9 +28,7 @@ def add_weeks(start_date: date, weeks: int) -> date:
     return start_date + timedelta(weeks=weeks)
 
 
-def calculate_payment_dates(
-    start_date: date, num_payments: int, frequency: str
-) -> List[date]:
+def calculate_payment_dates(start_date: date, num_payments: int, frequency: str) -> List[date]:
     # Args:
     #     start_date: Fecha del primer pago
     #     frequency: Frecuencia (SEMANAL, QUINCENAL, MENSUAL, BIMENSUAL)
@@ -193,9 +191,7 @@ def next_business_day(start_date: date, holidays: Optional[List[date]] = None) -
     return next_day
 
 
-def calculate_interest_days(
-    start_date: date, end_date: date, day_count_convention: str = "ACT/365"
-) -> int:
+def calculate_interest_days(start_date: date, end_date: date, day_count_convention: str = "ACT/365") -> int:
     # Calcula días para cálculo de intereses según convención
     # Args:
     #     start_date: Fecha inicial
@@ -207,11 +203,7 @@ def calculate_interest_days(
         # Convención 30/360 (cada mes tiene 30 días)
         d1 = min(start_date.day, 30)
         d2 = min(end_date.day, 30)
-        days = (
-            (end_date.year - start_date.year) * 360
-            + (end_date.month - start_date.month) * 30
-            + (d2 - d1)
-        )
+        days = (end_date.year - start_date.year) * 360 + (end_date.month - start_date.month) * 30 + (d2 - d1)
         return days
     elif day_count_convention == "ACT/360":
         # Días reales / 360
@@ -261,9 +253,7 @@ def get_age_in_days(birth_date: date, reference_date: Optional[date] = None) -> 
     return (reference_date - birth_date).days
 
 
-def get_notification_dates(
-    due_date: date, days_before: List[int]
-) -> List[tuple[date, str]]:
+def get_notification_dates(due_date: date, days_before: List[int]) -> List[tuple[date, str]]:
     # Calcula fechas para envío de notificaciones
     # Args:
     #     due_date: Fecha de vencimiento

@@ -23,14 +23,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _aplicar_filtros_auditoria(
-    query, usuario_email, modulo, accion, fecha_desde, fecha_hasta
-):
+def _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta):
     # Aplicar filtros a la query de auditoría (usando columnas seguras)
     if usuario_email:
-        query = query.join(User, User.id == Auditoria.usuario_id).filter(
-            User.email.ilike(f"%{usuario_email}%")
-        )
+        query = query.join(User, User.id == Auditoria.usuario_id).filter(User.email.ilike(f"%{usuario_email}%"))
     if modulo:
         query = query.filter(Auditoria.entidad == modulo)
     if accion:
@@ -57,9 +53,7 @@ def _calcular_paginacion_auditoria(total, limit, skip):
 
 @router.get("/auditoria", response_model=AuditoriaListResponse)
 def listar_auditoria(
-    usuario_email: Optional[str] = Query(
-        None, description="Filtrar por email de usuario"
-    ),
+    usuario_email: Optional[str] = Query(None, description="Filtrar por email de usuario"),
     modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
     accion: Optional[str] = Query(None, description="Filtrar por acción"),
     skip: int = Query(0, ge=0, description="Registros a omitir (paginación)"),
@@ -75,23 +69,15 @@ def listar_auditoria(
         query = db.query(Auditoria).options(joinedload(Auditoria.usuario))
 
         # Aplicar filtros
-        query = _aplicar_filtros_auditoria(
-            query, usuario_email, modulo, accion, None, None
-        )
+        query = _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, None, None)
 
         # Aplicar ordenamiento
         query = _aplicar_ordenamiento_auditoria(query, ordenar_por, orden)
 
         # Ejecutar consultas y unificar (general + préstamos + pagos)
         registros_general = query.all()
-        registros_prestamos = (
-            db.query(PrestamoAuditoria)
-            .order_by(PrestamoAuditoria.fecha_cambio.desc())
-            .all()
-        )
-        registros_pagos = (
-            db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc()).all()
-        )
+        registros_prestamos = db.query(PrestamoAuditoria).order_by(PrestamoAuditoria.fecha_cambio.desc()).all()
+        registros_pagos = db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc()).all()
 
         unified = []
 
@@ -179,12 +165,7 @@ def listar_auditoria(
 
         # Aplicar filtros en memoria para unificado
         if usuario_email:
-            unified = [
-                u
-                for u in unified
-                if u.get("usuario_email")
-                and usuario_email.lower() in u["usuario_email"].lower()
-            ]
+            unified = [u for u in unified if u.get("usuario_email") and usuario_email.lower() in u["usuario_email"].lower()]
         if modulo:
             unified = [u for u in unified if u.get("modulo") == modulo]
         if accion:
@@ -217,9 +198,7 @@ def listar_auditoria(
 
     except Exception as e:
         logger.error(f"Error listando auditoría: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/auditoria/exportar")
@@ -245,9 +224,7 @@ def exportar_auditoria(
         ).order_by(desc(Auditoria.fecha))
         registros_general = query_general.all()
 
-        query_prestamos = db.query(PrestamoAuditoria).order_by(
-            desc(PrestamoAuditoria.fecha_cambio)
-        )
+        query_prestamos = db.query(PrestamoAuditoria).order_by(desc(PrestamoAuditoria.fecha_cambio))
         query_pagos = db.query(PagoAuditoria).order_by(desc(PagoAuditoria.fecha_cambio))
 
         # Filtros aproximados para detalladas
@@ -255,14 +232,10 @@ def exportar_auditoria(
             query_prestamos = query_prestamos.filter(PrestamoAuditoria.accion == accion)
             query_pagos = query_pagos.filter(PagoAuditoria.accion == accion)
         if fecha_desde:
-            query_prestamos = query_prestamos.filter(
-                PrestamoAuditoria.fecha_cambio >= fecha_desde
-            )
+            query_prestamos = query_prestamos.filter(PrestamoAuditoria.fecha_cambio >= fecha_desde)
             query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio >= fecha_desde)
         if fecha_hasta:
-            query_prestamos = query_prestamos.filter(
-                PrestamoAuditoria.fecha_cambio <= fecha_hasta
-            )
+            query_prestamos = query_prestamos.filter(PrestamoAuditoria.fecha_cambio <= fecha_hasta)
             query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio <= fecha_hasta)
         # modulo/usuario_email no siempre disponibles en detalladas; modulo lo mapeamos
         registros_prestamos: List[PrestamoAuditoria] = query_prestamos.all()
@@ -342,9 +315,7 @@ def exportar_auditoria(
             db.add(audit)
             db.commit()
         except Exception as e:
-            logger.warning(
-                f"No se pudo registrar auditoría exportación de auditoría: {e}"
-            )
+            logger.warning(f"No se pudo registrar auditoría exportación de auditoría: {e}")
 
         return Response(
             content=output.getvalue(),
@@ -354,9 +325,7 @@ def exportar_auditoria(
 
     except Exception as e:
         logger.error(f"Error exportando auditoría: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 def _crear_excel_auditoria(registros):
@@ -464,64 +433,22 @@ def estadisticas_auditoria(
         inicio_mes = datetime(now.year, now.month, 1)
 
         acciones_hoy = (
-            (
-                db.query(func.count(Auditoria.id))
-                .filter(Auditoria.fecha >= inicio_hoy)
-                .scalar()
-                or 0
-            )
-            + (
-                db.query(func.count(PrestamoAuditoria.id))
-                .filter(PrestamoAuditoria.fecha_cambio >= inicio_hoy)
-                .scalar()
-                or 0
-            )
-            + (
-                db.query(func.count(PagoAuditoria.id))
-                .filter(PagoAuditoria.fecha_cambio >= inicio_hoy)
-                .scalar()
-                or 0
-            )
+            (db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_hoy).scalar() or 0)
+            + (db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0)
+            + (db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0)
         )
         acciones_esta_semana = (
-            (
-                db.query(func.count(Auditoria.id))
-                .filter(Auditoria.fecha >= inicio_semana)
-                .scalar()
-                or 0
-            )
+            (db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_semana).scalar() or 0)
             + (
-                db.query(func.count(PrestamoAuditoria.id))
-                .filter(PrestamoAuditoria.fecha_cambio >= inicio_semana)
-                .scalar()
+                db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_semana).scalar()
                 or 0
             )
-            + (
-                db.query(func.count(PagoAuditoria.id))
-                .filter(PagoAuditoria.fecha_cambio >= inicio_semana)
-                .scalar()
-                or 0
-            )
+            + (db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_semana).scalar() or 0)
         )
         acciones_este_mes = (
-            (
-                db.query(func.count(Auditoria.id))
-                .filter(Auditoria.fecha >= inicio_mes)
-                .scalar()
-                or 0
-            )
-            + (
-                db.query(func.count(PrestamoAuditoria.id))
-                .filter(PrestamoAuditoria.fecha_cambio >= inicio_mes)
-                .scalar()
-                or 0
-            )
-            + (
-                db.query(func.count(PagoAuditoria.id))
-                .filter(PagoAuditoria.fecha_cambio >= inicio_mes)
-                .scalar()
-                or 0
-            )
+            (db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_mes).scalar() or 0)
+            + (db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0)
+            + (db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0)
         )
 
         return AuditoriaStatsResponse(

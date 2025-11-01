@@ -23,9 +23,7 @@ router = APIRouter()
 
 @router.get("/dashboard")
 def dashboard_kpis_principales(
-    fecha_corte: Optional[str] = Query(
-        None, description="Fecha de corte (default: hoy)"
-    ),
+    fecha_corte: Optional[str] = Query(None, description="Fecha de corte (default: hoy)"),
     analista: Optional[str] = Query(None, description="Filtrar por analista"),
     concesionario: Optional[str] = Query(None, description="Filtrar por concesionario"),
     modelo: Optional[str] = Query(None, description="Filtrar por modelo"),
@@ -51,9 +49,7 @@ def dashboard_kpis_principales(
         fecha_corte = date.fromisoformat(fecha_corte)
 
     # ✅ Cartera total - usar filtros automáticos
-    cartera_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-        Prestamo.estado == "APROBADO"
-    )
+    cartera_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(Prestamo.estado == "APROBADO")
     cartera_query = FiltrosDashboard.aplicar_filtros_prestamo(
         cartera_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
     )
@@ -97,14 +93,11 @@ def dashboard_kpis_principales(
 
     # ✅ Pagos del mes - usar filtros automáticos
     pagos_query = db.query(func.sum(Pago.monto_pagado)).filter(
-        func.date_trunc("month", Pago.fecha_pago)
-        == func.date_trunc("month", fecha_corte)
+        func.date_trunc("month", Pago.fecha_pago) == func.date_trunc("month", fecha_corte)
     )
     if analista or concesionario or modelo:
         pagos_query = pagos_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
-    pagos_query = FiltrosDashboard.aplicar_filtros_pago(
-        pagos_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
-    )
+    pagos_query = FiltrosDashboard.aplicar_filtros_pago(pagos_query, analista, concesionario, modelo, fecha_inicio, fecha_fin)
     pagos_mes = pagos_query.scalar() or Decimal("0")
 
     # ✅ Cuotas vencidas - usar filtros automáticos
@@ -120,9 +113,7 @@ def dashboard_kpis_principales(
 
     # ✅ KPIs adicionales de amortizaciones - usar filtros automáticos
     # Total de cuotas
-    total_cuotas_query = db.query(func.count(Cuota.id)).join(
-        Prestamo, Cuota.prestamo_id == Prestamo.id
-    )
+    total_cuotas_query = db.query(func.count(Cuota.id)).join(Prestamo, Cuota.prestamo_id == Prestamo.id)
     total_cuotas_query = FiltrosDashboard.aplicar_filtros_cuota(
         total_cuotas_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
     )
@@ -146,9 +137,7 @@ def dashboard_kpis_principales(
 
     # Cuotas pagadas
     cuotas_pagadas_query = (
-        db.query(func.count(Cuota.id))
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .filter(Cuota.estado == "PAGADO")
+        db.query(func.count(Cuota.id)).join(Prestamo, Cuota.prestamo_id == Prestamo.id).filter(Cuota.estado == "PAGADO")
     )
     cuotas_pagadas_query = FiltrosDashboard.aplicar_filtros_cuota(
         cuotas_pagadas_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
@@ -157,11 +146,7 @@ def dashboard_kpis_principales(
 
     # Saldo pendiente total (capital + interés + mora)
     saldo_pendiente_query = (
-        db.query(
-            func.sum(
-                Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora
-            )
-        )
+        db.query(func.sum(Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .filter(Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"]))
     )
@@ -172,11 +157,7 @@ def dashboard_kpis_principales(
 
     # Monto total vencido (solo cuotas vencidas)
     monto_vencido_query = (
-        db.query(
-            func.sum(
-                Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora
-            )
-        )
+        db.query(func.sum(Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .filter(
             Cuota.fecha_vencimiento < fecha_corte,
@@ -189,9 +170,9 @@ def dashboard_kpis_principales(
     monto_vencido = monto_vencido_query.scalar() or Decimal("0")
 
     # Total pagado en cuotas (capital + interés + mora)
-    total_pagado_cuotas_query = db.query(
-        func.sum(Cuota.capital_pagado + Cuota.interes_pagado + Cuota.mora_pagada)
-    ).join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+    total_pagado_cuotas_query = db.query(func.sum(Cuota.capital_pagado + Cuota.interes_pagado + Cuota.mora_pagada)).join(
+        Prestamo, Cuota.prestamo_id == Prestamo.id
+    )
     total_pagado_cuotas_query = FiltrosDashboard.aplicar_filtros_cuota(
         total_pagado_cuotas_query,
         analista,
@@ -203,14 +184,10 @@ def dashboard_kpis_principales(
     total_pagado_cuotas = total_pagado_cuotas_query.scalar() or Decimal("0")
 
     # Porcentaje de recuperación (total pagado / cartera total)
-    porcentaje_recuperacion = (
-        float((total_pagado_cuotas / cartera_total) * 100) if cartera_total > 0 else 0.0
-    )
+    porcentaje_recuperacion = float((total_pagado_cuotas / cartera_total) * 100) if cartera_total > 0 else 0.0
 
     # Porcentaje de cuotas pagadas
-    porcentaje_cuotas_pagadas = (
-        float((cuotas_pagadas / total_cuotas) * 100) if total_cuotas > 0 else 0.0
-    )
+    porcentaje_cuotas_pagadas = float((cuotas_pagadas / total_cuotas) * 100) if total_cuotas > 0 else 0.0
 
     # ✅ NUEVOS KPIs: Cuotas del Mes Actual y Conciliadas
     # Obtener mes actual
@@ -229,9 +206,7 @@ def dashboard_kpis_principales(
             func.date(Cuota.fecha_vencimiento) <= ultimo_dia_mes,
         )
     )
-    cuotas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(
-        cuotas_mes_query, analista, concesionario, modelo, None, None
-    )
+    cuotas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(cuotas_mes_query, analista, concesionario, modelo, None, None)
     total_cuotas_mes = cuotas_mes_query.scalar() or 0
 
     # 2. Cuotas pagadas (ya existe, solo confirmamos)
@@ -256,9 +231,7 @@ def dashboard_kpis_principales(
                 )
             )
         if concesionario:
-            cuotas_conciliadas_query = cuotas_conciliadas_query.filter(
-                Prestamo.concesionario == concesionario
-            )
+            cuotas_conciliadas_query = cuotas_conciliadas_query.filter(Prestamo.concesionario == concesionario)
         if modelo:
             cuotas_conciliadas_query = cuotas_conciliadas_query.filter(
                 or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
@@ -277,9 +250,7 @@ def dashboard_kpis_principales(
         )
         .filter(
             ~Cuota.id.in_(
-                db.query(pago_cuotas.c.cuota_id)
-                .join(Pago, pago_cuotas.c.pago_id == Pago.id)
-                .filter(Pago.conciliado.is_(True))
+                db.query(pago_cuotas.c.cuota_id).join(Pago, pago_cuotas.c.pago_id == Pago.id).filter(Pago.conciliado.is_(True))
             )
         )
     )
@@ -306,31 +277,23 @@ def dashboard_kpis_principales(
             )
         )
     if concesionario:
-        clientes_cuotas_impagas_query = clientes_cuotas_impagas_query.filter(
-            Prestamo.concesionario == concesionario
-        )
+        clientes_cuotas_impagas_query = clientes_cuotas_impagas_query.filter(Prestamo.concesionario == concesionario)
     if modelo:
         clientes_cuotas_impagas_query = clientes_cuotas_impagas_query.filter(
             or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
         )
     # Contar total de cuotas impagas de estos clientes
     clientes_con_impagas = clientes_cuotas_impagas_query.all()
-    total_cuotas_impagas_2mas = sum(
-        cantidad for cedula, cantidad in clientes_con_impagas
-    )
+    total_cuotas_impagas_2mas = sum(cantidad for cedula, cantidad in clientes_con_impagas)
 
     # ✅ NUEVOS KPIs: Total Financiamiento por Estado de Cliente
     # Helper function para crear query base con filtros
     def crear_query_prestamo_base():
         query = db.query(Prestamo)
-        return FiltrosDashboard.aplicar_filtros_prestamo(
-            query, analista, concesionario, modelo, fecha_inicio, fecha_fin
-        )
+        return FiltrosDashboard.aplicar_filtros_prestamo(query, analista, concesionario, modelo, fecha_inicio, fecha_fin)
 
     # Total Financiamiento (suma de todos los préstamos)
-    total_financiamiento_query = crear_query_prestamo_base().with_entities(
-        func.sum(Prestamo.total_financiamiento)
-    )
+    total_financiamiento_query = crear_query_prestamo_base().with_entities(func.sum(Prestamo.total_financiamiento))
     total_financiamiento = total_financiamiento_query.scalar() or Decimal("0")
 
     # Total Financiamiento - Estado ACTIVO
@@ -340,9 +303,7 @@ def dashboard_kpis_principales(
         .filter(Cliente.estado == "ACTIVO")
         .with_entities(func.sum(Prestamo.total_financiamiento))
     )
-    total_financiamiento_activo = total_financiamiento_activo_query.scalar() or Decimal(
-        "0"
-    )
+    total_financiamiento_activo = total_financiamiento_activo_query.scalar() or Decimal("0")
 
     # Total Financiamiento - Estado INACTIVO
     total_financiamiento_inactivo_query = (
@@ -351,9 +312,7 @@ def dashboard_kpis_principales(
         .filter(Cliente.estado == "INACTIVO")
         .with_entities(func.sum(Prestamo.total_financiamiento))
     )
-    total_financiamiento_inactivo = (
-        total_financiamiento_inactivo_query.scalar() or Decimal("0")
-    )
+    total_financiamiento_inactivo = total_financiamiento_inactivo_query.scalar() or Decimal("0")
 
     # Total Financiamiento - Estado FINALIZADO
     total_financiamiento_finalizado_query = (
@@ -362,9 +321,7 @@ def dashboard_kpis_principales(
         .filter(Cliente.estado == "FINALIZADO")
         .with_entities(func.sum(Prestamo.total_financiamiento))
     )
-    total_financiamiento_finalizado = (
-        total_financiamiento_finalizado_query.scalar() or Decimal("0")
-    )
+    total_financiamiento_finalizado = total_financiamiento_finalizado_query.scalar() or Decimal("0")
 
     return {
         "cartera_total": float(cartera_total),
@@ -444,12 +401,7 @@ def kpis_cartera(
         .all()
     )
 
-    return {
-        "cartera_por_estado": [
-            {"estado": estado, "total": float(total)}
-            for estado, total in cartera_estado
-        ]
-    }
+    return {"cartera_por_estado": [{"estado": estado, "total": float(total)} for estado, total in cartera_estado]}
 
 
 @router.get("/prestamos")
@@ -481,9 +433,7 @@ def kpis_prestamos(
         )
 
         # Total financiamiento (suma de todos los préstamos)
-        total_financiamiento_query = base_query.with_entities(
-            func.sum(Prestamo.total_financiamiento)
-        )
+        total_financiamiento_query = base_query.with_entities(func.sum(Prestamo.total_financiamiento))
         total_financiamiento = total_financiamiento_query.scalar() or Decimal("0")
 
         # Total préstamos (conteo)
@@ -491,11 +441,7 @@ def kpis_prestamos(
         total_prestamos = total_prestamos_query.scalar() or 0
 
         # Promedio monto
-        promedio_monto = (
-            float(total_financiamiento / total_prestamos)
-            if total_prestamos > 0
-            else 0.0
-        )
+        promedio_monto = float(total_financiamiento / total_prestamos) if total_prestamos > 0 else 0.0
 
         # Cartera vigente (solo préstamos APROBADOS)
         cartera_vigente_query = base_query.filter(Prestamo.estado == "APROBADO")
@@ -519,6 +465,4 @@ def kpis_prestamos(
         }
     except Exception as e:
         logger.error(f"Error obteniendo KPIs de préstamos: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno al obtener KPIs: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno al obtener KPIs: {str(e)}")

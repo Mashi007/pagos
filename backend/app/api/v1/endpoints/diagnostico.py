@@ -48,13 +48,9 @@ def _verificar_tablas_criticas(db: Session) -> Dict[str, Any]:
         try:
             query = text(f"SELECT COUNT(*) FROM {tabla} LIMIT 1")
             db.execute(query)
-            resultados.append(
-                {"tabla": tabla, "existe": True, "accesible": True, "error": None}
-            )
+            resultados.append({"tabla": tabla, "existe": True, "accesible": True, "error": None})
         except Exception as e:
-            resultados.append(
-                {"tabla": tabla, "existe": False, "accesible": False, "error": str(e)}
-            )
+            resultados.append({"tabla": tabla, "existe": False, "accesible": False, "error": str(e)})
             todas_existen = False
 
     return {"todas_las_tablas_existen": todas_existen, "resultados": resultados}
@@ -152,10 +148,7 @@ def diagnostico_completo(db: Session = Depends(get_db)):
         if not verificaciones["tablas_criticas"]["todas_las_tablas_existen"]:
             estado_general = "error"
 
-        if (
-            verificaciones["modelos_sqlalchemy"]["modelos_funcionando"]
-            < verificaciones["modelos_sqlalchemy"]["total_modelos"]
-        ):
+        if verificaciones["modelos_sqlalchemy"]["modelos_funcionando"] < verificaciones["modelos_sqlalchemy"]["total_modelos"]:
             estado_general = "warning"
 
         if not verificaciones["configuracion"]["configuracion_completa"]:

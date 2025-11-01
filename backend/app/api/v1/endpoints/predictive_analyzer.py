@@ -33,9 +33,7 @@ class PredictiveAnalyzer:
             }
         return self.user_data[user_id]
 
-    def record_authentication_event(
-        self, user_id: str, success: bool, request_context: Dict[str, Any]
-    ) -> None:
+    def record_authentication_event(self, user_id: str, success: bool, request_context: Dict[str, Any]) -> None:
         # Registrar evento de autenticación para análisis
         user_data = self._get_user_data(user_id)
 
@@ -69,9 +67,7 @@ class PredictiveAnalyzer:
 
         # Análisis de frecuencia
         recent_attempts = [
-            attempt
-            for attempt in user_data["login_attempts"]
-            if attempt["timestamp"] > datetime.now() - timedelta(hours=24)
+            attempt for attempt in user_data["login_attempts"] if attempt["timestamp"] > datetime.now() - timedelta(hours=24)
         ]
 
         # Análisis de IPs
@@ -139,11 +135,7 @@ class PredictiveAnalyzer:
         recent_attempts = user_data["login_attempts"][-20:]  # Últimos 20 intentos
 
         # Calcular tasa de éxito reciente
-        recent_success_rate = (
-            len([a for a in recent_attempts if a["success"]])
-            / len(recent_attempts)
-            * 100
-        )
+        recent_success_rate = len([a for a in recent_attempts if a["success"]]) / len(recent_attempts) * 100
 
         # Predicción basada en tendencias
         if recent_success_rate < 50:
@@ -196,9 +188,7 @@ def analyze_user_patterns(
 
     except Exception as e:
         logger.error(f"Error analizando patrones de usuario {user_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/predictive-analysis/prediction/{user_id}")
@@ -208,9 +198,7 @@ def get_user_prediction(
 ):
     # Obtener predicción de riesgo para un usuario
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Solo administradores pueden acceder a predicciones"
-        )
+        raise HTTPException(status_code=403, detail="Solo administradores pueden acceder a predicciones")
 
     try:
         prediction = analyzer.predict_future_risk(user_id)
@@ -218,9 +206,7 @@ def get_user_prediction(
 
     except Exception as e:
         logger.error(f"Error obteniendo predicción para usuario {user_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.post("/predictive-analysis/record-event")
@@ -232,9 +218,7 @@ def record_auth_event(
 ):
     # Registrar evento de autenticación
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Solo administradores pueden registrar eventos"
-        )
+        raise HTTPException(status_code=403, detail="Solo administradores pueden registrar eventos")
 
     try:
         analyzer.record_authentication_event(user_id, success, request_context)
@@ -242,9 +226,7 @@ def record_auth_event(
 
     except Exception as e:
         logger.error(f"Error registrando evento: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/predictive-analysis/system-overview")
@@ -253,9 +235,7 @@ def get_system_overview(
 ):
     # Obtener resumen del sistema de análisis predictivo
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403, detail="Solo administradores pueden acceder a este resumen"
-        )
+        raise HTTPException(status_code=403, detail="Solo administradores pueden acceder a este resumen")
 
     try:
         total_users = len(analyzer.user_data)
@@ -290,6 +270,4 @@ def get_system_overview(
 
     except Exception as e:
         logger.error(f"Error obteniendo resumen del sistema: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

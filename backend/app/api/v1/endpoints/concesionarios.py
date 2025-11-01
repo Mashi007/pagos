@@ -38,9 +38,7 @@ def list_concesionarios(
     logger.info("=" * 80)
     logger.info("🔍 ENDPOINT EJECUTADO: list_concesionarios")
     logger.info(f"👤 Usuario: {current_user.email if current_user else 'N/A'}")
-    logger.info(
-        f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}"
-    )
+    logger.info(f"📥 Parámetros recibidos: skip={skip}, limit={limit}, search={search}, activo={activo}")
     logger.info("=" * 80)
 
     try:
@@ -64,9 +62,7 @@ def list_concesionarios(
         pages = (total + limit - 1) // limit if limit > 0 else 0
         page = (skip // limit) + 1 if limit > 0 else 1
 
-        logger.info(
-            f"✅ Listando {len(concesionarios)} concesionarios de {total} totales (página {page}/{pages})"
-        )
+        logger.info(f"✅ Listando {len(concesionarios)} concesionarios de {total} totales (página {page}/{pages})")
 
         response = ConcesionarioListResponse(
             items=concesionarios,
@@ -79,27 +75,19 @@ def list_concesionarios(
         return response
     except Exception as e:
         logger.error(f"Error en list_concesionarios: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/activos", response_model=List[ConcesionarioResponse])
-def list_concesionarios_activos(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def list_concesionarios_activos(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Listar solo concesionarios activos (para formularios)."""
     try:
-        concesionarios = (
-            db.query(Concesionario).filter(Concesionario.activo.is_(True)).all()
-        )
+        concesionarios = db.query(Concesionario).filter(Concesionario.activo.is_(True)).all()
         logger.info(f"✅ Listando {len(concesionarios)} concesionarios activos")
         return concesionarios
     except Exception as e:
         logger.error(f"Error listando concesionarios activos: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/dropdown")
@@ -124,9 +112,7 @@ def obtener_concesionario(
     current_user: User = Depends(get_current_user),
 ):
     # Obtener un concesionario por ID
-    concesionario = (
-        db.query(Concesionario).filter(Concesionario.id == concesionario_id).first()
-    )
+    concesionario = db.query(Concesionario).filter(Concesionario.id == concesionario_id).first()
     if not concesionario:
         raise HTTPException(status_code=404, detail="Concesionario no encontrado")
     return ConcesionarioResponse.model_validate(concesionario)
@@ -156,9 +142,7 @@ def crear_concesionario(
         logger.error(f"Error creando concesionario: {e}")
         traceback.print_exc()
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Error al crear concesionario: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error al crear concesionario: {str(e)}")
 
 
 @router.put("/{concesionario_id}", response_model=ConcesionarioResponse)
@@ -170,22 +154,13 @@ def actualizar_concesionario(
 ):
     # Actualizar un concesionario existente
     try:
-        concesionario = (
-            db.query(Concesionario).filter(Concesionario.id == concesionario_id).first()
-        )
+        concesionario = db.query(Concesionario).filter(Concesionario.id == concesionario_id).first()
         if not concesionario:
             raise HTTPException(status_code=404, detail="Concesionario no encontrado")
 
         # Verificar nombre unico si se esta cambiando
-        if (
-            concesionario_data.nombre
-            and concesionario_data.nombre != concesionario.nombre
-        ):
-            existing = (
-                db.query(Concesionario)
-                .filter(Concesionario.nombre == concesionario_data.nombre)
-                .first()
-            )
+        if concesionario_data.nombre and concesionario_data.nombre != concesionario.nombre:
+            existing = db.query(Concesionario).filter(Concesionario.nombre == concesionario_data.nombre).first()
             if existing:
                 raise HTTPException(status_code=400, detail="El nombre ya existe")
 
@@ -218,9 +193,7 @@ def eliminar_concesionario(
 ):
     # Eliminar un concesionario (HARD DELETE - borrado completo de BD)
     try:
-        concesionario = (
-            db.query(Concesionario).filter(Concesionario.id == concesionario_id).first()
-        )
+        concesionario = db.query(Concesionario).filter(Concesionario.id == concesionario_id).first()
         if not concesionario:
             raise HTTPException(status_code=404, detail="Concesionario no encontrado")
 

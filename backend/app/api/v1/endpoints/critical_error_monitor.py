@@ -30,6 +30,4 @@ def get_critical_error_monitor(
 
     except Exception as e:
         logger.error(f"Error obteniendo monitor de errores críticos: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

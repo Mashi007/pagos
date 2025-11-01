@@ -38,9 +38,7 @@ async def upload_pagos_excel(
     try:
         # Validar extensión
         if not file.filename.endswith((".xlsx", ".xls")):
-            raise HTTPException(
-                status_code=400, detail="El archivo debe ser Excel (.xlsx o .xls)"
-            )
+            raise HTTPException(status_code=400, detail="El archivo debe ser Excel (.xlsx o .xls)")
 
         # Leer archivo Excel
         contents = await file.read()
@@ -73,9 +71,7 @@ async def upload_pagos_excel(
                 # Validar cliente existe
                 cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
                 if not cliente:
-                    errores.append(
-                        f"Fila {index + 2}: Cliente con cédula {cedula} no encontrado"
-                    )
+                    errores.append(f"Fila {index + 2}: Cliente con cédula {cedula} no encontrado")
                     continue
 
                 # Parsear fecha
@@ -128,6 +124,4 @@ async def upload_pagos_excel(
         raise
     except Exception as e:
         logger.error(f"Error en upload_pagos_excel: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error procesando archivo: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error procesando archivo: {str(e)}")

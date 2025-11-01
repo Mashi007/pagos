@@ -158,26 +158,16 @@ app.include_router(prestamos.router, prefix="/api/v1/prestamos", tags=["prestamo
 app.include_router(pagos.router, prefix="/api/v1/pagos", tags=["pagos"])
 app.include_router(pagos_upload.router, prefix="/api/v1/pagos", tags=["pagos"])
 app.include_router(pagos_conciliacion.router, prefix="/api/v1/pagos", tags=["pagos"])
-app.include_router(
-    amortizacion.router, prefix="/api/v1/amortizacion", tags=["amortizacion"]
-)
-app.include_router(
-    solicitudes.router, prefix="/api/v1/solicitudes", tags=["solicitudes"]
-)
-app.include_router(
-    aprobaciones.router, prefix="/api/v1/aprobaciones", tags=["aprobaciones"]
-)
-app.include_router(
-    notificaciones.router, prefix="/api/v1/notificaciones", tags=["notificaciones"]
-)
+app.include_router(amortizacion.router, prefix="/api/v1/amortizacion", tags=["amortizacion"])
+app.include_router(solicitudes.router, prefix="/api/v1/solicitudes", tags=["solicitudes"])
+app.include_router(aprobaciones.router, prefix="/api/v1/aprobaciones", tags=["aprobaciones"])
+app.include_router(notificaciones.router, prefix="/api/v1/notificaciones", tags=["notificaciones"])
 app.include_router(reportes.router, prefix="/api/v1/reportes", tags=["reportes"])
 app.include_router(cobranzas.router, prefix="/api/v1/cobranzas", tags=["cobranzas"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
 app.include_router(kpis.router, prefix="/api/v1/kpis", tags=["kpis"])
 app.include_router(auditoria.router, prefix="/api/v1", tags=["auditoria"])
-app.include_router(
-    configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"]
-)
+app.include_router(configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"])
 # IMPORTANTE: Registrar estos routers ANTES de otros para evitar conflictos de rutas
 # Orden: modelos_vehiculos → analistas → concesionarios
 app.include_router(
@@ -186,19 +176,13 @@ app.include_router(
     tags=["modelos-vehiculos"],
 )
 app.include_router(analistas.router, prefix="/api/v1/analistas", tags=["analistas"])
-app.include_router(
-    concesionarios.router, prefix="/api/v1/concesionarios", tags=["concesionarios"]
-)
-app.include_router(
-    validadores.router, prefix="/api/v1/validadores", tags=["validadores"]
-)
+app.include_router(concesionarios.router, prefix="/api/v1/concesionarios", tags=["concesionarios"])
+app.include_router(validadores.router, prefix="/api/v1/validadores", tags=["validadores"])
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 
 # Log detallado de rutas registradas
 logger.info("✅ Todos los routers registrados correctamente")
-logger.info(
-    "📋 Router modelos_vehiculos registrado con prefix: /api/v1/modelos-vehiculos"
-)
+logger.info("📋 Router modelos_vehiculos registrado con prefix: /api/v1/modelos-vehiculos")
 logger.info("📋 Router analistas registrado con prefix: /api/v1/analistas")
 logger.info("📋 Router concesionarios registrado con prefix: /api/v1/concesionarios")
 

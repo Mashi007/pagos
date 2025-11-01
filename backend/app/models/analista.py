@@ -18,16 +18,12 @@ class Analista(Base):
     __tablename__ = "analistas"
 
     id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(
-        String(255), nullable=False, index=True
-    )  # Nombre completo (incluye apellido)
+    nombre = Column(String(255), nullable=False, index=True)  # Nombre completo (incluye apellido)
     activo = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=True)
-    updated_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
         return f"<Analista(id={self.id}, nombre='{self.nombre}', activo={self.activo})>"

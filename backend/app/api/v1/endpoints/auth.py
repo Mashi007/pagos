@@ -40,9 +40,7 @@ def add_cors_headers(request: Request, response: Response):
         # En caso de origin no permitido, usar el primer origin válido
         if settings.CORS_ORIGINS:
             response.headers["Access-Control-Allow-Origin"] = settings.CORS_ORIGINS[0]
-            logger.info(
-                f"CORS Debug - Usando origin por defecto: {settings.CORS_ORIGINS[0]}"
-            )
+            logger.info(f"CORS Debug - Usando origin por defecto: {settings.CORS_ORIGINS[0]}")
 
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
@@ -150,9 +148,7 @@ async def login(
         }
 
         # Calcular tiempo de expiración en segundos (4 horas = 240 minutos)
-        expires_in = (
-            settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        )  # 14400 segundos (4 horas)
+        expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # 14400 segundos (4 horas)
 
         return LoginResponse(
             access_token=access_token,
@@ -207,9 +203,7 @@ async def refresh_token(
         user = db.query(User).filter(User.id == user_id).first()
 
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado"
-            )
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado")
 
         # Generar nuevo access token (4 horas)
         new_access_token = create_access_token(subject=str(user.id))
@@ -260,9 +254,7 @@ async def change_password(
     """
     try:
         # Validar contraseña actual
-        if not verify_password(
-            password_data.current_password, current_user.password_hash
-        ):
+        if not verify_password(password_data.current_password, current_user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Contraseña actual incorrecta",
@@ -339,13 +331,9 @@ async def logout(
                 db.rollback()
             except Exception:
                 pass
-            logging.getLogger(__name__).warning(
-                f"No se pudo registrar auditoría LOGOUT: {e}"
-            )
+            logging.getLogger(__name__).warning(f"No se pudo registrar auditoría LOGOUT: {e}")
 
         return {"message": "Sesión cerrada"}
     except Exception as e:
-        logging.getLogger(__name__).warning(
-            f"No se pudo registrar auditoría LOGOUT: {e}"
-        )
+        logging.getLogger(__name__).warning(f"No se pudo registrar auditoría LOGOUT: {e}")
         return {"message": "Sesión cerrada"}

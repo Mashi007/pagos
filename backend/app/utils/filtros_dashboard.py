@@ -48,9 +48,7 @@ class FiltrosDashboard:
         if concesionario:
             query = query.filter(Prestamo.concesionario == concesionario)
         if modelo:
-            query = query.filter(
-                or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
-            )
+            query = query.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
         if fecha_inicio:
             query = query.filter(Prestamo.fecha_registro >= fecha_inicio)
         if fecha_fin:
@@ -92,9 +90,7 @@ class FiltrosDashboard:
             if concesionario:
                 query = query.filter(Prestamo.concesionario == concesionario)
             if modelo:
-                query = query.filter(
-                    or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
-                )
+                query = query.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
 
         if fecha_inicio:
             query = query.filter(func.date(Pago.fecha_pago) >= fecha_inicio)
@@ -132,9 +128,7 @@ class FiltrosDashboard:
         if concesionario:
             query = query.filter(Prestamo.concesionario == concesionario)
         if modelo:
-            query = query.filter(
-                or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
-            )
+            query = query.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
         if fecha_inicio:
             query = query.filter(Prestamo.fecha_registro >= fecha_inicio)
         if fecha_fin:
