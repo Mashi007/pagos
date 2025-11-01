@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from decimal import Decimal
 from typing import List, Optional
@@ -38,8 +39,48 @@ class ClienteBase(BaseModel):
         ...,
         min_length=MIN_PHONE_LENGTH,
         max_length=MAX_PHONE_LENGTH,
-        description="Teléfono del cliente",
+        description="Teléfono del cliente (formato: +58XXXXXXXXXX, 13 caracteres)",
     )
+
+    @field_validator("telefono", mode="before")
+    @classmethod
+    def validate_telefono_format(cls, v: str) -> str:
+        """Validar formato de teléfono: +58 seguido de 10 dígitos, primero NO puede ser 0"""
+        if not v:
+            raise ValueError("Teléfono requerido")
+        
+        # Limpiar espacios
+        telefono_limpio = v.strip()
+        
+        # Validar longitud exacta (13 caracteres: +58 + 10 dígitos)
+        if len(telefono_limpio) != 13:
+            raise ValueError(
+                f"Teléfono debe tener exactamente 13 caracteres (formato: +58XXXXXXXXXX). "
+                f"Recibido: {len(telefono_limpio)} caracteres"
+            )
+        
+        # Validar que empiece por +58
+        if not telefono_limpio.startswith("+58"):
+            raise ValueError(
+                "Teléfono debe empezar por '+58'. Ejemplo: +581234567890"
+            )
+        
+        # Validar que después de +58 tenga exactamente 10 dígitos
+        digitos = telefono_limpio[3:]  # Todo después de "+58"
+        if not re.match(r"^[0-9]{10}$", digitos):
+            raise ValueError(
+                "Después de '+58' deben ir exactamente 10 dígitos numéricos. "
+                f"Recibido: '{digitos}'"
+            )
+        
+        # Validar que el primer dígito después de +58 NO sea 0
+        if digitos[0] == "0":
+            raise ValueError(
+                "El primer dígito después de '+58' NO puede ser 0. "
+                "El número debe empezar por 1-9. Ejemplo: +581234567890"
+            )
+        
+        return telefono_limpio
     email: EmailStr = Field(..., description="Validado por validadores")
     direccion: str = Field(
         ...,
@@ -239,6 +280,15 @@ class ClienteUpdate(BaseModel):
             return ClienteBase.validate_ocupacion(v)
         return v
 
+    @field_validator("telefono", mode="before")
+    @classmethod
+    def validate_telefono_on_update(cls, v: Optional[str]) -> Optional[str]:
+        """Validar formato de teléfono en actualización (si se proporciona)"""
+        if v:
+            # Reutilizar la validación de ClienteBase
+            return ClienteBase.validate_telefono_format(v)
+        return v
+
 
 class ClienteResponse(ClienteBase):
     """Schema de respuesta para cliente"""
@@ -246,6 +296,17 @@ class ClienteResponse(ClienteBase):
     id: int
     activo: bool
     usuario_registro: str  # Email del usuario que registró
+
+    # Sobrescribir validador de telefono para permitir datos históricos
+    # (en lectura, aceptamos formatos no estándar para no romper datos existentes)
+    @field_validator("telefono", mode="before")
+    @classmethod
+    def validate_telefono_response(cls, v: str) -> str:
+        """Validación flexible para respuestas: permite datos históricos"""
+        if not v:
+            return v
+        # En respuestas, solo normalizamos espacios, pero no rechazamos formatos antiguos
+        return v.strip()
 
     model_config = ConfigDict(from_attributes=True)
 
