@@ -337,9 +337,9 @@ def dashboard_administrador(
             db.query(func.sum(Cuota.monto_cuota))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
-            and_(
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                and_(
+                    Cuota.fecha_vencimiento < hoy,
+                    Cuota.estado != "PAGADO",
                     Prestamo.estado == "APROBADO",
                 )
             )
@@ -893,7 +893,7 @@ def dashboard_administrador(
 
             # ✅ Cuotas pagadas del mes (para calcular morosidad correctamente)
             cuotas_pagadas_mes_query = (
-            db.query(func.count(Cuota.id))
+                db.query(func.count(Cuota.id))
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .filter(
                     Cuota.estado == "PAGADO",

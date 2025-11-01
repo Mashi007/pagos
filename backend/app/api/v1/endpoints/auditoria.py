@@ -248,30 +248,22 @@ def exportar_auditoria(
         query_prestamos = db.query(PrestamoAuditoria).order_by(
             desc(PrestamoAuditoria.fecha_cambio)
         )
-        query_pagos = db.query(PagoAuditoria).order_by(
-            desc(PagoAuditoria.fecha_cambio)
-        )
+        query_pagos = db.query(PagoAuditoria).order_by(desc(PagoAuditoria.fecha_cambio))
 
         # Filtros aproximados para detalladas
         if accion:
-            query_prestamos = query_prestamos.filter(
-                PrestamoAuditoria.accion == accion
-            )
+            query_prestamos = query_prestamos.filter(PrestamoAuditoria.accion == accion)
             query_pagos = query_pagos.filter(PagoAuditoria.accion == accion)
         if fecha_desde:
             query_prestamos = query_prestamos.filter(
                 PrestamoAuditoria.fecha_cambio >= fecha_desde
             )
-            query_pagos = query_pagos.filter(
-                PagoAuditoria.fecha_cambio >= fecha_desde
-            )
+            query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio >= fecha_desde)
         if fecha_hasta:
             query_prestamos = query_prestamos.filter(
                 PrestamoAuditoria.fecha_cambio <= fecha_hasta
             )
-            query_pagos = query_pagos.filter(
-                PagoAuditoria.fecha_cambio <= fecha_hasta
-            )
+            query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio <= fecha_hasta)
         # modulo/usuario_email no siempre disponibles en detalladas; modulo lo mapeamos
         registros_prestamos: List[PrestamoAuditoria] = query_prestamos.all()
         registros_pagos: List[PagoAuditoria] = query_pagos.all()
