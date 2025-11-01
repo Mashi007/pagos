@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import List
 
+from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
 
 from app.models.amortizacion import Cuota
@@ -58,7 +59,15 @@ def generar_tabla_amortizacion(
     # Generar cada cuota
     for numero_cuota in range(1, prestamo.numero_cuotas + 1):
         # Fecha de vencimiento
-        fecha_vencimiento = fecha_base + timedelta(days=intervalo_dias * numero_cuota)
+        # ✅ CORRECCIÓN: Para MENSUAL usar meses calendario (relativedelta)
+        # Para mantener el mismo día del mes en cada cuota
+        # relativedelta automáticamente ajusta al último día válido si el día no existe
+        # (ej: día 31 en febrero → último día de febrero)
+        if prestamo.modalidad_pago == "MENSUAL":
+            fecha_vencimiento = fecha_base + relativedelta(months=numero_cuota)
+        else:
+            # Para QUINCENAL y SEMANAL usar días fijos (timedelta)
+            fecha_vencimiento = fecha_base + timedelta(days=intervalo_dias * numero_cuota)
 
         # Método Francés (cuota fija)
         monto_cuota = prestamo.cuota_periodo
