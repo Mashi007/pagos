@@ -450,7 +450,7 @@ def exportar_reporte_cartera(
         if formato.lower() == "excel":
             # Crear archivo Excel con datos reales detallados
             from openpyxl import Workbook
-            from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+            from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
             wb = Workbook()
 
