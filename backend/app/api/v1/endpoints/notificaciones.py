@@ -251,7 +251,7 @@ def obtener_estadisticas_notificaciones(
         enviadas = db.query(func.count(Notificacion.id)).filter(Notificacion.estado == "ENVIADA").scalar() or 0
         pendientes = db.query(func.count(Notificacion.id)).filter(Notificacion.estado == "PENDIENTE").scalar() or 0
         fallidas = db.query(func.count(Notificacion.id)).filter(Notificacion.estado == "FALLIDA").scalar() or 0
-        
+
         # Intentar obtener no_leidas, pero manejar el caso si la columna no existe
         no_leidas = 0
         try:
