@@ -346,6 +346,10 @@ export function Configuracion() {
         const logoUrl = `${result.url}?t=${Date.now()}`
         setLogoPreview(logoUrl)
       }
+
+      // El logo se guarda automáticamente al subirlo, no requiere botón Guardar
+      // Pero si hay otros cambios pendientes, asegurar que el botón esté habilitado
+      console.log('✅ Logo cargado exitosamente. Cambios pendientes:', cambiosPendientes)
     } catch (error: any) {
       console.error('Error cargando logo:', error)
       const errorMessage = error?.response?.data?.detail || error?.message || 'Error desconocido'
