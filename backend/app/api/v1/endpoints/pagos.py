@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -71,6 +71,196 @@ def healthcheck_pagos(
             "error": str(e),
             "mensaje": "❌ Error de conexión o consulta a la base de datos",
         }
+
+
+@router.get("/diagnostico")
+def diagnostico_pagos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Diagnóstico detallado del módulo de Pagos para identificar problemas de conexión.
+    """
+    diagnostico = {
+        "timestamp": datetime.now().isoformat(),
+        "verificaciones": {},
+        "errores": [],
+        "estado": "ok"
+    }
+    
+    try:
+        # 1. Verificar conexión básica
+        logger.info("🔍 [diagnostico_pagos] Verificando conexión básica...")
+        try:
+            db.execute(text("SELECT 1"))
+            diagnostico["verificaciones"]["conexion_basica"] = {
+                "status": "ok",
+                "mensaje": "Conexión a BD establecida correctamente"
+            }
+        except Exception as e:
+            diagnostico["verificaciones"]["conexion_basica"] = {
+                "status": "error",
+                "mensaje": f"Error de conexión: {str(e)}"
+            }
+            diagnostico["errores"].append(f"Conexión básica falló: {str(e)}")
+            diagnostico["estado"] = "error"
+            logger.error(f"❌ [diagnostico_pagos] Error conexión básica: {e}", exc_info=True)
+        
+        # 2. Verificar tabla pagos
+        logger.info("🔍 [diagnostico_pagos] Verificando tabla pagos...")
+        try:
+            total_pagos = db.query(func.count(Pago.id)).scalar()
+            diagnostico["verificaciones"]["tabla_pagos"] = {
+                "status": "ok",
+                "total_registros": total_pagos,
+                "mensaje": f"Tabla 'pagos' accesible con {total_pagos} registros"
+            }
+        except Exception as e:
+            diagnostico["verificaciones"]["tabla_pagos"] = {
+                "status": "error",
+                "mensaje": f"Error accediendo tabla pagos: {str(e)}"
+            }
+            diagnostico["errores"].append(f"Tabla pagos inaccesible: {str(e)}")
+            diagnostico["estado"] = "error"
+            logger.error(f"❌ [diagnostico_pagos] Error tabla pagos: {e}", exc_info=True)
+        
+        # 3. Verificar tabla prestamos
+        logger.info("🔍 [diagnostico_pagos] Verificando tabla prestamos...")
+        try:
+            total_prestamos = db.query(func.count(Prestamo.id)).scalar()
+            diagnostico["verificaciones"]["tabla_prestamos"] = {
+                "status": "ok",
+                "total_registros": total_prestamos,
+                "mensaje": f"Tabla 'prestamos' accesible con {total_prestamos} registros"
+            }
+        except Exception as e:
+            diagnostico["verificaciones"]["tabla_prestamos"] = {
+                "status": "error",
+                "mensaje": f"Error accediendo tabla prestamos: {str(e)}"
+            }
+            diagnostico["errores"].append(f"Tabla prestamos inaccesible: {str(e)}")
+            diagnostico["estado"] = "warning"
+            logger.error(f"⚠️ [diagnostico_pagos] Error tabla prestamos: {e}", exc_info=True)
+        
+        # 4. Verificar tabla cuotas
+        logger.info("🔍 [diagnostico_pagos] Verificando tabla cuotas...")
+        try:
+            total_cuotas = db.query(func.count(Cuota.id)).scalar()
+            diagnostico["verificaciones"]["tabla_cuotas"] = {
+                "status": "ok",
+                "total_registros": total_cuotas,
+                "mensaje": f"Tabla 'cuotas' accesible con {total_cuotas} registros"
+            }
+        except Exception as e:
+            diagnostico["verificaciones"]["tabla_cuotas"] = {
+                "status": "error",
+                "mensaje": f"Error accediendo tabla cuotas: {str(e)}"
+            }
+            diagnostico["errores"].append(f"Tabla cuotas inaccesible: {str(e)}")
+            diagnostico["estado"] = "warning"
+            logger.error(f"⚠️ [diagnostico_pagos] Error tabla cuotas: {e}", exc_info=True)
+        
+        # 5. Verificar query compleja (similar a listar_pagos)
+        logger.info("🔍 [diagnostico_pagos] Verificando query compleja (listar_pagos)...")
+        try:
+            hoy = date.today()
+            # Query similar a la que se ejecuta en listar_pagos
+            query_test = db.query(Pago).order_by(Pago.fecha_registro.desc()).limit(5)
+            pagos_test = query_test.all()
+            
+            # Probar cálculo de cuotas atrasadas (solo para el primer pago)
+            if pagos_test:
+                primer_pago = pagos_test[0]
+                if primer_pago.cedula_cliente:
+                    prestamos_ids = [
+                        p.id
+                        for p in db.query(Prestamo.id)
+                        .filter(
+                            Prestamo.cedula == primer_pago.cedula_cliente,
+                            Prestamo.estado == "APROBADO",
+                        )
+                        .all()
+                    ]
+                    
+                    if prestamos_ids:
+                        cuotas_atrasadas_query = (
+                            db.query(func.count(Cuota.id))
+                            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                            .filter(
+                                Prestamo.id.in_(prestamos_ids),
+                                Prestamo.estado == "APROBADO",
+                                Cuota.fecha_vencimiento < hoy,
+                                Cuota.total_pagado < Cuota.monto_cuota,
+                            )
+                        )
+                        cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
+                        diagnostico["verificaciones"]["query_compleja"] = {
+                            "status": "ok",
+                            "mensaje": f"Query compleja exitosa - {len(pagos_test)} pagos obtenidos, cálculo de cuotas atrasadas OK",
+                            "ejemplo": {
+                                "pago_id": primer_pago.id,
+                                "cedula": primer_pago.cedula_cliente,
+                                "prestamos_encontrados": len(prestamos_ids),
+                                "cuotas_atrasadas": cuotas_atrasadas
+                            }
+                        }
+                    else:
+                        diagnostico["verificaciones"]["query_compleja"] = {
+                            "status": "ok",
+                            "mensaje": f"Query compleja exitosa - {len(pagos_test)} pagos obtenidos, sin préstamos APROBADOS para prueba"
+                        }
+                else:
+                    diagnostico["verificaciones"]["query_compleja"] = {
+                        "status": "ok",
+                        "mensaje": f"Query compleja exitosa - {len(pagos_test)} pagos obtenidos, primer pago sin cédula"
+                    }
+            else:
+                diagnostico["verificaciones"]["query_compleja"] = {
+                    "status": "warning",
+                    "mensaje": "Query compleja exitosa pero no hay pagos en BD para probar"
+                }
+        except Exception as e:
+            diagnostico["verificaciones"]["query_compleja"] = {
+                "status": "error",
+                "mensaje": f"Error en query compleja: {str(e)}"
+            }
+            diagnostico["errores"].append(f"Query compleja falló: {str(e)}")
+            diagnostico["estado"] = "error"
+            logger.error(f"❌ [diagnostico_pagos] Error query compleja: {e}", exc_info=True)
+        
+        # 6. Verificar serialización
+        logger.info("🔍 [diagnostico_pagos] Verificando serialización...")
+        try:
+            if pagos_test:
+                primer_pago = pagos_test[0]
+                pago_dict = PagoResponse.model_validate(primer_pago).model_dump()
+                diagnostico["verificaciones"]["serializacion"] = {
+                    "status": "ok",
+                    "mensaje": "Serialización de PagoResponse exitosa",
+                    "campos_serializados": len(pago_dict)
+                }
+            else:
+                diagnostico["verificaciones"]["serializacion"] = {
+                    "status": "warning",
+                    "mensaje": "No hay pagos para probar serialización"
+                }
+        except Exception as e:
+            diagnostico["verificaciones"]["serializacion"] = {
+                "status": "error",
+                "mensaje": f"Error en serialización: {str(e)}"
+            }
+            diagnostico["errores"].append(f"Serialización falló: {str(e)}")
+            diagnostico["estado"] = "error"
+            logger.error(f"❌ [diagnostico_pagos] Error serialización: {e}", exc_info=True)
+        
+    except Exception as e:
+        logger.error(f"❌ [diagnostico_pagos] Error general: {e}", exc_info=True)
+        diagnostico["estado"] = "error"
+        diagnostico["errores"].append(f"Error general: {str(e)}")
+    
+    logger.info(f"✅ [diagnostico_pagos] Diagnóstico completado - Estado: {diagnostico['estado']}")
+    
+    return diagnostico
 
 
 @router.get("/", response_model=dict)
