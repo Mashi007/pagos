@@ -276,8 +276,8 @@ class ValidadorCedula:
                     "error": "Cédula requerida",
                     "valor_original": cedula,
                     "valor_formateado": None,
-                        "formato_esperado": "V, E, J o Z + 7-10 dígitos",
-                        "sugerencia": "Ingrese una cédula. Ejemplo: 'V12345678'",
+                    "formato_esperado": "V, E, J o Z + 7-10 dígitos",
+                    "sugerencia": "Ingrese una cédula. Ejemplo: 'V12345678'",
                 }
 
             # Limpiar entrada
