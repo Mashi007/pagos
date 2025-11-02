@@ -69,15 +69,33 @@ class FiltrosDashboard:
 
         Uso:
             query = db.query(func.sum(Pago.monto_pagado))
-            if analista or concesionario or modelo:
-                query = query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
             query = FiltrosDashboard.aplicar_filtros_pago(
                 query, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
+            # NOTA: El método detecta automáticamente si necesita hacer el JOIN
         """
-        # Si hay filtros de préstamo, ya debe tener el join
+        # Si hay filtros de préstamo, hacer JOIN solo si no existe ya
         if analista or concesionario or modelo:
-            if not any(str(Prestamo) in str(query) for _ in [None]):
+            # Verificar si ya existe un JOIN con Prestamo compilando el SQL
+            necesita_join = True
+            try:
+                # Compilar el statement a SQL para verificar si ya tiene la tabla prestamos
+                compiled_sql = str(query.statement.compile(compile_kwargs={"literal_binds": False})).lower()
+                # Buscar referencias a la tabla prestamos (puede estar como "prestamos" o con esquema)
+                prestamo_table_name = Prestamo.__tablename__
+                # Verificar si la tabla ya aparece en el SQL (puede estar en FROM o JOIN)
+                if prestamo_table_name.lower() in compiled_sql:
+                    # Contar cuántas veces aparece "JOIN prestamos" o "FROM prestamos"
+                    count_joins = compiled_sql.count("join") + compiled_sql.count("from")
+                    # Si ya aparece al menos una vez, probablemente ya hay un JOIN
+                    if count_joins > 0 and prestamo_table_name.lower() in compiled_sql:
+                        necesita_join = False
+            except (AttributeError, Exception):
+                # Si hay error al compilar, asumir que necesita JOIN (seguro fallar que fallar silenciosamente)
+                necesita_join = True
+
+            # Hacer JOIN solo si es necesario
+            if necesita_join:
                 query = query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
 
             if analista:

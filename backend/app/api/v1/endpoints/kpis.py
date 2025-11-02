@@ -92,11 +92,10 @@ def dashboard_kpis_principales(
     clientes_al_dia = max(0, clientes_con_cuotas - clientes_en_mora)
 
     # ✅ Pagos del mes - usar filtros automáticos
+    # NOTA: FiltrosDashboard.aplicar_filtros_pago maneja el JOIN automáticamente si es necesario
     pagos_query = db.query(func.sum(Pago.monto_pagado)).filter(
         func.date_trunc("month", Pago.fecha_pago) == func.date_trunc("month", fecha_corte)
     )
-    if analista or concesionario or modelo:
-        pagos_query = pagos_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
     pagos_query = FiltrosDashboard.aplicar_filtros_pago(pagos_query, analista, concesionario, modelo, fecha_inicio, fecha_fin)
     pagos_mes = pagos_query.scalar() or Decimal("0")
 
