@@ -492,7 +492,6 @@ def dashboard_administrador(
         if periodo == "mes":
             fecha_inicio_periodo = date(hoy.year, hoy.month, 1)
             fecha_fin_periodo_anterior = fecha_inicio_periodo - timedelta(days=1)
-            fecha_inicio_periodo_anterior = date(fecha_fin_periodo_anterior.year, fecha_fin_periodo_anterior.month, 1)
         elif periodo == "semana":
             fecha_inicio_periodo = hoy - timedelta(days=hoy.weekday())
             fecha_fin_periodo_anterior = fecha_inicio_periodo - timedelta(days=1)
