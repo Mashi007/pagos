@@ -317,6 +317,25 @@ class ClienteResponse(ClienteBase):
         # En respuestas, solo normalizamos espacios, pero no rechazamos formatos antiguos
         return v.strip()
 
+    # Sobrescribir validador de nombres para permitir datos históricos
+    # (en lectura, aceptamos nombres con más de 4 palabras para no romper datos existentes)
+    @field_validator("nombres", mode="before")
+    @classmethod
+    def validate_nombres_response(cls, v: str) -> str:
+        """Validación flexible para respuestas: permite datos históricos con más de 4 palabras"""
+        if not v:
+            return v
+        # En respuestas, solo validamos que no esté vacío, permitimos cualquier cantidad de palabras
+        # para datos históricos que no cumplen la nueva regla de máximo 4 palabras
+        words = v.strip().split()
+        words = [word for word in words if word]  # Filtrar palabras vacías
+        
+        if len(words) < 1:
+            raise ValueError("Nombres requeridos")
+        
+        # Permitir cualquier cantidad de palabras en lectura (solo normalizar espacios)
+        return " ".join(words)
+
     model_config = ConfigDict(from_attributes=True)
 
 
