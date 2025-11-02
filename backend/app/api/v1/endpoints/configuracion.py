@@ -409,6 +409,50 @@ async def upload_logo(
         raise HTTPException(status_code=500, detail=f"Error al subir logo: {str(e)}")
 
 
+@router.head("/logo/{filename}")
+async def verificar_logo_existe(
+    filename: str,
+):
+    """Verificar si el logo existe (HEAD request)"""
+    try:
+        from fastapi.responses import Response
+
+        from app.core.config import settings
+
+        # Validar que el archivo sea del tipo correcto
+        if not filename.startswith("logo-custom") or not any(
+            filename.endswith(ext) for ext in [".svg", ".png", ".jpg", ".jpeg"]
+        ):
+            raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
+
+        uploads_dir = Path(settings.UPLOAD_DIR) if hasattr(settings, "UPLOAD_DIR") else Path("uploads")
+        logo_path = uploads_dir / "logos" / filename
+
+        if not logo_path.exists():
+            raise HTTPException(status_code=404, detail="Logo no encontrado")
+
+        # Determinar content type
+        content_type_map = {
+            ".svg": "image/svg+xml",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+        }
+        ext = Path(filename).suffix.lower()
+        media_type = content_type_map.get(ext, "application/octet-stream")
+
+        # Devolver respuesta HEAD sin cuerpo
+        return Response(
+            status_code=200,
+            headers={"Content-Type": media_type},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error verificando logo: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error verificando logo: {str(e)}")
+
+
 @router.get("/logo/{filename}")
 async def obtener_logo(
     filename: str,

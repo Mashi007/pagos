@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -234,10 +234,9 @@ const staticOptions = {
 };
 
 // ✅ Verificar que los archivos de assets existen antes de servir
-const fs = require('fs');
 const assetsPath = path.join(distPath, 'assets');
 if (existsSync(assetsPath)) {
-  const assetFiles = fs.readdirSync(assetsPath);
+  const assetFiles = readdirSync(assetsPath);
   console.log(`✅ Directorio assets encontrado: ${assetsPath}`);
   console.log(`📦 Total de archivos en assets: ${assetFiles.length}`);
   // Log los primeros 10 archivos para debugging
