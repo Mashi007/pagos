@@ -228,10 +228,39 @@ export function Configuracion() {
     { id: 'usuarios', nombre: 'Usuarios', icono: Users },
   ]
 
-  const handleGuardar = () => {
-    console.log('Guardando configuración...', configuracion)
-    setCambiosPendientes(false)
-    // Lógica para guardar configuración
+  const handleGuardar = async () => {
+    try {
+      setLoading(true)
+      
+      // Guardar cambios de configuración general si hay cambios pendientes
+      if (configuracionGeneral && cambiosPendientes) {
+        // Mapeo de campos frontend a backend
+        const camposMap: Record<string, string> = {
+          'nombreEmpresa': 'nombre_empresa',
+          'idioma': 'idioma',
+          'zonaHoraria': 'zona_horaria',
+          'moneda': 'moneda'
+        }
+        
+        // Actualizar cada campo que haya cambiado
+        for (const [campoFrontend, campoBackend] of Object.entries(camposMap)) {
+          const valorFrontend = configuracion.general[campoFrontend as keyof typeof configuracion.general]
+          const valorBackend = configuracionGeneral[campoBackend as keyof typeof configuracionGeneral]
+          
+          if (valorFrontend && valorFrontend !== valorBackend) {
+            await actualizarConfiguracionGeneral(campoBackend, String(valorFrontend))
+          }
+        }
+      }
+      
+      setCambiosPendientes(false)
+      toast.success('Configuración guardada exitosamente')
+    } catch (error) {
+      console.error('Error guardando configuración:', error)
+      toast.error('Error al guardar configuración')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleCambio = (seccion: string, campo: string, valor: any) => {
@@ -247,10 +276,8 @@ export function Configuracion() {
     
     setCambiosPendientes(true)
     
-    // Si es configuración general, actualizar también en el backend
-    if (seccion === 'general') {
-      actualizarConfiguracionGeneral(campo, valor)
-    }
+    // NO actualizar automáticamente en el backend
+    // El usuario debe hacer clic en "Guardar" para persistir los cambios
   }
 
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -307,10 +334,18 @@ export function Configuracion() {
       }
       reader.readAsDataURL(file)
 
-      // Recargar página para aplicar nuevo logo
-      setTimeout(() => {
-        window.location.reload()
-      }, 1500)
+      // Forzar recarga del componente Logo usando un evento personalizado
+      // No recargar toda la página, solo notificar que el logo cambió
+      window.dispatchEvent(new CustomEvent('logoUpdated', { 
+        detail: { filename: result.filename, url: result.url } 
+      }))
+      
+      // Recargar logo sin recargar toda la página
+      // Agregar timestamp al URL para evitar caché
+      if (result.url) {
+        const logoUrl = `${result.url}?t=${Date.now()}`
+        setLogoPreview(logoUrl)
+      }
     } catch (error: any) {
       console.error('Error cargando logo:', error)
       const errorMessage = error?.response?.data?.detail || error?.message || 'Error desconocido'

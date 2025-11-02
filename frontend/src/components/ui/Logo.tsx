@@ -41,7 +41,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           })
           
           if (response.ok) {
-            // Si el archivo existe, usar imagen
+            // Si el archivo existe, usar imagen con timestamp para evitar caché
             setCustomLogoUrl(`${logoPath}?t=${Date.now()}`)
             clearTimeout(timeoutId)
             break
@@ -60,6 +60,25 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     }
 
     checkCustomLogo()
+
+    // Escuchar eventos de actualización del logo
+    const handleLogoUpdate = (event: CustomEvent) => {
+      const { filename, url } = event.detail
+      if (url) {
+        // Recargar el logo con timestamp para evitar caché
+        setCustomLogoUrl(`${url}?t=${Date.now()}`)
+      } else if (filename) {
+        // Si solo tenemos el filename, construir el path
+        const logoPath = `/api/v1/configuracion/logo/${filename}`
+        setCustomLogoUrl(`${logoPath}?t=${Date.now()}`)
+      }
+    }
+
+    window.addEventListener('logoUpdated', handleLogoUpdate as EventListener)
+
+    return () => {
+      window.removeEventListener('logoUpdated', handleLogoUpdate as EventListener)
+    }
   }, [])
 
   // Si hay logo personalizado, mostrar imagen

@@ -354,6 +354,45 @@ async def upload_logo(
         with open(logo_path, "wb") as f:
             f.write(contents)
 
+        # Guardar referencia del logo en la base de datos
+        from app.models.configuracion_sistema import ConfiguracionSistema
+
+        # Buscar si ya existe una configuración de logo
+        logo_config = (
+            db.query(ConfiguracionSistema)
+            .filter(
+                ConfiguracionSistema.categoria == "GENERAL",
+                ConfiguracionSistema.clave == "logo_filename",
+            )
+            .first()
+        )
+
+        try:
+            if logo_config:
+                # Actualizar configuración existente
+                logo_config.valor = logo_filename
+                logo_config.actualizado_por = current_user.email
+                logo_config.actualizado_en = datetime.utcnow()
+            else:
+                # Crear nueva configuración
+                logo_config = ConfiguracionSistema(
+                    categoria="GENERAL",
+                    clave="logo_filename",
+                    valor=logo_filename,
+                    tipo_dato="STRING",
+                    descripcion="Nombre del archivo del logo de la empresa",
+                    visible_frontend=True,
+                    creado_por=current_user.email,
+                    actualizado_por=current_user.email,
+                )
+                db.add(logo_config)
+
+            db.commit()
+        except Exception as db_error:
+            db.rollback()
+            logger.error(f"Error guardando configuración de logo en BD: {str(db_error)}")
+            # No fallar si solo falla el guardado en BD, el archivo ya está guardado
+
         logger.info(f"Logo subido por usuario {current_user.email}: {logo_filename}")
 
         return {
