@@ -7,7 +7,6 @@ import {
   LineChart,
   Users,
   Building2,
-  BarChart,
   TrendingUp,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -522,7 +521,7 @@ export function DashboardAnalisis() {
             <CardContent className="p-6 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-blue-100 rounded-lg">
-                  <BarChart className="h-6 w-6 text-blue-600" />
+                  <BarChart3 className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-lg">Distribución de Préstamos</h3>

@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
-import { LucideIcon, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { formatCurrency } from '@/utils'
+import type React from 'react'
 
 interface KpiCardProps {
   title: string
@@ -8,7 +9,7 @@ interface KpiCardProps {
   variationPercent?: number
   variationAbs?: number
   color: 'blue' | 'green' | 'purple' | 'red'
-  icon?: LucideIcon
+  icon?: React.ComponentType<{ className?: string }>
   formatValue?: (value: number | string) => string
 }
 
