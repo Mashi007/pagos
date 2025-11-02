@@ -262,16 +262,46 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                     delay: 0.1 
                   }}
                   whileHover={{ scale: 1.05 }}
-                  className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-2xl p-2.5 ring-4 ring-white/70 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:shadow-blue-400/40 hover:ring-white/90"
+                  className="relative w-20 h-20 bg-gradient-to-br from-white via-white to-gray-50 rounded-2xl flex items-center justify-center p-2.5 cursor-pointer transition-all duration-300"
+                  style={{
+                    boxShadow: `
+                      0 10px 25px -5px rgba(0, 0, 0, 0.3),
+                      0 8px 10px -6px rgba(0, 0, 0, 0.2),
+                      0 0 0 1px rgba(255, 255, 255, 0.9),
+                      inset 0 2px 4px rgba(255, 255, 255, 0.6),
+                      inset 0 -2px 4px rgba(0, 0, 0, 0.05)
+                    `,
+                    filter: 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15))'
+                  }}
                 >
-                  <Logo size="lg" className="drop-shadow-xl brightness-110 contrast-125" />
+                  {/* Efecto de luz superior para relieve */}
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-white/60 to-transparent pointer-events-none" />
+                  {/* Borde interno sutil para profundidad */}
+                  <div className="absolute inset-[1px] rounded-[15px] border border-white/50 pointer-events-none" />
+                  <Logo size="lg" className="drop-shadow-xl brightness-110 contrast-125 relative z-10" />
                 </motion.div>
               </div>
             )}
             {isCompact && (
               <div className="flex items-center justify-center">
-                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-xl p-1.5 ring-2 ring-white/70">
-                  <Logo size="md" className="drop-shadow-lg brightness-110 contrast-125" />
+                <div 
+                  className="relative w-12 h-12 bg-gradient-to-br from-white via-white to-gray-50 rounded-xl flex items-center justify-center p-1.5 transition-all duration-300"
+                  style={{
+                    boxShadow: `
+                      0 6px 15px -3px rgba(0, 0, 0, 0.25),
+                      0 4px 6px -4px rgba(0, 0, 0, 0.15),
+                      0 0 0 1px rgba(255, 255, 255, 0.9),
+                      inset 0 1px 2px rgba(255, 255, 255, 0.6),
+                      inset 0 -1px 2px rgba(0, 0, 0, 0.04)
+                    `,
+                    filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.12))'
+                  }}
+                >
+                  {/* Efecto de luz superior para relieve */}
+                  <div className="absolute inset-0 rounded-xl bg-gradient-to-b from-white/60 to-transparent pointer-events-none" />
+                  {/* Borde interno sutil para profundidad */}
+                  <div className="absolute inset-[1px] rounded-[9px] border border-white/50 pointer-events-none" />
+                  <Logo size="md" className="drop-shadow-lg brightness-110 contrast-125 relative z-10" />
                 </div>
               </div>
             )}
