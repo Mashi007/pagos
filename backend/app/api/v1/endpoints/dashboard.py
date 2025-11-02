@@ -1135,6 +1135,7 @@ def resumen_general(
 # ENDPOINTS PARA COMPONENTES DEL DASHBOARD (6 COMPONENTES)
 # ============================================================================
 
+
 @router.get("/kpis-principales")
 def obtener_kpis_principales(
     analista: Optional[str] = Query(None, description="Filtrar por analista"),
@@ -1156,7 +1157,7 @@ def obtener_kpis_principales(
         hoy = date.today()
         mes_actual = hoy.month
         año_actual = hoy.year
-        
+
         # Calcular mes anterior
         if mes_actual == 1:
             mes_anterior = 12
@@ -1164,110 +1165,95 @@ def obtener_kpis_principales(
         else:
             mes_anterior = mes_actual - 1
             año_anterior = año_actual
-        
+
         fecha_inicio_mes_actual = date(año_actual, mes_actual, 1)
         fecha_inicio_mes_anterior = date(año_anterior, mes_anterior, 1)
-        
+
         # Último día del mes anterior
         if mes_anterior == 12:
             fecha_fin_mes_anterior = date(año_anterior + 1, 1, 1)
         else:
             fecha_fin_mes_anterior = date(año_anterior, mes_anterior + 1, 1)
-        
+
         # Último día del mes actual
         if mes_actual == 12:
             fecha_fin_mes_actual = date(año_actual + 1, 1, 1)
         else:
             fecha_fin_mes_actual = date(año_actual, mes_actual + 1, 1)
-        
+
         # 1. TOTAL PRESTAMOS
         query_prestamos_actual = db.query(func.count(Prestamo.id)).filter(Prestamo.estado == "APROBADO")
         query_prestamos_actual = FiltrosDashboard.aplicar_filtros_prestamo(
             query_prestamos_actual, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         total_prestamos_actual = query_prestamos_actual.scalar() or 0
-        
-        query_prestamos_anterior = (
-            db.query(func.count(Prestamo.id))
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
-                Prestamo.fecha_registro < fecha_fin_mes_anterior,
-            )
+
+        query_prestamos_anterior = db.query(func.count(Prestamo.id)).filter(
+            Prestamo.estado == "APROBADO",
+            Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
+            Prestamo.fecha_registro < fecha_fin_mes_anterior,
         )
         query_prestamos_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
             query_prestamos_anterior, analista, concesionario, modelo, None, None
         )
         total_prestamos_anterior = query_prestamos_anterior.scalar() or 0
-        
+
         variacion_prestamos = (
             ((total_prestamos_actual - total_prestamos_anterior) / total_prestamos_anterior * 100)
             if total_prestamos_anterior > 0
             else 0
         )
-        
+
         # 2. CREDITOS NUEVOS EN EL MES
-        query_creditos_nuevos_actual = (
-            db.query(func.count(Prestamo.id))
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Prestamo.fecha_registro >= fecha_inicio_mes_actual,
-                Prestamo.fecha_registro < fecha_fin_mes_actual,
-            )
+        query_creditos_nuevos_actual = db.query(func.count(Prestamo.id)).filter(
+            Prestamo.estado == "APROBADO",
+            Prestamo.fecha_registro >= fecha_inicio_mes_actual,
+            Prestamo.fecha_registro < fecha_fin_mes_actual,
         )
         query_creditos_nuevos_actual = FiltrosDashboard.aplicar_filtros_prestamo(
             query_creditos_nuevos_actual, analista, concesionario, modelo, None, None
         )
         creditos_nuevos_actual = query_creditos_nuevos_actual.scalar() or 0
-        
-        query_creditos_nuevos_anterior = (
-            db.query(func.count(Prestamo.id))
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
-                Prestamo.fecha_registro < fecha_fin_mes_anterior,
-            )
+
+        query_creditos_nuevos_anterior = db.query(func.count(Prestamo.id)).filter(
+            Prestamo.estado == "APROBADO",
+            Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
+            Prestamo.fecha_registro < fecha_fin_mes_anterior,
         )
         query_creditos_nuevos_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
             query_creditos_nuevos_anterior, analista, concesionario, modelo, None, None
         )
         creditos_nuevos_anterior = query_creditos_nuevos_anterior.scalar() or 0
-        
+
         variacion_creditos = (
             ((creditos_nuevos_actual - creditos_nuevos_anterior) / creditos_nuevos_anterior * 100)
             if creditos_nuevos_anterior > 0
             else 0
         )
-        
+
         # 3. TOTAL CLIENTES
-        query_clientes_actual = (
-            db.query(func.count(func.distinct(Prestamo.cedula)))
-            .filter(Prestamo.estado == "APROBADO")
-        )
+        query_clientes_actual = db.query(func.count(func.distinct(Prestamo.cedula))).filter(Prestamo.estado == "APROBADO")
         query_clientes_actual = FiltrosDashboard.aplicar_filtros_prestamo(
             query_clientes_actual, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         total_clientes_actual = query_clientes_actual.scalar() or 0
-        
-        query_clientes_anterior = (
-            db.query(func.count(func.distinct(Prestamo.cedula)))
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
-                Prestamo.fecha_registro < fecha_fin_mes_anterior,
-            )
+
+        query_clientes_anterior = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
+            Prestamo.estado == "APROBADO",
+            Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
+            Prestamo.fecha_registro < fecha_fin_mes_anterior,
         )
         query_clientes_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
             query_clientes_anterior, analista, concesionario, modelo, None, None
         )
         total_clientes_anterior = query_clientes_anterior.scalar() or 0
-        
+
         variacion_clientes = (
             ((total_clientes_actual - total_clientes_anterior) / total_clientes_anterior * 100)
             if total_clientes_anterior > 0
             else 0
         )
-        
+
         # 4. TOTAL MOROSIDAD EN DOLARES
         # Morosidad = cuotas vencidas no pagadas
         query_morosidad_actual = (
@@ -1283,7 +1269,7 @@ def obtener_kpis_principales(
             query_morosidad_actual, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         morosidad_actual = float(query_morosidad_actual.scalar() or Decimal("0"))
-        
+
         # Para mes anterior, filtrar por cuotas que vencieron en ese mes
         query_morosidad_anterior = (
             db.query(func.sum(Cuota.monto_cuota))
@@ -1299,18 +1285,26 @@ def obtener_kpis_principales(
             query_morosidad_anterior, analista, concesionario, modelo, None, None
         )
         morosidad_anterior = float(query_morosidad_anterior.scalar() or Decimal("0"))
-        
+
         variacion_morosidad = (
-            ((morosidad_actual - morosidad_anterior) / morosidad_anterior * 100)
-            if morosidad_anterior > 0
-            else 0
+            ((morosidad_actual - morosidad_anterior) / morosidad_anterior * 100) if morosidad_anterior > 0 else 0
         )
-        
+
         nombres_meses = [
-            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+            "Enero",
+            "Febrero",
+            "Marzo",
+            "Abril",
+            "Mayo",
+            "Junio",
+            "Julio",
+            "Agosto",
+            "Septiembre",
+            "Octubre",
+            "Noviembre",
+            "Diciembre",
         ]
-        
+
         return {
             "total_prestamos": {
                 "valor_actual": total_prestamos_actual,
@@ -1339,7 +1333,7 @@ def obtener_kpis_principales(
             "mes_actual": nombres_meses[mes_actual - 1],
             "mes_anterior": nombres_meses[mes_anterior - 1],
         }
-    
+
     except Exception as e:
         logger.error(f"Error obteniendo KPIs principales: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
@@ -1363,22 +1357,32 @@ def obtener_cobranzas_mensuales(
     try:
         hoy = date.today()
         nombres_meses = [
-            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+            "Enero",
+            "Febrero",
+            "Marzo",
+            "Abril",
+            "Mayo",
+            "Junio",
+            "Julio",
+            "Agosto",
+            "Septiembre",
+            "Octubre",
+            "Noviembre",
+            "Diciembre",
         ]
-        
+
         # Obtener últimos 12 meses
         meses_data = []
         for i in range(12):
             mes_fecha = date(hoy.year, hoy.month, 1) - timedelta(days=32 * i)
             mes_fecha = date(mes_fecha.year, mes_fecha.month, 1)
-            
+
             # Calcular rango del mes
             if mes_fecha.month == 12:
                 siguiente_mes = date(mes_fecha.year + 1, 1, 1)
             else:
                 siguiente_mes = date(mes_fecha.year, mes_fecha.month + 1, 1)
-            
+
             # Cobranzas planificadas: Suma de monto_cuota de cuotas con fecha_vencimiento en ese mes
             query_cobranzas = (
                 db.query(func.sum(Cuota.monto_cuota))
@@ -1393,15 +1397,12 @@ def obtener_cobranzas_mensuales(
                 query_cobranzas, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
             cobranzas_planificadas = float(query_cobranzas.scalar() or Decimal("0"))
-            
+
             # Pagos reales: Suma de pagos conciliados en ese mes
-            query_pagos = (
-                db.query(func.sum(Pago.monto_pagado))
-                .filter(
-                    func.date(Pago.fecha_pago) >= mes_fecha,
-                    func.date(Pago.fecha_pago) < siguiente_mes,
-                    Pago.conciliado.is_(True),
-                )
+            query_pagos = db.query(func.sum(Pago.monto_pagado)).filter(
+                func.date(Pago.fecha_pago) >= mes_fecha,
+                func.date(Pago.fecha_pago) < siguiente_mes,
+                Pago.conciliado.is_(True),
             )
             if analista or concesionario or modelo:
                 query_pagos = query_pagos.join(Prestamo, Pago.prestamo_id == Prestamo.id)
@@ -1409,22 +1410,24 @@ def obtener_cobranzas_mensuales(
                 query_pagos, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
             pagos_reales = float(query_pagos.scalar() or Decimal("0"))
-            
-            meses_data.append({
-                "mes": mes_fecha.strftime("%Y-%m"),
-                "nombre_mes": nombres_meses[mes_fecha.month - 1],
-                "cobranzas_planificadas": cobranzas_planificadas,
-                "pagos_reales": pagos_reales,
-                "meta_mensual": cobranzas_planificadas,  # Meta = cobranzas planificadas
-            })
-        
+
+            meses_data.append(
+                {
+                    "mes": mes_fecha.strftime("%Y-%m"),
+                    "nombre_mes": nombres_meses[mes_fecha.month - 1],
+                    "cobranzas_planificadas": cobranzas_planificadas,
+                    "pagos_reales": pagos_reales,
+                    "meta_mensual": cobranzas_planificadas,  # Meta = cobranzas planificadas
+                }
+            )
+
         # Meta actual = cobranzas planificadas del mes actual
         mes_actual_inicio = date(hoy.year, hoy.month, 1)
         if hoy.month == 12:
             mes_actual_fin = date(hoy.year + 1, 1, 1)
         else:
             mes_actual_fin = date(hoy.year, hoy.month + 1, 1)
-        
+
         query_meta = (
             db.query(func.sum(Cuota.monto_cuota))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -1438,12 +1441,12 @@ def obtener_cobranzas_mensuales(
             query_meta, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         meta_actual = float(query_meta.scalar() or Decimal("0"))
-        
+
         return {
             "meses": meses_data,
             "meta_actual": meta_actual,
         }
-    
+
     except Exception as e:
         logger.error(f"Error obteniendo cobranzas mensuales: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
@@ -1465,25 +1468,25 @@ def obtener_cobranza_por_dia(
     """
     try:
         hoy = date.today()
-        
+
         # Calcular rango de fechas
         if fecha_inicio:
             fecha_inicio_query = fecha_inicio
         else:
             fecha_inicio_query = hoy - timedelta(days=dias or 30)
-        
+
         if fecha_fin:
             fecha_fin_query = fecha_fin
         else:
             fecha_fin_query = hoy
-        
+
         # Generar lista de fechas
         fechas = []
         current_date = fecha_inicio_query
         while current_date <= fecha_fin_query:
             fechas.append(current_date)
             current_date += timedelta(days=1)
-        
+
         dias_data = []
         for fecha_dia in fechas:
             # Total a cobrar: Suma de monto_cuota de cuotas con fecha_vencimiento = fecha_dia
@@ -1499,19 +1502,16 @@ def obtener_cobranza_por_dia(
                 query_total_cobrar, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
             total_a_cobrar = float(query_total_cobrar.scalar() or Decimal("0"))
-            
+
             # Pagos: Suma de pagos con fecha_pago = fecha_dia
-            query_pagos = (
-                db.query(func.sum(Pago.monto_pagado))
-                .filter(func.date(Pago.fecha_pago) == fecha_dia)
-            )
+            query_pagos = db.query(func.sum(Pago.monto_pagado)).filter(func.date(Pago.fecha_pago) == fecha_dia)
             if analista or concesionario or modelo:
                 query_pagos = query_pagos.join(Prestamo, Pago.prestamo_id == Prestamo.id)
             query_pagos = FiltrosDashboard.aplicar_filtros_pago(
                 query_pagos, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
             pagos = float(query_pagos.scalar() or Decimal("0"))
-            
+
             # Morosidad: Suma de cuotas vencidas no pagadas hasta esa fecha
             query_morosidad = (
                 db.query(func.sum(Cuota.monto_cuota))
@@ -1526,16 +1526,18 @@ def obtener_cobranza_por_dia(
                 query_morosidad, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
             morosidad = float(query_morosidad.scalar() or Decimal("0"))
-            
-            dias_data.append({
-                "fecha": fecha_dia.isoformat(),
-                "total_a_cobrar": total_a_cobrar,
-                "pagos": pagos,
-                "morosidad": morosidad,
-            })
-        
+
+            dias_data.append(
+                {
+                    "fecha": fecha_dia.isoformat(),
+                    "total_a_cobrar": total_a_cobrar,
+                    "pagos": pagos,
+                    "morosidad": morosidad,
+                }
+            )
+
         return {"dias": dias_data}
-    
+
     except Exception as e:
         logger.error(f"Error obteniendo cobranza por día: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
@@ -1560,18 +1562,15 @@ def obtener_metricas_acumuladas(
     """
     try:
         hoy = date.today()
-        
+
         # Fechas de inicio de mes y año
         fecha_inicio_mes = date(hoy.year, hoy.month, 1)
         fecha_inicio_anio = date(hoy.year, 1, 1)
-        
+
         # Acumulado mensual: Pagos desde inicio del mes
-        query_acumulado_mensual = (
-            db.query(func.sum(Pago.monto_pagado))
-            .filter(
-                func.date(Pago.fecha_pago) >= fecha_inicio_mes,
-                Pago.conciliado.is_(True),
-            )
+        query_acumulado_mensual = db.query(func.sum(Pago.monto_pagado)).filter(
+            func.date(Pago.fecha_pago) >= fecha_inicio_mes,
+            Pago.conciliado.is_(True),
         )
         if analista or concesionario or modelo:
             query_acumulado_mensual = query_acumulado_mensual.join(Prestamo, Pago.prestamo_id == Prestamo.id)
@@ -1579,14 +1578,11 @@ def obtener_metricas_acumuladas(
             query_acumulado_mensual, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         acumulado_mensual = float(query_acumulado_mensual.scalar() or Decimal("0"))
-        
+
         # Acumulado anual: Pagos desde inicio del año
-        query_acumulado_anual = (
-            db.query(func.sum(Pago.monto_pagado))
-            .filter(
-                func.date(Pago.fecha_pago) >= fecha_inicio_anio,
-                Pago.conciliado.is_(True),
-            )
+        query_acumulado_anual = db.query(func.sum(Pago.monto_pagado)).filter(
+            func.date(Pago.fecha_pago) >= fecha_inicio_anio,
+            Pago.conciliado.is_(True),
         )
         if analista or concesionario or modelo:
             query_acumulado_anual = query_acumulado_anual.join(Prestamo, Pago.prestamo_id == Prestamo.id)
@@ -1594,7 +1590,7 @@ def obtener_metricas_acumuladas(
             query_acumulado_anual, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         acumulado_anual = float(query_acumulado_anual.scalar() or Decimal("0"))
-        
+
         # Clientes con 1 pago atrasado
         query_clientes_1_atrasado = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
@@ -1609,7 +1605,7 @@ def obtener_metricas_acumuladas(
             query_clientes_1_atrasado, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         clientes_1_atrasado = query_clientes_1_atrasado.scalar() or 0
-        
+
         # Clientes con 3+ cuotas atrasadas
         # Subquery: clientes con 3 o más cuotas atrasadas
         subquery_cuotas_atrasadas = (
@@ -1624,13 +1620,12 @@ def obtener_metricas_acumuladas(
             .having(func.count(Cuota.id) >= 3)
             .subquery()
         )
-        
-        query_clientes_3mas = (
-            db.query(func.count(func.distinct(subquery_cuotas_atrasadas.c.cedula)))
-            .select_from(subquery_cuotas_atrasadas)
+
+        query_clientes_3mas = db.query(func.count(func.distinct(subquery_cuotas_atrasadas.c.cedula))).select_from(
+            subquery_cuotas_atrasadas
         )
         clientes_3mas = query_clientes_3mas.scalar() or 0
-        
+
         return {
             "acumulado_mensual": acumulado_mensual,
             "acumulado_anual": acumulado_anual,
@@ -1639,7 +1634,7 @@ def obtener_metricas_acumuladas(
             "fecha_inicio_mes": fecha_inicio_mes.isoformat(),
             "fecha_inicio_anio": fecha_inicio_anio.isoformat(),
         }
-    
+
     except Exception as e:
         logger.error(f"Error obteniendo métricas acumuladas: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")

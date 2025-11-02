@@ -1,5 +1,6 @@
 # Archivo temporal con los endpoints restantes - Copiar al final de dashboard.py
 
+
 @router.get("/morosidad-por-analista")
 def obtener_morosidad_por_analista(
     analista: Optional[str] = Query(None),
@@ -16,7 +17,7 @@ def obtener_morosidad_por_analista(
     """
     try:
         hoy = date.today()
-        
+
         # Obtener morosidad por analista (morosidad = cuotas vencidas no pagadas)
         query = (
             db.query(
@@ -33,35 +34,35 @@ def obtener_morosidad_por_analista(
             )
             .group_by("analista")
         )
-        
+
         # Aplicar filtros (excepto analista que ya estamos agrupando)
         if concesionario:
             query = query.filter(Prestamo.concesionario == concesionario)
         if modelo:
             query = query.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
-        
+
         resultados = query.all()
-        
+
         analistas_data = []
         for row in resultados:
             total_morosidad = float(row.total_morosidad or Decimal("0"))
             cantidad_clientes = row.cantidad_clientes or 0
             cantidad_cuotas = row.cantidad_cuotas_atrasadas or 0
-            
-            promedio_por_cliente = (
-                total_morosidad / cantidad_clientes if cantidad_clientes > 0 else 0
+
+            promedio_por_cliente = total_morosidad / cantidad_clientes if cantidad_clientes > 0 else 0
+
+            analistas_data.append(
+                {
+                    "analista": row.analista or "Sin Analista",
+                    "total_morosidad": total_morosidad,
+                    "cantidad_clientes": cantidad_clientes,
+                    "cantidad_cuotas_atrasadas": cantidad_cuotas,
+                    "promedio_morosidad_por_cliente": promedio_por_cliente,
+                }
             )
-            
-            analistas_data.append({
-                "analista": row.analista or "Sin Analista",
-                "total_morosidad": total_morosidad,
-                "cantidad_clientes": cantidad_clientes,
-                "cantidad_cuotas_atrasadas": cantidad_cuotas,
-                "promedio_morosidad_por_cliente": promedio_por_cliente,
-            })
-        
+
         return {"analistas": analistas_data}
-    
+
     except Exception as e:
         logger.error(f"Error obteniendo morosidad por analista: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
@@ -86,11 +87,9 @@ def obtener_prestamos_por_concesionario(
         query_base = FiltrosDashboard.aplicar_filtros_prestamo(
             query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        
-        total_general = float(
-            query_base.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0")
-        )
-        
+
+        total_general = float(query_base.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
+
         # Agrupar por concesionario
         query_concesionarios = (
             db.query(
@@ -101,7 +100,7 @@ def obtener_prestamos_por_concesionario(
             .filter(Prestamo.estado == "APROBADO")
             .group_by("concesionario")
         )
-        
+
         # Aplicar filtros
         if analista:
             query_concesionarios = query_concesionarios.filter(
@@ -115,26 +114,28 @@ def obtener_prestamos_por_concesionario(
             query_concesionarios = query_concesionarios.filter(Prestamo.fecha_registro >= fecha_inicio)
         if fecha_fin:
             query_concesionarios = query_concesionarios.filter(Prestamo.fecha_registro <= fecha_fin)
-        
+
         resultados = query_concesionarios.all()
-        
+
         concesionarios_data = []
         for row in resultados:
             total_prestamos = float(row.total_prestamos or Decimal("0"))
             porcentaje = (total_prestamos / total_general * 100) if total_general > 0 else 0
-            
-            concesionarios_data.append({
-                "concesionario": row.concesionario or "Sin Concesionario",
-                "total_prestamos": total_prestamos,
-                "cantidad_prestamos": row.cantidad_prestamos or 0,
-                "porcentaje": round(porcentaje, 2),
-            })
-        
+
+            concesionarios_data.append(
+                {
+                    "concesionario": row.concesionario or "Sin Concesionario",
+                    "total_prestamos": total_prestamos,
+                    "cantidad_prestamos": row.cantidad_prestamos or 0,
+                    "porcentaje": round(porcentaje, 2),
+                }
+            )
+
         return {
             "concesionarios": concesionarios_data,
             "total_general": total_general,
         }
-    
+
     except Exception as e:
         logger.error(f"Error obteniendo préstamos por concesionario: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
@@ -159,14 +160,12 @@ def obtener_distribucion_prestamos(
         query_base = FiltrosDashboard.aplicar_filtros_prestamo(
             query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        
+
         total_prestamos = query_base.count()
-        total_monto = float(
-            query_base.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0")
-        )
-        
+        total_monto = float(query_base.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
+
         distribucion_data = []
-        
+
         if tipo == "rango_monto":
             # Rangos: 0-5000, 5000-10000, 10000-20000, 20000-50000, 50000+
             rangos = [
@@ -176,27 +175,29 @@ def obtener_distribucion_prestamos(
                 (20000, 50000, "$20,000 - $50,000"),
                 (50000, None, "$50,000+"),
             ]
-            
+
             for min_val, max_val, categoria in rangos:
                 query_rango = query_base.filter(Prestamo.total_financiamiento >= Decimal(str(min_val)))
                 if max_val:
                     query_rango = query_rango.filter(Prestamo.total_financiamiento < Decimal(str(max_val)))
-                
+
                 cantidad = query_rango.count()
                 monto_total = float(
                     query_rango.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0")
                 )
                 porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
                 porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
-                
-                distribucion_data.append({
-                    "categoria": categoria,
-                    "cantidad_prestamos": cantidad,
-                    "monto_total": monto_total,
-                    "porcentaje_cantidad": round(porcentaje_cantidad, 2),
-                    "porcentaje_monto": round(porcentaje_monto, 2),
-                })
-        
+
+                distribucion_data.append(
+                    {
+                        "categoria": categoria,
+                        "cantidad_prestamos": cantidad,
+                        "monto_total": monto_total,
+                        "porcentaje_cantidad": round(porcentaje_cantidad, 2),
+                        "porcentaje_monto": round(porcentaje_monto, 2),
+                    }
+                )
+
         elif tipo == "plazo":
             # Agrupar por numero_cuotas (plazo)
             query_plazo = (
@@ -208,48 +209,49 @@ def obtener_distribucion_prestamos(
                 .group_by(Prestamo.numero_cuotas)
                 .order_by(Prestamo.numero_cuotas)
             )
-            
+
             resultados = query_plazo.all()
             for row in resultados:
                 cantidad = row.cantidad or 0
                 monto_total = float(row.monto_total or Decimal("0"))
                 porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
                 porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
-                
-                distribucion_data.append({
-                    "categoria": f"{row.plazo} cuotas",
-                    "cantidad_prestamos": cantidad,
-                    "monto_total": monto_total,
-                    "porcentaje_cantidad": round(porcentaje_cantidad, 2),
-                    "porcentaje_monto": round(porcentaje_monto, 2),
-                })
-        
+
+                distribucion_data.append(
+                    {
+                        "categoria": f"{row.plazo} cuotas",
+                        "cantidad_prestamos": cantidad,
+                        "monto_total": monto_total,
+                        "porcentaje_cantidad": round(porcentaje_cantidad, 2),
+                        "porcentaje_monto": round(porcentaje_monto, 2),
+                    }
+                )
+
         elif tipo == "estado":
             # Agrupar por estado (aunque todos deberían ser APROBADO)
-            query_estado = (
-                query_base.with_entities(
-                    Prestamo.estado.label("estado"),
-                    func.count(Prestamo.id).label("cantidad"),
-                    func.sum(Prestamo.total_financiamiento).label("monto_total"),
-                )
-                .group_by(Prestamo.estado)
-            )
-            
+            query_estado = query_base.with_entities(
+                Prestamo.estado.label("estado"),
+                func.count(Prestamo.id).label("cantidad"),
+                func.sum(Prestamo.total_financiamiento).label("monto_total"),
+            ).group_by(Prestamo.estado)
+
             resultados = query_estado.all()
             for row in resultados:
                 cantidad = row.cantidad or 0
                 monto_total = float(row.monto_total or Decimal("0"))
                 porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
                 porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
-                
-                distribucion_data.append({
-                    "categoria": row.estado or "Sin Estado",
-                    "cantidad_prestamos": cantidad,
-                    "monto_total": monto_total,
-                    "porcentaje_cantidad": round(porcentaje_cantidad, 2),
-                    "porcentaje_monto": round(porcentaje_monto, 2),
-                })
-        
+
+                distribucion_data.append(
+                    {
+                        "categoria": row.estado or "Sin Estado",
+                        "cantidad_prestamos": cantidad,
+                        "monto_total": monto_total,
+                        "porcentaje_cantidad": round(porcentaje_cantidad, 2),
+                        "porcentaje_monto": round(porcentaje_monto, 2),
+                    }
+                )
+
         elif tipo == "rango_monto_plazo":
             # Combinación: rango de monto + plazo
             rangos_monto = [
@@ -262,17 +264,17 @@ def obtener_distribucion_prestamos(
                 (12, 36, "Medio"),
                 (36, None, "Largo"),
             ]
-            
+
             for min_monto, max_monto, cat_monto in rangos_monto:
                 for min_plazo, max_plazo, cat_plazo in rangos_plazo:
                     query_combinado = query_base.filter(Prestamo.total_financiamiento >= Decimal(str(min_monto)))
                     if max_monto:
                         query_combinado = query_combinado.filter(Prestamo.total_financiamiento < Decimal(str(max_monto)))
-                    
+
                     query_combinado = query_combinado.filter(Prestamo.numero_cuotas >= min_plazo)
                     if max_plazo:
                         query_combinado = query_combinado.filter(Prestamo.numero_cuotas < max_plazo)
-                    
+
                     cantidad = query_combinado.count()
                     if cantidad > 0:
                         monto_total = float(
@@ -280,22 +282,24 @@ def obtener_distribucion_prestamos(
                         )
                         porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
                         porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
-                        
-                        distribucion_data.append({
-                            "categoria": f"{cat_monto} - {cat_plazo}",
-                            "cantidad_prestamos": cantidad,
-                            "monto_total": monto_total,
-                            "porcentaje_cantidad": round(porcentaje_cantidad, 2),
-                            "porcentaje_monto": round(porcentaje_monto, 2),
-                        })
-        
+
+                        distribucion_data.append(
+                            {
+                                "categoria": f"{cat_monto} - {cat_plazo}",
+                                "cantidad_prestamos": cantidad,
+                                "monto_total": monto_total,
+                                "porcentaje_cantidad": round(porcentaje_cantidad, 2),
+                                "porcentaje_monto": round(porcentaje_monto, 2),
+                            }
+                        )
+
         return {
             "distribucion": distribucion_data,
             "tipo": tipo,
             "total_prestamos": total_prestamos,
             "total_monto": total_monto,
         }
-    
+
     except Exception as e:
         logger.error(f"Error obteniendo distribución de préstamos: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
@@ -304,7 +308,9 @@ def obtener_distribucion_prestamos(
 @router.get("/cuentas-cobrar-tendencias")
 def obtener_cuentas_cobrar_tendencias(
     meses_proyeccion: int = Query(6, description="Meses de proyección adelante"),
-    granularidad: str = Query("mes_actual", description="Granularidad: mes_actual, proximos_n_dias, hasta_fin_anio, personalizado"),
+    granularidad: str = Query(
+        "mes_actual", description="Granularidad: mes_actual, proximos_n_dias, hasta_fin_anio, personalizado"
+    ),
     dias: Optional[int] = Query(None, description="Días para granularidad 'proximos_n_dias'"),
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
@@ -319,7 +325,7 @@ def obtener_cuentas_cobrar_tendencias(
     """
     try:
         hoy = date.today()
-        
+
         # Determinar rango de fechas según granularidad
         if granularidad == "mes_actual":
             fecha_inicio_query = date(hoy.year, hoy.month, 1)
@@ -336,18 +342,18 @@ def obtener_cuentas_cobrar_tendencias(
         else:  # personalizado
             fecha_inicio_query = fecha_inicio or hoy
             fecha_fin_query = fecha_fin or (hoy + timedelta(days=30))
-        
+
         # Extender hasta incluir proyección
         fecha_fin_proyeccion = fecha_fin_query + timedelta(days=meses_proyeccion * 30)
-        
+
         # Generar lista de fechas (diaria)
         datos = []
         current_date = fecha_inicio_query
         fecha_division = fecha_fin_query  # Separación entre datos reales y proyección
-        
+
         while current_date <= fecha_fin_proyeccion:
             es_proyeccion = current_date > fecha_division
-            
+
             # CUENTAS POR COBRAR: Suma de monto_cuota de cuotas pendientes hasta esa fecha
             if not es_proyeccion:
                 query_cuentas = (
@@ -382,7 +388,7 @@ def obtener_cuentas_cobrar_tendencias(
                 # Proyección simple: último valor conocido * factor de crecimiento estimado
                 ultimo_valor = datos[-1]["cuentas_por_cobrar"] if datos else 0
                 cuentas_por_cobrar = ultimo_valor * 1.02 if ultimo_valor > 0 else 0  # Crecimiento del 2%
-            
+
             # CUOTAS EN DÍAS: Contar cuotas que se deben pagar por día (fecha_vencimiento = current_date)
             query_cuotas_dia = (
                 db.query(func.count(Cuota.id))
@@ -397,7 +403,7 @@ def obtener_cuentas_cobrar_tendencias(
                 query_cuotas_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
             cuotas_en_dias = query_cuotas_dia.scalar() or 0
-            
+
             # Proyección de cuotas en días
             if es_proyeccion:
                 # Proyección simple basada en promedio histórico
@@ -414,19 +420,21 @@ def obtener_cuentas_cobrar_tendencias(
                 )
                 promedio_cuotas = db.query(func.avg(query_promedio_cuotas.scalar())).scalar() or 0
                 cuotas_en_dias = int(promedio_cuotas)
-            
-            datos.append({
-                "fecha": current_date.isoformat(),
-                "fecha_formateada": current_date.strftime("%d/%m/%Y"),
-                "cuentas_por_cobrar": cuentas_por_cobrar if not es_proyeccion else None,
-                "cuentas_por_cobrar_proyectado": cuentas_por_cobrar if es_proyeccion else None,
-                "cuotas_en_dias": cuotas_en_dias if not es_proyeccion else None,
-                "cuotas_en_dias_proyectado": cuotas_en_dias if es_proyeccion else None,
-                "es_proyeccion": es_proyeccion,
-            })
-            
+
+            datos.append(
+                {
+                    "fecha": current_date.isoformat(),
+                    "fecha_formateada": current_date.strftime("%d/%m/%Y"),
+                    "cuentas_por_cobrar": cuentas_por_cobrar if not es_proyeccion else None,
+                    "cuentas_por_cobrar_proyectado": cuentas_por_cobrar if es_proyeccion else None,
+                    "cuotas_en_dias": cuotas_en_dias if not es_proyeccion else None,
+                    "cuotas_en_dias_proyectado": cuotas_en_dias if es_proyeccion else None,
+                    "es_proyeccion": es_proyeccion,
+                }
+            )
+
             current_date += timedelta(days=1)
-        
+
         return {
             "datos": datos,
             "fecha_inicio": fecha_inicio_query.isoformat(),
@@ -434,8 +442,7 @@ def obtener_cuentas_cobrar_tendencias(
             "meses_proyeccion": meses_proyeccion,
             "ultima_actualizacion": datetime.now().isoformat(),
         }
-    
+
     except Exception as e:
         logger.error(f"Error obteniendo tendencias: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
-
