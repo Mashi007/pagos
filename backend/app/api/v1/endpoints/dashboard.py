@@ -1,8 +1,8 @@
 import logging
 from calendar import monthrange
-from datetime import date, timedelta, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Optional, List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[import-untyped]
 from sqlalchemy import and_, cast, func, or_  # type: ignore[import-untyped]
