@@ -26,26 +26,36 @@ export function Logo({ className, size = 'md' }: LogoProps) {
   useEffect(() => {
     // Intentar cargar el logo personalizado desde el API
     const checkCustomLogo = async () => {
+      // Solo intentar cargar si hay conexión (evitar intentos en desarrollo local)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 3000) // Timeout de 3 segundos
+
       for (const ext of LOGO_EXTENSIONS) {
         const filename = `logo-custom${ext}`
         const logoPath = `/api/v1/configuracion/logo/${filename}`
         try {
-          // Usar timestamp para evitar caché
-          const img = new Image()
-          await new Promise((resolve, reject) => {
-            img.onload = () => {
-              setCustomLogoUrl(`${logoPath}?t=${Date.now()}`)
-              resolve(true)
-            }
-            img.onerror = reject
-            img.src = logoPath
+          // Usar fetch HEAD para verificar si el archivo existe sin descargarlo completo
+          const response = await fetch(logoPath, {
+            method: 'HEAD',
+            signal: controller.signal,
           })
-          break
-        } catch {
-          // Continuar con la siguiente extensión
-          continue
+          
+          if (response.ok) {
+            // Si el archivo existe, usar imagen
+            setCustomLogoUrl(`${logoPath}?t=${Date.now()}`)
+            clearTimeout(timeoutId)
+            break
+          }
+        } catch (error: any) {
+          // Ignorar errores de red o timeout, continuar con siguiente extensión
+          if (error?.name !== 'AbortError') {
+            // Solo registrar errores que no sean de timeout/abort
+            continue
+          }
         }
       }
+      
+      clearTimeout(timeoutId)
       setHasChecked(true)
     }
 

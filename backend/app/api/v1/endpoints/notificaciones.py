@@ -244,13 +244,23 @@ def obtener_estadisticas_notificaciones(
     """Obtener estadísticas de notificaciones."""
     try:
         from sqlalchemy import func
+        from sqlalchemy.exc import ProgrammingError
 
         # Usar func.count() sobre el ID para evitar problemas con columnas faltantes
         total = db.query(func.count(Notificacion.id)).scalar() or 0
         enviadas = db.query(func.count(Notificacion.id)).filter(Notificacion.estado == "ENVIADA").scalar() or 0
         pendientes = db.query(func.count(Notificacion.id)).filter(Notificacion.estado == "PENDIENTE").scalar() or 0
         fallidas = db.query(func.count(Notificacion.id)).filter(Notificacion.estado == "FALLIDA").scalar() or 0
-        no_leidas = db.query(func.count(Notificacion.id)).filter(Notificacion.leida.is_(False)).scalar() or 0
+        
+        # Intentar obtener no_leidas, pero manejar el caso si la columna no existe
+        no_leidas = 0
+        try:
+            no_leidas = db.query(func.count(Notificacion.id)).filter(Notificacion.leida.is_(False)).scalar() or 0
+        except ProgrammingError as pe:
+            # Si la columna 'leida' no existe en la BD, usar una aproximación basada en estado
+            # Asumimos que las notificaciones ENVIADAS son las no leídas
+            logger.warning(f"Columna 'leida' no existe en BD, usando aproximación: {pe}")
+            no_leidas = enviadas  # Aproximación: todas las enviadas se consideran no leídas
 
         return {
             "total": total,
