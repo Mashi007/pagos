@@ -33,7 +33,7 @@ class ClienteBase(BaseModel):
         ...,
         min_length=MIN_NAME_LENGTH,
         max_length=MAX_NAME_LENGTH,
-        description="2-4 palabras (nombres + apellidos unificados)",
+        description="2-7 palabras (nombres + apellidos unificados)",
     )
     telefono: str = Field(
         ...,
@@ -103,16 +103,16 @@ class ClienteBase(BaseModel):
         description="Activo/Inactivo/Finalizado",
     )
 
-    # Notas - OBLIGATORIO con default 'NA'
+    # Notas - OBLIGATORIO con default 'No hay observacion'
     notas: str = Field(
-        default="NA",
+        default="No hay observacion",
         max_length=MAX_NOTES_LENGTH,
-        description="Notas adicionales (default 'NA')",
+        description="Notas adicionales (default 'No hay observacion')",
     )
 
     @classmethod
     def validate_nombres(cls, v):
-        """Validar nombres: 2-4 palabras, primera letra mayúscula"""
+        """Validar nombres: 2-7 palabras, primera letra mayúscula"""
         if not v:
             raise ValueError("Nombres requeridos")
 
@@ -121,8 +121,8 @@ class ClienteBase(BaseModel):
 
         if len(words) < 2:
             raise ValueError("Mínimo 2 palabras requeridas (nombre + apellido)")
-        if len(words) > 4:
-            raise ValueError("Máximo 4 palabras permitidas")
+        if len(words) > 7:
+            raise ValueError("Máximo 7 palabras permitidas")
 
         return v
 
@@ -150,7 +150,7 @@ class ClienteBase(BaseModel):
     @field_validator("nombres", mode="before")
     @classmethod
     def validate_nombres_words(cls, v):
-        """Validar y formatear nombres: 2-4 palabras, primera letra mayúscula"""
+        """Validar y formatear nombres: 2-7 palabras, primera letra mayúscula"""
         if not v:
             raise ValueError("Nombres requeridos")
         return cls.validate_nombres(v)
@@ -207,7 +207,7 @@ class ClienteCreate(BaseModel):
     )
     estado: str = Field(..., pattern="^(ACTIVO|INACTIVO|FINALIZADO)$", description="Estado del cliente")
     activo: Optional[bool] = Field(True, description="Cliente activo")
-    notas: Optional[str] = Field("NA", description="Notas adicionales")
+    notas: Optional[str] = Field("No hay observacion", description="Notas adicionales (default 'No hay observacion')")
 
 
 class ClienteCreateWithConfirmation(BaseModel):
@@ -221,7 +221,7 @@ class ClienteCreateWithConfirmation(BaseModel):
 class ClienteUpdate(BaseModel):
 
     cedula: Optional[str] = Field(None, min_length=8, max_length=20)
-    nombres: Optional[str] = Field(None, min_length=2, max_length=100)  # 2-4 palabras validado
+    nombres: Optional[str] = Field(None, min_length=2, max_length=100)  # 2-7 palabras validado
     telefono: Optional[str] = Field(None, min_length=MIN_PHONE_LENGTH, max_length=MAX_PHONE_LENGTH)
     email: Optional[EmailStr] = None
     direccion: Optional[str] = Field(None, min_length=5, max_length=500)
@@ -232,20 +232,20 @@ class ClienteUpdate(BaseModel):
     estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO|FINALIZADO)$")
     activo: Optional[bool] = None
 
-    # Notas - OBLIGATORIO con default 'NA'
+    # Notas - OBLIGATORIO con default 'No hay observacion'
     notas: Optional[str] = Field(None, max_length=1000)
 
     @classmethod
     def validate_nombres(cls, v):
-        """Validar nombres: 2-4 palabras"""
+        """Validar nombres: 2-7 palabras"""
         if v:
             words = v.strip().split()
             words = [word for word in words if word]
 
             if len(words) < 2:
                 raise ValueError("Mínimo 2 palabras requeridas")
-            if len(words) > 4:
-                raise ValueError("Máximo 4 palabras permitidas")
+            if len(words) > 7:
+                raise ValueError("Máximo 7 palabras permitidas")
         return v
 
     @classmethod
@@ -318,15 +318,15 @@ class ClienteResponse(ClienteBase):
         return v.strip()
 
     # Sobrescribir validador de nombres para permitir datos históricos
-    # (en lectura, aceptamos nombres con más de 4 palabras para no romper datos existentes)
+    # (en lectura, aceptamos nombres con más de 7 palabras para no romper datos existentes)
     @field_validator("nombres", mode="before")
     @classmethod
     def validate_nombres_response(cls, v: str) -> str:
-        """Validación flexible para respuestas: permite datos históricos con más de 4 palabras"""
+        """Validación flexible para respuestas: permite datos históricos con más de 7 palabras"""
         if not v:
             return v
         # En respuestas, solo validamos que no esté vacío, permitimos cualquier cantidad de palabras
-        # para datos históricos que no cumplen la nueva regla de máximo 4 palabras
+        # para datos históricos que no cumplen la nueva regla de máximo 7 palabras
         words = v.strip().split()
         words = [word for word in words if word]  # Filtrar palabras vacías
 

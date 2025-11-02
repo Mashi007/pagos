@@ -247,7 +247,7 @@ class ValidadorCedula:
     PAISES_CEDULA = {
         "VENEZUELA": {
             "longitud": [7, 8, 9, 10],
-            "patron": r"^[VvEeJj]?\d{7,10}$",
+            "patron": r"^[VvEeJjZz]?\d{7,10}$",
             "formato_display": "V12345678",
             "descripcion": "Cédula venezolana",
         },
@@ -276,8 +276,8 @@ class ValidadorCedula:
                     "error": "Cédula requerida",
                     "valor_original": cedula,
                     "valor_formateado": None,
-                    "formato_esperado": "V, E o J + 7-10 dígitos",
-                    "sugerencia": "Ingrese una cédula. Ejemplo: 'V12345678'",
+                        "formato_esperado": "V, E, J o Z + 7-10 dígitos",
+                        "sugerencia": "Ingrese una cédula. Ejemplo: 'V12345678'",
                 }
 
             # Limpiar entrada
@@ -291,7 +291,7 @@ class ValidadorCedula:
                     "error": f"País '{pais}' no soportado",
                     "valor_original": cedula,
                     "valor_formateado": None,
-                    "formato_esperado": "V, E o J + 7-10 dígitos (Venezuela)",
+                    "formato_esperado": "V, E, J o Z + 7-10 dígitos (Venezuela)",
                     "sugerencia": "País no soportado. Use 'Venezuela'. Ejemplo: 'V12345678'",
                 }
 
@@ -303,10 +303,10 @@ class ValidadorCedula:
                         "error": f"Formato inválido para {config['descripcion']}",
                         "valor_original": cedula,
                         "valor_formateado": None,
-                        "formato_esperado": "V, E o J + 7-10 dígitos",
+                        "formato_esperado": "V, E, J o Z + 7-10 dígitos",
                         "sugerencia": (
-                            "Use prefijo V (venezolano), E (extranjero) o J (jurídico) "
-                            "seguido de 7-10 dígitos. Ejemplos: 'V12345678', 'E87654321', 'J9876543'"
+                            "Use prefijo V (venezolano), E (extranjero), J (jurídico) o Z (especial) "
+                            "seguido de 7-10 dígitos. Ejemplos: 'V12345678', 'E87654321', 'J9876543', 'Z12345678'"
                         ),
                     }
                 else:
@@ -320,8 +320,8 @@ class ValidadorCedula:
 
             # Formatear según país
             if pais.upper() == "VENEZUELA":
-                # Detectar prefijo V, E o J
-                if cedula_limpia.startswith(("V", "E", "J")):
+                # Detectar prefijo V, E, J o Z
+                if cedula_limpia.startswith(("V", "E", "J", "Z")):
                     cedula_formateada = cedula_limpia
                 else:
                     # Por defecto usar V

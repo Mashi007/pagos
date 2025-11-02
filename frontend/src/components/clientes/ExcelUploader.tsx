@@ -648,18 +648,18 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         if (!value.trim()) return { isValid: false, message: 'Cédula requerida' }
         // Limpiar caracteres no permitidos (como : al final)
         const cedulaLimpia = value.trim().replace(/:$/, '').replace(/:/g, '')
-        const cedulaPattern = /^[VEJ]\d{7,10}$/
+        const cedulaPattern = /^[VEJZ]\d{7,10}$/
         if (!cedulaPattern.test(cedulaLimpia.toUpperCase())) {
-          return { isValid: false, message: 'Formato: V/E/J + 7-10 dígitos (sin :)' }
+          return { isValid: false, message: 'Formato: V/E/J/Z + 7-10 dígitos (sin :)' }
         }
         return { isValid: true }
 
       case 'nombres':
         if (!value.trim()) return { isValid: false, message: 'Nombres requeridos' }
         const nombresWords = value.trim().split(/\s+/).filter(word => word.length > 0)
-        // ✅ CARGA MASIVA: ENTRE 2 Y 4 PALABRAS
-        if (nombresWords.length < 2 || nombresWords.length > 4) {
-          return { isValid: false, message: 'DEBE tener entre 2 y 4 palabras' }
+        // ✅ CARGA MASIVA: ENTRE 2 Y 7 PALABRAS
+        if (nombresWords.length < 2 || nombresWords.length > 7) {
+          return { isValid: false, message: 'DEBE tener entre 2 y 7 palabras' }
         }
         return { isValid: true }
 
@@ -686,10 +686,29 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       case 'email':
         if (!value.trim()) return { isValid: false, message: 'Email requerido' }
-        const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
-        if (!emailPattern.test(value.toLowerCase())) {
-          return { isValid: false, message: 'Formato de email inválido' }
+        const emailTrimmed = value.trim()
+        
+        // Validar que no tenga espacios intermedios
+        if (emailTrimmed.includes(' ')) {
+          return { isValid: false, message: 'El email no puede contener espacios' }
         }
+        
+        // Validar que no tenga comas
+        if (emailTrimmed.includes(',')) {
+          return { isValid: false, message: 'El email no puede contener comas' }
+        }
+        
+        // Validar que tenga arroba
+        if (!emailTrimmed.includes('@')) {
+          return { isValid: false, message: 'El email debe contener un @' }
+        }
+        
+        // Validar que tenga extensión válida (.com, .edu, .gob, etc.)
+        const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+        if (!emailPattern.test(emailTrimmed.toLowerCase())) {
+          return { isValid: false, message: 'El email debe tener una extensión válida (.com, .edu, .gob, etc.)' }
+        }
+        
         return { isValid: true }
 
       case 'direccion':

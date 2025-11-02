@@ -22,7 +22,7 @@ class Cliente(Base):
     # misma cédula
     cedula = Column(String(CEDULA_LENGTH), nullable=False, index=True)
 
-    nombres = Column(String(NAME_LENGTH), nullable=False)  # 2-4 palabras (nombres + apellidos unificados)
+    nombres = Column(String(NAME_LENGTH), nullable=False)  # 2-7 palabras (nombres + apellidos unificados)
     telefono = Column(String(PHONE_LENGTH), nullable=False, index=True)  # Validado por validadores
     email = Column(String(EMAIL_LENGTH), nullable=False, index=True)  # Validado por validadores
     direccion = Column(Text, nullable=False)  # Libre
