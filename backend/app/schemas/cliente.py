@@ -329,10 +329,10 @@ class ClienteResponse(ClienteBase):
         # para datos históricos que no cumplen la nueva regla de máximo 4 palabras
         words = v.strip().split()
         words = [word for word in words if word]  # Filtrar palabras vacías
-        
+
         if len(words) < 1:
             raise ValueError("Nombres requeridos")
-        
+
         # Permitir cualquier cantidad de palabras en lectura (solo normalizar espacios)
         return " ".join(words)
 
