@@ -258,8 +258,14 @@ def obtener_estadisticas_notificaciones(
             no_leidas = db.query(func.count(Notificacion.id)).filter(Notificacion.leida.is_(False)).scalar() or 0
         except ProgrammingError as pe:
             # Si la columna 'leida' no existe en la BD, usar una aproximación basada en estado
+            # Esto es esperado hasta que se aplique la migración 20251102_add_leida_notificaciones
             # Asumimos que las notificaciones ENVIADAS son las no leídas
-            logger.warning(f"Columna 'leida' no existe en BD, usando aproximación: {pe}")
+            if "column notificaciones.leida does not exist" in str(pe):
+                # Solo loguear una vez como info (no warning) ya que es esperado
+                logger.info("Columna 'leida' aún no existe en BD, usando aproximación temporal")
+            else:
+                # Otros errores de programación sí deben ser warnings
+                logger.warning(f"Error al consultar columna 'leida', usando aproximación: {pe}")
             no_leidas = enviadas  # Aproximación: todas las enviadas se consideran no leídas
 
         return {
