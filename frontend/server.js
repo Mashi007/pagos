@@ -233,6 +233,22 @@ const staticOptions = {
   fallthrough: true // Continuar al siguiente middleware si el archivo no existe
 };
 
+// ✅ Verificar que los archivos de assets existen antes de servir
+const fs = require('fs');
+const assetsPath = path.join(distPath, 'assets');
+if (existsSync(assetsPath)) {
+  const assetFiles = fs.readdirSync(assetsPath);
+  console.log(`✅ Directorio assets encontrado: ${assetsPath}`);
+  console.log(`📦 Total de archivos en assets: ${assetFiles.length}`);
+  // Log los primeros 10 archivos para debugging
+  if (assetFiles.length > 0) {
+    console.log(`📦 Primeros archivos: ${assetFiles.slice(0, 10).join(', ')}`);
+  }
+} else {
+  console.error(`❌ Directorio assets NO encontrado: ${assetsPath}`);
+  console.error(`❌ Esto causará que los módulos JavaScript no se carguen correctamente`);
+}
+
 // Middleware para loggear peticiones de archivos estáticos
 app.use((req, res, next) => {
   // Solo loggear archivos estáticos (assets, favicon, etc.)
@@ -273,10 +289,23 @@ app.get('*', (req, res) => {
     return res.status(404).json({ error: 'API endpoint not found' });
   }
   
-  // Si llegamos aquí, express.static NO encontró el archivo
-  // Esto puede ser:
-  // 1. Una ruta de la SPA (como /clientes, /dashboard) → servir index.html
-  // 2. Un archivo estático que no existe → servir index.html también (SPA routing)
+  // ✅ CRÍTICO: Si es una ruta de assets y no se encontró el archivo, devolver 404
+  // NO servir index.html para archivos de assets que no existen
+  if (req.path.startsWith('/assets/')) {
+    console.error(`❌ Archivo estático no encontrado: ${req.path}`);
+    return res.status(404).json({ error: 'Archivo estático no encontrado', path: req.path });
+  }
+  
+  // ✅ También devolver 404 para otros archivos estáticos que no existen (favicon, imágenes, etc.)
+  const staticFileExtensions = ['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.eot'];
+  const isStaticFile = staticFileExtensions.some(ext => req.path.endsWith(ext));
+  if (isStaticFile) {
+    console.error(`❌ Archivo estático no encontrado: ${req.path}`);
+    return res.status(404).json({ error: 'Archivo estático no encontrado', path: req.path });
+  }
+  
+  // Si llegamos aquí, NO es un archivo estático
+  // Es una ruta de la SPA (como /clientes, /dashboard) → servir index.html
   // React Router manejará la ruta en el cliente
   console.log(`📄 Frontend (SPA): Sirviendo index.html para ruta: ${req.method} ${req.path}`);
   res.sendFile(indexPath, (err) => {
