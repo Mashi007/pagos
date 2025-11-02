@@ -68,6 +68,15 @@ class ConcesionarioService {
   async eliminarConcesionario(id: number): Promise<{ message: string }> {
     return await apiClient.delete<{ message: string }>(`${this.baseUrl}/${id}`)
   }
+
+  // Importación masiva desde Excel
+  async importarDesdeExcel(file: File): Promise<{ message: string; creados: number; actualizados: number; errores?: string[] }> {
+    const formData = new FormData()
+    formData.append('archivo', file)
+    return await apiClient.post(`${this.baseUrl}/importar`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  }
 }
 
 export const concesionarioService = new ConcesionarioService()

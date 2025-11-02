@@ -5,6 +5,10 @@ import {
   BarChart3,
   PieChart,
   LineChart,
+  Users,
+  Building2,
+  BarChart,
+  TrendingUp,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +19,10 @@ import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboard
 import { DashboardFiltrosPanel } from '@/components/dashboard/DashboardFiltrosPanel'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { TreemapMorosidadModal } from '@/components/dashboard/modals/TreemapMorosidadModal'
+import { DonutConcesionariosModal } from '@/components/dashboard/modals/DonutConcesionariosModal'
+import { BarrasDivergentesModal } from '@/components/dashboard/modals/BarrasDivergentesModal'
+import { TendenciasModal } from '@/components/dashboard/modals/TendenciasModal'
 import {
   BarChart,
   Bar,
@@ -65,6 +73,12 @@ export function DashboardAnalisis() {
   const [filtros, setFiltros] = useState<DashboardFiltros>({})
   const [periodo, setPeriodo] = useState('mes')
   const { construirParams, construirFiltrosObject } = useDashboardFiltros(filtros)
+
+  // Estados para modales
+  const [isTreemapMorosidadOpen, setIsTreemapMorosidadOpen] = useState(false)
+  const [isDonutConcesionariosOpen, setIsDonutConcesionariosOpen] = useState(false)
+  const [isBarrasDivergentesOpen, setIsBarrasDivergentesOpen] = useState(false)
+  const [isTendenciasOpen, setIsTendenciasOpen] = useState(false)
 
   // Cargar opciones de filtros
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
@@ -447,6 +461,123 @@ export function DashboardAnalisis() {
           </CardContent>
         </Card>
       )}
+
+      {/* Botones de Acceso a Componentes Detallados */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+        >
+          <Card className="hover:shadow-lg transition-all cursor-pointer border-2 border-dashed border-gray-300 hover:border-red-500"
+                onClick={() => setIsTreemapMorosidadOpen(true)}>
+            <CardContent className="p-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-red-100 rounded-lg">
+                  <Users className="h-6 w-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Morosidad por Analista</h3>
+                  <p className="text-sm text-gray-500">Visualiza morosidad por analista con treemap interactivo</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm">
+                Abrir
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+        >
+          <Card className="hover:shadow-lg transition-all cursor-pointer border-2 border-dashed border-gray-300 hover:border-purple-500"
+                onClick={() => setIsDonutConcesionariosOpen(true)}>
+            <CardContent className="p-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-purple-100 rounded-lg">
+                  <Building2 className="h-6 w-6 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Préstamos por Concesionario</h3>
+                  <p className="text-sm text-gray-500">Distribución porcentual de préstamos por concesionario</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm">
+                Abrir
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+        >
+          <Card className="hover:shadow-lg transition-all cursor-pointer border-2 border-dashed border-gray-300 hover:border-blue-500"
+                onClick={() => setIsBarrasDivergentesOpen(true)}>
+            <CardContent className="p-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <BarChart className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Distribución de Préstamos</h3>
+                  <p className="text-sm text-gray-500">Análisis por rango de monto, plazo, estado y más</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm">
+                Abrir
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+        >
+          <Card className="hover:shadow-lg transition-all cursor-pointer border-2 border-dashed border-gray-300 hover:border-green-500"
+                onClick={() => setIsTendenciasOpen(true)}>
+            <CardContent className="p-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <TrendingUp className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Tendencias y Proyecciones</h3>
+                  <p className="text-sm text-gray-500">Cuentas por cobrar y cuotas en días con proyecciones</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm">
+                Abrir
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+
+      {/* Modales */}
+      <TreemapMorosidadModal
+        isOpen={isTreemapMorosidadOpen}
+        onClose={() => setIsTreemapMorosidadOpen(false)}
+      />
+      <DonutConcesionariosModal
+        isOpen={isDonutConcesionariosOpen}
+        onClose={() => setIsDonutConcesionariosOpen(false)}
+      />
+      <BarrasDivergentesModal
+        isOpen={isBarrasDivergentesOpen}
+        onClose={() => setIsBarrasDivergentesOpen(false)}
+      />
+      <TendenciasModal
+        isOpen={isTendenciasOpen}
+        onClose={() => setIsTendenciasOpen(false)}
+      />
     </div>
   )
 }

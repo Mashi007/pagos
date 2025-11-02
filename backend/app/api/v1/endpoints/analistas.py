@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -193,3 +193,76 @@ def eliminar_analista(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al eliminar analista: {str(e)}")
+
+
+@router.post("/importar")
+def importar_analistas(
+    archivo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Carga masiva desde Excel. Columnas requeridas: nombre, activo (opcional, por defecto True)."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores")
+
+    try:
+        import pandas as pd
+
+        if not archivo.filename.lower().endswith((".xlsx", ".xls")):
+            raise HTTPException(status_code=400, detail="Formato inválido. Use Excel .xlsx/.xls")
+
+        df = pd.read_excel(archivo.file)
+        columnas = {c.lower().strip() for c in df.columns}
+        if "nombre" not in columnas:
+            raise HTTPException(status_code=400, detail="Columna requerida: nombre")
+
+        creados = 0
+        actualizados = 0
+        errores = []
+
+        for idx, row in df.iterrows():
+            try:
+                nombre = str(row.get("nombre", "")).strip()
+                if not nombre:
+                    continue
+
+                activo_val = row.get("activo")
+                if activo_val is None or pd.isna(activo_val):
+                    activo_val = True
+                else:
+                    activo_val = bool(activo_val)
+
+                existente = db.query(Analista).filter(Analista.nombre == nombre).first()
+                if existente:
+                    existente.activo = activo_val
+                    existente.updated_at = datetime.utcnow()
+                    actualizados += 1
+                else:
+                    nuevo = Analista(
+                        nombre=nombre,
+                        activo=activo_val,
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow(),
+                    )
+                    db.add(nuevo)
+                    creados += 1
+            except Exception as e:
+                errores.append(f"Fila {idx + 2}: {str(e)}")
+                logger.warning(f"Error procesando fila {idx + 2}: {e}")
+
+        db.commit()
+        logger.info(f"Importación completada: {creados} creados, {actualizados} actualizados")
+
+        return {
+            "message": "Importación completada",
+            "creados": creados,
+            "actualizados": actualizados,
+            "errores": errores if errores else None,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error importando analistas: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error procesando el archivo")

@@ -251,6 +251,16 @@ export function Configuracion() {
             await actualizarConfiguracionGeneral(campoBackend, String(valorFrontend))
           }
         }
+
+        // Si hay un logo preview, significa que se subió un logo
+        // El logo ya está guardado en el servidor, solo confirmamos visualmente
+        if (logoPreview) {
+          console.log('✅ Logo confirmado y guardado')
+          // Disparar evento para actualizar todos los componentes Logo
+          window.dispatchEvent(new CustomEvent('logoUpdated', { 
+            detail: { confirmed: true } 
+          }))
+        }
       }
       
       setCambiosPendientes(false)
@@ -325,14 +335,18 @@ export function Configuracion() {
 
       const result = await response.json()
 
-      toast.success(result.message || 'Logo cargado exitosamente')
-      
       // Mostrar preview del logo
       const reader = new FileReader()
       reader.onloadend = () => {
         setLogoPreview(reader.result as string)
       }
       reader.readAsDataURL(file)
+
+      // Marcar como cambio pendiente para activar botón Guardar
+      // Esto permite al usuario validar/confirmar antes de aplicar el cambio
+      setCambiosPendientes(true)
+      
+      toast.success('Logo cargado. Haga clic en "Guardar" para confirmar el cambio.')
 
       // Forzar recarga del componente Logo usando un evento personalizado
       // No recargar toda la página, solo notificar que el logo cambió
@@ -346,10 +360,6 @@ export function Configuracion() {
         const logoUrl = `${result.url}?t=${Date.now()}`
         setLogoPreview(logoUrl)
       }
-
-      // El logo se guarda automáticamente al subirlo, no requiere botón Guardar
-      // Pero si hay otros cambios pendientes, asegurar que el botón esté habilitado
-      console.log('✅ Logo cargado exitosamente. Cambios pendientes:', cambiosPendientes)
     } catch (error: any) {
       console.error('Error cargando logo:', error)
       const errorMessage = error?.response?.data?.detail || error?.message || 'Error desconocido'

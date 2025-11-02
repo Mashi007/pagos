@@ -5,6 +5,8 @@ import {
   CreditCard,
   Target,
   TrendingUp,
+  BarChart3,
+  Calendar,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -14,6 +16,8 @@ import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboard
 import { DashboardFiltrosPanel } from '@/components/dashboard/DashboardFiltrosPanel'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { CobranzasMensualesModal } from '@/components/dashboard/modals/CobranzasMensualesModal'
+import { CobranzaPorDiaModal } from '@/components/dashboard/modals/CobranzaPorDiaModal'
 
 interface DashboardData {
   meta_mensual: number
@@ -32,6 +36,10 @@ export function DashboardCobranza() {
   const [filtros, setFiltros] = useState<DashboardFiltros>({})
   const [periodo, setPeriodo] = useState('mes')
   const { construirParams, construirFiltrosObject } = useDashboardFiltros(filtros)
+
+  // Estados para modales
+  const [isCobranzasMensualesOpen, setIsCobranzasMensualesOpen] = useState(false)
+  const [isCobranzaPorDiaOpen, setIsCobranzaPorDiaOpen] = useState(false)
 
   // Cargar opciones de filtros
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
@@ -235,6 +243,67 @@ export function DashboardCobranza() {
           </motion.div>
         </div>
       )}
+
+      {/* Botones de Acceso a Componentes Detallados */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+        >
+          <Card className="hover:shadow-lg transition-all cursor-pointer border-2 border-dashed border-gray-300 hover:border-blue-500"
+                onClick={() => setIsCobranzasMensualesOpen(true)}>
+            <CardContent className="p-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <BarChart3 className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Cobranzas Mensuales vs Pagos</h3>
+                  <p className="text-sm text-gray-500">Visualiza cobranzas planificadas, pagos reales y meta mensual</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm">
+                Abrir
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+        >
+          <Card className="hover:shadow-lg transition-all cursor-pointer border-2 border-dashed border-gray-300 hover:border-green-500"
+                onClick={() => setIsCobranzaPorDiaOpen(true)}>
+            <CardContent className="p-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <Calendar className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Cobranza por Día</h3>
+                  <p className="text-sm text-gray-500">Total a cobrar, pagos y morosidad diaria con métricas acumuladas</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm">
+                Abrir
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+
+      {/* Modales */}
+      <CobranzasMensualesModal
+        isOpen={isCobranzasMensualesOpen}
+        onClose={() => setIsCobranzasMensualesOpen(false)}
+      />
+      <CobranzaPorDiaModal
+        isOpen={isCobranzaPorDiaOpen}
+        onClose={() => setIsCobranzaPorDiaOpen(false)}
+      />
     </div>
   )
 }

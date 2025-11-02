@@ -31,6 +31,7 @@ export function AnalistasConfig() {
     nombre: '',
     activo: true
   })
+  const [archivoExcel, setArchivoExcel] = useState<File | null>(null)
 
   // Función para obtener fecha de hoy
   const getTodayDate = () => {
@@ -367,6 +368,49 @@ export function AnalistasConfig() {
               {searchTerm ? 'No se encontraron analistas con ese nombre' : 'No hay analistas disponibles'}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Importación desde Excel */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Importar Analistas (Excel)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="text-sm text-gray-600">
+            Columnas requeridas: <b>nombre</b>. Opcional: <b>activo</b> (por defecto: True).
+          </div>
+          <input 
+            type="file" 
+            accept=".xlsx,.xls" 
+            onChange={(e) => setArchivoExcel(e.target.files?.[0] || null)} 
+            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              disabled={!archivoExcel}
+              onClick={async () => {
+                if (!archivoExcel) return
+                try {
+                  const svc = (await import('@/services/analistaService')).analistaService
+                  const res = await svc.importarDesdeExcel(archivoExcel)
+                  const msg = `Importado: ${res.creados} creados, ${res.actualizados} actualizados`
+                  if (res.errores && res.errores.length > 0) {
+                    toast.success(msg)
+                    toast.error(`Errores en ${res.errores.length} fila(s): ${res.errores.slice(0, 3).join(', ')}`)
+                  } else {
+                    toast.success(msg)
+                  }
+                  setArchivoExcel(null)
+                  await refetch()
+                } catch (err: any) {
+                  toast.error(err?.response?.data?.detail || 'Error al importar')
+                }
+              }}
+            >
+              Cargar Excel
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
