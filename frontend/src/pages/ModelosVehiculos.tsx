@@ -511,7 +511,24 @@ export function ModelosVehiculos() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="text-sm text-gray-600">Columnas requeridas: <b>modelo</b>, <b>precio</b>. Opcional: <b>fecha_actualizacion</b>.</div>
-          <input type="file" accept=".xlsx,.xls" onChange={(e) => setArchivoExcel(e.target.files?.[0] || null)} />
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(e) => setArchivoExcel(e.target.files?.[0] || null)}
+              className="hidden"
+              id="excel-file-modelos"
+            />
+            <label
+              htmlFor="excel-file-modelos"
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md cursor-pointer text-sm font-medium text-gray-700 border border-gray-300"
+            >
+              Examinar...
+            </label>
+            <span className="text-sm text-gray-600">
+              {archivoExcel ? archivoExcel.name : 'No se ha seleccionado ningún archivo.'}
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             <Button
               disabled={!archivoExcel}
@@ -522,6 +539,9 @@ export function ModelosVehiculos() {
                   const res = await svc.importarDesdeExcel(archivoExcel)
                   toast.success(`Importado: ${res.creados} creados, ${res.actualizados} actualizados`)
                   setArchivoExcel(null)
+                  // Resetear el input file
+                  const fileInput = document.getElementById('excel-file-modelos') as HTMLInputElement
+                  if (fileInput) fileInput.value = ''
                   await refetch()
                 } catch (err: any) {
                   toast.error(err?.response?.data?.detail || 'Error al importar')

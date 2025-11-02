@@ -412,12 +412,24 @@ export function Analistas() {
           <div className="text-sm text-gray-600">
             Columnas requeridas: <b>nombre</b>. Opcional: <b>activo</b> (por defecto: True).
           </div>
-          <input 
-            type="file" 
-            accept=".xlsx,.xls" 
-            onChange={(e) => setArchivoExcel(e.target.files?.[0] || null)} 
-            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(e) => setArchivoExcel(e.target.files?.[0] || null)}
+              className="hidden"
+              id="excel-file-analistas"
+            />
+            <label
+              htmlFor="excel-file-analistas"
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md cursor-pointer text-sm font-medium text-gray-700 border border-gray-300"
+            >
+              Examinar...
+            </label>
+            <span className="text-sm text-gray-600">
+              {archivoExcel ? archivoExcel.name : 'No se ha seleccionado ningún archivo.'}
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             <Button
               disabled={!archivoExcel}
@@ -434,6 +446,9 @@ export function Analistas() {
                     toast.success(msg)
                   }
                   setArchivoExcel(null)
+                  // Resetear el input file
+                  const fileInput = document.getElementById('excel-file-analistas') as HTMLInputElement
+                  if (fileInput) fileInput.value = ''
                   await refetch()
                 } catch (err: any) {
                   toast.error(err?.response?.data?.detail || 'Error al importar')
