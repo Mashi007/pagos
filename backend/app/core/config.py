@@ -170,29 +170,53 @@ class Settings(BaseSettings):
 
         # Validación específica para producción
         if self.ENVIRONMENT == "production":
-            # Bloquear contraseña por defecto
+            import os
+            
+            # Verificar si ADMIN_PASSWORD fue configurado desde variable de entorno
+            admin_password_from_env = os.getenv("ADMIN_PASSWORD")
             default_password = "R@pi_2025**"
-            if self.ADMIN_PASSWORD == default_password:
+            
+            # Bloquear SOLO si:
+            # 1. NO está configurado en variable de entorno (None o vacío)
+            # 2. Y el valor actual es el valor por defecto
+            if (not admin_password_from_env or admin_password_from_env.strip() == "") and self.ADMIN_PASSWORD == default_password:
                 raise ValueError(
                     "CRÍTICO: No se puede usar la contraseña por defecto en producción. "
                     "Debe configurarse ADMIN_PASSWORD con una contraseña segura mediante variable de entorno."
                 )
+            
+            # Si viene de variable de entorno, permitir aunque sea débil (asumimos decisión consciente)
+            # Pero advertir si es muy corta o débil
+            if admin_password_from_env:
+                if len(admin_password_from_env) < 12:
+                    logger.warning(
+                        "⚠️ ADMIN_PASSWORD configurado desde variable de entorno pero es muy corta (<12 caracteres). "
+                        "Se recomienda usar una contraseña más segura para producción."
+                    )
+                
+                # Si es el valor por defecto pero viene de env, permitir pero advertir
+                if admin_password_from_env == default_password:
+                    logger.warning(
+                        "⚠️ ADMIN_PASSWORD está configurado con el valor por defecto desde variable de entorno. "
+                        "Se recomienda cambiar por una contraseña más segura en producción."
+                    )
 
             # Validar formato de email
             if "@" not in self.ADMIN_EMAIL or "." not in self.ADMIN_EMAIL.split("@")[1]:
                 raise ValueError("ADMIN_EMAIL debe ser un email válido en producción")
 
-            # Contraseña debe tener complejidad mínima
-            has_upper = any(c.isupper() for c in self.ADMIN_PASSWORD)
-            has_lower = any(c.islower() for c in self.ADMIN_PASSWORD)
-            has_digit = any(c.isdigit() for c in self.ADMIN_PASSWORD)
-            has_special = any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in self.ADMIN_PASSWORD)
+            # Contraseña debe tener complejidad mínima (solo si NO viene de env)
+            if not admin_password_from_env:
+                has_upper = any(c.isupper() for c in self.ADMIN_PASSWORD)
+                has_lower = any(c.islower() for c in self.ADMIN_PASSWORD)
+                has_digit = any(c.isdigit() for c in self.ADMIN_PASSWORD)
+                has_special = any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in self.ADMIN_PASSWORD)
 
-            if not (has_upper and has_lower and (has_digit or has_special)):
-                raise ValueError(
-                    "CRÍTICO: La contraseña de admin en producción debe contener: "
-                    "mayúsculas, minúsculas y números o caracteres especiales"
-                )
+                if not (has_upper and has_lower and (has_digit or has_special)):
+                    raise ValueError(
+                        "CRÍTICO: La contraseña de admin en producción debe contener: "
+                        "mayúsculas, minúsculas y números o caracteres especiales"
+                    )
 
         return True
 

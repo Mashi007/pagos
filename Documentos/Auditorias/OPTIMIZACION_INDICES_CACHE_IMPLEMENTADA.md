@@ -217,22 +217,16 @@ async def function_async(...): ...  # ✅ Funciona
 
 ## ⚠️ IMPORTANTE: PRÓXIMOS PASOS
 
-### **1. Crear Migración de Índices**
+### **1. ✅ Migración Creada**
 
-Los índices están definidos en los modelos pero **NO están creados en la BD** aún. Debes:
-
-```bash
-# Opción 1: Migración automática
-alembic revision --autogenerate -m "add_performance_indexes"
-
-# Opción 2: Migración manual (más control)
-# Crear archivo: backend/alembic/versions/XXXX_add_performance_indexes.py
-# Ver código de ejemplo arriba
-```
+La migración segura y eficiente está lista:
+- **Archivo:** `backend/alembic/versions/20250127_add_performance_indexes.py`
+- **Características:** Idempotente, verifica existencia, manejo robusto de errores
 
 ### **2. Aplicar Migración**
 
 ```bash
+cd backend
 alembic upgrade head
 ```
 
@@ -243,8 +237,11 @@ alembic upgrade head
 SELECT indexname, tablename 
 FROM pg_indexes 
 WHERE tablename IN ('pagos', 'cuotas', 'prestamos', 'prestamos_auditoria')
+  AND indexname LIKE 'ix_%_fecha%'
 ORDER BY tablename, indexname;
 ```
+
+**Documentación completa:** `Documentos/Auditorias/MIGRACION_INDICES_SEGURA.md`
 
 ---
 
