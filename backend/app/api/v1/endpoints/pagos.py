@@ -38,12 +38,7 @@ def _aplicar_filtros_pagos(
     """Aplica filtros a la query de pagos (usa PagoStaging)"""
     if cedula:
         # PagoStaging puede tener cedula_cliente o cedula
-        query = query.filter(
-            or_(
-                PagoStaging.cedula_cliente == cedula,
-                PagoStaging.cedula == cedula
-            )
-        )
+        query = query.filter(or_(PagoStaging.cedula_cliente == cedula, PagoStaging.cedula == cedula))
         logger.info(f"🔍 [listar_pagos] Filtro cédula: {cedula}")
     if estado:
         query = query.filter(PagoStaging.estado == estado)
@@ -158,7 +153,7 @@ def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str,
             f"❌ [listar_pagos] Error serializando pago ID {pago.id}: {error_detail}",
             exc_info=True,
         )
-        cedula_cliente = getattr(pago, 'cedula_cliente', None) or getattr(pago, 'cedula', None)
+        cedula_cliente = getattr(pago, "cedula_cliente", None) or getattr(pago, "cedula", None)
         logger.error(f"   Datos del pago: cedula={cedula_cliente}")
         logger.error(f"   fecha_pago={pago.fecha_pago} (tipo: {type(pago.fecha_pago)})")
         logger.error(
@@ -431,7 +426,7 @@ def listar_pagos(
         logger.info(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")
 
         # Ordenar por fecha de registro descendente (más actual primero)
-        if hasattr(PagoStaging, 'fecha_registro'):
+        if hasattr(PagoStaging, "fecha_registro"):
             query = query.order_by(PagoStaging.fecha_registro.desc(), PagoStaging.id.desc())
         else:
             query = query.order_by(PagoStaging.id.desc())
@@ -444,11 +439,7 @@ def listar_pagos(
         # OPTIMIZACIÓN: Calcular todas las cuotas atrasadas de una vez (batch)
         hoy = date.today()
         # PagoStaging puede tener cedula_cliente o cedula
-        cedulas_unicas = list(set(
-            (p.cedula_cliente or p.cedula) 
-            for p in pagos 
-            if (p.cedula_cliente or p.cedula)
-        ))
+        cedulas_unicas = list(set((p.cedula_cliente or p.cedula) for p in pagos if (p.cedula_cliente or p.cedula)))
         cuotas_atrasadas_cache = _calcular_cuotas_atrasadas_batch(db, cedulas_unicas, hoy)
 
         logger.debug(f"✅ [listar_pagos] Cache de cuotas atrasadas calculado para {len(cedulas_unicas)} clientes únicos")
@@ -686,7 +677,7 @@ def listar_ultimos_pagos(
 
         # Paginación (ordenar por fecha_registro desc)
         offset = (page - 1) * per_page
-        if hasattr(PagoStaging, 'fecha_registro'):
+        if hasattr(PagoStaging, "fecha_registro"):
             pagos_ultimos = pagos_ultimos_q.order_by(PagoStaging.fecha_registro.desc()).offset(offset).limit(per_page).all()
         else:
             pagos_ultimos = pagos_ultimos_q.order_by(PagoStaging.id.desc()).offset(offset).limit(per_page).all()
@@ -1098,8 +1089,13 @@ def obtener_kpis_pagos(
 
         # ✅ DIAGNÓSTICO: Verificar algunos pagos reales del mes
         pagos_ejemplo_mes = (
-            db.query(PagoStaging.id, PagoStaging.monto_pagado, PagoStaging.fecha_pago, 
-                     PagoStaging.cedula_cliente, PagoStaging.cedula)
+            db.query(
+                PagoStaging.id,
+                PagoStaging.monto_pagado,
+                PagoStaging.fecha_pago,
+                PagoStaging.cedula_cliente,
+                PagoStaging.cedula,
+            )
             .filter(
                 PagoStaging.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
                 PagoStaging.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
