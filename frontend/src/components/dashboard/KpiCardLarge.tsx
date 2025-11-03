@@ -1,12 +1,11 @@
-import { LucideIcon } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { formatCurrency, formatNumber } from '@/utils'
+import { formatCurrency } from '@/utils'
 
 interface KpiCardLargeProps {
   title: string
   value: number | string
   subtitle?: string
-  icon: LucideIcon
+  icon: React.ComponentType<{ className?: string }>
   color: string
   bgColor: string
   borderColor: string
@@ -36,7 +35,7 @@ export function KpiCardLarge({
       case 'currency':
         return formatCurrency(value)
       case 'number':
-        return formatNumber(value)
+        return value.toLocaleString('es-EC')
       case 'percentage':
         return `${value.toFixed(1)}%`
       default:

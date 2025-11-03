@@ -305,10 +305,48 @@ def listar_plantillas(
             query = query.filter(NotificacionPlantilla.tipo == tipo)
 
         plantillas = query.order_by(NotificacionPlantilla.nombre).all()
-        return plantillas
+        
+        # Serializar manualmente para evitar errores de Pydantic
+        resultado = []
+        for p in plantillas:
+            try:
+                resultado.append({
+                    "id": p.id,
+                    "nombre": p.nombre,
+                    "descripcion": p.descripcion,
+                    "tipo": p.tipo,
+                    "asunto": p.asunto,
+                    "cuerpo": p.cuerpo,
+                    "variables_disponibles": p.variables_disponibles,
+                    "activa": bool(p.activa),
+                    "zona_horaria": p.zona_horaria or "America/Caracas",
+                    "fecha_creacion": p.fecha_creacion,
+                    "fecha_actualizacion": p.fecha_actualizacion,
+                })
+            except Exception as e:
+                logger.error(f"Error serializando plantilla {p.id}: {e}")
+                continue
+        
+        return resultado
 
     except Exception as e:
-        logger.error(f"Error listando plantillas: {e}")
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(f"Error listando plantillas: {e}\n{error_trace}")
+        
+        # Verificar si la tabla existe
+        try:
+            from sqlalchemy import inspect
+            inspector = inspect(db.bind)
+            tablas = inspector.get_table_names()
+            if 'notificacion_plantillas' not in tablas:
+                raise HTTPException(
+                    status_code=500, 
+                    detail="Tabla 'notificacion_plantillas' no existe. Ejecute las migraciones."
+                )
+        except Exception:
+            pass
+        
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -396,7 +434,20 @@ def crear_plantilla(
         except Exception as e:
             logger.warning(f"No se pudo registrar auditoría creación plantilla: {e}")
 
-        return nueva_plantilla
+        # Serializar manualmente para evitar errores
+        return {
+            "id": nueva_plantilla.id,
+            "nombre": nueva_plantilla.nombre,
+            "descripcion": nueva_plantilla.descripcion,
+            "tipo": nueva_plantilla.tipo,
+            "asunto": nueva_plantilla.asunto,
+            "cuerpo": nueva_plantilla.cuerpo,
+            "variables_disponibles": nueva_plantilla.variables_disponibles,
+            "activa": bool(nueva_plantilla.activa),
+            "zona_horaria": nueva_plantilla.zona_horaria or "America/Caracas",
+            "fecha_creacion": nueva_plantilla.fecha_creacion,
+            "fecha_actualizacion": nueva_plantilla.fecha_actualizacion,
+        }
 
     except HTTPException:
         raise
@@ -443,7 +494,20 @@ def actualizar_plantilla(
         except Exception as e:
             logger.warning(f"No se pudo registrar auditoría actualización plantilla: {e}")
 
-        return plantilla_existente
+        # Serializar manualmente para evitar errores
+        return {
+            "id": plantilla_existente.id,
+            "nombre": plantilla_existente.nombre,
+            "descripcion": plantilla_existente.descripcion,
+            "tipo": plantilla_existente.tipo,
+            "asunto": plantilla_existente.asunto,
+            "cuerpo": plantilla_existente.cuerpo,
+            "variables_disponibles": plantilla_existente.variables_disponibles,
+            "activa": bool(plantilla_existente.activa),
+            "zona_horaria": plantilla_existente.zona_horaria or "America/Caracas",
+            "fecha_creacion": plantilla_existente.fecha_creacion,
+            "fecha_actualizacion": plantilla_existente.fecha_actualizacion,
+        }
 
     except HTTPException:
         raise
@@ -509,7 +573,20 @@ def obtener_plantilla(
         if not plantilla:
             raise HTTPException(status_code=404, detail="Plantilla no encontrada")
 
-        return plantilla
+        # Serializar manualmente para evitar errores
+        return {
+            "id": plantilla.id,
+            "nombre": plantilla.nombre,
+            "descripcion": plantilla.descripcion,
+            "tipo": plantilla.tipo,
+            "asunto": plantilla.asunto,
+            "cuerpo": plantilla.cuerpo,
+            "variables_disponibles": plantilla.variables_disponibles,
+            "activa": bool(plantilla.activa),
+            "zona_horaria": plantilla.zona_horaria or "America/Caracas",
+            "fecha_creacion": plantilla.fecha_creacion,
+            "fecha_actualizacion": plantilla.fecha_actualizacion,
+        }
 
     except HTTPException:
         raise

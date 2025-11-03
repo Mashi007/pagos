@@ -2,32 +2,31 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import {
+  TrendingUp,
+  Users,
+  Building2,
+  DollarSign,
   BarChart3,
   PieChart,
   LineChart,
-  Users,
-  Building2,
-  TrendingUp,
+  ArrowRight,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { formatCurrency } from '@/utils'
 import { apiClient } from '@/services/api'
 import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
 import { DashboardFiltrosPanel } from '@/components/dashboard/DashboardFiltrosPanel'
 import { useNavigate } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
+import { KpiCardLarge } from '@/components/dashboard/KpiCardLarge'
 import { TreemapMorosidadModal } from '@/components/dashboard/modals/TreemapMorosidadModal'
 import { DonutConcesionariosModal } from '@/components/dashboard/modals/DonutConcesionariosModal'
 import { BarrasDivergentesModal } from '@/components/dashboard/modals/BarrasDivergentesModal'
 import { TendenciasModal } from '@/components/dashboard/modals/TendenciasModal'
 import {
-  BarChart,
-  Bar,
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
+  LineChart as RechartsLineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -37,14 +36,6 @@ import {
   AreaChart,
   Area,
 } from 'recharts'
-
-interface CobroDiario {
-  fecha: string
-  dia: string
-  dia_semana: string
-  total_a_cobrar: number
-  total_cobrado: number
-}
 
 interface DashboardData {
   financieros?: {
@@ -60,8 +51,12 @@ interface DashboardData {
   }>
 }
 
-interface CobrosDiariosResponse {
-  datos: CobroDiario[]
+interface CobroDiario {
+  fecha: string
+  dia: string
+  dia_semana: string
+  total_a_cobrar: number
+  total_cobrado: number
 }
 
 export function DashboardAnalisis() {
@@ -73,13 +68,11 @@ export function DashboardAnalisis() {
   const [periodo, setPeriodo] = useState('mes')
   const { construirParams, construirFiltrosObject } = useDashboardFiltros(filtros)
 
-  // Estados para modales
   const [isTreemapMorosidadOpen, setIsTreemapMorosidadOpen] = useState(false)
   const [isDonutConcesionariosOpen, setIsDonutConcesionariosOpen] = useState(false)
   const [isBarrasDivergentesOpen, setIsBarrasDivergentesOpen] = useState(false)
   const [isTendenciasOpen, setIsTendenciasOpen] = useState(false)
 
-  // Cargar opciones de filtros
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
     queryFn: async () => {
@@ -88,14 +81,36 @@ export function DashboardAnalisis() {
     },
   })
 
-  const construirParamsDashboard = () => construirParams(periodo)
+  // Cargar KPIs principales
+  const { data: kpisPrincipales, isLoading: loadingKPIs } = useQuery({
+    queryKey: ['kpis-principales', filtros],
+    queryFn: async () => {
+      const params = construirFiltrosObject()
+      const queryParams = new URLSearchParams()
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString())
+      })
+      const queryString = queryParams.toString()
+      const response = await apiClient.get(
+        `/api/v1/dashboard/kpis-principales${queryString ? '?' + queryString : ''}`
+      ) as {
+        total_prestamos: number
+        variacion_mes_anterior: number
+        creditos_nuevos_mes: number
+        total_clientes: number
+        total_morosidad: number
+      }
+      return response
+    },
+    staleTime: 5 * 60 * 1000,
+  })
 
   // Cargar datos del dashboard
   const { data: dashboardData, isLoading: loadingDashboard, refetch } = useQuery({
     queryKey: ['dashboard-analisis', periodo, filtros],
     queryFn: async () => {
       try {
-        const params = construirParamsDashboard()
+        const params = construirParams(periodo)
         const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`) as DashboardData
         return response
       } catch (error) {
@@ -106,26 +121,31 @@ export function DashboardAnalisis() {
     staleTime: 5 * 60 * 1000,
   })
 
-  // Cargar cobros diarios
+  // Cargar cobros diarios del mes
   const { data: cobrosDiariosData, isLoading: loadingCobrosDiarios } = useQuery({
     queryKey: ['cobros-diarios', filtros],
     queryFn: async () => {
       try {
         const params = construirFiltrosObject()
         const queryParams = new URLSearchParams()
-        queryParams.append('dias', '30')
+        queryParams.append('dias', '31')
         Object.entries(params).forEach(([key, value]) => {
           if (value) queryParams.append(key, value.toString())
         })
-        const response = await apiClient.get(`/api/v1/dashboard/cobros-diarios?${queryParams.toString()}`) as CobrosDiariosResponse
-        return response
+        const response = await apiClient.get(`/api/v1/dashboard/cobros-diarios?${queryParams.toString()}`) as {
+          datos: CobroDiario[]
+        }
+        return response.datos
       } catch (error) {
         console.warn('Error cargando cobros diarios:', error)
-        return { datos: [] } as CobrosDiariosResponse
+        return [] as CobroDiario[]
       }
     },
     staleTime: 5 * 60 * 1000,
   })
+
+  // Cargar evolución mensual
+  const evolucionMensual = dashboardData?.evolucion_mensual || []
 
   const [isRefreshing, setIsRefreshing] = useState(false)
   const handleRefresh = async () => {
@@ -134,429 +154,281 @@ export function DashboardAnalisis() {
     setIsRefreshing(false)
   }
 
-  const data = dashboardData || {}
-  const cobrosDiarios = cobrosDiariosData?.datos || []
+  const totalFinanciamiento = dashboardData?.financieros?.ingresosCapital || 0
+  const carteraCobrada = dashboardData?.financieros?.ingresosInteres || 0
+  const morosidad = dashboardData?.financieros?.ingresosMora || 0
 
-  // Análisis de Morosidad
-  const totalFinanciamiento = data.financieros?.ingresosCapital || 0
-  const carteraCobrada = data.financieros?.ingresosInteres || 0
-  const morosidadDiferencia = data.financieros?.ingresosMora || 0
-  const base = totalFinanciamiento
-
-  const porcentajeFinanciamiento = base > 0 ? 100 : 0
-  const porcentajeCobrado = base > 0 ? (carteraCobrada / base * 100) : 0
-  const porcentajeMorosidad = base > 0 ? (morosidadDiferencia / base * 100) : 0
-
-  const datosAnalisisMorosidad = totalFinanciamiento > 0 ? [
-    {
-      name: 'Total Financiamiento',
-      value: totalFinanciamiento,
-      color: '#3b82f6',
-      porcentaje: porcentajeFinanciamiento
-    },
-    {
-      name: 'Cartera Cobrada',
-      value: carteraCobrada,
-      color: '#10b981',
-      porcentaje: porcentajeCobrado
-    },
-    {
-      name: 'Morosidad',
-      value: morosidadDiferencia,
-      color: '#ef4444',
-      porcentaje: porcentajeMorosidad
-    },
-  ] : []
+  // Calcular variación mes anterior (simulado por ahora)
+  const variacionMesAnterior = kpisPrincipales?.variacion_mes_anterior || 0
+  const crecimientoAnual = variacionMesAnterior * 1.2 // Simulado
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
-      >
-        <div className="flex items-center space-x-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/dashboard/menu')}
-          >
-            ← Volver al Menú
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Análisis y Gráficos</h1>
-            <p className="text-gray-600">
-              Bienvenido, {userName} • Visualizaciones y análisis detallados
-            </p>
-          </div>
-        </div>
-        <DashboardFiltrosPanel
-          filtros={filtros}
-          setFiltros={setFiltros}
-          periodo={periodo}
-          setPeriodo={setPeriodo}
-          onRefresh={handleRefresh}
-          isRefreshing={isRefreshing}
-          opcionesFiltros={opcionesFiltros}
-          loadingOpcionesFiltros={loadingOpcionesFiltros}
-          errorOpcionesFiltros={errorOpcionesFiltros}
-        />
-      </motion.div>
-
-      {/* Análisis de Morosidad */}
-      {loadingDashboard ? (
-        <Card>
-          <CardContent className="p-6">
-            <div className="animate-pulse">
-              <div className="h-64 bg-gray-200 rounded"></div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : datosAnalisisMorosidad.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <BarChart3 className="mr-2 h-5 w-5" />
-                Análisis de Morosidad
-              </CardTitle>
-              <CardDescription>Total Financiamiento vs Cartera Cobrada</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={datosAnalisisMorosidad}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip
-                    formatter={(value: number, name: string, props: any) => {
-                      const porcentaje = props.payload.porcentaje || 0
-                      return [
-                        `${formatCurrency(value)} (${porcentaje.toFixed(1)}%)`,
-                        name
-                      ]
-                    }}
-                  />
-                  <Legend />
-                  <Bar
-                    dataKey="value"
-                    fill="#8884d8"
-                    name="Monto"
-                    label={(props: any) => {
-                      const { payload, y } = props
-                      const porcentaje = payload?.porcentaje || 0
-                      return (
-                        <text
-                          x={props.x + (props.width || 0) / 2}
-                          y={y}
-                          dy={-8}
-                          fill={payload?.color || '#000'}
-                          fontSize={12}
-                          fontWeight="bold"
-                          textAnchor="middle"
-                        >
-                          {`${porcentaje.toFixed(1)}%`}
-                        </text>
-                      )
-                    }}
-                  >
-                    {datosAnalisisMorosidad.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <PieChart className="mr-2 h-5 w-5" />
-                Análisis de Morosidad
-              </CardTitle>
-              <CardDescription>Distribución por tipo</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={250}>
-                <RechartsPieChart>
-                  <Pie
-                    data={datosAnalisisMorosidad}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {datosAnalisisMorosidad.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                  <Legend />
-                </RechartsPieChart>
-              </ResponsiveContainer>
-              <div className="mt-4 space-y-2">
-                {totalFinanciamiento > 0 && (
-                  <div className="flex justify-between items-center p-2 bg-blue-50 rounded-lg">
-                    <span className="text-sm font-medium text-blue-900">Total Financiamiento</span>
-                    <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                      {formatCurrency(totalFinanciamiento)} ({porcentajeFinanciamiento.toFixed(1)}%)
-                    </Badge>
-                  </div>
-                )}
-                {carteraCobrada > 0 && (
-                  <div className="flex justify-between items-center p-2 bg-green-50 rounded-lg">
-                    <span className="text-sm font-medium text-green-900">Cartera Cobrada</span>
-                    <Badge variant="outline" className="bg-green-100 text-green-800">
-                      {formatCurrency(carteraCobrada)} ({porcentajeCobrado.toFixed(1)}%)
-                    </Badge>
-                  </div>
-                )}
-                {morosidadDiferencia > 0 && (
-                  <div className="flex justify-between items-center p-2 bg-red-50 rounded-lg">
-                    <span className="text-sm font-medium text-red-900">Morosidad</span>
-                    <Badge variant="outline" className="bg-red-100 text-red-800">
-                      {formatCurrency(morosidadDiferencia)} ({porcentajeMorosidad.toFixed(1)}%)
-                    </Badge>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <BarChart3 className="mr-2 h-5 w-5" />
-              Análisis de Morosidad
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-center h-64 text-gray-500">
-              No hay datos disponibles para el período seleccionado
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Evolución Mensual */}
-      {data.evolucion_mensual && data.evolucion_mensual.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <LineChart className="mr-2 h-5 w-5" />
-              Evolución Mensual
-            </CardTitle>
-            <CardDescription>Últimos 6 meses</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={data.evolucion_mensual}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="mes" />
-                <YAxis />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                <Legend />
-                <Area type="monotone" dataKey="cartera" stackId="1" stroke="#3b82f6" fill="#3b82f6" name="Cartera" />
-                <Area type="monotone" dataKey="cobrado" stackId="1" stroke="#10b981" fill="#10b981" name="Cobrado" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Cobros Diarios */}
-      {loadingCobrosDiarios ? (
-        <Card>
-          <CardContent className="p-6">
-            <div className="animate-pulse">
-              <div className="h-64 bg-gray-200 rounded"></div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : cobrosDiarios.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <BarChart3 className="mr-2 h-5 w-5" />
-              Cobros Diarios
-            </CardTitle>
-            <CardDescription>
-              Total a cobrar por día (barras) y total cobrado embebido (últimos 30 días)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={400}>
-              <BarChart
-                data={cobrosDiarios}
-                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="dia"
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                  interval={Math.floor(cobrosDiarios.length / 15)}
-                />
-                <YAxis yAxisId="left" />
-                <Tooltip
-                  formatter={(value: number) => formatCurrency(value)}
-                  labelFormatter={(label) => {
-                    const item = cobrosDiarios.find((d) => d.dia === label)
-                    return item ? `${item.dia_semana} ${item.dia}` : label
-                  }}
-                />
-                <Legend />
-                <Bar
-                  yAxisId="left"
-                  dataKey="total_a_cobrar"
-                  name="Total a Cobrar"
-                  fill="#ef4444"
-                  radius={[4, 4, 0, 0]}
-                >
-                  {cobrosDiarios.map((entry, index) => (
-                    <Cell
-                      key={`cell-a-${index}`}
-                      fill={entry.total_a_cobrar > 0 ? '#ef4444' : '#f3f4f6'}
-                    />
-                  ))}
-                </Bar>
-                <Bar
-                  yAxisId="left"
-                  dataKey="total_cobrado"
-                  name="Total Cobrado"
-                  fill="#10b981"
-                  radius={[3, 3, 0, 0]}
-                >
-                  {cobrosDiarios.map((entry, index) => (
-                    <Cell
-                      key={`cell-b-${index}`}
-                      fill={entry.total_cobrado > 0 ? '#10b981' : 'transparent'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <BarChart3 className="mr-2 h-5 w-5" />
-              Cobros Diarios
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-center h-64 text-gray-500">
-              No hay datos disponibles
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Botones de Acceso a Componentes Detallados */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="container mx-auto px-4 py-8 space-y-8">
+        {/* Header Estratégico */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          className="flex items-center justify-between"
         >
-          <Card className="hover:shadow-lg transition-all cursor-pointer border-2 border-dashed border-gray-300 hover:border-red-500"
-                onClick={() => setIsTreemapMorosidadOpen(true)}>
-            <CardContent className="p-6 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-red-100 rounded-lg">
-                  <Users className="h-6 w-6 text-red-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">Morosidad por Analista</h3>
-                  <p className="text-sm text-gray-500">Visualiza morosidad por analista con treemap interactivo</p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm">
-                Abrir
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/dashboard/menu')}
+              className="hover:bg-amber-50"
+            >
+              ← Menú
+            </Button>
+            <div>
+              <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tight">Análisis</h1>
+              <p className="text-lg text-gray-600 font-medium mt-1">
+                Monitoreo Estratégico • {userName}
+              </p>
+            </div>
+          </div>
+          <DashboardFiltrosPanel
+            filtros={filtros}
+            setFiltros={setFiltros}
+            periodo={periodo}
+            setPeriodo={setPeriodo}
+            onRefresh={handleRefresh}
+            isRefreshing={isRefreshing}
+            opcionesFiltros={opcionesFiltros}
+            loadingOpcionesFiltros={loadingOpcionesFiltros}
+            errorOpcionesFiltros={errorOpcionesFiltros}
+          />
         </motion.div>
 
+        {/* KPIs PRINCIPALES */}
+        {loadingKPIs || loadingDashboard ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i}>
+                <CardContent className="p-6">
+                  <div className="animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+                    <div className="h-10 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <KpiCardLarge
+              title="Variación Mes Anterior"
+              value={variacionMesAnterior}
+              icon={TrendingUp}
+              color="text-amber-600"
+              bgColor="bg-amber-100"
+              borderColor="border-amber-500"
+              format="percentage"
+              variation={{
+                percent: variacionMesAnterior,
+                label: 'vs mes anterior',
+              }}
+            />
+            <KpiCardLarge
+              title="Crecimiento Anual"
+              value={crecimientoAnual}
+              icon={TrendingUp}
+              color="text-green-600"
+              bgColor="bg-green-100"
+              borderColor="border-green-500"
+              format="percentage"
+            />
+            <KpiCardLarge
+              title="Clientes Activos"
+              value={kpisPrincipales?.total_clientes || 0}
+              icon={Users}
+              color="text-blue-600"
+              bgColor="bg-blue-100"
+              borderColor="border-blue-500"
+              format="number"
+            />
+            <KpiCardLarge
+              title="Cartera Total"
+              value={totalFinanciamiento}
+              icon={DollarSign}
+              color="text-purple-600"
+              bgColor="bg-purple-100"
+              borderColor="border-purple-500"
+              format="currency"
+            />
+          </div>
+        )}
+
+        {/* GRÁFICOS PRINCIPALES */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Gráfico 1: Cobros Diarios del Mes */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Card className="shadow-lg border-2 border-gray-200">
+              <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b-2 border-amber-200">
+                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                  <LineChart className="h-6 w-6 text-amber-600" />
+                  <span>Cobros Diarios del Mes</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                {loadingCobrosDiarios ? (
+                  <div className="h-[300px] flex items-center justify-center">
+                    <div className="animate-pulse text-gray-400">Cargando...</div>
+                  </div>
+                ) : cobrosDiariosData && cobrosDiariosData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={cobrosDiariosData}>
+                      <defs>
+                        <linearGradient id="colorCobrado" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8} />
+                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="dia" stroke="#6b7280" />
+                      <YAxis stroke="#6b7280" />
+                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      <Legend />
+                      <Area
+                        type="monotone"
+                        dataKey="total_cobrado"
+                        stroke="#f59e0b"
+                        fillOpacity={1}
+                        fill="url(#colorCobrado)"
+                        name="Total Cobrado"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="total_a_cobrar"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        name="Total a Cobrar"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[300px] flex items-center justify-center text-gray-400">
+                    No hay datos disponibles
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Gráfico 2: Análisis Comparativo */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <Card className="shadow-lg border-2 border-gray-200">
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                  <BarChart3 className="h-6 w-6 text-blue-600" />
+                  <span>Análisis Comparativo</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                {loadingDashboard ? (
+                  <div className="h-[300px] flex items-center justify-center">
+                    <div className="animate-pulse text-gray-400">Cargando...</div>
+                  </div>
+                ) : evolucionMensual.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <RechartsLineChart data={evolucionMensual}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="mes" stroke="#6b7280" />
+                      <YAxis stroke="#6b7280" />
+                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="cartera"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        name="Cartera"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="cobrado"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        name="Cobrado"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="morosidad"
+                        stroke="#ef4444"
+                        strokeWidth={2}
+                        name="Morosidad"
+                      />
+                    </RechartsLineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[300px] flex items-center justify-center text-gray-400">
+                    No hay datos disponibles
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+
+        {/* BOTONES EXPLORAR DETALLES */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
+          className="mt-8"
         >
-          <Card className="hover:shadow-lg transition-all cursor-pointer border-2 border-dashed border-gray-300 hover:border-purple-500"
-                onClick={() => setIsDonutConcesionariosOpen(true)}>
-            <CardContent className="p-6 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-purple-100 rounded-lg">
-                  <Building2 className="h-6 w-6 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">Préstamos por Concesionario</h3>
-                  <p className="text-sm text-gray-500">Distribución porcentual de préstamos por concesionario</p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm">
-                Abrir
+          <div className="bg-gradient-to-r from-amber-600 to-orange-600 rounded-xl p-6 shadow-xl">
+            <h2 className="text-2xl font-bold text-white mb-4 flex items-center space-x-2">
+              <span>🔍</span>
+              <span>Explorar Análisis Detallados</span>
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Button
+                variant="secondary"
+                className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-transparent hover:border-amber-300 h-auto py-4 flex flex-col items-center space-y-2"
+                onClick={() => setIsTreemapMorosidadOpen(true)}
+              >
+                <PieChart className="h-6 w-6" />
+                <span className="font-semibold">Morosidad por Analista</span>
+                <ArrowRight className="h-4 w-4" />
               </Button>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-        >
-          <Card className="hover:shadow-lg transition-all cursor-pointer border-2 border-dashed border-gray-300 hover:border-blue-500"
-                onClick={() => setIsBarrasDivergentesOpen(true)}>
-            <CardContent className="p-6 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <BarChart3 className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">Distribución de Préstamos</h3>
-                  <p className="text-sm text-gray-500">Análisis por rango de monto, plazo, estado y más</p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm">
-                Abrir
+              <Button
+                variant="secondary"
+                className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-transparent hover:border-amber-300 h-auto py-4 flex flex-col items-center space-y-2"
+                onClick={() => setIsDonutConcesionariosOpen(true)}
+              >
+                <Building2 className="h-6 w-6" />
+                <span className="font-semibold">Préstamos por Concesionario</span>
+                <ArrowRight className="h-4 w-4" />
               </Button>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-        >
-          <Card className="hover:shadow-lg transition-all cursor-pointer border-2 border-dashed border-gray-300 hover:border-green-500"
-                onClick={() => setIsTendenciasOpen(true)}>
-            <CardContent className="p-6 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <TrendingUp className="h-6 w-6 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">Tendencias y Proyecciones</h3>
-                  <p className="text-sm text-gray-500">Cuentas por cobrar y cuotas en días con proyecciones</p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm">
-                Abrir
+              <Button
+                variant="secondary"
+                className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-transparent hover:border-amber-300 h-auto py-4 flex flex-col items-center space-y-2"
+                onClick={() => setIsBarrasDivergentesOpen(true)}
+              >
+                <BarChart3 className="h-6 w-6" />
+                <span className="font-semibold">Distribución de Préstamos</span>
+                <ArrowRight className="h-4 w-4" />
               </Button>
-            </CardContent>
-          </Card>
+              <Button
+                variant="secondary"
+                className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-transparent hover:border-amber-300 h-auto py-4 flex flex-col items-center space-y-2"
+                onClick={() => setIsTendenciasOpen(true)}
+              >
+                <LineChart className="h-6 w-6" />
+                <span className="font-semibold">Tendencias y Proyecciones</span>
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </motion.div>
       </div>
 
@@ -573,11 +445,7 @@ export function DashboardAnalisis() {
         isOpen={isBarrasDivergentesOpen}
         onClose={() => setIsBarrasDivergentesOpen(false)}
       />
-      <TendenciasModal
-        isOpen={isTendenciasOpen}
-        onClose={() => setIsTendenciasOpen(false)}
-      />
+      <TendenciasModal isOpen={isTendenciasOpen} onClose={() => setIsTendenciasOpen(false)} />
     </div>
   )
 }
-

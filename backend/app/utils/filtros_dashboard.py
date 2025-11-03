@@ -4,7 +4,7 @@ Cualquier KPI nuevo debe usar estas funciones para aplicar filtros automáticame
 """
 
 from datetime import date
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Query
@@ -162,11 +162,11 @@ class FiltrosDashboard:
         fecha_inicio: Optional[date] = None,
         fecha_fin: Optional[date] = None,
         consolidado: Optional[bool] = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Convierte parámetros de filtros en diccionario para pasar a funciones
         """
-        params = {}
+        params: dict[str, Any] = {}
         if analista:
             params["analista"] = analista
         if concesionario:
@@ -177,6 +177,6 @@ class FiltrosDashboard:
             params["fecha_inicio"] = fecha_inicio
         if fecha_fin:
             params["fecha_fin"] = fecha_fin
-        if consolidado:
+        if consolidado is not None:
             params["consolidado"] = consolidado
         return params

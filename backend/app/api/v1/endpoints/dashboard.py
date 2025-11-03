@@ -2,7 +2,7 @@ import logging
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[import-untyped]
 from sqlalchemy import and_, cast, func, or_  # type: ignore[import-untyped]
@@ -1937,7 +1937,7 @@ def obtener_cuentas_cobrar_tendencias(
         fecha_fin_proyeccion = fecha_fin_query + timedelta(days=meses_proyeccion * 30)
 
         # Generar lista de fechas (diaria)
-        datos = []
+        datos: List[dict[str, Any]] = []
         current_date = fecha_inicio_query
         fecha_division = fecha_fin_query  # Separación entre datos reales y proyección
 
@@ -1961,8 +1961,12 @@ def obtener_cuentas_cobrar_tendencias(
                 cuentas_por_cobrar = float(query_cuentas.scalar() or Decimal("0"))
             else:
                 # Proyección: usar último valor conocido con factor de crecimiento
-                ultimo_valor = datos[-1]["cuentas_por_cobrar"] if datos and datos[-1]["cuentas_por_cobrar"] else 0
-                cuentas_por_cobrar = ultimo_valor * 1.02 if ultimo_valor > 0 else 0  # Crecimiento del 2%
+                ultimo_valor: float = 0.0
+                if datos and len(datos) > 0 and "cuentas_por_cobrar" in datos[-1]:
+                    valor = datos[-1]["cuentas_por_cobrar"]
+                    if valor is not None and isinstance(valor, (int, float)):
+                        ultimo_valor = float(valor)
+                cuentas_por_cobrar = ultimo_valor * 1.02 if ultimo_valor > 0 else 0.0  # Crecimiento del 2%
 
             # CUOTAS EN DÍAS: Contar cuotas que se deben pagar por día (fecha_vencimiento = current_date)
             if not es_proyeccion:
@@ -2075,8 +2079,12 @@ def obtener_financiamiento_tendencia_mensual(
             )
 
             resultado = query_nuevos.first()
-            cantidad_nuevos = resultado.cantidad or 0
-            monto_nuevos = float(resultado.monto_total or Decimal("0"))
+            if resultado:
+                cantidad_nuevos = resultado.cantidad or 0
+                monto_nuevos = float(resultado.monto_total or Decimal("0"))
+            else:
+                cantidad_nuevos = 0
+                monto_nuevos = 0.0
 
             # Total financiamiento acumulado hasta fin de mes (cartera vigente)
             query_total = db.query(func.sum(Prestamo.total_financiamiento).label("total")).filter(
@@ -2108,4 +2116,65 @@ def obtener_financiamiento_tendencia_mensual(
 
     except Exception as e:
         logger.error(f"Error obteniendo tendencia mensual de financiamiento: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/cobros-por-analista")
+def obtener_cobros_por_analista(
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Distribución de cobros por analista para gráfico de primera plana
+    Top analistas con montos y cantidad de pagos conciliados
+    """
+    try:
+        hoy = date.today()
+        fecha_inicio_mes = date(hoy.year, hoy.month, 1)
+
+        # Obtener cobros por analista (pagos conciliados del mes)
+        query = (
+            db.query(
+                func.coalesce(Prestamo.analista, Prestamo.producto_financiero, "Sin Analista").label("analista"),
+                func.sum(Pago.monto_pagado).label("total_cobrado"),
+                func.count(Pago.id).label("cantidad_pagos"),
+            )
+            .join(Pago, Pago.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Pago.conciliado.is_(True),
+                func.date(Pago.fecha_pago) >= fecha_inicio_mes,
+            )
+            .group_by("analista")
+            .order_by(func.sum(Pago.monto_pagado).desc())
+        )
+
+        # Aplicar filtros (excepto analista que ya estamos agrupando)
+        if concesionario:
+            query = query.filter(Prestamo.concesionario == concesionario)
+        if modelo:
+            query = query.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
+        if fecha_inicio or fecha_fin:
+            # Ya estamos filtrando por mes actual, pero podemos ajustar si hay fechas específicas
+            pass
+
+        resultados = query.limit(10).all()  # Top 10
+
+        analistas_data = []
+        for row in resultados:
+            analistas_data.append({
+                "analista": row.analista or "Sin Analista",
+                "total_cobrado": float(row.total_cobrado or Decimal("0")),
+                "cantidad_pagos": row.cantidad_pagos or 0,
+            })
+
+        return {"analistas": analistas_data}
+
+    except Exception as e:
+        logger.error(f"Error obteniendo cobros por analista: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
