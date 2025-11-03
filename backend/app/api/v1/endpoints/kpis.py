@@ -4,9 +4,9 @@ from datetime import date
 from decimal import Decimal
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, distinct, func, or_
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[import-untyped]
+from sqlalchemy import and_, distinct, func, or_  # type: ignore[import-untyped]
+from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.core.cache import cache_result
@@ -208,13 +208,13 @@ def _calcular_kpis_mes_actual(
     cuotas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(cuotas_mes_query, analista, concesionario, modelo, None, None)
     total_cuotas_mes = cuotas_mes_query.scalar() or 0
 
-    # Cuotas conciliadas
+    # Cuotas conciliadas (usa PagoStaging donde están los datos)
     cuotas_conciliadas_query = (
         db.query(func.count(func.distinct(Cuota.id)))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(pago_cuotas, pago_cuotas.c.cuota_id == Cuota.id)
-        .join(Pago, pago_cuotas.c.pago_id == Pago.id)
-        .filter(Pago.conciliado.is_(True))
+        .join(PagoStaging, pago_cuotas.c.pago_id == PagoStaging.id)
+        .filter(PagoStaging.conciliado.is_(True))
     )
     if analista or concesionario or modelo:
         if analista:

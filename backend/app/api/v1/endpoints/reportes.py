@@ -261,19 +261,19 @@ def reporte_pagos(
     """Genera reporte de pagos en un rango de fechas."""
     try:
         logger.info(f"[reportes.pagos] Generando reporte pagos desde {fecha_inicio} hasta {fecha_fin}")
-        # Total de pagos: usar monto_pagado
-        total_pagos = db.query(func.sum(Pago.monto_pagado)).filter(
-            Pago.fecha_pago >= fecha_inicio,
-            Pago.fecha_pago <= fecha_fin,
+        # Total de pagos: usar monto_pagado (usa PagoStaging donde están los datos)
+        total_pagos = db.query(func.sum(PagoStaging.monto_pagado)).filter(
+            PagoStaging.fecha_pago >= fecha_inicio,
+            PagoStaging.fecha_pago <= fecha_fin,
         ).scalar() or Decimal("0")
 
         logger.info(f"[reportes.pagos] Total pagos: {total_pagos}")
 
         cantidad_pagos = (
-            db.query(Pago)
+            db.query(PagoStaging)
             .filter(
-                Pago.fecha_pago >= fecha_inicio,
-                Pago.fecha_pago <= fecha_fin,
+                PagoStaging.fecha_pago >= fecha_inicio,
+                PagoStaging.fecha_pago <= fecha_fin,
             )
             .count()
         )
@@ -281,13 +281,13 @@ def reporte_pagos(
         # Pagos por método: usar monto_pagado y agrupar por institucion_bancaria
         pagos_por_metodo = (
             db.query(
-                func.coalesce(Pago.institucion_bancaria, "Sin especificar").label("metodo"),
-                func.count(Pago.id).label("cantidad"),
-                func.sum(Pago.monto_pagado).label("monto"),
+                func.coalesce(PagoStaging.institucion_bancaria, "Sin especificar").label("metodo"),
+                func.count(PagoStaging.id).label("cantidad"),
+                func.sum(PagoStaging.monto_pagado).label("monto"),
             )
             .filter(
-                Pago.fecha_pago >= fecha_inicio,
-                Pago.fecha_pago <= fecha_fin,
+                PagoStaging.fecha_pago >= fecha_inicio,
+                PagoStaging.fecha_pago <= fecha_fin,
             )
             .group_by("metodo")
             .all()
@@ -298,15 +298,15 @@ def reporte_pagos(
         # Pagos por día: usar monto_pagado
         pagos_por_dia = (
             db.query(
-                func.date(Pago.fecha_pago).label("fecha"),
-                func.count(Pago.id).label("cantidad"),
-                func.sum(Pago.monto_pagado).label("monto"),
+                func.date(PagoStaging.fecha_pago).label("fecha"),
+                func.count(PagoStaging.id).label("cantidad"),
+                func.sum(PagoStaging.monto_pagado).label("monto"),
             )
             .filter(
-                Pago.fecha_pago >= fecha_inicio,
-                Pago.fecha_pago <= fecha_fin,
+                PagoStaging.fecha_pago >= fecha_inicio,
+                PagoStaging.fecha_pago <= fecha_fin,
             )
-            .group_by(func.date(Pago.fecha_pago))
+            .group_by(func.date(PagoStaging.fecha_pago))
             .all()
         )
 
@@ -761,9 +761,9 @@ def resumen_dashboard(
 
         # Pagos del mes: usar monto_pagado y fecha_pago correctamente
         fecha_inicio_mes = hoy.replace(day=1)
-        pagos_mes_query = db.query(func.sum(Pago.monto_pagado)).filter(
-            Pago.fecha_pago >= fecha_inicio_mes,
-            Pago.fecha_pago <= hoy,
+        pagos_mes_query = db.query(func.sum(PagoStaging.monto_pagado)).filter(
+            PagoStaging.fecha_pago >= fecha_inicio_mes,
+            PagoStaging.fecha_pago <= hoy,
         )
         pagos_mes = float(pagos_mes_query.scalar() or Decimal("0"))
 
