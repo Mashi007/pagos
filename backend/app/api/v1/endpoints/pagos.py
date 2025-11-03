@@ -661,16 +661,21 @@ def listar_ultimos_pagos(
         )
 
         # Join para obtener el registro de pago completo de esa última fecha
-        pagos_ultimos_q = db.query(Pago).join(
+        # Usar PagoStaging donde están los datos reales
+        pagos_ultimos_q = db.query(PagoStaging).join(
             sub_ultimos,
-            (Pago.cedula_cliente == sub_ultimos.c.cedula) & (Pago.fecha_registro == sub_ultimos.c.max_fecha),
+            (
+                or_(PagoStaging.cedula_cliente == sub_ultimos.c.cedula, PagoStaging.cedula == sub_ultimos.c.cedula)
+            ) & (PagoStaging.fecha_registro == sub_ultimos.c.max_fecha),
         )
 
         # Filtros
         if cedula:
-            pagos_ultimos_q = pagos_ultimos_q.filter(Pago.cedula_cliente == cedula)
+            pagos_ultimos_q = pagos_ultimos_q.filter(
+                or_(PagoStaging.cedula_cliente == cedula, PagoStaging.cedula == cedula)
+            )
         if estado:
-            pagos_ultimos_q = pagos_ultimos_q.filter(Pago.estado == estado)
+            pagos_ultimos_q = pagos_ultimos_q.filter(PagoStaging.estado == estado)
 
         # Total para paginación
         total = pagos_ultimos_q.count()
@@ -1747,3 +1752,176 @@ def migrar_pago_staging_a_pagos(
         db.rollback()
         logger.error(f"❌ [migrar_pago_staging] Error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al migrar pago: {str(e)}")
+
+
+@router.get("/verificar-pagos-staging")
+def verificar_conexion_pagos_staging(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Endpoint de diagnóstico para verificar la conexión y estado de pagos_staging
+    """
+    diagnostico = {
+        "timestamp": datetime.now().isoformat(),
+        "estado": "ok",
+        "verificaciones": {},
+        "errores": [],
+        "datos": {},
+    }
+
+    try:
+        # 1. Verificar que el modelo existe
+        logger.info("🔍 [verificar_pagos_staging] Verificando modelo PagoStaging...")
+        try:
+            diagnostico["verificaciones"]["modelo_existe"] = {
+                "status": "ok",
+                "mensaje": "Modelo PagoStaging importado correctamente",
+                "tablename": PagoStaging.__tablename__,
+            }
+        except Exception as e:
+            diagnostico["verificaciones"]["modelo_existe"] = {
+                "status": "error",
+                "mensaje": f"Error al acceder al modelo: {str(e)}",
+            }
+            diagnostico["errores"].append(f"Modelo: {str(e)}")
+            diagnostico["estado"] = "error"
+            logger.error(f"❌ [verificar_pagos_staging] Error en modelo: {e}", exc_info=True)
+
+        # 2. Verificar conexión básica a la tabla
+        logger.info("🔍 [verificar_pagos_staging] Verificando conexión a tabla pagos_staging...")
+        try:
+            test_count = db.query(func.count(PagoStaging.id)).scalar()
+            diagnostico["verificaciones"]["conexion_tabla"] = {
+                "status": "ok",
+                "mensaje": "Conexión a tabla pagos_staging exitosa",
+                "total_registros": test_count or 0,
+            }
+            diagnostico["datos"]["total_registros"] = test_count or 0
+        except Exception as e:
+            diagnostico["verificaciones"]["conexion_tabla"] = {
+                "status": "error",
+                "mensaje": f"Error de conexión a tabla: {str(e)}",
+            }
+            diagnostico["errores"].append(f"Conexión tabla: {str(e)}")
+            diagnostico["estado"] = "error"
+            logger.error(f"❌ [verificar_pagos_staging] Error conexión tabla: {e}", exc_info=True)
+
+        # 3. Verificar estructura de columnas
+        logger.info("🔍 [verificar_pagos_staging] Verificando estructura de columnas...")
+        try:
+            # Intentar consultar diferentes columnas
+            muestra = db.query(
+                PagoStaging.id,
+                PagoStaging.cedula_cliente,
+                PagoStaging.cedula,
+                PagoStaging.prestamo_id,
+                PagoStaging.fecha_pago,
+                PagoStaging.monto_pagado,
+                PagoStaging.numero_documento,
+                PagoStaging.estado,
+                PagoStaging.conciliado,
+            ).limit(1).first()
+
+            columnas_verificadas = []
+            if muestra:
+                columnas_verificadas = [
+                    "id",
+                    "cedula_cliente",
+                    "cedula",
+                    "prestamo_id",
+                    "fecha_pago",
+                    "monto_pagado",
+                    "numero_documento",
+                    "estado",
+                    "conciliado",
+                ]
+
+            diagnostico["verificaciones"]["estructura_columnas"] = {
+                "status": "ok",
+                "mensaje": "Estructura de columnas verificada",
+                "columnas_verificadas": columnas_verificadas,
+                "tiene_datos": muestra is not None,
+            }
+            diagnostico["datos"]["tiene_datos"] = muestra is not None
+        except Exception as e:
+            diagnostico["verificaciones"]["estructura_columnas"] = {
+                "status": "error",
+                "mensaje": f"Error verificando columnas: {str(e)}",
+            }
+            diagnostico["errores"].append(f"Estructura columnas: {str(e)}")
+            diagnostico["estado"] = "error"
+            logger.error(f"❌ [verificar_pagos_staging] Error estructura: {e}", exc_info=True)
+
+        # 4. Consulta completa de ejemplo
+        logger.info("🔍 [verificar_pagos_staging] Ejecutando consulta de ejemplo...")
+        try:
+            query_ejemplo = db.query(PagoStaging).limit(5).all()
+            diagnostico["verificaciones"]["consulta_ejemplo"] = {
+                "status": "ok",
+                "mensaje": "Consulta de ejemplo ejecutada correctamente",
+                "registros_obtenidos": len(query_ejemplo),
+            }
+            diagnostico["datos"]["muestra_registros"] = len(query_ejemplo)
+            
+            # Datos de muestra si existen
+            if query_ejemplo:
+                muestra_datos = []
+                for p in query_ejemplo[:3]:
+                    muestra_datos.append({
+                        "id": p.id,
+                        "cedula": p.cedula_cliente or p.cedula,
+                        "monto": float(p.monto_pagado) if p.monto_pagado else None,
+                        "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
+                        "estado": p.estado,
+                    })
+                diagnostico["datos"]["muestra"] = muestra_datos
+        except Exception as e:
+            diagnostico["verificaciones"]["consulta_ejemplo"] = {
+                "status": "error",
+                "mensaje": f"Error en consulta ejemplo: {str(e)}",
+            }
+            diagnostico["errores"].append(f"Consulta ejemplo: {str(e)}")
+            diagnostico["estado"] = "error"
+            logger.error(f"❌ [verificar_pagos_staging] Error consulta: {e}", exc_info=True)
+
+        # 5. Estadísticas rápidas
+        logger.info("🔍 [verificar_pagos_staging] Calculando estadísticas...")
+        try:
+            total = db.query(func.count(PagoStaging.id)).scalar() or 0
+            con_cedula = db.query(func.count(PagoStaging.id)).filter(
+                or_(PagoStaging.cedula_cliente.isnot(None), PagoStaging.cedula.isnot(None))
+            ).scalar() or 0
+            con_fecha = db.query(func.count(PagoStaging.id)).filter(
+                PagoStaging.fecha_pago.isnot(None)
+            ).scalar() or 0
+            con_monto = db.query(func.count(PagoStaging.id)).filter(
+                PagoStaging.monto_pagado.isnot(None), PagoStaging.monto_pagado > 0
+            ).scalar() or 0
+
+            diagnostico["datos"]["estadisticas"] = {
+                "total": total,
+                "con_cedula": con_cedula,
+                "con_fecha_pago": con_fecha,
+                "con_monto": con_monto,
+                "completos": min(con_cedula, con_fecha, con_monto),
+            }
+            diagnostico["verificaciones"]["estadisticas"] = {
+                "status": "ok",
+                "mensaje": "Estadísticas calculadas correctamente",
+            }
+        except Exception as e:
+            diagnostico["verificaciones"]["estadisticas"] = {
+                "status": "error",
+                "mensaje": f"Error calculando estadísticas: {str(e)}",
+            }
+            diagnostico["errores"].append(f"Estadísticas: {str(e)}")
+            logger.warning(f"⚠️ [verificar_pagos_staging] Error estadísticas: {e}", exc_info=True)
+
+    except Exception as e:
+        logger.error(f"❌ [verificar_pagos_staging] Error general: {e}", exc_info=True)
+        diagnostico["estado"] = "error"
+        diagnostico["errores"].append(f"Error general: {str(e)}")
+
+    logger.info(f"✅ [verificar_pagos_staging] Diagnóstico completado - Estado: {diagnostico['estado']}")
+    return diagnostico
