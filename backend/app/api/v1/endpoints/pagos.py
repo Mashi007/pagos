@@ -548,14 +548,13 @@ def listar_pagos(
             """
             ).bindparams(limit=per_page, offset=offset)
         ).fetchall()
-        
+
         # Log de diagnóstico: mostrar ejemplos de los datos reales obtenidos
         if pagos_raw:
             logger.info(f"📊 [listar_pagos] Ejemplos de datos obtenidos de BD:")
             for i, row in enumerate(pagos_raw[:3]):  # Mostrar primeros 3
                 logger.info(
-                    f"   Pago {i+1}: ID={row[0]}, Cédula='{row[1]}', "
-                    f"Fecha='{row[2]}', Monto='{row[3]}', Doc='{row[4]}'"
+                    f"   Pago {i+1}: ID={row[0]}, Cédula='{row[1]}', " f"Fecha='{row[2]}', Monto='{row[3]}', Doc='{row[4]}'"
                 )
         else:
             logger.warning("⚠️ [listar_pagos] No se obtuvieron pagos con datos válidos de la BD")
@@ -1268,12 +1267,9 @@ def obtener_kpis_pagos(
         pagos_ejemplo_raw = pagos_ejemplo_query.fetchall()
         pagos_ejemplo_mes = []
         for row in pagos_ejemplo_raw:
-            pago_ej = type('obj', (object,), {
-                'id': row[0],
-                'monto_pagado': row[1],
-                'fecha_pago': row[2],
-                'cedula_cliente': row[3]
-            })()
+            pago_ej = type(
+                "obj", (object,), {"id": row[0], "monto_pagado": row[1], "fecha_pago": row[2], "cedula_cliente": row[3]}
+            )()
             pagos_ejemplo_mes.append(pago_ej)
 
         logger.info(
