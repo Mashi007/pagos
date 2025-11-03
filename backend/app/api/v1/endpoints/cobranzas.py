@@ -551,9 +551,7 @@ def _filtrar_por_dias_retraso(
                 "total_financiamiento": float(row.total_financiamiento),
                 "cuotas_vencidas": row.cuotas_vencidas,
                 "total_adeudado": (float(row.total_adeudado) if row.total_adeudado else 0.0),
-                "fecha_primera_vencida": (
-                    row.fecha_primera_vencida.isoformat() if row.fecha_primera_vencida else None
-                ),
+                "fecha_primera_vencida": (row.fecha_primera_vencida.isoformat() if row.fecha_primera_vencida else None),
                 "fecha_ultima_vencida": (row.fecha_ultima_vencida.isoformat() if row.fecha_ultima_vencida else None),
                 "dias_retraso": dias_retraso,
                 "monto_mas_30_dias": (float(row.monto_mas_30_dias) if row.monto_mas_30_dias else 0.0),
