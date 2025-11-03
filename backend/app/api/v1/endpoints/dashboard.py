@@ -136,6 +136,49 @@ def _calcular_total_a_cobrar_fecha(db: Session, fecha: date, analista: Optional[
     return float(query.scalar() or Decimal("0"))
 
 
+def _calcular_dias_mora_cliente(db: Session, cedula: str, hoy: date) -> int:
+    """Calcula días de mora máximo para un cliente"""
+    dias_mora_query = (
+        db.query(func.max(func.date_part("day", hoy - Cuota.fecha_vencimiento)))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            Prestamo.cedula == cedula,
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.estado != "PAGADO",
+        )
+        .scalar()
+    )
+    return int(dias_mora_query) if dias_mora_query else 0
+
+
+def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos: int, total_monto: float) -> list:
+    """Procesa distribución por rango de monto"""
+    distribucion_data = []
+    for min_val, max_val, categoria in rangos:
+        query_rango = query_base.filter(Prestamo.total_financiamiento >= Decimal(str(min_val)))
+        if max_val:
+            query_rango = query_rango.filter(Prestamo.total_financiamiento < Decimal(str(max_val)))
+
+        cantidad = query_rango.count()
+        monto_total = float(
+            query_rango.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0")
+        )
+        porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
+        porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
+
+        distribucion_data.append(
+            {
+                "categoria": categoria,
+                "cantidad_prestamos": cantidad,
+                "monto_total": monto_total,
+                "porcentaje_cantidad": round(porcentaje_cantidad, 2),
+                "porcentaje_monto": round(porcentaje_monto, 2),
+            }
+        )
+    return distribucion_data
+
+
 def _calcular_pagos_fecha(db: Session, fecha: date, analista: Optional[str],
                           concesionario: Optional[str], modelo: Optional[str],
                           fecha_inicio: Optional[date], fecha_fin: Optional[date]) -> float:
@@ -639,14 +682,8 @@ def dashboard_administrador(
         )
 
         # Total cobrado mes anterior
-        if mes_actual == 1:
-            mes_anterior = 12
-            año_anterior = año_actual - 1
-        else:
-            mes_anterior = mes_actual - 1
-            año_anterior = año_actual
-        primer_dia_mes_anterior = date(año_anterior, mes_anterior, 1)
-        ultimo_dia_mes_anterior = date(año_anterior, mes_anterior, monthrange(año_anterior, mes_anterior)[1])
+        mes_anterior, año_anterior = _calcular_mes_anterior(mes_actual, año_actual)
+        primer_dia_mes_anterior, ultimo_dia_mes_anterior = _obtener_fechas_mes(mes_anterior, año_anterior)
 
         total_cobrado_anterior = _calcular_total_cobrado_mes(
             db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
@@ -999,24 +1036,11 @@ def dashboard_analista(
 
     top_clientes_data = []
     for row in top_clientes_query:
-        # Calcular días de mora desde cuotas
-        dias_mora_query = (
-            db.query(func.max(func.date_part("day", hoy - Cuota.fecha_vencimiento)))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.cedula == row.cedula,
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
-            )
-            .scalar()
-        )
-        dias_mora = int(dias_mora_query) if dias_mora_query else 0
-
+        dias_mora = _calcular_dias_mora_cliente(db, row.cedula, hoy)
         top_clientes_data.append(
             {
                 "cedula": row.cedula,
-                "nombre": row.nombres,  # Corregido: usar nombres en lugar de nombre
+                "nombre": row.nombres,
                 "total_financiamiento": float(row.total_financiamiento or 0),
                 "dias_mora": dias_mora,
             }
@@ -1130,10 +1154,8 @@ def obtener_kpis_principales(
         )
         total_prestamos_anterior = query_prestamos_anterior.scalar() or 0
 
-        variacion_prestamos = (
-            ((total_prestamos_actual - total_prestamos_anterior) / total_prestamos_anterior * 100)
-            if total_prestamos_anterior > 0
-            else 0
+        variacion_prestamos, variacion_prestamos_abs = _calcular_variacion(
+            float(total_prestamos_actual), float(total_prestamos_anterior)
         )
 
         # 2. CREDITOS NUEVOS EN EL MES
@@ -1157,10 +1179,8 @@ def obtener_kpis_principales(
         )
         creditos_nuevos_anterior = query_creditos_nuevos_anterior.scalar() or 0
 
-        variacion_creditos = (
-            ((creditos_nuevos_actual - creditos_nuevos_anterior) / creditos_nuevos_anterior * 100)
-            if creditos_nuevos_anterior > 0
-            else 0
+        variacion_creditos, variacion_creditos_abs = _calcular_variacion(
+            float(creditos_nuevos_actual), float(creditos_nuevos_anterior)
         )
 
         # 3. TOTAL CLIENTES
@@ -1180,10 +1200,8 @@ def obtener_kpis_principales(
         )
         total_clientes_anterior = query_clientes_anterior.scalar() or 0
 
-        variacion_clientes = (
-            ((total_clientes_actual - total_clientes_anterior) / total_clientes_anterior * 100)
-            if total_clientes_anterior > 0
-            else 0
+        variacion_clientes, variacion_clientes_abs = _calcular_variacion(
+            float(total_clientes_actual), float(total_clientes_anterior)
         )
 
         # 4. TOTAL MOROSIDAD EN DOLARES
@@ -1218,8 +1236,8 @@ def obtener_kpis_principales(
         )
         morosidad_anterior = float(query_morosidad_anterior.scalar() or Decimal("0"))
 
-        variacion_morosidad = (
-            ((morosidad_actual - morosidad_anterior) / morosidad_anterior * 100) if morosidad_anterior > 0 else 0
+        variacion_morosidad, variacion_morosidad_abs = _calcular_variacion(
+            morosidad_actual, morosidad_anterior
         )
 
         nombres_meses = [
@@ -1242,25 +1260,25 @@ def obtener_kpis_principales(
                 "valor_actual": total_prestamos_actual,
                 "valor_mes_anterior": total_prestamos_anterior,
                 "variacion_porcentual": round(variacion_prestamos, 2),
-                "variacion_absoluta": total_prestamos_actual - total_prestamos_anterior,
+                "variacion_absoluta": variacion_prestamos_abs,
             },
             "creditos_nuevos_mes": {
                 "valor_actual": creditos_nuevos_actual,
                 "valor_mes_anterior": creditos_nuevos_anterior,
                 "variacion_porcentual": round(variacion_creditos, 2),
-                "variacion_absoluta": creditos_nuevos_actual - creditos_nuevos_anterior,
+                "variacion_absoluta": variacion_creditos_abs,
             },
             "total_clientes": {
                 "valor_actual": total_clientes_actual,
                 "valor_mes_anterior": total_clientes_anterior,
                 "variacion_porcentual": round(variacion_clientes, 2),
-                "variacion_absoluta": total_clientes_actual - total_clientes_anterior,
+                "variacion_absoluta": variacion_clientes_abs,
             },
             "total_morosidad_usd": {
                 "valor_actual": morosidad_actual,
                 "valor_mes_anterior": morosidad_anterior,
                 "variacion_porcentual": round(variacion_morosidad, 2),
-                "variacion_absoluta": morosidad_actual - morosidad_anterior,
+                "variacion_absoluta": variacion_morosidad_abs,
             },
             "mes_actual": nombres_meses[mes_actual - 1],
             "mes_anterior": nombres_meses[mes_anterior - 1],
@@ -1308,12 +1326,7 @@ def obtener_cobranzas_mensuales(
         for i in range(12):
             mes_fecha = date(hoy.year, hoy.month, 1) - timedelta(days=32 * i)
             mes_fecha = date(mes_fecha.year, mes_fecha.month, 1)
-
-            # Calcular rango del mes
-            if mes_fecha.month == 12:
-                siguiente_mes = date(mes_fecha.year + 1, 1, 1)
-            else:
-                siguiente_mes = date(mes_fecha.year, mes_fecha.month + 1, 1)
+            siguiente_mes = _obtener_fechas_mes_siguiente(mes_fecha.month, mes_fecha.year)
 
             # Cobranzas planificadas: Suma de monto_cuota de cuotas con fecha_vencimiento en ese mes
             query_cobranzas = (
@@ -1402,15 +1415,8 @@ def obtener_cobranza_por_dia(
         hoy = date.today()
 
         # Calcular rango de fechas
-        if fecha_inicio:
-            fecha_inicio_query = fecha_inicio
-        else:
-            fecha_inicio_query = hoy - timedelta(days=dias or 30)
-
-        if fecha_fin:
-            fecha_fin_query = fecha_fin
-        else:
-            fecha_fin_query = hoy
+        fecha_inicio_query = fecha_inicio or (hoy - timedelta(days=dias or 30))
+        fecha_fin_query = fecha_fin or hoy
 
         # Generar lista de fechas
         fechas = []
@@ -1421,43 +1427,15 @@ def obtener_cobranza_por_dia(
 
         dias_data = []
         for fecha_dia in fechas:
-            # Total a cobrar: Suma de monto_cuota de cuotas con fecha_vencimiento = fecha_dia
-            query_total_cobrar = (
-                db.query(func.sum(Cuota.monto_cuota))
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento == fecha_dia,
-                )
+            total_a_cobrar = _calcular_total_a_cobrar_fecha(
+                db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
-            query_total_cobrar = FiltrosDashboard.aplicar_filtros_cuota(
-                query_total_cobrar, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            pagos = _calcular_pagos_fecha(
+                db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
-            total_a_cobrar = float(query_total_cobrar.scalar() or Decimal("0"))
-
-            # Pagos: Suma de pagos con fecha_pago = fecha_dia
-            query_pagos = db.query(func.sum(Pago.monto_pagado)).filter(func.date(Pago.fecha_pago) == fecha_dia)
-            if analista or concesionario or modelo:
-                query_pagos = query_pagos.join(Prestamo, Pago.prestamo_id == Prestamo.id)
-            query_pagos = FiltrosDashboard.aplicar_filtros_pago(
-                query_pagos, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            morosidad = _calcular_morosidad(
+                db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
-            pagos = float(query_pagos.scalar() or Decimal("0"))
-
-            # Morosidad: Suma de cuotas vencidas no pagadas hasta esa fecha
-            query_morosidad = (
-                db.query(func.sum(Cuota.monto_cuota))
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento <= fecha_dia,
-                    Cuota.estado != "PAGADO",
-                )
-            )
-            query_morosidad = FiltrosDashboard.aplicar_filtros_cuota(
-                query_morosidad, analista, concesionario, modelo, fecha_inicio, fecha_fin
-            )
-            morosidad = float(query_morosidad.scalar() or Decimal("0"))
 
             dias_data.append(
                 {
@@ -1746,28 +1724,7 @@ def obtener_distribucion_prestamos(
                 (20000, 50000, "$20,000 - $50,000"),
                 (50000, None, "$50,000+"),
             ]
-
-            for min_val, max_val, categoria in rangos:
-                query_rango = query_base.filter(Prestamo.total_financiamiento >= Decimal(str(min_val)))
-                if max_val:
-                    query_rango = query_rango.filter(Prestamo.total_financiamiento < Decimal(str(max_val)))
-
-                cantidad = query_rango.count()
-                monto_total = float(
-                    query_rango.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0")
-                )
-                porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
-                porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
-
-                distribucion_data.append(
-                    {
-                        "categoria": categoria,
-                        "cantidad_prestamos": cantidad,
-                        "monto_total": monto_total,
-                        "porcentaje_cantidad": round(porcentaje_cantidad, 2),
-                        "porcentaje_monto": round(porcentaje_monto, 2),
-                    }
-                )
+            distribucion_data = _procesar_distribucion_rango_monto(query_base, rangos, total_prestamos, total_monto)
 
         elif tipo == "plazo":
             # Agrupar por numero_cuotas (plazo)
@@ -2037,14 +1994,8 @@ def obtener_financiamiento_tendencia_mensual(
         while current_date <= hoy:
             año_mes = current_date.year
             num_mes = current_date.month
-            año_siguiente = año_mes
-            mes_siguiente = num_mes + 1
-            if mes_siguiente > 12:
-                mes_siguiente = 1
-                año_siguiente += 1
-
             fecha_mes_inicio = date(año_mes, num_mes, 1)
-            fecha_mes_fin = date(año_siguiente, mes_siguiente, 1)
+            fecha_mes_fin = _obtener_fechas_mes_siguiente(num_mes, año_mes)
 
             # Nuevos financiamientos del mes (préstamos aprobados en el mes)
             query_nuevos = db.query(
