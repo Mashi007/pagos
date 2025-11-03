@@ -890,6 +890,7 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
         return 0
 
     from datetime import date
+
     from app.models.prestamo import Prestamo
 
     # ✅ VERIFICACIÓN DE CÉDULA: Verificar que la cédula del pago coincida con la del préstamo
