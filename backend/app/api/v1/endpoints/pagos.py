@@ -54,48 +54,76 @@ def _aplicar_filtros_pagos(
 
 
 def _calcular_cuotas_atrasadas(db: Session, cedula_cliente: Optional[str], hoy: date) -> int:
-    """Calcula cuotas atrasadas para un cliente"""
+    """Calcula cuotas atrasadas para un cliente (versión individual - para compatibilidad)"""
     if not cedula_cliente:
         return 0
 
-    prestamos_ids = [
-        p.id
-        for p in db.query(Prestamo.id)
-        .filter(
-            Prestamo.cedula == cedula_cliente,
-            Prestamo.estado == "APROBADO",
-        )
-        .all()
-    ]
-
-    if not prestamos_ids:
-        logger.debug(f"📊 [listar_pagos] Cliente {cedula_cliente}: Sin préstamos APROBADOS")
-        return 0
-
-    cuotas_atrasadas_query = (
+    # OPTIMIZACIÓN: Calcular en una sola query optimizada
+    cuotas_atrasadas = (
         db.query(func.count(Cuota.id))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .filter(
-            Prestamo.id.in_(prestamos_ids),
+            Prestamo.cedula == cedula_cliente,
             Prestamo.estado == "APROBADO",
             Cuota.fecha_vencimiento < hoy,
             Cuota.total_pagado < Cuota.monto_cuota,
         )
+        .scalar() or 0
     )
-    cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
-
-    logger.info(
-        f"📊 [listar_pagos] Cliente {cedula_cliente}: "
-        f"{len(prestamos_ids)} préstamos APROBADOS, "
-        f"{cuotas_atrasadas} cuotas atrasadas "
-        f"(fecha_vencimiento < {hoy} AND total_pagado < monto_cuota) - "
-        f"CÁLCULO DINÁMICO DESDE BD ✅"
-    )
+    
     return cuotas_atrasadas
 
 
-def _serializar_pago(pago, db: Session, hoy: date):
-    """Serializa un pago de forma segura"""
+def _calcular_cuotas_atrasadas_batch(db: Session, cedulas: list[str], hoy: date) -> dict[str, int]:
+    """
+    OPTIMIZACIÓN: Calcula cuotas atrasadas para múltiples clientes en una sola query.
+    Reduce N+1 queries a 1 query batch.
+    
+    Args:
+        db: Sesión de base de datos
+        cedulas: Lista de cédulas de clientes
+        hoy: Fecha de referencia
+    
+    Returns:
+        Dict con cédula -> número de cuotas atrasadas
+    """
+    if not cedulas:
+        return {}
+    
+    # OPTIMIZACIÓN: Una sola query para todos los clientes
+    resultados = (
+        db.query(Prestamo.cedula, func.count(Cuota.id))
+        .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            Prestamo.cedula.in_(cedulas),
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.total_pagado < Cuota.monto_cuota,
+        )
+        .group_by(Prestamo.cedula)
+        .all()
+    )
+    
+    # Construir diccionario con resultados (default 0 si no hay cuotas atrasadas)
+    cuotas_por_cedula = {cedula: 0 for cedula in cedulas}
+    for cedula, count in resultados:
+        cuotas_por_cedula[cedula] = count
+    
+    logger.debug(
+        f"📊 [batch] Calculadas cuotas atrasadas para {len(cedulas)} clientes "
+        f"({len(resultados)} con cuotas atrasadas)"
+    )
+    
+    return cuotas_por_cedula
+
+
+def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str, int]] = None):
+    """
+    Serializa un pago de forma segura.
+    
+    OPTIMIZACIÓN: Recibe cache de cuotas_atrasadas para evitar N+1 queries.
+    Si no se proporciona cache, asume 0 (no se calcula individualmente para mejor performance).
+    """
     try:
         # Convertir fecha_pago si es DATE a datetime si es necesario
         if hasattr(pago, "fecha_pago") and pago.fecha_pago is not None:
@@ -105,8 +133,16 @@ def _serializar_pago(pago, db: Session, hoy: date):
         # Validar con el schema
         pago_dict = PagoResponse.model_validate(pago).model_dump()
 
-        # Calcular cuotas atrasadas
-        cuotas_atrasadas = _calcular_cuotas_atrasadas(db, pago.cedula_cliente, hoy)
+        # Obtener cuotas atrasadas del cache (siempre debe proporcionarse)
+        if cuotas_atrasadas_cache is not None:
+            cuotas_atrasadas = cuotas_atrasadas_cache.get(pago.cedula_cliente, 0)
+        else:
+            # Fallback: 0 si no hay cache (para evitar N+1, el cache debe calcularse antes)
+            cuotas_atrasadas = 0
+            logger.warning(
+                f"⚠️ [serializar_pago] No se proporcionó cache de cuotas atrasadas para pago {pago.id}"
+            )
+        
         pago_dict["cuotas_atrasadas"] = cuotas_atrasadas
         return pago_dict
     except Exception as e:
@@ -394,14 +430,22 @@ def listar_pagos(
         pagos = query.offset(offset).limit(per_page).all()
         logger.info(f"📄 [listar_pagos] Pagos obtenidos de BD: {len(pagos)}")
 
-        # Serializar pagos
+        # OPTIMIZACIÓN: Calcular todas las cuotas atrasadas de una vez (batch)
+        hoy = date.today()
+        cedulas_unicas = list(set(p.cedula_cliente for p in pagos if p.cedula_cliente))
+        cuotas_atrasadas_cache = _calcular_cuotas_atrasadas_batch(db, cedulas_unicas, hoy)
+        
+        logger.debug(
+            f"✅ [listar_pagos] Cache de cuotas atrasadas calculado para {len(cedulas_unicas)} clientes únicos"
+        )
+
+        # Serializar pagos usando el cache
         pagos_serializados = []
         errores_serializacion = 0
-        hoy = date.today()
 
         for pago in pagos:
             try:
-                pago_dict = _serializar_pago(pago, db, hoy)
+                pago_dict = _serializar_pago(pago, hoy, cuotas_atrasadas_cache)
                 pagos_serializados.append(pago_dict)
             except Exception:
                 errores_serializacion += 1

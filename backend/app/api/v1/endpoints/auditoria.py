@@ -51,6 +51,121 @@ def _calcular_paginacion_auditoria(total, limit, skip):
     return total_pages, current_page
 
 
+def _determinar_resultado_auditoria(exito_attr) -> str:
+    """Determina el resultado de auditoría desde el atributo exito"""
+    if isinstance(exito_attr, bool):
+        return "EXITOSO" if exito_attr else "FALLIDO"
+    return exito_attr or "EXITOSO"
+
+
+def _convertir_registro_general_listado(registro) -> dict:
+    """Convierte un registro de Auditoria general a dict para listado"""
+    usuario_email_val = getattr(registro.usuario, "email", None)
+    modulo_val = getattr(registro, "entidad", None)
+    return {
+        "id": registro.id,
+        "usuario_id": registro.usuario_id,
+        "usuario_email": usuario_email_val,
+        "accion": registro.accion,
+        "modulo": modulo_val,
+        "tabla": modulo_val,
+        "registro_id": getattr(registro, "entidad_id", None),
+        "descripcion": getattr(registro, "detalles", None),
+        "ip_address": getattr(registro, "ip_address", None),
+        "user_agent": getattr(registro, "user_agent", None),
+        "resultado": _determinar_resultado_auditoria(getattr(registro, "exito", None)),
+        "mensaje_error": getattr(registro, "mensaje_error", None),
+        "fecha": registro.fecha,
+    }
+
+
+def _convertir_registro_prestamos_listado(registro: PrestamoAuditoria) -> dict:
+    """Convierte un registro de PrestamoAuditoria a dict para listado"""
+    desc = _generar_descripcion_detallada(registro)
+    return {
+        "id": registro.id,
+        "usuario_id": None,
+        "usuario_email": registro.usuario,
+        "accion": registro.accion,
+        "modulo": "PRESTAMOS",
+        "tabla": "prestamos",
+        "registro_id": registro.prestamo_id,
+        "descripcion": desc,
+        "ip_address": None,
+        "user_agent": None,
+        "resultado": "EXITOSO",
+        "mensaje_error": None,
+        "fecha": registro.fecha_cambio,
+    }
+
+
+def _convertir_registro_pagos_listado(registro: PagoAuditoria) -> dict:
+    """Convierte un registro de PagoAuditoria a dict para listado"""
+    desc = _generar_descripcion_detallada(registro)
+    return {
+        "id": registro.id,
+        "usuario_id": None,
+        "usuario_email": registro.usuario,
+        "accion": registro.accion,
+        "modulo": "PAGOS",
+        "tabla": "pagos",
+        "registro_id": registro.pago_id,
+        "descripcion": desc,
+        "ip_address": None,
+        "user_agent": None,
+        "resultado": "EXITOSO",
+        "mensaje_error": None,
+        "fecha": registro.fecha_cambio,
+    }
+
+
+def _unificar_registros_auditoria_listado(
+    registros_general: List, registros_prestamos: List[PrestamoAuditoria], registros_pagos: List[PagoAuditoria]
+) -> List[dict]:
+    """Unifica todos los registros de auditoría para listado"""
+    unified = []
+    for r in registros_general:
+        unified.append(_convertir_registro_general_listado(r))
+    for r in registros_prestamos:
+        unified.append(_convertir_registro_prestamos_listado(r))
+    for r in registros_pagos:
+        unified.append(_convertir_registro_pagos_listado(r))
+    return unified
+
+
+def _aplicar_filtros_memoria(unified: List[dict], usuario_email: Optional[str], modulo: Optional[str], accion: Optional[str]) -> List[dict]:
+    """Aplica filtros en memoria sobre registros unificados"""
+    if usuario_email:
+        unified = [u for u in unified if u.get("usuario_email") and usuario_email.lower() in u["usuario_email"].lower()]
+    if modulo:
+        unified = [u for u in unified if u.get("modulo") == modulo]
+    if accion:
+        unified = [u for u in unified if u.get("accion") == accion]
+    return unified
+
+
+def _aplicar_ordenamiento_memoria(unified: List[dict], ordenar_por: str, orden: str) -> List[dict]:
+    """Aplica ordenamiento en memoria sobre registros unificados"""
+    reverse = orden != "asc"
+    key_map = {
+        "usuario_email": lambda x: x.get("usuario_email") or "",
+        "modulo": lambda x: x.get("modulo") or "",
+        "accion": lambda x: x.get("accion") or "",
+        "fecha": lambda x: x.get("fecha") or 0,
+    }
+    sort_key = key_map.get(ordenar_por, key_map["fecha"])
+    unified.sort(key=sort_key, reverse=reverse)
+    return unified
+
+
+def _aplicar_paginacion_listado(unified: List[dict], skip: int, limit: int) -> tuple[List[dict], int, int, int]:
+    """Aplica paginación y retorna datos paginados y metadatos"""
+    total = len(unified)
+    total_pages, current_page = _calcular_paginacion_auditoria(total, limit, skip)
+    paged = unified[skip : skip + limit]
+    return paged, total, total_pages, current_page
+
+
 @router.get("/auditoria", response_model=AuditoriaListResponse)
 def listar_auditoria(
     usuario_email: Optional[str] = Query(None, description="Filtrar por email de usuario"),
@@ -74,117 +189,32 @@ def listar_auditoria(
         # Aplicar ordenamiento
         query = _aplicar_ordenamiento_auditoria(query, ordenar_por, orden)
 
-        # Ejecutar consultas y unificar (general + préstamos + pagos)
-        registros_general = query.all()
-        registros_prestamos = db.query(PrestamoAuditoria).order_by(PrestamoAuditoria.fecha_cambio.desc()).all()
-        registros_pagos = db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc()).all()
+        # OPTIMIZACIÓN: Aplicar límite ANTES de cargar para evitar cargar todos los registros
+        # Cargar solo lo necesario para la paginación solicitada + un buffer para unificación
+        max_to_load = min(skip + limit + 500, 5000)  # Máximo 5000 registros por tipo
+        
+        # Ejecutar consultas con límite optimizado
+        registros_general = query.limit(max_to_load).all()
+        
+        # Optimizar queries de préstamos y pagos con límite y orden
+        registros_prestamos = (
+            db.query(PrestamoAuditoria)
+            .order_by(PrestamoAuditoria.fecha_cambio.desc())
+            .limit(max_to_load)
+            .all()
+        )
+        registros_pagos = (
+            db.query(PagoAuditoria)
+            .order_by(PagoAuditoria.fecha_cambio.desc())
+            .limit(max_to_load)
+            .all()
+        )
 
-        unified = []
+        unified = _unificar_registros_auditoria_listado(registros_general, registros_prestamos, registros_pagos)
+        unified = _aplicar_filtros_memoria(unified, usuario_email, modulo, accion)
+        unified = _aplicar_ordenamiento_memoria(unified, ordenar_por, orden)
 
-        # General
-        for r in registros_general:
-            usuario_email_val = getattr(r.usuario, "email", None)
-            modulo_val = getattr(r, "entidad", None)
-            descripcion_val = getattr(r, "detalles", None)
-            exito_attr = getattr(r, "exito", None)
-            if isinstance(exito_attr, bool):
-                resultado_val = "EXITOSO" if exito_attr else "FALLIDO"
-            else:
-                resultado_val = exito_attr or "EXITOSO"
-            unified.append(
-                {
-                    "id": r.id,
-                    "usuario_id": r.usuario_id,
-                    "usuario_email": usuario_email_val,
-                    "accion": r.accion,
-                    "modulo": modulo_val,
-                    "tabla": modulo_val,
-                    "registro_id": getattr(r, "entidad_id", None),
-                    "descripcion": descripcion_val,
-                    "ip_address": getattr(r, "ip_address", None),
-                    "user_agent": getattr(r, "user_agent", None),
-                    "resultado": resultado_val,
-                    "mensaje_error": getattr(r, "mensaje_error", None),
-                    "fecha": r.fecha,
-                }
-            )
-
-        # Prestamos detallada
-        for r in registros_prestamos:
-            desc = f"{r.accion} {r.campo_modificado}: "
-            if r.valor_anterior is not None:
-                desc += f"{r.valor_anterior} -> "
-            desc += f"{r.valor_nuevo}"
-            if r.observaciones:
-                desc += f" ({r.observaciones})"
-
-            unified.append(
-                {
-                    "id": r.id,
-                    "usuario_id": None,
-                    "usuario_email": r.usuario,
-                    "accion": r.accion,
-                    "modulo": "PRESTAMOS",
-                    "tabla": "prestamos",
-                    "registro_id": r.prestamo_id,
-                    "descripcion": desc,
-                    "ip_address": None,
-                    "user_agent": None,
-                    "resultado": "EXITOSO",
-                    "mensaje_error": None,
-                    "fecha": r.fecha_cambio,
-                }
-            )
-
-        # Pagos detallada
-        for r in registros_pagos:
-            desc = f"{r.accion} {r.campo_modificado}: "
-            if r.valor_anterior is not None:
-                desc += f"{r.valor_anterior} -> "
-            desc += f"{r.valor_nuevo}"
-            if getattr(r, "observaciones", None):
-                desc += f" ({r.observaciones})"
-
-            unified.append(
-                {
-                    "id": r.id,
-                    "usuario_id": None,
-                    "usuario_email": r.usuario,
-                    "accion": r.accion,
-                    "modulo": "PAGOS",
-                    "tabla": "pagos",
-                    "registro_id": r.pago_id,
-                    "descripcion": desc,
-                    "ip_address": None,
-                    "user_agent": None,
-                    "resultado": "EXITOSO",
-                    "mensaje_error": None,
-                    "fecha": r.fecha_cambio,
-                }
-            )
-
-        # Aplicar filtros en memoria para unificado
-        if usuario_email:
-            unified = [u for u in unified if u.get("usuario_email") and usuario_email.lower() in u["usuario_email"].lower()]
-        if modulo:
-            unified = [u for u in unified if u.get("modulo") == modulo]
-        if accion:
-            unified = [u for u in unified if u.get("accion") == accion]
-
-        # Orden y paginación
-        reverse = orden != "asc"
-        key_map = {
-            "usuario_email": lambda x: x.get("usuario_email") or "",
-            "modulo": lambda x: x.get("modulo") or "",
-            "accion": lambda x: x.get("accion") or "",
-            "fecha": lambda x: x.get("fecha") or 0,
-        }
-        sort_key = key_map.get(ordenar_por, key_map["fecha"])
-        unified.sort(key=sort_key, reverse=reverse)
-
-        total = len(unified)
-        total_pages, current_page = _calcular_paginacion_auditoria(total, limit, skip)
-        paged = unified[skip : skip + limit]
+        paged, total, total_pages, current_page = _aplicar_paginacion_listado(unified, skip, limit)
 
         items = [AuditoriaResponse.model_validate(i) for i in paged]
 
