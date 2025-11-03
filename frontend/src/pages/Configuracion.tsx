@@ -256,6 +256,25 @@ export function Configuracion() {
         // El logo ya está guardado en el servidor, solo confirmamos visualmente
         if (logoPreview && logoInfo) {
           console.log('✅ Logo confirmado y guardado', logoInfo)
+          
+          // Forzar recarga de configuración general para obtener logo_filename actualizado
+          try {
+            const configResponse = await fetch('/api/v1/configuracion/general')
+            if (configResponse.ok) {
+              const updatedConfig = await configResponse.json()
+              console.log('✅ Configuración general recargada:', updatedConfig)
+              if (updatedConfig.logo_filename) {
+                console.log('✅ logo_filename encontrado en configuración:', updatedConfig.logo_filename)
+              } else {
+                console.warn('⚠️ logo_filename NO encontrado en configuración recargada')
+              }
+              // Actualizar estado local con configuración recargada
+              setConfiguracionGeneral(updatedConfig)
+            }
+          } catch (configError) {
+            console.warn('⚠️ Error recargando configuración general:', configError)
+          }
+          
           // Disparar evento para actualizar todos los componentes Logo con la información completa
           window.dispatchEvent(new CustomEvent('logoUpdated', { 
             detail: { 
@@ -264,6 +283,7 @@ export function Configuracion() {
               url: logoInfo.url 
             } 
           }))
+          
           // Limpiar estado después de confirmar
           setLogoInfo(null)
         }

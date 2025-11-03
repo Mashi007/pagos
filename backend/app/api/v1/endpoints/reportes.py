@@ -706,27 +706,7 @@ def exportar_reporte_cartera(
 
 
 @router.get("/dashboard/resumen")
-            from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-
-            wb = Workbook()
-
-            # ============================================
-            # HOJA 1: RESUMEN EJECUTIVO
-            # ============================================
-            ws_resumen = wb.active
-            ws_resumen.title = "Resumen Ejecutivo"
-
-            # Estilos
-            header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-            header_font = Font(bold=True, color="FFFFFF", size=14)
-            title_font = Font(bold=True, size=16)
-            label_font = Font(bold=True)
-            border = Border(
-                left=Side(style="thin"),
-                right=Side(style="thin"),
-                top=Side(style="thin"),
-                bottom=Side(style="thin"),
-            )
+def resumen_dashboard(
 
             # Encabezado
             ws_resumen.merge_cells("A1:B1")

@@ -410,11 +410,30 @@ async def upload_logo(
                 db.add(logo_config)
 
             db.commit()
-            logger.info(f"Logo guardado en BD: {logo_filename}")
+            db.refresh(logo_config)  # Refrescar para asegurar que se guardó
+            logger.info(f"✅ Logo filename guardado en BD exitosamente: {logo_filename}")
+            
+            # Verificar que se guardó correctamente
+            verificacion = (
+                db.query(ConfiguracionSistema)
+                .filter(
+                    ConfiguracionSistema.categoria == "GENERAL",
+                    ConfiguracionSistema.clave == "logo_filename",
+                )
+                .first()
+            )
+            if verificacion and verificacion.valor == logo_filename:
+                logger.info(f"✅ Verificación exitosa: logo_filename '{logo_filename}' persistido en BD")
+            else:
+                logger.warning(f"⚠️ Advertencia: No se pudo verificar el guardado de logo_filename en BD")
         except Exception as db_error:
             db.rollback()
-            logger.error(f"Error guardando configuración de logo en BD: {str(db_error)}", exc_info=True)
-            # No fallar si solo falla el guardado en BD, el archivo ya está guardado
+            logger.error(f"❌ Error guardando configuración de logo en BD: {str(db_error)}", exc_info=True)
+            # FALLAR si no se puede guardar en BD, es crítico para persistencia
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error guardando configuración de logo en base de datos: {str(db_error)}"
+            )
 
         logger.info(f"Logo subido por usuario {current_user.email}: {logo_filename}")
 
