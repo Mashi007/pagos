@@ -16,6 +16,7 @@ from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.pago_auditoria import PagoAuditoria
+from app.models.pago_staging import PagoStaging
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.schemas.pago import PagoCreate, PagoResponse, PagoUpdate
@@ -1461,3 +1462,287 @@ def obtener_auditoria_pago(
     ]
 
     return create_paginated_response(items=items, total=total, page=page, page_size=limit)
+
+
+# ============================================
+# ENDPOINTS PARA PAGOS_STAGING
+# ============================================
+
+@router.get("/staging")
+def listar_pagos_staging(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    cedula: Optional[str] = None,
+    estado: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Listar pagos de la tabla pagos_staging con filtros y paginación
+    """
+    try:
+        logger.info(f"📋 [listar_pagos_staging] Consultando pagos_staging - página {page}, por página {per_page}")
+
+        # Verificar si la tabla existe
+        try:
+            test_query = db.query(func.count(PagoStaging.id)).scalar()
+            logger.info(f"✅ [listar_pagos_staging] Conexión a pagos_staging OK. Total registros: {test_query}")
+        except Exception as db_error:
+            logger.error(f"❌ [listar_pagos_staging] Error de conexión a pagos_staging: {db_error}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error de conexión a pagos_staging: {str(db_error)}",
+            )
+
+        query = db.query(PagoStaging)
+
+        # Aplicar filtros
+        if cedula:
+            query = query.filter(
+                or_(
+                    PagoStaging.cedula_cliente == cedula,
+                    PagoStaging.cedula == cedula
+                )
+            )
+            logger.info(f"🔍 [listar_pagos_staging] Filtro cédula: {cedula}")
+        if estado:
+            query = query.filter(PagoStaging.estado == estado)
+            logger.info(f"🔍 [listar_pagos_staging] Filtro estado: {estado}")
+
+        # Contar total antes de aplicar paginación
+        total = query.count()
+        logger.info(f"📊 [listar_pagos_staging] Total registros encontrados (sin paginación): {total}")
+
+        # Ordenar por fecha de registro descendente (más actual primero)
+        if hasattr(PagoStaging, 'fecha_registro'):
+            query = query.order_by(PagoStaging.fecha_registro.desc(), PagoStaging.id.desc())
+        else:
+            query = query.order_by(PagoStaging.id.desc())
+
+        # Paginación
+        from app.utils.pagination import calculate_pagination_params, create_paginated_response
+        skip, limit = calculate_pagination_params(page=page, per_page=per_page, max_per_page=100)
+        pagos_staging = query.offset(skip).limit(limit).all()
+        logger.info(f"📄 [listar_pagos_staging] Registros obtenidos: {len(pagos_staging)}")
+
+        # Serializar resultados
+        items = [
+            {
+                "id": p.id,
+                "cedula_cliente": p.cedula_cliente or p.cedula,
+                "cedula": p.cedula,
+                "prestamo_id": p.prestamo_id,
+                "numero_cuota": p.numero_cuota,
+                "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
+                "fecha_registro": p.fecha_registro.isoformat() if p.fecha_registro else None,
+                "monto_pagado": float(p.monto_pagado) if p.monto_pagado else None,
+                "numero_documento": p.numero_documento,
+                "institucion_bancaria": p.institucion_bancaria,
+                "estado": p.estado,
+                "conciliado": p.conciliado,
+                "notas": p.notas,
+            }
+            for p in pagos_staging
+        ]
+
+        return create_paginated_response(items=items, total=total, page=page, page_size=limit)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ [listar_pagos_staging] Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al listar pagos_staging: {str(e)}")
+
+
+@router.get("/staging/estadisticas")
+def estadisticas_pagos_staging(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obtener estadísticas de la tabla pagos_staging
+    """
+    try:
+        logger.info("📊 [estadisticas_pagos_staging] Obteniendo estadísticas de pagos_staging")
+
+        # Verificar si la tabla existe
+        try:
+            total_registros = db.query(func.count(PagoStaging.id)).scalar() or 0
+        except Exception as db_error:
+            logger.error(f"❌ [estadisticas_pagos_staging] Error de conexión: {db_error}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error de conexión a pagos_staging: {str(db_error)}",
+            )
+
+        if total_registros == 0:
+            return {
+                "total_registros": 0,
+                "con_datos_completos": 0,
+                "con_cedula": 0,
+                "con_fecha_pago": 0,
+                "con_monto": 0,
+                "sin_prestamo_id": 0,
+                "por_estado": {},
+            }
+
+        # Estadísticas detalladas
+        con_cedula = db.query(func.count(PagoStaging.id)).filter(
+            or_(
+                PagoStaging.cedula_cliente.isnot(None),
+                PagoStaging.cedula.isnot(None)
+            )
+        ).scalar() or 0
+
+        con_fecha_pago = db.query(func.count(PagoStaging.id)).filter(
+            PagoStaging.fecha_pago.isnot(None)
+        ).scalar() or 0
+
+        con_monto = db.query(func.count(PagoStaging.id)).filter(
+            PagoStaging.monto_pagado.isnot(None),
+            PagoStaging.monto_pagado > 0
+        ).scalar() or 0
+
+        sin_prestamo_id = db.query(func.count(PagoStaging.id)).filter(
+            PagoStaging.prestamo_id.is_(None)
+        ).scalar() or 0
+
+        con_datos_completos = db.query(func.count(PagoStaging.id)).filter(
+            or_(
+                PagoStaging.cedula_cliente.isnot(None),
+                PagoStaging.cedula.isnot(None)
+            ),
+            PagoStaging.fecha_pago.isnot(None),
+            PagoStaging.monto_pagado.isnot(None),
+            PagoStaging.monto_pagado > 0
+        ).scalar() or 0
+
+        # Por estado
+        query_estado = db.query(
+            PagoStaging.estado,
+            func.count(PagoStaging.id).label("cantidad")
+        ).group_by(PagoStaging.estado).all()
+
+        por_estado = {estado or "SIN_ESTADO": cantidad for estado, cantidad in query_estado}
+
+        estadisticas = {
+            "total_registros": total_registros,
+            "con_datos_completos": con_datos_completos,
+            "con_cedula": con_cedula,
+            "con_fecha_pago": con_fecha_pago,
+            "con_monto": con_monto,
+            "sin_prestamo_id": sin_prestamo_id,
+            "por_estado": por_estado,
+        }
+
+        logger.info(f"✅ [estadisticas_pagos_staging] Estadísticas obtenidas: {estadisticas}")
+        return estadisticas
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ [estadisticas_pagos_staging] Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al obtener estadísticas: {str(e)}")
+
+
+@router.post("/staging/migrar/{pago_staging_id}")
+def migrar_pago_staging_a_pagos(
+    pago_staging_id: int = Path(..., description="ID del pago en staging a migrar"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Migra un pago de pagos_staging a la tabla pagos
+    """
+    try:
+        logger.info(f"🔄 [migrar_pago_staging] Iniciando migración de pago_staging_id={pago_staging_id}")
+
+        # Buscar el pago en staging
+        pago_staging = db.query(PagoStaging).filter(PagoStaging.id == pago_staging_id).first()
+
+        if not pago_staging:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Pago staging con ID {pago_staging_id} no encontrado"
+            )
+
+        # Validar que tenga datos mínimos
+        cedula_final = pago_staging.cedula_cliente or pago_staging.cedula
+        if not cedula_final:
+            raise HTTPException(
+                status_code=400,
+                detail="El pago staging no tiene cédula de cliente (cedula_cliente o cedula)"
+            )
+        if not pago_staging.fecha_pago:
+            raise HTTPException(
+                status_code=400,
+                detail="El pago staging no tiene fecha_pago"
+            )
+        if not pago_staging.monto_pagado or pago_staging.monto_pagado <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="El pago staging no tiene monto_pagado válido"
+            )
+        if not pago_staging.numero_documento:
+            raise HTTPException(
+                status_code=400,
+                detail="El pago staging no tiene numero_documento"
+            )
+
+        # Crear el pago en la tabla principal
+        nuevo_pago = Pago(
+            cedula_cliente=cedula_final,
+            prestamo_id=pago_staging.prestamo_id,
+            numero_cuota=pago_staging.numero_cuota,
+            fecha_pago=pago_staging.fecha_pago,
+            fecha_registro=pago_staging.fecha_registro or datetime.now(),
+            monto_pagado=pago_staging.monto_pagado,
+            numero_documento=pago_staging.numero_documento,
+            institucion_bancaria=pago_staging.institucion_bancaria,
+            documento_nombre=pago_staging.documento_nombre,
+            documento_tipo=pago_staging.documento_tipo,
+            documento_tamaño=pago_staging.documento_tamaño,
+            documento_ruta=pago_staging.documento_ruta,
+            conciliado=pago_staging.conciliado or False,
+            fecha_conciliacion=pago_staging.fecha_conciliacion,
+            estado=pago_staging.estado or "PAGADO",
+            activo=True,
+            notas=pago_staging.notas,
+            usuario_registro=current_user.email,
+            verificado_concordancia=pago_staging.verificado_concordancia or "NO",
+        )
+
+        db.add(nuevo_pago)
+        db.flush()  # Para obtener el ID
+
+        logger.info(f"✅ [migrar_pago_staging] Pago creado en tabla principal con ID={nuevo_pago.id}")
+
+        # Si tiene prestamo_id, intentar aplicar a cuotas
+        if nuevo_pago.prestamo_id:
+            try:
+                # Llamar directamente a la función (está definida en este mismo archivo)
+                aplicar_pago_a_cuotas(nuevo_pago, db, current_user)
+                logger.info(f"✅ [migrar_pago_staging] Pago aplicado a cuotas del préstamo {nuevo_pago.prestamo_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ [migrar_pago_staging] No se pudo aplicar pago a cuotas: {e}")
+
+        # Eliminar de staging (opcional, comentar si se quiere mantener)
+        # db.delete(pago_staging)
+        # logger.info(f"🗑️ [migrar_pago_staging] Pago eliminado de staging")
+
+        db.commit()
+
+        return {
+            "mensaje": "Pago migrado exitosamente",
+            "pago_staging_id": pago_staging_id,
+            "pago_id": nuevo_pago.id,
+            "prestamo_id": nuevo_pago.prestamo_id,
+            "monto": float(nuevo_pago.monto_pagado),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ [migrar_pago_staging] Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al migrar pago: {str(e)}")
