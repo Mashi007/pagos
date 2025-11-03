@@ -66,7 +66,7 @@ class Settings(BaseSettings):
                     return parsed
             except (json.JSONDecodeError, ValueError):
                 pass
-            
+
             # Si no es JSON válido, intentar separar por comas
             if "," in v:
                 # Separar por comas y limpiar espacios
@@ -78,6 +78,7 @@ class Settings(BaseSettings):
         elif isinstance(v, list):
             return v
         return v
+
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     CORS_ALLOW_HEADERS: List[str] = ["*"]
