@@ -542,9 +542,11 @@ def obtener_configuracion_email(db: Session = Depends(get_db), current_user: Use
     """Obtener configuración de email"""
     try:
         logger.info(f"📧 Obteniendo configuración de email - Usuario: {getattr(current_user, 'email', 'N/A')}")
-        
-        if not getattr(current_user, 'is_admin', False):
-            logger.warning(f"⚠️ Usuario no autorizado intentando acceder a configuración de email: {getattr(current_user, 'email', 'N/A')}")
+
+        if not getattr(current_user, "is_admin", False):
+            logger.warning(
+                f"⚠️ Usuario no autorizado intentando acceder a configuración de email: {getattr(current_user, 'email', 'N/A')}"
+            )
             raise HTTPException(
                 status_code=403,
                 detail="Solo administradores pueden ver configuración de email",
@@ -571,9 +573,9 @@ def obtener_configuracion_email(db: Session = Depends(get_db), current_user: Use
         for config in configs:
             try:
                 # Validar que config tiene los atributos necesarios
-                if hasattr(config, 'clave') and config.clave:
+                if hasattr(config, "clave") and config.clave:
                     # Manejar valor None o vacío
-                    valor = config.valor if hasattr(config, 'valor') and config.valor is not None else ""
+                    valor = config.valor if hasattr(config, "valor") and config.valor is not None else ""
                     config_dict[config.clave] = valor
                     logger.debug(f"📝 Configuración: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
                 else:
