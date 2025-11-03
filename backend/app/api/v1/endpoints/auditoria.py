@@ -280,9 +280,7 @@ def _unificar_registros_auditoria(
     return unified
 
 
-def _generar_detalles_exportacion(
-    usuario_email: Optional[str], modulo: Optional[str], accion: Optional[str]
-) -> str:
+def _generar_detalles_exportacion(usuario_email: Optional[str], modulo: Optional[str], accion: Optional[str]) -> str:
     """Genera el texto de detalles para la auditoría de exportación"""
     detalles = "Exportó auditoría unificada"
     if usuario_email:
@@ -337,7 +335,9 @@ def exportar_auditoria(
 
         query_prestamos = db.query(PrestamoAuditoria).order_by(desc(PrestamoAuditoria.fecha_cambio))
         query_pagos = db.query(PagoAuditoria).order_by(desc(PagoAuditoria.fecha_cambio))
-        query_prestamos, query_pagos = _aplicar_filtros_detalladas(query_prestamos, query_pagos, accion, fecha_desde, fecha_hasta)
+        query_prestamos, query_pagos = _aplicar_filtros_detalladas(
+            query_prestamos, query_pagos, accion, fecha_desde, fecha_hasta
+        )
 
         registros_prestamos: List[PrestamoAuditoria] = query_prestamos.all()
         registros_pagos: List[PagoAuditoria] = query_pagos.all()
