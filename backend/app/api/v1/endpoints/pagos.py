@@ -68,9 +68,10 @@ def _calcular_cuotas_atrasadas(db: Session, cedula_cliente: Optional[str], hoy: 
             Cuota.fecha_vencimiento < hoy,
             Cuota.total_pagado < Cuota.monto_cuota,
         )
-        .scalar() or 0
+        .scalar()
+        or 0
     )
-    
+
     return cuotas_atrasadas
 
 
@@ -78,18 +79,18 @@ def _calcular_cuotas_atrasadas_batch(db: Session, cedulas: list[str], hoy: date)
     """
     OPTIMIZACIÓN: Calcula cuotas atrasadas para múltiples clientes en una sola query.
     Reduce N+1 queries a 1 query batch.
-    
+
     Args:
         db: Sesión de base de datos
         cedulas: Lista de cédulas de clientes
         hoy: Fecha de referencia
-    
+
     Returns:
         Dict con cédula -> número de cuotas atrasadas
     """
     if not cedulas:
         return {}
-    
+
     # OPTIMIZACIÓN: Una sola query para todos los clientes
     resultados = (
         db.query(Prestamo.cedula, func.count(Cuota.id))
@@ -103,24 +104,23 @@ def _calcular_cuotas_atrasadas_batch(db: Session, cedulas: list[str], hoy: date)
         .group_by(Prestamo.cedula)
         .all()
     )
-    
+
     # Construir diccionario con resultados (default 0 si no hay cuotas atrasadas)
     cuotas_por_cedula = {cedula: 0 for cedula in cedulas}
     for cedula, count in resultados:
         cuotas_por_cedula[cedula] = count
-    
+
     logger.debug(
-        f"📊 [batch] Calculadas cuotas atrasadas para {len(cedulas)} clientes "
-        f"({len(resultados)} con cuotas atrasadas)"
+        f"📊 [batch] Calculadas cuotas atrasadas para {len(cedulas)} clientes " f"({len(resultados)} con cuotas atrasadas)"
     )
-    
+
     return cuotas_por_cedula
 
 
 def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str, int]] = None):
     """
     Serializa un pago de forma segura.
-    
+
     OPTIMIZACIÓN: Recibe cache de cuotas_atrasadas para evitar N+1 queries.
     Si no se proporciona cache, asume 0 (no se calcula individualmente para mejor performance).
     """
@@ -139,10 +139,8 @@ def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str,
         else:
             # Fallback: 0 si no hay cache (para evitar N+1, el cache debe calcularse antes)
             cuotas_atrasadas = 0
-            logger.warning(
-                f"⚠️ [serializar_pago] No se proporcionó cache de cuotas atrasadas para pago {pago.id}"
-            )
-        
+            logger.warning(f"⚠️ [serializar_pago] No se proporcionó cache de cuotas atrasadas para pago {pago.id}")
+
         pago_dict["cuotas_atrasadas"] = cuotas_atrasadas
         return pago_dict
     except Exception as e:
@@ -434,10 +432,8 @@ def listar_pagos(
         hoy = date.today()
         cedulas_unicas = list(set(p.cedula_cliente for p in pagos if p.cedula_cliente))
         cuotas_atrasadas_cache = _calcular_cuotas_atrasadas_batch(db, cedulas_unicas, hoy)
-        
-        logger.debug(
-            f"✅ [listar_pagos] Cache de cuotas atrasadas calculado para {len(cedulas_unicas)} clientes únicos"
-        )
+
+        logger.debug(f"✅ [listar_pagos] Cache de cuotas atrasadas calculado para {len(cedulas_unicas)} clientes únicos")
 
         # Serializar pagos usando el cache
         pagos_serializados = []

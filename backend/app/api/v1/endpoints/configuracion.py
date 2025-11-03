@@ -585,7 +585,7 @@ def obtener_configuracion_email(db: Session = Depends(get_db), current_user: Use
             )
 
         logger.info("🔍 Consultando configuración de email desde BD...")
-        
+
         # Intentar consulta con manejo robusto de errores
         configs = None
         try:

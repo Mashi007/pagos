@@ -133,7 +133,9 @@ def _unificar_registros_auditoria_listado(
     return unified
 
 
-def _aplicar_filtros_memoria(unified: List[dict], usuario_email: Optional[str], modulo: Optional[str], accion: Optional[str]) -> List[dict]:
+def _aplicar_filtros_memoria(
+    unified: List[dict], usuario_email: Optional[str], modulo: Optional[str], accion: Optional[str]
+) -> List[dict]:
     """Aplica filtros en memoria sobre registros unificados"""
     if usuario_email:
         unified = [u for u in unified if u.get("usuario_email") and usuario_email.lower() in u["usuario_email"].lower()]
@@ -192,23 +194,15 @@ def listar_auditoria(
         # OPTIMIZACIÓN: Aplicar límite ANTES de cargar para evitar cargar todos los registros
         # Cargar solo lo necesario para la paginación solicitada + un buffer para unificación
         max_to_load = min(skip + limit + 500, 5000)  # Máximo 5000 registros por tipo
-        
+
         # Ejecutar consultas con límite optimizado
         registros_general = query.limit(max_to_load).all()
-        
+
         # Optimizar queries de préstamos y pagos con límite y orden
         registros_prestamos = (
-            db.query(PrestamoAuditoria)
-            .order_by(PrestamoAuditoria.fecha_cambio.desc())
-            .limit(max_to_load)
-            .all()
+            db.query(PrestamoAuditoria).order_by(PrestamoAuditoria.fecha_cambio.desc()).limit(max_to_load).all()
         )
-        registros_pagos = (
-            db.query(PagoAuditoria)
-            .order_by(PagoAuditoria.fecha_cambio.desc())
-            .limit(max_to_load)
-            .all()
-        )
+        registros_pagos = db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc()).limit(max_to_load).all()
 
         unified = _unificar_registros_auditoria_listado(registros_general, registros_prestamos, registros_pagos)
         unified = _aplicar_filtros_memoria(unified, usuario_email, modulo, accion)
