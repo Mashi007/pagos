@@ -1127,11 +1127,21 @@ def obtener_kpis_pagos(
         fecha_inicio_dt = datetime.combine(fecha_inicio_mes, datetime.min.time())
         fecha_fin_dt = datetime.combine(fecha_fin_mes, datetime.min.time())
 
-        monto_cobrado_mes_query = db.query(func.sum(text("pagos_staging.monto_pagado::numeric"))).filter(
-            text("pagos_staging.fecha_pago::timestamp >= :fecha_inicio").bindparams(fecha_inicio=fecha_inicio_dt),
-            text("pagos_staging.fecha_pago::timestamp < :fecha_fin").bindparams(fecha_fin=fecha_fin_dt),
+        # ⚠️ Usar SQL directo completo porque func.sum(text(...)) no incluye FROM
+        monto_cobrado_mes_query = db.execute(
+            text("""
+                SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+                FROM pagos_staging
+                WHERE fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                  AND fecha_pago::timestamp >= :fecha_inicio
+                  AND fecha_pago::timestamp < :fecha_fin
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+            """).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
         )
-        monto_cobrado_mes = monto_cobrado_mes_query.scalar() or Decimal("0.00")
+        monto_cobrado_mes = Decimal(str(monto_cobrado_mes_query.scalar() or 0))
 
         # Log detallado para verificación
         total_pagos_mes = (
