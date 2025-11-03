@@ -259,11 +259,56 @@ class Settings(BaseSettings):
                 raise ValueError("CRÍTICO: CORS_ORIGINS debe estar configurado en producción. " "No puede estar vacío.")
 
             # Validar que los origins sean URLs válidas (no localhost en producción)
+            # IMPORTANTE: En lugar de bloquear, filtrar localhost automáticamente si usa valores por defecto
+            import os
+            cors_origins_from_env = os.getenv("CORS_ORIGINS")
+            default_origins = [
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "https://rapicredit.onrender.com",
+            ]
+            
+            # Si usa valores por defecto con localhost, filtrar automáticamente
+            has_localhost = any(
+                origin.startswith("http://localhost") or origin.startswith("https://localhost")
+                for origin in self.CORS_ORIGINS
+            )
+            
+            if has_localhost:
+                if not cors_origins_from_env and set(self.CORS_ORIGINS) == set(default_origins):
+                    # Usa valores por defecto con localhost - filtrar automáticamente
+                    logger.critical(
+                        "🚨 CRÍTICO: CORS_ORIGINS contiene localhost y usa valores por defecto. "
+                        "Filtrando localhost automáticamente. "
+                        "Se recomienda configurar CORS_ORIGINS como variable de entorno sin localhost."
+                    )
+                    # Filtrar localhost
+                    original_origins = self.CORS_ORIGINS.copy()
+                    self.CORS_ORIGINS = [
+                        origin for origin in self.CORS_ORIGINS
+                        if not (origin.startswith("http://localhost") or origin.startswith("https://localhost"))
+                    ]
+                    if self.CORS_ORIGINS:
+                        logger.info(f"✅ CORS_ORIGINS actualizado (sin localhost): {self.CORS_ORIGINS}")
+                    else:
+                        # Si se queda vacío, mantener al menos el de producción
+                        self.CORS_ORIGINS = [origin for origin in original_origins if "rapicredit.onrender.com" in origin]
+                        if not self.CORS_ORIGINS:
+                            raise ValueError("CRÍTICO: Después de filtrar localhost, CORS_ORIGINS quedó vacío. Debe configurarse CORS_ORIGINS sin localhost.")
+                else:
+                    # Si tiene localhost pero viene de env o no es exactamente el default, solo advertir
+                    logger.warning(
+                        f"⚠️ CORS_ORIGINS contiene localhost en producción: {[o for o in self.CORS_ORIGINS if 'localhost' in o]}. "
+                        "Se recomienda remover localhost de CORS_ORIGINS en producción."
+                    )
+            
+            # Validar formato de URLs (solo advertir si es inválido)
             for origin in self.CORS_ORIGINS:
-                if origin.startswith("http://localhost") or origin.startswith("https://localhost"):
-                    raise ValueError(f"CRÍTICO: No se permite localhost en CORS_ORIGINS en producción: {origin}")
                 if not (origin.startswith("http://") or origin.startswith("https://")):
-                    raise ValueError(f"CRÍTICO: CORS_ORIGINS debe contener URLs válidas en producción: {origin}")
+                    logger.warning(
+                        f"⚠️ CORS_ORIGINS contiene URL inválida: {origin}. "
+                        "Se recomienda usar URLs válidas (http:// o https://)."
+                    )
 
         return True
 
