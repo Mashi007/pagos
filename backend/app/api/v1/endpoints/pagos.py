@@ -843,14 +843,14 @@ def _aplicar_monto_a_cuota(cuota, monto_aplicar: Decimal, fecha_pago: date, fech
 def _aplicar_exceso_a_siguiente_cuota(
     db: Session, prestamo_id: int, saldo_restante: Decimal, fecha_pago: date, fecha_hoy: date
 ) -> int:
-    """Aplica el exceso de pago a la siguiente cuota pendiente. Returns: número de cuotas completadas"""
+    """Aplica el exceso de pago a la siguiente cuota pendiente (más antigua primero). Returns: número de cuotas completadas"""
     siguiente_cuota = (
         db.query(Cuota)
         .filter(
             Cuota.prestamo_id == prestamo_id,
             Cuota.estado != "PAGADO",
         )
-        .order_by(Cuota.numero_cuota)
+        .order_by(Cuota.fecha_vencimiento, Cuota.numero_cuota)  # ✅ Más antigua primero por fecha_vencimiento
         .first()
     )
 
@@ -876,7 +876,8 @@ def _aplicar_exceso_a_siguiente_cuota(
 def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
     """
     Aplica un pago a las cuotas correspondientes según la regla de negocio:
-    - Los pagos se aplican secuencialmente, cuota por cuota
+    - VERIFICA que la cédula del pago coincida con la cédula del préstamo
+    - Los pagos se aplican a las cuotas más antiguas primero (por fecha_vencimiento)
     - Una cuota está "ATRASADO" hasta que esté completamente pagada (monto_cuota)
     - Solo cuando total_pagado >= monto_cuota, se marca como "PAGADO"
     - Si un pago cubre completamente una cuota y sobra, el exceso se aplica a la siguiente
@@ -889,19 +890,36 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
         return 0
 
     from datetime import date
+    from app.models.prestamo import Prestamo
+
+    # ✅ VERIFICACIÓN DE CÉDULA: Verificar que la cédula del pago coincida con la del préstamo
+    prestamo = db.query(Prestamo).filter(Prestamo.id == pago.prestamo_id).first()
+    if not prestamo:
+        logger.error(f"❌ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} no encontrado")
+        return 0
+    
+    if pago.cedula_cliente and prestamo.cedula and pago.cedula_cliente != prestamo.cedula:
+        logger.error(
+            f"❌ [aplicar_pago_a_cuotas] Cédula del pago ({pago.cedula_cliente}) "
+            f"no coincide con cédula del préstamo ({prestamo.cedula}). "
+            f"No se aplicará el pago a las cuotas."
+        )
+        return 0
 
     logger.info(
         f"🔄 [aplicar_pago_a_cuotas] Aplicando pago ID {pago.id} "
-        f"(monto: ${pago.monto_pagado}, prestamo_id: {pago.prestamo_id})"
+        f"(monto: ${pago.monto_pagado}, prestamo_id: {pago.prestamo_id}, cedula: {pago.cedula_cliente})"
     )
 
+    # ✅ ORDENAMIENTO: Ordenar por fecha_vencimiento (más antigua primero), luego por numero_cuota
+    # Esto asegura que se cubran primero las cuotas más antiguas según su fecha de vencimiento
     cuotas = (
         db.query(Cuota)
         .filter(
             Cuota.prestamo_id == pago.prestamo_id,
             Cuota.estado != "PAGADO",
         )
-        .order_by(Cuota.numero_cuota)
+        .order_by(Cuota.fecha_vencimiento, Cuota.numero_cuota)  # ✅ Más antigua primero por fecha_vencimiento
         .all()
     )
 
