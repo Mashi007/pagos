@@ -110,6 +110,11 @@ export function DashboardMenu() {
           {/* Línea superior decorativa con efecto neón */}
           <div className="absolute -top-3 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 via-purple-400 to-transparent opacity-60"></div>
           
+          {/* Badge de identificación del nuevo diseño */}
+          <div className="absolute top-0 right-0 bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg z-20">
+            ✨ NUEVO DISEÑO v2.0
+          </div>
+          
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-5xl font-black text-gray-900 mb-3 tracking-tight">

@@ -103,7 +103,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const menuItems: MenuItem[] = [
     {
       title: 'Dashboard',
-      href: '/dashboard',
+      href: '/dashboard/menu',
       icon: LayoutDashboard,
     },
     {

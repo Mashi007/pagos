@@ -24,7 +24,7 @@ const BORDER_WIDTH = 2
 // Pages - Lazy loading para optimización
 const Welcome = lazy(() => import('@/pages/Welcome').then(module => ({ default: module.Welcome })))
 const Login = lazy(() => import('@/pages/Login').then(module => ({ default: module.Login })))
-const Dashboard = lazy(() => import('@/pages/Dashboard').then(module => ({ default: module.Dashboard })))
+// Componente Dashboard antiguo eliminado - Usar DashboardMenu en su lugar
 const DashboardMenu = lazy(() => import('@/pages/DashboardMenu').then(module => ({ default: module.DashboardMenu })))
 const DashboardFinanciamiento = lazy(() => import('@/pages/DashboardFinanciamiento').then(module => ({ default: module.DashboardFinanciamiento })))
 const DashboardCuotas = lazy(() => import('@/pages/DashboardCuotas').then(module => ({ default: module.DashboardCuotas })))
@@ -193,16 +193,6 @@ function App() {
             element={<Aprobaciones />}
           /> */}
 
-          {/* Auditoría */}
-          <Route
-            path="auditoria"
-            element={
-              <SimpleProtectedRoute requireAdmin={true}>
-                <Auditoria />
-              </SimpleProtectedRoute>
-            }
-          />
-
           {/* Notificaciones */}
           <Route path="notificaciones" element={<Notificaciones />} />
 
@@ -256,14 +246,10 @@ function App() {
             }
           />
 
-          {/* Asesores */}
+          {/* Analistas (ruta alternativa - redirige a /analistas) */}
           <Route
             path="analistaes"
-            element={
-              <SimpleProtectedRoute requireAdmin={true}>
-                <Analistas />
-              </SimpleProtectedRoute>
-            }
+            element={<Navigate to="/analistas" replace />}
           />
 
           {/* Concesionarios */}
