@@ -37,9 +37,15 @@ def _aplicar_filtro_busqueda(query, search: Optional[str]):
     )
 
 
-def _aplicar_filtros_especificos(query, estado: Optional[str], cedula: Optional[str],
-                                  email: Optional[str], telefono: Optional[str],
-                                  ocupacion: Optional[str], usuario_registro: Optional[str]):
+def _aplicar_filtros_especificos(
+    query,
+    estado: Optional[str],
+    cedula: Optional[str],
+    email: Optional[str],
+    telefono: Optional[str],
+    ocupacion: Optional[str],
+    usuario_registro: Optional[str],
+):
     """Aplica filtros específicos a la query"""
     if estado:
         query = query.filter(Cliente.estado == estado)
@@ -277,9 +283,7 @@ def _validar_duplicados_actualizacion(db: Session, cliente_id: int, update_data:
     nuevos_nombres = update_data.get("nombres", cliente.nombres)
 
     # Validar cédula duplicada
-    otro_con_misma_cedula = db.query(Cliente).filter(
-        Cliente.cedula == nueva_cedula, Cliente.id != cliente_id
-    ).first()
+    otro_con_misma_cedula = db.query(Cliente).filter(Cliente.cedula == nueva_cedula, Cliente.id != cliente_id).first()
     if otro_con_misma_cedula:
         logger.warning(
             f"❌ Intento de actualizar cliente {cliente_id} a cédula duplicada: {nueva_cedula} "

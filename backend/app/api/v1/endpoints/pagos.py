@@ -25,9 +25,15 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _aplicar_filtros_pagos(query, cedula: Optional[str], estado: Optional[str],
-                           fecha_desde: Optional[date], fecha_hasta: Optional[date],
-                           analista: Optional[str], db: Session):
+def _aplicar_filtros_pagos(
+    query,
+    cedula: Optional[str],
+    estado: Optional[str],
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+    analista: Optional[str],
+    db: Session,
+):
     """Aplica filtros a la query de pagos"""
     if cedula:
         query = query.filter(Pago.cedula_cliente == cedula)
