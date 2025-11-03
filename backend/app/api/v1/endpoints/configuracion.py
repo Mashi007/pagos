@@ -487,11 +487,11 @@ async def obtener_logo(
         media_type = content_type_map.get(ext, "application/octet-stream")
 
         from fastapi.responses import Response
-        
+
         # Leer el contenido del archivo
         with open(logo_path, "rb") as f:
             file_content = f.read()
-        
+
         # Crear respuesta con headers de no-caché para forzar recarga
         return Response(
             content=file_content,
