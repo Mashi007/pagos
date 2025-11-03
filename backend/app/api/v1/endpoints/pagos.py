@@ -712,8 +712,7 @@ def listar_ultimos_pagos(
         # Usar PagoStaging donde están los datos reales
         pagos_ultimos_q = db.query(PagoStaging).join(
             sub_ultimos,
-            (PagoStaging.cedula_cliente == sub_ultimos.c.cedula)
-            & (PagoStaging.fecha_registro == sub_ultimos.c.max_fecha),
+            (PagoStaging.cedula_cliente == sub_ultimos.c.cedula) & (PagoStaging.fecha_registro == sub_ultimos.c.max_fecha),
         )
 
         # Filtros
@@ -1946,12 +1945,7 @@ def verificar_conexion_pagos_staging(
         logger.info("🔍 [verificar_pagos_staging] Calculando estadísticas...")
         try:
             total = db.query(func.count(PagoStaging.id)).scalar() or 0
-            con_cedula = (
-                db.query(func.count(PagoStaging.id))
-                .filter(PagoStaging.cedula_cliente.isnot(None))
-                .scalar()
-                or 0
-            )
+            con_cedula = db.query(func.count(PagoStaging.id)).filter(PagoStaging.cedula_cliente.isnot(None)).scalar() or 0
             con_fecha = db.query(func.count(PagoStaging.id)).filter(PagoStaging.fecha_pago.isnot(None)).scalar() or 0
             con_monto = (
                 db.query(func.count(PagoStaging.id))
