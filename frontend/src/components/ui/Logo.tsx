@@ -16,17 +16,59 @@ const sizeMap = {
 // Generar IDs únicos para evitar conflictos si hay múltiples logos en la página
 const uniqueId = `logo-${Math.random().toString(36).substr(2, 9)}`
 
-// Extensiones posibles del logo personalizado
+// Extensiones posibles del logo personalizado (ordenadas por prioridad)
 const LOGO_EXTENSIONS = ['.svg', '.png', '.jpg', '.jpeg']
 
+// Cache compartido en memoria para evitar múltiples peticiones
+interface LogoCache {
+  logoUrl: string | null
+  isChecking: boolean
+  hasChecked: boolean
+}
+
+const logoCache: LogoCache = {
+  logoUrl: null,
+  isChecking: false,
+  hasChecked: false,
+}
+
 export function Logo({ className, size = 'md' }: LogoProps) {
-  const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(null)
-  const [hasChecked, setHasChecked] = useState(false)
+  const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(logoCache.logoUrl)
+  const [hasChecked, setHasChecked] = useState(logoCache.hasChecked)
 
   useEffect(() => {
+    // Si ya tenemos el logo cacheado, usarlo directamente
+    if (logoCache.logoUrl) {
+      setCustomLogoUrl(logoCache.logoUrl)
+      setHasChecked(true)
+      return
+    }
+
+    // Si ya verificamos y no hay logo, no hacer nada más
+    if (logoCache.hasChecked) {
+      setHasChecked(true)
+      return
+    }
+
+    // Si otra instancia ya está verificando, esperar
+    if (logoCache.isChecking) {
+      // Esperar hasta que termine la verificación
+      const checkInterval = setInterval(() => {
+        if (!logoCache.isChecking) {
+          setCustomLogoUrl(logoCache.logoUrl)
+          setHasChecked(logoCache.hasChecked)
+          clearInterval(checkInterval)
+        }
+      }, 100)
+
+      return () => clearInterval(checkInterval)
+    }
+
+    // Marcar que estamos verificando
+    logoCache.isChecking = true
+
     // Intentar cargar el logo personalizado desde el API
     const checkCustomLogo = async () => {
-      // Solo intentar cargar si hay conexión (evitar intentos en desarrollo local)
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 3000) // Timeout de 3 segundos
 
@@ -42,20 +84,28 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           
           if (response.ok) {
             // Si el archivo existe, usar imagen con timestamp para evitar caché
-            setCustomLogoUrl(`${logoPath}?t=${Date.now()}`)
+            const logoUrl = `${logoPath}?t=${Date.now()}`
+            logoCache.logoUrl = logoUrl
+            logoCache.hasChecked = true
+            setCustomLogoUrl(logoUrl)
+            setHasChecked(true)
             clearTimeout(timeoutId)
-            break
+            logoCache.isChecking = false
+            return
           }
         } catch (error: any) {
           // Ignorar errores de red o timeout, continuar con siguiente extensión
-          if (error?.name !== 'AbortError') {
-            // Solo registrar errores que no sean de timeout/abort
-            continue
+          if (error?.name === 'AbortError') {
+            break
           }
+          continue
         }
       }
       
+      // Si no encontramos ningún logo, marcar como verificado
       clearTimeout(timeoutId)
+      logoCache.hasChecked = true
+      logoCache.isChecking = false
       setHasChecked(true)
     }
 
@@ -64,13 +114,23 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     // Escuchar eventos de actualización del logo
     const handleLogoUpdate = (event: CustomEvent) => {
       const { filename, url } = event.detail
+      let newLogoUrl: string | null = null
+      
       if (url) {
         // Recargar el logo con timestamp para evitar caché
-        setCustomLogoUrl(`${url}?t=${Date.now()}`)
+        newLogoUrl = `${url}?t=${Date.now()}`
       } else if (filename) {
         // Si solo tenemos el filename, construir el path
         const logoPath = `/api/v1/configuracion/logo/${filename}`
-        setCustomLogoUrl(`${logoPath}?t=${Date.now()}`)
+        newLogoUrl = `${logoPath}?t=${Date.now()}`
+      }
+      
+      if (newLogoUrl) {
+        // Actualizar cache y estado
+        logoCache.logoUrl = newLogoUrl
+        logoCache.hasChecked = true
+        setCustomLogoUrl(newLogoUrl)
+        setHasChecked(true)
       }
     }
 

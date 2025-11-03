@@ -102,7 +102,7 @@ function App() {
           path="/"
           element={
             isAuthenticated ? (
-              <Navigate to="/dashboard" replace />
+              <Navigate to="/dashboard/menu" replace />
             ) : (
               <motion.div
                 key="welcome"
@@ -122,7 +122,7 @@ function App() {
           path="/login"
           element={
             isAuthenticated ? (
-              <Navigate to="/dashboard" replace />
+              <Navigate to="/dashboard/menu" replace />
             ) : (
               <motion.div
                 key="login"
@@ -146,9 +146,8 @@ function App() {
             </SimpleProtectedRoute>
           }
         >
-          {/* Dashboard */}
-          <Route index element={<Navigate to="/dashboard/menu" replace />} />
-          <Route path="dashboard" element={<Navigate to="/dashboard/menu" replace />} />
+          {/* Dashboard - DashboardMenu es el componente principal */}
+          <Route path="dashboard" element={<DashboardMenu />} />
           <Route path="dashboard/menu" element={<DashboardMenu />} />
           <Route path="dashboard/financiamiento" element={<DashboardFinanciamiento />} />
           <Route path="dashboard/cuotas" element={<DashboardCuotas />} />

@@ -79,6 +79,9 @@ export function DashboardMenu() {
   const { user } = useSimpleAuth()
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
 
+  // Verificar que el componente se está renderizando
+  console.log('✅ DashboardMenu renderizado - diseño nuevo')
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 p-6 relative overflow-hidden">
       {/* Efecto de fondo con patrones de grid estratégico */}
