@@ -76,13 +76,13 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         # Generar Request ID único
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
-        
+
         # Procesar request
         response = await call_next(request)
-        
+
         # Agregar Request ID al header de respuesta
         response.headers["X-Request-ID"] = request_id
-        
+
         return response
 
 
