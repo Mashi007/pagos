@@ -13,7 +13,7 @@ import {
   BarChart3,
   Bell,
   Loader2,
-  ExternalLink
+  Eye
 } from 'lucide-react'
 import { cobranzasService } from '@/services/cobranzasService'
 import { useQuery } from '@tanstack/react-query'
@@ -179,7 +179,7 @@ export function Cobranzas() {
             onClick={() => window.location.href = '/notificaciones'}
             className="flex items-center gap-2"
           >
-            <ExternalLink className="h-4 w-4" />
+            <Eye className="h-4 w-4" />
             Ver Historial
           </Button>
         </div>

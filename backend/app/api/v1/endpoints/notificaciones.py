@@ -191,23 +191,37 @@ async def envio_masivo(
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
-@router.get("/", response_model=list[NotificacionResponse])
+@router.get("/")
 def listar_notificaciones(
-    skip: int = 0,
-    limit: int = 100,
+    page: int = Query(1, ge=1, description="Número de página"),
+    per_page: int = Query(20, ge=1, le=100, description="Registros por página"),
     estado: Optional[str] = Query(None, description="Filtrar por estado"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Listar notificaciones con filtros."""
+    """
+    Listar notificaciones con filtros y paginación
+    """
+    from app.utils.pagination import calculate_pagination_params, create_paginated_response
+
     try:
+        # Calcular paginación
+        skip, limit = calculate_pagination_params(page=page, per_page=per_page, max_per_page=100)
+
+        # Query base
         query = db.query(Notificacion)
 
         if estado:
             query = query.filter(Notificacion.estado == estado)
 
-        notificaciones = query.offset(skip).limit(limit).all()
-        return notificaciones
+        # Contar total
+        total = query.count()
+
+        # Aplicar paginación
+        notificaciones = query.order_by(Notificacion.created_at.desc()).offset(skip).limit(limit).all()
+
+        # Retornar respuesta paginada
+        return create_paginated_response(items=notificaciones, total=total, page=page, page_size=limit)
 
     except Exception as e:
         logger.error(f"Error listando notificaciones: {e}")

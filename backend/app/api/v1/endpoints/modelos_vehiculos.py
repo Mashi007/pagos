@@ -75,12 +75,25 @@ def listar_modelos_vehiculos(
 
 
 @router.get("/activos", response_model=List[ModeloVehiculoResponse])
-def listar_modelos_activos(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Listar solo modelos activos (para formularios)."""
+def listar_modelos_activos(
+    limit: int = Query(500, ge=1, le=1000, description="Límite de resultados (máx 1000)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Listar solo modelos activos (para formularios).
+    Limitado a 1000 resultados por defecto para evitar cargas excesivas.
+    """
     try:
         # Solo modelos activos con precio definido (precio obligatorio para usar modelo)
-        modelos = db.query(ModeloVehiculo).filter(ModeloVehiculo.activo.is_(True), ModeloVehiculo.precio.isnot(None)).all()
-        logger.info(f"✅ Listando {len(modelos)} modelos activos con precio definido")
+        modelos = (
+            db.query(ModeloVehiculo)
+            .filter(ModeloVehiculo.activo.is_(True), ModeloVehiculo.precio.isnot(None))
+            .order_by(ModeloVehiculo.modelo)
+            .limit(limit)
+            .all()
+        )
+        logger.info(f"✅ Listando {len(modelos)} modelos activos con precio definido (límite: {limit})")
         return modelos
     except Exception as e:
         logger.error(f"Error listando modelos activos: {e}", exc_info=True)

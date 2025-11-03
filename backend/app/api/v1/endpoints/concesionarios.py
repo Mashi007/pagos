@@ -79,11 +79,24 @@ def list_concesionarios(
 
 
 @router.get("/activos", response_model=List[ConcesionarioResponse])
-def list_concesionarios_activos(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Listar solo concesionarios activos (para formularios)."""
+def list_concesionarios_activos(
+    limit: int = Query(500, ge=1, le=1000, description="Límite de resultados (máx 1000)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Listar solo concesionarios activos (para formularios).
+    Limitado a 1000 resultados por defecto para evitar cargas excesivas.
+    """
     try:
-        concesionarios = db.query(Concesionario).filter(Concesionario.activo.is_(True)).all()
-        logger.info(f"✅ Listando {len(concesionarios)} concesionarios activos")
+        concesionarios = (
+            db.query(Concesionario)
+            .filter(Concesionario.activo.is_(True))
+            .order_by(Concesionario.nombre)
+            .limit(limit)
+            .all()
+        )
+        logger.info(f"✅ Listando {len(concesionarios)} concesionarios activos (límite: {limit})")
         return concesionarios
     except Exception as e:
         logger.error(f"Error listando concesionarios activos: {e}", exc_info=True)

@@ -7,7 +7,7 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
@@ -1361,20 +1361,37 @@ def obtener_estadisticas_pagos(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
-@router.get("/auditoria/{pago_id}", response_model=list[dict])
+@router.get("/auditoria/{pago_id}")
 def obtener_auditoria_pago(
-    pago_id: int,
+    pago_id: int = Path(..., gt=0, description="ID del pago"),
+    page: int = Query(1, ge=1, description="Número de página"),
+    per_page: int = Query(20, ge=1, le=100, description="Registros por página"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Obtener historial de auditoría de un pago
+    Obtener historial de auditoría de un pago con paginación
     """
-    auditorias = (
-        db.query(PagoAuditoria).filter(PagoAuditoria.pago_id == pago_id).order_by(PagoAuditoria.fecha_cambio.desc()).all()
+    from app.utils.pagination import calculate_pagination_params, create_paginated_response
+
+    # Calcular paginación
+    skip, limit = calculate_pagination_params(page=page, per_page=per_page, max_per_page=100)
+
+    # Query base
+    query = (
+        db.query(PagoAuditoria)
+        .filter(PagoAuditoria.pago_id == pago_id)
+        .order_by(PagoAuditoria.fecha_cambio.desc())
     )
 
-    return [
+    # Contar total
+    total = query.count()
+
+    # Aplicar paginación
+    auditorias = query.offset(skip).limit(limit).all()
+
+    # Serializar resultados
+    items = [
         {
             "id": a.id,
             "usuario": a.usuario,
@@ -1387,3 +1404,5 @@ def obtener_auditoria_pago(
         }
         for a in auditorias
     ]
+
+    return create_paginated_response(items=items, total=total, page=page, page_size=limit)

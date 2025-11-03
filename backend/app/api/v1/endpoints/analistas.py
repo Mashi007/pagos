@@ -79,12 +79,23 @@ def listar_analistas(
 
 @router.get("/activos", response_model=List[AnalistaResponse])
 def listar_analistas_activos(
+    limit: int = Query(500, ge=1, le=1000, description="Límite de resultados (máx 1000)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Listar solo analistas activos"""
+    """
+    Listar solo analistas activos.
+    Limitado a 1000 resultados por defecto para evitar cargas excesivas.
+    """
     try:
-        analistas = db.query(Analista).filter(Analista.activo.is_(True)).all()
+        analistas = (
+            db.query(Analista)
+            .filter(Analista.activo.is_(True))
+            .order_by(Analista.nombre)
+            .limit(limit)
+            .all()
+        )
+        logger.info(f"✅ Listando {len(analistas)} analistas activos (límite: {limit})")
         return analistas
     except Exception as e:
         logger.error(f"Error listando analistas activos: {e}")

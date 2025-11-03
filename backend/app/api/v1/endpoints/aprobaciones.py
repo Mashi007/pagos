@@ -1,8 +1,11 @@
+import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.api.deps import get_current_user, get_db
 from app.models.aprobacion import Aprobacion
@@ -42,26 +45,48 @@ def crear_aprobacion(
         raise HTTPException(status_code=500, detail=f"Error creando aprobación: {str(e)}")
 
 
-@router.get("/", response_model=List[AprobacionResponse])
+@router.get("/")
 def listar_aprobaciones(
-    estado: Optional[str] = None,
-    tipo: Optional[str] = None,
+    page: int = Query(1, ge=1, description="Número de página"),
+    per_page: int = Query(20, ge=1, le=100, description="Registros por página"),
+    estado: Optional[str] = Query(None, description="Filtrar por estado"),
+    tipo: Optional[str] = Query(None, description="Filtrar por tipo"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Listar aprobaciones con filtros
-    query = db.query(Aprobacion)
+    """
+    Listar aprobaciones con filtros y paginación
+    """
+    from app.utils.pagination import calculate_pagination_params, create_paginated_response
 
-    if estado:
-        query = query.filter(Aprobacion.estado == estado)
-    if tipo:
-        query = query.filter(Aprobacion.tipo == tipo)
+    try:
+        # Calcular paginación
+        skip, limit = calculate_pagination_params(page=page, per_page=per_page, max_per_page=100)
 
-    # Si no es admin, solo ver las propias
-    if not bool(current_user.is_admin):
-        query = query.filter(Aprobacion.solicitado_por == current_user.id)
+        # Query base
+        query = db.query(Aprobacion)
 
-    return query.all()
+        if estado:
+            query = query.filter(Aprobacion.estado == estado)
+        if tipo:
+            query = query.filter(Aprobacion.tipo == tipo)
+
+        # Si no es admin, solo ver las propias
+        if not bool(current_user.is_admin):
+            query = query.filter(Aprobacion.solicitado_por == current_user.id)
+
+        # Contar total
+        total = query.count()
+
+        # Aplicar paginación con ordenamiento
+        aprobaciones = query.order_by(Aprobacion.created_at.desc()).offset(skip).limit(limit).all()
+
+        # Retornar respuesta paginada
+        return create_paginated_response(items=aprobaciones, total=total, page=page, page_size=limit)
+
+    except Exception as e:
+        logger.error(f"Error listando aprobaciones: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/{aprobacion_id}", response_model=AprobacionResponse)
