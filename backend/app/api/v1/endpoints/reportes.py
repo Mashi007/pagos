@@ -717,7 +717,7 @@ def resumen_dashboard(
     """Obtiene resumen para dashboard."""
     try:
         hoy = date.today()
-        
+
         # Estadísticas básicas - Solo préstamos aprobados
         total_clientes = db.query(Cliente).filter(Cliente.activo).count()
         total_prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
@@ -760,12 +760,9 @@ def resumen_dashboard(
 
         # Pagos del mes: usar monto_pagado y fecha_pago correctamente
         fecha_inicio_mes = hoy.replace(day=1)
-        pagos_mes_query = (
-            db.query(func.sum(Pago.monto_pagado))
-            .filter(
-                Pago.fecha_pago >= fecha_inicio_mes,
-                Pago.fecha_pago <= hoy,
-            )
+        pagos_mes_query = db.query(func.sum(Pago.monto_pagado)).filter(
+            Pago.fecha_pago >= fecha_inicio_mes,
+            Pago.fecha_pago <= hoy,
         )
         pagos_mes = float(pagos_mes_query.scalar() or Decimal("0"))
 
