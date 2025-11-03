@@ -664,16 +664,13 @@ def listar_ultimos_pagos(
         # Usar PagoStaging donde están los datos reales
         pagos_ultimos_q = db.query(PagoStaging).join(
             sub_ultimos,
-            (
-                or_(PagoStaging.cedula_cliente == sub_ultimos.c.cedula, PagoStaging.cedula == sub_ultimos.c.cedula)
-            ) & (PagoStaging.fecha_registro == sub_ultimos.c.max_fecha),
+            (or_(PagoStaging.cedula_cliente == sub_ultimos.c.cedula, PagoStaging.cedula == sub_ultimos.c.cedula))
+            & (PagoStaging.fecha_registro == sub_ultimos.c.max_fecha),
         )
 
         # Filtros
         if cedula:
-            pagos_ultimos_q = pagos_ultimos_q.filter(
-                or_(PagoStaging.cedula_cliente == cedula, PagoStaging.cedula == cedula)
-            )
+            pagos_ultimos_q = pagos_ultimos_q.filter(or_(PagoStaging.cedula_cliente == cedula, PagoStaging.cedula == cedula))
         if estado:
             pagos_ultimos_q = pagos_ultimos_q.filter(PagoStaging.estado == estado)
 
@@ -1811,17 +1808,21 @@ def verificar_conexion_pagos_staging(
         logger.info("🔍 [verificar_pagos_staging] Verificando estructura de columnas...")
         try:
             # Intentar consultar diferentes columnas
-            muestra = db.query(
-                PagoStaging.id,
-                PagoStaging.cedula_cliente,
-                PagoStaging.cedula,
-                PagoStaging.prestamo_id,
-                PagoStaging.fecha_pago,
-                PagoStaging.monto_pagado,
-                PagoStaging.numero_documento,
-                PagoStaging.estado,
-                PagoStaging.conciliado,
-            ).limit(1).first()
+            muestra = (
+                db.query(
+                    PagoStaging.id,
+                    PagoStaging.cedula_cliente,
+                    PagoStaging.cedula,
+                    PagoStaging.prestamo_id,
+                    PagoStaging.fecha_pago,
+                    PagoStaging.monto_pagado,
+                    PagoStaging.numero_documento,
+                    PagoStaging.estado,
+                    PagoStaging.conciliado,
+                )
+                .limit(1)
+                .first()
+            )
 
             columnas_verificadas = []
             if muestra:
@@ -1863,18 +1864,20 @@ def verificar_conexion_pagos_staging(
                 "registros_obtenidos": len(query_ejemplo),
             }
             diagnostico["datos"]["muestra_registros"] = len(query_ejemplo)
-            
+
             # Datos de muestra si existen
             if query_ejemplo:
                 muestra_datos = []
                 for p in query_ejemplo[:3]:
-                    muestra_datos.append({
-                        "id": p.id,
-                        "cedula": p.cedula_cliente or p.cedula,
-                        "monto": float(p.monto_pagado) if p.monto_pagado else None,
-                        "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
-                        "estado": p.estado,
-                    })
+                    muestra_datos.append(
+                        {
+                            "id": p.id,
+                            "cedula": p.cedula_cliente or p.cedula,
+                            "monto": float(p.monto_pagado) if p.monto_pagado else None,
+                            "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
+                            "estado": p.estado,
+                        }
+                    )
                 diagnostico["datos"]["muestra"] = muestra_datos
         except Exception as e:
             diagnostico["verificaciones"]["consulta_ejemplo"] = {
@@ -1889,15 +1892,19 @@ def verificar_conexion_pagos_staging(
         logger.info("🔍 [verificar_pagos_staging] Calculando estadísticas...")
         try:
             total = db.query(func.count(PagoStaging.id)).scalar() or 0
-            con_cedula = db.query(func.count(PagoStaging.id)).filter(
-                or_(PagoStaging.cedula_cliente.isnot(None), PagoStaging.cedula.isnot(None))
-            ).scalar() or 0
-            con_fecha = db.query(func.count(PagoStaging.id)).filter(
-                PagoStaging.fecha_pago.isnot(None)
-            ).scalar() or 0
-            con_monto = db.query(func.count(PagoStaging.id)).filter(
-                PagoStaging.monto_pagado.isnot(None), PagoStaging.monto_pagado > 0
-            ).scalar() or 0
+            con_cedula = (
+                db.query(func.count(PagoStaging.id))
+                .filter(or_(PagoStaging.cedula_cliente.isnot(None), PagoStaging.cedula.isnot(None)))
+                .scalar()
+                or 0
+            )
+            con_fecha = db.query(func.count(PagoStaging.id)).filter(PagoStaging.fecha_pago.isnot(None)).scalar() or 0
+            con_monto = (
+                db.query(func.count(PagoStaging.id))
+                .filter(PagoStaging.monto_pagado.isnot(None), PagoStaging.monto_pagado > 0)
+                .scalar()
+                or 0
+            )
 
             diagnostico["datos"]["estadisticas"] = {
                 "total": total,
