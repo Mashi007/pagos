@@ -897,7 +897,7 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
     if not prestamo:
         logger.error(f"❌ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} no encontrado")
         return 0
-    
+
     if pago.cedula_cliente and prestamo.cedula and pago.cedula_cliente != prestamo.cedula:
         logger.error(
             f"❌ [aplicar_pago_a_cuotas] Cédula del pago ({pago.cedula_cliente}) "
