@@ -2,10 +2,11 @@
 Configuración de la aplicación
 """
 
+import json
 import logging
 from typing import List, Optional
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,34 @@ class Settings(BaseSettings):
         ],
         env="CORS_ORIGINS",
     )
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """
+        Parsea CORS_ORIGINS desde variable de entorno.
+        Acepta JSON array o string separado por comas.
+        """
+        if isinstance(v, str):
+            # Intentar parsear como JSON primero
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except (json.JSONDecodeError, ValueError):
+                pass
+            
+            # Si no es JSON válido, intentar separar por comas
+            if "," in v:
+                # Separar por comas y limpiar espacios
+                origins = [origin.strip() for origin in v.split(",") if origin.strip()]
+                return origins
+            else:
+                # Si es un solo string sin comas, retornar como lista
+                return [v.strip()] if v.strip() else []
+        elif isinstance(v, list):
+            return v
+        return v
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     CORS_ALLOW_HEADERS: List[str] = ["*"]
