@@ -436,7 +436,30 @@ class Settings(BaseSettings):
 
 
 # Instancia global de configuración
-settings = Settings()
+# Manejar CORS_ORIGINS manualmente si falla el parsing
+try:
+    settings = Settings()
+except Exception as e:
+    if "CORS_ORIGINS" in str(e):
+        # Si falla por CORS_ORIGINS, intentar sin la variable de entorno
+        import os
+        cors_env_backup = os.environ.pop("CORS_ORIGINS", None)
+        try:
+            settings = Settings()
+            logger.warning(
+                "⚠️ CORS_ORIGINS no pudo ser parseado desde variable de entorno. "
+                "Usando valores por defecto que se filtrarán automáticamente."
+            )
+        except Exception as e2:
+            # Restaurar variable y dejar que falle normalmente
+            if cors_env_backup:
+                os.environ["CORS_ORIGINS"] = cors_env_backup
+            raise e
+        finally:
+            # No restaurar la variable si el parsing falló
+            pass
+    else:
+        raise
 
 # Validar configuración al importar
 try:
