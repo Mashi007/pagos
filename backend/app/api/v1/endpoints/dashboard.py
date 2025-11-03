@@ -2033,10 +2033,7 @@ def obtener_financiamiento_tendencia_mensual(
     """
     try:
         hoy = date.today()
-        nombres_meses = [
-            "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-            "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
-        ]
+        nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
         # Calcular fecha inicio (hace N meses)
         fecha_inicio_query = fecha_inicio
@@ -2066,12 +2063,11 @@ def obtener_financiamiento_tendencia_mensual(
 
             # Nuevos financiamientos del mes (préstamos aprobados en el mes)
             query_nuevos = db.query(
-                func.count(Prestamo.id).label("cantidad"),
-                func.sum(Prestamo.total_financiamiento).label("monto_total")
+                func.count(Prestamo.id).label("cantidad"), func.sum(Prestamo.total_financiamiento).label("monto_total")
             ).filter(
                 Prestamo.estado == "APROBADO",
                 Prestamo.fecha_registro >= fecha_mes_inicio,
-                Prestamo.fecha_registro < fecha_mes_fin
+                Prestamo.fecha_registro < fecha_mes_fin,
             )
 
             query_nuevos = FiltrosDashboard.aplicar_filtros_prestamo(
@@ -2083,11 +2079,8 @@ def obtener_financiamiento_tendencia_mensual(
             monto_nuevos = float(resultado.monto_total or Decimal("0"))
 
             # Total financiamiento acumulado hasta fin de mes (cartera vigente)
-            query_total = db.query(
-                func.sum(Prestamo.total_financiamiento).label("total")
-            ).filter(
-                Prestamo.estado == "APROBADO",
-                Prestamo.fecha_registro <= fecha_mes_fin
+            query_total = db.query(func.sum(Prestamo.total_financiamiento).label("total")).filter(
+                Prestamo.estado == "APROBADO", Prestamo.fecha_registro <= fecha_mes_fin
             )
 
             query_total = FiltrosDashboard.aplicar_filtros_prestamo(
@@ -2096,24 +2089,22 @@ def obtener_financiamiento_tendencia_mensual(
 
             total_acumulado = float(query_total.scalar() or Decimal("0"))
 
-            meses_data.append({
-                "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
-                "año": año_mes,
-                "mes_numero": num_mes,
-                "cantidad_nuevos": cantidad_nuevos,
-                "monto_nuevos": monto_nuevos,
-                "total_acumulado": total_acumulado,
-                "fecha_mes": fecha_mes_inicio.isoformat()
-            })
+            meses_data.append(
+                {
+                    "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
+                    "año": año_mes,
+                    "mes_numero": num_mes,
+                    "cantidad_nuevos": cantidad_nuevos,
+                    "monto_nuevos": monto_nuevos,
+                    "total_acumulado": total_acumulado,
+                    "fecha_mes": fecha_mes_inicio.isoformat(),
+                }
+            )
 
             # Avanzar al siguiente mes
             current_date = fecha_mes_fin
 
-        return {
-            "meses": meses_data,
-            "fecha_inicio": fecha_inicio_query.isoformat(),
-            "fecha_fin": hoy.isoformat()
-        }
+        return {"meses": meses_data, "fecha_inicio": fecha_inicio_query.isoformat(), "fecha_fin": hoy.isoformat()}
 
     except Exception as e:
         logger.error(f"Error obteniendo tendencia mensual de financiamiento: {e}", exc_info=True)
