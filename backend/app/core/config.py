@@ -171,20 +171,22 @@ class Settings(BaseSettings):
         # Validación específica para producción
         if self.ENVIRONMENT == "production":
             import os
-            
+
             # Verificar si ADMIN_PASSWORD fue configurado desde variable de entorno
             admin_password_from_env = os.getenv("ADMIN_PASSWORD")
             default_password = "R@pi_2025**"
-            
+
             # Bloquear SOLO si:
             # 1. NO está configurado en variable de entorno (None o vacío)
             # 2. Y el valor actual es el valor por defecto
-            if (not admin_password_from_env or admin_password_from_env.strip() == "") and self.ADMIN_PASSWORD == default_password:
+            if (
+                not admin_password_from_env or admin_password_from_env.strip() == ""
+            ) and self.ADMIN_PASSWORD == default_password:
                 raise ValueError(
                     "CRÍTICO: No se puede usar la contraseña por defecto en producción. "
                     "Debe configurarse ADMIN_PASSWORD con una contraseña segura mediante variable de entorno."
                 )
-            
+
             # Si viene de variable de entorno, permitir aunque sea débil (asumimos decisión consciente)
             # Pero advertir si es muy corta o débil
             if admin_password_from_env:
@@ -193,7 +195,7 @@ class Settings(BaseSettings):
                         "⚠️ ADMIN_PASSWORD configurado desde variable de entorno pero es muy corta (<12 caracteres). "
                         "Se recomienda usar una contraseña más segura para producción."
                     )
-                
+
                 # Si es el valor por defecto pero viene de env, permitir pero advertir
                 if admin_password_from_env == default_password:
                     logger.warning(
