@@ -12,7 +12,8 @@ from app.api.deps import get_current_user, get_db
 from app.core.cache import cache_result
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
-from app.models.pago import Pago
+from app.models.pago import Pago  # Mantener para operaciones que necesiten tabla pagos
+from app.models.pago_staging import PagoStaging  # Usar para consultas principales (donde están los datos)
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.utils.filtros_dashboard import FiltrosDashboard
@@ -70,13 +71,14 @@ def _calcular_total_cobrado_mes(
     modelo: Optional[str],
 ) -> Decimal:
     """Calcula el total cobrado en un mes (solo pagos conciliados)"""
-    query = db.query(func.sum(Pago.monto_pagado)).filter(
-        func.date(Pago.fecha_pago) >= primer_dia,
-        func.date(Pago.fecha_pago) <= ultimo_dia,
-        Pago.conciliado.is_(True),
+    # Usar PagoStaging donde están los datos reales
+    query = db.query(func.sum(PagoStaging.monto_pagado)).filter(
+        func.date(PagoStaging.fecha_pago) >= primer_dia,
+        func.date(PagoStaging.fecha_pago) <= ultimo_dia,
+        PagoStaging.conciliado.is_(True),
     )
     if analista or concesionario or modelo:
-        query = query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+        query = query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
     query = FiltrosDashboard.aplicar_filtros_pago(query, analista, concesionario, modelo, None, None)
     return query.scalar() or Decimal("0")
 
@@ -332,9 +334,9 @@ def _calcular_pagos_fecha(
     fecha_fin: Optional[date],
 ) -> float:
     """Calcula pagos en una fecha específica"""
-    query = db.query(func.sum(Pago.monto_pagado)).filter(func.date(Pago.fecha_pago) == fecha)
+    query = db.query(func.sum(PagoStaging.monto_pagado)).filter(func.date(PagoStaging.fecha_pago) == fecha)
     if analista or concesionario or modelo:
-        query = query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+        query = query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
     query = FiltrosDashboard.aplicar_filtros_pago(query, analista, concesionario, modelo, fecha_inicio, fecha_fin)
     return float(query.scalar() or Decimal("0"))
 
@@ -505,7 +507,7 @@ def _calcular_total_cobrado(
 ) -> float:
     """Calcula total cobrado para una fecha específica"""
     try:
-        pagos_dia_query = db.query(func.sum(Pago.monto_pagado)).filter(func.date(Pago.fecha_pago) == fecha_dia)
+        pagos_dia_query = db.query(func.sum(PagoStaging.monto_pagado)).filter(func.date(PagoStaging.fecha_pago) == fecha_dia)
         pagos_dia_query = FiltrosDashboard.aplicar_filtros_pago(pagos_dia_query, analista, concesionario, modelo, None, None)
         return float(pagos_dia_query.scalar() or Decimal("0"))
     except Exception:
@@ -668,13 +670,13 @@ def dashboard_administrador(
         porcentaje_mora = (float(cartera_vencida) / float(cartera_total) * 100) if cartera_total > 0 else 0
 
         # 5. PAGOS DE HOY (con filtros)
-        pagos_hoy_query = db.query(func.count(Pago.id)).filter(func.date(Pago.fecha_pago) == hoy)
-        monto_pagos_hoy_query = db.query(func.sum(Pago.monto_pagado)).filter(func.date(Pago.fecha_pago) == hoy)
+        pagos_hoy_query = db.query(func.count(PagoStaging.id)).filter(func.date(PagoStaging.fecha_pago) == hoy)
+        monto_pagos_hoy_query = db.query(func.sum(PagoStaging.monto_pagado)).filter(func.date(PagoStaging.fecha_pago) == hoy)
 
         # ✅ Aplicar filtros usando clase centralizada (automático)
         if analista or concesionario or modelo:
-            pagos_hoy_query = pagos_hoy_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
-            monto_pagos_hoy_query = monto_pagos_hoy_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            pagos_hoy_query = pagos_hoy_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
+            monto_pagos_hoy_query = monto_pagos_hoy_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
 
         pagos_hoy_query = FiltrosDashboard.aplicar_filtros_pago(
             pagos_hoy_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
@@ -747,9 +749,9 @@ def dashboard_administrador(
 
         # 11. TOTAL PAGADO (histórico o con filtros)
         # ✅ USAR FiltrosDashboard para aplicar filtros automáticamente
-        total_cobrado_query = db.query(func.sum(Pago.monto_pagado))
+        total_cobrado_query = db.query(func.sum(PagoStaging.monto_pagado))
         if analista or concesionario or modelo:
-            total_cobrado_query = total_cobrado_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            total_cobrado_query = total_cobrado_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
         total_cobrado_query = FiltrosDashboard.aplicar_filtros_pago(
             total_cobrado_query,
             analista,
@@ -902,13 +904,13 @@ def dashboard_administrador(
             cartera_mes = cartera_mes_query.scalar() or Decimal("0")
 
             # ✅ Cobrado del mes con filtros (SOLO PAGOS CONCILIADOS para consistencia)
-            cobrado_mes_query = db.query(func.sum(Pago.monto_pagado)).filter(
-                func.date(Pago.fecha_pago) >= mes_inicio,
-                func.date(Pago.fecha_pago) <= mes_fin,
-                Pago.conciliado.is_(True),  # ✅ Solo pagos conciliados
+            cobrado_mes_query = db.query(func.sum(PagoStaging.monto_pagado)).filter(
+                func.date(PagoStaging.fecha_pago) >= mes_inicio,
+                func.date(PagoStaging.fecha_pago) <= mes_fin,
+                PagoStaging.conciliado.is_(True),  # ✅ Solo pagos conciliados
             )
             if analista or concesionario or modelo:
-                cobrado_mes_query = cobrado_mes_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+                cobrado_mes_query = cobrado_mes_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
             cobrado_mes_query = FiltrosDashboard.aplicar_filtros_pago(
                 cobrado_mes_query,
                 analista,
@@ -1002,9 +1004,9 @@ def dashboard_administrador(
         total_financiamiento_operaciones = float(total_financiamiento_query.scalar() or Decimal("0"))
 
         # Cartera Cobrada: Suma de TODOS los pagos (conciliados y no conciliados)
-        cartera_cobrada_query = db.query(func.sum(Pago.monto_pagado))
+        cartera_cobrada_query = db.query(func.sum(PagoStaging.monto_pagado))
         if analista or concesionario or modelo:
-            cartera_cobrada_query = cartera_cobrada_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            cartera_cobrada_query = cartera_cobrada_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
         cartera_cobrada_query = FiltrosDashboard.aplicar_filtros_pago(
             cartera_cobrada_query,
             analista,
@@ -1507,13 +1509,13 @@ def obtener_cobranzas_mensuales(
             cobranzas_planificadas = float(query_cobranzas.scalar() or Decimal("0"))
 
             # Pagos reales: Suma de pagos conciliados en ese mes
-            query_pagos = db.query(func.sum(Pago.monto_pagado)).filter(
-                func.date(Pago.fecha_pago) >= mes_fecha,
-                func.date(Pago.fecha_pago) < siguiente_mes,
-                Pago.conciliado.is_(True),
+            query_pagos = db.query(func.sum(PagoStaging.monto_pagado)).filter(
+                func.date(PagoStaging.fecha_pago) >= mes_fecha,
+                func.date(PagoStaging.fecha_pago) < siguiente_mes,
+                PagoStaging.conciliado.is_(True),
             )
             if analista or concesionario or modelo:
-                query_pagos = query_pagos.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+                query_pagos = query_pagos.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
             query_pagos = FiltrosDashboard.aplicar_filtros_pago(
                 query_pagos, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
@@ -1637,24 +1639,24 @@ def obtener_metricas_acumuladas(
         fecha_inicio_anio = date(hoy.year, 1, 1)
 
         # Acumulado mensual: Pagos desde inicio del mes
-        query_acumulado_mensual = db.query(func.sum(Pago.monto_pagado)).filter(
-            func.date(Pago.fecha_pago) >= fecha_inicio_mes,
-            Pago.conciliado.is_(True),
+        query_acumulado_mensual = db.query(func.sum(PagoStaging.monto_pagado)).filter(
+            func.date(PagoStaging.fecha_pago) >= fecha_inicio_mes,
+            PagoStaging.conciliado.is_(True),
         )
         if analista or concesionario or modelo:
-            query_acumulado_mensual = query_acumulado_mensual.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            query_acumulado_mensual = query_acumulado_mensual.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
         query_acumulado_mensual = FiltrosDashboard.aplicar_filtros_pago(
             query_acumulado_mensual, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         acumulado_mensual = float(query_acumulado_mensual.scalar() or Decimal("0"))
 
         # Acumulado anual: Pagos desde inicio del año
-        query_acumulado_anual = db.query(func.sum(Pago.monto_pagado)).filter(
-            func.date(Pago.fecha_pago) >= fecha_inicio_anio,
-            Pago.conciliado.is_(True),
+        query_acumulado_anual = db.query(func.sum(PagoStaging.monto_pagado)).filter(
+            func.date(PagoStaging.fecha_pago) >= fecha_inicio_anio,
+            PagoStaging.conciliado.is_(True),
         )
         if analista or concesionario or modelo:
-            query_acumulado_anual = query_acumulado_anual.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            query_acumulado_anual = query_acumulado_anual.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
         query_acumulado_anual = FiltrosDashboard.aplicar_filtros_pago(
             query_acumulado_anual, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
@@ -2135,17 +2137,17 @@ def obtener_cobros_por_analista(
         query = (
             db.query(
                 func.coalesce(Prestamo.analista, Prestamo.producto_financiero, "Sin Analista").label("analista"),
-                func.sum(Pago.monto_pagado).label("total_cobrado"),
-                func.count(Pago.id).label("cantidad_pagos"),
+                func.sum(PagoStaging.monto_pagado).label("total_cobrado"),
+                func.count(PagoStaging.id).label("cantidad_pagos"),
             )
-            .join(Pago, Pago.prestamo_id == Prestamo.id)
+            .join(PagoStaging, PagoStaging.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado == "APROBADO",
-                Pago.conciliado.is_(True),
-                func.date(Pago.fecha_pago) >= fecha_inicio_mes,
+                PagoStaging.conciliado.is_(True),
+                func.date(PagoStaging.fecha_pago) >= fecha_inicio_mes,
             )
             .group_by("analista")
-            .order_by(func.sum(Pago.monto_pagado).desc())
+            .order_by(func.sum(PagoStaging.monto_pagado).desc())
         )
 
         # Aplicar filtros (excepto analista que ya estamos agrupando)

@@ -13,7 +13,8 @@ from app.core.cache import cache_result
 from app.models.amortizacion import Cuota, pago_cuotas
 from app.models.analista import Analista
 from app.models.cliente import Cliente
-from app.models.pago import Pago
+from app.models.pago import Pago  # Mantener para operaciones que necesiten tabla pagos
+from app.models.pago_staging import PagoStaging  # Usar para consultas principales (donde están los datos)
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.utils.filtros_dashboard import FiltrosDashboard
@@ -74,9 +75,9 @@ def _calcular_kpis_basicos(
     clientes_en_mora = clientes_en_mora_query.scalar() or 0
     clientes_al_dia = max(0, clientes_con_cuotas - clientes_en_mora)
 
-    # Pagos del mes
-    pagos_query = db.query(func.sum(Pago.monto_pagado)).filter(
-        func.date_trunc("month", Pago.fecha_pago) == func.date_trunc("month", fecha_corte)
+    # Pagos del mes (usa PagoStaging donde están los datos)
+    pagos_query = db.query(func.sum(PagoStaging.monto_pagado)).filter(
+        func.date_trunc("month", PagoStaging.fecha_pago) == func.date_trunc("month", fecha_corte)
     )
     pagos_query = FiltrosDashboard.aplicar_filtros_pago(pagos_query, analista, concesionario, modelo, fecha_inicio, fecha_fin)
     pagos_mes = pagos_query.scalar() or Decimal("0")
@@ -239,7 +240,7 @@ def _calcular_kpis_mes_actual(
         )
         .filter(
             ~Cuota.id.in_(
-                db.query(pago_cuotas.c.cuota_id).join(Pago, pago_cuotas.c.pago_id == Pago.id).filter(Pago.conciliado.is_(True))
+                db.query(pago_cuotas.c.cuota_id).join(PagoStaging, pago_cuotas.c.pago_id == PagoStaging.id).filter(PagoStaging.conciliado.is_(True))
             )
         )
     )

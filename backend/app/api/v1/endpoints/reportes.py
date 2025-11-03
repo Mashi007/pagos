@@ -25,7 +25,8 @@ from app.core.constants import EstadoPrestamo
 from app.models.amortizacion import Cuota
 from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
-from app.models.pago import Pago
+from app.models.pago import Pago  # Mantener para operaciones que necesiten tabla pagos
+from app.models.pago_staging import PagoStaging  # Usar para consultas principales (donde están los datos)
 from app.models.prestamo import Prestamo
 from app.models.user import User
 
@@ -47,7 +48,7 @@ def healthcheck_reportes(
         logger.info("[reportes.health] Verificando conexión a BD y métricas básicas")
 
         total_prestamos = db.query(func.count(Prestamo.id)).scalar() or 0
-        total_pagos = db.query(func.count(Pago.id)).scalar() or 0
+        total_pagos = db.query(func.count(PagoStaging.id)).scalar() or 0
 
         return {
             "status": "ok",

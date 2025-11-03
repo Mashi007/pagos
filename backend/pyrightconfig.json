@@ -22,13 +22,17 @@
   "reportUnusedClass": false,
   "reportUnusedFunction": false,
   "reportUnusedVariable": false,
+  "reportGeneralTypeIssues": false,
+  "pythonPlatform": "All",
   "executionEnvironments": [
     {
       "root": ".",
       "pythonVersion": "3.11",
       "extraPaths": [
-        "."
+        ".",
+        "app"
       ]
     }
-  ]
+  ],
+  "stubPath": ""
 }

@@ -7,9 +7,9 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from sqlalchemy import func, or_, text
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Path, Query  # type: ignore[import-untyped]
+from sqlalchemy import func, or_, text  # type: ignore[import-untyped]
+from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.models.amortizacion import Cuota
@@ -1379,10 +1379,10 @@ def obtener_estadisticas_pagos(
     try:
         hoy = datetime.now().date()
 
-        # ✅ Base query para pagos - usar FiltrosDashboard
-        base_pago_query = db.query(Pago)
+        # ✅ Base query para pagos - usar FiltrosDashboard (usa PagoStaging donde están los datos)
+        base_pago_query = db.query(PagoStaging)
         if analista or concesionario or modelo:
-            base_pago_query = base_pago_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            base_pago_query = base_pago_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
         base_pago_query = FiltrosDashboard.aplicar_filtros_pago(
             base_pago_query,
             analista,
@@ -1407,14 +1407,14 @@ def obtener_estadisticas_pagos(
                 .all()
             )
         else:
-            pagos_por_estado = db.query(Pago.estado, func.count(Pago.id)).group_by(Pago.estado).all()
+            pagos_por_estado = db.query(PagoStaging.estado, func.count(PagoStaging.id)).group_by(PagoStaging.estado).all()
 
         # Monto total pagado
-        total_pagado = base_pago_query.with_entities(func.sum(Pago.monto_pagado)).scalar() or Decimal("0.00")
+        total_pagado = base_pago_query.with_entities(func.sum(PagoStaging.monto_pagado)).scalar() or Decimal("0.00")
 
         # Pagos del día actual
-        pagos_hoy_query = base_pago_query.filter(func.date(Pago.fecha_pago) == hoy)
-        pagos_hoy = pagos_hoy_query.with_entities(func.sum(Pago.monto_pagado)).scalar() or Decimal("0.00")
+        pagos_hoy_query = base_pago_query.filter(func.date(PagoStaging.fecha_pago) == hoy)
+        pagos_hoy = pagos_hoy_query.with_entities(func.sum(PagoStaging.monto_pagado)).scalar() or Decimal("0.00")
 
         # ✅ Cuotas pagadas vs pendientes - usar FiltrosDashboard
         cuotas_query = db.query(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -1492,7 +1492,6 @@ def obtener_auditoria_pago(
 # ENDPOINTS PARA PAGOS_STAGING
 # ============================================
 
-
 @router.get("/staging")
 def listar_pagos_staging(
     page: int = Query(1, ge=1),
@@ -1523,7 +1522,12 @@ def listar_pagos_staging(
 
         # Aplicar filtros
         if cedula:
-            query = query.filter(or_(PagoStaging.cedula_cliente == cedula, PagoStaging.cedula == cedula))
+            query = query.filter(
+                or_(
+                    PagoStaging.cedula_cliente == cedula,
+                    PagoStaging.cedula == cedula
+                )
+            )
             logger.info(f"🔍 [listar_pagos_staging] Filtro cédula: {cedula}")
         if estado:
             query = query.filter(PagoStaging.estado == estado)
@@ -1534,14 +1538,13 @@ def listar_pagos_staging(
         logger.info(f"📊 [listar_pagos_staging] Total registros encontrados (sin paginación): {total}")
 
         # Ordenar por fecha de registro descendente (más actual primero)
-        if hasattr(PagoStaging, "fecha_registro"):
+        if hasattr(PagoStaging, 'fecha_registro'):
             query = query.order_by(PagoStaging.fecha_registro.desc(), PagoStaging.id.desc())
         else:
             query = query.order_by(PagoStaging.id.desc())
 
         # Paginación
         from app.utils.pagination import calculate_pagination_params, create_paginated_response
-
         skip, limit = calculate_pagination_params(page=page, per_page=per_page, max_per_page=100)
         pagos_staging = query.offset(skip).limit(limit).all()
         logger.info(f"📄 [listar_pagos_staging] Registros obtenidos: {len(pagos_staging)}")
@@ -1608,40 +1611,41 @@ def estadisticas_pagos_staging(
             }
 
         # Estadísticas detalladas
-        con_cedula = (
-            db.query(func.count(PagoStaging.id))
-            .filter(or_(PagoStaging.cedula_cliente.isnot(None), PagoStaging.cedula.isnot(None)))
-            .scalar()
-            or 0
-        )
-
-        con_fecha_pago = db.query(func.count(PagoStaging.id)).filter(PagoStaging.fecha_pago.isnot(None)).scalar() or 0
-
-        con_monto = (
-            db.query(func.count(PagoStaging.id))
-            .filter(PagoStaging.monto_pagado.isnot(None), PagoStaging.monto_pagado > 0)
-            .scalar()
-            or 0
-        )
-
-        sin_prestamo_id = db.query(func.count(PagoStaging.id)).filter(PagoStaging.prestamo_id.is_(None)).scalar() or 0
-
-        con_datos_completos = (
-            db.query(func.count(PagoStaging.id))
-            .filter(
-                or_(PagoStaging.cedula_cliente.isnot(None), PagoStaging.cedula.isnot(None)),
-                PagoStaging.fecha_pago.isnot(None),
-                PagoStaging.monto_pagado.isnot(None),
-                PagoStaging.monto_pagado > 0,
+        con_cedula = db.query(func.count(PagoStaging.id)).filter(
+            or_(
+                PagoStaging.cedula_cliente.isnot(None),
+                PagoStaging.cedula.isnot(None)
             )
-            .scalar()
-            or 0
-        )
+        ).scalar() or 0
+
+        con_fecha_pago = db.query(func.count(PagoStaging.id)).filter(
+            PagoStaging.fecha_pago.isnot(None)
+        ).scalar() or 0
+
+        con_monto = db.query(func.count(PagoStaging.id)).filter(
+            PagoStaging.monto_pagado.isnot(None),
+            PagoStaging.monto_pagado > 0
+        ).scalar() or 0
+
+        sin_prestamo_id = db.query(func.count(PagoStaging.id)).filter(
+            PagoStaging.prestamo_id.is_(None)
+        ).scalar() or 0
+
+        con_datos_completos = db.query(func.count(PagoStaging.id)).filter(
+            or_(
+                PagoStaging.cedula_cliente.isnot(None),
+                PagoStaging.cedula.isnot(None)
+            ),
+            PagoStaging.fecha_pago.isnot(None),
+            PagoStaging.monto_pagado.isnot(None),
+            PagoStaging.monto_pagado > 0
+        ).scalar() or 0
 
         # Por estado
-        query_estado = (
-            db.query(PagoStaging.estado, func.count(PagoStaging.id).label("cantidad")).group_by(PagoStaging.estado).all()
-        )
+        query_estado = db.query(
+            PagoStaging.estado,
+            func.count(PagoStaging.id).label("cantidad")
+        ).group_by(PagoStaging.estado).all()
 
         por_estado = {estado or "SIN_ESTADO": cantidad for estado, cantidad in query_estado}
 
@@ -1681,18 +1685,33 @@ def migrar_pago_staging_a_pagos(
         pago_staging = db.query(PagoStaging).filter(PagoStaging.id == pago_staging_id).first()
 
         if not pago_staging:
-            raise HTTPException(status_code=404, detail=f"Pago staging con ID {pago_staging_id} no encontrado")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Pago staging con ID {pago_staging_id} no encontrado"
+            )
 
         # Validar que tenga datos mínimos
         cedula_final = pago_staging.cedula_cliente or pago_staging.cedula
         if not cedula_final:
-            raise HTTPException(status_code=400, detail="El pago staging no tiene cédula de cliente (cedula_cliente o cedula)")
+            raise HTTPException(
+                status_code=400,
+                detail="El pago staging no tiene cédula de cliente (cedula_cliente o cedula)"
+            )
         if not pago_staging.fecha_pago:
-            raise HTTPException(status_code=400, detail="El pago staging no tiene fecha_pago")
+            raise HTTPException(
+                status_code=400,
+                detail="El pago staging no tiene fecha_pago"
+            )
         if not pago_staging.monto_pagado or pago_staging.monto_pagado <= 0:
-            raise HTTPException(status_code=400, detail="El pago staging no tiene monto_pagado válido")
+            raise HTTPException(
+                status_code=400,
+                detail="El pago staging no tiene monto_pagado válido"
+            )
         if not pago_staging.numero_documento:
-            raise HTTPException(status_code=400, detail="El pago staging no tiene numero_documento")
+            raise HTTPException(
+                status_code=400,
+                detail="El pago staging no tiene numero_documento"
+            )
 
         # Crear el pago en la tabla principal
         nuevo_pago = Pago(

@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, Integer, Numeric, String, Text, func  # type: ignore[import-untyped]
 
 from app.db.session import Base
 

@@ -6,10 +6,10 @@ import logging
 import os
 from typing import Generator
 
-from fastapi import HTTPException
-from sqlalchemy import create_engine, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from fastapi import HTTPException  # type: ignore[import-untyped]
+from sqlalchemy import create_engine, text  # type: ignore[import-untyped]
+from sqlalchemy.ext.declarative import declarative_base  # type: ignore[import-untyped]
+from sqlalchemy.orm import sessionmaker  # type: ignore[import-untyped]
 
 # Configuración de logging
 logger = logging.getLogger(__name__)
