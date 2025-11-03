@@ -61,19 +61,19 @@ class Settings(BaseSettings):
         # Si data es un dict (como viene de pydantic-settings)
         if isinstance(data, dict) and "CORS_ORIGINS" in data:
             cors_value = data["CORS_ORIGINS"]
-            
+
             # Si ya es una lista, no hacer nada
             if isinstance(cors_value, list):
                 return data
-            
+
             # Si es None o vacío, usar valores por defecto
             if not cors_value:
                 return data
-            
+
             # Convertir a string si no lo es
             if not isinstance(cors_value, str):
                 cors_value = str(cors_value)
-            
+
             # Intentar parsear como JSON primero
             try:
                 parsed = json.loads(cors_value)
@@ -91,8 +91,9 @@ class Settings(BaseSettings):
                 # Si es un solo string sin comas, retornar como lista
                 cleaned = cors_value.strip().strip('"').strip("'")
                 data["CORS_ORIGINS"] = [cleaned] if cleaned else []
-        
+
         return data
+
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     CORS_ALLOW_HEADERS: List[str] = ["*"]
