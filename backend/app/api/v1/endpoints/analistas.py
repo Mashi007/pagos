@@ -88,13 +88,7 @@ def listar_analistas_activos(
     Limitado a 1000 resultados por defecto para evitar cargas excesivas.
     """
     try:
-        analistas = (
-            db.query(Analista)
-            .filter(Analista.activo.is_(True))
-            .order_by(Analista.nombre)
-            .limit(limit)
-            .all()
-        )
+        analistas = db.query(Analista).filter(Analista.activo.is_(True)).order_by(Analista.nombre).limit(limit).all()
         logger.info(f"✅ Listando {len(analistas)} analistas activos (límite: {limit})")
         return analistas
     except Exception as e:

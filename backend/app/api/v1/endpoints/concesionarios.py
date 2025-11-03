@@ -90,11 +90,7 @@ def list_concesionarios_activos(
     """
     try:
         concesionarios = (
-            db.query(Concesionario)
-            .filter(Concesionario.activo.is_(True))
-            .order_by(Concesionario.nombre)
-            .limit(limit)
-            .all()
+            db.query(Concesionario).filter(Concesionario.activo.is_(True)).order_by(Concesionario.nombre).limit(limit).all()
         )
         logger.info(f"✅ Listando {len(concesionarios)} concesionarios activos (límite: {limit})")
         return concesionarios

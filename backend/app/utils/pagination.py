@@ -163,4 +163,3 @@ def validate_pagination_query(
     calculated_page = (skip // limit) + 1 if limit > 0 else 1
 
     return calculated_page, skip, limit
-

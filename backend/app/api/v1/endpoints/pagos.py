@@ -1378,11 +1378,7 @@ def obtener_auditoria_pago(
     skip, limit = calculate_pagination_params(page=page, per_page=per_page, max_per_page=100)
 
     # Query base
-    query = (
-        db.query(PagoAuditoria)
-        .filter(PagoAuditoria.pago_id == pago_id)
-        .order_by(PagoAuditoria.fecha_cambio.desc())
-    )
+    query = db.query(PagoAuditoria).filter(PagoAuditoria.pago_id == pago_id).order_by(PagoAuditoria.fecha_cambio.desc())
 
     # Contar total
     total = query.count()

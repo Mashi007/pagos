@@ -287,7 +287,7 @@ def obtener_configuracion_general(db: Session = Depends(get_db)):
     logo_filename = None
     try:
         logger.debug("🔍 Consultando logo_filename en BD...")
-        
+
         logo_config = (
             db.query(ConfiguracionSistema)
             .filter(
@@ -296,7 +296,7 @@ def obtener_configuracion_general(db: Session = Depends(get_db)):
             )
             .first()
         )
-        
+
         if logo_config:
             logo_filename = logo_config.valor
             logger.info(f"✅ Logo filename encontrado en BD: {logo_filename}")
@@ -420,7 +420,7 @@ async def upload_logo(
             db.commit()
             db.refresh(logo_config)  # Refrescar para asegurar que se guardó
             logger.info(f"✅ Logo filename guardado en BD exitosamente: {logo_filename}")
-            
+
             # Verificar que se guardó correctamente
             verificacion = (
                 db.query(ConfiguracionSistema)
@@ -439,8 +439,7 @@ async def upload_logo(
             logger.error(f"❌ Error guardando configuración de logo en BD: {str(db_error)}", exc_info=True)
             # FALLAR si no se puede guardar en BD, es crítico para persistencia
             raise HTTPException(
-                status_code=500,
-                detail=f"Error guardando configuración de logo en base de datos: {str(db_error)}"
+                status_code=500, detail=f"Error guardando configuración de logo en base de datos: {str(db_error)}"
             )
 
         logger.info(f"Logo subido por usuario {current_user.email}: {logo_filename}")

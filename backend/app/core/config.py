@@ -164,10 +164,10 @@ class Settings(BaseSettings):
             raise ValueError("ADMIN_EMAIL debe estar configurado")
         if not self.ADMIN_PASSWORD:
             raise ValueError("ADMIN_PASSWORD debe estar configurado")
-        
+
         if len(self.ADMIN_PASSWORD) < 8:
             raise ValueError("La contraseña de admin debe tener al menos 8 caracteres")
-        
+
         # Validación específica para producción
         if self.ENVIRONMENT == "production":
             # Bloquear contraseña por defecto
@@ -177,23 +177,23 @@ class Settings(BaseSettings):
                     "CRÍTICO: No se puede usar la contraseña por defecto en producción. "
                     "Debe configurarse ADMIN_PASSWORD con una contraseña segura mediante variable de entorno."
                 )
-            
+
             # Validar formato de email
             if "@" not in self.ADMIN_EMAIL or "." not in self.ADMIN_EMAIL.split("@")[1]:
                 raise ValueError("ADMIN_EMAIL debe ser un email válido en producción")
-            
+
             # Contraseña debe tener complejidad mínima
             has_upper = any(c.isupper() for c in self.ADMIN_PASSWORD)
             has_lower = any(c.islower() for c in self.ADMIN_PASSWORD)
             has_digit = any(c.isdigit() for c in self.ADMIN_PASSWORD)
             has_special = any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in self.ADMIN_PASSWORD)
-            
+
             if not (has_upper and has_lower and (has_digit or has_special)):
                 raise ValueError(
                     "CRÍTICO: La contraseña de admin en producción debe contener: "
                     "mayúsculas, minúsculas y números o caracteres especiales"
                 )
-        
+
         return True
 
     def validate_debug_mode(self) -> bool:
@@ -219,25 +219,18 @@ class Settings(BaseSettings):
                     "CRÍTICO: CORS con wildcard (*) en CORS_ORIGINS detectado en producción. "
                     "CORS_ORIGINS debe especificar dominios específicos."
                 )
-            
+
             # Validar que haya al menos un origin válido
             if not self.CORS_ORIGINS or len(self.CORS_ORIGINS) == 0:
-                raise ValueError(
-                    "CRÍTICO: CORS_ORIGINS debe estar configurado en producción. "
-                    "No puede estar vacío."
-                )
-            
+                raise ValueError("CRÍTICO: CORS_ORIGINS debe estar configurado en producción. " "No puede estar vacío.")
+
             # Validar que los origins sean URLs válidas (no localhost en producción)
             for origin in self.CORS_ORIGINS:
                 if origin.startswith("http://localhost") or origin.startswith("https://localhost"):
-                    raise ValueError(
-                        f"CRÍTICO: No se permite localhost en CORS_ORIGINS en producción: {origin}"
-                    )
+                    raise ValueError(f"CRÍTICO: No se permite localhost en CORS_ORIGINS en producción: {origin}")
                 if not (origin.startswith("http://") or origin.startswith("https://")):
-                    raise ValueError(
-                        f"CRÍTICO: CORS_ORIGINS debe contener URLs válidas en producción: {origin}"
-                    )
-        
+                    raise ValueError(f"CRÍTICO: CORS_ORIGINS debe contener URLs válidas en producción: {origin}")
+
         return True
 
     def validate_cors_middleware_config(self) -> bool:
@@ -262,7 +255,7 @@ class Settings(BaseSettings):
         if self.ENVIRONMENT == "production":
             if not self.DATABASE_URL:
                 raise ValueError("DATABASE_URL debe estar configurada en producción")
-            
+
             # Detectar credenciales por defecto
             default_patterns = [
                 "postgresql://user:password@",
@@ -271,7 +264,7 @@ class Settings(BaseSettings):
                 "mysql://root:root@",
                 "sqlite://",
             ]
-            
+
             for pattern in default_patterns:
                 if pattern in self.DATABASE_URL.lower():
                     raise ValueError(
@@ -279,17 +272,19 @@ class Settings(BaseSettings):
                         f"Patrón detectado: {pattern}. "
                         "Debe usar credenciales seguras configuradas en producción."
                     )
-            
+
             # Validar formato básico de URL
-            if not (self.DATABASE_URL.startswith("postgresql://") or 
-                    self.DATABASE_URL.startswith("postgresql+psycopg2://") or
-                    self.DATABASE_URL.startswith("mysql://") or
-                    self.DATABASE_URL.startswith("sqlite:///")):
+            if not (
+                self.DATABASE_URL.startswith("postgresql://")
+                or self.DATABASE_URL.startswith("postgresql+psycopg2://")
+                or self.DATABASE_URL.startswith("mysql://")
+                or self.DATABASE_URL.startswith("sqlite:///")
+            ):
                 raise ValueError(
                     "CRÍTICO: DATABASE_URL debe ser una URL de base de datos válida. "
                     f"Formato actual: {self.DATABASE_URL[:30]}..."
                 )
-        
+
         return True
 
     def validate_all(self) -> bool:
@@ -304,7 +299,7 @@ class Settings(BaseSettings):
         self.validate_cors_config()
         self.validate_cors_middleware_config()
         self.validate_database_url()
-        
+
         return True
 
     model_config = SettingsConfigDict(
@@ -332,7 +327,4 @@ except ValueError as e:
         ) from e
     else:
         # En desarrollo, solo advertir
-        logger.warning(
-            f"⚠️ Advertencia de configuración en desarrollo: {e}\n"
-            "Esto causará errores en producción."
-        )
+        logger.warning(f"⚠️ Advertencia de configuración en desarrollo: {e}\n" "Esto causará errores en producción.")

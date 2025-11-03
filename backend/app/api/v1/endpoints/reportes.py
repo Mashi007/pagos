@@ -518,7 +518,9 @@ def _crear_hoja_distribucion_mora_excel(ws, distribucion_por_mora, estilos):
     total_row_mora = len(distribucion_por_mora) + 3
     ws.cell(row=total_row_mora, column=1, value="TOTAL:").font = Font(bold=True)
     ws.cell(row=total_row_mora, column=2, value=sum(item["cantidad"] for item in distribucion_por_mora)).font = Font(bold=True)
-    total_cell_mora = ws.cell(row=total_row_mora, column=3, value=float(sum(item["monto_total"] for item in distribucion_por_mora)))
+    total_cell_mora = ws.cell(
+        row=total_row_mora, column=3, value=float(sum(item["monto_total"] for item in distribucion_por_mora))
+    )
     total_cell_mora.number_format = '"$"#,##0.00'
     total_cell_mora.font = Font(bold=True)
 
@@ -603,7 +605,9 @@ def _generar_excel_completo(reporte, db: Session, cantidad_prestamos_activos, ca
     estilos = _obtener_estilos_excel()
 
     _crear_hoja_resumen_excel(wb.active, reporte, cantidad_prestamos_activos, cantidad_prestamos_mora, estilos)
-    _crear_hoja_distribucion_monto_excel(wb.create_sheet("Distribución por Monto"), _obtener_distribucion_por_monto(db), estilos)
+    _crear_hoja_distribucion_monto_excel(
+        wb.create_sheet("Distribución por Monto"), _obtener_distribucion_por_monto(db), estilos
+    )
     _crear_hoja_distribucion_mora_excel(wb.create_sheet("Distribución por Mora"), _obtener_distribucion_por_mora(db), estilos)
     _crear_hoja_prestamos_detallados_excel(wb.create_sheet("Préstamos Detallados"), db, estilos)
 
