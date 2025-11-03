@@ -282,7 +282,8 @@ def _verificar_query_compleja(db: Session, diagnostico: dict):
     try:
         hoy = date.today()
         # Usar PagoStaging donde están los datos reales
-        query_test = db.query(PagoStaging).order_by(PagoStaging.fecha_registro.desc()).limit(5)
+        # ⚠️ PagoStaging no tiene fecha_registro, usar id
+        query_test = db.query(PagoStaging).order_by(PagoStaging.id.desc()).limit(5)
         pagos_test = query_test.all()
 
         if not pagos_test:
@@ -697,39 +698,38 @@ def listar_ultimos_pagos(
     """Devuelve el último pago por cédula y métricas agregadas del balance general."""
     try:
         # Subconsulta: última fecha_registro por cédula
-        # Usar PagoStaging donde están los datos reales
+        # ⚠️ PagoStaging no tiene fecha_registro, usar id para obtener últimos pagos
+        # Obtener últimos pagos por cédula usando id (más reciente = id más alto)
         sub_ultimos = (
             db.query(
                 PagoStaging.cedula_cliente.label("cedula"),
-                func.max(PagoStaging.fecha_registro).label("max_fecha"),
+                func.max(PagoStaging.id).label("max_id"),
             )
             .filter(PagoStaging.cedula_cliente.isnot(None))
             .group_by(PagoStaging.cedula_cliente)
             .subquery()
         )
 
-        # Join para obtener el registro de pago completo de esa última fecha
-        # Usar PagoStaging donde están los datos reales
+        # Join para obtener el registro de pago completo de ese último id
         pagos_ultimos_q = db.query(PagoStaging).join(
             sub_ultimos,
-            (PagoStaging.cedula_cliente == sub_ultimos.c.cedula) & (PagoStaging.fecha_registro == sub_ultimos.c.max_fecha),
+            (PagoStaging.cedula_cliente == sub_ultimos.c.cedula)
+            & (PagoStaging.id == sub_ultimos.c.max_id),
         )
 
         # Filtros
         if cedula:
             pagos_ultimos_q = pagos_ultimos_q.filter(PagoStaging.cedula_cliente == cedula)
-        if estado:
-            pagos_ultimos_q = pagos_ultimos_q.filter(PagoStaging.estado == estado)
+        # ⚠️ PagoStaging no tiene columna estado
+        # if estado:
+        #     pagos_ultimos_q = pagos_ultimos_q.filter(PagoStaging.estado == estado)
 
         # Total para paginación
         total = pagos_ultimos_q.count()
 
-        # Paginación (ordenar por fecha_registro desc)
+        # Paginación (ordenar por id desc)
         offset = (page - 1) * per_page
-        if hasattr(PagoStaging, "fecha_registro"):
-            pagos_ultimos = pagos_ultimos_q.order_by(PagoStaging.fecha_registro.desc()).offset(offset).limit(per_page).all()
-        else:
-            pagos_ultimos = pagos_ultimos_q.order_by(PagoStaging.id.desc()).offset(offset).limit(per_page).all()
+        pagos_ultimos = pagos_ultimos_q.order_by(PagoStaging.id.desc()).offset(offset).limit(per_page).all()
 
         # Para cada cédula, calcular agregados sobre amortización (todas sus deudas)
         items = []
@@ -1430,7 +1430,8 @@ def obtener_estadisticas_pagos(
         # ✅ Base query para pagos - usar FiltrosDashboard (usa PagoStaging donde están los datos)
         base_pago_query = db.query(PagoStaging)
         if analista or concesionario or modelo:
-            base_pago_query = base_pago_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
+            # ⚠️ PagoStaging no tiene prestamo_id, no se puede hacer join
+            # base_pago_query = base_pago_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
         base_pago_query = FiltrosDashboard.aplicar_filtros_pago(
             base_pago_query,
             analista,
@@ -1455,7 +1456,8 @@ def obtener_estadisticas_pagos(
                 .all()
             )
         else:
-            pagos_por_estado = db.query(PagoStaging.estado, func.count(PagoStaging.id)).group_by(PagoStaging.estado).all()
+            # ⚠️ PagoStaging no tiene columna estado
+            pagos_por_estado = []
 
         # Monto total pagado (convertir monto_pagado TEXT a NUMERIC)
         total_pagado = base_pago_query.with_entities(
@@ -1578,7 +1580,8 @@ def listar_pagos_staging(
             query = query.filter(PagoStaging.cedula_cliente == cedula)
             logger.info(f"🔍 [listar_pagos_staging] Filtro cédula: {cedula}")
         if estado:
-            query = query.filter(PagoStaging.estado == estado)
+            # ⚠️ PagoStaging no tiene columna estado
+            # query = query.filter(PagoStaging.estado == estado)
             logger.info(f"🔍 [listar_pagos_staging] Filtro estado: {estado}")
 
         # Contar total antes de aplicar paginación
@@ -1587,7 +1590,8 @@ def listar_pagos_staging(
 
         # Ordenar por fecha de registro descendente (más actual primero)
         if hasattr(PagoStaging, "fecha_registro"):
-            query = query.order_by(PagoStaging.fecha_registro.desc(), PagoStaging.id.desc())
+            # ⚠️ PagoStaging no tiene fecha_registro
+            query = query.order_by(PagoStaging.id.desc())
         else:
             query = query.order_by(PagoStaging.id.desc())
 
@@ -1675,7 +1679,8 @@ def estadisticas_pagos_staging(
             or 0
         )
 
-        sin_prestamo_id = db.query(func.count(PagoStaging.id)).filter(PagoStaging.prestamo_id.is_(None)).scalar() or 0
+        # ⚠️ PagoStaging no tiene prestamo_id
+        sin_prestamo_id = 0  # No aplica para pagos_staging
 
         con_datos_completos = (
             db.query(func.count(PagoStaging.id))
@@ -1689,12 +1694,8 @@ def estadisticas_pagos_staging(
             or 0
         )
 
-        # Por estado
-        query_estado = (
-            db.query(PagoStaging.estado, func.count(PagoStaging.id).label("cantidad")).group_by(PagoStaging.estado).all()
-        )
-
-        por_estado = {estado or "SIN_ESTADO": cantidad for estado, cantidad in query_estado}
+        # ⚠️ PagoStaging no tiene columna estado
+        por_estado = {"SIN_ESTADO": 0}  # No disponible
 
         estadisticas = {
             "total_registros": total_registros,

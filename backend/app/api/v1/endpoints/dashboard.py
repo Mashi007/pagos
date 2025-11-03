@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[import-untyped]
-from sqlalchemy import and_, cast, func, or_  # type: ignore[import-untyped]
+from sqlalchemy import and_, cast, func, or_, text  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
@@ -70,17 +70,29 @@ def _calcular_total_cobrado_mes(
     concesionario: Optional[str],
     modelo: Optional[str],
 ) -> Decimal:
-    """Calcula el total cobrado en un mes (solo pagos conciliados)"""
-    # Usar PagoStaging donde están los datos reales
-    query = db.query(func.sum(PagoStaging.monto_pagado)).filter(
-        func.date(PagoStaging.fecha_pago) >= primer_dia,
-        func.date(PagoStaging.fecha_pago) <= ultimo_dia,
-        PagoStaging.conciliado.is_(True),
-    )
-    if analista or concesionario or modelo:
-        query = query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
-    query = FiltrosDashboard.aplicar_filtros_pago(query, analista, concesionario, modelo, None, None)
-    return query.scalar() or Decimal("0")
+    """Calcula el total cobrado en un mes"""
+    # ⚠️ PagoStaging no tiene columna 'conciliado' ni 'prestamo_id'
+    # Usar SQL directo para convertir fecha_pago (TEXT) a timestamp
+    primer_dia_dt = datetime.combine(primer_dia, datetime.min.time())
+    ultimo_dia_dt = datetime.combine(ultimo_dia, datetime.max.time())
+    
+    query_sql = text("""
+        SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+        FROM pagos_staging
+        WHERE fecha_pago IS NOT NULL
+          AND fecha_pago != ''
+          AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+          AND fecha_pago::timestamp >= :primer_dia
+          AND fecha_pago::timestamp <= :ultimo_dia
+          AND monto_pagado IS NOT NULL
+          AND monto_pagado != ''
+          AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+    """).bindparams(primer_dia=primer_dia_dt, ultimo_dia=ultimo_dia_dt)
+    
+    # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
+    
+    result = db.execute(query_sql)
+    return Decimal(str(result.scalar() or 0))
 
 
 def _calcular_mes_anterior(mes_actual: int, año_actual: int) -> tuple[int, int]:
@@ -334,11 +346,26 @@ def _calcular_pagos_fecha(
     fecha_fin: Optional[date],
 ) -> float:
     """Calcula pagos en una fecha específica"""
-    query = db.query(func.sum(PagoStaging.monto_pagado)).filter(func.date(PagoStaging.fecha_pago) == fecha)
-    if analista or concesionario or modelo:
-        query = query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
-    query = FiltrosDashboard.aplicar_filtros_pago(query, analista, concesionario, modelo, fecha_inicio, fecha_fin)
-    return float(query.scalar() or Decimal("0"))
+    # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
+    fecha_dt = datetime.combine(fecha, datetime.min.time())
+    fecha_dt_end = datetime.combine(fecha, datetime.max.time())
+    
+    query_sql = text("""
+        SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+        FROM pagos_staging
+        WHERE fecha_pago IS NOT NULL
+          AND fecha_pago != ''
+          AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+          AND fecha_pago::timestamp >= :fecha_inicio
+          AND fecha_pago::timestamp <= :fecha_fin
+          AND monto_pagado IS NOT NULL
+          AND monto_pagado != ''
+    """).bindparams(fecha_inicio=fecha_dt, fecha_fin=fecha_dt_end)
+    
+    # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
+    
+    result = db.execute(query_sql)
+    return float(result.scalar() or Decimal("0"))
 
 
 def _calcular_tasa_recuperacion(
@@ -507,9 +534,24 @@ def _calcular_total_cobrado(
 ) -> float:
     """Calcula total cobrado para una fecha específica"""
     try:
-        pagos_dia_query = db.query(func.sum(PagoStaging.monto_pagado)).filter(func.date(PagoStaging.fecha_pago) == fecha_dia)
-        pagos_dia_query = FiltrosDashboard.aplicar_filtros_pago(pagos_dia_query, analista, concesionario, modelo, None, None)
-        return float(pagos_dia_query.scalar() or Decimal("0"))
+        # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
+        fecha_dt = datetime.combine(fecha_dia, datetime.min.time())
+        fecha_dt_end = datetime.combine(fecha_dia, datetime.max.time())
+        
+        query_sql = text("""
+            SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+            FROM pagos_staging
+            WHERE fecha_pago IS NOT NULL
+              AND fecha_pago != ''
+              AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+              AND fecha_pago::timestamp >= :fecha_inicio
+              AND fecha_pago::timestamp <= :fecha_fin
+              AND monto_pagado IS NOT NULL
+              AND monto_pagado != ''
+        """).bindparams(fecha_inicio=fecha_dt, fecha_fin=fecha_dt_end)
+        
+        result = db.execute(query_sql)
+        return float(result.scalar() or Decimal("0"))
     except Exception:
         logger.error(
             "Error en query total_cobrado",
@@ -670,28 +712,28 @@ def dashboard_administrador(
         porcentaje_mora = (float(cartera_vencida) / float(cartera_total) * 100) if cartera_total > 0 else 0
 
         # 5. PAGOS DE HOY (con filtros)
-        pagos_hoy_query = db.query(func.count(PagoStaging.id)).filter(func.date(PagoStaging.fecha_pago) == hoy)
-        monto_pagos_hoy_query = db.query(func.sum(PagoStaging.monto_pagado)).filter(func.date(PagoStaging.fecha_pago) == hoy)
-
-        # ✅ Aplicar filtros usando clase centralizada (automático)
-        if analista or concesionario or modelo:
-            pagos_hoy_query = pagos_hoy_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
-            monto_pagos_hoy_query = monto_pagos_hoy_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
-
-        pagos_hoy_query = FiltrosDashboard.aplicar_filtros_pago(
-            pagos_hoy_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
+        from sqlalchemy import text
+        hoy_dt = datetime.combine(hoy, datetime.min.time())
+        hoy_dt_end = datetime.combine(hoy, datetime.max.time())
+        
+        pagos_hoy_query = db.execute(
+            text("SELECT COUNT(*) FROM pagos_staging WHERE fecha_pago::timestamp >= :inicio AND fecha_pago::timestamp <= :fin")
+            .bindparams(inicio=hoy_dt, fin=hoy_dt_end)
         )
-        monto_pagos_hoy_query = FiltrosDashboard.aplicar_filtros_pago(
-            monto_pagos_hoy_query,
-            analista,
-            concesionario,
-            modelo,
-            fecha_inicio,
-            fecha_fin,
-        )
-
         pagos_hoy = pagos_hoy_query.scalar() or 0
-        monto_pagos_hoy = monto_pagos_hoy_query.scalar() or Decimal("0")
+        
+        monto_pagos_hoy_query = db.execute(
+            text("SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE fecha_pago::timestamp >= :inicio AND fecha_pago::timestamp <= :fin")
+            .bindparams(inicio=hoy_dt, fin=hoy_dt_end)
+        )
+        monto_pagos_hoy = Decimal(str(monto_pagos_hoy_query.scalar() or 0))
+        
+        # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
+        # if analista or concesionario or modelo:
+        #     # No disponible sin prestamo_id
+
+        # ⚠️ Filtros ya aplicados arriba con SQL directo, valores ya calculados
 
         # 6. CLIENTES ACTIVOS - Clientes con préstamos activos
         clientes_activos = base_prestamo_query.with_entities(func.count(func.distinct(Prestamo.cedula))).scalar() or 0
@@ -748,18 +790,24 @@ def dashboard_administrador(
         # )
 
         # 11. TOTAL PAGADO (histórico o con filtros)
-        # ✅ USAR FiltrosDashboard para aplicar filtros automáticamente
-        total_cobrado_query = db.query(func.sum(PagoStaging.monto_pagado))
-        if analista or concesionario or modelo:
-            total_cobrado_query = total_cobrado_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
-        total_cobrado_query = FiltrosDashboard.aplicar_filtros_pago(
-            total_cobrado_query,
-            analista,
-            concesionario,
-            modelo,
-            fecha_inicio,
-            fecha_fin,
-        )
+        # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
+        query_sql = "SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE monto_pagado IS NOT NULL AND monto_pagado != ''"
+        params = {}
+        
+        # Aplicar filtros de fecha si existen
+        if fecha_inicio:
+            query_sql += " AND fecha_pago::timestamp >= :fecha_inicio"
+            params["fecha_inicio"] = datetime.combine(fecha_inicio, datetime.min.time())
+        if fecha_fin:
+            query_sql += " AND fecha_pago::timestamp <= :fecha_fin"
+            params["fecha_fin"] = datetime.combine(fecha_fin, datetime.max.time())
+        
+        if fecha_inicio or fecha_fin:
+            query_sql += " AND fecha_pago IS NOT NULL AND fecha_pago != '' AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'"
+        
+        # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
+        
+        total_cobrado_query = db.execute(text(query_sql).bindparams(**params))
         # total_cobrado se calcula pero no se usa en la respuesta actual
         # total_cobrado = total_cobrado_query.scalar() or Decimal("0")
 
@@ -903,23 +951,24 @@ def dashboard_administrador(
             )
             cartera_mes = cartera_mes_query.scalar() or Decimal("0")
 
-            # ✅ Cobrado del mes con filtros (SOLO PAGOS CONCILIADOS para consistencia)
-            cobrado_mes_query = db.query(func.sum(PagoStaging.monto_pagado)).filter(
-                func.date(PagoStaging.fecha_pago) >= mes_inicio,
-                func.date(PagoStaging.fecha_pago) <= mes_fin,
-                PagoStaging.conciliado.is_(True),  # ✅ Solo pagos conciliados
+            # ✅ Cobrado del mes (PagoStaging no tiene conciliado ni prestamo_id)
+            mes_inicio_dt = datetime.combine(mes_inicio, datetime.min.time())
+            mes_fin_dt = datetime.combine(mes_fin, datetime.max.time())
+            
+            cobrado_mes_query = db.execute(
+                text("""
+                    SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+                    FROM pagos_staging
+                    WHERE fecha_pago IS NOT NULL
+                      AND fecha_pago != ''
+                      AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                      AND fecha_pago::timestamp >= :mes_inicio
+                      AND fecha_pago::timestamp <= :mes_fin
+                      AND monto_pagado IS NOT NULL
+                      AND monto_pagado != ''
+                """).bindparams(mes_inicio=mes_inicio_dt, mes_fin=mes_fin_dt)
             )
-            if analista or concesionario or modelo:
-                cobrado_mes_query = cobrado_mes_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
-            cobrado_mes_query = FiltrosDashboard.aplicar_filtros_pago(
-                cobrado_mes_query,
-                analista,
-                concesionario,
-                modelo,
-                None,  # No aplicar filtros de fecha aquí (ya filtrado por mes)
-                None,
-            )
-            cobrado_mes = cobrado_mes_query.scalar() or Decimal("0")
+            cobrado_mes = Decimal(str(cobrado_mes_query.scalar() or 0))
 
             # ✅ Cuotas vencidas en ese mes con filtros
             cuotas_vencidas_mes_query = (
@@ -1508,16 +1557,22 @@ def obtener_cobranzas_mensuales(
             )
             cobranzas_planificadas = float(query_cobranzas.scalar() or Decimal("0"))
 
-            # Pagos reales: Suma de pagos conciliados en ese mes
-            query_pagos = db.query(func.sum(PagoStaging.monto_pagado)).filter(
-                func.date(PagoStaging.fecha_pago) >= mes_fecha,
-                func.date(PagoStaging.fecha_pago) < siguiente_mes,
-                PagoStaging.conciliado.is_(True),
-            )
-            if analista or concesionario or modelo:
-                query_pagos = query_pagos.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
-            query_pagos = FiltrosDashboard.aplicar_filtros_pago(
-                query_pagos, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            # Pagos reales: Suma de pagos en ese mes (PagoStaging no tiene conciliado ni prestamo_id)
+            mes_fecha_dt = datetime.combine(mes_fecha, datetime.min.time())
+            siguiente_mes_dt = datetime.combine(siguiente_mes, datetime.min.time())
+            
+            query_pagos = db.execute(
+                text("""
+                    SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+                    FROM pagos_staging
+                    WHERE fecha_pago IS NOT NULL
+                      AND fecha_pago != ''
+                      AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                      AND fecha_pago::timestamp >= :mes_fecha
+                      AND fecha_pago::timestamp < :siguiente_mes
+                      AND monto_pagado IS NOT NULL
+                      AND monto_pagado != ''
+                """).bindparams(mes_fecha=mes_fecha_dt, siguiente_mes=siguiente_mes_dt)
             )
             pagos_reales = float(query_pagos.scalar() or Decimal("0"))
 
@@ -1638,27 +1693,35 @@ def obtener_metricas_acumuladas(
         fecha_inicio_mes = date(hoy.year, hoy.month, 1)
         fecha_inicio_anio = date(hoy.year, 1, 1)
 
-        # Acumulado mensual: Pagos desde inicio del mes
-        query_acumulado_mensual = db.query(func.sum(PagoStaging.monto_pagado)).filter(
-            func.date(PagoStaging.fecha_pago) >= fecha_inicio_mes,
-            PagoStaging.conciliado.is_(True),
-        )
-        if analista or concesionario or modelo:
-            query_acumulado_mensual = query_acumulado_mensual.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
-        query_acumulado_mensual = FiltrosDashboard.aplicar_filtros_pago(
-            query_acumulado_mensual, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        # Acumulado mensual: Pagos desde inicio del mes (PagoStaging no tiene conciliado ni prestamo_id)
+        fecha_inicio_mes_dt = datetime.combine(fecha_inicio_mes, datetime.min.time())
+        query_acumulado_mensual = db.execute(
+            text("""
+                SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+                FROM pagos_staging
+                WHERE fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                  AND fecha_pago::timestamp >= :fecha_inicio_mes
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+            """).bindparams(fecha_inicio_mes=fecha_inicio_mes_dt)
         )
         acumulado_mensual = float(query_acumulado_mensual.scalar() or Decimal("0"))
 
-        # Acumulado anual: Pagos desde inicio del año
-        query_acumulado_anual = db.query(func.sum(PagoStaging.monto_pagado)).filter(
-            func.date(PagoStaging.fecha_pago) >= fecha_inicio_anio,
-            PagoStaging.conciliado.is_(True),
-        )
-        if analista or concesionario or modelo:
-            query_acumulado_anual = query_acumulado_anual.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
-        query_acumulado_anual = FiltrosDashboard.aplicar_filtros_pago(
-            query_acumulado_anual, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        # Acumulado anual: Pagos desde inicio del año (PagoStaging no tiene conciliado ni prestamo_id)
+        fecha_inicio_anio_dt = datetime.combine(fecha_inicio_anio, datetime.min.time())
+        query_acumulado_anual = db.execute(
+            text("""
+                SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+                FROM pagos_staging
+                WHERE fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                  AND fecha_pago::timestamp >= :fecha_inicio_anio
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+            """).bindparams(fecha_inicio_anio=fecha_inicio_anio_dt)
         )
         acumulado_anual = float(query_acumulado_anual.scalar() or Decimal("0"))
 

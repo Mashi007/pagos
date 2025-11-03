@@ -278,15 +278,41 @@ def reporte_pagos(
             .count()
         )
 
-        # Pagos por método: usar monto_pagado y agrupar por institucion_bancaria
-        pagos_por_metodo = (
-            db.query(
-                func.coalesce(PagoStaging.institucion_bancaria, "Sin especificar").label("metodo"),
-                func.count(PagoStaging.id).label("cantidad"),
-                func.sum(PagoStaging.monto_pagado).label("monto"),
-            )
-            .filter(
-                PagoStaging.fecha_pago >= fecha_inicio,
+        # Pagos por método: PagoStaging no tiene institucion_bancaria
+        # Usar SQL directo para agrupar por número de documento o cédula
+        from sqlalchemy import text
+        fecha_inicio_dt = datetime.combine(fecha_inicio, datetime.min.time())
+        fecha_fin_dt = datetime.combine(fecha_fin, datetime.max.time())
+        
+        pagos_por_metodo_raw = db.execute(
+            text("""
+                SELECT 
+                    COALESCE(numero_documento, 'Sin especificar') AS metodo,
+                    COUNT(*) AS cantidad,
+                    COALESCE(SUM(monto_pagado::numeric), 0) AS monto
+                FROM pagos_staging
+                WHERE fecha_pago::timestamp >= :fecha_inicio
+                  AND fecha_pago::timestamp <= :fecha_fin
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                GROUP BY numero_documento
+            """).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+        ).fetchall()
+        
+        pagos_por_metodo = [
+            {"metodo": row[0], "cantidad": row[1], "monto": float(row[2])}
+            for row in pagos_por_metodo_raw
+        ]
+        
+        # OLD CODE (comentado porque no tiene institucion_bancaria):
+        # pagos_por_metodo = (
+        #     db.query(
+        #         func.coalesce(PagoStaging.institucion_bancaria, "Sin especificar").label("metodo"),
+        #         func.count(PagoStaging.id).label("cantidad"),
+        #         func.sum(PagoStaging.monto_pagado).label("monto"),
+        #     )
+        #     .filter(
+        #         PagoStaging.fecha_pago >= fecha_inicio,
                 PagoStaging.fecha_pago <= fecha_fin,
             )
             .group_by("metodo")

@@ -1,11 +1,11 @@
 import logging
 from calendar import monthrange
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[import-untyped]
-from sqlalchemy import and_, distinct, func, or_  # type: ignore[import-untyped]
+from sqlalchemy import and_, distinct, func, or_, text  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
@@ -76,11 +76,33 @@ def _calcular_kpis_basicos(
     clientes_al_dia = max(0, clientes_con_cuotas - clientes_en_mora)
 
     # Pagos del mes (usa PagoStaging donde están los datos)
-    pagos_query = db.query(func.sum(PagoStaging.monto_pagado)).filter(
-        func.date_trunc("month", PagoStaging.fecha_pago) == func.date_trunc("month", fecha_corte)
+    # ⚠️ PagoStaging tiene fecha_pago como TEXT, usar SQL directo
+    fecha_corte_dt = datetime.combine(fecha_corte, datetime.min.time())
+    mes_inicio = date(fecha_corte.year, fecha_corte.month, 1)
+    if fecha_corte.month == 12:
+        mes_fin = date(fecha_corte.year + 1, 1, 1)
+    else:
+        mes_fin = date(fecha_corte.year, fecha_corte.month + 1, 1)
+    
+    mes_inicio_dt = datetime.combine(mes_inicio, datetime.min.time())
+    mes_fin_dt = datetime.combine(mes_fin, datetime.min.time())
+    
+    pagos_query = db.execute(
+        text("""
+            SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+            FROM pagos_staging
+            WHERE fecha_pago IS NOT NULL
+              AND fecha_pago != ''
+              AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+              AND fecha_pago::timestamp >= :mes_inicio
+              AND fecha_pago::timestamp < :mes_fin
+              AND monto_pagado IS NOT NULL
+              AND monto_pagado != ''
+        """).bindparams(mes_inicio=mes_inicio_dt, mes_fin=mes_fin_dt)
     )
-    pagos_query = FiltrosDashboard.aplicar_filtros_pago(pagos_query, analista, concesionario, modelo, fecha_inicio, fecha_fin)
-    pagos_mes = pagos_query.scalar() or Decimal("0")
+    pagos_mes = Decimal(str(pagos_query.scalar() or 0))
+    
+    # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
 
     # Cuotas vencidas
     cuotas_query = (
@@ -213,8 +235,9 @@ def _calcular_kpis_mes_actual(
         db.query(func.count(func.distinct(Cuota.id)))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(pago_cuotas, pago_cuotas.c.cuota_id == Cuota.id)
-        .join(PagoStaging, pago_cuotas.c.pago_id == PagoStaging.id)
-        .filter(PagoStaging.conciliado.is_(True))
+        # ⚠️ No se puede filtrar por conciliado porque no existe en pagos_staging
+        # .join(PagoStaging, pago_cuotas.c.pago_id == PagoStaging.id)
+        # .filter(PagoStaging.conciliado.is_(True))
     )
     if analista or concesionario or modelo:
         if analista:
