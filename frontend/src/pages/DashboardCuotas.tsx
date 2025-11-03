@@ -410,7 +410,7 @@ export function DashboardCuotas() {
               <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                 <TrendingUp className="h-6 w-6 text-red-600" />
                 <span>Evolución de Morosidad (Últimos 6 Meses)</span>
-              </CardHeader>
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               {loadingEvolucion ? (

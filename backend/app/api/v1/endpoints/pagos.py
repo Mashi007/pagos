@@ -25,6 +25,104 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _aplicar_filtros_pagos(query, cedula: Optional[str], estado: Optional[str],
+                           fecha_desde: Optional[date], fecha_hasta: Optional[date],
+                           analista: Optional[str], db: Session):
+    """Aplica filtros a la query de pagos"""
+    if cedula:
+        query = query.filter(Pago.cedula_cliente == cedula)
+        logger.info(f"🔍 [listar_pagos] Filtro cédula: {cedula}")
+    if estado:
+        query = query.filter(Pago.estado == estado)
+        logger.info(f"🔍 [listar_pagos] Filtro estado: {estado}")
+    if fecha_desde:
+        query = query.filter(Pago.fecha_pago >= fecha_desde)
+        logger.info(f"🔍 [listar_pagos] Filtro fecha_desde: {fecha_desde}")
+    if fecha_hasta:
+        query = query.filter(Pago.fecha_pago <= fecha_hasta)
+        logger.info(f"🔍 [listar_pagos] Filtro fecha_hasta: {fecha_hasta}")
+    if analista:
+        query = query.join(Prestamo).filter(Prestamo.usuario_proponente == analista)
+        logger.info(f"🔍 [listar_pagos] Filtro analista: {analista}")
+    return query
+
+
+def _calcular_cuotas_atrasadas(db: Session, cedula_cliente: Optional[str], hoy: date) -> int:
+    """Calcula cuotas atrasadas para un cliente"""
+    if not cedula_cliente:
+        return 0
+
+    prestamos_ids = [
+        p.id
+        for p in db.query(Prestamo.id)
+        .filter(
+            Prestamo.cedula == cedula_cliente,
+            Prestamo.estado == "APROBADO",
+        )
+        .all()
+    ]
+
+    if not prestamos_ids:
+        logger.debug(f"📊 [listar_pagos] Cliente {cedula_cliente}: Sin préstamos APROBADOS")
+        return 0
+
+    cuotas_atrasadas_query = (
+        db.query(func.count(Cuota.id))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            Prestamo.id.in_(prestamos_ids),
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.total_pagado < Cuota.monto_cuota,
+        )
+    )
+    cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
+
+    logger.info(
+        f"📊 [listar_pagos] Cliente {cedula_cliente}: "
+        f"{len(prestamos_ids)} préstamos APROBADOS, "
+        f"{cuotas_atrasadas} cuotas atrasadas "
+        f"(fecha_vencimiento < {hoy} AND total_pagado < monto_cuota) - "
+        f"CÁLCULO DINÁMICO DESDE BD ✅"
+    )
+    return cuotas_atrasadas
+
+
+def _serializar_pago(pago, db: Session, hoy: date):
+    """Serializa un pago de forma segura"""
+    try:
+        # Convertir fecha_pago si es DATE a datetime si es necesario
+        if hasattr(pago, "fecha_pago") and pago.fecha_pago is not None:
+            if isinstance(pago.fecha_pago, date) and not isinstance(pago.fecha_pago, datetime):
+                pago.fecha_pago = datetime.combine(pago.fecha_pago, time.min)
+
+        # Validar con el schema
+        pago_dict = PagoResponse.model_validate(pago).model_dump()
+
+        # Calcular cuotas atrasadas
+        cuotas_atrasadas = _calcular_cuotas_atrasadas(db, pago.cedula_cliente, hoy)
+        pago_dict["cuotas_atrasadas"] = cuotas_atrasadas
+        return pago_dict
+    except Exception as e:
+        error_detail = str(e)
+        logger.error(
+            f"❌ [listar_pagos] Error serializando pago ID {pago.id}: {error_detail}",
+            exc_info=True,
+        )
+        logger.error(f"   Datos del pago: cedula={pago.cedula_cliente}")
+        logger.error(f"   fecha_pago={pago.fecha_pago} (tipo: {type(pago.fecha_pago)})")
+        logger.error(
+            f"   fecha_registro={getattr(pago, 'fecha_registro', 'N/A')} (tipo: {type(getattr(pago, 'fecha_registro', None))})"
+        )
+        logger.error(
+            f"   fecha_actualizacion={getattr(pago, 'fecha_actualizacion', 'N/A')} (tipo: {type(getattr(pago, 'fecha_actualizacion', None))})"
+        )
+        logger.error(
+            f"   fecha_conciliacion={getattr(pago, 'fecha_conciliacion', 'N/A')} (tipo: {type(getattr(pago, 'fecha_conciliacion', None))})"
+        )
+        raise
+
+
 @router.get("/health")
 def healthcheck_pagos(
     db: Session = Depends(get_db),

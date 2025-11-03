@@ -23,6 +23,70 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _aplicar_filtro_busqueda(query, search: Optional[str]):
+    """Aplica filtro de búsqueda general"""
+    if not search:
+        return query
+    search_pattern = f"%{search}%"
+    return query.filter(
+        or_(
+            Cliente.nombres.ilike(search_pattern),
+            Cliente.cedula.ilike(search_pattern),
+            Cliente.telefono.ilike(search_pattern),
+        )
+    )
+
+
+def _aplicar_filtros_especificos(query, estado: Optional[str], cedula: Optional[str],
+                                  email: Optional[str], telefono: Optional[str],
+                                  ocupacion: Optional[str], usuario_registro: Optional[str]):
+    """Aplica filtros específicos a la query"""
+    if estado:
+        query = query.filter(Cliente.estado == estado)
+    if cedula:
+        query = query.filter(Cliente.cedula.ilike(f"%{cedula}%"))
+    if email:
+        query = query.filter(Cliente.email.ilike(f"%{email}%"))
+    if telefono:
+        query = query.filter(Cliente.telefono.ilike(f"%{telefono}%"))
+    if ocupacion:
+        query = query.filter(Cliente.ocupacion.ilike(f"%{ocupacion}%"))
+    if usuario_registro:
+        query = query.filter(Cliente.usuario_registro.ilike(f"%{usuario_registro}%"))
+    return query
+
+
+def _aplicar_filtros_fecha(query, fecha_desde: Optional[str], fecha_hasta: Optional[str]):
+    """Aplica filtros de fecha de registro"""
+    if fecha_desde:
+        try:
+            fecha_desde_obj = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
+            query = query.filter(func.date(Cliente.fecha_registro) >= fecha_desde_obj)
+        except ValueError:
+            logger.warning(f"Fecha desde inválida: {fecha_desde}")
+    if fecha_hasta:
+        try:
+            fecha_hasta_obj = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
+            fecha_hasta_obj = fecha_hasta_obj + timedelta(days=1)
+            query = query.filter(func.date(Cliente.fecha_registro) < fecha_hasta_obj)
+        except ValueError:
+            logger.warning(f"Fecha hasta inválida: {fecha_hasta}")
+    return query
+
+
+def _serializar_clientes(clientes):
+    """Serializa una lista de clientes de forma segura"""
+    clientes_dict = []
+    for cliente in clientes:
+        try:
+            cliente_data = ClienteResponse.model_validate(cliente).model_dump()
+            clientes_dict.append(cliente_data)
+        except Exception as e:
+            logger.error(f"Error serializando cliente {cliente.id}: {e}")
+            continue
+    return clientes_dict
+
+
 @router.get("", response_model=dict)
 def listar_clientes(
     page: int = Query(1, ge=1, description="Numero de pagina"),
@@ -47,52 +111,10 @@ def listar_clientes(
         # Query base
         query = db.query(Cliente)
 
-        # Búsqueda general (nombres, cédula, teléfono)
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    Cliente.nombres.ilike(search_pattern),
-                    Cliente.cedula.ilike(search_pattern),
-                    Cliente.telefono.ilike(search_pattern),
-                )
-            )
-
-        # Filtros específicos
-        if estado:
-            query = query.filter(Cliente.estado == estado)
-
-        if cedula:
-            query = query.filter(Cliente.cedula.ilike(f"%{cedula}%"))
-
-        if email:
-            query = query.filter(Cliente.email.ilike(f"%{email}%"))
-
-        if telefono:
-            query = query.filter(Cliente.telefono.ilike(f"%{telefono}%"))
-
-        if ocupacion:
-            query = query.filter(Cliente.ocupacion.ilike(f"%{ocupacion}%"))
-
-        if usuario_registro:
-            query = query.filter(Cliente.usuario_registro.ilike(f"%{usuario_registro}%"))
-
-        # Filtros de fecha de registro
-        if fecha_desde:
-            try:
-                fecha_desde_obj = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
-                query = query.filter(func.date(Cliente.fecha_registro) >= fecha_desde_obj)
-            except ValueError:
-                logger.warning(f"Fecha desde inválida: {fecha_desde}")
-
-        if fecha_hasta:
-            try:
-                fecha_hasta_obj = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
-                # Para fecha hasta, incluir todo el día
-                fecha_hasta_obj = fecha_hasta_obj + timedelta(days=1)
-                query = query.filter(func.date(Cliente.fecha_registro) < fecha_hasta_obj)
-            except ValueError:
-                logger.warning(f"Fecha hasta inválida: {fecha_hasta}")
+        # Aplicar filtros
+        query = _aplicar_filtro_busqueda(query, search)
+        query = _aplicar_filtros_especificos(query, estado, cedula, email, telefono, ocupacion, usuario_registro)
+        query = _aplicar_filtros_fecha(query, fecha_desde, fecha_hasta)
 
         # Ordenamiento por fecha de registro descendente (más recientes primero)
         query = query.order_by(Cliente.fecha_registro.desc())
@@ -105,14 +127,7 @@ def listar_clientes(
         clientes = query.offset(offset).limit(per_page).all()
 
         # Serializacion segura
-        clientes_dict = []
-        for cliente in clientes:
-            try:
-                cliente_data = ClienteResponse.model_validate(cliente).model_dump()
-                clientes_dict.append(cliente_data)
-            except Exception as e:
-                logger.error(f"Error serializando cliente {cliente.id}: {e}")
-                continue
+        clientes_dict = _serializar_clientes(clientes)
 
         # Calcular paginas
         total_pages = (total + per_page - 1) // per_page
@@ -253,6 +268,56 @@ def crear_cliente(
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
+def _validar_duplicados_actualizacion(db: Session, cliente_id: int, update_data: dict, cliente: Cliente):
+    """Valida que no haya duplicados al actualizar cédula o nombres"""
+    if "cedula" not in update_data and "nombres" not in update_data:
+        return
+
+    nueva_cedula = update_data.get("cedula", cliente.cedula)
+    nuevos_nombres = update_data.get("nombres", cliente.nombres)
+
+    # Validar cédula duplicada
+    otro_con_misma_cedula = db.query(Cliente).filter(
+        Cliente.cedula == nueva_cedula, Cliente.id != cliente_id
+    ).first()
+    if otro_con_misma_cedula:
+        logger.warning(
+            f"❌ Intento de actualizar cliente {cliente_id} a cédula duplicada: {nueva_cedula} "
+            f"(ya existe ID: {otro_con_misma_cedula.id})"
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"No se puede actualizar el cliente para tener la misma cédula "
+                f"({nueva_cedula}) que otro cliente existente (ID: {otro_con_misma_cedula.id})."
+            ),
+        )
+
+    # Validar nombre duplicado
+    if nuevos_nombres:
+        nuevos_nombres_normalizados = nuevos_nombres.strip().lower()
+        otro_con_mismo_nombre = (
+            db.query(Cliente)
+            .filter(
+                func.lower(Cliente.nombres) == nuevos_nombres_normalizados,
+                Cliente.id != cliente_id,
+            )
+            .first()
+        )
+        if otro_con_mismo_nombre:
+            logger.warning(
+                f"❌ Intento de actualizar cliente {cliente_id} a nombre duplicado: {nuevos_nombres} "
+                f"(ya existe ID: {otro_con_mismo_nombre.id})"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"No se puede actualizar el cliente para tener el mismo nombre completo "
+                    f"({nuevos_nombres}) que otro cliente existente (ID: {otro_con_mismo_nombre.id})."
+                ),
+            )
+
+
 @router.put("/{cliente_id}", response_model=ClienteResponse)
 def actualizar_cliente(
     cliente_id: int = Path(..., description="ID del cliente"),
@@ -270,50 +335,8 @@ def actualizar_cliente(
 
         update_data = cliente_data.model_dump(exclude_unset=True)
 
-        # ✅ Validar: NO permitir actualizar si queda con cédula O nombre duplicados de OTRO cliente
-        # Solo validar si se está actualizando cédula o nombres
-        if "cedula" in update_data or "nombres" in update_data:
-            nueva_cedula = update_data.get("cedula", cliente.cedula)
-            nuevos_nombres = update_data.get("nombres", cliente.nombres)
-
-            # 1) Bloquear por cédula duplicada en otro cliente
-            otro_con_misma_cedula = db.query(Cliente).filter(Cliente.cedula == nueva_cedula, Cliente.id != cliente_id).first()
-            if otro_con_misma_cedula:
-                logger.warning(
-                    f"❌ Intento de actualizar cliente {cliente_id} a cédula duplicada: {nueva_cedula} "
-                    f"(ya existe ID: {otro_con_misma_cedula.id})"
-                )
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        f"No se puede actualizar el cliente para tener la misma cédula "
-                        f"({nueva_cedula}) que otro cliente existente (ID: {otro_con_misma_cedula.id})."
-                    ),
-                )
-
-            # 2) Bloquear por nombre completo duplicado en otro cliente (case-insensitive)
-            if nuevos_nombres:
-                nuevos_nombres_normalizados = nuevos_nombres.strip().lower()
-                otro_con_mismo_nombre = (
-                    db.query(Cliente)
-                    .filter(
-                        func.lower(Cliente.nombres) == nuevos_nombres_normalizados,
-                        Cliente.id != cliente_id,
-                    )
-                    .first()
-                )
-                if otro_con_mismo_nombre:
-                    logger.warning(
-                        f"❌ Intento de actualizar cliente {cliente_id} a nombre duplicado: {nuevos_nombres} "
-                        f"(ya existe ID: {otro_con_mismo_nombre.id})"
-                    )
-                    raise HTTPException(
-                        status_code=400,
-                        detail=(
-                            f"No se puede actualizar el cliente para tener el mismo nombre completo "
-                            f"({nuevos_nombres}) que otro cliente existente (ID: {otro_con_mismo_nombre.id})."
-                        ),
-                    )
+        # Validar duplicados
+        _validar_duplicados_actualizacion(db, cliente_id, update_data, cliente)
 
         # Sincronizar estado y activo SI se actualiza el estado
         if "estado" in update_data:

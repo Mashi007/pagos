@@ -325,7 +325,7 @@ export function DashboardCobranza() {
               <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                 <BarChart3 className="h-6 w-6 text-emerald-600" />
                 <span>Recaudación por Día del Mes</span>
-              </CardHeader>
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               {loadingRecaudacionDia ? (
