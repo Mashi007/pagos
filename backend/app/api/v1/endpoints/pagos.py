@@ -749,6 +749,105 @@ def listar_ultimos_pagos(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
+def _calcular_proporcion_capital_interes(cuota, monto_aplicar: Decimal) -> tuple[Decimal, Decimal]:
+    """Calcula la proporción de capital e interés a aplicar según lo pendiente"""
+    total_pendiente = cuota.capital_pendiente + cuota.interes_pendiente
+    if total_pendiente > Decimal("0.00"):
+        capital = monto_aplicar * (cuota.capital_pendiente / total_pendiente)
+        interes = monto_aplicar * (cuota.interes_pendiente / total_pendiente)
+    else:
+        capital = monto_aplicar
+        interes = Decimal("0.00")
+    return capital, interes
+
+
+def _actualizar_estado_cuota(cuota, fecha_hoy: date, es_exceso: bool = False) -> bool:
+    """
+    Actualiza el estado de una cuota según las reglas de negocio.
+    Returns:
+        bool: True si la cuota se completó completamente (pasó de incompleta a PAGADO)
+    """
+    estado_previo_completo = cuota.total_pagado >= cuota.monto_cuota
+    estado_completado = False
+
+    if cuota.total_pagado >= cuota.monto_cuota:
+        cuota.estado = "PAGADO"
+        if not estado_previo_completo:
+            estado_completado = True
+    elif cuota.total_pagado > Decimal("0.00"):
+        if cuota.fecha_vencimiento and cuota.fecha_vencimiento < fecha_hoy:
+            cuota.estado = "ATRASADO"
+        else:
+            cuota.estado = "ADELANTADO" if es_exceso else "PENDIENTE"
+    else:
+        if cuota.fecha_vencimiento and cuota.fecha_vencimiento < fecha_hoy:
+            cuota.estado = "ATRASADO"
+        else:
+            cuota.estado = "PENDIENTE"
+
+    return estado_completado
+
+
+def _aplicar_monto_a_cuota(
+    cuota, monto_aplicar: Decimal, fecha_pago: date, fecha_hoy: date, es_exceso: bool = False
+) -> bool:
+    """
+    Aplica un monto a una cuota, actualizando todos los campos correspondientes.
+    Returns:
+        bool: True si la cuota se completó completamente con este pago
+    """
+    if monto_aplicar <= Decimal("0.00"):
+        return False
+
+    estado_previo_completo = cuota.total_pagado >= cuota.monto_cuota
+
+    capital_aplicar, interes_aplicar = _calcular_proporcion_capital_interes(cuota, monto_aplicar)
+
+    cuota.capital_pagado += capital_aplicar
+    cuota.interes_pagado += interes_aplicar
+    cuota.total_pagado += monto_aplicar
+    cuota.capital_pendiente = max(Decimal("0.00"), cuota.capital_pendiente - capital_aplicar)
+    cuota.interes_pendiente = max(Decimal("0.00"), cuota.interes_pendiente - interes_aplicar)
+
+    if monto_aplicar > Decimal("0.00"):
+        cuota.fecha_pago = fecha_pago
+
+    return _actualizar_estado_cuota(cuota, fecha_hoy, es_exceso)
+
+
+def _aplicar_exceso_a_siguiente_cuota(
+    db: Session, prestamo_id: int, saldo_restante: Decimal, fecha_pago: date, fecha_hoy: date
+) -> int:
+    """Aplica el exceso de pago a la siguiente cuota pendiente. Returns: número de cuotas completadas"""
+    siguiente_cuota = (
+        db.query(Cuota)
+        .filter(
+            Cuota.prestamo_id == prestamo_id,
+            Cuota.estado != "PAGADO",
+        )
+        .order_by(Cuota.numero_cuota)
+        .first()
+    )
+
+    if not siguiente_cuota:
+        return 0
+
+    monto_faltante = siguiente_cuota.monto_cuota - siguiente_cuota.total_pagado
+    monto_aplicar_exceso = min(saldo_restante, monto_faltante)
+
+    if monto_aplicar_exceso <= Decimal("0.00"):
+        return 0
+
+    estado_completado = _aplicar_monto_a_cuota(siguiente_cuota, monto_aplicar_exceso, fecha_pago, fecha_hoy, es_exceso=True)
+
+    logger.debug(
+        f"  💰 [aplicar_pago_a_cuotas] Cuota #{siguiente_cuota.numero_cuota} "
+        f"(exceso): Aplicado ${monto_aplicar_exceso}, Estado: {siguiente_cuota.estado}"
+    )
+
+    return 1 if estado_completado else 0
+
+
 def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
     """
     Aplica un pago a las cuotas correspondientes según la regla de negocio:
@@ -771,13 +870,11 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
         f"(monto: ${pago.monto_pagado}, prestamo_id: {pago.prestamo_id})"
     )
 
-    # Obtener TODAS las cuotas no pagadas del préstamo, ordenadas por número
-    # (incluyendo PENDIENTE, ATRASADO, PARCIAL para aplicar pagos secuenciales)
     cuotas = (
         db.query(Cuota)
         .filter(
             Cuota.prestamo_id == pago.prestamo_id,
-            Cuota.estado != "PAGADO",  # Solo cuotas no pagadas completamente
+            Cuota.estado != "PAGADO",
         )
         .order_by(Cuota.numero_cuota)
         .all()
@@ -792,71 +889,21 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
         return 0
 
     saldo_restante = pago.monto_pagado
-    cuotas_completadas = 0  # Contador de cuotas completadas con este pago
+    cuotas_completadas = 0
+    fecha_hoy = date.today()
 
     for cuota in cuotas:
         if saldo_restante <= Decimal("0.00"):
             break
 
-        # Calcular cuánto se puede aplicar a esta cuota (lo que falta para completarla)
         monto_faltante = cuota.monto_cuota - cuota.total_pagado
         monto_aplicar = min(saldo_restante, monto_faltante)
 
-        # Si no hay nada que aplicar a esta cuota (ya está pagada), continuar con la siguiente
         if monto_aplicar <= Decimal("0.00"):
             continue
 
-        # Actualizar montos pagados proporcionalmente (capital e interés)
-        # Aplicar el pago proporcionalmente según lo que falta de capital e interés
-        total_pendiente_cuota = cuota.capital_pendiente + cuota.interes_pendiente
-        if total_pendiente_cuota > Decimal("0.00"):
-            # Proporción según lo que falta pagar de cada uno
-            capital_aplicar = monto_aplicar * (cuota.capital_pendiente / total_pendiente_cuota)
-            interes_aplicar = monto_aplicar * (cuota.interes_pendiente / total_pendiente_cuota)
-        else:
-            # Si no hay pendiente (no debería pasar), aplicar todo al capital
-            capital_aplicar = monto_aplicar
-            interes_aplicar = Decimal("0.00")
-
-        # Guardar estado previo ANTES de actualizar para detectar si se completó la cuota con este pago
-        total_pagado_previo = cuota.total_pagado
-        estado_previo_completo = total_pagado_previo >= cuota.monto_cuota
-
-        # Actualizar cuota
-        cuota.capital_pagado += capital_aplicar
-        cuota.interes_pagado += interes_aplicar
-        cuota.total_pagado += monto_aplicar
-        cuota.capital_pendiente = max(Decimal("0.00"), cuota.capital_pendiente - capital_aplicar)
-        cuota.interes_pendiente = max(Decimal("0.00"), cuota.interes_pendiente - interes_aplicar)
-
-        # Actualizar fecha de pago solo si es el último pago recibido
-        if monto_aplicar > Decimal("0.00"):
-            cuota.fecha_pago = pago.fecha_pago
-
-        # ACTUALIZAR ESTADO según la regla de negocio:
-        # - Si la cuota está completamente pagada (total_pagado >= monto_cuota) → PAGADO
-        # - Si tiene pago parcial pero NO está completa → ATRASADO (si vencida) o PENDIENTE (si no vencida)
-        fecha_hoy = date.today()
-
-        if cuota.total_pagado >= cuota.monto_cuota:
-            # Cuota completamente pagada
-            cuota.estado = "PAGADO"
-            # Si antes NO estaba completa y ahora sí, incrementar contador
-            if not estado_previo_completo:
-                cuotas_completadas += 1
-        elif cuota.total_pagado > Decimal("0.00"):
-            # Cuota con pago parcial pero no completa
-            # Si está vencida → ATRASADO, si no → PENDIENTE
-            if cuota.fecha_vencimiento and cuota.fecha_vencimiento < fecha_hoy:
-                cuota.estado = "ATRASADO"
-            else:
-                cuota.estado = "PENDIENTE"
-        else:
-            # Cuota sin pago (no debería pasar, pero por seguridad)
-            if cuota.fecha_vencimiento and cuota.fecha_vencimiento < fecha_hoy:
-                cuota.estado = "ATRASADO"
-            else:
-                cuota.estado = "PENDIENTE"
+        if _aplicar_monto_a_cuota(cuota, monto_aplicar, pago.fecha_pago, fecha_hoy):
+            cuotas_completadas += 1
 
         saldo_restante -= monto_aplicar
         logger.debug(
@@ -865,63 +912,13 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
             f"Estado: {cuota.estado}"
         )
 
-    # Si queda saldo después de aplicar a todas las cuotas pendientes, es un pago adelantado
-    # Aplicar el exceso a la siguiente cuota que esté PENDIENTE
     if saldo_restante > Decimal("0.00"):
         logger.info(
             f"📊 [aplicar_pago_a_cuotas] Saldo restante: ${saldo_restante}. " f"Aplicando a siguiente cuota pendiente..."
         )
-        # Buscar la siguiente cuota pendiente (la primera que no esté pagada)
-        siguiente_cuota = (
-            db.query(Cuota)
-            .filter(
-                Cuota.prestamo_id == pago.prestamo_id,
-                Cuota.estado != "PAGADO",
-            )
-            .order_by(Cuota.numero_cuota)
-            .first()
+        cuotas_completadas += _aplicar_exceso_a_siguiente_cuota(
+            db, pago.prestamo_id, saldo_restante, pago.fecha_pago, fecha_hoy
         )
-
-        if siguiente_cuota:
-            # Aplicar el saldo restante a la siguiente cuota
-            monto_faltante = siguiente_cuota.monto_cuota - siguiente_cuota.total_pagado
-            monto_aplicar_exceso = min(saldo_restante, monto_faltante)
-
-            if monto_aplicar_exceso > Decimal("0.00"):
-                # Aplicar proporcionalmente según lo que falta de capital e interés
-                total_pendiente_siguiente = siguiente_cuota.capital_pendiente + siguiente_cuota.interes_pendiente
-                if total_pendiente_siguiente > Decimal("0.00"):
-                    capital_exceso = monto_aplicar_exceso * (siguiente_cuota.capital_pendiente / total_pendiente_siguiente)
-                    interes_exceso = monto_aplicar_exceso * (siguiente_cuota.interes_pendiente / total_pendiente_siguiente)
-                else:
-                    capital_exceso = monto_aplicar_exceso
-                    interes_exceso = Decimal("0.00")
-
-                # Guardar estado previo ANTES de actualizar para detectar si se completó la cuota
-                total_pagado_previo_siguiente = siguiente_cuota.total_pagado
-                estado_previo_siguiente_completo = total_pagado_previo_siguiente >= siguiente_cuota.monto_cuota
-
-                siguiente_cuota.capital_pagado += capital_exceso
-                siguiente_cuota.interes_pagado += interes_exceso
-                siguiente_cuota.total_pagado += monto_aplicar_exceso
-                siguiente_cuota.capital_pendiente = max(Decimal("0.00"), siguiente_cuota.capital_pendiente - capital_exceso)
-                siguiente_cuota.interes_pendiente = max(Decimal("0.00"), siguiente_cuota.interes_pendiente - interes_exceso)
-
-                fecha_hoy = date.today()
-
-                if siguiente_cuota.total_pagado >= siguiente_cuota.monto_cuota:
-                    siguiente_cuota.estado = "PAGADO"
-                    # Si antes NO estaba completa y ahora sí, incrementar contador
-                    if not estado_previo_siguiente_completo:
-                        cuotas_completadas += 1
-                elif siguiente_cuota.fecha_vencimiento and siguiente_cuota.fecha_vencimiento < fecha_hoy:
-                    siguiente_cuota.estado = "ATRASADO"
-                else:
-                    siguiente_cuota.estado = "ADELANTADO"
-                logger.debug(
-                    f"  💰 [aplicar_pago_a_cuotas] Cuota #{siguiente_cuota.numero_cuota} "
-                    f"(exceso): Aplicado ${monto_aplicar_exceso}, Estado: {siguiente_cuota.estado}"
-                )
 
     try:
         db.commit()
@@ -936,7 +933,6 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
         db.rollback()
         raise
 
-    # Retornar número de cuotas completadas con este pago
     return cuotas_completadas
 
 

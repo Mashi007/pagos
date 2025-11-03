@@ -305,7 +305,140 @@ def obtener_estadisticas_prestamos(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
-@router.get("", response_model=dict)
+def _obtener_query_base_prestamos(db: Session):
+    """Obtiene la query base para préstamos con columnas seguras"""
+    return db.query(
+        Prestamo.id,
+        Prestamo.cliente_id,
+        Prestamo.cedula,
+        Prestamo.nombres,
+        Prestamo.total_financiamiento,
+        Prestamo.fecha_requerimiento,
+        Prestamo.modalidad_pago,
+        Prestamo.numero_cuotas,
+        Prestamo.cuota_periodo,
+        Prestamo.tasa_interes,
+        Prestamo.fecha_base_calculo,
+        Prestamo.producto,
+        Prestamo.producto_financiero,
+        Prestamo.estado,
+        Prestamo.usuario_proponente,
+        Prestamo.usuario_aprobador,
+        Prestamo.observaciones,
+        Prestamo.fecha_registro,
+        Prestamo.fecha_aprobacion,
+        Prestamo.fecha_actualizacion,
+    )
+
+
+def _aplicar_filtros_prestamos(
+    query,
+    search: Optional[str],
+    estado: Optional[str],
+    cedula: Optional[str],
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+    fecha_inicio: Optional[date],
+    fecha_fin: Optional[date],
+):
+    """Aplica filtros a la query de préstamos"""
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            or_(
+                Prestamo.nombres.ilike(search_pattern),
+                Prestamo.cedula.ilike(search_pattern),
+            )
+        )
+
+    if estado:
+        query = query.filter(Prestamo.estado == estado)
+
+    if cedula:
+        cedula_normalizada = cedula.strip().upper()
+        query = query.filter(Prestamo.cedula == cedula_normalizada)
+
+    if analista:
+        query = query.filter(Prestamo.analista == analista)
+
+    if concesionario:
+        query = query.filter(Prestamo.concesionario == concesionario)
+
+    if modelo:
+        query = query.filter(Prestamo.modelo_vehiculo == modelo)
+
+    if fecha_inicio:
+        query = query.filter(Prestamo.fecha_registro >= fecha_inicio)
+
+    if fecha_fin:
+        fecha_fin_completa = datetime.combine(fecha_fin, datetime.max.time())
+        query = query.filter(Prestamo.fecha_registro <= fecha_fin_completa)
+
+    return query
+
+
+def _contar_prestamos_con_manejo_error(query, db: Session) -> int:
+    """Cuenta el total de préstamos con manejo de errores"""
+    try:
+        return query.count()
+    except Exception as e:
+        logger.error(f"Error contando préstamos: {str(e)}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return 0
+
+
+def _obtener_prestamos_con_manejo_error(query, skip: int, per_page: int, db: Session):
+    """Obtiene préstamos con paginación y manejo de errores"""
+    try:
+        return query.order_by(Prestamo.fecha_registro.desc()).offset(skip).limit(per_page).all()
+    except Exception as e:
+        logger.error(f"Error obteniendo préstamos: {str(e)}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return []
+
+
+def _serializar_prestamo(row) -> Optional[dict]:
+    """Serializa un préstamo de forma segura. Returns None si falla"""
+    try:
+        prestamo_data = {
+            "id": row.id,
+            "cliente_id": row.cliente_id,
+            "cedula": row.cedula,
+            "nombres": row.nombres,
+            "total_financiamiento": row.total_financiamiento,
+            "fecha_requerimiento": row.fecha_requerimiento,
+            "modalidad_pago": row.modalidad_pago,
+            "numero_cuotas": row.numero_cuotas,
+            "cuota_periodo": row.cuota_periodo,
+            "tasa_interes": row.tasa_interes,
+            "fecha_base_calculo": row.fecha_base_calculo,
+            "producto": row.producto,
+            "producto_financiero": row.producto_financiero,
+            "concesionario": None,
+            "analista": None,
+            "modelo_vehiculo": None,
+            "estado": row.estado,
+            "usuario_proponente": row.usuario_proponente,
+            "usuario_aprobador": row.usuario_aprobador,
+            "usuario_autoriza": None,
+            "observaciones": row.observaciones,
+            "fecha_registro": row.fecha_registro,
+            "fecha_aprobacion": row.fecha_aprobacion,
+            "fecha_actualizacion": row.fecha_actualizacion,
+        }
+        return PrestamoResponse.model_validate(prestamo_data).model_dump()
+    except Exception as e:
+        logger.error(f"Error serializando préstamo en listar: {str(e)}", exc_info=True)
+        return None
+
+
 def listar_prestamos(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=1000),
@@ -324,137 +457,24 @@ def listar_prestamos(
     try:
         logger.info(f"Listar préstamos - Usuario: {current_user.email}")
 
-        # Consulta segura: evitar columnas nuevas que podrían no existir en BD
-        query = db.query(
-            Prestamo.id,
-            Prestamo.cliente_id,
-            Prestamo.cedula,
-            Prestamo.nombres,
-            Prestamo.total_financiamiento,
-            Prestamo.fecha_requerimiento,
-            Prestamo.modalidad_pago,
-            Prestamo.numero_cuotas,
-            Prestamo.cuota_periodo,
-            Prestamo.tasa_interes,
-            Prestamo.fecha_base_calculo,
-            Prestamo.producto,
-            Prestamo.producto_financiero,
-            Prestamo.estado,
-            Prestamo.usuario_proponente,
-            Prestamo.usuario_aprobador,
-            Prestamo.observaciones,
-            Prestamo.fecha_registro,
-            Prestamo.fecha_aprobacion,
-            Prestamo.fecha_actualizacion,
-        )
+        query = _obtener_query_base_prestamos(db)
+        query = _aplicar_filtros_prestamos(query, search, estado, cedula, analista, concesionario, modelo, fecha_inicio, fecha_fin)
 
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    Prestamo.nombres.ilike(search_pattern),
-                    Prestamo.cedula.ilike(search_pattern),
-                )
-            )
-
-        if estado:
-            query = query.filter(Prestamo.estado == estado)
-
-        if cedula:
-            # Normalizar cédula para búsqueda
-            cedula_normalizada = cedula.strip().upper()
-            query = query.filter(Prestamo.cedula == cedula_normalizada)
-
-        if analista:
-            query = query.filter(Prestamo.analista == analista)
-
-        if concesionario:
-            query = query.filter(Prestamo.concesionario == concesionario)
-
-        if modelo:
-            query = query.filter(Prestamo.modelo_vehiculo == modelo)
-
-        if fecha_inicio:
-            query = query.filter(Prestamo.fecha_registro >= fecha_inicio)
-
-        if fecha_fin:
-            # Incluir todo el día de fecha_fin
-            fecha_fin_completa = datetime.combine(fecha_fin, datetime.max.time())
-            query = query.filter(Prestamo.fecha_registro <= fecha_fin_completa)
-
-        # Paginación
-        try:
-            total = query.count()
-        except Exception as e:
-            logger.error(f"Error contando préstamos: {str(e)}", exc_info=True)
-            # Hacer rollback si hay error de transacción
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            total = 0
-
+        total = _contar_prestamos_con_manejo_error(query, db)
         skip = (page - 1) * per_page
-        try:
-            prestamos = query.order_by(Prestamo.fecha_registro.desc()).offset(skip).limit(per_page).all()
-        except Exception as e:
-            logger.error(f"Error obteniendo préstamos: {str(e)}", exc_info=True)
-            # Hacer rollback si hay error de transacción
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            prestamos = []
+        prestamos = _obtener_prestamos_con_manejo_error(query, skip, per_page, db)
 
-        # Serializar préstamos usando PrestamoResponse
         prestamos_serializados = []
         for row in prestamos:
-            try:
-                # Mapear fila segura a dict y complementar con None en columnas nuevas
-                prestamo_data = {
-                    "id": row.id,
-                    "cliente_id": row.cliente_id,
-                    "cedula": row.cedula,
-                    "nombres": row.nombres,
-                    "total_financiamiento": row.total_financiamiento,
-                    "fecha_requerimiento": row.fecha_requerimiento,
-                    "modalidad_pago": row.modalidad_pago,
-                    "numero_cuotas": row.numero_cuotas,
-                    "cuota_periodo": row.cuota_periodo,
-                    "tasa_interes": row.tasa_interes,
-                    "fecha_base_calculo": row.fecha_base_calculo,
-                    "producto": row.producto,
-                    "producto_financiero": row.producto_financiero,
-                    "concesionario": None,
-                    "analista": None,
-                    "modelo_vehiculo": None,
-                    "estado": row.estado,
-                    "usuario_proponente": row.usuario_proponente,
-                    "usuario_aprobador": row.usuario_aprobador,
-                    "usuario_autoriza": None,
-                    "observaciones": row.observaciones,
-                    "fecha_registro": row.fecha_registro,
-                    "fecha_aprobacion": row.fecha_aprobacion,
-                    "fecha_actualizacion": row.fecha_actualizacion,
-                }
-                prestamo_dict = PrestamoResponse.model_validate(prestamo_data).model_dump()
+            prestamo_dict = _serializar_prestamo(row)
+            if prestamo_dict:
                 prestamos_serializados.append(prestamo_dict)
-            except Exception as e:
-                logger.error(
-                    f"Error serializando préstamo en listar: {str(e)}",
-                    exc_info=True,
-                )
-                # Continuar con el siguiente préstamo en lugar de fallar completamente
-                continue
 
-        # Si no se pudo serializar ningún préstamo pero hay préstamos en BD, es un error crítico
         if prestamos and not prestamos_serializados:
             logger.error(
                 f"No se pudo serializar ninguno de los {len(prestamos)} préstamos. "
                 "Posible problema de esquema de base de datos."
             )
-            # Retornar lista vacía en lugar de fallar
-            prestamos_serializados = []
 
         return {
             "data": prestamos_serializados,
@@ -467,7 +487,6 @@ def listar_prestamos(
         error_msg = str(e)
         logger.error(f"Error en listar_prestamos: {error_msg}", exc_info=True)
 
-        # Mensaje más descriptivo si es un error de esquema de BD
         if "column" in error_msg.lower() and ("does not exist" in error_msg.lower() or "no such column" in error_msg.lower()):
             detail_msg = f"Error de esquema de base de datos. " f"Es posible que falten migraciones. " f"Error: {error_msg}"
             logger.error(detail_msg)

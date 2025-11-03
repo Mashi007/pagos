@@ -281,11 +281,27 @@ def eliminar_configuracion(
 
 
 @router.get("/general")
-def obtener_configuracion_general():
+def obtener_configuracion_general(db: Session = Depends(get_db)):
     """Obtener configuración general del sistema"""
-    # Retornar configuración por defecto sin consultar la base de datos
-    # para evitar errores de esquema
-    return {
+    # Consultar logo_filename desde la base de datos
+    logo_filename = None
+    try:
+        logo_config = (
+            db.query(ConfiguracionSistema)
+            .filter(
+                ConfiguracionSistema.categoria == "GENERAL",
+                ConfiguracionSistema.clave == "logo_filename",
+            )
+            .first()
+        )
+        if logo_config:
+            logo_filename = logo_config.valor
+            logger.info(f"Logo filename encontrado en BD: {logo_filename}")
+    except Exception as e:
+        logger.warning(f"No se pudo obtener logo_filename de BD: {str(e)}")
+    
+    # Retornar configuración con logo_filename si existe
+    config = {
         "nombre_empresa": "RAPICREDIT",
         "version_sistema": "1.0.0",
         "idioma": "ES",
@@ -298,6 +314,12 @@ def obtener_configuracion_general():
         "email": "",
         "horario_atencion": "08:00-18:00",
     }
+    
+    # Agregar logo_filename si existe
+    if logo_filename:
+        config["logo_filename"] = logo_filename
+    
+    return config
 
 
 @router.post("/upload-logo")

@@ -20,6 +20,8 @@ const uniqueId = `logo-${Math.random().toString(36).substr(2, 9)}`
 const LOGO_EXTENSIONS = ['.svg', '.png', '.jpg', '.jpeg']
 
 // Cache compartido en memoria para evitar múltiples peticiones
+// NOTA: Este caché se resetea al recargar la página, pero eso está bien
+// porque consultamos la BD al iniciar
 interface LogoCache {
   logoUrl: string | null
   isChecking: boolean
@@ -70,35 +72,78 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     // Intentar cargar el logo personalizado desde el API
     const checkCustomLogo = async () => {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 3000) // Timeout de 3 segundos
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // Timeout de 5 segundos
 
-      for (const ext of LOGO_EXTENSIONS) {
-        const filename = `logo-custom${ext}`
-        const logoPath = `/api/v1/configuracion/logo/${filename}`
+      try {
+        // PRIMERO: Intentar obtener el nombre del logo desde la configuración general
         try {
-          // Usar fetch HEAD para verificar si el archivo existe sin descargarlo completo
-          const response = await fetch(logoPath, {
-            method: 'HEAD',
+          const configResponse = await fetch('/api/v1/configuracion/general', {
             signal: controller.signal,
           })
           
-          if (response.ok) {
-            // Si el archivo existe, usar imagen con timestamp para evitar caché
-            const logoUrl = `${logoPath}?t=${Date.now()}`
-            logoCache.logoUrl = logoUrl
-            logoCache.hasChecked = true
-            setCustomLogoUrl(logoUrl)
-            setHasChecked(true)
-            clearTimeout(timeoutId)
-            logoCache.isChecking = false
-            return
+          if (configResponse.ok) {
+            const config = await configResponse.json()
+            if (config.logo_filename) {
+              // Si tenemos el nombre del logo, usarlo directamente
+              const logoPath = `/api/v1/configuracion/logo/${config.logo_filename}`
+              const logoUrl = `${logoPath}?t=${Date.now()}`
+              
+              // Verificar que el archivo existe
+              const headResponse = await fetch(logoPath, {
+                method: 'HEAD',
+                signal: controller.signal,
+              })
+              
+              if (headResponse.ok) {
+                logoCache.logoUrl = logoUrl
+                logoCache.hasChecked = true
+                setCustomLogoUrl(logoUrl)
+                setHasChecked(true)
+                clearTimeout(timeoutId)
+                logoCache.isChecking = false
+                console.log('✅ Logo cargado desde configuración:', config.logo_filename)
+                return
+              }
+            }
           }
-        } catch (error: any) {
-          // Ignorar errores de red o timeout, continuar con siguiente extensión
-          if (error?.name === 'AbortError') {
-            break
+        } catch (configError: any) {
+          // Si falla obtener la configuración, continuar con método alternativo
+          console.warn('⚠️ No se pudo obtener logo_filename desde configuración, usando método alternativo')
+        }
+
+        // MÉTODO ALTERNATIVO: Intentar cada extensión (para retrocompatibilidad)
+        for (const ext of LOGO_EXTENSIONS) {
+          const filename = `logo-custom${ext}`
+          const logoPath = `/api/v1/configuracion/logo/${filename}`
+          try {
+            // Usar fetch HEAD para verificar si el archivo existe sin descargarlo completo
+            const response = await fetch(logoPath, {
+              method: 'HEAD',
+              signal: controller.signal,
+            })
+            
+            if (response.ok) {
+              // Si el archivo existe, usar imagen con timestamp para evitar caché
+              const logoUrl = `${logoPath}?t=${Date.now()}`
+              logoCache.logoUrl = logoUrl
+              logoCache.hasChecked = true
+              setCustomLogoUrl(logoUrl)
+              setHasChecked(true)
+              clearTimeout(timeoutId)
+              logoCache.isChecking = false
+              return
+            }
+          } catch (error: any) {
+            // Ignorar errores de red o timeout, continuar con siguiente extensión
+            if (error?.name === 'AbortError') {
+              break
+            }
+            continue
           }
-          continue
+        }
+      } catch (error: any) {
+        if (error?.name !== 'AbortError') {
+          console.warn('⚠️ Error cargando logo:', error)
         }
       }
       

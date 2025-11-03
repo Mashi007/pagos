@@ -13,6 +13,7 @@ export interface ConfiguracionGeneral {
   idioma: string
   moneda: string
   version_sistema: string
+  logo_filename?: string  // Nombre del archivo del logo (si existe)
 }
 
 export interface ConfiguracionGeneralUpdate {
