@@ -476,6 +476,111 @@ def disparar_notificaciones_atrasos(
 # ============================================
 
 
+def _construir_query_clientes_atrasados(db: Session, hoy: date, analista: Optional[str]):
+    """Construye la query base para clientes atrasados"""
+    from app.core.config import settings
+
+    query = (
+        db.query(
+            Cliente.cedula,
+            Cliente.nombres,
+            Cliente.telefono,
+            Prestamo.usuario_proponente.label("analista"),
+            Prestamo.id.label("prestamo_id"),
+            Prestamo.total_financiamiento,
+            func.count(Cuota.id).label("cuotas_vencidas"),
+            func.sum(Cuota.monto_cuota).label("total_adeudado"),
+            func.min(Cuota.fecha_vencimiento).label("fecha_primera_vencida"),
+            func.max(Cuota.fecha_vencimiento).label("fecha_ultima_vencida"),
+            func.sum(
+                case(
+                    (
+                        Cuota.fecha_vencimiento < hoy - timedelta(days=30),
+                        Cuota.monto_cuota,
+                    ),
+                    else_=0,
+                )
+            ).label("monto_mas_30_dias"),
+        )
+        .join(Prestamo, Prestamo.cedula == Cliente.cedula)
+        .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+        .outerjoin(User, User.email == Prestamo.usuario_proponente)
+        .filter(
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.estado != "PAGADO",
+            Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
+            or_(User.is_admin.is_(False), User.is_admin.is_(None)),
+        )
+    )
+
+    if analista:
+        query = query.filter(Prestamo.usuario_proponente == analista)
+
+    return query.group_by(
+        Cliente.cedula,
+        Cliente.nombres,
+        Cliente.telefono,
+        Prestamo.usuario_proponente,
+        Prestamo.id,
+        Prestamo.total_financiamiento,
+    )
+
+
+def _filtrar_por_dias_retraso(
+    resultados, hoy: date, dias_retraso_min: Optional[int], dias_retraso_max: Optional[int]
+) -> List[Dict]:
+    """Filtra resultados por días de retraso y serializa los datos"""
+    datos_filtrados = []
+    for row in resultados:
+        if not row.fecha_primera_vencida:
+            continue
+
+        dias_retraso = (hoy - row.fecha_primera_vencida).days
+        if dias_retraso_min and dias_retraso < dias_retraso_min:
+            continue
+        if dias_retraso_max and dias_retraso > dias_retraso_max:
+            continue
+
+        datos_filtrados.append(
+            {
+                "cedula": row.cedula,
+                "nombres": row.nombres,
+                "telefono": row.telefono or "N/A",
+                "analista": row.analista or "N/A",
+                "prestamo_id": row.prestamo_id,
+                "total_financiamiento": float(row.total_financiamiento),
+                "cuotas_vencidas": row.cuotas_vencidas,
+                "total_adeudado": (float(row.total_adeudado) if row.total_adeudado else 0.0),
+                "fecha_primera_vencida": (
+                    row.fecha_primera_vencida.isoformat() if row.fecha_primera_vencida else None
+                ),
+                "fecha_ultima_vencida": (row.fecha_ultima_vencida.isoformat() if row.fecha_ultima_vencida else None),
+                "dias_retraso": dias_retraso,
+                "monto_mas_30_dias": (float(row.monto_mas_30_dias) if row.monto_mas_30_dias else 0.0),
+            }
+        )
+
+    return datos_filtrados
+
+
+def _generar_respuesta_formato(datos_filtrados: List[Dict], formato: str):
+    """Genera la respuesta según el formato solicitado"""
+    if formato.lower() == "json":
+        return {
+            "titulo": "Informe de Clientes Atrasados",
+            "fecha_generacion": datetime.now().isoformat(),
+            "total_registros": len(datos_filtrados),
+            "total_adeudado": sum(d.get("total_adeudado", 0) for d in datos_filtrados),
+            "datos": datos_filtrados,
+        }
+    elif formato.lower() == "excel":
+        return _generar_excel_clientes_atrasados(datos_filtrados)
+    elif formato.lower() == "pdf":
+        return _generar_pdf_clientes_atrasados(datos_filtrados)
+    else:
+        raise HTTPException(status_code=400, detail="Formato no válido. Use: json, excel o pdf")
+
+
 @router.get("/informes/clientes-atrasados")
 def informe_clientes_atrasados(
     dias_retraso_min: Optional[int] = Query(None, description="Días mínimos de retraso"),
@@ -489,101 +594,12 @@ def informe_clientes_atrasados(
     try:
         hoy = date.today()
 
-        query = (
-            db.query(
-                Cliente.cedula,
-                Cliente.nombres,
-                Cliente.telefono,
-                Prestamo.usuario_proponente.label("analista"),
-                Prestamo.id.label("prestamo_id"),
-                Prestamo.total_financiamiento,
-                func.count(Cuota.id).label("cuotas_vencidas"),
-                func.sum(Cuota.monto_cuota).label("total_adeudado"),
-                func.min(Cuota.fecha_vencimiento).label("fecha_primera_vencida"),
-                func.max(Cuota.fecha_vencimiento).label("fecha_ultima_vencida"),
-                func.sum(
-                    case(
-                        (
-                            Cuota.fecha_vencimiento < hoy - timedelta(days=30),
-                            Cuota.monto_cuota,
-                        ),
-                        else_=0,
-                    )
-                ).label("monto_mas_30_dias"),
-            )
-            .join(Prestamo, Prestamo.cedula == Cliente.cedula)
-            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-            .outerjoin(User, User.email == Prestamo.usuario_proponente)
-            .filter(
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
-            )
-        )
-
-        # Excluir admin siempre
-        from app.core.config import settings
-
-        query = query.filter(
-            Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
-            or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
-        )
-
-        if analista:
-            query = query.filter(Prestamo.usuario_proponente == analista)
-
-        query = query.group_by(
-            Cliente.cedula,
-            Cliente.nombres,
-            Cliente.telefono,
-            Prestamo.usuario_proponente,
-            Prestamo.id,
-            Prestamo.total_financiamiento,
-        )
-
+        query = _construir_query_clientes_atrasados(db, hoy, analista)
         resultados = query.all()
 
-        # Aplicar filtros de días de retraso en Python
-        datos_filtrados = []
-        for row in resultados:
-            if row.fecha_primera_vencida:
-                dias_retraso = (hoy - row.fecha_primera_vencida).days
-                if dias_retraso_min and dias_retraso < dias_retraso_min:
-                    continue
-                if dias_retraso_max and dias_retraso > dias_retraso_max:
-                    continue
-                datos_filtrados.append(
-                    {
-                        "cedula": row.cedula,
-                        "nombres": row.nombres,
-                        "telefono": row.telefono or "N/A",
-                        "analista": row.analista or "N/A",
-                        "prestamo_id": row.prestamo_id,
-                        "total_financiamiento": float(row.total_financiamiento),
-                        "cuotas_vencidas": row.cuotas_vencidas,
-                        "total_adeudado": (float(row.total_adeudado) if row.total_adeudado else 0.0),
-                        "fecha_primera_vencida": (
-                            row.fecha_primera_vencida.isoformat() if row.fecha_primera_vencida else None
-                        ),
-                        "fecha_ultima_vencida": (row.fecha_ultima_vencida.isoformat() if row.fecha_ultima_vencida else None),
-                        "dias_retraso": dias_retraso,
-                        "monto_mas_30_dias": (float(row.monto_mas_30_dias) if row.monto_mas_30_dias else 0.0),
-                    }
-                )
+        datos_filtrados = _filtrar_por_dias_retraso(resultados, hoy, dias_retraso_min, dias_retraso_max)
 
-        if formato.lower() == "json":
-            return {
-                "titulo": "Informe de Clientes Atrasados",
-                "fecha_generacion": datetime.now().isoformat(),
-                "total_registros": len(datos_filtrados),
-                "total_adeudado": sum(d.get("total_adeudado", 0) for d in datos_filtrados),
-                "datos": datos_filtrados,
-            }
-        elif formato.lower() == "excel":
-            return _generar_excel_clientes_atrasados(datos_filtrados)
-        elif formato.lower() == "pdf":
-            return _generar_pdf_clientes_atrasados(datos_filtrados)
-        else:
-            raise HTTPException(status_code=400, detail="Formato no válido. Use: json, excel o pdf")
+        return _generar_respuesta_formato(datos_filtrados, formato)
 
     except Exception as e:
         logger.error(f"Error generando informe clientes atrasados: {e}")

@@ -716,13 +716,17 @@ def resumen_dashboard(
 ):
     """Obtiene resumen para dashboard."""
     try:
-        # Estadísticas básicas
-        total_clientes = db.query(Cliente).count()
-        total_prestamos = db.query(Prestamo).count()
+        hoy = date.today()
+        
+        # Estadísticas básicas - Solo préstamos aprobados
+        total_clientes = db.query(Cliente).filter(Cliente.activo).count()
+        total_prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
         total_pagos = db.query(Pago).count()
 
         # Cartera activa: calcular desde cuotas pendientes
-        cartera_activa = (
+        # Suma de capital_pendiente + interes_pendiente + monto_mora
+        # Solo para préstamos aprobados y cuotas no pagadas
+        cartera_activa_query = (
             db.query(
                 func.sum(
                     func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
@@ -735,29 +739,37 @@ def resumen_dashboard(
                 Prestamo.estado == "APROBADO",
                 Cuota.estado != "PAGADO",
             )
-            .scalar()
-        ) or Decimal("0")
+        )
+        cartera_activa = float(cartera_activa_query.scalar() or Decimal("0"))
 
         logger.info(f"[reportes.resumen] Cartera activa: {cartera_activa}")
 
-        # Mora: préstamos con cuotas en mora
+        # Mora: préstamos con cuotas vencidas no pagadas
         prestamos_mora = (
             db.query(func.count(func.distinct(Prestamo.id)))
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado == "APROBADO",
-                Cuota.monto_mora > Decimal("0.00"),
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
             )
             .scalar()
         ) or 0
 
         logger.info(f"[reportes.resumen] Préstamos en mora: {prestamos_mora}")
 
-        # Pagos del mes: usar monto_pagado
-        fecha_inicio_mes = date.today().replace(day=1)
-        pagos_mes = db.query(func.sum(Pago.monto_pagado)).filter(Pago.fecha_pago >= fecha_inicio_mes).scalar() or Decimal("0")
+        # Pagos del mes: usar monto_pagado y fecha_pago correctamente
+        fecha_inicio_mes = hoy.replace(day=1)
+        pagos_mes_query = (
+            db.query(func.sum(Pago.monto_pagado))
+            .filter(
+                Pago.fecha_pago >= fecha_inicio_mes,
+                Pago.fecha_pago <= hoy,
+            )
+        )
+        pagos_mes = float(pagos_mes_query.scalar() or Decimal("0"))
 
-        logger.info(f"[reportes.resumen] Pagos del mes: {pagos_mes}")
+        logger.info(f"[reportes.resumen] Pagos del mes: {pagos_mes} (desde {fecha_inicio_mes} hasta {hoy})")
 
         return {
             "total_clientes": total_clientes,
@@ -766,11 +778,11 @@ def resumen_dashboard(
             "cartera_activa": cartera_activa,
             "prestamos_mora": prestamos_mora,
             "pagos_mes": pagos_mes,
-            "fecha_actualizacion": datetime.now(),
+            "fecha_actualizacion": datetime.now().isoformat(),
         }
 
     except Exception as e:
-        logger.error(f"Error obteniendo resumen: {e}")
+        logger.error(f"Error obteniendo resumen: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
