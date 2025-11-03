@@ -19,7 +19,7 @@ class PagoStaging(Base):
 
     __tablename__ = "pagos_staging"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column("id_stg", Integer, primary_key=True, index=True)  # En BD se llama id_stg
 
     # DATOS DEL CLIENTE
     cedula_cliente = Column(String(CEDULA_LENGTH), nullable=True, index=True)
@@ -28,9 +28,10 @@ class PagoStaging(Base):
     # DATOS DEL PAGO
     prestamo_id = Column(Integer, nullable=True, index=True)  # ID del crédito (puede ser NULL en staging)
     numero_cuota = Column(Integer, nullable=True)  # Número de cuota asociada (opcional)
-    fecha_pago = Column(DateTime, nullable=True)  # Fecha de pago
+    # ⚠️ IMPORTANTE: fecha_pago y monto_pagado son TEXT en la BD real
+    fecha_pago = Column(String(50), nullable=True)  # Fecha de pago (TEXT en BD: 'YYYY-MM-DD HH24:MI:SS')
     fecha_registro = Column(DateTime, default=func.now(), nullable=True, index=True)  # Fecha de registro (automático)
-    monto_pagado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=True)
+    monto_pagado = Column(String(50), nullable=True)  # Monto pagado (TEXT en BD, se convierte a numeric en queries)
     numero_documento = Column(String(DOCUMENTO_LENGTH), nullable=True, index=True)
     institucion_bancaria = Column(String(100), nullable=True)  # Institución bancaria
 
