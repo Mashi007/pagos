@@ -343,9 +343,7 @@ def _verificar_tabla_plantillas(db: Session):
         inspector = inspect(db.bind)
         tablas = inspector.get_table_names()
         if "notificacion_plantillas" not in tablas:
-            raise HTTPException(
-                status_code=500, detail="Tabla 'notificacion_plantillas' no existe. Ejecute las migraciones."
-            )
+            raise HTTPException(status_code=500, detail="Tabla 'notificacion_plantillas' no existe. Ejecute las migraciones.")
     except HTTPException:
         raise
     except Exception:

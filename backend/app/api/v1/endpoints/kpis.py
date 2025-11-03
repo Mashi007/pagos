@@ -286,6 +286,7 @@ def _calcular_kpis_financiamiento_por_estado(
     fecha_fin: Optional[date],
 ) -> Dict:
     """Calcula KPIs de financiamiento por estado de cliente"""
+
     def crear_query_prestamo_base():
         query = db.query(Prestamo)
         return FiltrosDashboard.aplicar_filtros_prestamo(query, analista, concesionario, modelo, fecha_inicio, fecha_fin)

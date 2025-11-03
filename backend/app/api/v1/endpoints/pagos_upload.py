@@ -42,9 +42,7 @@ def _validar_columnas_pagos(df: pd.DataFrame):
         )
 
 
-def _procesar_fila_pago(
-    row: pd.Series, index: int, db: Session, current_user: User
-) -> tuple[Optional[dict], Optional[str]]:
+def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: User) -> tuple[Optional[dict], Optional[str]]:
     """Procesa una fila del Excel y retorna (resultado, error)"""
     try:
         cedula = str(row["Cédula de Identidad"]).strip()
