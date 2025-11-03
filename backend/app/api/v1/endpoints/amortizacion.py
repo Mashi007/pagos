@@ -416,8 +416,24 @@ def obtener_tabla_visual(
             detail="Préstamo no encontrado",
         )
 
-    # Obtener cuotas ordenadas
-    cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota).all()
+    # Obtener cuotas ordenadas: primero NO PAGADAS (más antigua primero), luego PAGADAS
+    from sqlalchemy import case
+    cuotas = (
+        db.query(Cuota)
+        .filter(Cuota.prestamo_id == prestamo_id)
+        .order_by(
+            # Primero: NO PAGADAS (estado != 'PAGADO'), luego PAGADAS
+            case(
+                (Cuota.estado != 'PAGADO', 0),
+                else_=1
+            ),
+            # Dentro de NO PAGADAS: ordenar por fecha_vencimiento (más antigua primero)
+            Cuota.fecha_vencimiento,
+            # Como desempate: numero_cuota
+            Cuota.numero_cuota
+        )
+        .all()
+    )
 
     # Formatear para tabla visual
     tabla_visual = []

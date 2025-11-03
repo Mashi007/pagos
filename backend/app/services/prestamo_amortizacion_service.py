@@ -157,15 +157,33 @@ def obtener_cuotas_prestamo(
 ) -> List[Cuota]:
     """
     Obtiene todas las cuotas de un préstamo.
+    Ordena primero las cuotas NO PAGADAS (más antigua primero), luego las pagadas.
 
     Args:
         prestamo_id: ID del préstamo
         db: Sesión de base de datos
 
     Returns:
-        Lista de cuotas ordenadas por número
+        Lista de cuotas ordenadas: primero NO PAGADAS por fecha_vencimiento, luego PAGADAS por numero_cuota
     """
-    return db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota).all()
+    from sqlalchemy import case
+    
+    return (
+        db.query(Cuota)
+        .filter(Cuota.prestamo_id == prestamo_id)
+        .order_by(
+            # Primero: NO PAGADAS (estado != 'PAGADO'), luego PAGADAS
+            case(
+                (Cuota.estado != 'PAGADO', 0),
+                else_=1
+            ),
+            # Dentro de NO PAGADAS: ordenar por fecha_vencimiento (más antigua primero)
+            Cuota.fecha_vencimiento,
+            # Como desempate: numero_cuota
+            Cuota.numero_cuota
+        )
+        .all()
+    )
 
 
 def obtener_cuotas_pendientes(
