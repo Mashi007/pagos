@@ -113,7 +113,14 @@ export function Logo({ className, size = 'md' }: LogoProps) {
 
     // Escuchar eventos de actualización del logo
     const handleLogoUpdate = (event: CustomEvent) => {
-      const { filename, url } = event.detail
+      const { filename, url, confirmed } = event.detail || {}
+      
+      // Si solo viene confirmed: true sin filename ni url, ignorar
+      if (confirmed && !filename && !url) {
+        console.warn('Evento logoUpdated recibido con confirmed pero sin filename/url')
+        return
+      }
+      
       let newLogoUrl: string | null = null
       
       if (url) {
@@ -127,6 +134,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
       
       if (newLogoUrl) {
         // Actualizar cache y estado
+        console.log('🔄 Actualizando logo:', newLogoUrl)
         logoCache.logoUrl = newLogoUrl
         logoCache.hasChecked = true
         setCustomLogoUrl(newLogoUrl)

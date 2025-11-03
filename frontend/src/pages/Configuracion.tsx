@@ -254,12 +254,18 @@ export function Configuracion() {
 
         // Si hay un logo preview, significa que se subió un logo
         // El logo ya está guardado en el servidor, solo confirmamos visualmente
-        if (logoPreview) {
-          console.log('✅ Logo confirmado y guardado')
-          // Disparar evento para actualizar todos los componentes Logo
+        if (logoPreview && logoInfo) {
+          console.log('✅ Logo confirmado y guardado', logoInfo)
+          // Disparar evento para actualizar todos los componentes Logo con la información completa
           window.dispatchEvent(new CustomEvent('logoUpdated', { 
-            detail: { confirmed: true } 
+            detail: { 
+              confirmed: true,
+              filename: logoInfo.filename, 
+              url: logoInfo.url 
+            } 
           }))
+          // Limpiar estado después de confirmar
+          setLogoInfo(null)
         }
       }
       
@@ -292,6 +298,7 @@ export function Configuracion() {
 
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [logoInfo, setLogoInfo] = useState<{ filename: string; url: string } | null>(null)
 
   const handleCargarLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -335,12 +342,21 @@ export function Configuracion() {
 
       const result = await response.json()
 
-      // Mostrar preview del logo
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setLogoPreview(reader.result as string)
+      // Guardar información del logo para usar después al confirmar
+      setLogoInfo({ filename: result.filename, url: result.url })
+
+      // Mostrar preview del logo desde el servidor con timestamp para evitar caché
+      if (result.url) {
+        const logoUrl = `${result.url}?t=${Date.now()}`
+        setLogoPreview(logoUrl)
+      } else {
+        // Fallback: mostrar preview local si no hay URL
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          setLogoPreview(reader.result as string)
+        }
+        reader.readAsDataURL(file)
       }
-      reader.readAsDataURL(file)
 
       // Marcar como cambio pendiente para activar botón Guardar
       // Esto permite al usuario validar/confirmar antes de aplicar el cambio
@@ -348,18 +364,11 @@ export function Configuracion() {
       
       toast.success('Logo cargado. Haga clic en "Guardar" para confirmar el cambio.')
 
-      // Forzar recarga del componente Logo usando un evento personalizado
-      // No recargar toda la página, solo notificar que el logo cambió
+      // Disparar evento para actualizar componentes Logo inmediatamente
+      // (aunque luego se confirmará al hacer clic en Guardar)
       window.dispatchEvent(new CustomEvent('logoUpdated', { 
         detail: { filename: result.filename, url: result.url } 
       }))
-      
-      // Recargar logo sin recargar toda la página
-      // Agregar timestamp al URL para evitar caché
-      if (result.url) {
-        const logoUrl = `${result.url}?t=${Date.now()}`
-        setLogoPreview(logoUrl)
-      }
     } catch (error: any) {
       console.error('Error cargando logo:', error)
       const errorMessage = error?.response?.data?.detail || error?.message || 'Error desconocido'
