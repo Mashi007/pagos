@@ -418,19 +418,17 @@ def obtener_tabla_visual(
 
     # Obtener cuotas ordenadas: primero NO PAGADAS (más antigua primero), luego PAGADAS
     from sqlalchemy import case
+
     cuotas = (
         db.query(Cuota)
         .filter(Cuota.prestamo_id == prestamo_id)
         .order_by(
             # Primero: NO PAGADAS (estado != 'PAGADO'), luego PAGADAS
-            case(
-                (Cuota.estado != 'PAGADO', 0),
-                else_=1
-            ),
+            case((Cuota.estado != "PAGADO", 0), else_=1),
             # Dentro de NO PAGADAS: ordenar por fecha_vencimiento (más antigua primero)
             Cuota.fecha_vencimiento,
             # Como desempate: numero_cuota
-            Cuota.numero_cuota
+            Cuota.numero_cuota,
         )
         .all()
     )

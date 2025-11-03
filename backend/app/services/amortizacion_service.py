@@ -350,26 +350,20 @@ class AmortizacionService:
         Ordena primero las cuotas NO PAGADAS (más antigua primero), luego las pagadas.
         """
         from sqlalchemy import case
-        
+
         query = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id)
 
         if estado:
             query = query.filter(Cuota.estado == estado)
 
-        return (
-            query.order_by(
-                # Primero: NO PAGADAS (estado != 'PAGADO'), luego PAGADAS
-                case(
-                    (Cuota.estado != 'PAGADO', 0),
-                    else_=1
-                ),
-                # Dentro de NO PAGADAS: ordenar por fecha_vencimiento (más antigua primero)
-                Cuota.fecha_vencimiento,
-                # Como desempate: numero_cuota
-                Cuota.numero_cuota
-            )
-            .all()
-        )
+        return query.order_by(
+            # Primero: NO PAGADAS (estado != 'PAGADO'), luego PAGADAS
+            case((Cuota.estado != "PAGADO", 0), else_=1),
+            # Dentro de NO PAGADAS: ordenar por fecha_vencimiento (más antigua primero)
+            Cuota.fecha_vencimiento,
+            # Como desempate: numero_cuota
+            Cuota.numero_cuota,
+        ).all()
 
     @staticmethod
     def recalcular_mora(

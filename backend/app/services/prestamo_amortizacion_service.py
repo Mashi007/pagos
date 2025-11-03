@@ -167,20 +167,17 @@ def obtener_cuotas_prestamo(
         Lista de cuotas ordenadas: primero NO PAGADAS por fecha_vencimiento, luego PAGADAS por numero_cuota
     """
     from sqlalchemy import case
-    
+
     return (
         db.query(Cuota)
         .filter(Cuota.prestamo_id == prestamo_id)
         .order_by(
             # Primero: NO PAGADAS (estado != 'PAGADO'), luego PAGADAS
-            case(
-                (Cuota.estado != 'PAGADO', 0),
-                else_=1
-            ),
+            case((Cuota.estado != "PAGADO", 0), else_=1),
             # Dentro de NO PAGADAS: ordenar por fecha_vencimiento (más antigua primero)
             Cuota.fecha_vencimiento,
             # Como desempate: numero_cuota
-            Cuota.numero_cuota
+            Cuota.numero_cuota,
         )
         .all()
     )
