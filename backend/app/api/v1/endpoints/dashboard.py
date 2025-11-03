@@ -37,9 +37,15 @@ def _calcular_periodos(periodo: str, hoy: date) -> tuple[date, date]:
     return fecha_inicio_periodo, fecha_fin_periodo_anterior
 
 
-def _calcular_cartera_anterior(db: Session, periodo: str, fecha_fin_periodo_anterior: date,
-                               analista: Optional[str], concesionario: Optional[str],
-                               modelo: Optional[str], cartera_total: Decimal) -> float:
+def _calcular_cartera_anterior(
+    db: Session,
+    periodo: str,
+    fecha_fin_periodo_anterior: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+    cartera_total: Decimal,
+) -> float:
     """Calcula la cartera anterior según el período"""
     if periodo == "dia":
         return float(cartera_total)
@@ -54,9 +60,14 @@ def _calcular_cartera_anterior(db: Session, periodo: str, fecha_fin_periodo_ante
     return float(cartera_anterior_query.scalar() or Decimal("0"))
 
 
-def _calcular_total_cobrado_mes(db: Session, primer_dia: date, ultimo_dia: date,
-                                analista: Optional[str], concesionario: Optional[str],
-                                modelo: Optional[str]) -> Decimal:
+def _calcular_total_cobrado_mes(
+    db: Session,
+    primer_dia: date,
+    ultimo_dia: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> Decimal:
     """Calcula el total cobrado en un mes (solo pagos conciliados)"""
     query = db.query(func.sum(Pago.monto_pagado)).filter(
         func.date(Pago.fecha_pago) >= primer_dia,
@@ -93,15 +104,19 @@ def _obtener_fechas_mes_siguiente(mes: int, año: int) -> date:
 def _calcular_variacion(valor_actual: float, valor_anterior: float) -> tuple[float, float]:
     """Calcula variación porcentual y absoluta"""
     variacion_absoluta = valor_actual - valor_anterior
-    variacion_porcentual = (
-        ((valor_actual - valor_anterior) / valor_anterior * 100) if valor_anterior > 0 else 0
-    )
+    variacion_porcentual = ((valor_actual - valor_anterior) / valor_anterior * 100) if valor_anterior > 0 else 0
     return variacion_porcentual, variacion_absoluta
 
 
-def _calcular_morosidad(db: Session, fecha: date, analista: Optional[str],
-                        concesionario: Optional[str], modelo: Optional[str],
-                        fecha_inicio: Optional[date], fecha_fin: Optional[date]) -> float:
+def _calcular_morosidad(
+    db: Session,
+    fecha: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+    fecha_inicio: Optional[date],
+    fecha_fin: Optional[date],
+) -> float:
     """Calcula morosidad (cuotas vencidas no pagadas) hasta una fecha"""
     query = (
         db.query(func.sum(Cuota.monto_cuota))
@@ -112,15 +127,19 @@ def _calcular_morosidad(db: Session, fecha: date, analista: Optional[str],
             Cuota.estado != "PAGADO",
         )
     )
-    query = FiltrosDashboard.aplicar_filtros_cuota(
-        query, analista, concesionario, modelo, fecha_inicio, fecha_fin
-    )
+    query = FiltrosDashboard.aplicar_filtros_cuota(query, analista, concesionario, modelo, fecha_inicio, fecha_fin)
     return float(query.scalar() or Decimal("0"))
 
 
-def _calcular_total_a_cobrar_fecha(db: Session, fecha: date, analista: Optional[str],
-                                   concesionario: Optional[str], modelo: Optional[str],
-                                   fecha_inicio: Optional[date], fecha_fin: Optional[date]) -> float:
+def _calcular_total_a_cobrar_fecha(
+    db: Session,
+    fecha: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+    fecha_inicio: Optional[date],
+    fecha_fin: Optional[date],
+) -> float:
     """Calcula total a cobrar en una fecha específica"""
     query = (
         db.query(func.sum(Cuota.monto_cuota))
@@ -130,9 +149,7 @@ def _calcular_total_a_cobrar_fecha(db: Session, fecha: date, analista: Optional[
             Cuota.fecha_vencimiento == fecha,
         )
     )
-    query = FiltrosDashboard.aplicar_filtros_cuota(
-        query, analista, concesionario, modelo, fecha_inicio, fecha_fin
-    )
+    query = FiltrosDashboard.aplicar_filtros_cuota(query, analista, concesionario, modelo, fecha_inicio, fecha_fin)
     return float(query.scalar() or Decimal("0"))
 
 
@@ -208,8 +225,9 @@ def _procesar_distribucion_por_estado(query_base, total_prestamos: int, total_mo
     return distribucion_data
 
 
-def _procesar_distribucion_rango_monto_plazo(query_base, rangos_monto: list, rangos_plazo: list,
-                                             total_prestamos: int, total_monto: float) -> list:
+def _procesar_distribucion_rango_monto_plazo(
+    query_base, rangos_monto: list, rangos_plazo: list, total_prestamos: int, total_monto: float
+) -> list:
     """Procesa distribución combinada por rango de monto y plazo"""
     distribucion_data = []
     for min_monto, max_monto, cat_monto in rangos_monto:
@@ -248,9 +266,7 @@ def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos
             query_rango = query_rango.filter(Prestamo.total_financiamiento < Decimal(str(max_val)))
 
         cantidad = query_rango.count()
-        monto_total = float(
-            query_rango.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0")
-        )
+        monto_total = float(query_rango.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
         porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
         porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
 
@@ -266,8 +282,9 @@ def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos
     return distribucion_data
 
 
-def _calcular_rango_fechas_granularidad(granularidad: str, hoy: date, dias: Optional[int],
-                                       fecha_inicio: Optional[date], fecha_fin: Optional[date]) -> tuple[date, date]:
+def _calcular_rango_fechas_granularidad(
+    granularidad: str, hoy: date, dias: Optional[int], fecha_inicio: Optional[date], fecha_fin: Optional[date]
+) -> tuple[date, date]:
     """Calcula rango de fechas según granularidad"""
     if granularidad == "mes_actual":
         fecha_inicio_query = date(hoy.year, hoy.month, 1)
@@ -298,16 +315,21 @@ def _calcular_proyeccion_cuotas_dias(datos: List[dict[str, Any]]) -> int:
     """Calcula proyección de cuotas en días usando promedio histórico"""
     if len(datos) > 0:
         valores_historicos = [
-            d["cuotas_en_dias"] for d in datos
-            if d.get("cuotas_en_dias") is not None and d["cuotas_en_dias"] > 0
+            d["cuotas_en_dias"] for d in datos if d.get("cuotas_en_dias") is not None and d["cuotas_en_dias"] > 0
         ]
         return int(sum(valores_historicos) / len(valores_historicos)) if valores_historicos else 0
     return 0
 
 
-def _calcular_pagos_fecha(db: Session, fecha: date, analista: Optional[str],
-                          concesionario: Optional[str], modelo: Optional[str],
-                          fecha_inicio: Optional[date], fecha_fin: Optional[date]) -> float:
+def _calcular_pagos_fecha(
+    db: Session,
+    fecha: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+    fecha_inicio: Optional[date],
+    fecha_fin: Optional[date],
+) -> float:
     """Calcula pagos en una fecha específica"""
     query = db.query(func.sum(Pago.monto_pagado)).filter(func.date(Pago.fecha_pago) == fecha)
     if analista or concesionario or modelo:
@@ -316,9 +338,14 @@ def _calcular_pagos_fecha(db: Session, fecha: date, analista: Optional[str],
     return float(query.scalar() or Decimal("0"))
 
 
-def _calcular_tasa_recuperacion(db: Session, primer_dia: date, ultimo_dia: date,
-                                analista: Optional[str], concesionario: Optional[str],
-                                modelo: Optional[str]) -> float:
+def _calcular_tasa_recuperacion(
+    db: Session,
+    primer_dia: date,
+    ultimo_dia: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> float:
     """Calcula la tasa de recuperación mensual"""
     # Cuotas a cobrar del mes
     cuotas_a_cobrar_query = (
@@ -815,9 +842,7 @@ def dashboard_administrador(
         )
 
         # 17. TASA DE RECUPERACIÓN MENSUAL
-        tasa_recuperacion = _calcular_tasa_recuperacion(
-            db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo
-        )
+        tasa_recuperacion = _calcular_tasa_recuperacion(db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo)
 
         # Tasa recuperación mes anterior
         tasa_recuperacion_anterior = _calcular_tasa_recuperacion(
@@ -1373,9 +1398,7 @@ def obtener_kpis_principales(
         )
         morosidad_anterior = float(query_morosidad_anterior.scalar() or Decimal("0"))
 
-        variacion_morosidad, variacion_morosidad_abs = _calcular_variacion(
-            morosidad_actual, morosidad_anterior
-        )
+        variacion_morosidad, variacion_morosidad_abs = _calcular_variacion(morosidad_actual, morosidad_anterior)
 
         nombres_meses = [
             "Enero",
@@ -1567,12 +1590,8 @@ def obtener_cobranza_por_dia(
             total_a_cobrar = _calcular_total_a_cobrar_fecha(
                 db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
-            pagos = _calcular_pagos_fecha(
-                db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin
-            )
-            morosidad = _calcular_morosidad(
-                db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin
-            )
+            pagos = _calcular_pagos_fecha(db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin)
+            morosidad = _calcular_morosidad(db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin)
 
             dias_data.append(
                 {
