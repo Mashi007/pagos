@@ -119,7 +119,11 @@ def obtener_configuracion_completa(db: Session = Depends(get_db), current_user: 
         )
 
     try:
-        configuraciones = db.query(ConfiguracionSistema).all()
+        # OPTIMIZACIÓN: Agregar límite para evitar cargar demasiadas configuraciones
+        # Si hay más de 1000 configuraciones, solo cargar las primeras 1000
+        MAX_CONFIGURACIONES = 1000
+        configuraciones = db.query(ConfiguracionSistema).limit(MAX_CONFIGURACIONES).all()
+        total = db.query(ConfiguracionSistema).count()
 
         return {
             "configuraciones": [
@@ -131,7 +135,9 @@ def obtener_configuracion_completa(db: Session = Depends(get_db), current_user: 
                 }
                 for config in configuraciones
             ],
-            "total": len(configuraciones),
+            "total": total,
+            "retornadas": len(configuraciones),
+            "advertencia": "Límite de 1000 configuraciones aplicado" if total > MAX_CONFIGURACIONES else None,
         }
 
     except Exception as e:
@@ -579,12 +585,37 @@ def obtener_configuracion_email(db: Session = Depends(get_db), current_user: Use
             )
 
         logger.info("🔍 Consultando configuración de email desde BD...")
-        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "EMAIL").all()
-        logger.info(f"📊 Configuraciones encontradas: {len(configs)}")
+        
+        # Intentar consulta con manejo robusto de errores
+        configs = None
+        try:
+            configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "EMAIL").all()
+            logger.info(f"📊 Configuraciones encontradas: {len(configs)}")
+        except Exception as query_error:
+            logger.error(f"❌ Error ejecutando consulta de configuración de email: {str(query_error)}", exc_info=True)
+            # Intentar consulta alternativa usando método estático del modelo
+            try:
+                config_dict = ConfiguracionSistema.obtener_categoria(db, "EMAIL")
+                if config_dict:
+                    logger.info(f"✅ Configuración obtenida usando método alternativo: {len(config_dict)} configuraciones")
+                    return config_dict
+            except Exception as alt_error:
+                logger.error(f"❌ Error en método alternativo también falló: {str(alt_error)}", exc_info=True)
+            # Si todo falla, retornar valores por defecto en lugar de fallar con 500
+            logger.warning("⚠️ No se pudo obtener configuración de BD, retornando valores por defecto")
+            return {
+                "smtp_host": "smtp.gmail.com",
+                "smtp_port": "587",
+                "smtp_user": "",
+                "smtp_password": "",
+                "from_email": "",
+                "from_name": "RapiCredit",
+                "smtp_use_tls": "true",
+            }
 
         if not configs:
             # Valores por defecto
-            logger.info("📝 Retornando valores por defecto de email")
+            logger.info("📝 Retornando valores por defecto de email (no hay configuraciones en BD)")
             return {
                 "smtp_host": "smtp.gmail.com",
                 "smtp_port": "587",
@@ -617,7 +648,17 @@ def obtener_configuracion_email(db: Session = Depends(get_db), current_user: Use
         raise
     except Exception as e:
         logger.error(f"❌ Error obteniendo configuración de email: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        # En caso de error crítico, retornar valores por defecto en lugar de fallar completamente
+        logger.warning("⚠️ Retornando valores por defecto debido a error")
+        return {
+            "smtp_host": "smtp.gmail.com",
+            "smtp_port": "587",
+            "smtp_user": "",
+            "smtp_password": "",
+            "from_email": "",
+            "from_name": "RapiCredit",
+            "smtp_use_tls": "true",
+        }
 
 
 @router.put("/email/configuracion")
