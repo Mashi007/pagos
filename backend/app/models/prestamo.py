@@ -3,11 +3,13 @@ from sqlalchemy import (
     Boolean,
     Column,
     Date,
+    ForeignKey,
     Integer,
     Numeric,
     String,
     Text,
 )
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.db.session import Base
@@ -21,9 +23,12 @@ class Prestamo(Base):
     # ============================================
     # DATOS DEL CLIENTE (vinculado por cédula)
     # ============================================
-    cliente_id = Column(Integer, nullable=False, index=True)  # FK a clientes.id
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False, index=True)
     cedula = Column(String(20), nullable=False, index=True)  # Cédula del cliente
     nombres = Column(String(100), nullable=False)  # Nombre del cliente
+    
+    # Relación con Cliente
+    cliente = relationship("Cliente", backref="prestamos")
 
     # ============================================
     # DATOS DEL PRÉSTAMO
