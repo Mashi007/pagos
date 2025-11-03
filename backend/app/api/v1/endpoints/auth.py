@@ -55,7 +55,9 @@ def _obtener_info_request(request: Request) -> tuple[Optional[str], Optional[str
     return (ip, ua)
 
 
-def _registrar_auditoria_login(db: Session, request: Request, usuario_id: int, exito: bool, entidad_id: Optional[int] = None) -> None:
+def _registrar_auditoria_login(
+    db: Session, request: Request, usuario_id: int, exito: bool, entidad_id: Optional[int] = None
+) -> None:
     """Registra auditoría de login sin bloquear el proceso"""
     try:
         ip, ua = _obtener_info_request(request)

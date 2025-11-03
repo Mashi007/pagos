@@ -110,7 +110,9 @@ def _calcular_total_a_cobrar(
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(Cuota.fecha_vencimiento == fecha_dia, Prestamo.estado == "APROBADO")
         )
-        cuotas_dia_query = FiltrosDashboard.aplicar_filtros_cuota(cuotas_dia_query, analista, concesionario, modelo, None, None)
+        cuotas_dia_query = FiltrosDashboard.aplicar_filtros_cuota(
+            cuotas_dia_query, analista, concesionario, modelo, None, None
+        )
         return float(cuotas_dia_query.scalar() or Decimal("0"))
     except Exception:
         logger.error(
