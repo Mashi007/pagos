@@ -398,22 +398,22 @@ def _calcular_tasa_recuperacion(
 
 
 def _normalizar_valor(valor: Optional[str]) -> Optional[str]:
-            """Normaliza un valor: trim, validar no vacío"""
-            if not valor:
-                return None
-            valor_limpio = str(valor).strip()
-            return valor_limpio if valor_limpio else None
+    """Normaliza un valor: trim, validar no vacío"""
+    if not valor:
+        return None
+    valor_limpio = str(valor).strip()
+    return valor_limpio if valor_limpio else None
 
 
 def _obtener_valores_unicos(query_result) -> set:
-            """Extrae valores únicos normalizados de una query"""
-            valores = set()
-            for item in query_result:
-                valor = item[0] if isinstance(item, tuple) else item
+    """Extrae valores únicos normalizados de una query"""
+    valores = set()
+    for item in query_result:
+        valor = item[0] if isinstance(item, tuple) else item
         valor_limpio = _normalizar_valor(valor)
-                if valor_limpio:
-                    valores.add(valor_limpio)
-            return valores
+        if valor_limpio:
+            valores.add(valor_limpio)
+    return valores
 
 
 def _obtener_valores_distintos_de_columna(db: Session, columna, default: Optional[set] = None) -> set:
