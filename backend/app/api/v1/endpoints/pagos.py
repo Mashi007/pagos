@@ -212,7 +212,9 @@ def healthcheck_pagos(
 
         # Monto total pagado (convertir monto_pagado TEXT a NUMERIC)
         monto_total_query = db.execute(
-            text("SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE monto_pagado IS NOT NULL AND monto_pagado != ''")
+            text(
+                "SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE monto_pagado IS NOT NULL AND monto_pagado != ''"
+            )
         )
         monto_total = Decimal(str(monto_total_query.scalar() or 0))
 
@@ -1483,7 +1485,7 @@ def obtener_estadisticas_pagos(
         where_conditions.append("fecha_pago IS NOT NULL")
         where_conditions.append("fecha_pago != ''")
         where_conditions.append("fecha_pago ~ '^\\\\d{4}-\\\\d{2}-\\\\d{2}'")
-        
+
         params = {}
         if fecha_inicio:
             where_conditions.append("fecha_pago::timestamp >= :fecha_inicio")
@@ -1491,11 +1493,13 @@ def obtener_estadisticas_pagos(
         if fecha_fin:
             where_conditions.append("fecha_pago::timestamp <= :fecha_fin")
             params["fecha_fin"] = datetime.combine(fecha_fin, datetime.max.time())
-        
+
         where_clause = " AND ".join(where_conditions)
-        
+
         total_pagado_query = db.execute(
-            text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_clause}").bindparams(**params)
+            text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_clause}").bindparams(
+                **params
+            )
         )
         total_pagado = Decimal(str(total_pagado_query.scalar() or 0))
 
@@ -1503,7 +1507,9 @@ def obtener_estadisticas_pagos(
         where_hoy = where_clause + " AND DATE(fecha_pago::timestamp) = :hoy"
         params_hoy = {**params, "hoy": hoy}
         pagos_hoy_query = db.execute(
-            text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_hoy}").bindparams(**params_hoy)
+            text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_hoy}").bindparams(
+                **params_hoy
+            )
         )
         pagos_hoy = Decimal(str(pagos_hoy_query.scalar() or 0))
 
