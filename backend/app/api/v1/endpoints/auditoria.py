@@ -201,6 +201,119 @@ def listar_auditoria(
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
+def _aplicar_filtros_detalladas(
+    query_prestamos, query_pagos, accion: Optional[str], fecha_desde: Optional[date], fecha_hasta: Optional[date]
+):
+    """Aplica filtros a las queries de auditoría detallada"""
+    if accion:
+        query_prestamos = query_prestamos.filter(PrestamoAuditoria.accion == accion)
+        query_pagos = query_pagos.filter(PagoAuditoria.accion == accion)
+    if fecha_desde:
+        query_prestamos = query_prestamos.filter(PrestamoAuditoria.fecha_cambio >= fecha_desde)
+        query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio >= fecha_desde)
+    if fecha_hasta:
+        query_prestamos = query_prestamos.filter(PrestamoAuditoria.fecha_cambio <= fecha_hasta)
+        query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio <= fecha_hasta)
+    return query_prestamos, query_pagos
+
+
+def _convertir_registro_general_a_dict(registro) -> dict:
+    """Convierte un registro de Auditoria general a dict unificado"""
+    return {
+        "fecha": registro.fecha,
+        "usuario_email": registro.usuario_email,
+        "modulo": getattr(registro, "entidad", None),
+        "accion": registro.accion,
+        "descripcion": getattr(registro, "detalles", None),
+        "ip_address": getattr(registro, "ip_address", None),
+    }
+
+
+def _generar_descripcion_detallada(registro) -> str:
+    """Genera descripción textual para registro detallado de auditoría"""
+    desc_text = f"{registro.accion} {registro.campo_modificado}: "
+    if registro.valor_anterior is not None:
+        desc_text += f"{registro.valor_anterior} -> "
+    desc_text += f"{registro.valor_nuevo}"
+    observaciones = getattr(registro, "observaciones", None)
+    if observaciones:
+        desc_text += f" ({observaciones})"
+    return desc_text
+
+
+def _convertir_registro_prestamos_a_dict(registro: PrestamoAuditoria) -> dict:
+    """Convierte un registro de PrestamoAuditoria a dict unificado"""
+    return {
+        "fecha": registro.fecha_cambio,
+        "usuario_email": registro.usuario,
+        "modulo": "PRESTAMOS",
+        "accion": registro.accion,
+        "descripcion": _generar_descripcion_detallada(registro),
+        "ip_address": None,
+    }
+
+
+def _convertir_registro_pagos_a_dict(registro: PagoAuditoria) -> dict:
+    """Convierte un registro de PagoAuditoria a dict unificado"""
+    return {
+        "fecha": registro.fecha_cambio,
+        "usuario_email": registro.usuario,
+        "modulo": "PAGOS",
+        "accion": registro.accion,
+        "descripcion": _generar_descripcion_detallada(registro),
+        "ip_address": None,
+    }
+
+
+def _unificar_registros_auditoria(
+    registros_general: List, registros_prestamos: List[PrestamoAuditoria], registros_pagos: List[PagoAuditoria]
+) -> List[dict]:
+    """Unifica todos los registros de auditoría en una lista de dicts"""
+    unified = []
+    for r in registros_general:
+        unified.append(_convertir_registro_general_a_dict(r))
+    for r in registros_prestamos:
+        unified.append(_convertir_registro_prestamos_a_dict(r))
+    for r in registros_pagos:
+        unified.append(_convertir_registro_pagos_a_dict(r))
+    unified.sort(key=lambda x: x.get("fecha") or 0, reverse=True)
+    return unified
+
+
+def _generar_detalles_exportacion(
+    usuario_email: Optional[str], modulo: Optional[str], accion: Optional[str]
+) -> str:
+    """Genera el texto de detalles para la auditoría de exportación"""
+    detalles = "Exportó auditoría unificada"
+    if usuario_email:
+        detalles += f" (usuario_email={usuario_email})"
+    if modulo:
+        detalles += f" (modulo={modulo})"
+    if accion:
+        detalles += f" (accion={accion})"
+    return detalles
+
+
+def _registrar_auditoria_exportacion(
+    db: Session, current_user: User, usuario_email: Optional[str], modulo: Optional[str], accion: Optional[str]
+):
+    """Registra la auditoría de la exportación"""
+    try:
+        detalles = _generar_detalles_exportacion(usuario_email, modulo, accion)
+        audit = Auditoria(
+            usuario_id=current_user.id,
+            accion="EXPORT",
+            entidad="AUDITORIA",
+            entidad_id=None,
+            detalles=detalles,
+            exito=True,
+        )
+        db.add(audit)
+        db.commit()
+    except Exception as e:
+        logger.warning(f"No se pudo registrar auditoría exportación de auditoría: {e}")
+
+
 @router.get("/auditoria/exportar")
 def exportar_auditoria(
     usuario_email: Optional[str] = Query(None),
@@ -211,13 +324,11 @@ def exportar_auditoria(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Exportar auditoría a Excel
+    """Exportar auditoría a Excel"""
     try:
-        # Permitir solo ADMIN
         if not getattr(current_user, "is_admin", False):
             raise HTTPException(status_code=403, detail="No autorizado")
 
-        # Consultas base
         query_general = db.query(Auditoria)
         query_general = _aplicar_filtros_auditoria(
             query_general, usuario_email, modulo, accion, fecha_desde, fecha_hasta
@@ -226,96 +337,15 @@ def exportar_auditoria(
 
         query_prestamos = db.query(PrestamoAuditoria).order_by(desc(PrestamoAuditoria.fecha_cambio))
         query_pagos = db.query(PagoAuditoria).order_by(desc(PagoAuditoria.fecha_cambio))
+        query_prestamos, query_pagos = _aplicar_filtros_detalladas(query_prestamos, query_pagos, accion, fecha_desde, fecha_hasta)
 
-        # Filtros aproximados para detalladas
-        if accion:
-            query_prestamos = query_prestamos.filter(PrestamoAuditoria.accion == accion)
-            query_pagos = query_pagos.filter(PagoAuditoria.accion == accion)
-        if fecha_desde:
-            query_prestamos = query_prestamos.filter(PrestamoAuditoria.fecha_cambio >= fecha_desde)
-            query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio >= fecha_desde)
-        if fecha_hasta:
-            query_prestamos = query_prestamos.filter(PrestamoAuditoria.fecha_cambio <= fecha_hasta)
-            query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio <= fecha_hasta)
-        # modulo/usuario_email no siempre disponibles en detalladas; modulo lo mapeamos
         registros_prestamos: List[PrestamoAuditoria] = query_prestamos.all()
         registros_pagos: List[PagoAuditoria] = query_pagos.all()
 
-        # Unificar
-        unified = []
-        for r in registros_general:
-            unified.append(
-                {
-                    "fecha": r.fecha,
-                    "usuario_email": r.usuario_email,
-                    "modulo": getattr(r, "entidad", None),
-                    "accion": r.accion,
-                    "descripcion": getattr(r, "detalles", None),
-                    "ip_address": getattr(r, "ip_address", None),
-                }
-            )
-        for r in registros_prestamos:
-            desc_text = f"{r.accion} {r.campo_modificado}: "
-            if r.valor_anterior is not None:
-                desc_text += f"{r.valor_anterior} -> "
-            desc_text += f"{r.valor_nuevo}"
-            if r.observaciones:
-                desc_text += f" ({r.observaciones})"
-            unified.append(
-                {
-                    "fecha": r.fecha_cambio,
-                    "usuario_email": r.usuario,
-                    "modulo": "PRESTAMOS",
-                    "accion": r.accion,
-                    "descripcion": desc_text,
-                    "ip_address": None,
-                }
-            )
-        for r in registros_pagos:
-            desc_text = f"{r.accion} {r.campo_modificado}: "
-            if r.valor_anterior is not None:
-                desc_text += f"{r.valor_anterior} -> "
-            desc_text += f"{r.valor_nuevo}"
-            if getattr(r, "observaciones", None):
-                desc_text += f" ({r.observaciones})"
-            unified.append(
-                {
-                    "fecha": r.fecha_cambio,
-                    "usuario_email": r.usuario,
-                    "modulo": "PAGOS",
-                    "accion": r.accion,
-                    "descripcion": desc_text,
-                    "ip_address": None,
-                }
-            )
-
-        # Ordenar por fecha desc
-        unified.sort(key=lambda x: x.get("fecha") or 0, reverse=True)
-
-        # Crear archivo Excel desde datos unificados
+        unified = _unificar_registros_auditoria(registros_general, registros_prestamos, registros_pagos)
         output = _crear_excel_auditoria_unificado(unified)
 
-        # Auditoría de exportación de Auditoría (solo admin)
-        try:
-            detalles = "Exportó auditoría unificada"
-            if usuario_email:
-                detalles += f" (usuario_email={usuario_email})"
-            if modulo:
-                detalles += f" (modulo={modulo})"
-            if accion:
-                detalles += f" (accion={accion})"
-            audit = Auditoria(
-                usuario_id=current_user.id,
-                accion="EXPORT",
-                entidad="AUDITORIA",
-                entidad_id=None,
-                detalles=detalles,
-                exito=True,
-            )
-            db.add(audit)
-            db.commit()
-        except Exception as e:
-            logger.warning(f"No se pudo registrar auditoría exportación de auditoría: {e}")
+        _registrar_auditoria_exportacion(db, current_user, usuario_email, modulo, accion)
 
         return Response(
             content=output.getvalue(),

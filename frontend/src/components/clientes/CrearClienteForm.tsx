@@ -890,18 +890,18 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         notas: blankIfNN(formData.notas) || 'No hay observacion'
       }
 
-      console.log('🔍 DEBUG - Datos a enviar al backend:', clienteData)
+      logger.debug('Datos a enviar al backend', { clienteData })
 
       if (cliente) {
         // Editar cliente existente
-        console.log('✏️ Editando cliente existente:', cliente.id)
+        logger.info('Editando cliente existente', { clienteId: cliente.id })
         await clienteService.updateCliente(cliente.id, clienteData)
-        console.log('✅ Cliente actualizado exitosamente')
+        logger.info('Cliente actualizado exitosamente', { clienteId: cliente.id })
       } else {
         // Crear nuevo cliente
-        console.log('➕ Creando nuevo cliente')
+        logger.info('Creando nuevo cliente', { cedula: clienteData.cedula })
         await clienteService.createCliente(clienteData)
-        console.log('✅ Cliente creado exitosamente')
+        logger.info('Cliente creado exitosamente', { cedula: clienteData.cedula })
       }
       onSuccess()
       onClienteCreated?.()
