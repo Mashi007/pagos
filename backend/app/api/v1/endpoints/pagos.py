@@ -14,9 +14,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
-from app.models.pago import Pago
+from app.models.pago import Pago  # Mantener para operaciones que necesiten tabla pagos (crear, actualizar)
 from app.models.pago_auditoria import PagoAuditoria
-from app.models.pago_staging import PagoStaging
+from app.models.pago_staging import PagoStaging  # Usar para consultas principales (listar, stats, kpis)
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.schemas.pago import PagoCreate, PagoResponse, PagoUpdate
@@ -35,21 +35,27 @@ def _aplicar_filtros_pagos(
     analista: Optional[str],
     db: Session,
 ):
-    """Aplica filtros a la query de pagos"""
+    """Aplica filtros a la query de pagos (usa PagoStaging)"""
     if cedula:
-        query = query.filter(Pago.cedula_cliente == cedula)
+        # PagoStaging puede tener cedula_cliente o cedula
+        query = query.filter(
+            or_(
+                PagoStaging.cedula_cliente == cedula,
+                PagoStaging.cedula == cedula
+            )
+        )
         logger.info(f"🔍 [listar_pagos] Filtro cédula: {cedula}")
     if estado:
-        query = query.filter(Pago.estado == estado)
+        query = query.filter(PagoStaging.estado == estado)
         logger.info(f"🔍 [listar_pagos] Filtro estado: {estado}")
     if fecha_desde:
-        query = query.filter(Pago.fecha_pago >= fecha_desde)
+        query = query.filter(PagoStaging.fecha_pago >= fecha_desde)
         logger.info(f"🔍 [listar_pagos] Filtro fecha_desde: {fecha_desde}")
     if fecha_hasta:
-        query = query.filter(Pago.fecha_pago <= fecha_hasta)
+        query = query.filter(PagoStaging.fecha_pago <= fecha_hasta)
         logger.info(f"🔍 [listar_pagos] Filtro fecha_hasta: {fecha_hasta}")
     if analista:
-        query = query.join(Prestamo).filter(Prestamo.usuario_proponente == analista)
+        query = query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id).filter(Prestamo.usuario_proponente == analista)
         logger.info(f"🔍 [listar_pagos] Filtro analista: {analista}")
     return query
 
@@ -135,8 +141,10 @@ def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str,
         pago_dict = PagoResponse.model_validate(pago).model_dump()
 
         # Obtener cuotas atrasadas del cache (siempre debe proporcionarse)
+        # PagoStaging puede tener cedula_cliente o cedula
+        cedula_cliente = pago.cedula_cliente or pago.cedula
         if cuotas_atrasadas_cache is not None:
-            cuotas_atrasadas = cuotas_atrasadas_cache.get(pago.cedula_cliente, 0)
+            cuotas_atrasadas = cuotas_atrasadas_cache.get(cedula_cliente, 0)
         else:
             # Fallback: 0 si no hay cache (para evitar N+1, el cache debe calcularse antes)
             cuotas_atrasadas = 0
@@ -150,7 +158,8 @@ def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str,
             f"❌ [listar_pagos] Error serializando pago ID {pago.id}: {error_detail}",
             exc_info=True,
         )
-        logger.error(f"   Datos del pago: cedula={pago.cedula_cliente}")
+        cedula_cliente = getattr(pago, 'cedula_cliente', None) or getattr(pago, 'cedula', None)
+        logger.error(f"   Datos del pago: cedula={cedula_cliente}")
         logger.error(f"   fecha_pago={pago.fecha_pago} (tipo: {type(pago.fecha_pago)})")
         logger.error(
             f"   fecha_registro={getattr(pago, 'fecha_registro', 'N/A')} (tipo: {type(getattr(pago, 'fecha_registro', None))})"
@@ -176,19 +185,19 @@ def healthcheck_pagos(
     y disponibilidad de datos para alimentar el dashboard.
     """
     try:
-        # Verificar conexión a BD con prueba de consulta
-        total_pagos = db.query(func.count(Pago.id)).scalar() or 0
+        # Verificar conexión a BD con prueba de consulta (usa PagoStaging)
+        total_pagos = db.query(func.count(PagoStaging.id)).scalar() or 0
 
         # Pagos del mes actual
         hoy = date.today()
         primer_dia_mes = date(hoy.year, hoy.month, 1)
-        pagos_mes = db.query(func.count(Pago.id)).filter(Pago.fecha_pago >= primer_dia_mes).scalar() or 0
+        pagos_mes = db.query(func.count(PagoStaging.id)).filter(PagoStaging.fecha_pago >= primer_dia_mes).scalar() or 0
 
         # Monto total pagado
-        monto_total = db.query(func.sum(Pago.monto_pagado)).scalar() or Decimal("0")
+        monto_total = db.query(func.sum(PagoStaging.monto_pagado)).scalar() or Decimal("0")
 
         # Pagos por estado
-        pagos_por_estado = db.query(Pago.estado, func.count(Pago.id)).group_by(Pago.estado).all()
+        pagos_por_estado = db.query(PagoStaging.estado, func.count(PagoStaging.id)).group_by(PagoStaging.estado).all()
         estados_dict = {estado: count for estado, count in pagos_por_estado}
 
         return {
@@ -403,8 +412,8 @@ def listar_pagos(
 
         # Verificar conexión a BD
         try:
-            test_query = db.query(func.count(Pago.id)).scalar()
-            logger.info(f"✅ [listar_pagos] Conexión BD OK. Total pagos en BD: {test_query}")
+            test_query = db.query(func.count(PagoStaging.id)).scalar()
+            logger.info(f"✅ [listar_pagos] Conexión BD OK. Total pagos en pagos_staging: {test_query}")
         except Exception as db_error:
             logger.error(f"❌ [listar_pagos] Error de conexión BD: {db_error}", exc_info=True)
             raise HTTPException(
@@ -412,7 +421,7 @@ def listar_pagos(
                 detail=f"Error de conexión a la base de datos: {str(db_error)}",
             )
 
-        query = db.query(Pago)
+        query = db.query(PagoStaging)
 
         # Aplicar filtros
         query = _aplicar_filtros_pagos(query, cedula, estado, fecha_desde, fecha_hasta, analista, db)
@@ -422,7 +431,10 @@ def listar_pagos(
         logger.info(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")
 
         # Ordenar por fecha de registro descendente (más actual primero)
-        query = query.order_by(Pago.fecha_registro.desc(), Pago.id.desc())
+        if hasattr(PagoStaging, 'fecha_registro'):
+            query = query.order_by(PagoStaging.fecha_registro.desc(), PagoStaging.id.desc())
+        else:
+            query = query.order_by(PagoStaging.id.desc())
 
         # Paginación
         offset = (page - 1) * per_page
@@ -431,7 +443,12 @@ def listar_pagos(
 
         # OPTIMIZACIÓN: Calcular todas las cuotas atrasadas de una vez (batch)
         hoy = date.today()
-        cedulas_unicas = list(set(p.cedula_cliente for p in pagos if p.cedula_cliente))
+        # PagoStaging puede tener cedula_cliente o cedula
+        cedulas_unicas = list(set(
+            (p.cedula_cliente or p.cedula) 
+            for p in pagos 
+            if (p.cedula_cliente or p.cedula)
+        ))
         cuotas_atrasadas_cache = _calcular_cuotas_atrasadas_batch(db, cedulas_unicas, hoy)
 
         logger.debug(f"✅ [listar_pagos] Cache de cuotas atrasadas calculado para {len(cedulas_unicas)} clientes únicos")
@@ -669,7 +686,10 @@ def listar_ultimos_pagos(
 
         # Paginación (ordenar por fecha_registro desc)
         offset = (page - 1) * per_page
-        pagos_ultimos = pagos_ultimos_q.order_by(Pago.fecha_registro.desc()).offset(offset).limit(per_page).all()
+        if hasattr(PagoStaging, 'fecha_registro'):
+            pagos_ultimos = pagos_ultimos_q.order_by(PagoStaging.fecha_registro.desc()).offset(offset).limit(per_page).all()
+        else:
+            pagos_ultimos = pagos_ultimos_q.order_by(PagoStaging.id.desc()).offset(offset).limit(per_page).all()
 
         # Para cada cédula, calcular agregados sobre amortización (todas sus deudas)
         items = []
