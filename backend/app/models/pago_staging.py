@@ -26,38 +26,16 @@ class PagoStaging(Base):
     # ⚠️ NOTA: No hay columna 'cedula' en pagos_staging, solo 'cedula_cliente'
 
     # DATOS DEL PAGO
-    prestamo_id = Column(Integer, nullable=True, index=True)  # ID del crédito (puede ser NULL en staging)
-    numero_cuota = Column(Integer, nullable=True)  # Número de cuota asociada (opcional)
-    # ⚠️ IMPORTANTE: fecha_pago y monto_pagado son TEXT en la BD real
-    fecha_pago = Column(String(50), nullable=True)  # Fecha de pago (TEXT en BD: 'YYYY-MM-DD HH24:MI:SS')
-    fecha_registro = Column(DateTime, default=func.now(), nullable=True, index=True)  # Fecha de registro (automático)
-    monto_pagado = Column(String(50), nullable=True)  # Monto pagado (TEXT en BD, se convierte a numeric en queries)
+    # ⚠️ IMPORTANTE: pagos_staging solo tiene estas columnas básicas en la BD real:
+    # - id_stg (ya mapeado arriba)
+    # - cedula_cliente (ya mapeado arriba)
+    # - fecha_pago (TEXT en BD: 'YYYY-MM-DD HH24:MI:SS')
+    # - monto_pagado (TEXT en BD)
+    # - numero_documento
+    # Las demás columnas NO EXISTEN en la BD real y causan errores
+    fecha_pago = Column(String(50), nullable=True)  # Fecha de pago (TEXT en BD)
+    monto_pagado = Column(String(50), nullable=True)  # Monto pagado (TEXT en BD)
     numero_documento = Column(String(DOCUMENTO_LENGTH), nullable=True, index=True)
-    institucion_bancaria = Column(String(100), nullable=True)  # Institución bancaria
-
-    # DOCUMENTO ADJUNTO
-    documento_nombre = Column(String(DOCUMENTO_NOMBRE_LENGTH), nullable=True)
-    documento_tipo = Column(String(DOCUMENTO_TIPO_LENGTH), nullable=True)  # PNG, JPG, PDF
-    documento_tamaño = Column(Integer, nullable=True)  # bytes
-    documento_ruta = Column(String(DOCUMENTO_RUTA_LENGTH), nullable=True)
-
-    # ESTADO DE CONCILIACIÓN
-    conciliado = Column(Boolean, default=False, nullable=True)
-    fecha_conciliacion = Column(DateTime, nullable=True)
-
-    # ESTADO DEL PAGO
-    estado = Column(String(20), default="PENDIENTE", nullable=True, index=True)  # PENDIENTE, PAGADO, PARCIAL, ADELANTADO
-
-    # CONTROL Y AUDITORÍA
-    activo = Column(Boolean, default=True, nullable=True)
-    notas = Column(Text, nullable=True)
-    usuario_registro = Column(String(100), nullable=True)  # Email del usuario que registró el pago
-    fecha_actualizacion = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=True)
-
-    # VERIFICACIÓN DE CONCORDANCIA
-    verificado_concordancia = Column(
-        String(2), default="NO", nullable=True
-    )  # SI/NO - Se actualiza cuando el número de documento coincide en conciliación
 
     def __repr__(self):
-        return f"<PagoStaging(id={self.id}, cedula={self.cedula_cliente or self.cedula}, monto={self.monto_pagado}, estado={self.estado})>"
+        return f"<PagoStaging(id={self.id}, cedula={self.cedula_cliente}, monto={self.monto_pagado})>"

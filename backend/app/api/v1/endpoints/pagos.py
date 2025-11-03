@@ -41,8 +41,9 @@ def _aplicar_filtros_pagos(
         query = query.filter(PagoStaging.cedula_cliente == cedula)
         logger.info(f"🔍 [listar_pagos] Filtro cédula: {cedula}")
     if estado:
-        query = query.filter(PagoStaging.estado == estado)
-        logger.info(f"🔍 [listar_pagos] Filtro estado: {estado}")
+        # ⚠️ PagoStaging no tiene columna 'estado' en la BD real
+        # query = query.filter(PagoStaging.estado == estado)
+        logger.info(f"🔍 [listar_pagos] Filtro estado: {estado} (ignorado - columna no existe)")
     if fecha_desde:
         # Convertir fecha_pago (TEXT) a timestamp para comparar
         query = query.filter(
@@ -60,8 +61,9 @@ def _aplicar_filtros_pagos(
         )
         logger.info(f"🔍 [listar_pagos] Filtro fecha_hasta: {fecha_hasta}")
     if analista:
-        query = query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id).filter(Prestamo.usuario_proponente == analista)
-        logger.info(f"🔍 [listar_pagos] Filtro analista: {analista}")
+        # ⚠️ PagoStaging no tiene columna 'prestamo_id' en la BD real
+        # query = query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id).filter(Prestamo.usuario_proponente == analista)
+        logger.info(f"🔍 [listar_pagos] Filtro analista: {analista} (ignorado - prestamo_id no existe)")
     return query
 
 
@@ -211,8 +213,8 @@ def healthcheck_pagos(
         # Monto total pagado (convertir monto_pagado TEXT a NUMERIC)
         monto_total = db.query(func.sum(text("pagos_staging.monto_pagado::numeric"))).scalar() or Decimal("0")
 
-        # Pagos por estado
-        pagos_por_estado = db.query(PagoStaging.estado, func.count(PagoStaging.id)).group_by(PagoStaging.estado).all()
+        # Pagos por estado (PagoStaging no tiene columna estado)
+        pagos_por_estado = []  # Vacío porque no hay columna estado
         estados_dict = {estado: count for estado, count in pagos_por_estado}
 
         return {
@@ -438,24 +440,46 @@ def listar_pagos(
                 detail=f"Error de conexión a la base de datos: {str(db_error)}",
             )
 
+        # ⚠️ IMPORTANTE: PagoStaging solo tiene 5 columnas en BD
+        # Usar query directo y evitar que SQLAlchemy seleccione columnas que no existen
         query = db.query(PagoStaging)
 
         # Aplicar filtros
         query = _aplicar_filtros_pagos(query, cedula, estado, fecha_desde, fecha_hasta, analista, db)
 
-        # Contar total antes de aplicar paginación
-        total = query.count()
+        # Contar total - usar texto SQL directo para evitar problemas
+        result = db.execute(text("SELECT COUNT(*) FROM pagos_staging WHERE cedula_cliente IS NOT NULL"))
+        total = result.scalar() or 0
+        
+        # Aplicar filtros al count también si hay cedula
+        if cedula:
+            result = db.execute(text("SELECT COUNT(*) FROM pagos_staging WHERE cedula_cliente = :cedula").bindparams(cedula=cedula))
+            total = result.scalar() or 0
+        
         logger.info(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")
 
-        # Ordenar por fecha de registro descendente (más actual primero)
-        if hasattr(PagoStaging, "fecha_registro"):
-            query = query.order_by(PagoStaging.fecha_registro.desc(), PagoStaging.id.desc())
-        else:
-            query = query.order_by(PagoStaging.id.desc())
-
-        # Paginación
+        # Paginación - usar SQL directo para evitar problemas con columnas inexistentes
         offset = (page - 1) * per_page
-        pagos = query.offset(offset).limit(per_page).all()
+        pagos_raw = db.execute(
+            text("""
+                SELECT id_stg, cedula_cliente, fecha_pago, monto_pagado, numero_documento
+                FROM pagos_staging
+                WHERE cedula_cliente IS NOT NULL
+                ORDER BY id_stg DESC
+                LIMIT :limit OFFSET :offset
+            """).bindparams(limit=per_page, offset=offset)
+        ).fetchall()
+        
+        # Convertir resultados a objetos PagoStaging simulados
+        pagos = []
+        for row in pagos_raw:
+            pago = PagoStaging()
+            pago.id = row[0]
+            pago.cedula_cliente = row[1]
+            pago.fecha_pago = row[2]
+            pago.monto_pagado = row[3]
+            pago.numero_documento = row[4]
+            pagos.append(pago)
         logger.info(f"📄 [listar_pagos] Pagos obtenidos de BD: {len(pagos)}")
 
         # OPTIMIZACIÓN: Calcular todas las cuotas atrasadas de una vez (batch)
