@@ -23,7 +23,7 @@ class PagoStaging(Base):
 
     # DATOS DEL CLIENTE
     cedula_cliente = Column(String(CEDULA_LENGTH), nullable=True, index=True)
-    cedula = Column(String(CEDULA_LENGTH), nullable=True, index=True)  # Columna alternativa
+    # ⚠️ NOTA: No hay columna 'cedula' en pagos_staging, solo 'cedula_cliente'
 
     # DATOS DEL PAGO
     prestamo_id = Column(Integer, nullable=True, index=True)  # ID del crédito (puede ser NULL en staging)

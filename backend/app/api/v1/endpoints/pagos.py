@@ -37,8 +37,8 @@ def _aplicar_filtros_pagos(
 ):
     """Aplica filtros a la query de pagos (usa PagoStaging)"""
     if cedula:
-        # PagoStaging puede tener cedula_cliente o cedula
-        query = query.filter(or_(PagoStaging.cedula_cliente == cedula, PagoStaging.cedula == cedula))
+        # PagoStaging solo tiene cedula_cliente (no existe columna cedula)
+        query = query.filter(PagoStaging.cedula_cliente == cedula)
         logger.info(f"🔍 [listar_pagos] Filtro cédula: {cedula}")
     if estado:
         query = query.filter(PagoStaging.estado == estado)
@@ -146,8 +146,8 @@ def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str,
         pago_dict = PagoResponse.model_validate(pago).model_dump()
 
         # Obtener cuotas atrasadas del cache (siempre debe proporcionarse)
-        # PagoStaging puede tener cedula_cliente o cedula
-        cedula_cliente = pago.cedula_cliente or pago.cedula
+        # PagoStaging solo tiene cedula_cliente
+        cedula_cliente = pago.cedula_cliente
         if cuotas_atrasadas_cache is not None:
             cuotas_atrasadas = cuotas_atrasadas_cache.get(cedula_cliente, 0)
         else:
@@ -163,7 +163,7 @@ def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str,
             f"❌ [listar_pagos] Error serializando pago ID {pago.id}: {error_detail}",
             exc_info=True,
         )
-        cedula_cliente = getattr(pago, "cedula_cliente", None) or getattr(pago, "cedula", None)
+        cedula_cliente = getattr(pago, "cedula_cliente", None)
         logger.error(f"   Datos del pago: cedula={cedula_cliente}")
         logger.error(f"   fecha_pago={pago.fecha_pago} (tipo: {type(pago.fecha_pago)})")
         logger.error(
@@ -460,8 +460,8 @@ def listar_pagos(
 
         # OPTIMIZACIÓN: Calcular todas las cuotas atrasadas de una vez (batch)
         hoy = date.today()
-        # PagoStaging puede tener cedula_cliente o cedula
-        cedulas_unicas = list(set((p.cedula_cliente or p.cedula) for p in pagos if (p.cedula_cliente or p.cedula)))
+        # PagoStaging solo tiene cedula_cliente
+        cedulas_unicas = list(set(p.cedula_cliente for p in pagos if p.cedula_cliente))
         cuotas_atrasadas_cache = _calcular_cuotas_atrasadas_batch(db, cedulas_unicas, hoy)
 
         logger.debug(f"✅ [listar_pagos] Cache de cuotas atrasadas calculado para {len(cedulas_unicas)} clientes únicos")
@@ -676,11 +676,11 @@ def listar_ultimos_pagos(
         # Usar PagoStaging donde están los datos reales
         sub_ultimos = (
             db.query(
-                func.coalesce(PagoStaging.cedula_cliente, PagoStaging.cedula).label("cedula"),
+                PagoStaging.cedula_cliente.label("cedula"),
                 func.max(PagoStaging.fecha_registro).label("max_fecha"),
             )
-            .filter(or_(PagoStaging.cedula_cliente.isnot(None), PagoStaging.cedula.isnot(None)))
-            .group_by(func.coalesce(PagoStaging.cedula_cliente, PagoStaging.cedula))
+            .filter(PagoStaging.cedula_cliente.isnot(None))
+            .group_by(PagoStaging.cedula_cliente)
             .subquery()
         )
 
@@ -688,13 +688,13 @@ def listar_ultimos_pagos(
         # Usar PagoStaging donde están los datos reales
         pagos_ultimos_q = db.query(PagoStaging).join(
             sub_ultimos,
-            (or_(PagoStaging.cedula_cliente == sub_ultimos.c.cedula, PagoStaging.cedula == sub_ultimos.c.cedula))
+            (PagoStaging.cedula_cliente == sub_ultimos.c.cedula)
             & (PagoStaging.fecha_registro == sub_ultimos.c.max_fecha),
         )
 
         # Filtros
         if cedula:
-            pagos_ultimos_q = pagos_ultimos_q.filter(or_(PagoStaging.cedula_cliente == cedula, PagoStaging.cedula == cedula))
+            pagos_ultimos_q = pagos_ultimos_q.filter(PagoStaging.cedula_cliente == cedula)
         if estado:
             pagos_ultimos_q = pagos_ultimos_q.filter(PagoStaging.estado == estado)
 
@@ -1124,7 +1124,6 @@ def obtener_kpis_pagos(
                 PagoStaging.monto_pagado,
                 PagoStaging.fecha_pago,
                 PagoStaging.cedula_cliente,
-                PagoStaging.cedula,
             )
             .filter(
                 text("pagos_staging.fecha_pago::timestamp >= :fecha_inicio").bindparams(fecha_inicio=fecha_inicio_dt),
@@ -1553,7 +1552,7 @@ def listar_pagos_staging(
 
         # Aplicar filtros
         if cedula:
-            query = query.filter(or_(PagoStaging.cedula_cliente == cedula, PagoStaging.cedula == cedula))
+            query = query.filter(PagoStaging.cedula_cliente == cedula)
             logger.info(f"🔍 [listar_pagos_staging] Filtro cédula: {cedula}")
         if estado:
             query = query.filter(PagoStaging.estado == estado)
@@ -1580,8 +1579,7 @@ def listar_pagos_staging(
         items = [
             {
                 "id": p.id,
-                "cedula_cliente": p.cedula_cliente or p.cedula,
-                "cedula": p.cedula,
+                "cedula_cliente": p.cedula_cliente,
                 "prestamo_id": p.prestamo_id,
                 "numero_cuota": p.numero_cuota,
                 "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
@@ -1659,7 +1657,7 @@ def estadisticas_pagos_staging(
         con_datos_completos = (
             db.query(func.count(PagoStaging.id))
             .filter(
-                or_(PagoStaging.cedula_cliente.isnot(None), PagoStaging.cedula.isnot(None)),
+                PagoStaging.cedula_cliente.isnot(None),
                 PagoStaging.fecha_pago.isnot(None),
                 PagoStaging.monto_pagado.isnot(None),
                 text("pagos_staging.monto_pagado::numeric > 0"),
@@ -1714,7 +1712,7 @@ def migrar_pago_staging_a_pagos(
             raise HTTPException(status_code=404, detail=f"Pago staging con ID {pago_staging_id} no encontrado")
 
         # Validar que tenga datos mínimos
-        cedula_final = pago_staging.cedula_cliente or pago_staging.cedula
+        cedula_final = pago_staging.cedula_cliente
         if not cedula_final:
             raise HTTPException(status_code=400, detail="El pago staging no tiene cédula de cliente (cedula_cliente o cedula)")
         if not pago_staging.fecha_pago:
@@ -1904,7 +1902,7 @@ def verificar_conexion_pagos_staging(
                     muestra_datos.append(
                         {
                             "id": p.id,
-                            "cedula": p.cedula_cliente or p.cedula,
+                            "cedula": p.cedula_cliente,
                             "monto": float(p.monto_pagado) if p.monto_pagado else None,
                             "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
                             "estado": p.estado,
@@ -1926,7 +1924,7 @@ def verificar_conexion_pagos_staging(
             total = db.query(func.count(PagoStaging.id)).scalar() or 0
             con_cedula = (
                 db.query(func.count(PagoStaging.id))
-                .filter(or_(PagoStaging.cedula_cliente.isnot(None), PagoStaging.cedula.isnot(None)))
+                .filter(PagoStaging.cedula_cliente.isnot(None))
                 .scalar()
                 or 0
             )
