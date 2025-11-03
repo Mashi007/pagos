@@ -1063,17 +1063,24 @@ def dashboard_administrador(
         )
         total_financiamiento_operaciones = float(total_financiamiento_query.scalar() or Decimal("0"))
 
-        # Cartera Cobrada: Suma de TODOS los pagos (conciliados y no conciliados)
-        cartera_cobrada_query = db.query(func.sum(PagoStaging.monto_pagado))
-        if analista or concesionario or modelo:
-            cartera_cobrada_query = cartera_cobrada_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
-        cartera_cobrada_query = FiltrosDashboard.aplicar_filtros_pago(
-            cartera_cobrada_query,
-            analista,
-            concesionario,
-            modelo,
-            fecha_inicio,
-            fecha_fin,
+        # Cartera Cobrada: Suma de TODOS los pagos
+        # ⚠️ PagoStaging no tiene prestamo_id, así que no podemos aplicar filtros de analista/concesionario/modelo
+        # Usar SQL directo para sumar monto_pagado con filtros de fecha únicamente
+        where_conditions = ["monto_pagado IS NOT NULL", "monto_pagado != ''"]
+        params = {}
+        
+        if fecha_inicio:
+            where_conditions.append("fecha_pago::timestamp >= :fecha_inicio")
+            params["fecha_inicio"] = datetime.combine(fecha_inicio, datetime.min.time())
+        if fecha_fin:
+            where_conditions.append("fecha_pago::timestamp <= :fecha_fin")
+            params["fecha_fin"] = datetime.combine(fecha_fin, datetime.max.time())
+        
+        where_clause = " AND ".join(where_conditions)
+        where_clause += " AND fecha_pago IS NOT NULL AND fecha_pago != '' AND fecha_pago ~ '^\\\\d{4}-\\\\d{2}-\\\\d{2}'"
+        
+        cartera_cobrada_query = db.execute(
+            text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_clause}").bindparams(**params)
         )
         cartera_cobrada_total = float(cartera_cobrada_query.scalar() or Decimal("0"))
 
@@ -2213,33 +2220,14 @@ def obtener_cobros_por_analista(
         hoy = date.today()
         fecha_inicio_mes = date(hoy.year, hoy.month, 1)
 
-        # Obtener cobros por analista (pagos conciliados del mes)
-        query = (
-            db.query(
-                func.coalesce(Prestamo.analista, Prestamo.producto_financiero, "Sin Analista").label("analista"),
-                func.sum(PagoStaging.monto_pagado).label("total_cobrado"),
-                func.count(PagoStaging.id).label("cantidad_pagos"),
-            )
-            .join(PagoStaging, PagoStaging.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                PagoStaging.conciliado.is_(True),
-                func.date(PagoStaging.fecha_pago) >= fecha_inicio_mes,
-            )
-            .group_by("analista")
-            .order_by(func.sum(PagoStaging.monto_pagado).desc())
+        # Obtener cobros por analista (pagos del mes)
+        # ⚠️ PagoStaging no tiene prestamo_id ni conciliado, no podemos hacer JOIN ni filtrar por conciliado
+        # Retornar lista vacía ya que no podemos relacionar pagos con analistas
+        resultados = []
+        logger.warning(
+            f"⚠️ [obtener_cobros_por_analista] No se puede obtener cobros por analista: "
+            f"PagoStaging no tiene prestamo_id para hacer JOIN con Prestamo"
         )
-
-        # Aplicar filtros (excepto analista que ya estamos agrupando)
-        if concesionario:
-            query = query.filter(Prestamo.concesionario == concesionario)
-        if modelo:
-            query = query.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
-        if fecha_inicio or fecha_fin:
-            # Ya estamos filtrando por mes actual, pero podemos ajustar si hay fechas específicas
-            pass
-
-        resultados = query.limit(10).all()  # Top 10
 
         analistas_data = []
         for row in resultados:

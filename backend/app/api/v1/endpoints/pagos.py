@@ -134,22 +134,67 @@ def _calcular_cuotas_atrasadas_batch(db: Session, cedulas: list[str], hoy: date)
 def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str, int]] = None):
     """
     Serializa un pago de forma segura.
+    
+    Maneja PagoStaging que no tiene: estado, conciliado, usuario_registro, activo, fecha_registro, etc.
+    Convierte monto_pagado de string a Decimal.
 
     OPTIMIZACIÓN: Recibe cache de cuotas_atrasadas para evitar N+1 queries.
     Si no se proporciona cache, asume 0 (no se calcula individualmente para mejor performance).
     """
     try:
-        # Convertir fecha_pago si es DATE a datetime si es necesario
+        # Convertir fecha_pago si es string a datetime si es necesario
+        fecha_pago_dt = None
         if hasattr(pago, "fecha_pago") and pago.fecha_pago is not None:
-            if isinstance(pago.fecha_pago, date) and not isinstance(pago.fecha_pago, datetime):
-                pago.fecha_pago = datetime.combine(pago.fecha_pago, time.min)
+            if isinstance(pago.fecha_pago, str):
+                # Intentar parsear string a datetime
+                try:
+                    fecha_pago_dt = datetime.fromisoformat(pago.fecha_pago.replace("Z", "+00:00"))
+                except (ValueError, AttributeError):
+                    try:
+                        fecha_pago_dt = datetime.strptime(pago.fecha_pago[:19], "%Y-%m-%d %H:%M:%S")
+                    except (ValueError, IndexError):
+                        fecha_pago_dt = datetime.combine(date.fromisoformat(pago.fecha_pago[:10]), time.min)
+            elif isinstance(pago.fecha_pago, date) and not isinstance(pago.fecha_pago, datetime):
+                fecha_pago_dt = datetime.combine(pago.fecha_pago, time.min)
+            else:
+                fecha_pago_dt = pago.fecha_pago
 
-        # Validar con el schema
-        pago_dict = PagoResponse.model_validate(pago).model_dump()
+        # Convertir monto_pagado de string a Decimal
+        monto_pagado_decimal = Decimal("0.00")
+        if hasattr(pago, "monto_pagado") and pago.monto_pagado:
+            try:
+                monto_str = str(pago.monto_pagado).strip()
+                if monto_str and monto_str != '':
+                    monto_pagado_decimal = Decimal(monto_str)
+            except (ValueError, TypeError):
+                logger.warning(f"⚠️ [serializar_pago] No se pudo convertir monto_pagado '{pago.monto_pagado}' a Decimal para pago {pago.id}")
+
+        # Construir diccionario manualmente porque PagoStaging no tiene todos los campos de PagoResponse
+        pago_dict = {
+            "id": pago.id,
+            "cedula_cliente": getattr(pago, "cedula_cliente", ""),
+            "prestamo_id": None,  # PagoStaging no tiene prestamo_id
+            "fecha_pago": fecha_pago_dt,
+            "monto_pagado": float(monto_pagado_decimal),  # Convertir a float para serialización
+            "numero_documento": getattr(pago, "numero_documento", ""),
+            "institucion_bancaria": None,  # PagoStaging no tiene esta columna
+            "notas": None,  # PagoStaging no tiene esta columna
+            "fecha_registro": None,  # PagoStaging no tiene esta columna
+            "estado": "REGISTRADO",  # Valor por defecto ya que PagoStaging no tiene esta columna
+            "conciliado": False,  # Valor por defecto ya que PagoStaging no tiene esta columna
+            "fecha_conciliacion": None,  # PagoStaging no tiene esta columna
+            "documento_nombre": None,  # PagoStaging no tiene esta columna
+            "documento_tipo": None,  # PagoStaging no tiene esta columna
+            "documento_ruta": None,  # PagoStaging no tiene esta columna
+            "usuario_registro": "SISTEMA",  # Valor por defecto ya que PagoStaging no tiene esta columna
+            "activo": True,  # Valor por defecto ya que PagoStaging no tiene esta columna
+            "fecha_actualizacion": None,  # PagoStaging no tiene esta columna
+            "verificado_concordancia": None,  # PagoStaging no tiene esta columna
+        }
 
         # Obtener cuotas atrasadas del cache (siempre debe proporcionarse)
         # PagoStaging solo tiene cedula_cliente
-        cedula_cliente = pago.cedula_cliente
+        cedula_cliente = getattr(pago, "cedula_cliente", "")
         if cuotas_atrasadas_cache is not None:
             cuotas_atrasadas = cuotas_atrasadas_cache.get(cedula_cliente, 0)
         else:
@@ -162,21 +207,13 @@ def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str,
     except Exception as e:
         error_detail = str(e)
         logger.error(
-            f"❌ [listar_pagos] Error serializando pago ID {pago.id}: {error_detail}",
+            f"❌ [listar_pagos] Error serializando pago ID {getattr(pago, 'id', 'N/A')}: {error_detail}",
             exc_info=True,
         )
         cedula_cliente = getattr(pago, "cedula_cliente", None)
         logger.error(f"   Datos del pago: cedula={cedula_cliente}")
-        logger.error(f"   fecha_pago={pago.fecha_pago} (tipo: {type(pago.fecha_pago)})")
-        logger.error(
-            f"   fecha_registro={getattr(pago, 'fecha_registro', 'N/A')} (tipo: {type(getattr(pago, 'fecha_registro', None))})"
-        )
-        logger.error(
-            f"   fecha_actualizacion={getattr(pago, 'fecha_actualizacion', 'N/A')} (tipo: {type(getattr(pago, 'fecha_actualizacion', None))})"
-        )
-        logger.error(
-            f"   fecha_conciliacion={getattr(pago, 'fecha_conciliacion', 'N/A')} (tipo: {type(getattr(pago, 'fecha_conciliacion', None))})"
-        )
+        logger.error(f"   fecha_pago={getattr(pago, 'fecha_pago', 'N/A')} (tipo: {type(getattr(pago, 'fecha_pago', None))})")
+        logger.error(f"   monto_pagado={getattr(pago, 'monto_pagado', 'N/A')} (tipo: {type(getattr(pago, 'monto_pagado', None))})")
         raise
 
 
@@ -1904,18 +1941,14 @@ def verificar_conexion_pagos_staging(
         # 3. Verificar estructura de columnas
         logger.info("🔍 [verificar_pagos_staging] Verificando estructura de columnas...")
         try:
-            # Intentar consultar diferentes columnas
+            # Intentar consultar columnas que existen en PagoStaging (solo las 5 columnas reales)
             muestra = (
                 db.query(
                     PagoStaging.id,
                     PagoStaging.cedula_cliente,
-                    PagoStaging.cedula,
-                    PagoStaging.prestamo_id,
                     PagoStaging.fecha_pago,
                     PagoStaging.monto_pagado,
                     PagoStaging.numero_documento,
-                    PagoStaging.estado,
-                    PagoStaging.conciliado,
                 )
                 .limit(1)
                 .first()
@@ -1924,15 +1957,11 @@ def verificar_conexion_pagos_staging(
             columnas_verificadas = []
             if muestra:
                 columnas_verificadas = [
-                    "id",
+                    "id_stg",
                     "cedula_cliente",
-                    "cedula",
-                    "prestamo_id",
                     "fecha_pago",
                     "monto_pagado",
                     "numero_documento",
-                    "estado",
-                    "conciliado",
                 ]
 
             diagnostico["verificaciones"]["estructura_columnas"] = {
