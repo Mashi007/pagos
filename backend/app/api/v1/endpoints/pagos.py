@@ -494,20 +494,41 @@ def listar_pagos(
         # Aplicar filtros
         query = _aplicar_filtros_pagos(query, cedula, estado, fecha_desde, fecha_hasta, analista, db)
 
-        # Contar total - usar texto SQL directo para evitar problemas
-        result = db.execute(text("SELECT COUNT(*) FROM pagos_staging WHERE cedula_cliente IS NOT NULL"))
+        # Contar total - filtrar solo pagos con datos válidos (cedula y monto no vacíos)
+        result = db.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM pagos_staging 
+                WHERE cedula_cliente IS NOT NULL 
+                  AND cedula_cliente != ''
+                  AND TRIM(cedula_cliente) != ''
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                  AND TRIM(monto_pagado) != ''
+                """
+            )
+        )
         total = result.scalar() or 0
 
         # Aplicar filtros al count también si hay cedula
         if cedula:
             result = db.execute(
-                text("SELECT COUNT(*) FROM pagos_staging WHERE cedula_cliente = :cedula").bindparams(cedula=cedula)
+                text(
+                    """
+                    SELECT COUNT(*) FROM pagos_staging 
+                    WHERE cedula_cliente = :cedula
+                      AND monto_pagado IS NOT NULL
+                      AND monto_pagado != ''
+                      AND TRIM(monto_pagado) != ''
+                    """
+                ).bindparams(cedula=cedula)
             )
             total = result.scalar() or 0
 
         logger.info(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")
 
         # Paginación - usar SQL directo para evitar problemas con columnas inexistentes
+        # Filtrar por cedula_cliente válida (no NULL y no vacío) y monto_pagado válido
         offset = (page - 1) * per_page
         pagos_raw = db.execute(
             text(
@@ -515,11 +536,28 @@ def listar_pagos(
                 SELECT id_stg, cedula_cliente, fecha_pago, monto_pagado, numero_documento
                 FROM pagos_staging
                 WHERE cedula_cliente IS NOT NULL
+                  AND cedula_cliente != ''
+                  AND TRIM(cedula_cliente) != ''
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                  AND TRIM(monto_pagado) != ''
+                  AND (monto_pagado::numeric > 0 OR monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$')
                 ORDER BY id_stg DESC
                 LIMIT :limit OFFSET :offset
             """
             ).bindparams(limit=per_page, offset=offset)
         ).fetchall()
+        
+        # Log de diagnóstico: mostrar ejemplos de los datos reales obtenidos
+        if pagos_raw:
+            logger.info(f"📊 [listar_pagos] Ejemplos de datos obtenidos de BD:")
+            for i, row in enumerate(pagos_raw[:3]):  # Mostrar primeros 3
+                logger.info(
+                    f"   Pago {i+1}: ID={row[0]}, Cédula='{row[1]}', "
+                    f"Fecha='{row[2]}', Monto='{row[3]}', Doc='{row[4]}'"
+                )
+        else:
+            logger.warning("⚠️ [listar_pagos] No se obtuvieron pagos con datos válidos de la BD")
 
         # Convertir resultados a objetos PagoStaging simulados
         pagos = []
@@ -1190,32 +1228,52 @@ def obtener_kpis_pagos(
         )
         monto_cobrado_mes = Decimal(str(monto_cobrado_mes_query.scalar() or 0))
 
-        # Log detallado para verificación
-        total_pagos_mes = (
-            db.query(func.count(PagoStaging.id))
-            .filter(
-                text("pagos_staging.fecha_pago::timestamp >= :fecha_inicio").bindparams(fecha_inicio=fecha_inicio_dt),
-                text("pagos_staging.fecha_pago::timestamp < :fecha_fin").bindparams(fecha_fin=fecha_fin_dt),
-            )
-            .scalar()
-            or 0
+        # Log detallado para verificación - contar solo pagos con montos válidos > 0
+        total_pagos_mes_query = db.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM pagos_staging
+                WHERE fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                  AND fecha_pago::timestamp >= :fecha_inicio
+                  AND fecha_pago::timestamp < :fecha_fin
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                  AND monto_pagado::numeric > 0
+            """
+            ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
         )
+        total_pagos_mes = total_pagos_mes_query.scalar() or 0
 
-        # ✅ DIAGNÓSTICO: Verificar algunos pagos reales del mes
-        pagos_ejemplo_mes = (
-            db.query(
-                PagoStaging.id,
-                PagoStaging.monto_pagado,
-                PagoStaging.fecha_pago,
-                PagoStaging.cedula_cliente,
-            )
-            .filter(
-                text("pagos_staging.fecha_pago::timestamp >= :fecha_inicio").bindparams(fecha_inicio=fecha_inicio_dt),
-                text("pagos_staging.fecha_pago::timestamp < :fecha_fin").bindparams(fecha_fin=fecha_fin_dt),
-            )
-            .limit(5)
-            .all()
+        # ✅ DIAGNÓSTICO: Verificar algunos pagos reales del mes (usar SQL directo para mejor control)
+        pagos_ejemplo_query = db.execute(
+            text(
+                """
+                SELECT id_stg, monto_pagado, fecha_pago, cedula_cliente
+                FROM pagos_staging
+                WHERE fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                  AND fecha_pago::timestamp >= :fecha_inicio
+                  AND fecha_pago::timestamp < :fecha_fin
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                  AND monto_pagado::numeric > 0
+                LIMIT 5
+            """
+            ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
         )
+        pagos_ejemplo_raw = pagos_ejemplo_query.fetchall()
+        pagos_ejemplo_mes = []
+        for row in pagos_ejemplo_raw:
+            pago_ej = type('obj', (object,), {
+                'id': row[0],
+                'monto_pagado': row[1],
+                'fecha_pago': row[2],
+                'cedula_cliente': row[3]
+            })()
+            pagos_ejemplo_mes.append(pago_ej)
 
         logger.info(
             f"💰 [kpis_pagos] Monto cobrado en el mes: ${monto_cobrado_mes:,.2f} "
