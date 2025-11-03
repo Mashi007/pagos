@@ -11,12 +11,14 @@ import sys
 from datetime import date
 from decimal import Decimal
 
-# Agregar el directorio raíz al path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+# Agregar el directorio del backend al path (donde está la estructura app/)
+backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../backend"))
+sys.path.insert(0, backend_dir)
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from app.models.prestamo import Prestamo
+from app.models.amortizacion import Cuota
 from app.services.prestamo_amortizacion_service import generar_tabla_amortizacion
 
 
@@ -98,7 +100,6 @@ def generar_amortizacion_prestamo(prestamo_id: int, db) -> tuple[bool, str]:
             return False, f"Préstamo {prestamo_id} tiene modalidad inválida: {prestamo.modalidad_pago}"
         
         # Verificar si ya tiene cuotas
-        from app.models.amortizacion import Cuota
         cuotas_existentes = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).count()
         
         if cuotas_existentes > 0:
