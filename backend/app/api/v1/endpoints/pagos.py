@@ -211,7 +211,10 @@ def healthcheck_pagos(
         )
 
         # Monto total pagado (convertir monto_pagado TEXT a NUMERIC)
-        monto_total = db.query(func.sum(text("pagos_staging.monto_pagado::numeric"))).scalar() or Decimal("0")
+        monto_total_query = db.execute(
+            text("SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE monto_pagado IS NOT NULL AND monto_pagado != ''")
+        )
+        monto_total = Decimal(str(monto_total_query.scalar() or 0))
 
         # Pagos por estado (PagoStaging no tiene columna estado)
         pagos_por_estado = []  # Vacío porque no hay columna estado
@@ -1474,15 +1477,35 @@ def obtener_estadisticas_pagos(
             pagos_por_estado = []
 
         # Monto total pagado (convertir monto_pagado TEXT a NUMERIC)
-        total_pagado = base_pago_query.with_entities(
-            func.sum(text("pagos_staging.monto_pagado::numeric"))
-        ).scalar() or Decimal("0.00")
+        # Usar SQL directo porque func.sum(text(...)) no incluye FROM automáticamente
+        # ⚠️ PagoStaging no tiene prestamo_id, así que filtros de analista/concesionario/modelo no se aplican
+        where_conditions = ["monto_pagado IS NOT NULL", "monto_pagado != ''"]
+        where_conditions.append("fecha_pago IS NOT NULL")
+        where_conditions.append("fecha_pago != ''")
+        where_conditions.append("fecha_pago ~ '^\\\\d{4}-\\\\d{2}-\\\\d{2}'")
+        
+        params = {}
+        if fecha_inicio:
+            where_conditions.append("fecha_pago::timestamp >= :fecha_inicio")
+            params["fecha_inicio"] = datetime.combine(fecha_inicio, datetime.min.time())
+        if fecha_fin:
+            where_conditions.append("fecha_pago::timestamp <= :fecha_fin")
+            params["fecha_fin"] = datetime.combine(fecha_fin, datetime.max.time())
+        
+        where_clause = " AND ".join(where_conditions)
+        
+        total_pagado_query = db.execute(
+            text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_clause}").bindparams(**params)
+        )
+        total_pagado = Decimal(str(total_pagado_query.scalar() or 0))
 
         # Pagos del día actual (convertir fecha_pago TEXT a timestamp)
-        pagos_hoy_query = base_pago_query.filter(text("DATE(pagos_staging.fecha_pago::timestamp) = :hoy").bindparams(hoy=hoy))
-        pagos_hoy = pagos_hoy_query.with_entities(func.sum(text("pagos_staging.monto_pagado::numeric"))).scalar() or Decimal(
-            "0.00"
+        where_hoy = where_clause + " AND DATE(fecha_pago::timestamp) = :hoy"
+        params_hoy = {**params, "hoy": hoy}
+        pagos_hoy_query = db.execute(
+            text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_hoy}").bindparams(**params_hoy)
         )
+        pagos_hoy = Decimal(str(pagos_hoy_query.scalar() or 0))
 
         # ✅ Cuotas pagadas vs pendientes - usar FiltrosDashboard
         cuotas_query = db.query(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id)
