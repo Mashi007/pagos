@@ -4,6 +4,7 @@ Endpoints para el módulo de Cobranzas
 
 import logging
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from io import BytesIO
 from typing import Dict, List, Optional
 
@@ -108,6 +109,7 @@ def obtener_clientes_atrasados(
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
             .filter(
+                Prestamo.estado == "APROBADO",  # Solo préstamos aprobados
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
@@ -127,6 +129,11 @@ def obtener_clientes_atrasados(
             query = query.filter(Cuota.fecha_vencimiento <= fecha_limite)
 
         resultados = query.all()
+
+        logger.info(
+            f"📋 [clientes_atrasados] Encontrados {len(resultados)} clientes atrasados "
+            f"(filtro días_retraso={dias_retraso})"
+        )
 
         # Convertir a diccionarios
         clientes_atrasados = []
@@ -363,28 +370,63 @@ def obtener_resumen_cobranzas(
 ):
     """
     Obtener resumen general de cobranzas
+    Excluye admin y solo cuenta préstamos aprobados
     """
     try:
         hoy = date.today()
+        from app.core.config import settings
+
+        # Base query con joins necesarios y filtros
+        base_query = (
+            db.query(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cedula == Cliente.cedula)
+            .outerjoin(User, User.email == Prestamo.usuario_proponente)
+            .filter(
+                Prestamo.estado == "APROBADO",  # Solo préstamos aprobados
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
+                or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
+            )
+        )
 
         # Total de cuotas vencidas
-        total_cuotas_vencidas = (
-            db.query(func.count(Cuota.id)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar() or 0
-        )
+        total_cuotas_vencidas = base_query.count()
 
         # Monto total adeudado
-        monto_total_adeudado = (
-            db.query(func.sum(Cuota.monto_cuota)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar()
-            or 0.0
+        monto_query = (
+            db.query(func.sum(Cuota.monto_cuota))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .outerjoin(User, User.email == Prestamo.usuario_proponente)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
+                or_(User.is_admin.is_(False), User.is_admin.is_(None)),
+            )
         )
+        monto_total_adeudado = monto_query.scalar() or Decimal("0.0")
 
         # Cantidad de clientes únicos atrasados
-        clientes_unicos = (
+        clientes_query = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
-            .scalar()
-            or 0
+            .outerjoin(User, User.email == Prestamo.usuario_proponente)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
+                or_(User.is_admin.is_(False), User.is_admin.is_(None)),
+            )
+        )
+        clientes_unicos = clientes_query.scalar() or 0
+
+        logger.info(
+            f"📊 [resumen_cobranzas] Total: {total_cuotas_vencidas} cuotas vencidas, "
+            f"${float(monto_total_adeudado):,.2f} adeudado, {clientes_unicos} clientes atrasados"
         )
 
         return {
@@ -394,7 +436,7 @@ def obtener_resumen_cobranzas(
         }
 
     except Exception as e:
-        logger.error(f"Error obteniendo resumen de cobranzas: {e}")
+        logger.error(f"Error obteniendo resumen de cobranzas: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
