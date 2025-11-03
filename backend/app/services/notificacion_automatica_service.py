@@ -197,6 +197,56 @@ class NotificacionAutomaticaService:
             logger.error(f"Error enviando notificación: {e}")
             return False
 
+    def _determinar_tipo_plantilla(self, dias: int) -> Optional[str]:
+        """Determina el tipo de plantilla según los días hasta vencimiento"""
+        mapeo_dias = {
+            5: "PAGO_5_DIAS_ANTES",
+            3: "PAGO_3_DIAS_ANTES",
+            1: "PAGO_1_DIA_ANTES",
+            0: "PAGO_DIA_0",
+            -1: "PAGO_1_DIA_ATRASADO",
+            -3: "PAGO_3_DIAS_ATRASADO",
+            -5: "PAGO_5_DIAS_ATRASADO",
+        }
+        return mapeo_dias.get(dias)
+
+    def _procesar_cuota(self, cuota: Cuota, stats: Dict[str, int]) -> bool:
+        """Procesa una cuota individual. Returns: True si se procesó exitosamente"""
+        try:
+            cliente = self.db.query(Cliente).filter(Cliente.id == cuota.cliente_id).first()
+
+            if not cliente:
+                logger.warning(f"Cliente {cuota.cliente_id} no encontrado")
+                return False
+
+            if not cuota.fecha_vencimiento:
+                return False
+
+            dias = self.calcular_dias_para_vencimiento(cuota.fecha_vencimiento)
+            tipo_plantilla = self._determinar_tipo_plantilla(dias)
+
+            if not tipo_plantilla:
+                return False
+
+            plantilla = self.obtener_plantilla_por_tipo(tipo_plantilla)
+
+            if not plantilla:
+                stats["sin_plantilla"] += 1
+                logger.warning(f"No hay plantilla para tipo {tipo_plantilla}")
+                return False
+
+            if self.enviar_notificacion(cuota, plantilla, cliente):
+                stats["enviadas"] += 1
+            else:
+                stats["errores"] += 1
+
+            return True
+
+        except Exception as e:
+            stats["errores"] += 1
+            logger.error(f"Error procesando cuota {cuota.id}: {e}")
+            return False
+
     def procesar_notificaciones_automaticas(self) -> Dict[str, int]:
         """
         Procesar todas las notificaciones automáticas necesarias
@@ -216,59 +266,8 @@ class NotificacionAutomaticaService:
             cuotas_pendientes = self.obtener_cuotas_pendientes()
 
             for cuota in cuotas_pendientes:
-                try:
-                    # Obtener cliente
-                    cliente = self.db.query(Cliente).filter(Cliente.id == cuota.cliente_id).first()
-
-                    if not cliente:
-                        logger.warning(f"Cliente {cuota.cliente_id} no encontrado")
-                        continue
-
-                    if not cuota.fecha_vencimiento:
-                        continue
-
-                    # Calcular días hasta vencimiento
-                    dias = self.calcular_dias_para_vencimiento(cuota.fecha_vencimiento)
-
-                    # Determinar tipo de notificación según días
-                    tipo_plantilla = None
-                    if dias == 5:
-                        tipo_plantilla = "PAGO_5_DIAS_ANTES"
-                    elif dias == 3:
-                        tipo_plantilla = "PAGO_3_DIAS_ANTES"
-                    elif dias == 1:
-                        tipo_plantilla = "PAGO_1_DIA_ANTES"
-                    elif dias == 0:
-                        tipo_plantilla = "PAGO_DIA_0"
-                    elif dias == -1:
-                        tipo_plantilla = "PAGO_1_DIA_ATRASADO"
-                    elif dias == -3:
-                        tipo_plantilla = "PAGO_3_DIAS_ATRASADO"
-                    elif dias == -5:
-                        tipo_plantilla = "PAGO_5_DIAS_ATRASADO"
-                    else:
-                        # No está en días de notificación
-                        continue
-
-                    # Obtener plantilla
-                    plantilla = self.obtener_plantilla_por_tipo(tipo_plantilla)
-
-                    if not plantilla:
-                        stats["sin_plantilla"] += 1
-                        logger.warning(f"No hay plantilla para tipo {tipo_plantilla}")
-                        continue
-
-                    # Enviar notificación
-                    if self.enviar_notificacion(cuota, plantilla, cliente):
-                        stats["enviadas"] += 1
-                    else:
-                        stats["errores"] += 1
-
+                if self._procesar_cuota(cuota, stats):
                     stats["procesadas"] += 1
-
-                except Exception as e:
-                    stats["errores"] += 1
-                    logger.error(f"Error procesando cuota {cuota.id}: {e}")
 
             logger.info(f"Procesamiento completado: {stats}")
             return stats

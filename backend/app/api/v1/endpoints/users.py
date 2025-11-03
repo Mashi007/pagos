@@ -160,6 +160,100 @@ def get_user(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
+def _validar_permisos_actualizacion(current_user: User, user_id: int):
+    """Valida que el usuario tenga permisos para actualizar"""
+    if not current_user.is_admin and current_user.id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para actualizar este usuario",
+        )
+
+
+def _validar_email_unico(db: Session, email: str, user_id: int):
+    """Valida que el email no esté registrado por otro usuario"""
+    existing_user = db.query(User).filter(User.email == email, User.id != user_id).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El email ya está registrado por otro usuario",
+        )
+
+
+def _actualizar_password(user, password: str):
+    """Actualiza la contraseña del usuario"""
+    is_valid, message = validate_password_strength(password)
+    if not is_valid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+    setattr(user, "hashed_password", get_password_hash(password))
+
+
+def _actualizar_is_admin(user, value: bool):
+    """Actualiza is_admin y rol relacionado"""
+    setattr(user, "is_admin", value)
+    nuevo_rol = "ADMIN" if value else "USER"
+    setattr(user, "rol", nuevo_rol)
+    logger.debug(f"Actualizado is_admin={value}, rol={nuevo_rol}")
+
+
+def _actualizar_campo_simple(user, field: str, value):
+    """Actualiza un campo simple del usuario"""
+    if field == "email" and value:
+        value = value.lower().strip()
+
+    try:
+        setattr(user, field, value)
+        logger.debug(f"Campo '{field}' actualizado correctamente")
+    except Exception as field_error:
+        logger.error(f"Error actualizando campo '{field}': {field_error}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error al actualizar campo '{field}': {str(field_error)}",
+        )
+
+
+def _aplicar_actualizaciones(user, update_data: dict):
+    """Aplica todas las actualizaciones a un usuario"""
+    CAMPOS_VALIDOS = ["email", "nombre", "apellido", "cargo", "is_active"]
+
+    for field, value in update_data.items():
+        if not hasattr(user, field):
+            logger.warning(f"Campo '{field}' no existe en el modelo User, omitiendo...")
+            continue
+
+        if field == "password" and value:
+            _actualizar_password(user, value)
+        elif field == "is_admin":
+            _actualizar_is_admin(user, value)
+        elif field == "rol":
+            logger.debug("Campo 'rol' ignorado, se maneja con is_admin")
+            continue
+        elif field in CAMPOS_VALIDOS:
+            _actualizar_campo_simple(user, field, value)
+        else:
+            logger.warning(f"Campo '{field}' no se puede actualizar directamente, omitiendo...")
+            continue
+
+
+def _manejar_error_commit(commit_error: Exception, user_id: int):
+    """Maneja errores durante el commit"""
+    error_str = str(commit_error).lower()
+    if "unique constraint" in error_str or "duplicate" in error_str:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El email ya está registrado por otro usuario",
+        )
+    elif "check constraint" in error_str or "invalid" in error_str:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error de validación: {str(commit_error)}",
+        )
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al guardar cambios: {str(commit_error)}",
+        )
+
+
 @router.put("/{user_id}", response_model=UserResponse)
 def update_user(
     user_id: int,
@@ -167,78 +261,23 @@ def update_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Actualizar usuario
+    """Actualizar usuario"""
     try:
         user = db.query(User).filter(User.id == user_id).first()
 
         if not user:
             raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-        # Solo admins pueden actualizar otros usuarios, o el usuario puede actualizarse a sí mismo
-        if not current_user.is_admin and current_user.id != user_id:
-            raise HTTPException(
-                status_code=403,
-                detail="No tienes permisos para actualizar este usuario",
-            )
+        _validar_permisos_actualizacion(current_user, user_id)
 
-        # Validar email único si se está actualizando
         update_data = user_data.model_dump(exclude_unset=True)
+
         if "email" in update_data and update_data["email"] != user.email:
-            existing_user = db.query(User).filter(User.email == update_data["email"], User.id != user_id).first()
-            if existing_user:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="El email ya está registrado por otro usuario",
-                )
+            _validar_email_unico(db, update_data["email"], user_id)
 
         logger.info(f"Actualizando usuario {user_id} con campos: {list(update_data.keys())}")
+        _aplicar_actualizaciones(user, update_data)
 
-        for field, value in update_data.items():
-            # Verificar que el campo existe en el modelo User
-            if not hasattr(user, field):
-                logger.warning(f"Campo '{field}' no existe en el modelo User, omitiendo...")
-                continue
-
-            if field == "password" and value:
-                # Validar contraseña si se está cambiando
-                is_valid, message = validate_password_strength(value)
-                if not is_valid:
-                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
-                setattr(user, "hashed_password", get_password_hash(value))
-            elif field == "is_admin":
-                # Actualizar tanto is_admin como rol
-                setattr(user, "is_admin", value)
-                # Actualizar rol según is_admin - solo valores válidos: ADMIN o USER
-                nuevo_rol = "ADMIN" if value else "USER"
-                setattr(user, "rol", nuevo_rol)
-                logger.debug(f"Actualizado is_admin={value}, rol={nuevo_rol}")
-            elif field == "rol":
-                # Ignorar campo rol directamente, se maneja automáticamente con is_admin
-                logger.debug("Campo 'rol' ignorado, se maneja con is_admin")
-                continue
-            elif field in ["email", "nombre", "apellido", "cargo", "is_active"]:
-                # Campos válidos del modelo User que se pueden actualizar directamente
-                try:
-                    # Validación especial para email (ya validado arriba)
-                    if field == "email" and value:
-                        value = value.lower().strip()  # Normalizar email
-                    setattr(user, field, value)
-                    logger.debug(f"Campo '{field}' actualizado correctamente")
-                except Exception as field_error:
-                    logger.error(
-                        f"Error actualizando campo '{field}': {field_error}",
-                        exc_info=True,
-                    )
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Error al actualizar campo '{field}': {str(field_error)}",
-                    )
-            else:
-                # Campo no reconocido - omitir con advertencia
-                logger.warning(f"Campo '{field}' no se puede actualizar directamente, omitiendo...")
-                continue
-
-        # Intentar commit con manejo de errores de BD
         try:
             db.commit()
             db.refresh(user)
@@ -249,23 +288,7 @@ def update_user(
                 f"Error en commit al actualizar usuario {user_id}: {commit_error}",
                 exc_info=True,
             )
-            # Verificar si es un error de constraint (ej: email duplicado, rol inválido)
-            error_str = str(commit_error).lower()
-            if "unique constraint" in error_str or "duplicate" in error_str:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="El email ya está registrado por otro usuario",
-                )
-            elif "check constraint" in error_str or "invalid" in error_str:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Error de validación: {str(commit_error)}",
-                )
-            else:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Error al guardar cambios: {str(commit_error)}",
-                )
+            _manejar_error_commit(commit_error, user_id)
 
         return user
 
@@ -275,7 +298,6 @@ def update_user(
         db.rollback()
         error_detail = f"Error actualizando usuario: {str(e)}"
         logger.error(error_detail, exc_info=True)
-        # Incluir más detalles en el error para debugging
         error_trace = traceback.format_exc()
         logger.error(f"Traceback completo:\n{error_trace}")
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

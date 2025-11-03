@@ -540,17 +540,23 @@ async def obtener_logo(
 @router.get("/email/configuracion")
 def obtener_configuracion_email(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Obtener configuración de email"""
-    if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403,
-            detail="Solo administradores pueden ver configuración de email",
-        )
-
     try:
+        logger.info(f"📧 Obteniendo configuración de email - Usuario: {getattr(current_user, 'email', 'N/A')}")
+        
+        if not getattr(current_user, 'is_admin', False):
+            logger.warning(f"⚠️ Usuario no autorizado intentando acceder a configuración de email: {getattr(current_user, 'email', 'N/A')}")
+            raise HTTPException(
+                status_code=403,
+                detail="Solo administradores pueden ver configuración de email",
+            )
+
+        logger.info("🔍 Consultando configuración de email desde BD...")
         configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "EMAIL").all()
+        logger.info(f"📊 Configuraciones encontradas: {len(configs)}")
 
         if not configs:
             # Valores por defecto
+            logger.info("📝 Retornando valores por defecto de email")
             return {
                 "smtp_host": "smtp.gmail.com",
                 "smtp_port": "587",
@@ -563,12 +569,26 @@ def obtener_configuracion_email(db: Session = Depends(get_db), current_user: Use
 
         config_dict = {}
         for config in configs:
-            config_dict[config.clave] = config.valor
+            try:
+                # Validar que config tiene los atributos necesarios
+                if hasattr(config, 'clave') and config.clave:
+                    # Manejar valor None o vacío
+                    valor = config.valor if hasattr(config, 'valor') and config.valor is not None else ""
+                    config_dict[config.clave] = valor
+                    logger.debug(f"📝 Configuración: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
+                else:
+                    logger.warning(f"⚠️ Configuración sin clave válida: {config}")
+            except Exception as config_error:
+                logger.error(f"❌ Error procesando configuración individual: {config_error}", exc_info=True)
+                continue
 
+        logger.info(f"✅ Configuración de email obtenida exitosamente: {len(config_dict)} configuraciones")
         return config_dict
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error obteniendo configuración de email: {e}")
+        logger.error(f"❌ Error obteniendo configuración de email: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
