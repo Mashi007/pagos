@@ -227,10 +227,10 @@ def actualizar_configuracion(
             db.add(config)
         else:
             # Actualizar configuración existente
-            config.valor = config_data.valor
-            config.descripcion = config_data.descripcion
-            config.actualizado_por = int(current_user.id)
-            config.fecha_actualizacion = datetime.now()
+            config.valor = config_data.valor  # type: ignore[assignment]
+            config.descripcion = config_data.descripcion  # type: ignore[assignment]
+            config.actualizado_por = int(current_user.id)  # type: ignore[assignment]
+            config.fecha_actualizacion = datetime.now()  # type: ignore[assignment]
 
         db.commit()
         db.refresh(config)
@@ -370,9 +370,9 @@ async def upload_logo(
 
             if logo_config:
                 # Actualizar configuración existente
-                logo_config.valor = logo_filename
-                logo_config.actualizado_por = current_user.email
-                logo_config.actualizado_en = datetime.utcnow()
+                logo_config.valor = logo_filename  # type: ignore[assignment]
+                logo_config.actualizado_por = current_user.email  # type: ignore[assignment]
+                logo_config.actualizado_en = datetime.utcnow()  # type: ignore[assignment]
             else:
                 # Crear nueva configuración
                 logo_config = ConfiguracionSistema(
@@ -576,9 +576,9 @@ def actualizar_configuracion_email(
             )
 
             if config:
-                config.valor = str(valor)
-                config.actualizado_por = current_user.email
-                configuraciones.append(config)
+                config.valor = str(valor)  # type: ignore[assignment]
+                config.actualizado_por = current_user.email  # type: ignore[assignment]
+                configuraciones.append(config)  # type: ignore[arg-type]
             else:
                 nueva_config = ConfiguracionSistema(
                     categoria="EMAIL",
