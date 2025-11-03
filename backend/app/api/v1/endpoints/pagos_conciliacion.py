@@ -58,9 +58,7 @@ def _conciliar_pago(pago: Pago, db: Session, numero_documento: str) -> bool:
     return True
 
 
-def _procesar_fila_conciliacion(
-    row, index: int, db: Session, documentos_procesados: set
-) -> tuple[int, list[str], list[str]]:
+def _procesar_fila_conciliacion(row, index: int, db: Session, documentos_procesados: set) -> tuple[int, list[str], list[str]]:
     """
     Procesa una fila del Excel de conciliación.
     Returns: (pagos_conciliados, pagos_no_encontrados, errores)
