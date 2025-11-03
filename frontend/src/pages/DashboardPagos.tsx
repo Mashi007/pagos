@@ -10,7 +10,7 @@ import {
   AlertCircle,
   PieChart,
   BarChart3,
-  ArrowRight,
+  ChevronRight,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -114,7 +114,7 @@ export function DashboardPagos() {
     queryFn: async () => {
       // Datos simulados - se puede crear endpoint específico
       const hoy = new Date()
-      const meses = []
+      const meses: Array<{ mes: string; pagos: number; monto: number }> = []
       for (let i = 5; i >= 0; i--) {
         const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)
         meses.push({
@@ -384,7 +384,7 @@ export function DashboardPagos() {
               >
                 <CreditCard className="h-6 w-6" />
                 <span className="font-semibold">Detalles de Transacciones</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
                 variant="secondary"
@@ -396,7 +396,7 @@ export function DashboardPagos() {
               >
                 <Shield className="h-6 w-6" />
                 <span className="font-semibold">Análisis de Conciliaciones</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
                 variant="secondary"
@@ -408,7 +408,7 @@ export function DashboardPagos() {
               >
                 <CheckCircle className="h-6 w-6" />
                 <span className="font-semibold">Reportes de Pagos</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           </div>

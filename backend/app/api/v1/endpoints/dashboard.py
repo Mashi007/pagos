@@ -69,6 +69,84 @@ def _calcular_total_cobrado_mes(db: Session, primer_dia: date, ultimo_dia: date,
     return query.scalar() or Decimal("0")
 
 
+def _calcular_mes_anterior(mes_actual: int, año_actual: int) -> tuple[int, int]:
+    """Calcula mes y año anterior"""
+    if mes_actual == 1:
+        return (12, año_actual - 1)
+    return (mes_actual - 1, año_actual)
+
+
+def _obtener_fechas_mes(mes: int, año: int) -> tuple[date, date]:
+    """Obtiene primer y último día de un mes"""
+    primer_dia = date(año, mes, 1)
+    ultimo_dia = date(año, mes, monthrange(año, mes)[1])
+    return primer_dia, ultimo_dia
+
+
+def _obtener_fechas_mes_siguiente(mes: int, año: int) -> date:
+    """Obtiene primer día del mes siguiente"""
+    if mes == 12:
+        return date(año + 1, 1, 1)
+    return date(año, mes + 1, 1)
+
+
+def _calcular_variacion(valor_actual: float, valor_anterior: float) -> tuple[float, float]:
+    """Calcula variación porcentual y absoluta"""
+    variacion_absoluta = valor_actual - valor_anterior
+    variacion_porcentual = (
+        ((valor_actual - valor_anterior) / valor_anterior * 100) if valor_anterior > 0 else 0
+    )
+    return variacion_porcentual, variacion_absoluta
+
+
+def _calcular_morosidad(db: Session, fecha: date, analista: Optional[str],
+                        concesionario: Optional[str], modelo: Optional[str],
+                        fecha_inicio: Optional[date], fecha_fin: Optional[date]) -> float:
+    """Calcula morosidad (cuotas vencidas no pagadas) hasta una fecha"""
+    query = (
+        db.query(func.sum(Cuota.monto_cuota))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_vencimiento <= fecha,
+            Cuota.estado != "PAGADO",
+        )
+    )
+    query = FiltrosDashboard.aplicar_filtros_cuota(
+        query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+    return float(query.scalar() or Decimal("0"))
+
+
+def _calcular_total_a_cobrar_fecha(db: Session, fecha: date, analista: Optional[str],
+                                   concesionario: Optional[str], modelo: Optional[str],
+                                   fecha_inicio: Optional[date], fecha_fin: Optional[date]) -> float:
+    """Calcula total a cobrar en una fecha específica"""
+    query = (
+        db.query(func.sum(Cuota.monto_cuota))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_vencimiento == fecha,
+        )
+    )
+    query = FiltrosDashboard.aplicar_filtros_cuota(
+        query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
+    return float(query.scalar() or Decimal("0"))
+
+
+def _calcular_pagos_fecha(db: Session, fecha: date, analista: Optional[str],
+                          concesionario: Optional[str], modelo: Optional[str],
+                          fecha_inicio: Optional[date], fecha_fin: Optional[date]) -> float:
+    """Calcula pagos en una fecha específica"""
+    query = db.query(func.sum(Pago.monto_pagado)).filter(func.date(Pago.fecha_pago) == fecha)
+    if analista or concesionario or modelo:
+        query = query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+    query = FiltrosDashboard.aplicar_filtros_pago(query, analista, concesionario, modelo, fecha_inicio, fecha_fin)
+    return float(query.scalar() or Decimal("0"))
+
+
 def _calcular_tasa_recuperacion(db: Session, primer_dia: date, ultimo_dia: date,
                                 analista: Optional[str], concesionario: Optional[str],
                                 modelo: Optional[str]) -> float:
@@ -574,115 +652,14 @@ def dashboard_administrador(
             db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
         )
 
-        # 17. TASA DE RECUPERACIÓN MENSUAL (cuotas pagadas del mes / cuotas a cobrar del mes)
-        # Cuotas a cobrar del mes (planificadas)
-        cuotas_a_cobrar_mes_query = (
-            db.query(func.sum(Cuota.monto_cuota))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                func.date(Cuota.fecha_vencimiento) >= primer_dia_mes,
-                func.date(Cuota.fecha_vencimiento) <= ultimo_dia_mes,
-                Prestamo.estado == "APROBADO",
-            )
+        # 17. TASA DE RECUPERACIÓN MENSUAL
+        tasa_recuperacion = _calcular_tasa_recuperacion(
+            db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo
         )
-        cuotas_a_cobrar_mes_query = FiltrosDashboard.aplicar_filtros_cuota(
-            cuotas_a_cobrar_mes_query,
-            analista,
-            concesionario,
-            modelo,
-            None,
-            None,
-        )
-        total_a_cobrar_mes = float(cuotas_a_cobrar_mes_query.scalar() or Decimal("0"))
 
-        # Cuotas pagadas del mes (con fecha_pago en el mes actual)
-        cuotas_pagadas_mes_query = (
-            db.query(func.count(Cuota.id))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Cuota.estado == "PAGADO",
-                Cuota.fecha_pago.isnot(None),
-                func.date(Cuota.fecha_pago) >= primer_dia_mes,
-                func.date(Cuota.fecha_pago) <= ultimo_dia_mes,
-                Prestamo.estado == "APROBADO",
-            )
-        )
-        cuotas_pagadas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(
-            cuotas_pagadas_mes_query,
-            analista,
-            concesionario,
-            modelo,
-            None,
-            None,
-        )
-        cuotas_pagadas_mes = cuotas_pagadas_mes_query.scalar() or 0
-
-        # Total cuotas planificadas del mes (para calcular tasa)
-        total_cuotas_mes_query = (
-            db.query(func.count(Cuota.id))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                func.date(Cuota.fecha_vencimiento) >= primer_dia_mes,
-                func.date(Cuota.fecha_vencimiento) <= ultimo_dia_mes,
-                Prestamo.estado == "APROBADO",
-            )
-        )
-        total_cuotas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(
-            total_cuotas_mes_query,
-            analista,
-            concesionario,
-            modelo,
-            None,
-            None,
-        )
-        total_cuotas_mes = total_cuotas_mes_query.scalar() or 0
-
-        # Tasa de recuperación mensual = (cuotas pagadas del mes / cuotas planificadas del mes) * 100
-        tasa_recuperacion = (cuotas_pagadas_mes / total_cuotas_mes * 100) if total_cuotas_mes > 0 else 0
-
-        # Tasa recuperación mes anterior - Calcular desde BD histórica
-        cuotas_pagadas_mes_anterior_query = (
-            db.query(func.count(Cuota.id))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Cuota.estado == "PAGADO",
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_pago.isnot(None),
-                func.date(Cuota.fecha_pago) >= primer_dia_mes_anterior,
-                func.date(Cuota.fecha_pago) <= ultimo_dia_mes_anterior,
-            )
-        )
-        cuotas_pagadas_mes_anterior_query = FiltrosDashboard.aplicar_filtros_cuota(
-            cuotas_pagadas_mes_anterior_query,
-            analista,
-            concesionario,
-            modelo,
-            None,
-            None,
-        )
-        cuotas_pagadas_mes_anterior = cuotas_pagadas_mes_anterior_query.scalar() or 0
-
-        total_cuotas_mes_anterior_query = (
-            db.query(func.count(Cuota.id))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                func.date(Cuota.fecha_vencimiento) >= primer_dia_mes_anterior,
-                func.date(Cuota.fecha_vencimiento) <= ultimo_dia_mes_anterior,
-                Prestamo.estado == "APROBADO",
-            )
-        )
-        total_cuotas_mes_anterior_query = FiltrosDashboard.aplicar_filtros_cuota(
-            total_cuotas_mes_anterior_query,
-            analista,
-            concesionario,
-            modelo,
-            None,
-            None,
-        )
-        total_cuotas_mes_anterior = total_cuotas_mes_anterior_query.scalar() or 0
-
-        tasa_recuperacion_anterior = (
-            (cuotas_pagadas_mes_anterior / total_cuotas_mes_anterior * 100) if total_cuotas_mes_anterior > 0 else 0
+        # Tasa recuperación mes anterior
+        tasa_recuperacion_anterior = _calcular_tasa_recuperacion(
+            db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
         )
 
         # 18. PROMEDIO DÍAS DE MORA
@@ -1127,27 +1104,14 @@ def obtener_kpis_principales(
         año_actual = hoy.year
 
         # Calcular mes anterior
-        if mes_actual == 1:
-            mes_anterior = 12
-            año_anterior = año_actual - 1
-        else:
-            mes_anterior = mes_actual - 1
-            año_anterior = año_actual
+        mes_anterior, año_anterior = _calcular_mes_anterior(mes_actual, año_actual)
 
         fecha_inicio_mes_actual = date(año_actual, mes_actual, 1)
         fecha_inicio_mes_anterior = date(año_anterior, mes_anterior, 1)
 
-        # Último día del mes anterior
-        if mes_anterior == 12:
-            fecha_fin_mes_anterior = date(año_anterior + 1, 1, 1)
-        else:
-            fecha_fin_mes_anterior = date(año_anterior, mes_anterior + 1, 1)
-
-        # Último día del mes actual
-        if mes_actual == 12:
-            fecha_fin_mes_actual = date(año_actual + 1, 1, 1)
-        else:
-            fecha_fin_mes_actual = date(año_actual, mes_actual + 1, 1)
+        # Último día del mes anterior y actual
+        fecha_fin_mes_anterior = _obtener_fechas_mes_siguiente(mes_anterior, año_anterior)
+        fecha_fin_mes_actual = _obtener_fechas_mes_siguiente(mes_actual, año_actual)
 
         # 1. TOTAL PRESTAMOS
         query_prestamos_actual = db.query(func.count(Prestamo.id)).filter(Prestamo.estado == "APROBADO")

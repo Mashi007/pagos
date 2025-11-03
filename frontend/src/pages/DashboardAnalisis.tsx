@@ -9,7 +9,7 @@ import {
   BarChart3,
   PieChart,
   LineChart,
-  ArrowRight,
+  ChevronRight,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -398,7 +398,7 @@ export function DashboardAnalisis() {
               >
                 <PieChart className="h-6 w-6" />
                 <span className="font-semibold">Morosidad por Analista</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
                 variant="secondary"
@@ -407,7 +407,7 @@ export function DashboardAnalisis() {
               >
                 <Building2 className="h-6 w-6" />
                 <span className="font-semibold">Préstamos por Concesionario</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
                 variant="secondary"
@@ -416,7 +416,7 @@ export function DashboardAnalisis() {
               >
                 <BarChart3 className="h-6 w-6" />
                 <span className="font-semibold">Distribución de Préstamos</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
                 variant="secondary"
@@ -425,7 +425,7 @@ export function DashboardAnalisis() {
               >
                 <LineChart className="h-6 w-6" />
                 <span className="font-semibold">Tendencias y Proyecciones</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           </div>

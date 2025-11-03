@@ -10,7 +10,7 @@ import {
   FileText,
   BarChart3,
   PieChart,
-  ArrowRight,
+  ChevronRight,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -127,14 +127,19 @@ export function DashboardFinanciamiento() {
         if (value) queryParams.append(key, value.toString())
       })
       const queryString = queryParams.toString()
-      const response = await apiClient.get(
+      const response = (await apiClient.get(
         `/api/v1/kpis/dashboard${queryString ? '?' + queryString : ''}`
-      )
+      )) as {
+        total_financiamiento?: number
+        total_financiamiento_activo?: number
+        total_financiamiento_inactivo?: number
+        total_financiamiento_finalizado?: number
+      }
 
-      const total = (response.total_financiamiento || 0) as number
-      const activo = (response.total_financiamiento_activo || 0) as number
-      const inactivo = (response.total_financiamiento_inactivo || 0) as number
-      const finalizado = (response.total_financiamiento_finalizado || 0) as number
+      const total = response.total_financiamiento || 0
+      const activo = response.total_financiamiento_activo || 0
+      const inactivo = response.total_financiamiento_inactivo || 0
+      const finalizado = response.total_financiamiento_finalizado || 0
 
       const datos: EstadoData[] = [
         {
@@ -587,7 +592,7 @@ export function DashboardFinanciamiento() {
               >
                 <FileText className="h-6 w-6" />
                 <span className="font-semibold">Ver Financiamientos Activos</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
                 variant="secondary"
@@ -599,7 +604,7 @@ export function DashboardFinanciamiento() {
               >
                 <BarChart3 className="h-6 w-6" />
                 <span className="font-semibold">Análisis por Estado</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
                 variant="secondary"
@@ -608,7 +613,7 @@ export function DashboardFinanciamiento() {
               >
                 <PieChart className="h-6 w-6" />
                 <span className="font-semibold">Distribución Concesionarios</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
                 variant="secondary"
@@ -620,7 +625,7 @@ export function DashboardFinanciamiento() {
               >
                 <TrendingUp className="h-6 w-6" />
                 <span className="font-semibold">Tendencias Temporales</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
                 variant="secondary"
@@ -629,7 +634,7 @@ export function DashboardFinanciamiento() {
               >
                 <PieChart className="h-6 w-6" />
                 <span className="font-semibold">Por Tipo Producto</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           </div>

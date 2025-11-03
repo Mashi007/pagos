@@ -10,7 +10,7 @@ import {
   Users,
   BarChart3,
   TrendingDown,
-  ArrowRight,
+  ChevronRight,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -372,7 +372,7 @@ export function DashboardCobranza() {
               >
                 <BarChart3 className="h-6 w-6" />
                 <span className="font-semibold">Cobranzas Mensuales</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
                 variant="secondary"
@@ -381,7 +381,7 @@ export function DashboardCobranza() {
               >
                 <TrendingUp className="h-6 w-6" />
                 <span className="font-semibold">Cobranza por Día</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
                 variant="secondary"
@@ -393,7 +393,7 @@ export function DashboardCobranza() {
               >
                 <Users className="h-6 w-6" />
                 <span className="font-semibold">Desglose por Analista</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
                 variant="secondary"
@@ -405,7 +405,7 @@ export function DashboardCobranza() {
               >
                 <Target className="h-6 w-6" />
                 <span className="font-semibold">Análisis de Metas</span>
-                <ArrowRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           </div>
