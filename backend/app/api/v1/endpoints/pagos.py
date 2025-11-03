@@ -451,26 +451,30 @@ def listar_pagos(
         # Contar total - usar texto SQL directo para evitar problemas
         result = db.execute(text("SELECT COUNT(*) FROM pagos_staging WHERE cedula_cliente IS NOT NULL"))
         total = result.scalar() or 0
-        
+
         # Aplicar filtros al count también si hay cedula
         if cedula:
-            result = db.execute(text("SELECT COUNT(*) FROM pagos_staging WHERE cedula_cliente = :cedula").bindparams(cedula=cedula))
+            result = db.execute(
+                text("SELECT COUNT(*) FROM pagos_staging WHERE cedula_cliente = :cedula").bindparams(cedula=cedula)
+            )
             total = result.scalar() or 0
-        
+
         logger.info(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")
 
         # Paginación - usar SQL directo para evitar problemas con columnas inexistentes
         offset = (page - 1) * per_page
         pagos_raw = db.execute(
-            text("""
+            text(
+                """
                 SELECT id_stg, cedula_cliente, fecha_pago, monto_pagado, numero_documento
                 FROM pagos_staging
                 WHERE cedula_cliente IS NOT NULL
                 ORDER BY id_stg DESC
                 LIMIT :limit OFFSET :offset
-            """).bindparams(limit=per_page, offset=offset)
+            """
+            ).bindparams(limit=per_page, offset=offset)
         ).fetchall()
-        
+
         # Convertir resultados a objetos PagoStaging simulados
         pagos = []
         for row in pagos_raw:
