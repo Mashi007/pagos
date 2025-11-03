@@ -176,6 +176,53 @@ def eliminar_modelo_vehiculo(
     return {"message": "Modelo de vehículo eliminado exitosamente"}
 
 
+def _validar_archivo_excel(archivo: UploadFile) -> None:
+    """Valida que el archivo sea Excel"""
+    if not archivo.filename or not archivo.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Formato inválido. Use Excel .xlsx/.xls")
+
+
+def _validar_columnas_requeridas(columnas: set) -> None:
+    """Valida que existan las columnas requeridas"""
+    if "modelo" not in columnas or "precio" not in columnas:
+        raise HTTPException(status_code=400, detail="Columnas requeridas: modelo, precio")
+
+
+def _procesar_fila_modelo(row, db: Session, current_user: User) -> tuple[int, int]:
+    """Procesa una fila del Excel y retorna (creados, actualizados)"""
+    import pandas as pd
+
+    nombre = str(row.get("modelo", "")).strip()
+    if not nombre:
+        return (0, 0)
+
+    try:
+        precio_val = float(row.get("precio"))
+    except Exception:
+        return (0, 0)
+
+    fecha_act = row.get("fecha_actualizacion")
+    email_usuario = current_user.email if getattr(current_user, "email", None) else None
+    fecha_actualizacion = pd.to_datetime(fecha_act).to_pydatetime() if pd.notna(fecha_act) else datetime.utcnow()
+
+    existente = db.query(ModeloVehiculo).filter(ModeloVehiculo.modelo == nombre).first()
+    if existente:
+        existente.precio = precio_val
+        existente.fecha_actualizacion = fecha_actualizacion
+        existente.actualizado_por = email_usuario
+        return (0, 1)
+
+    nuevo = ModeloVehiculo(
+        modelo=nombre,
+        activo=True,
+        precio=precio_val,
+        fecha_actualizacion=datetime.utcnow(),
+        actualizado_por=email_usuario,
+    )
+    db.add(nuevo)
+    return (1, 0)
+
+
 @router.post("/importar")
 def importar_modelos_vehiculos(
     archivo: UploadFile = File(...),
@@ -189,42 +236,18 @@ def importar_modelos_vehiculos(
     try:
         import pandas as pd
 
-        if not archivo.filename.lower().endswith((".xlsx", ".xls")):
-            raise HTTPException(status_code=400, detail="Formato inválido. Use Excel .xlsx/.xls")
+        _validar_archivo_excel(archivo)
 
         df = pd.read_excel(archivo.file)
         columnas = {c.lower().strip() for c in df.columns}
-        if "modelo" not in columnas or "precio" not in columnas:
-            raise HTTPException(status_code=400, detail="Columnas requeridas: modelo, precio")
+        _validar_columnas_requeridas(columnas)
 
         creados = 0
         actualizados = 0
         for _, row in df.iterrows():
-            nombre = str(row.get("modelo")).strip()
-            try:
-                precio_val = float(row.get("precio"))
-            except Exception:
-                continue
-            fecha_act = row.get("fecha_actualizacion")
-
-            existente = db.query(ModeloVehiculo).filter(ModeloVehiculo.modelo == nombre).first()
-            if existente:
-                existente.precio = precio_val
-                existente.fecha_actualizacion = (
-                    pd.to_datetime(fecha_act).to_pydatetime() if pd.notna(fecha_act) else datetime.utcnow()
-                )
-                existente.actualizado_por = current_user.email if getattr(current_user, "email", None) else None
-                actualizados += 1
-            else:
-                nuevo = ModeloVehiculo(
-                    modelo=nombre,
-                    activo=True,
-                    precio=precio_val,
-                    fecha_actualizacion=datetime.utcnow(),
-                    actualizado_por=(current_user.email if getattr(current_user, "email", None) else None),
-                )
-                db.add(nuevo)
-                creados += 1
+            c, a = _procesar_fila_modelo(row, db, current_user)
+            creados += c
+            actualizados += a
 
         db.commit()
         return {

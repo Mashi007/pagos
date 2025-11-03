@@ -5,6 +5,7 @@ Solución temporal para resolver error 503
 
 import logging
 from datetime import timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
@@ -47,6 +48,46 @@ def add_cors_headers(request: Request, response: Response):
     response.headers["Access-Control-Allow-Credentials"] = "true"
 
 
+def _obtener_info_request(request: Request) -> tuple[Optional[str], Optional[str]]:
+    """Extrae IP y User-Agent de la request"""
+    ip = request.client.host if request and request.client else None
+    ua = request.headers.get("user-agent") if request else None
+    return (ip, ua)
+
+
+def _registrar_auditoria_login(db: Session, request: Request, usuario_id: int, exito: bool, entidad_id: Optional[int] = None) -> None:
+    """Registra auditoría de login sin bloquear el proceso"""
+    try:
+        ip, ua = _obtener_info_request(request)
+        detalles = "Inicio de sesión" if exito else "Intento de login fallido"
+        audit = Auditoria(
+            usuario_id=usuario_id,
+            accion="LOGIN",
+            entidad="USUARIOS",
+            entidad_id=entidad_id,
+            detalles=detalles,
+            ip_address=ip,
+            user_agent=ua,
+            exito=exito,
+        )
+        db.add(audit)
+        db.commit()
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        tipo = "LOGIN" if exito else "LOGIN FALLIDO"
+        logger.warning(f"No se pudo registrar auditoría {tipo}: {e}")
+
+
+def _generar_tokens_usuario(user_id: int) -> tuple[str, str]:
+    """Genera access token y refresh token para el usuario"""
+    access_token = create_access_token(subject=str(user_id))
+    refresh_token = create_access_token(subject=str(user_id), expires_delta=timedelta(days=7))
+    return (access_token, refresh_token)
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(
     login_data: LoginRequest,
@@ -73,68 +114,14 @@ async def login(
 
         if not user:
             logger.warning(f"Login fallido para: {login_data.email}")
-            # Auditoría de LOGIN fallido (sin bloquear)
-            try:
-                ip = request.client.host if request and request.client else None
-                ua = request.headers.get("user-agent") if request else None
-                audit = Auditoria(
-                    usuario_id=0,  # usuario desconocido
-                    accion="LOGIN",
-                    entidad="USUARIOS",
-                    entidad_id=None,
-                    detalles="Intento de login fallido",
-                    ip_address=ip,
-                    user_agent=ua,
-                    exito=False,
-                )
-                db.add(audit)
-                db.commit()
-            except Exception as e:
-                # Importante: limpiar la sesión tras error de INSERT para no dejarla en estado inválido
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
-                logger.warning(f"No se pudo registrar auditoría LOGIN FALLIDO: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuario o clave incorrecto",
-            )
+            _registrar_auditoria_login(db, request, 0, False)
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario o clave incorrecto")
 
         # Generar tokens
-        access_token = create_access_token(subject=str(user.id))
-
-        # Generar refresh token nuevo (7 días)
-        refresh_token = create_access_token(
-            subject=str(user.id),
-            expires_delta=timedelta(days=7),
-        )
+        access_token, refresh_token = _generar_tokens_usuario(user.id)
 
         logger.info(f"Login exitoso para: {login_data.email}")
-
-        # Registrar auditoría de LOGIN
-        try:
-            ip = request.client.host if request and request.client else None
-            ua = request.headers.get("user-agent") if request else None
-            audit = Auditoria(
-                usuario_id=user.id,
-                accion="LOGIN",
-                entidad="USUARIOS",
-                entidad_id=user.id,
-                detalles="Inicio de sesión",
-                ip_address=ip,
-                user_agent=ua,
-                exito=True,
-            )
-            db.add(audit)
-            db.commit()
-        except Exception as e:
-            # No bloquear login por auditoría, y limpiar sesión si falló el INSERT
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            logger.warning(f"No se pudo registrar auditoría LOGIN: {e}")
+        _registrar_auditoria_login(db, request, user.id, True, user.id)
 
         # Preparar información del usuario para la respuesta
         user_info = {

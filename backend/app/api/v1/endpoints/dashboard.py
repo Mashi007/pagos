@@ -20,6 +20,36 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _normalizar_valor(valor: Optional[str]) -> Optional[str]:
+    """Normaliza un valor: trim, validar no vacío"""
+    if not valor:
+        return None
+    valor_limpio = str(valor).strip()
+    return valor_limpio if valor_limpio else None
+
+
+def _obtener_valores_unicos(query_result) -> set:
+    """Extrae valores únicos normalizados de una query"""
+    valores = set()
+    for item in query_result:
+        valor = item[0] if isinstance(item, tuple) else item
+        valor_limpio = _normalizar_valor(valor)
+        if valor_limpio:
+            valores.add(valor_limpio)
+    return valores
+
+
+def _obtener_valores_distintos_de_columna(db: Session, columna, default: set = None) -> set:
+    """Obtiene valores distintos de una columna con manejo de excepciones"""
+    if default is None:
+        default = set()
+    try:
+        query = db.query(func.distinct(columna)).filter(columna.isnot(None), columna != "").all()
+        return _obtener_valores_unicos(query)
+    except Exception:
+        return default
+
+
 @router.get("/opciones-filtros")
 def obtener_opciones_filtros(
     db: Session = Depends(get_db),
@@ -27,84 +57,18 @@ def obtener_opciones_filtros(
 ):
     """Obtener opciones disponibles para filtros del dashboard - Sin duplicados"""
     try:
-
-        def normalizar_valor(valor: Optional[str]) -> Optional[str]:
-            """Normaliza un valor: trim, validar no vacío"""
-            if not valor:
-                return None
-            valor_limpio = str(valor).strip()
-            return valor_limpio if valor_limpio else None
-
-        def obtener_valores_unicos(query_result) -> set:
-            """Extrae valores únicos normalizados de una query"""
-            valores = set()
-            for item in query_result:
-                valor = item[0] if isinstance(item, tuple) else item
-                valor_limpio = normalizar_valor(valor)
-                if valor_limpio:
-                    valores.add(valor_limpio)
-            return valores
-
         # 1. ANALISTAS - Combinar analista y producto_financiero sin duplicados
-        try:
-            analistas_query = (
-                db.query(func.distinct(Prestamo.analista)).filter(Prestamo.analista.isnot(None), Prestamo.analista != "").all()
-            )
-            analistas_set = obtener_valores_unicos(analistas_query)
-        except Exception:
-            # Si la columna no existe todavía (migraciones pendientes)
-            analistas_set = set()
-
-        # Productos financieros (pueden ser analistas)
-        try:
-            productos_fin_query = (
-                db.query(func.distinct(Prestamo.producto_financiero))
-                .filter(
-                    Prestamo.producto_financiero.isnot(None),
-                    Prestamo.producto_financiero != "",
-                )
-                .all()
-            )
-            productos_set = obtener_valores_unicos(productos_fin_query)
-        except Exception:
-            productos_set = set()
-
-        # Combinar sin duplicados
+        analistas_set = _obtener_valores_distintos_de_columna(db, Prestamo.analista)
+        productos_set = _obtener_valores_distintos_de_columna(db, Prestamo.producto_financiero)
         analistas_final = sorted(analistas_set | productos_set)
 
         # 2. CONCESIONARIOS - Únicos y normalizados
-        try:
-            concesionarios_query = (
-                db.query(func.distinct(Prestamo.concesionario))
-                .filter(Prestamo.concesionario.isnot(None), Prestamo.concesionario != "")
-                .all()
-            )
-            concesionarios_set = obtener_valores_unicos(concesionarios_query)
-        except Exception:
-            concesionarios_set = set()
+        concesionarios_set = _obtener_valores_distintos_de_columna(db, Prestamo.concesionario)
         concesionarios_final = sorted(concesionarios_set)
 
         # 3. MODELOS - Combinar producto y modelo_vehiculo sin duplicados
-        try:
-            modelos_producto_query = (
-                db.query(func.distinct(Prestamo.producto)).filter(Prestamo.producto.isnot(None), Prestamo.producto != "").all()
-            )
-            modelos_producto_set = obtener_valores_unicos(modelos_producto_query)
-        except Exception:
-            modelos_producto_set = set()
-
-        # También modelo_vehiculo
-        try:
-            modelos_vehiculo_query = (
-                db.query(func.distinct(Prestamo.modelo_vehiculo))
-                .filter(Prestamo.modelo_vehiculo.isnot(None), Prestamo.modelo_vehiculo != "")
-                .all()
-            )
-            modelos_vehiculo_set = obtener_valores_unicos(modelos_vehiculo_query)
-        except Exception:
-            modelos_vehiculo_set = set()
-
-        # Combinar sin duplicados
+        modelos_producto_set = _obtener_valores_distintos_de_columna(db, Prestamo.producto)
+        modelos_vehiculo_set = _obtener_valores_distintos_de_columna(db, Prestamo.modelo_vehiculo)
         modelos_final = sorted(modelos_producto_set | modelos_vehiculo_set)
 
         return {
@@ -115,6 +79,73 @@ def obtener_opciones_filtros(
     except Exception as e:
         logger.error(f"Error obteniendo opciones de filtros: {e}", exc_info=True)
         return {"analistas": [], "concesionarios": [], "modelos": []}
+
+
+def _validar_acceso_admin(current_user: User) -> None:
+    """Valida acceso admin de forma tolerante"""
+    try:
+        es_admin = getattr(current_user, "is_admin", None)
+    except Exception:
+        es_admin = None
+    if es_admin is False:
+        raise HTTPException(status_code=403, detail="Acceso denegado. Solo administradores.")
+
+
+def _normalizar_dias(dias: Optional[int]) -> int:
+    """Normaliza parámetro días"""
+    try:
+        dias_norm = int(dias or 30)
+    except Exception:
+        dias_norm = 30
+    return max(dias_norm, 30) if dias_norm <= 0 else dias_norm
+
+
+def _calcular_total_a_cobrar(
+    db: Session, fecha_dia: date, analista: Optional[str], concesionario: Optional[str], modelo: Optional[str]
+) -> float:
+    """Calcula total a cobrar para una fecha específica"""
+    try:
+        cuotas_dia_query = (
+            db.query(func.sum(Cuota.monto_cuota))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(Cuota.fecha_vencimiento == fecha_dia, Prestamo.estado == "APROBADO")
+        )
+        cuotas_dia_query = FiltrosDashboard.aplicar_filtros_cuota(cuotas_dia_query, analista, concesionario, modelo, None, None)
+        return float(cuotas_dia_query.scalar() or Decimal("0"))
+    except Exception:
+        logger.error(
+            "Error en query total_a_cobrar",
+            extra={"fecha": fecha_dia.isoformat(), "analista": analista, "concesionario": concesionario, "modelo": modelo},
+            exc_info=True,
+        )
+        return 0.0
+
+
+def _calcular_total_cobrado(
+    db: Session, fecha_dia: date, analista: Optional[str], concesionario: Optional[str], modelo: Optional[str]
+) -> float:
+    """Calcula total cobrado para una fecha específica"""
+    try:
+        pagos_dia_query = db.query(func.sum(Pago.monto_pagado)).filter(func.date(Pago.fecha_pago) == fecha_dia)
+        pagos_dia_query = FiltrosDashboard.aplicar_filtros_pago(pagos_dia_query, analista, concesionario, modelo, None, None)
+        return float(pagos_dia_query.scalar() or Decimal("0"))
+    except Exception:
+        logger.error(
+            "Error en query total_cobrado",
+            extra={"fecha": fecha_dia.isoformat(), "analista": analista, "concesionario": concesionario, "modelo": modelo},
+            exc_info=True,
+        )
+        return 0.0
+
+
+def _generar_lista_fechas(fecha_inicio: date, fecha_fin: date) -> List[date]:
+    """Genera lista de fechas entre inicio y fin"""
+    fechas = []
+    current_date = fecha_inicio
+    while current_date <= fecha_fin:
+        fechas.append(current_date)
+        current_date += timedelta(days=1)
+    return fechas
 
 
 @router.get("/cobros-diarios")
@@ -130,104 +161,20 @@ def obtener_cobros_diarios(
 ):
     """Obtener total a cobrar y total cobrado por día"""
     try:
-        # Validar acceso admin de forma tolerante (evitar 500 si falta atributo)
-        try:
-            es_admin = getattr(current_user, "is_admin", None)
-        except Exception:
-            es_admin = None
-        if es_admin is False:
-            raise HTTPException(status_code=403, detail="Acceso denegado. Solo administradores.")
+        _validar_acceso_admin(current_user)
 
-        # Normalizar parámetro 'dias'
-        try:
-            dias_norm = int(dias or 30)
-        except Exception:
-            dias_norm = 30
-        if dias_norm <= 0:
-            dias_norm = 30
-
+        dias_norm = _normalizar_dias(dias)
         hoy = date.today()
 
-        # Calcular fecha inicio (dias días atrás o fecha_inicio si está definida)
-        if fecha_inicio:
-            fecha_inicio_query = fecha_inicio
-        else:
-            fecha_inicio_query = hoy - timedelta(days=dias_norm)
+        fecha_inicio_query = fecha_inicio if fecha_inicio else hoy - timedelta(days=dias_norm)
+        fecha_fin_query = fecha_fin if fecha_fin else hoy
 
-        if fecha_fin:
-            fecha_fin_query = fecha_fin
-        else:
-            fecha_fin_query = hoy
-
-        # Generar lista de fechas
-        fechas = []
-        current_date = fecha_inicio_query
-        while current_date <= fecha_fin_query:
-            fechas.append(current_date)
-            current_date += timedelta(days=1)
+        fechas = _generar_lista_fechas(fecha_inicio_query, fecha_fin_query)
 
         datos_diarios = []
-
         for fecha_dia in fechas:
-            # ✅ Total a cobrar: TODAS las cuotas programadas con fecha_vencimiento = fecha_dia
-            # (incluye todas las cuotas, pagadas o no, porque es el monto programado para ese día)
-            try:
-                cuotas_dia_query = (
-                    db.query(func.sum(Cuota.monto_cuota))
-                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                    .filter(
-                        Cuota.fecha_vencimiento == fecha_dia,
-                        Prestamo.estado == "APROBADO",
-                    )
-                )
-                cuotas_dia_query = FiltrosDashboard.aplicar_filtros_cuota(
-                    cuotas_dia_query,
-                    analista,
-                    concesionario,
-                    modelo,
-                    None,
-                    None,
-                )
-                total_a_cobrar = float(cuotas_dia_query.scalar() or Decimal("0"))
-            except Exception:
-                logger.error(
-                    "Error en query total_a_cobrar",
-                    extra={
-                        "fecha": fecha_dia.isoformat(),
-                        "analista": analista,
-                        "concesionario": concesionario,
-                        "modelo": modelo,
-                    },
-                    exc_info=True,
-                )
-                total_a_cobrar = 0.0
-
-            # ✅ Total cobrado: TODOS los pagos realizados con fecha_pago = fecha_dia
-            # (suma monto_pagado de todos los registros en tabla Pago donde fecha_pago = fecha_dia)
-            try:
-                pagos_dia_query = db.query(func.sum(Pago.monto_pagado)).filter(func.date(Pago.fecha_pago) == fecha_dia)
-                # Aplicar filtros usando FiltrosDashboard (necesita join con Prestamo si hay filtros)
-                pagos_dia_query = FiltrosDashboard.aplicar_filtros_pago(
-                    pagos_dia_query,
-                    analista,
-                    concesionario,
-                    modelo,
-                    None,  # No aplicar filtros de fecha_inicio/fecha_fin aquí (ya filtrado por fecha_dia)
-                    None,
-                )
-                total_cobrado = float(pagos_dia_query.scalar() or Decimal("0"))
-            except Exception:
-                logger.error(
-                    "Error en query total_cobrado",
-                    extra={
-                        "fecha": fecha_dia.isoformat(),
-                        "analista": analista,
-                        "concesionario": concesionario,
-                        "modelo": modelo,
-                    },
-                    exc_info=True,
-                )
-                total_cobrado = 0.0
+            total_a_cobrar = _calcular_total_a_cobrar(db, fecha_dia, analista, concesionario, modelo)
+            total_cobrado = _calcular_total_cobrado(db, fecha_dia, analista, concesionario, modelo)
 
             datos_diarios.append(
                 {
@@ -241,6 +188,8 @@ def obtener_cobros_diarios(
 
         return {"datos": datos_diarios}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error obteniendo cobros diarios: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")

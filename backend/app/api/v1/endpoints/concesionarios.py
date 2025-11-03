@@ -212,6 +212,44 @@ def eliminar_concesionario(
         )
 
 
+def _normalizar_valor_activo(activo_val, pd) -> bool:
+    """Normaliza el valor de activo desde Excel"""
+    if activo_val is None or pd.isna(activo_val):
+        return True
+    return bool(activo_val)
+
+
+def _procesar_fila_concesionario(row, db: Session, idx: int) -> tuple[int, int, Optional[str]]:
+    """Procesa una fila del Excel para concesionarios"""
+    import pandas as pd
+
+    try:
+        nombre = str(row.get("nombre", "")).strip()
+        if not nombre:
+            return (0, 0, None)
+
+        activo_val = _normalizar_valor_activo(row.get("activo"), pd)
+
+        existente = db.query(Concesionario).filter(Concesionario.nombre == nombre).first()
+        if existente:
+            existente.activo = activo_val
+            existente.updated_at = datetime.utcnow()
+            return (0, 1, None)
+
+        nuevo = Concesionario(
+            nombre=nombre,
+            activo=activo_val,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db.add(nuevo)
+        return (1, 0, None)
+    except Exception as e:
+        error_msg = f"Fila {idx + 2}: {str(e)}"
+        logger.warning(f"Error procesando fila {idx + 2}: {e}")
+        return (0, 0, error_msg)
+
+
 @router.post("/importar")
 def importar_concesionarios(
     archivo: UploadFile = File(...),
@@ -225,7 +263,7 @@ def importar_concesionarios(
     try:
         import pandas as pd
 
-        if not archivo.filename.lower().endswith((".xlsx", ".xls")):
+        if not archivo.filename or not archivo.filename.lower().endswith((".xlsx", ".xls")):
             raise HTTPException(status_code=400, detail="Formato inválido. Use Excel .xlsx/.xls")
 
         df = pd.read_excel(archivo.file)
@@ -238,34 +276,11 @@ def importar_concesionarios(
         errores = []
 
         for idx, row in df.iterrows():
-            try:
-                nombre = str(row.get("nombre", "")).strip()
-                if not nombre:
-                    continue
-
-                activo_val = row.get("activo")
-                if activo_val is None or pd.isna(activo_val):
-                    activo_val = True
-                else:
-                    activo_val = bool(activo_val)
-
-                existente = db.query(Concesionario).filter(Concesionario.nombre == nombre).first()
-                if existente:
-                    existente.activo = activo_val
-                    existente.updated_at = datetime.utcnow()
-                    actualizados += 1
-                else:
-                    nuevo = Concesionario(
-                        nombre=nombre,
-                        activo=activo_val,
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow(),
-                    )
-                    db.add(nuevo)
-                    creados += 1
-            except Exception as e:
-                errores.append(f"Fila {idx + 2}: {str(e)}")
-                logger.warning(f"Error procesando fila {idx + 2}: {e}")
+            c, a, error = _procesar_fila_concesionario(row, db, idx)
+            creados += c
+            actualizados += a
+            if error:
+                errores.append(error)
 
         db.commit()
         logger.info(f"Importación completada: {creados} creados, {actualizados} actualizados")
