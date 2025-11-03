@@ -305,48 +305,51 @@ def listar_plantillas(
             query = query.filter(NotificacionPlantilla.tipo == tipo)
 
         plantillas = query.order_by(NotificacionPlantilla.nombre).all()
-        
+
         # Serializar manualmente para evitar errores de Pydantic
         resultado = []
         for p in plantillas:
             try:
-                resultado.append({
-                    "id": p.id,
-                    "nombre": p.nombre,
-                    "descripcion": p.descripcion,
-                    "tipo": p.tipo,
-                    "asunto": p.asunto,
-                    "cuerpo": p.cuerpo,
-                    "variables_disponibles": p.variables_disponibles,
-                    "activa": bool(p.activa),
-                    "zona_horaria": p.zona_horaria or "America/Caracas",
-                    "fecha_creacion": p.fecha_creacion,
-                    "fecha_actualizacion": p.fecha_actualizacion,
-                })
+                resultado.append(
+                    {
+                        "id": p.id,
+                        "nombre": p.nombre,
+                        "descripcion": p.descripcion,
+                        "tipo": p.tipo,
+                        "asunto": p.asunto,
+                        "cuerpo": p.cuerpo,
+                        "variables_disponibles": p.variables_disponibles,
+                        "activa": bool(p.activa),
+                        "zona_horaria": p.zona_horaria or "America/Caracas",
+                        "fecha_creacion": p.fecha_creacion,
+                        "fecha_actualizacion": p.fecha_actualizacion,
+                    }
+                )
             except Exception as e:
                 logger.error(f"Error serializando plantilla {p.id}: {e}")
                 continue
-        
+
         return resultado
 
     except Exception as e:
         import traceback
+
         error_trace = traceback.format_exc()
         logger.error(f"Error listando plantillas: {e}\n{error_trace}")
-        
+
         # Verificar si la tabla existe
         try:
             from sqlalchemy import inspect
+
             inspector = inspect(db.bind)
             tablas = inspector.get_table_names()
-            if 'notificacion_plantillas' not in tablas:
+            if "notificacion_plantillas" not in tablas:
                 raise HTTPException(
-                    status_code=500, 
-                    detail="Tabla 'notificacion_plantillas' no existe. Ejecute las migraciones."
+                    status_code=500, detail="Tabla 'notificacion_plantillas' no existe. Ejecute las migraciones."
                 )
         except Exception:
             pass
-        
+
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
