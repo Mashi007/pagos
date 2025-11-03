@@ -439,6 +439,7 @@ def _serializar_prestamo(row) -> Optional[dict]:
         return None
 
 
+@router.get("", response_model=dict)
 def listar_prestamos(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=1000),

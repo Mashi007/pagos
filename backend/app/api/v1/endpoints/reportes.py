@@ -704,9 +704,8 @@ def exportar_reporte_cartera(
         logger.error(f"Error exportando reporte: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
-        if formato.lower() == "excel":
-            # Crear archivo Excel con datos reales detallados
-            from openpyxl import Workbook
+
+@router.get("/dashboard/resumen")
             from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
             wb = Workbook()
