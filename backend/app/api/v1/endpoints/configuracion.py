@@ -228,15 +228,14 @@ def actualizar_configuracion(
                 clave=config_data.clave,
                 valor=config_data.valor,
                 descripcion=config_data.descripcion,
-                actualizado_por=current_user.id,
+                # creado_por y actualizado_por no existen en la tabla BD
             )
             db.add(config)
         else:
             # Actualizar configuración existente
             config.valor = config_data.valor  # type: ignore[assignment]
             config.descripcion = config_data.descripcion  # type: ignore[assignment]
-            config.actualizado_por = int(current_user.id)  # type: ignore[assignment]
-            config.fecha_actualizacion = datetime.now()  # type: ignore[assignment]
+            # actualizado_en se actualiza automáticamente por onupdate=func.now()
 
         db.commit()
         db.refresh(config)
@@ -407,8 +406,7 @@ async def upload_logo(
             if logo_config:
                 # Actualizar configuración existente
                 logo_config.valor = logo_filename  # type: ignore[assignment]
-                logo_config.actualizado_por = current_user.email  # type: ignore[assignment]
-                logo_config.actualizado_en = datetime.utcnow()  # type: ignore[assignment]
+                # actualizado_en se actualiza automáticamente por onupdate=func.now()
             else:
                 # Crear nueva configuración
                 logo_config = ConfiguracionSistema(
@@ -418,8 +416,7 @@ async def upload_logo(
                     tipo_dato="STRING",
                     descripcion="Nombre del archivo del logo de la empresa",
                     visible_frontend=True,
-                    creado_por=current_user.email,
-                    actualizado_por=current_user.email,
+                    # creado_por y actualizado_por no existen en la tabla BD
                 )
                 db.add(logo_config)
 
@@ -688,7 +685,7 @@ def actualizar_configuracion_email(
 
             if config:
                 config.valor = str(valor)  # type: ignore[assignment]
-                config.actualizado_por = current_user.email  # type: ignore[assignment]
+                # actualizado_en se actualiza automáticamente por onupdate=func.now()
                 configuraciones.append(config)  # type: ignore[arg-type]
             else:
                 nueva_config = ConfiguracionSistema(
@@ -697,8 +694,7 @@ def actualizar_configuracion_email(
                     valor=str(valor),
                     tipo_dato="STRING",
                     visible_frontend=True,
-                    creado_por=current_user.email,
-                    actualizado_por=current_user.email,
+                    # creado_por y actualizado_por no existen en la tabla BD
                 )
                 db.add(nueva_config)
                 configuraciones.append(nueva_config)
