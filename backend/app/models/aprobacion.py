@@ -4,6 +4,7 @@ Modelo de Aprobación
 
 from datetime import date, datetime
 from enum import Enum
+from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -123,26 +124,26 @@ class Aprobacion(Base):
             delta = self.fecha_aprobacion - self.fecha_solicitud
             self.tiempo_respuesta_horas = int(delta.total_seconds() / 3600)
 
-    def aprobar(self, revisor_id: int, resultado: str = None):
+    def aprobar(self, revisor_id: int, resultado: Optional[str] = None):
         """Marca la solicitud como aprobada"""
-        self.estado = "APROBADA"
-        self.revisor_id = revisor_id
-        self.resultado = resultado
-        self.fecha_aprobacion = datetime.utcnow()
+        self.estado = "APROBADA"  # type: ignore[assignment]
+        self.revisor_id = revisor_id  # type: ignore[assignment]
+        self.resultado = resultado  # type: ignore[assignment]
+        self.fecha_aprobacion = datetime.utcnow()  # type: ignore[assignment]
         self.calcular_tiempo_respuesta()
 
     def rechazar(self, revisor_id: int, resultado: str):
         """Marca la solicitud como rechazada"""
-        self.estado = "RECHAZADA"
-        self.revisor_id = revisor_id
-        self.resultado = resultado
-        self.fecha_aprobacion = datetime.utcnow()
+        self.estado = "RECHAZADA"  # type: ignore[assignment]
+        self.revisor_id = revisor_id  # type: ignore[assignment]
+        self.resultado = resultado  # type: ignore[assignment]
+        self.fecha_aprobacion = datetime.utcnow()  # type: ignore[assignment]
         self.calcular_tiempo_respuesta()
 
     def cancelar(self, solicitante_id: int):
         """Cancela la solicitud"""
-        self.estado = "CANCELADA"
-        self.fecha_aprobacion = datetime.utcnow()
+        self.estado = "CANCELADA"  # type: ignore[assignment]
+        self.fecha_aprobacion = datetime.utcnow()  # type: ignore[assignment]
 
     def to_dict(self):
         """Convierte la aprobación a diccionario"""

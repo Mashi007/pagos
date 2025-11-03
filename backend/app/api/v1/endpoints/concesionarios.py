@@ -169,7 +169,7 @@ def actualizar_concesionario(
             setattr(concesionario, field, value)
 
         # Actualizar timestamp manually
-        concesionario.updated_at = datetime.utcnow()
+        concesionario.updated_at = datetime.utcnow()  # type: ignore[assignment]
 
         db.commit()
         db.refresh(concesionario)

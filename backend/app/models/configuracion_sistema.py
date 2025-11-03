@@ -63,7 +63,7 @@ class ConfiguracionSistema(Base):
         else:
             return self.valor
 
-    def establecer_valor(self, nuevo_valor: Any, usuario: str = None):
+    def establecer_valor(self, nuevo_valor: Any, usuario: Optional[str] = None):
         """Establece un nuevo valor con validación de tipo"""
         if self.tipo_dato == "INTEGER":
             try:

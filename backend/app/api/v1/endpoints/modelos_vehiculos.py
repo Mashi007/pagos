@@ -146,9 +146,9 @@ def actualizar_modelo_vehiculo(
         setattr(modelo, field, value)
 
     # Actualizar timestamp manualmente
-    modelo.updated_at = datetime.utcnow()
-    modelo.fecha_actualizacion = datetime.utcnow()
-    modelo.actualizado_por = current_user.email if getattr(current_user, "email", None) else None
+    modelo.updated_at = datetime.utcnow()  # type: ignore[assignment]
+    modelo.fecha_actualizacion = datetime.utcnow()  # type: ignore[assignment]
+    modelo.actualizado_por = current_user.email if getattr(current_user, "email", None) else None  # type: ignore[assignment]
 
     db.commit()
     db.refresh(modelo)

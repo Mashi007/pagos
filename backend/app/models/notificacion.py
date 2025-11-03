@@ -91,16 +91,16 @@ class Notificacion(Base):
         """Verifica si se puede reintentar el envío"""
         return str(self.estado) == EstadoNotificacion.FALLIDA.value and self.intentos < 3
 
-    def marcar_enviada(self, respuesta: str = None):
+    def marcar_enviada(self, respuesta: Optional[str] = None):
         """Marca la notificación como enviada"""
-        self.estado = EstadoNotificacion.ENVIADA.value
-        self.respuesta_servicio = respuesta
-        self.enviada_en = datetime.utcnow()
+        self.estado = EstadoNotificacion.ENVIADA.value  # type: ignore[assignment]
+        self.respuesta_servicio = respuesta  # type: ignore[assignment]
+        self.enviada_en = datetime.utcnow()  # type: ignore[assignment]
 
     def marcar_fallida(self, error: str):
         """Marca la notificación como fallida"""
-        self.estado = EstadoNotificacion.FALLIDA.value
-        self.error_mensaje = error
+        self.estado = EstadoNotificacion.FALLIDA.value  # type: ignore[assignment]
+        self.error_mensaje = error  # type: ignore[assignment]
         self.intentos += 1
 
     def marcar_leida(self):

@@ -109,19 +109,19 @@ class PrestamoResponse(PrestamoBase):
     def serialize_fecha_aprobacion(self, value: Optional[datetime]) -> Optional[str]:
         if value and isinstance(value, datetime):
             return value.isoformat()
-        return value
+        return None if value is None else str(value)
 
     @field_serializer("fecha_actualizacion")
-    def serialize_fecha_actualizacion(self, value: datetime) -> str:
+    def serialize_fecha_actualizacion(self, value: Optional[datetime]) -> Optional[str]:
         if isinstance(value, datetime):
             return value.isoformat()
-        return value
+        return None if value is None else str(value)
 
     @field_serializer("fecha_requerimiento")
-    def serialize_fecha_requerimiento(self, value: date) -> str:
+    def serialize_fecha_requerimiento(self, value: Optional[date]) -> Optional[str]:
         if isinstance(value, date):
             return value.isoformat()
-        return value
+        return None if value is None else str(value)
 
     @field_serializer("fecha_base_calculo")
     def serialize_fecha_base_calculo(self, value: Optional[date]) -> Optional[str]:

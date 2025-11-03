@@ -156,7 +156,7 @@ def actualizar_analista(
             setattr(analista, field, value)
 
         # Actualizar timestamp manually
-        analista.updated_at = datetime.utcnow()
+        analista.updated_at = datetime.utcnow()  # type: ignore[assignment]
 
         db.commit()
         db.refresh(analista)

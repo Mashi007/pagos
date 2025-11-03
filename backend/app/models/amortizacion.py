@@ -74,7 +74,7 @@ class Cuota(Base):
     @property
     def total_pendiente(self) -> Decimal:
         """Calcula el total pendiente de pago"""
-        return self.capital_pendiente + self.interes_pendiente + self.monto_mora
+        return self.capital_pendiente + self.interes_pendiente + self.monto_mora  # type: ignore[return-value]
 
     @property
     def esta_vencida(self) -> bool:
@@ -82,7 +82,7 @@ class Cuota(Base):
         from datetime import date
 
         if self.fecha_vencimiento:
-            return self.fecha_vencimiento < date.today() and self.estado != "PAGADA"
+            return self.fecha_vencimiento < date.today() and self.estado != "PAGADA"  # type: ignore[return-value]
         return False
 
     def calcular_mora(self, tasa_mora_diaria: Decimal) -> Decimal:
