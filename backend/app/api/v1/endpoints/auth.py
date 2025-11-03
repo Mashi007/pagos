@@ -120,10 +120,11 @@ async def login(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario o clave incorrecto")
 
         # Generar tokens
-        access_token, refresh_token = _generar_tokens_usuario(user.id)
+        user_id = int(user.id)
+        access_token, refresh_token = _generar_tokens_usuario(user_id)
 
         logger.info(f"Login exitoso para: {login_data.email}")
-        _registrar_auditoria_login(db, request, user.id, True, user.id)
+        _registrar_auditoria_login(db, request, user_id, True, user_id)
 
         # Preparar información del usuario para la respuesta
         user_info = {
