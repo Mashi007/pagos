@@ -152,6 +152,93 @@ def _calcular_dias_mora_cliente(db: Session, cedula: str, hoy: date) -> int:
     return int(dias_mora_query) if dias_mora_query else 0
 
 
+def _procesar_distribucion_por_plazo(query_base, total_prestamos: int, total_monto: float) -> list:
+    """Procesa distribución por plazo (numero_cuotas)"""
+    distribucion_data = []
+    query_plazo = (
+        query_base.with_entities(
+            Prestamo.numero_cuotas.label("plazo"),
+            func.count(Prestamo.id).label("cantidad"),
+            func.sum(Prestamo.total_financiamiento).label("monto_total"),
+        )
+        .group_by(Prestamo.numero_cuotas)
+        .order_by(Prestamo.numero_cuotas)
+    )
+    resultados = query_plazo.all()
+    for row in resultados:
+        cantidad = row.cantidad or 0
+        monto_total = float(row.monto_total or Decimal("0"))
+        porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
+        porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
+        distribucion_data.append(
+            {
+                "categoria": f"{row.plazo} cuotas",
+                "cantidad_prestamos": cantidad,
+                "monto_total": monto_total,
+                "porcentaje_cantidad": round(porcentaje_cantidad, 2),
+                "porcentaje_monto": round(porcentaje_monto, 2),
+            }
+        )
+    return distribucion_data
+
+
+def _procesar_distribucion_por_estado(query_base, total_prestamos: int, total_monto: float) -> list:
+    """Procesa distribución por estado"""
+    distribucion_data = []
+    query_estado = query_base.with_entities(
+        Prestamo.estado.label("estado"),
+        func.count(Prestamo.id).label("cantidad"),
+        func.sum(Prestamo.total_financiamiento).label("monto_total"),
+    ).group_by(Prestamo.estado)
+    resultados = query_estado.all()
+    for row in resultados:
+        cantidad = row.cantidad or 0
+        monto_total = float(row.monto_total or Decimal("0"))
+        porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
+        porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
+        distribucion_data.append(
+            {
+                "categoria": row.estado or "Sin Estado",
+                "cantidad_prestamos": cantidad,
+                "monto_total": monto_total,
+                "porcentaje_cantidad": round(porcentaje_cantidad, 2),
+                "porcentaje_monto": round(porcentaje_monto, 2),
+            }
+        )
+    return distribucion_data
+
+
+def _procesar_distribucion_rango_monto_plazo(query_base, rangos_monto: list, rangos_plazo: list,
+                                             total_prestamos: int, total_monto: float) -> list:
+    """Procesa distribución combinada por rango de monto y plazo"""
+    distribucion_data = []
+    for min_monto, max_monto, cat_monto in rangos_monto:
+        for min_plazo, max_plazo, cat_plazo in rangos_plazo:
+            query_combinado = query_base.filter(Prestamo.total_financiamiento >= Decimal(str(min_monto)))
+            if max_monto:
+                query_combinado = query_combinado.filter(Prestamo.total_financiamiento < Decimal(str(max_monto)))
+            query_combinado = query_combinado.filter(Prestamo.numero_cuotas >= min_plazo)
+            if max_plazo:
+                query_combinado = query_combinado.filter(Prestamo.numero_cuotas < max_plazo)
+            cantidad = query_combinado.count()
+            if cantidad > 0:
+                monto_total = float(
+                    query_combinado.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0")
+                )
+                porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
+                porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
+                distribucion_data.append(
+                    {
+                        "categoria": f"{cat_monto} - {cat_plazo}",
+                        "cantidad_prestamos": cantidad,
+                        "monto_total": monto_total,
+                        "porcentaje_cantidad": round(porcentaje_cantidad, 2),
+                        "porcentaje_monto": round(porcentaje_monto, 2),
+                    }
+                )
+    return distribucion_data
+
+
 def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos: int, total_monto: float) -> list:
     """Procesa distribución por rango de monto"""
     distribucion_data = []
@@ -177,6 +264,45 @@ def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos
             }
         )
     return distribucion_data
+
+
+def _calcular_rango_fechas_granularidad(granularidad: str, hoy: date, dias: Optional[int],
+                                       fecha_inicio: Optional[date], fecha_fin: Optional[date]) -> tuple[date, date]:
+    """Calcula rango de fechas según granularidad"""
+    if granularidad == "mes_actual":
+        fecha_inicio_query = date(hoy.year, hoy.month, 1)
+        fecha_fin_query = _obtener_fechas_mes_siguiente(hoy.month, hoy.year)
+    elif granularidad == "proximos_n_dias":
+        fecha_inicio_query = hoy
+        fecha_fin_query = hoy + timedelta(days=dias or 30)
+    elif granularidad == "hasta_fin_anio":
+        fecha_inicio_query = hoy
+        fecha_fin_query = date(hoy.year, 12, 31)
+    else:  # personalizado
+        fecha_inicio_query = fecha_inicio or hoy
+        fecha_fin_query = fecha_fin or (hoy + timedelta(days=30))
+    return fecha_inicio_query, fecha_fin_query
+
+
+def _calcular_proyeccion_cuentas_cobrar(datos: List[dict[str, Any]]) -> float:
+    """Calcula proyección de cuentas por cobrar usando último valor conocido"""
+    ultimo_valor: float = 0.0
+    if datos and len(datos) > 0 and "cuentas_por_cobrar" in datos[-1]:
+        valor = datos[-1]["cuentas_por_cobrar"]
+        if valor is not None and isinstance(valor, (int, float)):
+            ultimo_valor = float(valor)
+    return ultimo_valor * 1.02 if ultimo_valor > 0 else 0.0  # Crecimiento del 2%
+
+
+def _calcular_proyeccion_cuotas_dias(datos: List[dict[str, Any]]) -> int:
+    """Calcula proyección de cuotas en días usando promedio histórico"""
+    if len(datos) > 0:
+        valores_historicos = [
+            d["cuotas_en_dias"] for d in datos
+            if d.get("cuotas_en_dias") is not None and d["cuotas_en_dias"] > 0
+        ]
+        return int(sum(valores_historicos) / len(valores_historicos)) if valores_historicos else 0
+    return 0
 
 
 def _calcular_pagos_fecha(db: Session, fecha: date, analista: Optional[str],
@@ -207,7 +333,6 @@ def _calcular_tasa_recuperacion(db: Session, primer_dia: date, ultimo_dia: date,
     cuotas_a_cobrar_query = FiltrosDashboard.aplicar_filtros_cuota(
         cuotas_a_cobrar_query, analista, concesionario, modelo, None, None
     )
-    total_a_cobrar = float(cuotas_a_cobrar_query.scalar() or Decimal("0"))
 
     # Cuotas pagadas del mes
     cuotas_pagadas_query = (
@@ -874,7 +999,19 @@ def dashboard_administrador(
         # 23. META MENSUAL - Total a cobrar del mes actual (suma de monto_cuota de cuotas del mes)
         # Meta = Total a cobrar del mes (cuotas planificadas)
         # Recaudado = Pagos conciliados del mes
-        meta_mensual_final = total_a_cobrar_mes  # Meta = Total a cobrar del mes
+        query_meta_mensual = (
+            db.query(func.sum(Cuota.monto_cuota))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                func.date(Cuota.fecha_vencimiento) >= primer_dia_mes,
+                func.date(Cuota.fecha_vencimiento) <= ultimo_dia_mes,
+            )
+        )
+        query_meta_mensual = FiltrosDashboard.aplicar_filtros_cuota(
+            query_meta_mensual, analista, concesionario, modelo, None, None
+        )
+        meta_mensual_final = float(query_meta_mensual.scalar() or Decimal("0"))
 
         return {
             "cartera_total": float(cartera_total),
@@ -1727,61 +1864,12 @@ def obtener_distribucion_prestamos(
             distribucion_data = _procesar_distribucion_rango_monto(query_base, rangos, total_prestamos, total_monto)
 
         elif tipo == "plazo":
-            # Agrupar por numero_cuotas (plazo)
-            query_plazo = (
-                query_base.with_entities(
-                    Prestamo.numero_cuotas.label("plazo"),
-                    func.count(Prestamo.id).label("cantidad"),
-                    func.sum(Prestamo.total_financiamiento).label("monto_total"),
-                )
-                .group_by(Prestamo.numero_cuotas)
-                .order_by(Prestamo.numero_cuotas)
-            )
-
-            resultados = query_plazo.all()
-            for row in resultados:
-                cantidad = row.cantidad or 0
-                monto_total = float(row.monto_total or Decimal("0"))
-                porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
-                porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
-
-                distribucion_data.append(
-                    {
-                        "categoria": f"{row.plazo} cuotas",
-                        "cantidad_prestamos": cantidad,
-                        "monto_total": monto_total,
-                        "porcentaje_cantidad": round(porcentaje_cantidad, 2),
-                        "porcentaje_monto": round(porcentaje_monto, 2),
-                    }
-                )
+            distribucion_data = _procesar_distribucion_por_plazo(query_base, total_prestamos, total_monto)
 
         elif tipo == "estado":
-            # Agrupar por estado (aunque todos deberían ser APROBADO)
-            query_estado = query_base.with_entities(
-                Prestamo.estado.label("estado"),
-                func.count(Prestamo.id).label("cantidad"),
-                func.sum(Prestamo.total_financiamiento).label("monto_total"),
-            ).group_by(Prestamo.estado)
-
-            resultados = query_estado.all()
-            for row in resultados:
-                cantidad = row.cantidad or 0
-                monto_total = float(row.monto_total or Decimal("0"))
-                porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
-                porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
-
-                distribucion_data.append(
-                    {
-                        "categoria": row.estado or "Sin Estado",
-                        "cantidad_prestamos": cantidad,
-                        "monto_total": monto_total,
-                        "porcentaje_cantidad": round(porcentaje_cantidad, 2),
-                        "porcentaje_monto": round(porcentaje_monto, 2),
-                    }
-                )
+            distribucion_data = _procesar_distribucion_por_estado(query_base, total_prestamos, total_monto)
 
         elif tipo == "rango_monto_plazo":
-            # Combinación: rango de monto + plazo
             rangos_monto = [
                 (0, 10000, "Pequeño"),
                 (10000, 30000, "Mediano"),
@@ -1792,34 +1880,9 @@ def obtener_distribucion_prestamos(
                 (12, 36, "Medio"),
                 (36, None, "Largo"),
             ]
-
-            for min_monto, max_monto, cat_monto in rangos_monto:
-                for min_plazo, max_plazo, cat_plazo in rangos_plazo:
-                    query_combinado = query_base.filter(Prestamo.total_financiamiento >= Decimal(str(min_monto)))
-                    if max_monto:
-                        query_combinado = query_combinado.filter(Prestamo.total_financiamiento < Decimal(str(max_monto)))
-
-                    query_combinado = query_combinado.filter(Prestamo.numero_cuotas >= min_plazo)
-                    if max_plazo:
-                        query_combinado = query_combinado.filter(Prestamo.numero_cuotas < max_plazo)
-
-                    cantidad = query_combinado.count()
-                    if cantidad > 0:
-                        monto_total = float(
-                            query_combinado.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0")
-                        )
-                        porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
-                        porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
-
-                        distribucion_data.append(
-                            {
-                                "categoria": f"{cat_monto} - {cat_plazo}",
-                                "cantidad_prestamos": cantidad,
-                                "monto_total": monto_total,
-                                "porcentaje_cantidad": round(porcentaje_cantidad, 2),
-                                "porcentaje_monto": round(porcentaje_monto, 2),
-                            }
-                        )
+            distribucion_data = _procesar_distribucion_rango_monto_plazo(
+                query_base, rangos_monto, rangos_plazo, total_prestamos, total_monto
+            )
 
         return {
             "distribucion": distribucion_data,
@@ -1855,21 +1918,9 @@ def obtener_cuentas_cobrar_tendencias(
         hoy = date.today()
 
         # Determinar rango de fechas según granularidad
-        if granularidad == "mes_actual":
-            fecha_inicio_query = date(hoy.year, hoy.month, 1)
-            if hoy.month == 12:
-                fecha_fin_query = date(hoy.year + 1, 1, 1)
-            else:
-                fecha_fin_query = date(hoy.year, hoy.month + 1, 1)
-        elif granularidad == "proximos_n_dias":
-            fecha_inicio_query = hoy
-            fecha_fin_query = hoy + timedelta(days=dias or 30)
-        elif granularidad == "hasta_fin_anio":
-            fecha_inicio_query = hoy
-            fecha_fin_query = date(hoy.year, 12, 31)
-        else:  # personalizado
-            fecha_inicio_query = fecha_inicio or hoy
-            fecha_fin_query = fecha_fin or (hoy + timedelta(days=30))
+        fecha_inicio_query, fecha_fin_query = _calcular_rango_fechas_granularidad(
+            granularidad, hoy, dias, fecha_inicio, fecha_fin
+        )
 
         # Extender hasta incluir proyección
         fecha_fin_proyeccion = fecha_fin_query + timedelta(days=meses_proyeccion * 30)
@@ -1899,12 +1950,7 @@ def obtener_cuentas_cobrar_tendencias(
                 cuentas_por_cobrar = float(query_cuentas.scalar() or Decimal("0"))
             else:
                 # Proyección: usar último valor conocido con factor de crecimiento
-                ultimo_valor: float = 0.0
-                if datos and len(datos) > 0 and "cuentas_por_cobrar" in datos[-1]:
-                    valor = datos[-1]["cuentas_por_cobrar"]
-                    if valor is not None and isinstance(valor, (int, float)):
-                        ultimo_valor = float(valor)
-                cuentas_por_cobrar = ultimo_valor * 1.02 if ultimo_valor > 0 else 0.0  # Crecimiento del 2%
+                cuentas_por_cobrar = _calcular_proyeccion_cuentas_cobrar(datos)
 
             # CUOTAS EN DÍAS: Contar cuotas que se deben pagar por día (fecha_vencimiento = current_date)
             if not es_proyeccion:
@@ -1923,13 +1969,7 @@ def obtener_cuentas_cobrar_tendencias(
                 cuotas_en_dias = query_cuotas_dia.scalar() or 0
             else:
                 # Proyección: usar promedio de últimos días históricos
-                if len(datos) > 0:
-                    valores_historicos = [
-                        d["cuotas_en_dias"] for d in datos if d.get("cuotas_en_dias") is not None and d["cuotas_en_dias"] > 0
-                    ]
-                    cuotas_en_dias = int(sum(valores_historicos) / len(valores_historicos)) if valores_historicos else 0
-                else:
-                    cuotas_en_dias = 0
+                cuotas_en_dias = _calcular_proyeccion_cuotas_dias(datos)
 
             datos.append(
                 {
