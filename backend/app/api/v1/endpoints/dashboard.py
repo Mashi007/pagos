@@ -1068,19 +1068,21 @@ def dashboard_administrador(
         # Usar SQL directo para sumar monto_pagado con filtros de fecha únicamente
         where_conditions = ["monto_pagado IS NOT NULL", "monto_pagado != ''"]
         params = {}
-        
+
         if fecha_inicio:
             where_conditions.append("fecha_pago::timestamp >= :fecha_inicio")
             params["fecha_inicio"] = datetime.combine(fecha_inicio, datetime.min.time())
         if fecha_fin:
             where_conditions.append("fecha_pago::timestamp <= :fecha_fin")
             params["fecha_fin"] = datetime.combine(fecha_fin, datetime.max.time())
-        
+
         where_clause = " AND ".join(where_conditions)
         where_clause += " AND fecha_pago IS NOT NULL AND fecha_pago != '' AND fecha_pago ~ '^\\\\d{4}-\\\\d{2}-\\\\d{2}'"
-        
+
         cartera_cobrada_query = db.execute(
-            text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_clause}").bindparams(**params)
+            text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_clause}").bindparams(
+                **params
+            )
         )
         cartera_cobrada_total = float(cartera_cobrada_query.scalar() or Decimal("0"))
 

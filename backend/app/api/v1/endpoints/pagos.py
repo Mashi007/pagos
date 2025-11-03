@@ -134,7 +134,7 @@ def _calcular_cuotas_atrasadas_batch(db: Session, cedulas: list[str], hoy: date)
 def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str, int]] = None):
     """
     Serializa un pago de forma segura.
-    
+
     Maneja PagoStaging que no tiene: estado, conciliado, usuario_registro, activo, fecha_registro, etc.
     Convierte monto_pagado de string a Decimal.
 
@@ -164,10 +164,12 @@ def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str,
         if hasattr(pago, "monto_pagado") and pago.monto_pagado:
             try:
                 monto_str = str(pago.monto_pagado).strip()
-                if monto_str and monto_str != '':
+                if monto_str and monto_str != "":
                     monto_pagado_decimal = Decimal(monto_str)
             except (ValueError, TypeError):
-                logger.warning(f"⚠️ [serializar_pago] No se pudo convertir monto_pagado '{pago.monto_pagado}' a Decimal para pago {pago.id}")
+                logger.warning(
+                    f"⚠️ [serializar_pago] No se pudo convertir monto_pagado '{pago.monto_pagado}' a Decimal para pago {pago.id}"
+                )
 
         # Construir diccionario manualmente porque PagoStaging no tiene todos los campos de PagoResponse
         pago_dict = {
@@ -213,7 +215,9 @@ def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str,
         cedula_cliente = getattr(pago, "cedula_cliente", None)
         logger.error(f"   Datos del pago: cedula={cedula_cliente}")
         logger.error(f"   fecha_pago={getattr(pago, 'fecha_pago', 'N/A')} (tipo: {type(getattr(pago, 'fecha_pago', None))})")
-        logger.error(f"   monto_pagado={getattr(pago, 'monto_pagado', 'N/A')} (tipo: {type(getattr(pago, 'monto_pagado', None))})")
+        logger.error(
+            f"   monto_pagado={getattr(pago, 'monto_pagado', 'N/A')} (tipo: {type(getattr(pago, 'monto_pagado', None))})"
+        )
         raise
 
 
