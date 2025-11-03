@@ -384,29 +384,14 @@ def listar_pagos(
 
         query = db.query(Pago)
 
-        # Filtros
-        if cedula:
-            query = query.filter(Pago.cedula_cliente == cedula)
-            logger.info(f"🔍 [listar_pagos] Filtro cédula: {cedula}")
-        if estado:
-            query = query.filter(Pago.estado == estado)
-            logger.info(f"🔍 [listar_pagos] Filtro estado: {estado}")
-        if fecha_desde:
-            query = query.filter(Pago.fecha_pago >= fecha_desde)
-            logger.info(f"🔍 [listar_pagos] Filtro fecha_desde: {fecha_desde}")
-        if fecha_hasta:
-            query = query.filter(Pago.fecha_pago <= fecha_hasta)
-            logger.info(f"🔍 [listar_pagos] Filtro fecha_hasta: {fecha_hasta}")
-        if analista:
-            query = query.join(Prestamo).filter(Prestamo.usuario_proponente == analista)
-            logger.info(f"🔍 [listar_pagos] Filtro analista: {analista}")
+        # Aplicar filtros
+        query = _aplicar_filtros_pagos(query, cedula, estado, fecha_desde, fecha_hasta, analista, db)
 
         # Contar total antes de aplicar paginación
         total = query.count()
         logger.info(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")
 
         # Ordenar por fecha de registro descendente (más actual primero)
-        # Si hay misma fecha_registro, ordenar por ID descendente como criterio secundario
         query = query.order_by(Pago.fecha_registro.desc(), Pago.id.desc())
 
         # Paginación
@@ -421,86 +406,10 @@ def listar_pagos(
 
         for pago in pagos:
             try:
-                # Convertir fecha_pago si es DATE a datetime si es necesario
-                if hasattr(pago, "fecha_pago") and pago.fecha_pago is not None:
-                    if isinstance(pago.fecha_pago, date) and not isinstance(pago.fecha_pago, datetime):
-                        # Si es date sin hora, convertir a datetime al inicio del día
-                        pago.fecha_pago = datetime.combine(pago.fecha_pago, time.min)
-
-                # Validar con el schema
-                pago_dict = PagoResponse.model_validate(pago).model_dump()
-
-                # ✅ Calcular cuotas atrasadas para este cliente
-                # IMPORTANTE: Revisa TODAS las cuotas de TODOS los préstamos activos del cliente
-                # Cuotas atrasadas = cuotas vencidas con pago incompleto (total_pagado < monto_cuota)
-                cuotas_atrasadas = 0
-                if pago.cedula_cliente:
-                    # Obtener TODOS los préstamos APROBADOS del cliente (no solo del último pago)
-                    prestamos_ids = [
-                        p.id
-                        for p in db.query(Prestamo.id)
-                        .filter(
-                            Prestamo.cedula == pago.cedula_cliente,
-                            Prestamo.estado == "APROBADO",  # ✅ Solo préstamos activos
-                        )
-                        .all()
-                    ]
-
-                    if prestamos_ids:
-                        # Contar TODAS las cuotas atrasadas de TODOS los préstamos del cliente
-                        # Filtros aplicados:
-                        # 1. Pertenece a algún préstamo del cliente
-                        # 2. Está vencida (fecha_vencimiento < hoy)
-                        # 3. No está completamente pagada (total_pagado < monto_cuota)
-                        # ✅ NO HAY VALORES HARDCODEADOS - Todo se calcula dinámicamente desde la BD
-                        cuotas_atrasadas_query = (
-                            db.query(func.count(Cuota.id))
-                            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                            .filter(
-                                Prestamo.id.in_(prestamos_ids),
-                                Prestamo.estado == "APROBADO",  # ✅ Solo préstamos activos
-                                Cuota.fecha_vencimiento < hoy,  # ✅ Vencida
-                                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
-                            )
-                        )
-                        cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
-
-                        # Logging detallado para verificación (INFO para producción)
-                        logger.info(
-                            f"📊 [listar_pagos] Cliente {pago.cedula_cliente}: "
-                            f"{len(prestamos_ids)} préstamos APROBADOS, "
-                            f"{cuotas_atrasadas} cuotas atrasadas "
-                            f"(fecha_vencimiento < {hoy} AND total_pagado < monto_cuota) - "
-                            f"CÁLCULO DINÁMICO DESDE BD ✅"
-                        )
-                    else:
-                        logger.debug(f"📊 [listar_pagos] Cliente {pago.cedula_cliente}: Sin préstamos APROBADOS")
-                else:
-                    logger.debug(f"📊 [listar_pagos] Pago ID {pago.id}: Sin cédula de cliente")
-
-                # Agregar cuotas_atrasadas al diccionario
-                pago_dict["cuotas_atrasadas"] = cuotas_atrasadas
+                pago_dict = _serializar_pago(pago, db, hoy)
                 pagos_serializados.append(pago_dict)
-            except Exception as serialization_error:
+            except Exception:
                 errores_serializacion += 1
-                # Log detallado del error y campos del pago
-                error_detail = str(serialization_error)
-                logger.error(
-                    f"❌ [listar_pagos] Error serializando pago ID {pago.id}: {error_detail}",
-                    exc_info=True,
-                )
-                logger.error(f"   Datos del pago: cedula={pago.cedula_cliente}")
-                logger.error(f"   fecha_pago={pago.fecha_pago} (tipo: {type(pago.fecha_pago)})")
-                logger.error(
-                    f"   fecha_registro={getattr(pago, 'fecha_registro', 'N/A')} (tipo: {type(getattr(pago, 'fecha_registro', None))})"
-                )
-                logger.error(
-                    f"   fecha_actualizacion={getattr(pago, 'fecha_actualizacion', 'N/A')} (tipo: {type(getattr(pago, 'fecha_actualizacion', None))})"
-                )
-                logger.error(
-                    f"   fecha_conciliacion={getattr(pago, 'fecha_conciliacion', 'N/A')} (tipo: {type(getattr(pago, 'fecha_conciliacion', None))})"
-                )
-                # Continuar con los demás pagos, pero loguear el error
                 continue
 
         if errores_serializacion > 0:
