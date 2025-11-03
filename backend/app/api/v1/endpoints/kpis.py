@@ -240,7 +240,9 @@ def _calcular_kpis_mes_actual(
         )
         .filter(
             ~Cuota.id.in_(
-                db.query(pago_cuotas.c.cuota_id).join(PagoStaging, pago_cuotas.c.pago_id == PagoStaging.id).filter(PagoStaging.conciliado.is_(True))
+                db.query(pago_cuotas.c.cuota_id)
+                .join(PagoStaging, pago_cuotas.c.pago_id == PagoStaging.id)
+                .filter(PagoStaging.conciliado.is_(True))
             )
         )
     )
