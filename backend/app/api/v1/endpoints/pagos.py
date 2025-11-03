@@ -541,7 +541,8 @@ def listar_pagos(
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
                   AND TRIM(monto_pagado) != ''
-                  AND (monto_pagado::numeric > 0 OR monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$')
+                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                  AND monto_pagado::numeric > 0
                 ORDER BY id_stg DESC
                 LIMIT :limit OFFSET :offset
             """
