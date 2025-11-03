@@ -327,6 +327,334 @@ def reporte_pagos(
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
+def _obtener_distribucion_por_monto(db: Session) -> list:
+    """Obtiene distribución de préstamos por rango de monto"""
+    distribucion_por_monto_query = (
+        db.query(
+            case(
+                (Prestamo.total_financiamiento <= 1000, "Hasta $1,000"),
+                (Prestamo.total_financiamiento <= 5000, "$1,001 - $5,000"),
+                (Prestamo.total_financiamiento <= 10000, "$5,001 - $10,000"),
+                else_="Más de $10,000",
+            ).label("rango"),
+            func.count(Prestamo.id).label("cantidad"),
+            func.sum(Prestamo.total_financiamiento).label("monto"),
+        )
+        .filter(Prestamo.estado == "APROBADO")
+        .group_by("rango")
+        .all()
+    )
+
+    return [
+        {
+            "rango": item.rango,
+            "cantidad": item.cantidad,
+            "monto": float(item.monto) if item.monto else 0.0,
+        }
+        for item in distribucion_por_monto_query
+    ]
+
+
+def _obtener_distribucion_por_mora(db: Session) -> list:
+    """Obtiene distribución de préstamos por rango de días de mora"""
+    rangos_mora = [
+        {"min": 1, "max": 30, "label": "1-30 días"},
+        {"min": 31, "max": 60, "label": "31-60 días"},
+        {"min": 61, "max": 90, "label": "61-90 días"},
+        {"min": 91, "max": 999999, "label": "Más de 90 días"},
+    ]
+
+    distribucion_por_mora = []
+    for rango in rangos_mora:
+        cantidad = (
+            db.query(func.count(func.distinct(Prestamo.id)))
+            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.monto_mora > Decimal("0.00"),
+                Cuota.dias_mora >= rango["min"],
+                Cuota.dias_mora <= rango["max"],
+            )
+            .scalar()
+        ) or 0
+
+        monto_mora = (
+            db.query(func.sum(Cuota.monto_mora))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.monto_mora > Decimal("0.00"),
+                Cuota.dias_mora >= rango["min"],
+                Cuota.dias_mora <= rango["max"],
+            )
+            .scalar()
+        ) or Decimal("0")
+
+        distribucion_por_mora.append(
+            {
+                "rango": rango["label"],
+                "cantidad": cantidad,
+                "monto_total": float(monto_mora),
+            }
+        )
+
+    return distribucion_por_mora
+
+
+def _obtener_estilos_excel():
+    """Obtiene estilos reutilizables para Excel"""
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
+    return {
+        "header_fill": PatternFill(start_color="366092", end_color="366092", fill_type="solid"),
+        "header_font": Font(bold=True, color="FFFFFF", size=14),
+        "title_font": Font(bold=True, size=16),
+        "label_font": Font(bold=True),
+        "border": Border(
+            left=Side(style="thin"),
+            right=Side(style="thin"),
+            top=Side(style="thin"),
+            bottom=Side(style="thin"),
+        ),
+    }
+
+
+def _crear_hoja_resumen_excel(ws, reporte, cantidad_prestamos_activos, cantidad_prestamos_mora, estilos):
+    """Crea la hoja de resumen ejecutivo en Excel"""
+    from openpyxl.styles import Alignment, Font
+
+    ws.title = "Resumen Ejecutivo"
+
+    ws.merge_cells("A1:B1")
+    ws["A1"] = "REPORTE DE CARTERA"
+    ws["A1"].font = estilos["title_font"]
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 30
+
+    ws["A2"] = f"Fecha de Corte: {reporte.fecha_corte}"
+    ws["A2"].font = Font(size=12)
+    ws["A3"] = f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+    ws["A3"].font = Font(size=10, italic=True)
+
+    row = 5
+    datos_resumen = [
+        ("Cartera Total:", reporte.cartera_total),
+        ("Capital Pendiente:", reporte.capital_pendiente),
+        ("Intereses Pendientes:", reporte.intereses_pendientes),
+        ("Mora Total:", reporte.mora_total),
+        ("Préstamos Activos:", cantidad_prestamos_activos),
+        ("Préstamos en Mora:", cantidad_prestamos_mora),
+    ]
+
+    for label, value in datos_resumen:
+        ws[f"A{row}"] = label
+        ws[f"A{row}"].font = estilos["label_font"]
+        if isinstance(value, Decimal):
+            ws[f"B{row}"] = float(value)
+            ws[f"B{row}"].number_format = '"$"#,##0.00'
+        else:
+            ws[f"B{row}"] = value
+        ws[f"B{row}"].font = Font(bold=True)
+        row += 1
+
+    ws.column_dimensions["A"].width = 25
+    ws.column_dimensions["B"].width = 20
+
+
+def _crear_hoja_distribucion_monto_excel(ws, distribucion_por_monto, estilos):
+    """Crea la hoja de distribución por monto en Excel"""
+    from openpyxl.styles import Alignment, Font
+
+    ws.title = "Distribución por Monto"
+
+    headers = ["Rango de Monto", "Cantidad Préstamos", "Monto Total"]
+    for col_idx, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.font = estilos["header_font"]
+        cell.fill = estilos["header_fill"]
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = estilos["border"]
+
+    for row_idx, item in enumerate(distribucion_por_monto, 2):
+        ws.cell(row=row_idx, column=1, value=item["rango"]).border = estilos["border"]
+        ws.cell(row=row_idx, column=2, value=item["cantidad"]).border = estilos["border"]
+        cell_monto = ws.cell(row=row_idx, column=3, value=float(item["monto"]))
+        cell_monto.number_format = '"$"#,##0.00'
+        cell_monto.border = estilos["border"]
+
+    total_row = len(distribucion_por_monto) + 3
+    ws.cell(row=total_row, column=1, value="TOTAL:").font = Font(bold=True)
+    ws.cell(row=total_row, column=2, value=sum(item["cantidad"] for item in distribucion_por_monto)).font = Font(bold=True)
+    total_cell = ws.cell(row=total_row, column=3, value=sum(item["monto"] for item in distribucion_por_monto))
+    total_cell.number_format = '"$"#,##0.00'
+    total_cell.font = Font(bold=True)
+
+    ws.column_dimensions["A"].width = 20
+    ws.column_dimensions["B"].width = 20
+    ws.column_dimensions["C"].width = 20
+
+
+def _crear_hoja_distribucion_mora_excel(ws, distribucion_por_mora, estilos):
+    """Crea la hoja de distribución por mora en Excel"""
+    from openpyxl.styles import Alignment, Font
+
+    ws.title = "Distribución por Mora"
+
+    headers_mora = ["Rango de Días", "Cantidad Préstamos", "Monto Total Mora"]
+    for col_idx, header in enumerate(headers_mora, 1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.font = estilos["header_font"]
+        cell.fill = estilos["header_fill"]
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = estilos["border"]
+
+    for row_idx, item in enumerate(distribucion_por_mora, 2):
+        ws.cell(row=row_idx, column=1, value=item["rango"]).border = estilos["border"]
+        ws.cell(row=row_idx, column=2, value=item["cantidad"]).border = estilos["border"]
+        cell_mora = ws.cell(row=row_idx, column=3, value=float(item["monto_total"]))
+        cell_mora.number_format = '"$"#,##0.00'
+        cell_mora.border = estilos["border"]
+
+    total_row_mora = len(distribucion_por_mora) + 3
+    ws.cell(row=total_row_mora, column=1, value="TOTAL:").font = Font(bold=True)
+    ws.cell(row=total_row_mora, column=2, value=sum(item["cantidad"] for item in distribucion_por_mora)).font = Font(bold=True)
+    total_cell_mora = ws.cell(row=total_row_mora, column=3, value=float(sum(item["monto_total"] for item in distribucion_por_mora)))
+    total_cell_mora.number_format = '"$"#,##0.00'
+    total_cell_mora.font = Font(bold=True)
+
+    ws.column_dimensions["A"].width = 20
+    ws.column_dimensions["B"].width = 20
+    ws.column_dimensions["C"].width = 20
+
+
+def _crear_hoja_prestamos_detallados_excel(ws, db: Session, estilos):
+    """Crea la hoja de préstamos detallados en Excel"""
+    from openpyxl.styles import Alignment, Font
+
+    ws.title = "Préstamos Detallados"
+
+    prestamos_detalle = (
+        db.query(
+            Prestamo.id,
+            Prestamo.cedula,
+            Prestamo.nombres,
+            Prestamo.total_financiamiento,
+            Prestamo.estado,
+            Prestamo.modalidad_pago,
+            Prestamo.numero_cuotas,
+            Prestamo.usuario_proponente.label("analista"),
+            func.sum(
+                func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
+                + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
+                + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
+            ).label("saldo_pendiente"),
+            func.count(Cuota.id).label("cuotas_pendientes"),
+        )
+        .join(Cuota, Cuota.prestamo_id == Prestamo.id, isouter=True)
+        .filter(Prestamo.estado == "APROBADO")
+        .group_by(Prestamo.id)
+        .order_by(Prestamo.id)
+        .all()
+    )
+
+    headers_detalle = [
+        "ID Préstamo",
+        "Cédula",
+        "Cliente",
+        "Total Financiamiento",
+        "Saldo Pendiente",
+        "Cuotas Pendientes",
+        "Modalidad",
+        "Analista",
+        "Estado",
+    ]
+    for col_idx, header in enumerate(headers_detalle, 1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.font = estilos["header_font"]
+        cell.fill = estilos["header_fill"]
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = estilos["border"]
+
+    for row_idx, prestamo in enumerate(prestamos_detalle, 2):
+        ws.cell(row=row_idx, column=1, value=prestamo.id).border = estilos["border"]
+        ws.cell(row=row_idx, column=2, value=prestamo.cedula).border = estilos["border"]
+        ws.cell(row=row_idx, column=3, value=prestamo.nombres or "").border = estilos["border"]
+        cell_total = ws.cell(row=row_idx, column=4, value=float(prestamo.total_financiamiento))
+        cell_total.number_format = '"$"#,##0.00'
+        cell_total.border = estilos["border"]
+        cell_saldo = ws.cell(row=row_idx, column=5, value=float(prestamo.saldo_pendiente or Decimal("0")))
+        cell_saldo.number_format = '"$"#,##0.00'
+        cell_saldo.border = estilos["border"]
+        ws.cell(row=row_idx, column=6, value=prestamo.cuotas_pendientes or 0).border = estilos["border"]
+        ws.cell(row=row_idx, column=7, value=prestamo.modalidad_pago or "").border = estilos["border"]
+        ws.cell(row=row_idx, column=8, value=prestamo.analista or "").border = estilos["border"]
+        ws.cell(row=row_idx, column=9, value=prestamo.estado or "").border = estilos["border"]
+
+    column_widths = [12, 15, 30, 18, 18, 15, 15, 25, 12]
+    for idx, width in enumerate(column_widths, 1):
+        ws.column_dimensions[chr(64 + idx)].width = width
+
+
+def _generar_excel_completo(reporte, db: Session, cantidad_prestamos_activos, cantidad_prestamos_mora):
+    """Genera el archivo Excel completo con todas las hojas"""
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    estilos = _obtener_estilos_excel()
+
+    _crear_hoja_resumen_excel(wb.active, reporte, cantidad_prestamos_activos, cantidad_prestamos_mora, estilos)
+    _crear_hoja_distribucion_monto_excel(wb.create_sheet("Distribución por Monto"), _obtener_distribucion_por_monto(db), estilos)
+    _crear_hoja_distribucion_mora_excel(wb.create_sheet("Distribución por Mora"), _obtener_distribucion_por_mora(db), estilos)
+    _crear_hoja_prestamos_detallados_excel(wb.create_sheet("Préstamos Detallados"), db, estilos)
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
+
+
+def _generar_pdf_completo(reporte):
+    """Genera el archivo PDF completo"""
+    output = BytesIO()
+    c = canvas.Canvas(output, pagesize=A4)
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(100, 750, "REPORTE DE CARTERA")
+
+    c.setFont("Helvetica", 12)
+    c.drawString(100, 720, f"Fecha de Corte: {reporte.fecha_corte}")
+
+    y = 680
+    c.drawString(100, y, f"Cartera Total: ${reporte.cartera_total:,.2f}")
+    y -= 20
+    c.drawString(100, y, f"Capital Pendiente: ${reporte.capital_pendiente:,.2f}")
+    y -= 20
+    c.drawString(100, y, f"Intereses Pendientes: ${reporte.intereses_pendientes:,.2f}")
+    y -= 20
+    c.drawString(100, y, f"Mora Total: ${reporte.mora_total:,.2f}")
+
+    c.save()
+    output.seek(0)
+    return output
+
+
+def _registrar_auditoria_exportacion(db: Session, current_user: User, formato: str, fecha_corte: date):
+    """Registra la auditoría de la exportación"""
+    try:
+        audit = Auditoria(
+            usuario_id=current_user.id,
+            accion="EXPORT",
+            entidad="REPORTES",
+            entidad_id=None,
+            detalles=f"Exportó cartera en {formato.upper()} (fecha_corte={fecha_corte})",
+            exito=True,
+        )
+        db.add(audit)
+        db.commit()
+    except Exception as e:
+        logger.warning(f"No se pudo registrar auditoría de exportación ({formato}): {e}")
+
+
 @router.get("/exportar/cartera")
 def exportar_reporte_cartera(
     formato: str = Query("excel", description="Formato: excel o pdf"),
@@ -337,89 +665,44 @@ def exportar_reporte_cartera(
     """Exporta reporte de cartera en Excel o PDF."""
     try:
         logger.info(f"[reportes.exportar] Exportando reporte cartera en formato {formato}")
-        # Obtener datos del reporte
         reporte = reporte_cartera(fecha_corte, db, current_user)
 
-        # Obtener variables adicionales para el Excel
         cantidad_prestamos_activos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
-
         cantidad_prestamos_mora = (
             db.query(func.count(func.distinct(Prestamo.id)))
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Cuota.monto_mora > Decimal("0.00"),
-            )
+            .filter(Prestamo.estado == "APROBADO", Cuota.monto_mora > Decimal("0.00"))
             .scalar()
         ) or 0
 
-        # Obtener distribuciones para las hojas
-        distribucion_por_monto_query = (
-            db.query(
-                case(
-                    (Prestamo.total_financiamiento <= 1000, "Hasta $1,000"),
-                    (Prestamo.total_financiamiento <= 5000, "$1,001 - $5,000"),
-                    (Prestamo.total_financiamiento <= 10000, "$5,001 - $10,000"),
-                    else_="Más de $10,000",
-                ).label("rango"),
-                func.count(Prestamo.id).label("cantidad"),
-                func.sum(Prestamo.total_financiamiento).label("monto"),
+        if formato.lower() == "excel":
+            output = _generar_excel_completo(reporte, db, cantidad_prestamos_activos, cantidad_prestamos_mora)
+            response = StreamingResponse(
+                output,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.xlsx"},
             )
-            .filter(Prestamo.estado == "APROBADO")
-            .group_by("rango")
-            .all()
-        )
+            logger.info("[reportes.exportar] Excel generado correctamente")
+            _registrar_auditoria_exportacion(db, current_user, "excel", reporte.fecha_corte)
+            return response
 
-        distribucion_por_monto = [
-            {
-                "rango": item.rango,
-                "cantidad": item.cantidad,
-                "monto": float(item.monto) if item.monto else 0.0,
-            }
-            for item in distribucion_por_monto_query
-        ]
-
-        # Distribución por mora
-        rangos_mora = [
-            {"min": 1, "max": 30, "label": "1-30 días"},
-            {"min": 31, "max": 60, "label": "31-60 días"},
-            {"min": 61, "max": 90, "label": "61-90 días"},
-            {"min": 91, "max": 999999, "label": "Más de 90 días"},
-        ]
-
-        distribucion_por_mora = []
-        for rango in rangos_mora:
-            cantidad = (
-                db.query(func.count(func.distinct(Prestamo.id)))
-                .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.monto_mora > Decimal("0.00"),
-                    Cuota.dias_mora >= rango["min"],
-                    Cuota.dias_mora <= rango["max"],
-                )
-                .scalar()
-            ) or 0
-
-            monto_mora = (
-                db.query(func.sum(Cuota.monto_mora))
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.monto_mora > Decimal("0.00"),
-                    Cuota.dias_mora >= rango["min"],
-                    Cuota.dias_mora <= rango["max"],
-                )
-                .scalar()
-            ) or Decimal("0")
-
-            distribucion_por_mora.append(
-                {
-                    "rango": rango["label"],
-                    "cantidad": cantidad,
-                    "monto_total": float(monto_mora),
-                }
+        elif formato.lower() == "pdf":
+            output = _generar_pdf_completo(reporte)
+            response = StreamingResponse(
+                output,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.pdf"},
             )
+            logger.info("[reportes.exportar] PDF generado correctamente")
+            _registrar_auditoria_exportacion(db, current_user, "pdf", reporte.fecha_corte)
+            return response
+
+        else:
+            raise HTTPException(status_code=400, detail="Formato no soportado. Use 'excel' o 'pdf'")
+
+    except Exception as e:
+        logger.error(f"Error exportando reporte: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
         if formato.lower() == "excel":
             # Crear archivo Excel con datos reales detallados

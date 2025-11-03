@@ -12,7 +12,8 @@ import {
   Download,
   BarChart3,
   Bell,
-  Loader2
+  Loader2,
+  ExternalLink
 } from 'lucide-react'
 import { cobranzasService } from '@/services/cobranzasService'
 import { useQuery } from '@tanstack/react-query'
@@ -119,7 +120,25 @@ export function Cobranzas() {
     setProcesandoNotificaciones(true)
     try {
       const resultado = await cobranzasService.procesarNotificacionesAtrasos()
-      toast.success(`Notificaciones procesadas: ${resultado.estadisticas?.enviadas || 0} enviadas`)
+      const stats = resultado.estadisticas || {}
+      const enviadas = stats.enviadas || 0
+      const fallidas = stats.fallidas || 0
+      const errores = stats.errores || 0
+      
+      if (enviadas > 0 || fallidas > 0) {
+        toast.success(
+          `Notificaciones procesadas: ${enviadas} enviadas${fallidas > 0 ? `, ${fallidas} fallidas` : ''}`,
+          {
+            duration: 5000,
+            action: {
+              label: 'Ver Historial',
+              onClick: () => window.location.href = '/notificaciones'
+            }
+          }
+        )
+      } else {
+        toast.info('No hay notificaciones pendientes para procesar')
+      }
     } catch (error: any) {
       toast.error(error?.response?.data?.detail || 'Error al procesar notificaciones')
     } finally {
@@ -137,23 +156,33 @@ export function Cobranzas() {
             Seguimiento de pagos atrasados y cartera vencida
           </p>
         </div>
-        <Button 
-          onClick={procesarNotificaciones}
-          disabled={procesandoNotificaciones}
-          className="flex items-center gap-2"
-        >
-          {procesandoNotificaciones ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Procesando...
-            </>
-          ) : (
-            <>
-              <Bell className="h-4 w-4" />
-              Procesar Notificaciones Ahora
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={procesarNotificaciones}
+            disabled={procesandoNotificaciones}
+            className="flex items-center gap-2"
+          >
+            {procesandoNotificaciones ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Procesando...
+              </>
+            ) : (
+              <>
+                <Bell className="h-4 w-4" />
+                Procesar Notificaciones Ahora
+              </>
+            )}
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => window.location.href = '/notificaciones'}
+            className="flex items-center gap-2"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Ver Historial
+          </Button>
+        </div>
       </div>
 
       {/* KPIs Resumen */}

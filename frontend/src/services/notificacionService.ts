@@ -16,12 +16,16 @@ export interface NotificacionPlantilla {
 
 export interface Notificacion {
   id: number
-  cliente_id: number
+  cliente_id: number | null
   tipo: string
+  canal: string | null
   mensaje: string
+  asunto: string | null
   estado: string
-  enviada_en: string | null
-  created_at: string
+  fecha_envio: string | null
+  fecha_creacion: string
+  error_mensaje?: string | null
+  created_at?: string
 }
 
 export interface NotificacionStats {

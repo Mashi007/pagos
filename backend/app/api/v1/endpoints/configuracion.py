@@ -730,6 +730,58 @@ def actualizar_configuracion_general(
 # ============================================
 
 
+def _probar_validador_telefono(telefono: str, pais: str, resultados: Dict[str, Any]) -> tuple[int, int]:
+    """Prueba el validador de teléfono. Returns: (validos, invalidos)"""
+    try:
+        from app.services.validators_service import ValidadorTelefono
+
+        resultado = ValidadorTelefono.validar_y_formatear_telefono(telefono, pais)
+        resultados["telefono"] = resultado
+        return (1, 0) if resultado.get("valido") else (0, 1)
+    except Exception as e:
+        resultados["telefono"] = {"valido": False, "error": str(e)}
+        return (0, 1)
+
+
+def _probar_validador_cedula(cedula: str, resultados: Dict[str, Any]) -> tuple[int, int]:
+    """Prueba el validador de cédula. Returns: (validos, invalidos)"""
+    try:
+        from app.services.validators_service import ValidadorCedula
+
+        resultado = ValidadorCedula.validar_y_formatear_cedula(cedula)
+        resultados["cedula"] = resultado
+        return (1, 0) if resultado.get("valido") else (0, 1)
+    except Exception as e:
+        resultados["cedula"] = {"valido": False, "error": str(e)}
+        return (0, 1)
+
+
+def _probar_validador_fecha(fecha: Any, resultados: Dict[str, Any]) -> tuple[int, int]:
+    """Prueba el validador de fecha. Returns: (validos, invalidos)"""
+    try:
+        from app.services.validators_service import ValidadorFecha
+
+        resultado = ValidadorFecha.validar_y_formatear_fecha(fecha)
+        resultados["fecha"] = resultado
+        return (1, 0) if resultado.get("valido") else (0, 1)
+    except Exception as e:
+        resultados["fecha"] = {"valido": False, "error": str(e)}
+        return (0, 1)
+
+
+def _probar_validador_email(email: str, resultados: Dict[str, Any]) -> tuple[int, int]:
+    """Prueba el validador de email. Returns: (validos, invalidos)"""
+    try:
+        from app.services.validators_service import ValidadorEmail
+
+        resultado = ValidadorEmail.validar_y_formatear_email(email)
+        resultados["email"] = resultado
+        return (1, 0) if resultado.get("valido") else (0, 1)
+    except Exception as e:
+        resultados["email"] = {"valido": False, "error": str(e)}
+        return (0, 1)
+
+
 @router.post("/validadores/probar")
 def probar_validadores(
     datos_prueba: Dict[str, Any],
@@ -745,71 +797,29 @@ def probar_validadores(
         validos = 0
         invalidos = 0
 
-        # Probar teléfono si está presente
         if datos_prueba.get("telefono"):
             total_validados += 1
-            try:
-                from app.services.validators_service import ValidadorTelefono
+            v, i = _probar_validador_telefono(datos_prueba["telefono"], datos_prueba.get("pais_telefono", "VE"), resultados)
+            validos += v
+            invalidos += i
 
-                pais = datos_prueba.get("pais_telefono", "VE")
-                resultado_telefono = ValidadorTelefono.validar_y_formatear_telefono(datos_prueba["telefono"], pais)
-                if resultado_telefono.get("valido"):
-                    validos += 1
-                else:
-                    invalidos += 1
-                resultados["telefono"] = resultado_telefono
-            except Exception as e:
-                invalidos += 1
-                resultados["telefono"] = {"valido": False, "error": str(e)}
-
-        # Probar cédula si está presente
         if datos_prueba.get("cedula"):
             total_validados += 1
-            try:
-                from app.services.validators_service import ValidadorCedula
+            v, i = _probar_validador_cedula(datos_prueba["cedula"], resultados)
+            validos += v
+            invalidos += i
 
-                pais = datos_prueba.get("pais_cedula", "VE")
-                resultado_cedula = ValidadorCedula.validar_y_formatear_cedula(datos_prueba["cedula"])
-                if resultado_cedula.get("valido"):
-                    validos += 1
-                else:
-                    invalidos += 1
-                resultados["cedula"] = resultado_cedula
-            except Exception as e:
-                invalidos += 1
-                resultados["cedula"] = {"valido": False, "error": str(e)}
-
-        # Probar fecha si está presente
         if datos_prueba.get("fecha"):
             total_validados += 1
-            try:
-                from app.services.validators_service import ValidadorFecha
+            v, i = _probar_validador_fecha(datos_prueba["fecha"], resultados)
+            validos += v
+            invalidos += i
 
-                resultado_fecha = ValidadorFecha.validar_y_formatear_fecha(datos_prueba["fecha"])
-                if resultado_fecha.get("valido"):
-                    validos += 1
-                else:
-                    invalidos += 1
-                resultados["fecha"] = resultado_fecha
-            except Exception as e:
-                invalidos += 1
-                resultados["fecha"] = {"valido": False, "error": str(e)}
-
-        # Probar email si está presente
         if datos_prueba.get("email"):
             total_validados += 1
-            try:
-                from app.services.validators_service import ValidadorEmail
-
-                resultado_email = ValidadorEmail.validar_y_formatear_email(datos_prueba["email"])
-                if resultado_email.get("valido"):
-                    validos += 1
-                else:
-                    invalidos += 1
-                resultados["email"] = resultado_email
-            except Exception as e:
-                invalidos += 1
-                resultados["email"] = {"valido": False, "error": str(e)}
+            v, i = _probar_validador_email(datos_prueba["email"], resultados)
+            validos += v
+            invalidos += i
 
         return {
             "titulo": "Prueba de Validadores",

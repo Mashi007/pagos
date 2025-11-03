@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { 
   Bell, 
@@ -149,44 +149,59 @@ export function Notificaciones() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1, duration: 0.5 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
+        className="grid grid-cols-1 md:grid-cols-4 gap-6"
       >
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">No Leídas</CardTitle>
-            <Bell className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {notificacionesNoLeidas}
-            </div>
-            <p className="text-xs text-gray-600">Pendientes de revisar</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Alta Prioridad</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {notificacionesAltaPrioridad}
-            </div>
-            <p className="text-xs text-gray-600">Requieren atención inmediata</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total</CardTitle>
-            <Info className="h-4 w-4 text-gray-600" />
+            <Bell className="h-4 w-4 text-gray-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-600">
-              {notificaciones.length}
+              {estadisticas?.total || 0}
             </div>
             <p className="text-xs text-gray-600">Notificaciones en el sistema</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Enviadas</CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {estadisticas?.enviadas || 0}
+            </div>
+            <p className="text-xs text-gray-600">
+              {estadisticas?.tasa_exito ? `${estadisticas.tasa_exito.toFixed(1)}% éxito` : 'Envíos exitosos'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
+            <Clock className="h-4 w-4 text-yellow-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-600">
+              {estadisticas?.pendientes || 0}
+            </div>
+            <p className="text-xs text-gray-600">En espera de envío</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Fallidas</CardTitle>
+            <XCircle className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {estadisticas?.fallidas || 0}
+            </div>
+            <p className="text-xs text-gray-600">Requieren revisión</p>
           </CardContent>
         </Card>
       </motion.div>
@@ -209,34 +224,37 @@ export function Notificaciones() {
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Buscar notificaciones..."
+                  placeholder="Buscar por asunto, mensaje o tipo..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
               <select
-                value={filterTipo}
-                onChange={(e) => setFilterTipo(e.target.value)}
+                value={filterEstado}
+                onChange={(e) => {
+                  setFilterEstado(e.target.value)
+                  setSkip(0)
+                }}
                 className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Todos los tipos</option>
-                <option value="vencimiento">Vencimiento</option>
-                <option value="mora">Mora</option>
-                <option value="pago">Pago</option>
-                <option value="sistema">Sistema</option>
+                <option value="">Todos los estados</option>
+                <option value="ENVIADA">Enviadas</option>
+                <option value="PENDIENTE">Pendientes</option>
+                <option value="FALLIDA">Fallidas</option>
+                <option value="CANCELADA">Canceladas</option>
               </select>
               <select
-                value={filterPrioridad}
-                onChange={(e) => setFilterPrioridad(e.target.value)}
+                value={filterCanal}
+                onChange={(e) => setFilterCanal(e.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Todas las prioridades</option>
-                <option value="alta">Alta</option>
-                <option value="media">Media</option>
-                <option value="baja">Baja</option>
+                <option value="">Todos los canales</option>
+                <option value="EMAIL">Email</option>
+                <option value="WHATSAPP">WhatsApp</option>
+                <option value="SMS">SMS</option>
               </select>
-              <Button variant="outline" className="flex items-center">
+              <Button variant="outline" onClick={handleLimpiarFiltros} className="flex items-center">
                 <Filter className="w-4 h-4 mr-2" />
                 Limpiar Filtros
               </Button>
@@ -253,88 +271,129 @@ export function Notificaciones() {
       >
         <Card>
           <CardHeader>
-            <CardTitle>Centro de Notificaciones</CardTitle>
+            <CardTitle>Historial de Envíos</CardTitle>
             <CardDescription>
-              Todas las alertas y notificaciones del sistema
+              Registro completo de todas las notificaciones enviadas desde el sistema
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {filteredNotificaciones.map((notificacion) => (
-                <div 
-                  key={notificacion.id} 
-                  className={`border rounded-lg p-4 hover:bg-gray-50 transition-colors ${
-                    !notificacion.leida ? 'bg-blue-50 border-blue-200' : ''
-                  }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-start space-x-3">
-                        <div className="mt-1">
-                          {getTipoIcon(notificacion.tipo)}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-2">
-                            <h3 className={`font-semibold ${!notificacion.leida ? 'text-gray-900' : 'text-gray-700'}`}>
-                              {notificacion.titulo}
-                            </h3>
-                            {!notificacion.leida && (
-                              <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+            {isLoading ? (
+              <div className="text-center py-8">
+                <RefreshCw className="w-8 h-8 mx-auto mb-4 text-gray-400 animate-spin" />
+                <p className="text-gray-500">Cargando notificaciones...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8 text-red-500">
+                <AlertTriangle className="w-12 h-12 mx-auto mb-4" />
+                <p>Error al cargar notificaciones</p>
+                <Button variant="outline" onClick={() => refetch()} className="mt-4">
+                  Reintentar
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredNotificaciones.map((notificacion) => (
+                  <div 
+                    key={notificacion.id} 
+                    className={`border rounded-lg p-4 hover:bg-gray-50 transition-colors ${
+                      notificacion.estado === 'FALLIDA' ? 'bg-red-50 border-red-200' :
+                      notificacion.estado === 'PENDIENTE' ? 'bg-yellow-50 border-yellow-200' :
+                      notificacion.estado === 'ENVIADA' ? 'bg-green-50 border-green-200' :
+                      'bg-white border-gray-200'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-start space-x-3">
+                          <div className="mt-1">
+                            {notificacion.canal === 'EMAIL' ? (
+                              <Mail className="w-5 h-5 text-blue-600" />
+                            ) : (
+                              <Bell className="w-5 h-5 text-gray-600" />
                             )}
                           </div>
-                          <p className="text-gray-600 text-sm mb-2">{notificacion.mensaje}</p>
-                          <div className="flex items-center space-x-4 text-xs text-gray-500">
-                            <span>{new Date(notificacion.fecha).toLocaleString('es-ES')}</span>
-                            {notificacion.cliente && (
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <h3 className="font-semibold text-gray-900">
+                                {notificacion.asunto || 'Sin asunto'}
+                              </h3>
+                            </div>
+                            <p className="text-gray-600 text-sm mb-2 line-clamp-2">
+                              {notificacion.mensaje}
+                            </p>
+                            <div className="flex items-center space-x-4 text-xs text-gray-500 flex-wrap gap-2">
                               <span className="flex items-center">
-                                <User className="w-3 h-3 mr-1" />
-                                {notificacion.cliente}
+                                <Calendar className="w-3 h-3 mr-1" />
+                                Creada: {new Date(notificacion.fecha_creacion || notificacion.created_at || Date.now()).toLocaleString('es-ES')}
                               </span>
-                            )}
-                            {notificacion.monto && (
-                              <span className="font-medium text-green-600">
-                                ${notificacion.monto.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
-                              </span>
+                              {notificacion.fecha_envio && (
+                                <span className="flex items-center">
+                                  <CheckCircle className="w-3 h-3 mr-1" />
+                                  Enviada: {new Date(notificacion.fecha_envio).toLocaleString('es-ES')}
+                                </span>
+                              )}
+                              {notificacion.cliente_id && (
+                                <span className="flex items-center">
+                                  <User className="w-3 h-3 mr-1" />
+                                  Cliente ID: {notificacion.cliente_id}
+                                </span>
+                              )}
+                            </div>
+                            {notificacion.estado === 'FALLIDA' && (
+                              <div className="mt-2 p-2 bg-red-100 rounded text-xs text-red-800">
+                                <strong>Error:</strong> {notificacion.error_mensaje || 'Error desconocido'}
+                              </div>
                             )}
                           </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <div className="flex space-x-2">
-                        {getTipoBadge(notificacion.tipo)}
-                        {getPrioridadBadge(notificacion.prioridad)}
-                      </div>
-                      <div className="flex space-x-1">
-                        {!notificacion.leida && (
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => marcarComoLeida(notificacion.id)}
-                          >
-                            <Check className="w-3 h-3" />
-                          </Button>
-                        )}
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => eliminarNotificacion(notificacion.id)}
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
+                      <div className="flex items-center space-x-3">
+                        <div className="flex flex-col space-y-2">
+                          {getEstadoBadge(notificacion.estado)}
+                          {getCanalBadge(notificacion.canal || 'EMAIL')}
+                          {getTipoBadge(notificacion.tipo)}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
-              
-              {filteredNotificaciones.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <Bell className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p>No se encontraron notificaciones con los filtros aplicados</p>
-                </div>
-              )}
-            </div>
+                ))}
+                
+                {filteredNotificaciones.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <Bell className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>No se encontraron notificaciones con los filtros aplicados</p>
+                    {notificaciones.length > 0 && (
+                      <p className="text-sm mt-2">
+                        Mostrando {filteredNotificaciones.length} de {notificaciones.length} notificaciones
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Paginación */}
+                {notificaciones.length >= limit && (
+                  <div className="flex justify-center items-center space-x-2 pt-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setSkip(Math.max(0, skip - limit))}
+                      disabled={skip === 0}
+                    >
+                      Anterior
+                    </Button>
+                    <span className="text-sm text-gray-600">
+                      Página {Math.floor(skip / limit) + 1}
+                    </span>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setSkip(skip + limit)}
+                      disabled={notificaciones.length < limit}
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>
