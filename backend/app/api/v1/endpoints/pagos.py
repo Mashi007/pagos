@@ -177,6 +177,149 @@ def healthcheck_pagos(
         }
 
 
+def _verificar_conexion_basica(db: Session, diagnostico: dict):
+    """Verifica la conexión básica a la base de datos"""
+    logger.info("🔍 [diagnostico_pagos] Verificando conexión básica...")
+    try:
+        db.execute(text("SELECT 1"))
+        diagnostico["verificaciones"]["conexion_basica"] = {
+            "status": "ok",
+            "mensaje": "Conexión a BD establecida correctamente",
+        }
+    except Exception as e:
+        diagnostico["verificaciones"]["conexion_basica"] = {"status": "error", "mensaje": f"Error de conexión: {str(e)}"}
+        diagnostico["errores"].append(f"Conexión básica falló: {str(e)}")
+        diagnostico["estado"] = "error"
+        logger.error(f"❌ [diagnostico_pagos] Error conexión básica: {e}", exc_info=True)
+
+
+def _verificar_tabla(db: Session, nombre: str, modelo, diagnostico: dict, es_warning: bool = False):
+    """Verifica acceso a una tabla específica"""
+    logger.info(f"🔍 [diagnostico_pagos] Verificando tabla {nombre}...")
+    try:
+        total = db.query(func.count(modelo.id)).scalar()
+        diagnostico["verificaciones"][f"tabla_{nombre}"] = {
+            "status": "ok",
+            "total_registros": total,
+            "mensaje": f"Tabla '{nombre}' accesible con {total} registros",
+        }
+    except Exception as e:
+        estado = "warning" if es_warning else "error"
+        diagnostico["verificaciones"][f"tabla_{nombre}"] = {
+            "status": "error",
+            "mensaje": f"Error accediendo tabla {nombre}: {str(e)}",
+        }
+        diagnostico["errores"].append(f"Tabla {nombre} inaccesible: {str(e)}")
+        diagnostico["estado"] = estado
+        nivel_log = logger.warning if es_warning else logger.error
+        nivel_log(f"⚠️ [diagnostico_pagos] Error tabla {nombre}: {e}", exc_info=True)
+
+
+def _verificar_query_compleja(db: Session, diagnostico: dict):
+    """Verifica query compleja similar a listar_pagos"""
+    logger.info("🔍 [diagnostico_pagos] Verificando query compleja (listar_pagos)...")
+    try:
+        hoy = date.today()
+        query_test = db.query(Pago).order_by(Pago.fecha_registro.desc()).limit(5)
+        pagos_test = query_test.all()
+
+        if not pagos_test:
+            diagnostico["verificaciones"]["query_compleja"] = {
+                "status": "warning",
+                "mensaje": "Query compleja exitosa pero no hay pagos en BD para probar",
+            }
+            return
+
+        primer_pago = pagos_test[0]
+        if not primer_pago.cedula_cliente:
+            diagnostico["verificaciones"]["query_compleja"] = {
+                "status": "ok",
+                "mensaje": f"Query compleja exitosa - {len(pagos_test)} pagos obtenidos, primer pago sin cédula",
+            }
+            return
+
+        prestamos_ids = [
+            p.id
+            for p in db.query(Prestamo.id)
+            .filter(
+                Prestamo.cedula == primer_pago.cedula_cliente,
+                Prestamo.estado == "APROBADO",
+            )
+            .all()
+        ]
+
+        if not prestamos_ids:
+            diagnostico["verificaciones"]["query_compleja"] = {
+                "status": "ok",
+                "mensaje": f"Query compleja exitosa - {len(pagos_test)} pagos obtenidos, sin préstamos APROBADOS para prueba",
+            }
+            return
+
+        cuotas_atrasadas_query = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.id.in_(prestamos_ids),
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,
+            )
+        )
+        cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
+
+        diagnostico["verificaciones"]["query_compleja"] = {
+            "status": "ok",
+            "mensaje": f"Query compleja exitosa - {len(pagos_test)} pagos obtenidos, cálculo de cuotas atrasadas OK",
+            "ejemplo": {
+                "pago_id": primer_pago.id,
+                "cedula": primer_pago.cedula_cliente,
+                "prestamos_encontrados": len(prestamos_ids),
+                "cuotas_atrasadas": cuotas_atrasadas,
+            },
+        }
+
+    except Exception as e:
+        diagnostico["verificaciones"]["query_compleja"] = {
+            "status": "error",
+            "mensaje": f"Error en query compleja: {str(e)}",
+        }
+        diagnostico["errores"].append(f"Query compleja falló: {str(e)}")
+        diagnostico["estado"] = "error"
+        logger.error(f"❌ [diagnostico_pagos] Error query compleja: {e}", exc_info=True)
+
+
+def _verificar_serializacion(db: Session, diagnostico: dict):
+    """Verifica serialización de PagoResponse"""
+    logger.info("🔍 [diagnostico_pagos] Verificando serialización...")
+    try:
+        query_test = db.query(Pago).order_by(Pago.fecha_registro.desc()).limit(1)
+        pagos_test = query_test.all()
+
+        if not pagos_test:
+            diagnostico["verificaciones"]["serializacion"] = {
+                "status": "warning",
+                "mensaje": "No hay pagos para probar serialización",
+            }
+            return
+
+        primer_pago = pagos_test[0]
+        pago_dict = PagoResponse.model_validate(primer_pago).model_dump()
+        diagnostico["verificaciones"]["serializacion"] = {
+            "status": "ok",
+            "mensaje": "Serialización de PagoResponse exitosa",
+            "campos_serializados": len(pago_dict),
+        }
+
+    except Exception as e:
+        diagnostico["verificaciones"]["serializacion"] = {
+            "status": "error",
+            "mensaje": f"Error en serialización: {str(e)}",
+        }
+        diagnostico["errores"].append(f"Serialización falló: {str(e)}")
+        diagnostico["estado"] = "error"
+        logger.error(f"❌ [diagnostico_pagos] Error serialización: {e}", exc_info=True)
+
+
 @router.get("/diagnostico")
 def diagnostico_pagos(
     db: Session = Depends(get_db),
@@ -188,166 +331,12 @@ def diagnostico_pagos(
     diagnostico = {"timestamp": datetime.now().isoformat(), "verificaciones": {}, "errores": [], "estado": "ok"}
 
     try:
-        # 1. Verificar conexión básica
-        logger.info("🔍 [diagnostico_pagos] Verificando conexión básica...")
-        try:
-            db.execute(text("SELECT 1"))
-            diagnostico["verificaciones"]["conexion_basica"] = {
-                "status": "ok",
-                "mensaje": "Conexión a BD establecida correctamente",
-            }
-        except Exception as e:
-            diagnostico["verificaciones"]["conexion_basica"] = {"status": "error", "mensaje": f"Error de conexión: {str(e)}"}
-            diagnostico["errores"].append(f"Conexión básica falló: {str(e)}")
-            diagnostico["estado"] = "error"
-            logger.error(f"❌ [diagnostico_pagos] Error conexión básica: {e}", exc_info=True)
-
-        # 2. Verificar tabla pagos
-        logger.info("🔍 [diagnostico_pagos] Verificando tabla pagos...")
-        try:
-            total_pagos = db.query(func.count(Pago.id)).scalar()
-            diagnostico["verificaciones"]["tabla_pagos"] = {
-                "status": "ok",
-                "total_registros": total_pagos,
-                "mensaje": f"Tabla 'pagos' accesible con {total_pagos} registros",
-            }
-        except Exception as e:
-            diagnostico["verificaciones"]["tabla_pagos"] = {
-                "status": "error",
-                "mensaje": f"Error accediendo tabla pagos: {str(e)}",
-            }
-            diagnostico["errores"].append(f"Tabla pagos inaccesible: {str(e)}")
-            diagnostico["estado"] = "error"
-            logger.error(f"❌ [diagnostico_pagos] Error tabla pagos: {e}", exc_info=True)
-
-        # 3. Verificar tabla prestamos
-        logger.info("🔍 [diagnostico_pagos] Verificando tabla prestamos...")
-        try:
-            total_prestamos = db.query(func.count(Prestamo.id)).scalar()
-            diagnostico["verificaciones"]["tabla_prestamos"] = {
-                "status": "ok",
-                "total_registros": total_prestamos,
-                "mensaje": f"Tabla 'prestamos' accesible con {total_prestamos} registros",
-            }
-        except Exception as e:
-            diagnostico["verificaciones"]["tabla_prestamos"] = {
-                "status": "error",
-                "mensaje": f"Error accediendo tabla prestamos: {str(e)}",
-            }
-            diagnostico["errores"].append(f"Tabla prestamos inaccesible: {str(e)}")
-            diagnostico["estado"] = "warning"
-            logger.error(f"⚠️ [diagnostico_pagos] Error tabla prestamos: {e}", exc_info=True)
-
-        # 4. Verificar tabla cuotas
-        logger.info("🔍 [diagnostico_pagos] Verificando tabla cuotas...")
-        try:
-            total_cuotas = db.query(func.count(Cuota.id)).scalar()
-            diagnostico["verificaciones"]["tabla_cuotas"] = {
-                "status": "ok",
-                "total_registros": total_cuotas,
-                "mensaje": f"Tabla 'cuotas' accesible con {total_cuotas} registros",
-            }
-        except Exception as e:
-            diagnostico["verificaciones"]["tabla_cuotas"] = {
-                "status": "error",
-                "mensaje": f"Error accediendo tabla cuotas: {str(e)}",
-            }
-            diagnostico["errores"].append(f"Tabla cuotas inaccesible: {str(e)}")
-            diagnostico["estado"] = "warning"
-            logger.error(f"⚠️ [diagnostico_pagos] Error tabla cuotas: {e}", exc_info=True)
-
-        # 5. Verificar query compleja (similar a listar_pagos)
-        logger.info("🔍 [diagnostico_pagos] Verificando query compleja (listar_pagos)...")
-        try:
-            hoy = date.today()
-            # Query similar a la que se ejecuta en listar_pagos
-            query_test = db.query(Pago).order_by(Pago.fecha_registro.desc()).limit(5)
-            pagos_test = query_test.all()
-
-            # Probar cálculo de cuotas atrasadas (solo para el primer pago)
-            if pagos_test:
-                primer_pago = pagos_test[0]
-                if primer_pago.cedula_cliente:
-                    prestamos_ids = [
-                        p.id
-                        for p in db.query(Prestamo.id)
-                        .filter(
-                            Prestamo.cedula == primer_pago.cedula_cliente,
-                            Prestamo.estado == "APROBADO",
-                        )
-                        .all()
-                    ]
-
-                    if prestamos_ids:
-                        cuotas_atrasadas_query = (
-                            db.query(func.count(Cuota.id))
-                            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                            .filter(
-                                Prestamo.id.in_(prestamos_ids),
-                                Prestamo.estado == "APROBADO",
-                                Cuota.fecha_vencimiento < hoy,
-                                Cuota.total_pagado < Cuota.monto_cuota,
-                            )
-                        )
-                        cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
-                        diagnostico["verificaciones"]["query_compleja"] = {
-                            "status": "ok",
-                            "mensaje": f"Query compleja exitosa - {len(pagos_test)} pagos obtenidos, cálculo de cuotas atrasadas OK",
-                            "ejemplo": {
-                                "pago_id": primer_pago.id,
-                                "cedula": primer_pago.cedula_cliente,
-                                "prestamos_encontrados": len(prestamos_ids),
-                                "cuotas_atrasadas": cuotas_atrasadas,
-                            },
-                        }
-                    else:
-                        diagnostico["verificaciones"]["query_compleja"] = {
-                            "status": "ok",
-                            "mensaje": f"Query compleja exitosa - {len(pagos_test)} pagos obtenidos, sin préstamos APROBADOS para prueba",
-                        }
-                else:
-                    diagnostico["verificaciones"]["query_compleja"] = {
-                        "status": "ok",
-                        "mensaje": f"Query compleja exitosa - {len(pagos_test)} pagos obtenidos, primer pago sin cédula",
-                    }
-            else:
-                diagnostico["verificaciones"]["query_compleja"] = {
-                    "status": "warning",
-                    "mensaje": "Query compleja exitosa pero no hay pagos en BD para probar",
-                }
-        except Exception as e:
-            diagnostico["verificaciones"]["query_compleja"] = {
-                "status": "error",
-                "mensaje": f"Error en query compleja: {str(e)}",
-            }
-            diagnostico["errores"].append(f"Query compleja falló: {str(e)}")
-            diagnostico["estado"] = "error"
-            logger.error(f"❌ [diagnostico_pagos] Error query compleja: {e}", exc_info=True)
-
-        # 6. Verificar serialización
-        logger.info("🔍 [diagnostico_pagos] Verificando serialización...")
-        try:
-            if pagos_test:
-                primer_pago = pagos_test[0]
-                pago_dict = PagoResponse.model_validate(primer_pago).model_dump()
-                diagnostico["verificaciones"]["serializacion"] = {
-                    "status": "ok",
-                    "mensaje": "Serialización de PagoResponse exitosa",
-                    "campos_serializados": len(pago_dict),
-                }
-            else:
-                diagnostico["verificaciones"]["serializacion"] = {
-                    "status": "warning",
-                    "mensaje": "No hay pagos para probar serialización",
-                }
-        except Exception as e:
-            diagnostico["verificaciones"]["serializacion"] = {
-                "status": "error",
-                "mensaje": f"Error en serialización: {str(e)}",
-            }
-            diagnostico["errores"].append(f"Serialización falló: {str(e)}")
-            diagnostico["estado"] = "error"
-            logger.error(f"❌ [diagnostico_pagos] Error serialización: {e}", exc_info=True)
+        _verificar_conexion_basica(db, diagnostico)
+        _verificar_tabla(db, "pagos", Pago, diagnostico)
+        _verificar_tabla(db, "prestamos", Prestamo, diagnostico, es_warning=True)
+        _verificar_tabla(db, "cuotas", Cuota, diagnostico, es_warning=True)
+        _verificar_query_compleja(db, diagnostico)
+        _verificar_serializacion(db, diagnostico)
 
     except Exception as e:
         logger.error(f"❌ [diagnostico_pagos] Error general: {e}", exc_info=True)

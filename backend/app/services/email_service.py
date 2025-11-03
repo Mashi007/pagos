@@ -6,7 +6,9 @@ import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 
@@ -16,14 +18,65 @@ logger = logging.getLogger(__name__)
 class EmailService:
     """Servicio para envío de emails"""
 
-    def __init__(self):
-        """Inicializar servicio de email"""
+    def __init__(self, db: Optional[Session] = None):
+        """
+        Inicializar servicio de email
+        
+        Args:
+            db: Sesión de base de datos opcional para leer configuración desde BD
+        """
+        self.db = db
+        self._cargar_configuracion()
+
+    def _cargar_configuracion(self):
+        """Cargar configuración desde BD si está disponible, sino usar settings por defecto"""
+        # Valores por defecto desde settings
         self.smtp_server = settings.SMTP_HOST
         self.smtp_port = settings.SMTP_PORT
         self.smtp_username = settings.SMTP_USER
         self.smtp_password = settings.SMTP_PASSWORD
         self.from_email = settings.FROM_EMAIL
         self.from_name = settings.FROM_NAME
+        self.smtp_use_tls = settings.SMTP_USE_TLS
+
+        # Si hay sesión de BD, intentar cargar configuración desde BD
+        if self.db:
+            try:
+                from app.models.configuracion_sistema import ConfiguracionSistema
+                
+                configs = self.db.query(ConfiguracionSistema).filter(
+                    ConfiguracionSistema.categoria == "EMAIL"
+                ).all()
+
+                if configs:
+                    config_dict = {config.clave: config.valor for config in configs}
+                    
+                    # Actualizar valores si existen en BD
+                    if config_dict.get("smtp_host"):
+                        self.smtp_server = config_dict["smtp_host"]
+                    if config_dict.get("smtp_port"):
+                        try:
+                            self.smtp_port = int(config_dict["smtp_port"])
+                        except (ValueError, TypeError):
+                            logger.warning(f"Puerto SMTP inválido en BD: {config_dict.get('smtp_port')}")
+                    if config_dict.get("smtp_user"):
+                        self.smtp_username = config_dict["smtp_user"]
+                    if config_dict.get("smtp_password"):
+                        self.smtp_password = config_dict["smtp_password"]
+                    if config_dict.get("from_email"):
+                        self.from_email = config_dict["from_email"]
+                    if config_dict.get("from_name"):
+                        self.from_name = config_dict["from_name"]
+                    if config_dict.get("smtp_use_tls"):
+                        self.smtp_use_tls = config_dict["smtp_use_tls"].lower() in ("true", "1", "yes", "on")
+                    
+                    logger.info("✅ Configuración de email cargada desde base de datos")
+                    return
+
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo cargar configuración de email desde BD: {str(e)}. Usando valores por defecto.")
+        
+        logger.debug("📧 Usando configuración de email por defecto desde settings")
 
     def send_email(self, to_emails: List[str], subject: str, body: str, is_html: bool = False) -> Dict[str, Any]:
         """
@@ -54,7 +107,7 @@ class EmailService:
             # Enviar email
             server = smtplib.SMTP(self.smtp_server, self.smtp_port)
 
-            if settings.SMTP_USE_TLS:
+            if self.smtp_use_tls:
                 server.starttls()
 
             if self.smtp_username and self.smtp_password:
@@ -178,7 +231,7 @@ class EmailService:
         try:
             server = smtplib.SMTP(self.smtp_server, self.smtp_port)
 
-            if settings.SMTP_USE_TLS:
+            if self.smtp_use_tls:
                 server.starttls()
 
             if self.smtp_username and self.smtp_password:

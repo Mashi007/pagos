@@ -9,7 +9,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+import uuid
 
 # Routers
 from app.api.v1.endpoints import (
@@ -37,6 +40,7 @@ from app.api.v1.endpoints import (
     validadores,
 )
 from app.core.config import settings
+from app.core.exceptions import global_exception_handler
 from app.db.init_db import init_db_shutdown, init_db_startup
 
 # Configurar logging básico pero efectivo
@@ -60,6 +64,26 @@ logger.info("=== INICIANDO APLICACIÓN ===")
 logger.info("Configuración de logging aplicada")
 logger.info(f"CORS Origins: {settings.CORS_ORIGINS}")
 logger.info(f"Database URL configurada: {bool(settings.DATABASE_URL)}")
+
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware para agregar Request ID único a cada request
+    Facilita correlación de logs y debugging
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        # Generar Request ID único
+        request_id = str(uuid.uuid4())
+        request.state.request_id = request_id
+        
+        # Procesar request
+        response = await call_next(request)
+        
+        # Agregar Request ID al header de respuesta
+        response.headers["X-Request-ID"] = request_id
+        
+        return response
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -126,9 +150,18 @@ app = FastAPI(
     redirect_slashes=False,  # Desactivar redirects automáticos de barras finales
 )
 
+# Registrar manejador global de excepciones
+app.add_exception_handler(Exception, global_exception_handler)
+
 # ============================================
-# MIDDLEWARES DE SEGURIDAD
+# MIDDLEWARES
 # ============================================
+
+# Request ID - Para correlación de logs (debe ir primero)
+app.add_middleware(RequestIDMiddleware)
+
+# Compresión GZip - Para optimizar tamaño de respuestas
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Security Headers - OWASP Best Practices
 app.add_middleware(SecurityHeadersMiddleware)
