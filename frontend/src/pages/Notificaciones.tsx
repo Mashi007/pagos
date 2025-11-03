@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { 
   Bell, 
@@ -10,136 +10,116 @@ import {
   X,
   Calendar,
   User,
-  CreditCard
+  CreditCard,
+  Mail,
+  CheckCircle,
+  XCircle,
+  Clock,
+  RefreshCw
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-
-// Mock data para notificaciones
-const mockNotificaciones = [
-  {
-    id: 1,
-    tipo: 'vencimiento',
-    titulo: 'Cuotas próximas a vencer',
-    mensaje: '5 cuotas vencen en los próximos 3 días',
-    fecha: '2024-01-15T10:30:00',
-    leida: false,
-    prioridad: 'alta',
-    cliente: 'Juan Carlos Pérez González',
-    monto: 850.00
-  },
-  {
-    id: 2,
-    tipo: 'mora',
-    titulo: 'Cliente en mora',
-    mensaje: 'Carlos Alberto Martínez Silva tiene 15 días de atraso',
-    fecha: '2024-01-14T14:20:00',
-    leida: false,
-    prioridad: 'alta',
-    cliente: 'Carlos Alberto Martínez Silva',
-    monto: 950.00
-  },
-  {
-    id: 3,
-    tipo: 'pago',
-    titulo: 'Pago confirmado',
-    mensaje: 'Se confirmó el pago de $1,200 de María Elena Rodríguez',
-    fecha: '2024-01-14T09:15:00',
-    leida: true,
-    prioridad: 'media',
-    cliente: 'María Elena Rodríguez López',
-    monto: 1200.00
-  },
-  {
-    id: 4,
-    tipo: 'sistema',
-    titulo: 'Mantenimiento programado',
-    mensaje: 'El sistema estará en mantenimiento el domingo de 2:00 AM a 4:00 AM',
-    fecha: '2024-01-13T16:45:00',
-    leida: true,
-    prioridad: 'baja'
-  }
-]
+import { useQuery } from '@tanstack/react-query'
+import { notificacionService, type Notificacion, type NotificacionStats } from '@/services/notificacionService'
+import { toast } from 'sonner'
 
 export function Notificaciones() {
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterTipo, setFilterTipo] = useState('')
-  const [filterPrioridad, setFilterPrioridad] = useState('')
-  const [notificaciones, setNotificaciones] = useState(mockNotificaciones)
+  const [filterEstado, setFilterEstado] = useState<string>('')
+  const [filterCanal, setFilterCanal] = useState<string>('')
+  const [skip, setSkip] = useState(0)
+  const limit = 50
 
-  const getTipoIcon = (tipo: string) => {
-    switch (tipo) {
-      case 'vencimiento':
-        return <Calendar className="w-4 h-4 text-orange-600" />
-      case 'mora':
-        return <AlertTriangle className="w-4 h-4 text-red-600" />
-      case 'pago':
-        return <CreditCard className="w-4 h-4 text-green-600" />
-      case 'sistema':
-        return <Info className="w-4 h-4 text-blue-600" />
+  // Cargar notificaciones desde API
+  const { data: notificaciones = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['notificaciones', filterEstado, skip, limit],
+    queryFn: () => notificacionService.listarNotificaciones(skip, limit, filterEstado || undefined),
+    refetchInterval: 30000, // Refrescar cada 30 segundos
+  })
+
+  // Cargar estadísticas
+  const { data: estadisticas } = useQuery({
+    queryKey: ['notificaciones-estadisticas'],
+    queryFn: () => notificacionService.obtenerEstadisticas(),
+    refetchInterval: 30000,
+  })
+
+  // Filtrar notificaciones localmente por búsqueda y canal
+  const filteredNotificaciones = notificaciones.filter(notif => {
+    const matchesSearch = 
+      (notif.asunto || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (notif.mensaje || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      notif.tipo.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesCanal = !filterCanal || notif.canal === filterCanal
+    return matchesSearch && matchesCanal
+  })
+
+  const getEstadoBadge = (estado: string) => {
+    switch (estado) {
+      case 'ENVIADA':
+        return <Badge className="bg-green-100 text-green-800 flex items-center gap-1">
+          <CheckCircle className="w-3 h-3" />
+          Enviada
+        </Badge>
+      case 'FALLIDA':
+        return <Badge className="bg-red-100 text-red-800 flex items-center gap-1">
+          <XCircle className="w-3 h-3" />
+          Fallida
+        </Badge>
+      case 'PENDIENTE':
+        return <Badge className="bg-yellow-100 text-yellow-800 flex items-center gap-1">
+          <Clock className="w-3 h-3" />
+          Pendiente
+        </Badge>
+      case 'CANCELADA':
+        return <Badge className="bg-gray-100 text-gray-800">Cancelada</Badge>
       default:
-        return <Bell className="w-4 h-4 text-gray-600" />
+        return <Badge variant="secondary">{estado}</Badge>
     }
   }
 
-  const getPrioridadBadge = (prioridad: string) => {
-    switch (prioridad) {
-      case 'alta':
-        return <Badge className="bg-red-100 text-red-800">Alta</Badge>
-      case 'media':
-        return <Badge className="bg-yellow-100 text-yellow-800">Media</Badge>
-      case 'baja':
-        return <Badge className="bg-green-100 text-green-800">Baja</Badge>
+  const getCanalBadge = (canal: string) => {
+    switch (canal) {
+      case 'EMAIL':
+        return <Badge className="bg-blue-100 text-blue-800 flex items-center gap-1">
+          <Mail className="w-3 h-3" />
+          Email
+        </Badge>
+      case 'WHATSAPP':
+        return <Badge className="bg-green-100 text-green-800">WhatsApp</Badge>
+      case 'SMS':
+        return <Badge className="bg-purple-100 text-purple-800">SMS</Badge>
       default:
-        return <Badge variant="secondary">{prioridad}</Badge>
+        return <Badge variant="secondary">{canal}</Badge>
     }
   }
 
   const getTipoBadge = (tipo: string) => {
-    switch (tipo) {
-      case 'vencimiento':
-        return <Badge className="bg-orange-100 text-orange-800">Vencimiento</Badge>
-      case 'mora':
-        return <Badge className="bg-red-100 text-red-800">Mora</Badge>
-      case 'pago':
-        return <Badge className="bg-green-100 text-green-800">Pago</Badge>
-      case 'sistema':
-        return <Badge className="bg-blue-100 text-blue-800">Sistema</Badge>
-      default:
-        return <Badge variant="secondary">{tipo}</Badge>
+    const tipos: Record<string, { label: string; color: string }> = {
+      'PAGO_5_DIAS_ANTES': { label: 'Recordatorio 5 días', color: 'bg-blue-100 text-blue-800' },
+      'PAGO_3_DIAS_ANTES': { label: 'Recordatorio 3 días', color: 'bg-cyan-100 text-cyan-800' },
+      'PAGO_1_DIA_ANTES': { label: 'Recordatorio 1 día', color: 'bg-yellow-100 text-yellow-800' },
+      'PAGO_DIA_0': { label: 'Vencimiento hoy', color: 'bg-orange-100 text-orange-800' },
+      'PAGO_1_DIA_ATRASADO': { label: '1 día atrasado', color: 'bg-red-100 text-red-800' },
+      'PAGO_3_DIAS_ATRASADO': { label: '3 días atrasado', color: 'bg-red-100 text-red-800' },
+      'PAGO_5_DIAS_ATRASADO': { label: '5 días atrasado', color: 'bg-red-100 text-red-800' },
     }
+    const tipoInfo = tipos[tipo] || { label: tipo, color: 'bg-gray-100 text-gray-800' }
+    return <Badge className={tipoInfo.color}>{tipoInfo.label}</Badge>
   }
 
-  const filteredNotificaciones = notificaciones.filter(notif => {
-    const matchesSearch = notif.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         notif.mensaje.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (notif.cliente && notif.cliente.toLowerCase().includes(searchTerm.toLowerCase()))
-    const matchesTipo = !filterTipo || notif.tipo === filterTipo
-    const matchesPrioridad = !filterPrioridad || notif.prioridad === filterPrioridad
-    return matchesSearch && matchesTipo && matchesPrioridad
-  })
-
-  const notificacionesNoLeidas = notificaciones.filter(n => !n.leida).length
-  const notificacionesAltaPrioridad = notificaciones.filter(n => n.prioridad === 'alta' && !n.leida).length
-
-  const marcarComoLeida = (id: number) => {
-    setNotificaciones(prev => 
-      prev.map(notif => 
-        notif.id === id ? { ...notif, leida: true } : notif
-      )
-    )
+  const handleRefresh = () => {
+    refetch()
+    toast.success('Notificaciones actualizadas')
   }
 
-  const marcarTodasComoLeidas = () => {
-    setNotificaciones(prev => 
-      prev.map(notif => ({ ...notif, leida: true }))
-    )
-  }
-
-  const eliminarNotificacion = (id: number) => {
-    setNotificaciones(prev => prev.filter(notif => notif.id !== id))
+  const handleLimpiarFiltros = () => {
+    setSearchTerm('')
+    setFilterEstado('')
+    setFilterCanal('')
+    setSkip(0)
   }
 
   return (
@@ -152,13 +132,13 @@ export function Notificaciones() {
       >
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Notificaciones</h1>
-            <p className="text-gray-600 mt-1">Mantente al día con todas las actividades del sistema</p>
+            <h1 className="text-3xl font-bold text-gray-900">Historial de Notificaciones</h1>
+            <p className="text-gray-600 mt-1">Verifica el estado de todos los envíos de email y notificaciones</p>
           </div>
           <div className="flex space-x-2">
-            <Button variant="outline" onClick={marcarTodasComoLeidas}>
-              <Check className="w-4 h-4 mr-2" />
-              Marcar todas como leídas
+            <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Actualizar
             </Button>
           </div>
         </div>
