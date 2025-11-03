@@ -1443,9 +1443,8 @@ def obtener_estadisticas_pagos(
 
         # ✅ Base query para pagos - usar FiltrosDashboard (usa PagoStaging donde están los datos)
         base_pago_query = db.query(PagoStaging)
-        if analista or concesionario or modelo:
-            # ⚠️ PagoStaging no tiene prestamo_id, no se puede hacer join
-            # base_pago_query = base_pago_query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id)
+        # ⚠️ PagoStaging no tiene prestamo_id, no se puede hacer join con Prestamo
+        # Los filtros por analista/concesionario/modelo no se pueden aplicar sin prestamo_id
         base_pago_query = FiltrosDashboard.aplicar_filtros_pago(
             base_pago_query,
             analista,
