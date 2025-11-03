@@ -301,6 +301,57 @@ def obtener_estadisticas_notificaciones(
 # ============================================
 
 
+def _construir_query_plantillas(db: Session, solo_activas: bool, tipo: Optional[str]):
+    """Construye la query para listar plantillas con filtros"""
+    query = db.query(NotificacionPlantilla)
+
+    if solo_activas:
+        query = query.filter(NotificacionPlantilla.activa.is_(True))
+
+    if tipo:
+        query = query.filter(NotificacionPlantilla.tipo == tipo)
+
+    return query.order_by(NotificacionPlantilla.nombre)
+
+
+def _serializar_plantilla(p) -> Optional[dict]:
+    """Serializa una plantilla a diccionario"""
+    try:
+        return {
+            "id": p.id,
+            "nombre": p.nombre,
+            "descripcion": p.descripcion,
+            "tipo": p.tipo,
+            "asunto": p.asunto,
+            "cuerpo": p.cuerpo,
+            "variables_disponibles": p.variables_disponibles,
+            "activa": bool(p.activa),
+            "zona_horaria": p.zona_horaria or "America/Caracas",
+            "fecha_creacion": p.fecha_creacion,
+            "fecha_actualizacion": p.fecha_actualizacion,
+        }
+    except Exception as e:
+        logger.error(f"Error serializando plantilla {p.id}: {e}")
+        return None
+
+
+def _verificar_tabla_plantillas(db: Session):
+    """Verifica si la tabla de plantillas existe"""
+    try:
+        from sqlalchemy import inspect
+
+        inspector = inspect(db.bind)
+        tablas = inspector.get_table_names()
+        if "notificacion_plantillas" not in tablas:
+            raise HTTPException(
+                status_code=500, detail="Tabla 'notificacion_plantillas' no existe. Ejecute las migraciones."
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+
 @router.get("/plantillas", response_model=list[NotificacionPlantillaResponse])
 def listar_plantillas(
     tipo: Optional[str] = Query(None, description="Filtrar por tipo"),
@@ -310,60 +361,25 @@ def listar_plantillas(
 ):
     """Listar plantillas de notificaciones"""
     try:
-        query = db.query(NotificacionPlantilla)
+        query = _construir_query_plantillas(db, solo_activas, tipo)
+        plantillas = query.all()
 
-        if solo_activas:
-            query = query.filter(NotificacionPlantilla.activa.is_(True))
-
-        if tipo:
-            query = query.filter(NotificacionPlantilla.tipo == tipo)
-
-        plantillas = query.order_by(NotificacionPlantilla.nombre).all()
-
-        # Serializar manualmente para evitar errores de Pydantic
         resultado = []
         for p in plantillas:
-            try:
-                resultado.append(
-                    {
-                        "id": p.id,
-                        "nombre": p.nombre,
-                        "descripcion": p.descripcion,
-                        "tipo": p.tipo,
-                        "asunto": p.asunto,
-                        "cuerpo": p.cuerpo,
-                        "variables_disponibles": p.variables_disponibles,
-                        "activa": bool(p.activa),
-                        "zona_horaria": p.zona_horaria or "America/Caracas",
-                        "fecha_creacion": p.fecha_creacion,
-                        "fecha_actualizacion": p.fecha_actualizacion,
-                    }
-                )
-            except Exception as e:
-                logger.error(f"Error serializando plantilla {p.id}: {e}")
-                continue
+            serializado = _serializar_plantilla(p)
+            if serializado:
+                resultado.append(serializado)
 
         return resultado
 
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
 
         error_trace = traceback.format_exc()
         logger.error(f"Error listando plantillas: {e}\n{error_trace}")
-
-        # Verificar si la tabla existe
-        try:
-            from sqlalchemy import inspect
-
-            inspector = inspect(db.bind)
-            tablas = inspector.get_table_names()
-            if "notificacion_plantillas" not in tablas:
-                raise HTTPException(
-                    status_code=500, detail="Tabla 'notificacion_plantillas' no existe. Ejecute las migraciones."
-                )
-        except Exception:
-            pass
-
+        _verificar_tabla_plantillas(db)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 

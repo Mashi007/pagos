@@ -25,34 +25,39 @@ class PagoBase(BaseModel):
     def parse_fecha_pago(cls, v):
         """Convertir fecha_pago a datetime si viene como string o date"""
         if isinstance(v, str):
-            # Limpiar string y remover espacios
-            v = v.strip()
-            # Intentar parsear como fecha (YYYY-MM-DD) primero, que es lo más común
-            try:
-                # Intentar como fecha simple YYYY-MM-DD y convertir a datetime al inicio del día
-                if len(v) == 10 and v.count("-") == 2:
-                    return datetime.strptime(v, "%Y-%m-%d")
-            except ValueError:
-                pass
-            # Si no es formato simple, intentar como datetime ISO
-            try:
-                # Reemplazar Z por +00:00 para compatibilidad
-                v_iso = v.replace("Z", "+00:00")
-                return datetime.fromisoformat(v_iso)
-            except ValueError:
-                # Si falla, intentar otros formatos comunes
-                try:
-                    # Formato con espacio en lugar de T
-                    return datetime.strptime(v, "%Y-%m-%d %H:%M:%S")
-                except ValueError:
-                    try:
-                        return datetime.strptime(v, "%Y-%m-%d %H:%M")
-                    except ValueError:
-                        raise ValueError(f"Formato de fecha inválido: {v}")
-        elif isinstance(v, date) and not isinstance(v, datetime):
-            # Si es date pero no datetime, convertir a datetime al inicio del día
+            return cls._parsear_fecha_string(v)
+        if isinstance(v, date) and not isinstance(v, datetime):
             return datetime.combine(v, datetime.min.time())
         return v
+
+    @staticmethod
+    def _parsear_fecha_string(v: str) -> datetime:
+        """Intenta parsear una fecha en formato string a datetime"""
+        v = v.strip()
+
+        # Intentar formato YYYY-MM-DD
+        if len(v) == 10 and v.count("-") == 2:
+            try:
+                return datetime.strptime(v, "%Y-%m-%d")
+            except ValueError:
+                pass
+
+        # Intentar formato ISO (con Z o sin)
+        try:
+            v_iso = v.replace("Z", "+00:00")
+            return datetime.fromisoformat(v_iso)
+        except ValueError:
+            pass
+
+        # Intentar otros formatos comunes
+        formatos = ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"]
+        for formato in formatos:
+            try:
+                return datetime.strptime(v, formato)
+            except ValueError:
+                continue
+
+        raise ValueError(f"Formato de fecha inválido: {v}")
 
 
 class PagoCreate(PagoBase):
@@ -73,27 +78,8 @@ class PagoUpdate(BaseModel):
         if v is None:
             return None
         if isinstance(v, str):
-            # Limpiar string y remover espacios
-            v = v.strip()
-            # Intentar parsear como fecha (YYYY-MM-DD) primero
-            try:
-                if len(v) == 10 and v.count("-") == 2:
-                    return datetime.strptime(v, "%Y-%m-%d")
-            except ValueError:
-                pass
-            # Si no es formato simple, intentar como datetime ISO
-            try:
-                v_iso = v.replace("Z", "+00:00")
-                return datetime.fromisoformat(v_iso)
-            except ValueError:
-                try:
-                    return datetime.strptime(v, "%Y-%m-%d %H:%M:%S")
-                except ValueError:
-                    try:
-                        return datetime.strptime(v, "%Y-%m-%d %H:%M")
-                    except ValueError:
-                        raise ValueError(f"Formato de fecha inválido: {v}")
-        elif isinstance(v, date) and not isinstance(v, datetime):
+            return PagoBase._parsear_fecha_string(v)
+        if isinstance(v, date) and not isinstance(v, datetime):
             return datetime.combine(v, datetime.min.time())
         return v
 
