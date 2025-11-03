@@ -2167,11 +2167,13 @@ def obtener_cobros_por_analista(
 
         analistas_data = []
         for row in resultados:
-            analistas_data.append({
-                "analista": row.analista or "Sin Analista",
-                "total_cobrado": float(row.total_cobrado or Decimal("0")),
-                "cantidad_pagos": row.cantidad_pagos or 0,
-            })
+            analistas_data.append(
+                {
+                    "analista": row.analista or "Sin Analista",
+                    "total_cobrado": float(row.total_cobrado or Decimal("0")),
+                    "cantidad_pagos": row.cantidad_pagos or 0,
+                }
+            )
 
         return {"analistas": analistas_data}
 
