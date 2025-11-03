@@ -44,10 +44,12 @@ def _aplicar_filtros_pagos(
         query = query.filter(PagoStaging.estado == estado)
         logger.info(f"🔍 [listar_pagos] Filtro estado: {estado}")
     if fecha_desde:
-        query = query.filter(PagoStaging.fecha_pago >= fecha_desde)
+        # Convertir fecha_pago (TEXT) a timestamp para comparar
+        query = query.filter(text("pagos_staging.fecha_pago::timestamp >= :fecha_desde").bindparams(fecha_desde=datetime.combine(fecha_desde, datetime.min.time())))
         logger.info(f"🔍 [listar_pagos] Filtro fecha_desde: {fecha_desde}")
     if fecha_hasta:
-        query = query.filter(PagoStaging.fecha_pago <= fecha_hasta)
+        # Convertir fecha_pago (TEXT) a timestamp para comparar
+        query = query.filter(text("pagos_staging.fecha_pago::timestamp <= :fecha_hasta").bindparams(fecha_hasta=datetime.combine(fecha_hasta, time.max)))
         logger.info(f"🔍 [listar_pagos] Filtro fecha_hasta: {fecha_hasta}")
     if analista:
         query = query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id).filter(Prestamo.usuario_proponente == analista)
@@ -186,10 +188,13 @@ def healthcheck_pagos(
         # Pagos del mes actual
         hoy = date.today()
         primer_dia_mes = date(hoy.year, hoy.month, 1)
-        pagos_mes = db.query(func.count(PagoStaging.id)).filter(PagoStaging.fecha_pago >= primer_dia_mes).scalar() or 0
+        # Convertir fecha_pago (TEXT) a timestamp para comparar
+        pagos_mes = db.query(func.count(PagoStaging.id)).filter(
+            text("pagos_staging.fecha_pago::timestamp >= :primer_dia").bindparams(primer_dia=datetime.combine(primer_dia_mes, datetime.min.time()))
+        ).scalar() or 0
 
-        # Monto total pagado
-        monto_total = db.query(func.sum(PagoStaging.monto_pagado)).scalar() or Decimal("0")
+        # Monto total pagado (convertir monto_pagado TEXT a NUMERIC)
+        monto_total = db.query(func.sum(text("pagos_staging.monto_pagado::numeric"))).scalar() or Decimal("0")
 
         # Pagos por estado
         pagos_por_estado = db.query(PagoStaging.estado, func.count(PagoStaging.id)).group_by(PagoStaging.estado).all()
@@ -1078,9 +1083,15 @@ def obtener_kpis_pagos(
         )
 
         # Usar PagoStaging (donde están los datos reales)
-        monto_cobrado_mes_query = db.query(func.sum(PagoStaging.monto_pagado)).filter(
-            PagoStaging.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
-            PagoStaging.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
+        # Convertir fecha_pago (TEXT) a timestamp y monto_pagado (TEXT) a numeric
+        fecha_inicio_dt = datetime.combine(fecha_inicio_mes, datetime.min.time())
+        fecha_fin_dt = datetime.combine(fecha_fin_mes, datetime.min.time())
+        
+        monto_cobrado_mes_query = db.query(
+            func.sum(text("pagos_staging.monto_pagado::numeric"))
+        ).filter(
+            text("pagos_staging.fecha_pago::timestamp >= :fecha_inicio").bindparams(fecha_inicio=fecha_inicio_dt),
+            text("pagos_staging.fecha_pago::timestamp < :fecha_fin").bindparams(fecha_fin=fecha_fin_dt),
         )
         monto_cobrado_mes = monto_cobrado_mes_query.scalar() or Decimal("0.00")
 
@@ -1088,8 +1099,8 @@ def obtener_kpis_pagos(
         total_pagos_mes = (
             db.query(func.count(PagoStaging.id))
             .filter(
-                PagoStaging.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
-                PagoStaging.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
+                text("pagos_staging.fecha_pago::timestamp >= :fecha_inicio").bindparams(fecha_inicio=fecha_inicio_dt),
+                text("pagos_staging.fecha_pago::timestamp < :fecha_fin").bindparams(fecha_fin=fecha_fin_dt),
             )
             .scalar()
             or 0
@@ -1105,8 +1116,8 @@ def obtener_kpis_pagos(
                 PagoStaging.cedula,
             )
             .filter(
-                PagoStaging.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
-                PagoStaging.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
+                text("pagos_staging.fecha_pago::timestamp >= :fecha_inicio").bindparams(fecha_inicio=fecha_inicio_dt),
+                text("pagos_staging.fecha_pago::timestamp < :fecha_fin").bindparams(fecha_fin=fecha_fin_dt),
             )
             .limit(5)
             .all()
@@ -1413,12 +1424,14 @@ def obtener_estadisticas_pagos(
         else:
             pagos_por_estado = db.query(PagoStaging.estado, func.count(PagoStaging.id)).group_by(PagoStaging.estado).all()
 
-        # Monto total pagado
-        total_pagado = base_pago_query.with_entities(func.sum(PagoStaging.monto_pagado)).scalar() or Decimal("0.00")
+        # Monto total pagado (convertir monto_pagado TEXT a NUMERIC)
+        total_pagado = base_pago_query.with_entities(func.sum(text("pagos_staging.monto_pagado::numeric"))).scalar() or Decimal("0.00")
 
-        # Pagos del día actual
-        pagos_hoy_query = base_pago_query.filter(func.date(PagoStaging.fecha_pago) == hoy)
-        pagos_hoy = pagos_hoy_query.with_entities(func.sum(PagoStaging.monto_pagado)).scalar() or Decimal("0.00")
+        # Pagos del día actual (convertir fecha_pago TEXT a timestamp)
+        pagos_hoy_query = base_pago_query.filter(
+            text("DATE(pagos_staging.fecha_pago::timestamp) = :hoy").bindparams(hoy=hoy)
+        )
+        pagos_hoy = pagos_hoy_query.with_entities(func.sum(text("pagos_staging.monto_pagado::numeric"))).scalar() or Decimal("0.00")
 
         # ✅ Cuotas pagadas vs pendientes - usar FiltrosDashboard
         cuotas_query = db.query(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -1623,7 +1636,10 @@ def estadisticas_pagos_staging(
 
         con_monto = (
             db.query(func.count(PagoStaging.id))
-            .filter(PagoStaging.monto_pagado.isnot(None), PagoStaging.monto_pagado > 0)
+            .filter(
+                PagoStaging.monto_pagado.isnot(None),
+                text("pagos_staging.monto_pagado::numeric > 0")
+            )
             .scalar()
             or 0
         )
@@ -1636,7 +1652,7 @@ def estadisticas_pagos_staging(
                 or_(PagoStaging.cedula_cliente.isnot(None), PagoStaging.cedula.isnot(None)),
                 PagoStaging.fecha_pago.isnot(None),
                 PagoStaging.monto_pagado.isnot(None),
-                PagoStaging.monto_pagado > 0,
+                text("pagos_staging.monto_pagado::numeric > 0"),
             )
             .scalar()
             or 0
@@ -1907,7 +1923,10 @@ def verificar_conexion_pagos_staging(
             con_fecha = db.query(func.count(PagoStaging.id)).filter(PagoStaging.fecha_pago.isnot(None)).scalar() or 0
             con_monto = (
                 db.query(func.count(PagoStaging.id))
-                .filter(PagoStaging.monto_pagado.isnot(None), PagoStaging.monto_pagado > 0)
+                .filter(
+                    PagoStaging.monto_pagado.isnot(None),
+                    text("pagos_staging.monto_pagado::numeric > 0")
+                )
                 .scalar()
                 or 0
             )

@@ -7,14 +7,15 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from openpyxl import load_workbook
-from sqlalchemy.orm import Session
+import pandas as pd  # type: ignore[import-untyped]
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile  # type: ignore[import-untyped]
+from openpyxl import load_workbook  # type: ignore[import-untyped]
+from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
 from app.models.pago import Pago
+from app.models.pago_staging import PagoStaging  # Para insertar en staging
 from app.models.user import User
 
 router = APIRouter()
@@ -29,45 +30,98 @@ def _validar_archivo_excel_pagos(filename: Optional[str]):
 
 def _validar_columnas_pagos(df: pd.DataFrame):
     """Valida que el DataFrame contenga las columnas requeridas"""
-    required_columns = [
+    # Aceptar ambos formatos: español y el formato del Excel del usuario
+    required_columns_espanol = [
         "Cédula de Identidad",
         "Fecha de Pago",
         "Monto Pagado",
         "Número de Documento",
     ]
-    if not all(col in df.columns for col in required_columns):
+    required_columns_excel = [
+        "cedula_cliente",
+        "monto_pagado",  # También aceptar "monto_pagad" (truncado)
+        "fecha_pago",
+        "numero_documento",
+    ]
+    
+    # Verificar si tiene las columnas en español
+    tiene_espanol = all(col in df.columns for col in required_columns_espanol)
+    # Verificar si tiene las columnas del Excel del usuario
+    tiene_excel = all(
+        col in df.columns or (col == "monto_pagado" and "monto_pagad" in df.columns)
+        for col in required_columns_excel
+    )
+    
+    if not (tiene_espanol or tiene_excel):
         raise HTTPException(
             status_code=400,
-            detail=f"El archivo debe contener las columnas: {', '.join(required_columns)}",
+            detail=f"El archivo debe contener las columnas: {', '.join(required_columns_excel)} o {', '.join(required_columns_espanol)}",
         )
 
 
 def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: User) -> tuple[Optional[dict], Optional[str]]:
     """Procesa una fila del Excel y retorna (resultado, error)"""
     try:
-        cedula = str(row["Cédula de Identidad"]).strip()
-        fecha_pago_str = str(row["Fecha de Pago"])
-        monto_pagado = Decimal(str(row["Monto Pagado"]))
-        numero_documento = str(row["Número de Documento"]).strip()
+        # Detectar formato de columnas (español o Excel del usuario)
+        if "cedula_cliente" in row.index:
+            cedula = str(row["cedula_cliente"]).strip()
+        elif "Cédula de Identidad" in row.index:
+            cedula = str(row["Cédula de Identidad"]).strip()
+        else:
+            return None, f"Fila {index + 2}: Columna 'cedula_cliente' o 'Cédula de Identidad' no encontrada"
+        
+        # Fecha de pago - aceptar ambos formatos
+        if "fecha_pago" in row.index:
+            fecha_pago_str = str(row["fecha_pago"])
+        elif "Fecha de Pago" in row.index:
+            fecha_pago_str = str(row["Fecha de Pago"])
+        else:
+            return None, f"Fila {index + 2}: Columna 'fecha_pago' o 'Fecha de Pago' no encontrada"
+        
+        # Monto pagado - aceptar monto_pagad (truncado) o monto_pagado
+        if "monto_pagado" in row.index:
+            monto_pagado = Decimal(str(row["monto_pagado"]))
+        elif "monto_pagad" in row.index:  # Versión truncada
+            monto_pagado = Decimal(str(row["monto_pagad"]))
+        elif "Monto Pagado" in row.index:
+            monto_pagado = Decimal(str(row["Monto Pagado"]))
+        else:
+            return None, f"Fila {index + 2}: Columna 'monto_pagado' o 'Monto Pagado' no encontrada"
+        
+        # Número de documento
+        if "numero_documento" in row.index:
+            numero_documento = str(row["numero_documento"]).strip()
+        elif "Número de Documento" in row.index:
+            numero_documento = str(row["Número de Documento"]).strip()
+        else:
+            return None, f"Fila {index + 2}: Columna 'numero_documento' o 'Número de Documento' no encontrada"
 
         # Validar cliente existe
         cliente = db.query(Cliente).filter(Cliente.cedula == cedula).first()
         if not cliente:
             return None, f"Fila {index + 2}: Cliente con cédula {cedula} no encontrado"
 
-        # Parsear fecha
+        # Parsear fecha - manejar múltiples formatos
         try:
-            fecha_pago = pd.to_datetime(fecha_pago_str).to_pydatetime()
-        except Exception:
-            return None, f"Fila {index + 2}: Fecha inválida"
+            # Intentar parsear con diferentes formatos
+            # Formato del Excel del usuario: MM/DD/YYYY (ej: 9/11/2025, 5/12/2025)
+            fecha_pago = pd.to_datetime(fecha_pago_str, dayfirst=False).to_pydatetime()
+        except Exception as e:
+            # Intentar formato alternativo
+            try:
+                fecha_pago = pd.to_datetime(fecha_pago_str, format='%m/%d/%Y').to_pydatetime()
+            except Exception:
+                return None, f"Fila {index + 2}: Fecha inválida ({fecha_pago_str}). Formato esperado: MM/DD/YYYY o YYYY-MM-DD"
 
-        # Crear pago
-        pago = Pago(
+        # ⚠️ IMPORTANTE: Insertar en pagos_staging (donde el dashboard consulta)
+        # pagos_staging tiene fecha_pago y monto_pagado como TEXT
+        pago_staging = PagoStaging(
             cedula_cliente=cedula,
+            cedula=cedula,  # Columna alternativa
             prestamo_id=None,  # TODO: Buscar préstamo del cliente
-            fecha_pago=fecha_pago,
+            fecha_pago=fecha_pago,  # SQLAlchemy maneja la conversión si es necesario
             fecha_registro=datetime.now(),
-            monto_pagado=monto_pagado,
+            monto_pagado=monto_pagado,  # SQLAlchemy maneja la conversión si es necesario
             numero_documento=numero_documento,
             institucion_bancaria=None,
             estado="PAGADO",
@@ -76,9 +130,9 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
             activo=True,
         )
 
-        db.add(pago)
+        db.add(pago_staging)
         db.commit()
-        db.refresh(pago)
+        db.refresh(pago_staging)
 
         return {
             "fila": index + 2,
