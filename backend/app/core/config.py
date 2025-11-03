@@ -6,7 +6,7 @@ import json
 import logging
 from typing import List, Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -51,33 +51,48 @@ class Settings(BaseSettings):
         env="CORS_ORIGINS",
     )
 
-    @field_validator("CORS_ORIGINS", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def parse_cors_origins(cls, v):
+    def parse_cors_origins_env(cls, data):
         """
-        Parsea CORS_ORIGINS desde variable de entorno.
+        Parsea CORS_ORIGINS desde variable de entorno antes de que Pydantic intente validarlo.
         Acepta JSON array o string separado por comas.
         """
-        if isinstance(v, str):
+        # Si data es un dict (como viene de pydantic-settings)
+        if isinstance(data, dict) and "CORS_ORIGINS" in data:
+            cors_value = data["CORS_ORIGINS"]
+            
+            # Si ya es una lista, no hacer nada
+            if isinstance(cors_value, list):
+                return data
+            
+            # Si es None o vacío, usar valores por defecto
+            if not cors_value:
+                return data
+            
+            # Convertir a string si no lo es
+            if not isinstance(cors_value, str):
+                cors_value = str(cors_value)
+            
             # Intentar parsear como JSON primero
             try:
-                parsed = json.loads(v)
+                parsed = json.loads(cors_value)
                 if isinstance(parsed, list):
-                    return parsed
+                    data["CORS_ORIGINS"] = parsed
+                    return data
             except (json.JSONDecodeError, ValueError):
                 pass
             
             # Si no es JSON válido, intentar separar por comas
-            if "," in v:
-                # Separar por comas y limpiar espacios
-                origins = [origin.strip() for origin in v.split(",") if origin.strip()]
-                return origins
+            if "," in cors_value:
+                origins = [origin.strip().strip('"').strip("'") for origin in cors_value.split(",") if origin.strip()]
+                data["CORS_ORIGINS"] = origins
             else:
                 # Si es un solo string sin comas, retornar como lista
-                return [v.strip()] if v.strip() else []
-        elif isinstance(v, list):
-            return v
-        return v
+                cleaned = cors_value.strip().strip('"').strip("'")
+                data["CORS_ORIGINS"] = [cleaned] if cleaned else []
+        
+        return data
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     CORS_ALLOW_HEADERS: List[str] = ["*"]
