@@ -11,44 +11,32 @@ import sys
 from datetime import date
 from decimal import Decimal
 
+# Manejar encoding para Windows
+if sys.platform == "win32":
+    import codecs
+    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.buffer, "strict")
+    sys.stderr = codecs.getwriter("utf-8")(sys.stderr.buffer, "strict")
+
 # Agregar el directorio del backend al path (donde está la estructura app/)
 backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../backend"))
 sys.path.insert(0, backend_dir)
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+# Importar desde app
+from app.db.session import SessionLocal
 from app.models.prestamo import Prestamo
 from app.models.amortizacion import Cuota
 from app.services.prestamo_amortizacion_service import generar_tabla_amortizacion
 
-
-def create_safe_session():
-    """Crea una sesión de base de datos manejando encoding issues"""
-    database_url = os.getenv("DATABASE_URL")
-    
-    if not database_url:
-        raise ValueError("DATABASE_URL no está definido en las variables de entorno")
-    
-    # Manejar encoding issues
-    try:
-        database_url = database_url.encode('utf-8').decode('utf-8')
-    except (UnicodeDecodeError, UnicodeEncodeError):
-        try:
-            database_url = database_url.encode('latin1').decode('utf-8')
-        except:
-            pass
-    
-    # Crear engine con encoding explícito
-    engine = create_engine(
-        database_url,
-        connect_args={
-            "options": "-c client_encoding=UTF8"
-        },
-        echo=False
-    )
-    
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    return SessionLocal()
+logger = None
+try:
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+except Exception:
+    pass
 
 
 def identificar_prestamos_sin_amortizacion(db):
@@ -124,33 +112,41 @@ def main():
     
     # Crear sesión
     try:
-        SessionLocal = create_safe_session()
         db = SessionLocal()
-        print("✅ Conexión a base de datos establecida")
+        # Probar conexión
+        db.execute(text("SELECT 1"))
+        print("[OK] Conexion a base de datos establecida")
+    except UnicodeDecodeError as e:
+        print(f"[ERROR] Error de encoding en DATABASE_URL: {str(e)}")
+        print("[INFO] Sugerencia: Verifica que DATABASE_URL esté correctamente codificado")
+        print("[INFO] Alternativa: Usa el script Generar_Amortizacion_Por_API.py que usa la API")
+        return
     except Exception as e:
-        print(f"❌ Error conectando a base de datos: {str(e)}")
+        print(f"[ERROR] Error conectando a base de datos: {str(e)}")
+        print("[INFO] Sugerencia: Verifica que DATABASE_URL esté configurado correctamente")
+        print("[INFO] Alternativa: Usa el script Generar_Amortizacion_Por_API.py que usa la API")
         return
     
     try:
         # Identificar préstamos sin amortización
-        print("\n🔍 Identificando préstamos aprobados sin tabla de amortización...")
+        print("\n[INFO] Identificando prestamos aprobados sin tabla de amortizacion...")
         prestamo_ids = identificar_prestamos_sin_amortizacion(db)
         
         if not prestamo_ids:
-            print("\n✅ No hay préstamos aprobados sin tabla de amortización")
+            print("\n[OK] No hay prestamos aprobados sin tabla de amortizacion")
             return
         
-        print(f"\n📊 Encontrados {len(prestamo_ids)} préstamos sin tabla de amortización")
+        print(f"\n[INFO] Encontrados {len(prestamo_ids)} prestamos sin tabla de amortizacion")
         print(f"   IDs: {', '.join(map(str, prestamo_ids))}")
         
         # Confirmar antes de generar
-        respuesta = input(f"\n¿Generar amortización para estos {len(prestamo_ids)} préstamos? (s/n): ")
+        respuesta = input(f"\n¿Generar amortizacion para estos {len(prestamo_ids)} prestamos? (s/n): ")
         if respuesta.lower() != 's':
-            print("\n❌ Operación cancelada")
+            print("\n[CANCELADO] Operacion cancelada")
             return
         
         # Generar amortización para cada préstamo
-        print("\n🔄 Generando tablas de amortización...\n")
+        print("\n[INFO] Generando tablas de amortizacion...\n")
         
         exitosos = 0
         fallidos = 0
@@ -159,28 +155,28 @@ def main():
             exito, mensaje = generar_amortizacion_prestamo(prestamo_id, db)
             
             if exito:
-                print(f"✅ {mensaje}")
+                print(f"[OK] {mensaje}")
                 exitosos += 1
             else:
-                print(f"❌ {mensaje}")
+                print(f"[ERROR] {mensaje}")
                 fallidos += 1
         
         # Resumen final
         print("\n" + "=" * 70)
-        print("RESUMEN DE GENERACIÓN")
+        print("RESUMEN DE GENERACION")
         print("=" * 70)
-        print(f"✅ Exitosos: {exitosos}")
-        print(f"❌ Fallidos: {fallidos}")
-        print(f"📊 Total procesados: {len(prestamo_ids)}")
+        print(f"[OK] Exitosos: {exitosos}")
+        print(f"[ERROR] Fallidos: {fallidos}")
+        print(f"[INFO] Total procesados: {len(prestamo_ids)}")
         print("=" * 70)
         
     except Exception as e:
-        print(f"\n❌ Error general: {str(e)}")
+        print(f"\n[ERROR] Error general: {str(e)}")
         import traceback
         traceback.print_exc()
     finally:
         db.close()
-        print("\n✅ Sesión cerrada")
+        print("\n[OK] Sesion cerrada")
 
 
 if __name__ == "__main__":
