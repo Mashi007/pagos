@@ -171,14 +171,16 @@ class Settings(BaseSettings):
         # Validación específica para producción
         if self.ENVIRONMENT == "production":
             import os
-            
+
             # Verificar si ADMIN_PASSWORD fue configurado desde variable de entorno
             admin_password_from_env = os.getenv("ADMIN_PASSWORD")
             default_password = "R@pi_2025**"
-            
+
             # Si NO está configurado en variable de entorno y usa el valor por defecto
             # IMPORTANTE: NO bloquear para permitir que la aplicación inicie y el usuario pueda configurar
-            if (not admin_password_from_env or admin_password_from_env.strip() == "") and self.ADMIN_PASSWORD == default_password:
+            if (
+                not admin_password_from_env or admin_password_from_env.strip() == ""
+            ) and self.ADMIN_PASSWORD == default_password:
                 # Advertir severamente pero NO bloquear
                 logger.critical(
                     "🚨🚨🚨 CRÍTICO: ADMIN_PASSWORD no está configurada como variable de entorno y usa el valor por defecto. "
@@ -189,15 +191,16 @@ class Settings(BaseSettings):
                 )
                 # NO lanzar excepción - permitir que la aplicación inicie
                 # La seguridad es importante, pero bloquear impide que el usuario pueda configurar
-            
-            # Si viene de variable de entorno, verificar si es segura
+
+            # Si viene de variable de entorno, permitir aunque sea débil (asumimos decisión consciente)
+            # Pero advertir si es muy corta o débil
             if admin_password_from_env:
                 if len(admin_password_from_env) < 12:
                     logger.warning(
                         "⚠️ ADMIN_PASSWORD configurado desde variable de entorno pero es muy corta (<12 caracteres). "
                         "Se recomienda usar una contraseña más segura para producción."
                     )
-                
+
                 # Si es el valor por defecto pero viene de env, permitir pero advertir
                 if admin_password_from_env == default_password:
                     logger.warning(

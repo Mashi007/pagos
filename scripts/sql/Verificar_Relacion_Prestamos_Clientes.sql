@@ -20,7 +20,7 @@ SELECT
     'Préstamos SIN cliente_id válido' AS problema,
     p.id AS prestamo_id,
     p.cliente_id,
-    p.cedula,
+    p.cedula AS cedula_prestamo,
     p.nombres AS nombres_prestamo,
     p.estado,
     p.fecha_registro
@@ -92,7 +92,7 @@ SELECT
     p.id AS prestamo_id,
     p.cliente_id AS cliente_id_prestamo,
     c_match.id AS cliente_id_real,
-    p.cedula,
+    p.cedula AS cedula_prestamo,
     p.nombres AS nombres_prestamo,
     c_match.nombres AS nombres_cliente,
     p.estado
@@ -117,7 +117,7 @@ FROM prestamos p
 LEFT JOIN clientes c ON p.cliente_id = c.id
 LEFT JOIN clientes c_cedula ON UPPER(TRIM(p.cedula)) = UPPER(TRIM(c_cedula.cedula))
 GROUP BY p.estado
-ORDER BY total_prestamos DESC;
+ORDER BY COUNT(DISTINCT p.id) DESC;
 
 -- ============================================
 -- 5. VERIFICAR CLIENTES CON MÚLTIPLES PRÉSTAMOS
@@ -125,8 +125,8 @@ ORDER BY total_prestamos DESC;
 SELECT 
     '=== CLIENTES CON MÚLTIPLES PRÉSTAMOS ===' AS verificacion,
     c.id AS cliente_id,
-    c.cedula,
-    c.nombres,
+    c.cedula AS cedula_cliente,
+    c.nombres AS nombres_cliente,
     COUNT(DISTINCT p.id) AS total_prestamos,
     COUNT(DISTINCT CASE WHEN p.estado = 'APROBADO' THEN p.id END) AS prestamos_aprobados,
     SUM(CASE WHEN p.estado = 'APROBADO' THEN p.total_financiamiento ELSE 0 END) AS total_financiado_aprobados,
@@ -135,7 +135,7 @@ FROM clientes c
 JOIN prestamos p ON c.id = p.cliente_id
 GROUP BY c.id, c.cedula, c.nombres
 HAVING COUNT(DISTINCT p.id) > 1
-ORDER BY total_prestamos DESC
+ORDER BY COUNT(DISTINCT p.id) DESC
 LIMIT 20;
 
 -- ============================================
@@ -156,8 +156,8 @@ SELECT
     'Préstamos huérfanos (sin relación con clientes)' AS problema,
     p.id AS prestamo_id,
     p.cliente_id,
-    p.cedula,
-    p.nombres,
+    p.cedula AS cedula_prestamo,
+    p.nombres AS nombres_prestamo,
     p.estado,
     p.total_financiamiento,
     p.fecha_registro
@@ -201,6 +201,5 @@ SELECT
 FROM prestamos p
 JOIN clientes c ON p.cliente_id = c.id
 WHERE UPPER(TRIM(p.cedula)) != UPPER(TRIM(c.cedula))
-GROUP BY p.cedula, c.cedula
+GROUP BY p.cedula, c.cedula, p.cliente_id
 LIMIT 10;
-
