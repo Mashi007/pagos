@@ -43,15 +43,14 @@ def _validar_columnas_pagos(df: pd.DataFrame):
         "fecha_pago",
         "numero_documento",
     ]
-    
+
     # Verificar si tiene las columnas en español
     tiene_espanol = all(col in df.columns for col in required_columns_espanol)
     # Verificar si tiene las columnas del Excel del usuario
     tiene_excel = all(
-        col in df.columns or (col == "monto_pagado" and "monto_pagad" in df.columns)
-        for col in required_columns_excel
+        col in df.columns or (col == "monto_pagado" and "monto_pagad" in df.columns) for col in required_columns_excel
     )
-    
+
     if not (tiene_espanol or tiene_excel):
         raise HTTPException(
             status_code=400,
@@ -69,7 +68,7 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
             cedula = str(row["Cédula de Identidad"]).strip()
         else:
             return None, f"Fila {index + 2}: Columna 'cedula_cliente' o 'Cédula de Identidad' no encontrada"
-        
+
         # Fecha de pago - aceptar ambos formatos
         if "fecha_pago" in row.index:
             fecha_pago_str = str(row["fecha_pago"])
@@ -77,7 +76,7 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
             fecha_pago_str = str(row["Fecha de Pago"])
         else:
             return None, f"Fila {index + 2}: Columna 'fecha_pago' o 'Fecha de Pago' no encontrada"
-        
+
         # Monto pagado - aceptar monto_pagad (truncado) o monto_pagado
         if "monto_pagado" in row.index:
             monto_pagado = Decimal(str(row["monto_pagado"]))
@@ -87,7 +86,7 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
             monto_pagado = Decimal(str(row["Monto Pagado"]))
         else:
             return None, f"Fila {index + 2}: Columna 'monto_pagado' o 'Monto Pagado' no encontrada"
-        
+
         # Número de documento
         if "numero_documento" in row.index:
             numero_documento = str(row["numero_documento"]).strip()
@@ -109,7 +108,7 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
         except Exception as e:
             # Intentar formato alternativo
             try:
-                fecha_pago = pd.to_datetime(fecha_pago_str, format='%m/%d/%Y').to_pydatetime()
+                fecha_pago = pd.to_datetime(fecha_pago_str, format="%m/%d/%Y").to_pydatetime()
             except Exception:
                 return None, f"Fila {index + 2}: Fecha inválida ({fecha_pago_str}). Formato esperado: MM/DD/YYYY o YYYY-MM-DD"
 
