@@ -458,7 +458,9 @@ def listar_prestamos(
         logger.info(f"Listar préstamos - Usuario: {current_user.email}")
 
         query = _obtener_query_base_prestamos(db)
-        query = _aplicar_filtros_prestamos(query, search, estado, cedula, analista, concesionario, modelo, fecha_inicio, fecha_fin)
+        query = _aplicar_filtros_prestamos(
+            query, search, estado, cedula, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
 
         total = _contar_prestamos_con_manejo_error(query, db)
         skip = (page - 1) * per_page

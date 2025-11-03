@@ -788,9 +788,7 @@ def _actualizar_estado_cuota(cuota, fecha_hoy: date, es_exceso: bool = False) ->
     return estado_completado
 
 
-def _aplicar_monto_a_cuota(
-    cuota, monto_aplicar: Decimal, fecha_pago: date, fecha_hoy: date, es_exceso: bool = False
-) -> bool:
+def _aplicar_monto_a_cuota(cuota, monto_aplicar: Decimal, fecha_pago: date, fecha_hoy: date, es_exceso: bool = False) -> bool:
     """
     Aplica un monto a una cuota, actualizando todos los campos correspondientes.
     Returns:

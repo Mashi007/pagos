@@ -299,7 +299,7 @@ def obtener_configuracion_general(db: Session = Depends(get_db)):
             logger.info(f"Logo filename encontrado en BD: {logo_filename}")
     except Exception as e:
         logger.warning(f"No se pudo obtener logo_filename de BD: {str(e)}")
-    
+
     # Retornar configuración con logo_filename si existe
     config = {
         "nombre_empresa": "RAPICREDIT",
@@ -314,11 +314,11 @@ def obtener_configuracion_general(db: Session = Depends(get_db)):
         "email": "",
         "horario_atencion": "08:00-18:00",
     }
-    
+
     # Agregar logo_filename si existe
     if logo_filename:
         config["logo_filename"] = logo_filename
-    
+
     return config
 
 
