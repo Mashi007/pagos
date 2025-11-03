@@ -313,11 +313,11 @@ def reporte_pagos(
         #     )
         #     .filter(
         #         PagoStaging.fecha_pago >= fecha_inicio,
-                PagoStaging.fecha_pago <= fecha_fin,
-            )
-            .group_by("metodo")
-            .all()
-        )
+        #         PagoStaging.fecha_pago <= fecha_fin,
+        #     )
+        #     .group_by("metodo")
+        #     .all()
+        # )
 
         logger.info(f"[reportes.pagos] Pagos por método: {len(pagos_por_metodo)} métodos")
 
