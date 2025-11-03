@@ -259,7 +259,8 @@ def _verificar_query_compleja(db: Session, diagnostico: dict):
     logger.info("🔍 [diagnostico_pagos] Verificando query compleja (listar_pagos)...")
     try:
         hoy = date.today()
-        query_test = db.query(Pago).order_by(Pago.fecha_registro.desc()).limit(5)
+        # Usar PagoStaging donde están los datos reales
+        query_test = db.query(PagoStaging).order_by(PagoStaging.fecha_registro.desc()).limit(5)
         pagos_test = query_test.all()
 
         if not pagos_test:
@@ -331,7 +332,8 @@ def _verificar_serializacion(db: Session, diagnostico: dict):
     """Verifica serialización de PagoResponse"""
     logger.info("🔍 [diagnostico_pagos] Verificando serialización...")
     try:
-        query_test = db.query(Pago).order_by(Pago.fecha_registro.desc()).limit(1)
+        # Usar PagoStaging donde están los datos reales
+        query_test = db.query(PagoStaging).order_by(PagoStaging.fecha_registro.desc()).limit(1)
         pagos_test = query_test.all()
 
         if not pagos_test:
@@ -651,12 +653,16 @@ def listar_ultimos_pagos(
     """Devuelve el último pago por cédula y métricas agregadas del balance general."""
     try:
         # Subconsulta: última fecha_registro por cédula
+        # Usar PagoStaging donde están los datos reales
         sub_ultimos = (
             db.query(
-                Pago.cedula_cliente.label("cedula"),
-                func.max(Pago.fecha_registro).label("max_fecha"),
+                func.coalesce(PagoStaging.cedula_cliente, PagoStaging.cedula).label("cedula"),
+                func.max(PagoStaging.fecha_registro).label("max_fecha"),
             )
-            .group_by(Pago.cedula_cliente)
+            .filter(
+                or_(PagoStaging.cedula_cliente.isnot(None), PagoStaging.cedula.isnot(None))
+            )
+            .group_by(func.coalesce(PagoStaging.cedula_cliente, PagoStaging.cedula))
             .subquery()
         )
 

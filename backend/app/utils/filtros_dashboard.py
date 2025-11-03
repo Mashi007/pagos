@@ -11,6 +11,7 @@ from sqlalchemy.orm import Query
 
 from app.models.amortizacion import Cuota
 from app.models.pago import Pago
+from app.models.pago_staging import PagoStaging
 from app.models.prestamo import Prestamo
 
 
@@ -74,6 +75,41 @@ class FiltrosDashboard:
             )
             # NOTA: El método detecta automáticamente si necesita hacer el JOIN
         """
+        # Detectar si la query usa Pago o PagoStaging
+        # Verificar qué modelo está en la query principal
+        tabla_pago = None
+        try:
+            # Intentar detectar qué tabla de pagos se está usando
+            compiled_sql = str(query.statement.compile(compile_kwargs={"literal_binds": False})).lower()
+            if "pagos_staging" in compiled_sql or "pagostaging" in compiled_sql:
+                tabla_pago = PagoStaging
+            elif "pagos" in compiled_sql and "staging" not in compiled_sql:
+                # Puede ser Pago, pero verificar que no sea solo parte de otra palabra
+                if "pagos" in compiled_sql and "pagos_staging" not in compiled_sql:
+                    tabla_pago = Pago
+        except (AttributeError, Exception):
+            # Si no se puede detectar, intentar inferir desde la estructura de la query
+            try:
+                # Verificar si la query tiene columnas específicas de PagoStaging
+                if hasattr(query, "column_descriptions"):
+                    desc = query.column_descriptions
+                    for col in desc:
+                        if "entity" in col and col["entity"]:
+                            entity = col["entity"]
+                            if hasattr(entity, "__tablename__"):
+                                if entity.__tablename__ == "pagos_staging":
+                                    tabla_pago = PagoStaging
+                                    break
+                                elif entity.__tablename__ == "pagos":
+                                    tabla_pago = Pago
+                                    break
+            except (AttributeError, Exception):
+                pass
+
+        # Si no se pudo detectar, usar PagoStaging por defecto (donde están los datos)
+        if tabla_pago is None:
+            tabla_pago = PagoStaging
+
         # Si hay filtros de préstamo, hacer JOIN solo si no existe ya
         if analista or concesionario or modelo:
             # Verificar si ya existe un JOIN con Prestamo compilando el SQL
@@ -94,9 +130,9 @@ class FiltrosDashboard:
                 # Si hay error al compilar, asumir que necesita JOIN (seguro fallar que fallar silenciosamente)
                 necesita_join = True
 
-            # Hacer JOIN solo si es necesario
+            # Hacer JOIN solo si es necesario, usando la tabla correcta (Pago o PagoStaging)
             if necesita_join:
-                query = query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+                query = query.join(Prestamo, tabla_pago.prestamo_id == Prestamo.id)
 
             if analista:
                 query = query.filter(
@@ -110,10 +146,11 @@ class FiltrosDashboard:
             if modelo:
                 query = query.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
 
+        # Aplicar filtros de fecha usando la tabla correcta
         if fecha_inicio:
-            query = query.filter(func.date(Pago.fecha_pago) >= fecha_inicio)
+            query = query.filter(func.date(tabla_pago.fecha_pago) >= fecha_inicio)
         if fecha_fin:
-            query = query.filter(func.date(Pago.fecha_pago) <= fecha_fin)
+            query = query.filter(func.date(tabla_pago.fecha_pago) <= fecha_fin)
 
         return query
 
