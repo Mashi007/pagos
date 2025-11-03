@@ -82,7 +82,7 @@ class Settings(BaseSettings):
                     return data
             except (json.JSONDecodeError, ValueError):
                 pass
-            
+
             # Si no es JSON válido, intentar separar por comas
             if "," in cors_value:
                 origins = [origin.strip().strip('"').strip("'") for origin in cors_value.split(",") if origin.strip()]
