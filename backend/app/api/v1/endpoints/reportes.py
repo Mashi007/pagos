@@ -281,11 +281,13 @@ def reporte_pagos(
         # Pagos por método: PagoStaging no tiene institucion_bancaria
         # Usar SQL directo para agrupar por número de documento o cédula
         from sqlalchemy import text
+
         fecha_inicio_dt = datetime.combine(fecha_inicio, datetime.min.time())
         fecha_fin_dt = datetime.combine(fecha_fin, datetime.max.time())
-        
+
         pagos_por_metodo_raw = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     COALESCE(numero_documento, 'Sin especificar') AS metodo,
                     COUNT(*) AS cantidad,
@@ -296,14 +298,12 @@ def reporte_pagos(
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
                 GROUP BY numero_documento
-            """).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+            """
+            ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
         ).fetchall()
-        
-        pagos_por_metodo = [
-            {"metodo": row[0], "cantidad": row[1], "monto": float(row[2])}
-            for row in pagos_por_metodo_raw
-        ]
-        
+
+        pagos_por_metodo = [{"metodo": row[0], "cantidad": row[1], "monto": float(row[2])} for row in pagos_por_metodo_raw]
+
         # OLD CODE (comentado porque no tiene institucion_bancaria):
         # pagos_por_metodo = (
         #     db.query(

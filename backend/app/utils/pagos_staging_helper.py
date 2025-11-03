@@ -27,27 +27,27 @@ def sumar_monto_pagado_staging(
           AND monto_pagado != ''
           AND monto_pagado ~ '^[0-9]+(\.[0-9]+)?$'
     """
-    
+
     params = {}
     conditions = []
-    
+
     if fecha_inicio:
         conditions.append("fecha_pago::timestamp >= :fecha_inicio")
         params["fecha_inicio"] = fecha_inicio
-    
+
     if fecha_fin:
         conditions.append("fecha_pago::timestamp <= :fecha_fin")
         params["fecha_fin"] = fecha_fin
-    
+
     if fecha_inicio or fecha_fin:
         conditions.append("fecha_pago IS NOT NULL")
         conditions.append("fecha_pago != ''")
         conditions.append("LENGTH(TRIM(fecha_pago)) >= 10")
         conditions.append("fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'")
-    
+
     if conditions:
         query_sql += " AND " + " AND ".join(conditions)
-    
+
     result = db.execute(text(query_sql).bindparams(**params))
     return Decimal(str(result.scalar() or 0))
 
@@ -66,31 +66,30 @@ def contar_pagos_staging(
         FROM pagos_staging
         WHERE 1=1
     """
-    
+
     params = {}
     conditions = []
-    
+
     if fecha_inicio:
         conditions.append("fecha_pago::timestamp >= :fecha_inicio")
         params["fecha_inicio"] = fecha_inicio
-    
+
     if fecha_fin:
         conditions.append("fecha_pago::timestamp <= :fecha_fin")
         params["fecha_fin"] = fecha_fin
-    
+
     if fecha_inicio or fecha_fin:
         conditions.append("fecha_pago IS NOT NULL")
         conditions.append("fecha_pago != ''")
         conditions.append("LENGTH(TRIM(fecha_pago)) >= 10")
         conditions.append("fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'")
-    
+
     if cedula_cliente:
         conditions.append("cedula_cliente = :cedula_cliente")
         params["cedula_cliente"] = cedula_cliente
-    
+
     if conditions:
         query_sql += " AND " + " AND ".join(conditions)
-    
+
     result = db.execute(text(query_sql).bindparams(**params))
     return result.scalar() or 0
-

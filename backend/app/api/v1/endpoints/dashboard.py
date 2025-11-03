@@ -75,8 +75,9 @@ def _calcular_total_cobrado_mes(
     # Usar SQL directo para convertir fecha_pago (TEXT) a timestamp
     primer_dia_dt = datetime.combine(primer_dia, datetime.min.time())
     ultimo_dia_dt = datetime.combine(ultimo_dia, datetime.max.time())
-    
-    query_sql = text("""
+
+    query_sql = text(
+        """
         SELECT COALESCE(SUM(monto_pagado::numeric), 0)
         FROM pagos_staging
         WHERE fecha_pago IS NOT NULL
@@ -87,10 +88,11 @@ def _calcular_total_cobrado_mes(
           AND monto_pagado IS NOT NULL
           AND monto_pagado != ''
           AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-    """).bindparams(primer_dia=primer_dia_dt, ultimo_dia=ultimo_dia_dt)
-    
+    """
+    ).bindparams(primer_dia=primer_dia_dt, ultimo_dia=ultimo_dia_dt)
+
     # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
-    
+
     result = db.execute(query_sql)
     return Decimal(str(result.scalar() or 0))
 
@@ -349,8 +351,9 @@ def _calcular_pagos_fecha(
     # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
     fecha_dt = datetime.combine(fecha, datetime.min.time())
     fecha_dt_end = datetime.combine(fecha, datetime.max.time())
-    
-    query_sql = text("""
+
+    query_sql = text(
+        """
         SELECT COALESCE(SUM(monto_pagado::numeric), 0)
         FROM pagos_staging
         WHERE fecha_pago IS NOT NULL
@@ -360,10 +363,11 @@ def _calcular_pagos_fecha(
           AND fecha_pago::timestamp <= :fecha_fin
           AND monto_pagado IS NOT NULL
           AND monto_pagado != ''
-    """).bindparams(fecha_inicio=fecha_dt, fecha_fin=fecha_dt_end)
-    
+    """
+    ).bindparams(fecha_inicio=fecha_dt, fecha_fin=fecha_dt_end)
+
     # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
-    
+
     result = db.execute(query_sql)
     return float(result.scalar() or Decimal("0"))
 
@@ -537,8 +541,9 @@ def _calcular_total_cobrado(
         # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
         fecha_dt = datetime.combine(fecha_dia, datetime.min.time())
         fecha_dt_end = datetime.combine(fecha_dia, datetime.max.time())
-        
-        query_sql = text("""
+
+        query_sql = text(
+            """
             SELECT COALESCE(SUM(monto_pagado::numeric), 0)
             FROM pagos_staging
             WHERE fecha_pago IS NOT NULL
@@ -548,8 +553,9 @@ def _calcular_total_cobrado(
               AND fecha_pago::timestamp <= :fecha_fin
               AND monto_pagado IS NOT NULL
               AND monto_pagado != ''
-        """).bindparams(fecha_inicio=fecha_dt, fecha_fin=fecha_dt_end)
-        
+        """
+        ).bindparams(fecha_inicio=fecha_dt, fecha_fin=fecha_dt_end)
+
         result = db.execute(query_sql)
         return float(result.scalar() or Decimal("0"))
     except Exception:
@@ -714,21 +720,24 @@ def dashboard_administrador(
         # 5. PAGOS DE HOY (con filtros)
         # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
         from sqlalchemy import text
+
         hoy_dt = datetime.combine(hoy, datetime.min.time())
         hoy_dt_end = datetime.combine(hoy, datetime.max.time())
-        
+
         pagos_hoy_query = db.execute(
-            text("SELECT COUNT(*) FROM pagos_staging WHERE fecha_pago::timestamp >= :inicio AND fecha_pago::timestamp <= :fin")
-            .bindparams(inicio=hoy_dt, fin=hoy_dt_end)
+            text(
+                "SELECT COUNT(*) FROM pagos_staging WHERE fecha_pago::timestamp >= :inicio AND fecha_pago::timestamp <= :fin"
+            ).bindparams(inicio=hoy_dt, fin=hoy_dt_end)
         )
         pagos_hoy = pagos_hoy_query.scalar() or 0
-        
+
         monto_pagos_hoy_query = db.execute(
-            text("SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE fecha_pago::timestamp >= :inicio AND fecha_pago::timestamp <= :fin")
-            .bindparams(inicio=hoy_dt, fin=hoy_dt_end)
+            text(
+                "SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE fecha_pago::timestamp >= :inicio AND fecha_pago::timestamp <= :fin"
+            ).bindparams(inicio=hoy_dt, fin=hoy_dt_end)
         )
         monto_pagos_hoy = Decimal(str(monto_pagos_hoy_query.scalar() or 0))
-        
+
         # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
         # if analista or concesionario or modelo:
         #     # No disponible sin prestamo_id
@@ -793,7 +802,7 @@ def dashboard_administrador(
         # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
         query_sql = "SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE monto_pagado IS NOT NULL AND monto_pagado != ''"
         params = {}
-        
+
         # Aplicar filtros de fecha si existen
         if fecha_inicio:
             query_sql += " AND fecha_pago::timestamp >= :fecha_inicio"
@@ -801,12 +810,12 @@ def dashboard_administrador(
         if fecha_fin:
             query_sql += " AND fecha_pago::timestamp <= :fecha_fin"
             params["fecha_fin"] = datetime.combine(fecha_fin, datetime.max.time())
-        
+
         if fecha_inicio or fecha_fin:
             query_sql += " AND fecha_pago IS NOT NULL AND fecha_pago != '' AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'"
-        
+
         # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
-        
+
         total_cobrado_query = db.execute(text(query_sql).bindparams(**params))
         # total_cobrado se calcula pero no se usa en la respuesta actual
         # total_cobrado = total_cobrado_query.scalar() or Decimal("0")
@@ -954,9 +963,10 @@ def dashboard_administrador(
             # ✅ Cobrado del mes (PagoStaging no tiene conciliado ni prestamo_id)
             mes_inicio_dt = datetime.combine(mes_inicio, datetime.min.time())
             mes_fin_dt = datetime.combine(mes_fin, datetime.max.time())
-            
+
             cobrado_mes_query = db.execute(
-                text("""
+                text(
+                    """
                     SELECT COALESCE(SUM(monto_pagado::numeric), 0)
                     FROM pagos_staging
                     WHERE fecha_pago IS NOT NULL
@@ -966,7 +976,8 @@ def dashboard_administrador(
                       AND fecha_pago::timestamp <= :mes_fin
                       AND monto_pagado IS NOT NULL
                       AND monto_pagado != ''
-                """).bindparams(mes_inicio=mes_inicio_dt, mes_fin=mes_fin_dt)
+                """
+                ).bindparams(mes_inicio=mes_inicio_dt, mes_fin=mes_fin_dt)
             )
             cobrado_mes = Decimal(str(cobrado_mes_query.scalar() or 0))
 
@@ -1560,9 +1571,10 @@ def obtener_cobranzas_mensuales(
             # Pagos reales: Suma de pagos en ese mes (PagoStaging no tiene conciliado ni prestamo_id)
             mes_fecha_dt = datetime.combine(mes_fecha, datetime.min.time())
             siguiente_mes_dt = datetime.combine(siguiente_mes, datetime.min.time())
-            
+
             query_pagos = db.execute(
-                text("""
+                text(
+                    """
                     SELECT COALESCE(SUM(monto_pagado::numeric), 0)
                     FROM pagos_staging
                     WHERE fecha_pago IS NOT NULL
@@ -1572,7 +1584,8 @@ def obtener_cobranzas_mensuales(
                       AND fecha_pago::timestamp < :siguiente_mes
                       AND monto_pagado IS NOT NULL
                       AND monto_pagado != ''
-                """).bindparams(mes_fecha=mes_fecha_dt, siguiente_mes=siguiente_mes_dt)
+                """
+                ).bindparams(mes_fecha=mes_fecha_dt, siguiente_mes=siguiente_mes_dt)
             )
             pagos_reales = float(query_pagos.scalar() or Decimal("0"))
 
@@ -1696,7 +1709,8 @@ def obtener_metricas_acumuladas(
         # Acumulado mensual: Pagos desde inicio del mes (PagoStaging no tiene conciliado ni prestamo_id)
         fecha_inicio_mes_dt = datetime.combine(fecha_inicio_mes, datetime.min.time())
         query_acumulado_mensual = db.execute(
-            text("""
+            text(
+                """
                 SELECT COALESCE(SUM(monto_pagado::numeric), 0)
                 FROM pagos_staging
                 WHERE fecha_pago IS NOT NULL
@@ -1705,14 +1719,16 @@ def obtener_metricas_acumuladas(
                   AND fecha_pago::timestamp >= :fecha_inicio_mes
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
-            """).bindparams(fecha_inicio_mes=fecha_inicio_mes_dt)
+            """
+            ).bindparams(fecha_inicio_mes=fecha_inicio_mes_dt)
         )
         acumulado_mensual = float(query_acumulado_mensual.scalar() or Decimal("0"))
 
         # Acumulado anual: Pagos desde inicio del año (PagoStaging no tiene conciliado ni prestamo_id)
         fecha_inicio_anio_dt = datetime.combine(fecha_inicio_anio, datetime.min.time())
         query_acumulado_anual = db.execute(
-            text("""
+            text(
+                """
                 SELECT COALESCE(SUM(monto_pagado::numeric), 0)
                 FROM pagos_staging
                 WHERE fecha_pago IS NOT NULL
@@ -1721,7 +1737,8 @@ def obtener_metricas_acumuladas(
                   AND fecha_pago::timestamp >= :fecha_inicio_anio
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
-            """).bindparams(fecha_inicio_anio=fecha_inicio_anio_dt)
+            """
+            ).bindparams(fecha_inicio_anio=fecha_inicio_anio_dt)
         )
         acumulado_anual = float(query_acumulado_anual.scalar() or Decimal("0"))
 

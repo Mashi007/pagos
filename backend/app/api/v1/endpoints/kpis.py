@@ -83,12 +83,13 @@ def _calcular_kpis_basicos(
         mes_fin = date(fecha_corte.year + 1, 1, 1)
     else:
         mes_fin = date(fecha_corte.year, fecha_corte.month + 1, 1)
-    
+
     mes_inicio_dt = datetime.combine(mes_inicio, datetime.min.time())
     mes_fin_dt = datetime.combine(mes_fin, datetime.min.time())
-    
+
     pagos_query = db.execute(
-        text("""
+        text(
+            """
             SELECT COALESCE(SUM(monto_pagado::numeric), 0)
             FROM pagos_staging
             WHERE fecha_pago IS NOT NULL
@@ -98,10 +99,11 @@ def _calcular_kpis_basicos(
               AND fecha_pago::timestamp < :mes_fin
               AND monto_pagado IS NOT NULL
               AND monto_pagado != ''
-        """).bindparams(mes_inicio=mes_inicio_dt, mes_fin=mes_fin_dt)
+        """
+        ).bindparams(mes_inicio=mes_inicio_dt, mes_fin=mes_fin_dt)
     )
     pagos_mes = Decimal(str(pagos_query.scalar() or 0))
-    
+
     # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
 
     # Cuotas vencidas

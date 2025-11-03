@@ -717,8 +717,7 @@ def listar_ultimos_pagos(
         # Join para obtener el registro de pago completo de ese último id
         pagos_ultimos_q = db.query(PagoStaging).join(
             sub_ultimos,
-            (PagoStaging.cedula_cliente == sub_ultimos.c.cedula)
-            & (PagoStaging.id == sub_ultimos.c.max_id),
+            (PagoStaging.cedula_cliente == sub_ultimos.c.cedula) & (PagoStaging.id == sub_ultimos.c.max_id),
         )
 
         # Filtros
@@ -1129,7 +1128,8 @@ def obtener_kpis_pagos(
 
         # ⚠️ Usar SQL directo completo porque func.sum(text(...)) no incluye FROM
         monto_cobrado_mes_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT COALESCE(SUM(monto_pagado::numeric), 0)
                 FROM pagos_staging
                 WHERE fecha_pago IS NOT NULL
@@ -1139,7 +1139,8 @@ def obtener_kpis_pagos(
                   AND fecha_pago::timestamp < :fecha_fin
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
-            """).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+            """
+            ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
         )
         monto_cobrado_mes = Decimal(str(monto_cobrado_mes_query.scalar() or 0))
 
