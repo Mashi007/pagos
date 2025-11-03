@@ -166,6 +166,58 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         return
       }
       
+      // Cuando se confirma el logo, invalidar caché y recargar desde configuración
+      if (confirmed && (filename || url)) {
+        console.log('🔄 Logo confirmado, invalidando caché y recargando desde configuración')
+        // Invalidar caché para forzar recarga desde BD
+        logoCache.logoUrl = null
+        logoCache.hasChecked = false
+        logoCache.isChecking = false
+        
+        // Recargar desde configuración general para obtener logo_filename persistido en BD
+        fetch('/api/v1/configuracion/general')
+          .then(res => res.json())
+          .then(config => {
+            if (config.logo_filename) {
+              const logoPath = `/api/v1/configuracion/logo/${config.logo_filename}`
+              const logoUrl = `${logoPath}?t=${Date.now()}`
+              logoCache.logoUrl = logoUrl
+              logoCache.hasChecked = true
+              setCustomLogoUrl(logoUrl)
+              setHasChecked(true)
+              console.log('✅ Logo recargado desde configuración (BD):', config.logo_filename)
+            } else if (filename) {
+              // Fallback: usar filename del evento si no está en BD aún
+              const logoPath = `/api/v1/configuracion/logo/${filename}`
+              const logoUrl = `${logoPath}?t=${Date.now()}`
+              logoCache.logoUrl = logoUrl
+              logoCache.hasChecked = true
+              setCustomLogoUrl(logoUrl)
+              setHasChecked(true)
+              console.log('✅ Logo actualizado desde evento (fallback):', filename)
+            }
+          })
+          .catch(err => {
+            console.warn('⚠️ Error recargando logo desde configuración:', err)
+            // Fallback: usar valores del evento directamente
+            let newLogoUrl: string | null = null
+            if (url) {
+              newLogoUrl = `${url}?t=${Date.now()}`
+            } else if (filename) {
+              const logoPath = `/api/v1/configuracion/logo/${filename}`
+              newLogoUrl = `${logoPath}?t=${Date.now()}`
+            }
+            if (newLogoUrl) {
+              logoCache.logoUrl = newLogoUrl
+              logoCache.hasChecked = true
+              setCustomLogoUrl(newLogoUrl)
+              setHasChecked(true)
+            }
+          })
+        return
+      }
+      
+      // Para actualizaciones no confirmadas (preview durante carga), actualizar directamente
       let newLogoUrl: string | null = null
       
       if (url) {
@@ -178,8 +230,8 @@ export function Logo({ className, size = 'md' }: LogoProps) {
       }
       
       if (newLogoUrl) {
-        // Actualizar cache y estado
-        console.log('🔄 Actualizando logo:', newLogoUrl)
+        // Actualizar cache y estado (preview temporal)
+        console.log('🔄 Actualizando logo (preview):', newLogoUrl)
         logoCache.logoUrl = newLogoUrl
         logoCache.hasChecked = true
         setCustomLogoUrl(newLogoUrl)

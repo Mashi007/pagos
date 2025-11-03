@@ -286,6 +286,8 @@ def obtener_configuracion_general(db: Session = Depends(get_db)):
     # Consultar logo_filename desde la base de datos
     logo_filename = None
     try:
+        logger.debug("🔍 Consultando logo_filename en BD...")
+        
         logo_config = (
             db.query(ConfiguracionSistema)
             .filter(
@@ -294,11 +296,14 @@ def obtener_configuracion_general(db: Session = Depends(get_db)):
             )
             .first()
         )
+        
         if logo_config:
             logo_filename = logo_config.valor
-            logger.info(f"Logo filename encontrado en BD: {logo_filename}")
+            logger.info(f"✅ Logo filename encontrado en BD: {logo_filename}")
+        else:
+            logger.debug("⚠️ No se encontró logo_filename en BD (puede ser normal si no se ha subido un logo)")
     except Exception as e:
-        logger.warning(f"No se pudo obtener logo_filename de BD: {str(e)}")
+        logger.error(f"❌ Error obteniendo logo_filename de BD: {str(e)}", exc_info=True)
 
     # Retornar configuración con logo_filename si existe
     config = {
@@ -318,6 +323,9 @@ def obtener_configuracion_general(db: Session = Depends(get_db)):
     # Agregar logo_filename si existe
     if logo_filename:
         config["logo_filename"] = logo_filename
+        logger.debug(f"✅ Configuración general retornada con logo_filename: {logo_filename}")
+    else:
+        logger.debug("⚠️ Configuración general retornada SIN logo_filename")
 
     return config
 
