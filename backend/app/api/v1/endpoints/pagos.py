@@ -664,9 +664,7 @@ def listar_ultimos_pagos(
                 func.coalesce(PagoStaging.cedula_cliente, PagoStaging.cedula).label("cedula"),
                 func.max(PagoStaging.fecha_registro).label("max_fecha"),
             )
-            .filter(
-                or_(PagoStaging.cedula_cliente.isnot(None), PagoStaging.cedula.isnot(None))
-            )
+            .filter(or_(PagoStaging.cedula_cliente.isnot(None), PagoStaging.cedula.isnot(None)))
             .group_by(func.coalesce(PagoStaging.cedula_cliente, PagoStaging.cedula))
             .subquery()
         )
