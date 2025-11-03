@@ -9,6 +9,7 @@ from sqlalchemy import and_, distinct, func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.cache import cache_result
 from app.models.amortizacion import Cuota, pago_cuotas
 from app.models.analista import Analista
 from app.models.cliente import Cliente
@@ -22,6 +23,7 @@ router = APIRouter()
 
 
 @router.get("/dashboard")
+@cache_result(ttl=300, key_prefix="kpis")  # Cache por 5 minutos
 def dashboard_kpis_principales(
     fecha_corte: Optional[str] = Query(None, description="Fecha de corte (default: hoy)"),
     analista: Optional[str] = Query(None, description="Filtrar por analista"),
@@ -351,6 +353,7 @@ def dashboard_kpis_principales(
 
 
 @router.get("/analistas")
+@cache_result(ttl=300, key_prefix="kpis")  # Cache por 5 minutos
 def kpis_analistas(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -384,6 +387,7 @@ def kpis_analistas(
 
 
 @router.get("/cartera")
+@cache_result(ttl=300, key_prefix="kpis")  # Cache por 5 minutos
 def kpis_cartera(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -404,6 +408,7 @@ def kpis_cartera(
 
 
 @router.get("/prestamos")
+@cache_result(ttl=300, key_prefix="kpis")  # Cache por 5 minutos
 def kpis_prestamos(
     analista: Optional[str] = Query(None, description="Filtrar por analista"),
     concesionario: Optional[str] = Query(None, description="Filtrar por concesionario"),

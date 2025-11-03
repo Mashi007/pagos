@@ -64,7 +64,7 @@ class Prestamo(Base):
     observaciones = Column(Text, nullable=True)  # Observaciones de aprobación/rechazo
 
     # Fechas de aprobación
-    fecha_registro = Column(TIMESTAMP, nullable=False, default=func.now())
+    fecha_registro = Column(TIMESTAMP, nullable=False, default=func.now(), index=True)  # INDEXADO para optimización de listado y filtros
     fecha_aprobacion = Column(TIMESTAMP, nullable=True)
 
     # ============================================

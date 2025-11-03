@@ -146,7 +146,7 @@ except Exception as e:
 
 def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
     """
-    Decorador para cachear resultados de funciones
+    Decorador para cachear resultados de funciones (soporta sync y async)
 
     Args:
         ttl: Tiempo de vida del cache en segundos (default: 5 minutos)
@@ -154,43 +154,83 @@ def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
 
     Ejemplo:
         @cache_result(ttl=600, key_prefix="dashboard")
-        async def get_dashboard_stats(...):
+        def get_dashboard_stats(...):  # Sync
+            ...
+
+        @cache_result(ttl=600, key_prefix="dashboard")
+        async def get_dashboard_stats_async(...):  # Async
             ...
     """
+    import asyncio
+    import inspect
 
     def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # Construir clave del cache
-            if key_prefix:
-                cache_key = f"{key_prefix}:{func.__name__}"
-            else:
-                cache_key = f"cache:{func.__name__}"
+        is_async = inspect.iscoroutinefunction(func)
 
-            # Incluir argumentos en la clave
-            if args or kwargs:
-                import hashlib
+        if is_async:
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                # Construir clave del cache
+                if key_prefix:
+                    cache_key = f"{key_prefix}:{func.__name__}"
+                else:
+                    cache_key = f"cache:{func.__name__}"
 
-                key_data = json.dumps({"args": str(args), "kwargs": str(kwargs)}, sort_keys=True)
-                key_hash = hashlib.md5(key_data.encode()).hexdigest()[:8]
-                cache_key = f"{cache_key}:{key_hash}"
+                # Incluir argumentos en la clave
+                if args or kwargs:
+                    import hashlib
+                    key_data = json.dumps({"args": str(args), "kwargs": str(kwargs)}, sort_keys=True)
+                    key_hash = hashlib.md5(key_data.encode()).hexdigest()[:8]
+                    cache_key = f"{cache_key}:{key_hash}"
 
-            # Intentar obtener del cache
-            cached_result = cache_backend.get(cache_key)
-            if cached_result is not None:
-                logger.debug(f"Cache hit: {cache_key}")
-                return cached_result
+                # Intentar obtener del cache
+                cached_result = cache_backend.get(cache_key)
+                if cached_result is not None:
+                    logger.debug(f"Cache hit: {cache_key}")
+                    return cached_result
 
-            # Ejecutar función
-            logger.debug(f"Cache miss: {cache_key}")
-            result = await func(*args, **kwargs)
+                # Ejecutar función
+                logger.debug(f"Cache miss: {cache_key}")
+                result = await func(*args, **kwargs)
 
-            # Guardar en cache
-            cache_backend.set(cache_key, result, ttl=ttl)
+                # Guardar en cache
+                cache_backend.set(cache_key, result, ttl=ttl)
 
-            return result
+                return result
 
-        return wrapper
+            return async_wrapper
+        else:
+            @wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                # Construir clave del cache
+                if key_prefix:
+                    cache_key = f"{key_prefix}:{func.__name__}"
+                else:
+                    cache_key = f"cache:{func.__name__}"
+
+                # Incluir argumentos en la clave
+                if args or kwargs:
+                    import hashlib
+                    key_data = json.dumps({"args": str(args), "kwargs": str(kwargs)}, sort_keys=True)
+                    key_hash = hashlib.md5(key_data.encode()).hexdigest()[:8]
+                    cache_key = f"{cache_key}:{key_hash}"
+
+                # Intentar obtener del cache
+                cached_result = cache_backend.get(cache_key)
+                if cached_result is not None:
+                    logger.debug(f"Cache hit: {cache_key}")
+                    return cached_result
+
+                # Ejecutar función
+                logger.debug(f"Cache miss: {cache_key}")
+                result = func(*args, **kwargs)
+
+                # Guardar en cache
+                cache_backend.set(cache_key, result, ttl=ttl)
+
+                return result
+
+            return sync_wrapper
 
     return decorator
 

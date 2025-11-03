@@ -84,13 +84,13 @@ class NotificacionService {
   }
 
   // Notificaciones
-  async listarNotificaciones(skip = 0, limit = 100, estado?: string): Promise<Notificacion[]> {
+  async listarNotificaciones(page = 1, per_page = 20, estado?: string): Promise<{ items: Notificacion[], total: number, page: number, page_size: number, total_pages: number }> {
     const params = new URLSearchParams()
-    params.append('skip', String(skip))
-    params.append('limit', String(limit))
+    params.append('page', String(page))
+    params.append('per_page', String(per_page))
     if (estado) params.append('estado', estado)
     
-    return await apiClient.get<Notificacion[]>(`${this.baseUrl}/?${params}`)
+    return await apiClient.get<{ items: Notificacion[], total: number, page: number, page_size: number, total_pages: number }>(`${this.baseUrl}/?${params}`)
   }
 
   async obtenerEstadisticas(): Promise<NotificacionStats> {

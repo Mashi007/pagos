@@ -956,6 +956,149 @@ def actualizar_cuotas_segun_plazo_maximo(
     return numero_cuotas, cuota_periodo
 
 
+def _calcular_edad_cliente(fecha_nacimiento: date) -> tuple[float, int, int]:
+    """Calcula edad del cliente en años, años enteros y meses desde fecha de nacimiento"""
+    hoy = date.today()
+    años = hoy.year - fecha_nacimiento.year
+
+    if hoy.month < fecha_nacimiento.month or (hoy.month == fecha_nacimiento.month and hoy.day < fecha_nacimiento.day):
+        años -= 1
+
+    if hoy.month >= fecha_nacimiento.month:
+        meses = hoy.month - fecha_nacimiento.month
+        if hoy.day < fecha_nacimiento.day:
+            meses -= 1
+    else:
+        meses = (12 - fecha_nacimiento.month) + hoy.month
+        if hoy.day < fecha_nacimiento.day:
+            meses -= 1
+
+    if meses >= 12:
+        años += meses // 12
+        meses = meses % 12
+
+    edad_total = años + (meses / 12)
+    return edad_total, años, meses
+
+
+def _obtener_edad_desde_bd(prestamo: Prestamo, db: Session, datos_evaluacion: dict) -> None:
+    """Obtiene y agrega la edad del cliente desde la base de datos a datos_evaluacion"""
+    if "edad" in datos_evaluacion and datos_evaluacion["edad"]:
+        return
+
+    cliente = db.query(Cliente).filter(Cliente.cedula == prestamo.cedula).first()
+    if cliente and cliente.fecha_nacimiento:
+        edad_total, años, meses = _calcular_edad_cliente(cliente.fecha_nacimiento)
+        datos_evaluacion["edad"] = edad_total
+        datos_evaluacion["edad_años"] = años
+        datos_evaluacion["edad_meses"] = meses
+        logger.info(f"Edad calculada desde BD: {años} años y {meses} meses (fecha_nacimiento: {cliente.fecha_nacimiento})")
+    else:
+        datos_evaluacion["edad"] = 25.0
+        datos_evaluacion["edad_años"] = 25
+        datos_evaluacion["edad_meses"] = 0
+        logger.warning(f"No se encontró fecha de nacimiento para cédula {prestamo.cedula}, usando valor por defecto")
+
+
+def _preparar_datos_evaluacion(prestamo: Prestamo, datos_evaluacion: dict, db: Session) -> None:
+    """Prepara los datos de evaluación agregando información del préstamo y cliente"""
+    datos_evaluacion["prestamo_id"] = prestamo.id
+
+    if "cuota_mensual" not in datos_evaluacion or not datos_evaluacion["cuota_mensual"]:
+        datos_evaluacion["cuota_mensual"] = float(prestamo.cuota_periodo) if prestamo.cuota_periodo else 0
+
+    _obtener_edad_desde_bd(prestamo, db, datos_evaluacion)
+
+
+def _actualizar_estado_evaluado(prestamo: Prestamo, prestamo_id: int, db: Session) -> None:
+    """Actualiza el estado del préstamo a EVALUADO si está en DRAFT o EN_REVISION"""
+    if prestamo.estado in ["DRAFT", "EN_REVISION"]:
+        prestamo.estado = "EVALUADO"
+        db.commit()
+        logger.info(f"Préstamo {prestamo_id} cambiado a estado EVALUADO después de evaluación de riesgo")
+
+
+def _construir_respuesta_evaluacion(evaluacion, prestamo_id: int) -> dict:
+    """Construye la respuesta completa de evaluación con todos los detalles"""
+    return {
+        "prestamo_id": prestamo_id,
+        "puntuacion_total": float(evaluacion.puntuacion_total or 0),
+        "clasificacion_riesgo": evaluacion.clasificacion_riesgo,
+        "decision_final": evaluacion.decision_final,
+        "requiere_aprobacion_manual": evaluacion.decision_final == "APROBADO_AUTOMATICO",
+        "mensaje": (
+            "✅ Préstamo candidato para aprobación. Debe ser aprobado manualmente con tasa sugerida."
+            if evaluacion.decision_final == "APROBADO_AUTOMATICO"
+            else "⚠️ Revisar antes de aprobar"
+        ),
+        "sugerencias": {
+            "tasa_interes_sugerida": float(evaluacion.tasa_interes_aplicada or 0),
+            "plazo_maximo_sugerido": evaluacion.plazo_maximo,
+            "enganche_minimo_sugerido": float(evaluacion.enganche_minimo or 0),
+            "requisitos_adicionales": evaluacion.requisitos_adicionales,
+        },
+        "tasa_interes_aplicada": float(evaluacion.tasa_interes_aplicada or 0),
+        "plazo_maximo": evaluacion.plazo_maximo,
+        "enganche_minimo": float(evaluacion.enganche_minimo or 0),
+        "requisitos_adicionales": evaluacion.requisitos_adicionales,
+        "detalle_criterios": {
+            "ratio_endeudamiento": {
+                "puntos": float(evaluacion.ratio_endeudamiento_puntos or 0),
+                "calculo": float(evaluacion.ratio_endeudamiento_calculo or 0),
+            },
+            "ratio_cobertura": {
+                "puntos": float(evaluacion.ratio_cobertura_puntos or 0),
+                "calculo": float(evaluacion.ratio_cobertura_calculo or 0),
+            },
+            "antiguedad_trabajo": {
+                "puntos": float(evaluacion.antiguedad_trabajo_puntos or 0),
+                "meses": (float(evaluacion.meses_trabajo) if evaluacion.meses_trabajo else 0),
+            },
+            "tipo_empleo": {
+                "puntos": float(evaluacion.tipo_empleo_puntos or 0),
+                "descripcion": evaluacion.tipo_empleo_descripcion,
+            },
+            "sector_economico": {
+                "puntos": float(evaluacion.sector_economico_puntos or 0),
+                "descripcion": evaluacion.sector_economico_descripcion,
+            },
+            "referencias": {
+                "puntos": float(evaluacion.referencias_puntos or 0),
+                "descripcion": evaluacion.referencias_descripcion,
+                "referencia1_calificacion": evaluacion.referencia1_calificacion,
+                "referencia1_observaciones": evaluacion.referencia1_observaciones,
+                "referencia2_calificacion": evaluacion.referencia2_calificacion,
+                "referencia2_observaciones": evaluacion.referencia2_observaciones,
+                "referencia3_calificacion": evaluacion.referencia3_calificacion,
+                "referencia3_observaciones": evaluacion.referencia3_observaciones,
+            },
+            "arraigo_vivienda": float(evaluacion.arraigo_vivienda_puntos or 0),
+            "arraigo_familiar": float(evaluacion.arraigo_familiar_puntos or 0),
+            "arraigo_laboral": float(evaluacion.arraigo_laboral_puntos or 0),
+            "vivienda": {
+                "puntos": float(evaluacion.vivienda_puntos or 0),
+                "descripcion": evaluacion.vivienda_descripcion,
+            },
+            "estado_civil": {
+                "puntos": float(evaluacion.estado_civil_puntos or 0),
+                "descripcion": evaluacion.estado_civil_descripcion,
+            },
+            "hijos": {
+                "puntos": float(evaluacion.hijos_puntos or 0),
+                "descripcion": evaluacion.hijos_descripcion,
+            },
+            "edad": {
+                "puntos": float(evaluacion.edad_puntos or 0),
+                "cliente": evaluacion.edad_cliente,
+            },
+            "capacidad_maniobra": {
+                "puntos": float(evaluacion.enganche_garantias_puntos or 0),
+                "porcentaje_residual": float(evaluacion.enganche_garantias_calculo or 0),
+            },
+        },
+    }
+
+
 @router.post("/{prestamo_id}/evaluar-riesgo")
 def evaluar_riesgo_prestamo(
     prestamo_id: int,
@@ -983,77 +1126,17 @@ def evaluar_riesgo_prestamo(
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
 
-    # Agregar prestamo_id y cuota_mensual del préstamo desde BD
-    datos_evaluacion["prestamo_id"] = prestamo_id
+    _preparar_datos_evaluacion(prestamo, datos_evaluacion, db)
 
-    # IMPORTANTE: Tomar la cuota del préstamo desde la base de datos
-    if "cuota_mensual" not in datos_evaluacion or not datos_evaluacion["cuota_mensual"]:
-        datos_evaluacion["cuota_mensual"] = float(prestamo.cuota_periodo) if prestamo.cuota_periodo else 0
-
-    # AGREGAR: Obtener edad del cliente desde la base de datos en años y meses
-    if "edad" not in datos_evaluacion or not datos_evaluacion["edad"]:
-        # Buscar cliente por cédula
-        cliente = db.query(Cliente).filter(Cliente.cedula == prestamo.cedula).first()
-        if cliente and cliente.fecha_nacimiento:
-            # Calcular edad exacta en años con meses desde fecha de nacimiento
-            hoy = date.today()
-            nacimiento = cliente.fecha_nacimiento
-
-            # Calcular años
-            años = hoy.year - nacimiento.year
-
-            # Calcular meses
-            if hoy.month < nacimiento.month or (hoy.month == nacimiento.month and hoy.day < nacimiento.day):
-                años -= 1
-
-            # Calcular meses adicionales
-            if hoy.month >= nacimiento.month:
-                meses = hoy.month - nacimiento.month
-                if hoy.day < nacimiento.day:
-                    meses -= 1
-            else:
-                meses = (12 - nacimiento.month) + hoy.month
-                if hoy.day < nacimiento.day:
-                    meses -= 1
-
-            # Normalizar meses (si >= 12, agregar al año)
-            if meses >= 12:
-                años += meses // 12
-                meses = meses % 12
-
-            # Edad total en años decimales para el cálculo
-            edad_total = años + (meses / 12)
-            datos_evaluacion["edad"] = edad_total
-            datos_evaluacion["edad_años"] = años
-            datos_evaluacion["edad_meses"] = meses
-
-            logger.info(
-                f"Edad calculada desde BD: {años} años y {meses} meses " f"(fecha_nacimiento: {cliente.fecha_nacimiento})"
-            )
-        else:
-            datos_evaluacion["edad"] = 25.0  # Valor por defecto si no se encuentra
-            datos_evaluacion["edad_años"] = 25
-            datos_evaluacion["edad_meses"] = 0
-            logger.warning(f"No se encontró fecha de nacimiento para cédula {prestamo.cedula}, usando valor por defecto")
-
-    # Log para debugging
     logger.info(
-        f"Evaluando préstamo {prestamo_id} con cuota: {datos_evaluacion['cuota_mensual']} USD, edad: {datos_evaluacion.get('edad', 'N/A')} años"
+        f"Evaluando préstamo {prestamo_id} con cuota: {datos_evaluacion['cuota_mensual']} USD, "
+        f"edad: {datos_evaluacion.get('edad', 'N/A')} años"
     )
 
     try:
         evaluacion = crear_evaluacion_prestamo(datos_evaluacion, db)
+        _actualizar_estado_evaluado(prestamo, prestamo_id, db)
 
-        # IMPORTANTE: Cambiar estado a EVALUADO después de completar la evaluación
-        # Esto permite que aparezca el icono de "Aprobar Crédito" en el dashboard
-        if prestamo.estado in ["DRAFT", "EN_REVISION"]:
-            prestamo.estado = "EVALUADO"
-            db.commit()
-            logger.info(f"Préstamo {prestamo_id} cambiado a estado EVALUADO después de evaluación de riesgo")
-
-        # IMPORTANTE: La evaluación solo genera SUGERENCIAS
-        # El humano (admin) debe decidir si aprobar o rechazar
-        # NO se aprueba automáticamente, solo se marca como candidato para aprobación
         if evaluacion.decision_final == "APROBADO_AUTOMATICO":
             logger.info(
                 f"Préstamo {prestamo_id} es candidato para aprobación "
@@ -1064,90 +1147,8 @@ def evaluar_riesgo_prestamo(
                 "Usar endpoint '/aplicar-condiciones-aprobacion' para aprobar manualmente."
             )
 
-        return {
-            "prestamo_id": prestamo_id,
-            "puntuacion_total": float(evaluacion.puntuacion_total or 0),
-            "clasificacion_riesgo": evaluacion.clasificacion_riesgo,
-            "decision_final": evaluacion.decision_final,
-            "requiere_aprobacion_manual": evaluacion.decision_final == "APROBADO_AUTOMATICO",
-            "mensaje": (
-                "✅ Préstamo candidato para aprobación. Debe ser aprobado manualmente con tasa sugerida."
-                if evaluacion.decision_final == "APROBADO_AUTOMATICO"
-                else "⚠️ Revisar antes de aprobar"
-            ),
-            "sugerencias": {
-                "tasa_interes_sugerida": float(evaluacion.tasa_interes_aplicada or 0),
-                "plazo_maximo_sugerido": evaluacion.plazo_maximo,
-                "enganche_minimo_sugerido": float(evaluacion.enganche_minimo or 0),
-                "requisitos_adicionales": evaluacion.requisitos_adicionales,
-            },
-            "tasa_interes_aplicada": float(evaluacion.tasa_interes_aplicada or 0),
-            "plazo_maximo": evaluacion.plazo_maximo,
-            "enganche_minimo": float(evaluacion.enganche_minimo or 0),
-            "requisitos_adicionales": evaluacion.requisitos_adicionales,
-            "detalle_criterios": {
-                # Criterio 1: Capacidad de Pago (29 puntos)
-                "ratio_endeudamiento": {
-                    "puntos": float(evaluacion.ratio_endeudamiento_puntos or 0),
-                    "calculo": float(evaluacion.ratio_endeudamiento_calculo or 0),
-                },
-                "ratio_cobertura": {
-                    "puntos": float(evaluacion.ratio_cobertura_puntos or 0),
-                    "calculo": float(evaluacion.ratio_cobertura_calculo or 0),
-                },
-                # Criterio 2: Estabilidad Laboral (23 puntos)
-                "antiguedad_trabajo": {
-                    "puntos": float(evaluacion.antiguedad_trabajo_puntos or 0),
-                    "meses": (float(evaluacion.meses_trabajo) if evaluacion.meses_trabajo else 0),
-                },
-                "tipo_empleo": {
-                    "puntos": float(evaluacion.tipo_empleo_puntos or 0),
-                    "descripcion": evaluacion.tipo_empleo_descripcion,
-                },
-                "sector_economico": {
-                    "puntos": float(evaluacion.sector_economico_puntos or 0),
-                    "descripcion": evaluacion.sector_economico_descripcion,
-                },
-                # Criterio 3: Referencias (9 puntos)
-                "referencias": {
-                    "puntos": float(evaluacion.referencias_puntos or 0),
-                    "descripcion": evaluacion.referencias_descripcion,
-                    "referencia1_calificacion": evaluacion.referencia1_calificacion,
-                    "referencia1_observaciones": evaluacion.referencia1_observaciones,
-                    "referencia2_calificacion": evaluacion.referencia2_calificacion,
-                    "referencia2_observaciones": evaluacion.referencia2_observaciones,
-                    "referencia3_calificacion": evaluacion.referencia3_calificacion,
-                    "referencia3_observaciones": evaluacion.referencia3_observaciones,
-                },
-                # Criterio 4: Arraigo Geográfico (7 puntos)
-                "arraigo_vivienda": float(evaluacion.arraigo_vivienda_puntos or 0),
-                "arraigo_familiar": float(evaluacion.arraigo_familiar_puntos or 0),
-                "arraigo_laboral": float(evaluacion.arraigo_laboral_puntos or 0),
-                # Criterio 5: Perfil Sociodemográfico (17 puntos)
-                "vivienda": {
-                    "puntos": float(evaluacion.vivienda_puntos or 0),
-                    "descripcion": evaluacion.vivienda_descripcion,
-                },
-                "estado_civil": {
-                    "puntos": float(evaluacion.estado_civil_puntos or 0),
-                    "descripcion": evaluacion.estado_civil_descripcion,
-                },
-                "hijos": {
-                    "puntos": float(evaluacion.hijos_puntos or 0),
-                    "descripcion": evaluacion.hijos_descripcion,
-                },
-                # Criterio 6: Edad (10 puntos)
-                "edad": {
-                    "puntos": float(evaluacion.edad_puntos or 0),
-                    "cliente": evaluacion.edad_cliente,
-                },
-                # Criterio 7: Capacidad de Maniobra (5 puntos)
-                "capacidad_maniobra": {
-                    "puntos": float(evaluacion.enganche_garantias_puntos or 0),
-                    "porcentaje_residual": float(evaluacion.enganche_garantias_calculo or 0),
-                },
-            },
-        }
+        return _construir_respuesta_evaluacion(evaluacion, prestamo_id)
+
     except Exception as e:
         logger.error(f"Error evaluando riesgo: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error evaluando riesgo: {str(e)}")

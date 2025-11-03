@@ -25,15 +25,19 @@ export function Notificaciones() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterEstado, setFilterEstado] = useState<string>('')
   const [filterCanal, setFilterCanal] = useState<string>('')
-  const [skip, setSkip] = useState(0)
-  const limit = 50
+  const [page, setPage] = useState(1)
+  const perPage = 20
 
   // Cargar notificaciones desde API
-  const { data: notificaciones = [], isLoading, error, refetch } = useQuery({
-    queryKey: ['notificaciones', filterEstado, skip, limit],
-    queryFn: () => notificacionService.listarNotificaciones(skip, limit, filterEstado || undefined),
+  const { data: notificacionesData, isLoading, error, refetch } = useQuery({
+    queryKey: ['notificaciones', filterEstado, page, perPage],
+    queryFn: () => notificacionService.listarNotificaciones(page, perPage, filterEstado || undefined),
     refetchInterval: 30000, // Refrescar cada 30 segundos
   })
+
+  const notificaciones = notificacionesData?.items || []
+  const total = notificacionesData?.total || 0
+  const totalPages = notificacionesData?.total_pages || 0
 
   // Cargar estadísticas
   const { data: estadisticas } = useQuery({
@@ -115,7 +119,7 @@ export function Notificaciones() {
     setSearchTerm('')
     setFilterEstado('')
     setFilterCanal('')
-    setSkip(0)
+    setPage(1)
   }
 
   return (
@@ -230,7 +234,7 @@ export function Notificaciones() {
                 value={filterEstado}
                 onChange={(e) => {
                   setFilterEstado(e.target.value)
-                  setSkip(0)
+                  setPage(1)
                 }}
                 className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
@@ -367,22 +371,22 @@ export function Notificaciones() {
                 )}
 
                 {/* Paginación */}
-                {notificaciones.length >= limit && (
+                {totalPages > 1 && (
                   <div className="flex justify-center items-center space-x-2 pt-4">
                     <Button 
                       variant="outline" 
-                      onClick={() => setSkip(Math.max(0, skip - limit))}
-                      disabled={skip === 0}
+                      onClick={() => setPage(Math.max(1, page - 1))}
+                      disabled={page === 1}
                     >
                       Anterior
                     </Button>
                     <span className="text-sm text-gray-600">
-                      Página {Math.floor(skip / limit) + 1}
+                      Página {page} de {totalPages} ({total} total)
                     </span>
                     <Button 
                       variant="outline" 
-                      onClick={() => setSkip(skip + limit)}
-                      disabled={notificaciones.length < limit}
+                      onClick={() => setPage(Math.min(totalPages, page + 1))}
+                      disabled={page >= totalPages}
                     >
                       Siguiente
                     </Button>

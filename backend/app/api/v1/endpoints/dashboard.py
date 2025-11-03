@@ -9,6 +9,7 @@ from sqlalchemy import and_, cast, func, or_  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
+from app.core.cache import cache_result
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.pago import Pago
@@ -600,6 +601,7 @@ def aplicar_filtros_pago(
 
 
 @router.get("/admin")
+@cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos
 def dashboard_administrador(
     periodo: Optional[str] = Query("mes", description="Periodo: dia, semana, mes, año"),
     analista: Optional[str] = Query(None, description="Filtrar por analista"),
@@ -1268,6 +1270,7 @@ def resumen_general(
 
 
 @router.get("/kpis-principales")
+@cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos
 def obtener_kpis_principales(
     analista: Optional[str] = Query(None, description="Filtrar por analista"),
     concesionario: Optional[str] = Query(None, description="Filtrar por concesionario"),

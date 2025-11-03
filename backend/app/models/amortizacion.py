@@ -32,7 +32,7 @@ class Cuota(Base):
     numero_cuota = Column(Integer, nullable=False)  # 1, 2, 3, etc.
 
     # Fechas
-    fecha_vencimiento = Column(Date, nullable=False)  # YYYY-MM-DD
+    fecha_vencimiento = Column(Date, nullable=False, index=True)  # YYYY-MM-DD - INDEXADO para optimización de queries de mora
     fecha_pago = Column(Date, nullable=True)  # YYYY-MM-DD cuando se paga
 
     # Montos de la cuota

@@ -35,7 +35,7 @@ class PrestamoAuditoria(Base):
     observaciones = Column(Text, nullable=True)
 
     # Fecha del cambio
-    fecha_cambio = Column(TIMESTAMP, nullable=False, default=func.now())
+    fecha_cambio = Column(TIMESTAMP, nullable=False, default=func.now(), index=True)  # INDEXADO para optimización de listado de auditoría
 
     def __repr__(self):
         return (
