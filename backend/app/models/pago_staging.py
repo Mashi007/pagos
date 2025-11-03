@@ -30,9 +30,7 @@ class PagoStaging(Base):
     prestamo_id = Column(Integer, nullable=True, index=True)  # ID del crédito (puede ser NULL en staging)
     numero_cuota = Column(Integer, nullable=True)  # Número de cuota asociada (opcional)
     fecha_pago = Column(DateTime, nullable=True)  # Fecha de pago
-    fecha_registro = Column(
-        DateTime, default=func.now(), nullable=True, index=True
-    )  # Fecha de registro (automático)
+    fecha_registro = Column(DateTime, default=func.now(), nullable=True, index=True)  # Fecha de registro (automático)
     monto_pagado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=True)
     numero_documento = Column(String(DOCUMENTO_LENGTH), nullable=True, index=True)
     institucion_bancaria = Column(String(100), nullable=True)  # Institución bancaria
@@ -63,4 +61,3 @@ class PagoStaging(Base):
 
     def __repr__(self):
         return f"<PagoStaging(id={self.id}, cedula={self.cedula_cliente or self.cedula}, monto={self.monto_pagado}, estado={self.estado})>"
-
