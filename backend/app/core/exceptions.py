@@ -137,4 +137,3 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         },
         headers={"X-Request-ID": request_id} if request_id else {},
     )
-

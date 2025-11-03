@@ -198,7 +198,7 @@ def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
 def invalidate_cache(pattern: str):
     """
     Invalidar cache por patrón (requiere implementación específica según backend)
-    
+
     Args:
         pattern: Patrón para buscar claves a invalidar
     """
@@ -210,4 +210,3 @@ def invalidate_cache(pattern: str):
         logger.info(f"Invalidado {len(keys_to_delete)} entradas de cache con patrón: {pattern}")
     else:
         logger.warning("Invalidación por patrón no implementada para este backend")
-

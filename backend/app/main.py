@@ -5,6 +5,7 @@ Configuración central de la aplicación y registro de endpoints
 
 import logging
 import sys
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -12,7 +13,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-import uuid
 
 # Routers
 from app.api.v1.endpoints import (
@@ -76,13 +76,13 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         # Generar Request ID único
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
-        
+
         # Procesar request
         response = await call_next(request)
-        
+
         # Agregar Request ID al header de respuesta
         response.headers["X-Request-ID"] = request_id
-        
+
         return response
 
 

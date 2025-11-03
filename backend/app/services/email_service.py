@@ -21,7 +21,7 @@ class EmailService:
     def __init__(self, db: Optional[Session] = None):
         """
         Inicializar servicio de email
-        
+
         Args:
             db: Sesión de base de datos opcional para leer configuración desde BD
         """
@@ -43,14 +43,12 @@ class EmailService:
         if self.db:
             try:
                 from app.models.configuracion_sistema import ConfiguracionSistema
-                
-                configs = self.db.query(ConfiguracionSistema).filter(
-                    ConfiguracionSistema.categoria == "EMAIL"
-                ).all()
+
+                configs = self.db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "EMAIL").all()
 
                 if configs:
                     config_dict = {config.clave: config.valor for config in configs}
-                    
+
                     # Actualizar valores si existen en BD
                     if config_dict.get("smtp_host"):
                         self.smtp_server = config_dict["smtp_host"]
@@ -69,13 +67,13 @@ class EmailService:
                         self.from_name = config_dict["from_name"]
                     if config_dict.get("smtp_use_tls"):
                         self.smtp_use_tls = config_dict["smtp_use_tls"].lower() in ("true", "1", "yes", "on")
-                    
+
                     logger.info("✅ Configuración de email cargada desde base de datos")
                     return
 
             except Exception as e:
                 logger.warning(f"⚠️ No se pudo cargar configuración de email desde BD: {str(e)}. Usando valores por defecto.")
-        
+
         logger.debug("📧 Usando configuración de email por defecto desde settings")
 
     def send_email(self, to_emails: List[str], subject: str, body: str, is_html: bool = False) -> Dict[str, Any]:
