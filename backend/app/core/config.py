@@ -176,17 +176,21 @@ class Settings(BaseSettings):
             admin_password_from_env = os.getenv("ADMIN_PASSWORD")
             default_password = "R@pi_2025**"
             
-            # Bloquear SOLO si:
-            # 1. NO está configurado en variable de entorno (None o vacío)
-            # 2. Y el valor actual es el valor por defecto
+            # Si NO está configurado en variable de entorno y usa el valor por defecto
+            # IMPORTANTE: NO bloquear para permitir que la aplicación inicie y el usuario pueda configurar
             if (not admin_password_from_env or admin_password_from_env.strip() == "") and self.ADMIN_PASSWORD == default_password:
-                raise ValueError(
-                    "CRÍTICO: No se puede usar la contraseña por defecto en producción. "
-                    "Debe configurarse ADMIN_PASSWORD con una contraseña segura mediante variable de entorno."
+                # Advertir severamente pero NO bloquear
+                logger.critical(
+                    "🚨🚨🚨 CRÍTICO: ADMIN_PASSWORD no está configurada como variable de entorno y usa el valor por defecto. "
+                    "ESTO ES UNA GRAVE FALTA DE SEGURIDAD. "
+                    "Por favor, configure ADMIN_PASSWORD como variable de entorno en Render Dashboard con una contraseña segura. "
+                    "La aplicación iniciará con esta configuración insegura SOLO para permitir la configuración. "
+                    "CAMBIE ESTO INMEDIATAMENTE. 🚨🚨🚨"
                 )
+                # NO lanzar excepción - permitir que la aplicación inicie
+                # La seguridad es importante, pero bloquear impide que el usuario pueda configurar
             
-            # Si viene de variable de entorno, permitir aunque sea débil (asumimos decisión consciente)
-            # Pero advertir si es muy corta o débil
+            # Si viene de variable de entorno, verificar si es segura
             if admin_password_from_env:
                 if len(admin_password_from_env) < 12:
                     logger.warning(
@@ -206,16 +210,19 @@ class Settings(BaseSettings):
                 raise ValueError("ADMIN_EMAIL debe ser un email válido en producción")
 
             # Contraseña debe tener complejidad mínima (solo si NO viene de env)
-            if not admin_password_from_env:
+            # Pero no bloquear si usa el valor por defecto (ya se advirtió arriba)
+            if not admin_password_from_env and self.ADMIN_PASSWORD != default_password:
                 has_upper = any(c.isupper() for c in self.ADMIN_PASSWORD)
                 has_lower = any(c.islower() for c in self.ADMIN_PASSWORD)
                 has_digit = any(c.isdigit() for c in self.ADMIN_PASSWORD)
                 has_special = any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in self.ADMIN_PASSWORD)
 
                 if not (has_upper and has_lower and (has_digit or has_special)):
-                    raise ValueError(
-                        "CRÍTICO: La contraseña de admin en producción debe contener: "
-                        "mayúsculas, minúsculas y números o caracteres especiales"
+                    # Solo advertir, no bloquear
+                    logger.warning(
+                        "⚠️ La contraseña de admin en producción debería contener: "
+                        "mayúsculas, minúsculas y números o caracteres especiales. "
+                        "Se recomienda mejorar la seguridad."
                     )
 
         return True

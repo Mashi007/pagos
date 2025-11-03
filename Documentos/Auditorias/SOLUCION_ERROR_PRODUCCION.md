@@ -19,16 +19,17 @@ Debe configurarse ADMIN_PASSWORD con una contraseña segura mediante variable de
 
 ## ✅ SOLUCIÓN IMPLEMENTADA
 
-La validación ahora es más inteligente:
+La validación ahora NO BLOQUEA la aplicación:
 
 ### **Antes:**
 - ❌ Bloqueaba SIEMPRE si la contraseña era el valor por defecto
-- ❌ No diferenciaba si venía de variable de entorno o del código
+- ❌ La aplicación no podía iniciar sin configurar la variable
 
 ### **Después:**
-- ✅ Bloquea SOLO si NO está configurada en variable de entorno
-- ✅ Permite si está configurada explícitamente (aunque sea débil)
-- ✅ Advierte si es débil pero no bloquea si viene de env
+- ✅ **NO bloquea** - La aplicación inicia aunque use el valor por defecto
+- ✅ **Advierte severamente** - Logs críticos indican la falta de seguridad
+- ✅ **Permite configuración** - El usuario puede configurar la variable y reiniciar
+- ✅ Si está configurada desde env, solo advierte si es débil
 
 ---
 
