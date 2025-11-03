@@ -28,7 +28,7 @@ class NotificacionAutomaticaService:
 
     def __init__(self, db: Session):
         self.db = db
-        self.email_service = EmailService()
+        self.email_service = EmailService(db=db)
 
     def obtener_cuotas_pendientes(self) -> List[Cuota]:
         """

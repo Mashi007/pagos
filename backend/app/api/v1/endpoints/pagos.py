@@ -786,8 +786,6 @@ def _aplicar_monto_a_cuota(cuota, monto_aplicar: Decimal, fecha_pago: date, fech
     if monto_aplicar <= Decimal("0.00"):
         return False
 
-    estado_previo_completo = cuota.total_pagado >= cuota.monto_cuota
-
     capital_aplicar, interes_aplicar = _calcular_proporcion_capital_interes(cuota, monto_aplicar)
 
     cuota.capital_pagado += capital_aplicar

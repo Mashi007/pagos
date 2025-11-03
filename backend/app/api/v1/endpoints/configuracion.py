@@ -669,7 +669,7 @@ def probar_configuracion_email(db: Session = Depends(get_db), current_user: User
         from app.services.email_service import EmailService
 
         # Actualizar configuración global temporalmente
-        email_service = EmailService()
+        email_service = EmailService(db=db)
         result = email_service.send_email(
             to_emails=[current_user.email],
             subject="Prueba de configuración - RapiCredit",

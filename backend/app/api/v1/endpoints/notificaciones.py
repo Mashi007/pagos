@@ -91,7 +91,7 @@ async def enviar_notificacion(
 
         # Enviar según canal
         if notificacion.canal == "EMAIL":
-            email_service = EmailService()
+            email_service = EmailService(db=db)
             background_tasks.add_task(
                 email_service.send_email,
                 to_emails=[str(cliente.email)],
@@ -163,7 +163,7 @@ async def envio_masivo(
             cliente = next(c for c in clientes if c.id == notif.cliente_id)
 
             if request.canal == "EMAIL":
-                email_service = EmailService()
+                email_service = EmailService(db=db)
                 background_tasks.add_task(
                     email_service.send_email,
                     to_emails=[str(cliente.email)],
@@ -691,7 +691,7 @@ async def enviar_notificacion_con_plantilla(
 
         # Enviar email en background
         if cliente.email:
-            email_service = EmailService()
+            email_service = EmailService(db=db)
             background_tasks.add_task(
                 email_service.send_email,
                 to_emails=[str(cliente.email)],
