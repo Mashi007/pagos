@@ -20,6 +20,109 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _calcular_periodos(periodo: str, hoy: date) -> tuple[date, date]:
+    """Calcula fecha_inicio_periodo y fecha_fin_periodo_anterior según el período"""
+    if periodo == "mes":
+        fecha_inicio_periodo = date(hoy.year, hoy.month, 1)
+        fecha_fin_periodo_anterior = fecha_inicio_periodo - timedelta(days=1)
+    elif periodo == "semana":
+        fecha_inicio_periodo = hoy - timedelta(days=hoy.weekday())
+        fecha_fin_periodo_anterior = fecha_inicio_periodo - timedelta(days=1)
+    elif periodo == "año":
+        fecha_inicio_periodo = date(hoy.year, 1, 1)
+        fecha_fin_periodo_anterior = date(hoy.year - 1, 12, 31)
+    else:  # dia
+        fecha_inicio_periodo = hoy
+        fecha_fin_periodo_anterior = hoy - timedelta(days=1)
+    return fecha_inicio_periodo, fecha_fin_periodo_anterior
+
+
+def _calcular_cartera_anterior(db: Session, periodo: str, fecha_fin_periodo_anterior: date,
+                               analista: Optional[str], concesionario: Optional[str],
+                               modelo: Optional[str], cartera_total: Decimal) -> float:
+    """Calcula la cartera anterior según el período"""
+    if periodo == "dia":
+        return float(cartera_total)
+
+    cartera_anterior_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
+        Prestamo.estado == "APROBADO",
+        func.date(Prestamo.fecha_registro) <= fecha_fin_periodo_anterior,
+    )
+    cartera_anterior_query = FiltrosDashboard.aplicar_filtros_prestamo(
+        cartera_anterior_query, analista, concesionario, modelo, None, None
+    )
+    return float(cartera_anterior_query.scalar() or Decimal("0"))
+
+
+def _calcular_total_cobrado_mes(db: Session, primer_dia: date, ultimo_dia: date,
+                                analista: Optional[str], concesionario: Optional[str],
+                                modelo: Optional[str]) -> Decimal:
+    """Calcula el total cobrado en un mes (solo pagos conciliados)"""
+    query = db.query(func.sum(Pago.monto_pagado)).filter(
+        func.date(Pago.fecha_pago) >= primer_dia,
+        func.date(Pago.fecha_pago) <= ultimo_dia,
+        Pago.conciliado.is_(True),
+    )
+    if analista or concesionario or modelo:
+        query = query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+    query = FiltrosDashboard.aplicar_filtros_pago(query, analista, concesionario, modelo, None, None)
+    return query.scalar() or Decimal("0")
+
+
+def _calcular_tasa_recuperacion(db: Session, primer_dia: date, ultimo_dia: date,
+                                analista: Optional[str], concesionario: Optional[str],
+                                modelo: Optional[str]) -> float:
+    """Calcula la tasa de recuperación mensual"""
+    # Cuotas a cobrar del mes
+    cuotas_a_cobrar_query = (
+        db.query(func.sum(Cuota.monto_cuota))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            func.date(Cuota.fecha_vencimiento) >= primer_dia,
+            func.date(Cuota.fecha_vencimiento) <= ultimo_dia,
+            Prestamo.estado == "APROBADO",
+        )
+    )
+    cuotas_a_cobrar_query = FiltrosDashboard.aplicar_filtros_cuota(
+        cuotas_a_cobrar_query, analista, concesionario, modelo, None, None
+    )
+    total_a_cobrar = float(cuotas_a_cobrar_query.scalar() or Decimal("0"))
+
+    # Cuotas pagadas del mes
+    cuotas_pagadas_query = (
+        db.query(func.count(Cuota.id))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            Cuota.estado == "PAGADO",
+            Cuota.fecha_pago.isnot(None),
+            func.date(Cuota.fecha_pago) >= primer_dia,
+            func.date(Cuota.fecha_pago) <= ultimo_dia,
+            Prestamo.estado == "APROBADO",
+        )
+    )
+    cuotas_pagadas_query = FiltrosDashboard.aplicar_filtros_cuota(
+        cuotas_pagadas_query, analista, concesionario, modelo, None, None
+    )
+    cuotas_pagadas = cuotas_pagadas_query.scalar() or 0
+
+    # Total cuotas planificadas
+    total_cuotas_query = (
+        db.query(func.count(Cuota.id))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            func.date(Cuota.fecha_vencimiento) >= primer_dia,
+            func.date(Cuota.fecha_vencimiento) <= ultimo_dia,
+            Prestamo.estado == "APROBADO",
+        )
+    )
+    total_cuotas_query = FiltrosDashboard.aplicar_filtros_cuota(
+        total_cuotas_query, analista, concesionario, modelo, None, None
+    )
+    total_cuotas = total_cuotas_query.scalar() or 0
+
+    return (cuotas_pagadas / total_cuotas * 100) if total_cuotas > 0 else 0
+
+
 def _normalizar_valor(valor: Optional[str]) -> Optional[str]:
     """Normaliza un valor: trim, validar no vacío"""
     if not valor:
@@ -440,97 +543,24 @@ def dashboard_administrador(
         # cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
 
         # 15. CÁLCULO DE PERÍODOS ANTERIORES
-        if periodo == "mes":
-            fecha_inicio_periodo = date(hoy.year, hoy.month, 1)
-            fecha_fin_periodo_anterior = fecha_inicio_periodo - timedelta(days=1)
-        elif periodo == "semana":
-            fecha_inicio_periodo = hoy - timedelta(days=hoy.weekday())
-            fecha_fin_periodo_anterior = fecha_inicio_periodo - timedelta(days=1)
-        elif periodo == "año":
-            fecha_inicio_periodo = date(hoy.year, 1, 1)
-            fecha_fin_periodo_anterior = date(hoy.year - 1, 12, 31)
-        else:  # dia
-            fecha_inicio_periodo = hoy
-            # fecha_inicio_periodo_anterior = hoy - timedelta(days=1)  # No se usa en período día
-            fecha_fin_periodo_anterior = hoy - timedelta(days=1)
+        fecha_inicio_periodo, fecha_fin_periodo_anterior = _calcular_periodos(periodo, hoy)
 
         # Cartera anterior - Calcular desde BD histórica
-        if periodo == "mes":
-            # Mes anterior: cartera total al final del mes anterior
-            fecha_fin_mes_anterior = fecha_fin_periodo_anterior
-            cartera_anterior_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-                Prestamo.estado == "APROBADO",
-                func.date(Prestamo.fecha_registro) <= fecha_fin_mes_anterior,
-            )
-            cartera_anterior_query = FiltrosDashboard.aplicar_filtros_prestamo(
-                cartera_anterior_query,
-                analista,
-                concesionario,
-                modelo,
-                None,  # No filtrar por fechas para obtener histórico
-                None,
-            )
-            cartera_anterior_val = float(cartera_anterior_query.scalar() or Decimal("0"))
-        elif periodo == "semana":
-            # Semana anterior: cartera al inicio de la semana anterior
-            cartera_anterior_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-                Prestamo.estado == "APROBADO",
-                func.date(Prestamo.fecha_registro) <= fecha_fin_periodo_anterior,
-            )
-            cartera_anterior_query = FiltrosDashboard.aplicar_filtros_prestamo(
-                cartera_anterior_query,
-                analista,
-                concesionario,
-                modelo,
-                None,
-                None,
-            )
-            cartera_anterior_val = float(cartera_anterior_query.scalar() or Decimal("0"))
-        elif periodo == "año":
-            # Año anterior: cartera al final del año anterior
-            cartera_anterior_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-                Prestamo.estado == "APROBADO",
-                func.date(Prestamo.fecha_registro) <= fecha_fin_periodo_anterior,
-            )
-            cartera_anterior_query = FiltrosDashboard.aplicar_filtros_prestamo(
-                cartera_anterior_query,
-                analista,
-                concesionario,
-                modelo,
-                None,
-                None,
-            )
-            cartera_anterior_val = float(cartera_anterior_query.scalar() or Decimal("0"))
-        else:  # dia
-            cartera_anterior_val = float(cartera_total)
+        cartera_anterior_val = _calcular_cartera_anterior(
+            db, periodo, fecha_fin_periodo_anterior, analista, concesionario, modelo, cartera_total
+        )
 
         # 16. TOTAL COBRADO EN EL MES ACTUAL - SOLO PAGOS CONCILIADOS
-        # ✅ Si es período mensual, calcular solo pagos conciliados del mes actual
-        hoy = date.today()
         año_actual = hoy.year
         mes_actual = hoy.month
         primer_dia_mes = date(año_actual, mes_actual, 1)
         ultimo_dia_mes = date(año_actual, mes_actual, monthrange(año_actual, mes_actual)[1])
 
-        # Total cobrado del mes actual (solo pagos conciliados)
-        total_cobrado_mes_query = db.query(func.sum(Pago.monto_pagado)).filter(
-            func.date(Pago.fecha_pago) >= primer_dia_mes,
-            func.date(Pago.fecha_pago) <= ultimo_dia_mes,
-            Pago.conciliado.is_(True),  # ✅ Solo pagos conciliados
+        total_cobrado_periodo = _calcular_total_cobrado_mes(
+            db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo
         )
-        if analista or concesionario or modelo:
-            total_cobrado_mes_query = total_cobrado_mes_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
-        total_cobrado_mes_query = FiltrosDashboard.aplicar_filtros_pago(
-            total_cobrado_mes_query,
-            analista,
-            concesionario,
-            modelo,
-            None,  # No aplicar filtros de fecha aquí (ya filtrado por mes)
-            None,
-        )
-        total_cobrado_periodo = total_cobrado_mes_query.scalar() or Decimal("0")
 
-        # Total cobrado mes anterior (solo pagos conciliados)
+        # Total cobrado mes anterior
         if mes_actual == 1:
             mes_anterior = 12
             año_anterior = año_actual - 1
@@ -540,22 +570,9 @@ def dashboard_administrador(
         primer_dia_mes_anterior = date(año_anterior, mes_anterior, 1)
         ultimo_dia_mes_anterior = date(año_anterior, mes_anterior, monthrange(año_anterior, mes_anterior)[1])
 
-        total_cobrado_anterior_query = db.query(func.sum(Pago.monto_pagado)).filter(
-            func.date(Pago.fecha_pago) >= primer_dia_mes_anterior,
-            func.date(Pago.fecha_pago) <= ultimo_dia_mes_anterior,
-            Pago.conciliado.is_(True),  # ✅ Solo pagos conciliados
+        total_cobrado_anterior = _calcular_total_cobrado_mes(
+            db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
         )
-        if analista or concesionario or modelo:
-            total_cobrado_anterior_query = total_cobrado_anterior_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
-        total_cobrado_anterior_query = FiltrosDashboard.aplicar_filtros_pago(
-            total_cobrado_anterior_query,
-            analista,
-            concesionario,
-            modelo,
-            None,
-            None,
-        )
-        total_cobrado_anterior = total_cobrado_anterior_query.scalar() or Decimal("0")
 
         # 17. TASA DE RECUPERACIÓN MENSUAL (cuotas pagadas del mes / cuotas a cobrar del mes)
         # Cuotas a cobrar del mes (planificadas)
