@@ -700,12 +700,14 @@ def listar_ultimos_pagos(
         from app.models.prestamo import Prestamo
 
         for pago in pagos_ultimos:
+            # PagoStaging puede tener cedula_cliente o cedula
+            cedula_cliente = pago.cedula_cliente or pago.cedula
             # ✅ Obtener TODOS los préstamos APROBADOS del cliente (no solo del último pago)
             prestamos_ids = [
                 p.id
                 for p in db.query(Prestamo.id)
                 .filter(
-                    Prestamo.cedula == pago.cedula_cliente,
+                    Prestamo.cedula == cedula_cliente,
                     Prestamo.estado == "APROBADO",  # ✅ Solo préstamos activos
                 )
                 .all()
@@ -739,7 +741,7 @@ def listar_ultimos_pagos(
 
                 # Logging detallado para verificación
                 logger.info(
-                    f"📊 [ultimos_pagos] Cliente {pago.cedula_cliente}: "
+                    f"📊 [ultimos_pagos] Cliente {cedula_cliente}: "
                     f"{len(prestamos_ids)} préstamos APROBADOS, "
                     f"{cuotas_atrasadas} cuotas atrasadas "
                     f"(fecha_vencimiento < {hoy} AND total_pagado < monto_cuota) - "
@@ -775,7 +777,7 @@ def listar_ultimos_pagos(
 
             items.append(
                 {
-                    "cedula": pago.cedula_cliente,
+                    "cedula": cedula_cliente,
                     "pago_id": pago.id,
                     "prestamo_id": prestamo_id_mostrar,  # ✅ Usar prestamo_id del pago o del primer préstamo aprobado
                     "estado_pago": pago.estado,
@@ -1076,18 +1078,19 @@ def obtener_kpis_pagos(
             f"(desde {fecha_inicio_mes} hasta {fecha_fin_mes})"
         )
 
-        monto_cobrado_mes_query = db.query(func.sum(Pago.monto_pagado)).filter(
-            Pago.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
-            Pago.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
+        # Usar PagoStaging (donde están los datos reales)
+        monto_cobrado_mes_query = db.query(func.sum(PagoStaging.monto_pagado)).filter(
+            PagoStaging.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
+            PagoStaging.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
         )
         monto_cobrado_mes = monto_cobrado_mes_query.scalar() or Decimal("0.00")
 
         # Log detallado para verificación
         total_pagos_mes = (
-            db.query(func.count(Pago.id))
+            db.query(func.count(PagoStaging.id))
             .filter(
-                Pago.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
-                Pago.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
+                PagoStaging.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
+                PagoStaging.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
             )
             .scalar()
             or 0
@@ -1095,10 +1098,11 @@ def obtener_kpis_pagos(
 
         # ✅ DIAGNÓSTICO: Verificar algunos pagos reales del mes
         pagos_ejemplo_mes = (
-            db.query(Pago.id, Pago.monto_pagado, Pago.fecha_pago, Pago.cedula_cliente)
+            db.query(PagoStaging.id, PagoStaging.monto_pagado, PagoStaging.fecha_pago, 
+                     PagoStaging.cedula_cliente, PagoStaging.cedula)
             .filter(
-                Pago.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
-                Pago.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
+                PagoStaging.fecha_pago >= datetime.combine(fecha_inicio_mes, datetime.min.time()),
+                PagoStaging.fecha_pago < datetime.combine(fecha_fin_mes, datetime.min.time()),
             )
             .limit(5)
             .all()
