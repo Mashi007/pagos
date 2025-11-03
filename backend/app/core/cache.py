@@ -168,6 +168,7 @@ def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
         is_async = inspect.iscoroutinefunction(func)
 
         if is_async:
+
             @wraps(func)
             async def async_wrapper(*args, **kwargs):
                 # Construir clave del cache
@@ -179,6 +180,7 @@ def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
                 # Incluir argumentos en la clave
                 if args or kwargs:
                     import hashlib
+
                     key_data = json.dumps({"args": str(args), "kwargs": str(kwargs)}, sort_keys=True)
                     key_hash = hashlib.md5(key_data.encode()).hexdigest()[:8]
                     cache_key = f"{cache_key}:{key_hash}"
@@ -200,6 +202,7 @@ def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
 
             return async_wrapper
         else:
+
             @wraps(func)
             def sync_wrapper(*args, **kwargs):
                 # Construir clave del cache
@@ -211,6 +214,7 @@ def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
                 # Incluir argumentos en la clave
                 if args or kwargs:
                     import hashlib
+
                     key_data = json.dumps({"args": str(args), "kwargs": str(kwargs)}, sort_keys=True)
                     key_hash = hashlib.md5(key_data.encode()).hexdigest()[:8]
                     cache_key = f"{cache_key}:{key_hash}"

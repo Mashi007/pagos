@@ -29,7 +29,9 @@ class Pago(Base):
     prestamo_id = Column(Integer, nullable=True, index=True)  # ID del crédito
     numero_cuota = Column(Integer, nullable=True)  # Número de cuota asociada (opcional)
     fecha_pago = Column(DateTime, nullable=False)  # Fecha de pago (manual)
-    fecha_registro = Column(DateTime, default=func.now(), nullable=False, index=True)  # Fecha de registro (automático) - INDEXADO para optimización
+    fecha_registro = Column(
+        DateTime, default=func.now(), nullable=False, index=True
+    )  # Fecha de registro (automático) - INDEXADO para optimización
     monto_pagado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=False)
     numero_documento = Column(String(DOCUMENTO_LENGTH), nullable=False, index=True)
     institucion_bancaria = Column(String(100), nullable=True)  # Institución bancaria
