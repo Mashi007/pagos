@@ -5,7 +5,7 @@ Endpoints para el módulo de Pagos
 import logging
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query  # type: ignore[import-untyped]
 from sqlalchemy import func, or_, text  # type: ignore[import-untyped]
@@ -1221,6 +1221,8 @@ def obtener_kpis_pagos(
                   AND fecha_pago::timestamp < :fecha_fin
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
+                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                  AND monto_pagado::numeric >= 0
             """
             ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
         )
@@ -1238,7 +1240,8 @@ def obtener_kpis_pagos(
                   AND fecha_pago::timestamp < :fecha_fin
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
-                  AND monto_pagado::numeric > 0
+                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                  AND monto_pagado::numeric >= 0
             """
             ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
         )
@@ -1257,7 +1260,8 @@ def obtener_kpis_pagos(
                   AND fecha_pago::timestamp < :fecha_fin
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
-                  AND monto_pagado::numeric > 0
+                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                  AND monto_pagado::numeric >= 0
                 LIMIT 5
             """
             ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
@@ -1845,7 +1849,7 @@ def estadisticas_pagos_staging(
 
         con_monto = (
             db.query(func.count(PagoStaging.id))
-            .filter(PagoStaging.monto_pagado.isnot(None), text("pagos_staging.monto_pagado::numeric > 0"))
+            .filter(PagoStaging.monto_pagado.isnot(None), text("pagos_staging.monto_pagado::numeric >= 0"))
             .scalar()
             or 0
         )
@@ -2113,7 +2117,7 @@ def verificar_conexion_pagos_staging(
             con_fecha = db.query(func.count(PagoStaging.id)).filter(PagoStaging.fecha_pago.isnot(None)).scalar() or 0
             con_monto = (
                 db.query(func.count(PagoStaging.id))
-                .filter(PagoStaging.monto_pagado.isnot(None), text("pagos_staging.monto_pagado::numeric > 0"))
+                .filter(PagoStaging.monto_pagado.isnot(None), text("pagos_staging.monto_pagado::numeric >= 0"))
                 .scalar()
                 or 0
             )
