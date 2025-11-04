@@ -80,8 +80,8 @@ export function PagosListResumen() {
       const { getErrorMessage, isAxiosError } = await import('@/types/errors')
       const errorMessage = isAxiosError(error) ? error.response?.data?.detail || getErrorMessage(error) : getErrorMessage(error)
       toast.dismiss()
-      console.error('Error descargando PDF:', error)
-      toast.error(error.response?.data?.detail || 'Error al descargar PDF')
+      console.error('Error descargando PDF:', errorMessage)
+      toast.error(errorMessage || 'Error al descargar PDF')
     }
   }
 
