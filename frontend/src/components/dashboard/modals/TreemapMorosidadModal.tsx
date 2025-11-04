@@ -123,6 +123,7 @@ export function TreemapMorosidadModal({ isOpen, onClose }: TreemapMorosidadModal
 
   // Componente personalizado para cada celda del Treemap
   const CustomCell = ({ x, y, width, height, payload }: { x?: number; y?: number; width?: number; height?: number; payload?: { name?: string; value?: number } }) => {
+    if (!x || !y || !width || !height || !payload || typeof payload.value !== 'number') return null
     const color = getColor(payload.value, maxValue)
     return (
       <g>
@@ -146,7 +147,7 @@ export function TreemapMorosidadModal({ isOpen, onClose }: TreemapMorosidadModal
               fontSize={14}
               fontWeight="bold"
             >
-              {payload.name}
+              {payload.name || 'N/A'}
             </text>
             <text
               x={x + width / 2}

@@ -243,18 +243,18 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         }
       }
       
-      const direccionData = parsearDireccion(cliente.direccion || '')
+      const direccionData = parsearDireccion(typeof cliente.direccion === 'string' ? cliente.direccion : '')
       
-      const newFormData = {
-        cedula: cliente.cedula || '',
-        nombres: nombresValue,  // ✅ nombres unificados
-        telefono: extraerNumeroTelefono(cliente.telefono || ''),  // ✅ Extraer solo el número (sin +58)
-        email: cliente.email || '',
+      const newFormData: FormData = {
+        cedula: typeof cliente.cedula === 'string' ? cliente.cedula : '',
+        nombres: typeof nombresValue === 'string' ? nombresValue : '',  // ✅ nombres unificados
+        telefono: extraerNumeroTelefono(typeof cliente.telefono === 'string' ? cliente.telefono : ''),  // ✅ Extraer solo el número (sin +58)
+        email: typeof cliente.email === 'string' ? cliente.email : '',
         ...direccionData,
-        fechaNacimiento: convertirFechaLocal(cliente.fecha_nacimiento || ''), // ✅ Convertir ISO a DD/MM/YYYY
-        ocupacion: cliente.ocupacion || '',
-        estado: cliente.estado || 'ACTIVO',  // ✅ Mantener estado del cliente existente en edición
-        notas: cliente.notas || 'No hay observacion'
+        fechaNacimiento: convertirFechaLocal(typeof cliente.fecha_nacimiento === 'string' ? cliente.fecha_nacimiento : ''), // ✅ Convertir ISO a DD/MM/YYYY
+        ocupacion: typeof cliente.ocupacion === 'string' ? cliente.ocupacion : '',
+        estado: (typeof cliente.estado === 'string' && ['ACTIVO', 'INACTIVO', 'FINALIZADO'].includes(cliente.estado)) ? cliente.estado as 'ACTIVO' | 'INACTIVO' | 'FINALIZADO' : 'ACTIVO',  // ✅ Mantener estado del cliente existente en edición
+        notas: typeof cliente.notas === 'string' ? cliente.notas : 'No hay observacion'
       }
       
       console.log('📝 MODO EDITAR - Datos formateados para cargar:', newFormData)
@@ -893,10 +893,10 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
       logger.debug('Datos a enviar al backend', { clienteData })
 
-      if (cliente) {
+      if (cliente && typeof cliente.id === 'number') {
         // Editar cliente existente
         logger.info('Editando cliente existente', { clienteId: cliente.id })
-        await clienteService.updateCliente(cliente.id, clienteData)
+        await clienteService.updateCliente(String(cliente.id), clienteData)
         logger.info('Cliente actualizado exitosamente', { clienteId: cliente.id })
       } else {
         // Crear nuevo cliente

@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { pagoService, type PagoCreate } from '@/services/pagoService'
 import { usePrestamosByCedula } from '@/hooks/usePrestamos'
 import { useDebounce } from '@/hooks/useDebounce'
-import { getErrorMessage, isAxiosError } from '@/types/errors'
+import { getErrorMessage, isAxiosError, getErrorDetail } from '@/types/errors'
 
 interface RegistrarPagoFormProps {
   onClose: () => void
@@ -96,7 +96,10 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
       console.error(`❌ Error ${isEditing ? 'actualizando' : 'registrando'} pago:`, error)
       let errorMessage = getErrorMessage(error)
       if (isAxiosError(error)) {
-        errorMessage = error.response?.data?.detail || errorMessage
+        const detail = getErrorDetail(error)
+        if (detail) {
+          errorMessage = detail
+        }
       }
       setErrors({ general: errorMessage || `Error al ${isEditing ? 'actualizar' : 'registrar'} el pago` })
     } finally {
