@@ -32,3 +32,4 @@ SELECT
 FROM public.prestamos_staging;
 
 
+
