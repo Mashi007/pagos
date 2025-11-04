@@ -95,7 +95,9 @@ class FiltrosDashboard:
         return False
 
     @staticmethod
-    def _aplicar_filtros_prestamo(query: Query, analista: Optional[str], concesionario: Optional[str], modelo: Optional[str]) -> Query:
+    def _aplicar_filtros_prestamo(
+        query: Query, analista: Optional[str], concesionario: Optional[str], modelo: Optional[str]
+    ) -> Query:
         """Aplica filtros de préstamo a la query"""
         if analista:
             query = query.filter(or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista))

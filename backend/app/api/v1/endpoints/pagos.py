@@ -1054,7 +1054,9 @@ def _obtener_cuotas_pendientes(db: Session, prestamo_id: int) -> list:
     return cuotas
 
 
-def _aplicar_pago_a_cuotas_iterativas(cuotas: list, saldo_restante: Decimal, fecha_pago: date, fecha_hoy: date) -> tuple[int, Decimal]:
+def _aplicar_pago_a_cuotas_iterativas(
+    cuotas: list, saldo_restante: Decimal, fecha_pago: date, fecha_hoy: date
+) -> tuple[int, Decimal]:
     """Aplica el pago a las cuotas iterativamente"""
     cuotas_completadas = 0
 
@@ -1107,19 +1109,27 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
     logger.info(f"📋 [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id}: {len(cuotas)} cuotas no pagadas encontradas")
 
     if len(cuotas) == 0:
-        logger.warning(f"⚠️ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} no tiene cuotas pendientes. No se aplicará el pago.")
+        logger.warning(
+            f"⚠️ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} no tiene cuotas pendientes. No se aplicará el pago."
+        )
         return 0
 
     fecha_hoy = date.today()
-    cuotas_completadas, saldo_restante = _aplicar_pago_a_cuotas_iterativas(cuotas, pago.monto_pagado, pago.fecha_pago, fecha_hoy)
+    cuotas_completadas, saldo_restante = _aplicar_pago_a_cuotas_iterativas(
+        cuotas, pago.monto_pagado, pago.fecha_pago, fecha_hoy
+    )
 
     if saldo_restante > Decimal("0.00"):
         logger.info(f"📊 [aplicar_pago_a_cuotas] Saldo restante: ${saldo_restante}. Aplicando a siguiente cuota pendiente...")
-        cuotas_completadas += _aplicar_exceso_a_siguiente_cuota(db, pago.prestamo_id, saldo_restante, pago.fecha_pago, fecha_hoy)
+        cuotas_completadas += _aplicar_exceso_a_siguiente_cuota(
+            db, pago.prestamo_id, saldo_restante, pago.fecha_pago, fecha_hoy
+        )
 
     try:
         db.commit()
-        logger.info(f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id} aplicado exitosamente. Cuotas completadas: {cuotas_completadas}")
+        logger.info(
+            f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id} aplicado exitosamente. Cuotas completadas: {cuotas_completadas}"
+        )
     except Exception as e:
         logger.error(f"❌ [aplicar_pago_a_cuotas] Error al guardar cambios en BD: {str(e)}", exc_info=True)
         db.rollback()

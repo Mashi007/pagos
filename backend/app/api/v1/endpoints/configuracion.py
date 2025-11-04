@@ -412,6 +412,7 @@ async def upload_logo(
         extension = _obtener_extension_logo(logo.content_type)
 
         from app.core.config import settings
+
         uploads_dir = Path(settings.UPLOAD_DIR) if hasattr(settings, "UPLOAD_DIR") else Path("uploads")
         logos_dir = uploads_dir / "logos"
         logos_dir.mkdir(parents=True, exist_ok=True)
