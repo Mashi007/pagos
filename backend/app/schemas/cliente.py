@@ -1,5 +1,5 @@
 import re
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 
@@ -296,6 +296,8 @@ class ClienteResponse(ClienteBase):
     id: int
     activo: bool
     usuario_registro: str  # Email del usuario que registró
+    fecha_registro: Optional[datetime] = Field(None, description="Fecha de creación del cliente")
+    fecha_actualizacion: Optional[datetime] = Field(None, description="Fecha de última actualización del cliente")
 
     # Sobrescribir campo telefono para permitir datos históricos
     # (en lectura, aceptamos formatos no estándar para no romper datos existentes)

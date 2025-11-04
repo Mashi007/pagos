@@ -106,7 +106,7 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
             # Intentar parsear con diferentes formatos
             # Formato del Excel del usuario: MM/DD/YYYY (ej: 9/11/2025, 5/12/2025)
             fecha_pago = pd.to_datetime(fecha_pago_str, dayfirst=False).to_pydatetime()
-        except Exception as e:
+        except Exception:
             # Intentar formato alternativo
             try:
                 fecha_pago = pd.to_datetime(fecha_pago_str, format="%m/%d/%Y").to_pydatetime()

@@ -2,10 +2,8 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
-
-logger = logging.getLogger(__name__)
+from fastapi import APIRouter, Depends, HTTPException, Query, status  # type: ignore[import-untyped]
+from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.models.aprobacion import Aprobacion
@@ -15,6 +13,8 @@ from app.schemas.aprobacion import (
     AprobacionResponse,
     AprobacionUpdate,
 )
+
+logger = logging.getLogger(__name__)
 
 # Endpoints de Aprobaciones
 # Sistema de workflow para solicitudes que requieren aprobación

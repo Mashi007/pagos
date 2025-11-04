@@ -428,7 +428,7 @@ export function ClientesList() {
                   <TableHead>Cliente</TableHead>
                   <TableHead>Contacto</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>Fecha Creación</TableHead>
+                  <TableHead>Fecha Actualización</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -466,7 +466,11 @@ export function ClientesList() {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm text-gray-600">
-                        {cliente.fecha_registro ? formatDate(cliente.fecha_registro) : '01/10/2025'}
+                        {cliente.fecha_actualizacion 
+                          ? formatDate(cliente.fecha_actualizacion) 
+                          : cliente.fecha_registro 
+                            ? formatDate(cliente.fecha_registro) 
+                            : 'N/A'}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">

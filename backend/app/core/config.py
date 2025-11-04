@@ -453,7 +453,7 @@ except Exception as e:
                 "⚠️ CORS_ORIGINS no pudo ser parseado desde variable de entorno. "
                 "Usando valores por defecto que se filtrarán automáticamente."
             )
-        except Exception as e2:
+        except Exception:
             # Restaurar variable y dejar que falle normalmente
             if cors_env_backup:
                 os.environ["CORS_ORIGINS"] = cors_env_backup

@@ -496,7 +496,7 @@ def obtener_opciones_filtros(
         )
 
         result = db.execute(query_sql)
-        all_values = {row[0].strip() for row in result if row[0] and row[0].strip()}
+        all_values = {row[0].strip() for row in result if row[0] and row[0].strip()}  # type: ignore[assignment]
 
         # Separar en categorías (aproximado, ya que no podemos distinguir el origen)
         # Usar queries separadas optimizadas para categorías específicas
@@ -850,7 +850,7 @@ def dashboard_administrador(
 
         # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
 
-        total_cobrado_query = db.execute(text(query_sql).bindparams(**params))
+        # total_cobrado_query = db.execute(text(query_sql).bindparams(**params))
         # total_cobrado se calcula pero no se usa en la respuesta actual
         # total_cobrado = total_cobrado_query.scalar() or Decimal("0")
 
