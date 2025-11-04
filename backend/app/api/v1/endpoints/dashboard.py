@@ -717,9 +717,10 @@ def dashboard_administrador(
         cartera_total = base_prestamo_query.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0")
 
         # 2. CARTERA VENCIDA - Monto de préstamos con cuotas vencidas (no pagadas)
-        # ✅ USAR FiltrosDashboard para aplicar filtros automáticamente
+        # ✅ Usar select_from para evitar ambigüedad en JOIN
         cartera_vencida_query = (
             db.query(func.sum(Cuota.monto_cuota))
+            .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 and_(
@@ -776,10 +777,11 @@ def dashboard_administrador(
         clientes_activos = base_prestamo_query.with_entities(func.count(func.distinct(Prestamo.cedula))).scalar() or 0
 
         # 7. CLIENTES EN MORA - Clientes con cuotas vencidas
-        # ✅ USAR FiltrosDashboard para aplicar filtros automáticamente
+        # ✅ Usar select_from para evitar ambigüedad en JOIN
         clientes_mora_query = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
-            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 and_(
                     Cuota.fecha_vencimiento < hoy,
@@ -851,18 +853,21 @@ def dashboard_administrador(
         # 12. CUOTAS PAGADAS TOTALES
         cuotas_pagadas_query = (
             db.query(func.count(Cuota.id))
+            .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(Cuota.estado == "PAGADO", Prestamo.estado == "APROBADO")
         )
         # 13. CUOTAS PENDIENTES
         cuotas_pendientes_query = (
             db.query(func.count(Cuota.id))
+            .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(Cuota.estado == "PENDIENTE", Prestamo.estado == "APROBADO")
         )
         # 14. CUOTAS ATRASADAS
         cuotas_atrasadas_query = (
             db.query(func.count(Cuota.id))
+            .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 and_(
@@ -2464,48 +2469,63 @@ def obtener_evolucion_pagos(
             mes_inicio += 12
         fecha_inicio_query = date(año_inicio, mes_inicio, 1)
 
-        # Generar datos mensuales
+        # ✅ OPTIMIZACIÓN: Una sola query con GROUP BY en lugar de múltiples queries en loop
+        fecha_inicio_query_dt = datetime.combine(fecha_inicio_query, datetime.min.time())
+        hoy_dt = datetime.combine(hoy, datetime.max.time())
+
+        query_pagos = db.execute(
+            text(
+                """
+                SELECT 
+                    EXTRACT(YEAR FROM fecha_pago::timestamp)::integer as año,
+                    EXTRACT(MONTH FROM fecha_pago::timestamp)::integer as mes,
+                    COUNT(*) as cantidad,
+                    COALESCE(SUM(monto_pagado::numeric), 0) as monto_total
+                FROM pagos_staging
+                WHERE fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                  AND fecha_pago::timestamp >= :fecha_inicio
+                  AND fecha_pago::timestamp <= :fecha_fin
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                GROUP BY 
+                    EXTRACT(YEAR FROM fecha_pago::timestamp),
+                    EXTRACT(MONTH FROM fecha_pago::timestamp)
+                ORDER BY año, mes
+                """
+            ).bindparams(fecha_inicio=fecha_inicio_query_dt, fecha_fin=hoy_dt)
+        )
+        resultados = query_pagos.fetchall()
+
+        # Crear diccionario de resultados por año-mes para acceso rápido
+        pagos_por_mes: dict[tuple[int, int], dict[str, Any]] = {}
+        for row in resultados:
+            año = int(row.año)
+            mes = int(row.mes)
+            pagos_por_mes[(año, mes)] = {
+                "cantidad": int(row.cantidad),
+                "monto": float(row.monto_total or Decimal("0")),
+            }
+
+        # Generar datos mensuales (incluir todos los meses en el rango, incluso sin pagos)
         meses_data = []
         current_date = fecha_inicio_query
 
         while current_date <= hoy:
             año_mes = current_date.year
             num_mes = current_date.month
-            fecha_mes_inicio = date(año_mes, num_mes, 1)
             fecha_mes_fin = _obtener_fechas_mes_siguiente(num_mes, año_mes)
 
-            # Pagos del mes desde pagos_staging
-            fecha_mes_inicio_dt = datetime.combine(fecha_mes_inicio, datetime.min.time())
-            fecha_mes_fin_dt = datetime.combine(fecha_mes_fin, datetime.min.time())
-
-            query_pagos = db.execute(
-                text(
-                    """
-                    SELECT 
-                        COALESCE(COUNT(*), 0) as cantidad,
-                        COALESCE(SUM(monto_pagado::numeric), 0) as monto_total
-                    FROM pagos_staging
-                    WHERE fecha_pago IS NOT NULL
-                      AND fecha_pago != ''
-                      AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                      AND fecha_pago::timestamp >= :fecha_inicio
-                      AND fecha_pago::timestamp < :fecha_fin
-                      AND monto_pagado IS NOT NULL
-                      AND monto_pagado != ''
-                      AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-                """
-                ).bindparams(fecha_inicio=fecha_mes_inicio_dt, fecha_fin=fecha_mes_fin_dt)
-            )
-            resultado = query_pagos.first()
-
-            cantidad_pagos = resultado.cantidad if resultado else 0
-            monto_total = float(resultado.monto_total or Decimal("0")) if resultado else 0.0
+            # Obtener datos del mes (o valores por defecto si no hay pagos)
+            datos_mes = pagos_por_mes.get((año_mes, num_mes), {"cantidad": 0, "monto": 0.0})
 
             meses_data.append(
                 {
                     "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
-                    "pagos": cantidad_pagos,
-                    "monto": monto_total,
+                    "pagos": datos_mes["cantidad"],
+                    "monto": datos_mes["monto"],
                 }
             )
 
