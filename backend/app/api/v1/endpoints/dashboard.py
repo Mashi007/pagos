@@ -2322,6 +2322,7 @@ def obtener_cuentas_cobrar_tendencias(
 
 
 @router.get("/financiamiento-tendencia-mensual")
+@cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos
 def obtener_financiamiento_tendencia_mensual(
     meses: int = Query(12, description="Número de meses a mostrar (últimos N meses)"),
     analista: Optional[str] = Query(None),
@@ -2335,7 +2336,11 @@ def obtener_financiamiento_tendencia_mensual(
     """
     Tendencia mensual de financiamientos para gráfico de primera plana
     Últimos N meses con nuevos financiamientos y monto total mensual
+    ✅ OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
     """
+    import time
+    start_time = time.time()
+    
     try:
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
@@ -2350,9 +2355,62 @@ def obtener_financiamiento_tendencia_mensual(
                 mes_inicio += 12
             fecha_inicio_query = date(año_inicio, mes_inicio, 1)
 
-        # Generar datos mensuales
+        # Calcular fecha fin (hoy)
+        fecha_fin_query = hoy
+
+        # ✅ OPTIMIZACIÓN: Una sola query para obtener todos los nuevos financiamientos por mes con GROUP BY
+        start_query = time.time()
+        
+        # Construir filtros base
+        filtros_base = [Prestamo.estado == "APROBADO"]
+        if fecha_inicio_query:
+            filtros_base.append(Prestamo.fecha_registro >= fecha_inicio_query)
+        if fecha_fin_query:
+            filtros_base.append(Prestamo.fecha_registro <= fecha_fin_query)
+
+        # Query optimizada: GROUP BY año y mes
+        query_nuevos = (
+            db.query(
+                func.extract('year', Prestamo.fecha_registro).label('año'),
+                func.extract('month', Prestamo.fecha_registro).label('mes'),
+                func.count(Prestamo.id).label('cantidad'),
+                func.sum(Prestamo.total_financiamiento).label('monto_total')
+            )
+            .filter(*filtros_base)
+            .group_by(
+                func.extract('year', Prestamo.fecha_registro),
+                func.extract('month', Prestamo.fecha_registro)
+            )
+            .order_by(
+                func.extract('year', Prestamo.fecha_registro),
+                func.extract('month', Prestamo.fecha_registro)
+            )
+        )
+
+        # Aplicar filtros adicionales (si hay)
+        query_nuevos = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_nuevos, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+
+        resultados_nuevos = query_nuevos.all()
+        query_time = int((time.time() - start_query) * 1000)
+        logger.info(f"📊 [financiamiento-tendencia] Query completada en {query_time}ms, {len(resultados_nuevos)} meses")
+
+        # Crear diccionario de nuevos financiamientos por mes
+        nuevos_por_mes = {}
+        for row in resultados_nuevos:
+            año_mes = int(row.año)
+            num_mes = int(row.mes)
+            nuevos_por_mes[(año_mes, num_mes)] = {
+                "cantidad": row.cantidad or 0,
+                "monto": float(row.monto_total or Decimal("0"))
+            }
+
+        # Generar datos mensuales (incluyendo meses sin datos) y calcular acumulados
+        start_process = time.time()
         meses_data = []
         current_date = fecha_inicio_query
+        total_acumulado = Decimal("0")
 
         while current_date <= hoy:
             año_mes = current_date.year
@@ -2360,37 +2418,13 @@ def obtener_financiamiento_tendencia_mensual(
             fecha_mes_inicio = date(año_mes, num_mes, 1)
             fecha_mes_fin = _obtener_fechas_mes_siguiente(num_mes, año_mes)
 
-            # Nuevos financiamientos del mes (préstamos aprobados en el mes)
-            query_nuevos = db.query(
-                func.count(Prestamo.id).label("cantidad"), func.sum(Prestamo.total_financiamiento).label("monto_total")
-            ).filter(
-                Prestamo.estado == "APROBADO",
-                Prestamo.fecha_registro >= fecha_mes_inicio,
-                Prestamo.fecha_registro < fecha_mes_fin,
-            )
-
-            query_nuevos = FiltrosDashboard.aplicar_filtros_prestamo(
-                query_nuevos, analista, concesionario, modelo, fecha_inicio, fecha_fin
-            )
-
-            resultado = query_nuevos.first()
-            if resultado:
-                cantidad_nuevos = resultado.cantidad or 0
-                monto_nuevos = float(resultado.monto_total or Decimal("0"))
-            else:
-                cantidad_nuevos = 0
-                monto_nuevos = 0.0
-
-            # Total financiamiento acumulado hasta fin de mes (cartera vigente)
-            query_total = db.query(func.sum(Prestamo.total_financiamiento).label("total")).filter(
-                Prestamo.estado == "APROBADO", Prestamo.fecha_registro <= fecha_mes_fin
-            )
-
-            query_total = FiltrosDashboard.aplicar_filtros_prestamo(
-                query_total, analista, concesionario, modelo, fecha_inicio, fecha_fin
-            )
-
-            total_acumulado = float(query_total.scalar() or Decimal("0"))
+            # Obtener datos del mes (o valores por defecto si no hay)
+            datos_mes = nuevos_por_mes.get((año_mes, num_mes), {"cantidad": 0, "monto": Decimal("0")})
+            cantidad_nuevos = datos_mes["cantidad"]
+            monto_nuevos = datos_mes["monto"]
+            
+            # Calcular acumulado: sumar los nuevos financiamientos del mes
+            total_acumulado += Decimal(str(monto_nuevos))
 
             meses_data.append(
                 {
@@ -2398,14 +2432,18 @@ def obtener_financiamiento_tendencia_mensual(
                     "año": año_mes,
                     "mes_numero": num_mes,
                     "cantidad_nuevos": cantidad_nuevos,
-                    "monto_nuevos": monto_nuevos,
-                    "total_acumulado": total_acumulado,
+                    "monto_nuevos": float(monto_nuevos),
+                    "total_acumulado": float(total_acumulado),
                     "fecha_mes": fecha_mes_inicio.isoformat(),
                 }
             )
 
             # Avanzar al siguiente mes
             current_date = fecha_mes_fin
+
+        process_time = int((time.time() - start_process) * 1000)
+        total_time = int((time.time() - start_time) * 1000)
+        logger.info(f"⏱️ [financiamiento-tendencia] Tiempo total: {total_time}ms (query: {query_time}ms, process: {process_time}ms)")
 
         return {"meses": meses_data, "fecha_inicio": fecha_inicio_query.isoformat(), "fecha_fin": hoy.isoformat()}
 
