@@ -27,6 +27,7 @@ interface LogoCache {
   isChecking: boolean
   hasChecked: boolean
   version: number // Contador de versión para forzar actualizaciones
+  logoNotFound: boolean // ✅ Flag para recordar que el logo no existe (evitar requests repetidos)
 }
 
 const logoCache: LogoCache = {
@@ -34,6 +35,7 @@ const logoCache: LogoCache = {
   isChecking: false,
   hasChecked: false,
   version: 0,
+  logoNotFound: false, // ✅ Inicializar flag
 }
 
 // Listeners para notificar a todos los componentes cuando cambia el logo
@@ -100,25 +102,55 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           if (configResponse.ok) {
             const config = await configResponse.json()
             if (config.logo_filename) {
-              // Si tenemos el nombre del logo, usarlo directamente sin verificar HEAD
-              // El GET fallará si no existe, pero evitamos hacer HEAD innecesarios
+              // ✅ Si tenemos el nombre del logo, verificar primero si existe antes de intentar cargar
               const logoPath = `/api/v1/configuracion/logo/${config.logo_filename}`
-              const logoUrl = `${logoPath}?t=${Date.now()}`
               
-              // Confiar en que si está en la BD, el archivo existe
-              // Si no existe, el navegador mostrará el logo por defecto
-              logoCache.logoUrl = logoUrl
-              logoCache.hasChecked = true
-              logoCache.version += 1
-              setCustomLogoUrl(logoUrl)
-              setHasChecked(true)
-              setLogoVersion(logoCache.version)
-              clearTimeout(timeoutId)
-              logoCache.isChecking = false
-              // Notificar a todos los listeners sobre el logo cargado
-              notifyLogoListeners(logoUrl, logoCache.version)
-              console.log('✅ Logo cargado desde configuración:', config.logo_filename)
-              return
+              // Verificar si el logo existe con HEAD request (más ligero que GET)
+              try {
+                const headResponse = await fetch(logoPath, {
+                  method: 'HEAD',
+                  signal: controller.signal,
+                })
+                
+                if (headResponse.ok) {
+                  // Logo existe, usar URL con timestamp
+                  const logoUrl = `${logoPath}?t=${Date.now()}`
+                  logoCache.logoUrl = logoUrl
+                  logoCache.logoNotFound = false // ✅ Resetear flag
+                  logoCache.hasChecked = true
+                  logoCache.version += 1
+                  setCustomLogoUrl(logoUrl)
+                  setHasChecked(true)
+                  setLogoVersion(logoCache.version)
+                  clearTimeout(timeoutId)
+                  logoCache.isChecking = false
+                  notifyLogoListeners(logoUrl, logoCache.version)
+                  console.log('✅ Logo cargado desde configuración:', config.logo_filename)
+                  return
+                } else {
+                  // Logo no existe (404), marcar como no encontrado
+                  console.warn('⚠️ Logo no encontrado en servidor:', config.logo_filename)
+                  logoCache.logoNotFound = true
+                  logoCache.logoUrl = null
+                  logoCache.hasChecked = true
+                  logoCache.isChecking = false
+                  setHasChecked(true)
+                  clearTimeout(timeoutId)
+                  return
+                }
+              } catch (headError: any) {
+                // Si HEAD falla, asumir que no existe (evitar requests repetidos)
+                if (headError?.name !== 'AbortError') {
+                  console.warn('⚠️ Error verificando logo, asumiendo que no existe:', headError)
+                }
+                logoCache.logoNotFound = true
+                logoCache.logoUrl = null
+                logoCache.hasChecked = true
+                logoCache.isChecking = false
+                setHasChecked(true)
+                clearTimeout(timeoutId)
+                return
+              }
             } else {
               // Si no hay logo_filename en la configuración, no hay logo personalizado
               // No hacer solicitudes HEAD innecesarias
@@ -251,6 +283,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         // Actualizar cache y notificar a todos los listeners
         console.log('🔄 Actualizando logo (preview):', newLogoUrl)
         logoCache.logoUrl = newLogoUrl
+        logoCache.logoNotFound = false // ✅ Resetear flag cuando se actualiza el logo
         logoCache.hasChecked = true
         logoCache.version += 1
         notifyLogoListeners(newLogoUrl, logoCache.version)
@@ -267,7 +300,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
 
   // Si hay logo personalizado, mostrar imagen
   // Usar logoVersion como key para forzar re-render cuando cambia
-  if (customLogoUrl) {
+  if (customLogoUrl && !logoCache.logoNotFound) {
     return (
       <img
         key={`logo-${logoVersion}-${customLogoUrl}`}
@@ -276,11 +309,15 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         className={cn(sizeMap[size], className, 'object-contain')}
         role="img"
         onError={(e) => {
-          // Si falla la carga, intentar recargar sin timestamp
-          const urlWithoutTimestamp = customLogoUrl.split('?')[0]
-          if (e.currentTarget.src !== urlWithoutTimestamp) {
-            e.currentTarget.src = urlWithoutTimestamp
-          }
+          // ✅ Si falla la carga (404), marcar como no encontrado y evitar más intentos
+          console.warn('⚠️ Error cargando logo, marcando como no encontrado:', customLogoUrl)
+          logoCache.logoNotFound = true
+          logoCache.logoUrl = null
+          logoCache.version += 1
+          setCustomLogoUrl(null)
+          setHasChecked(true)
+          setLogoVersion(logoCache.version)
+          // No intentar recargar - el logo no existe
         }}
       />
     )
