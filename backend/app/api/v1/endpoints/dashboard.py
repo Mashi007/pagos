@@ -1609,7 +1609,7 @@ def obtener_cobranzas_mensuales(
             "fecha_inicio": fecha_inicio_query,
             "fecha_fin_total": hoy,
         }
-        
+
         if analista:
             filtros_cobranzas.append("(p.analista = :analista OR p.producto_financiero = :analista)")
             params_cobranzas["analista"] = analista
@@ -1621,7 +1621,8 @@ def obtener_cobranzas_mensuales(
             params_cobranzas["modelo"] = modelo
 
         where_clause_cobranzas = " AND ".join(filtros_cobranzas)
-        query_cobranzas_sql = text(f"""
+        query_cobranzas_sql = text(
+            f"""
             SELECT 
                 EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
                 EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
@@ -1631,7 +1632,8 @@ def obtener_cobranzas_mensuales(
             WHERE {where_clause_cobranzas}
             GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
             ORDER BY año, mes
-        """).bindparams(**params_cobranzas)
+        """
+        ).bindparams(**params_cobranzas)
 
         result_cobranzas = db.execute(query_cobranzas_sql)
         cobranzas_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_cobranzas}
@@ -1639,8 +1641,9 @@ def obtener_cobranzas_mensuales(
         # OPTIMIZACIÓN: Query única para pagos reales con GROUP BY
         fecha_inicio_dt = datetime.combine(fecha_inicio_query, datetime.min.time())
         fecha_fin_dt = datetime.combine(hoy, datetime.max.time())
-        
-        query_pagos_sql = text("""
+
+        query_pagos_sql = text(
+            """
             SELECT 
                 EXTRACT(YEAR FROM fecha_pago::timestamp)::int as año,
                 EXTRACT(MONTH FROM fecha_pago::timestamp)::int as mes,
@@ -1655,7 +1658,8 @@ def obtener_cobranzas_mensuales(
               AND monto_pagado != ''
             GROUP BY EXTRACT(YEAR FROM fecha_pago::timestamp), EXTRACT(MONTH FROM fecha_pago::timestamp)
             ORDER BY año, mes
-        """).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+        """
+        ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
 
         result_pagos = db.execute(query_pagos_sql)
         pagos_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_pagos}
@@ -1668,7 +1672,7 @@ def obtener_cobranzas_mensuales(
                 break
             año_mes = current_date.year
             num_mes = current_date.month
-            
+
             cobranzas_planificadas = cobranzas_por_mes.get((año_mes, num_mes), 0.0)
             pagos_reales = pagos_por_mes.get((año_mes, num_mes), 0.0)
 
@@ -1681,7 +1685,7 @@ def obtener_cobranzas_mensuales(
                     "meta_mensual": cobranzas_planificadas,  # Meta = cobranzas planificadas
                 }
             )
-            
+
             # Avanzar al siguiente mes
             current_date = _obtener_fechas_mes_siguiente(num_mes, año_mes)
 
