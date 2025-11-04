@@ -314,16 +314,16 @@ export function Configuracion() {
           toast.success('Configuración guardada exitosamente')
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error guardando configuración:', error)
-      const errorMessage = error?.message || 'Error desconocido'
+      const errorMessage = getErrorMessage(error)
       toast.error(`Error al guardar configuración: ${errorMessage}`)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleCambio = (seccion: string, campo: string, valor: any) => {
+  const handleCambio = (seccion: string, campo: string, valor: string | number | boolean | null) => {
     console.log(`🔄 Cambio en ${seccion}.${campo}:`, valor)
     
     setConfiguracion(prev => ({
@@ -413,9 +413,12 @@ export function Configuracion() {
       window.dispatchEvent(new CustomEvent('logoUpdated', { 
         detail: { filename: result.filename, url: result.url } 
       }))
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error cargando logo:', error)
-      const errorMessage = error?.response?.data?.detail || error?.message || 'Error desconocido'
+      let errorMessage = getErrorMessage(error)
+      if (isAxiosError(error)) {
+        errorMessage = error.response?.data?.detail || errorMessage
+      }
       toast.error(`Error al cargar logo: ${errorMessage}`)
     } finally {
       setUploadingLogo(false)

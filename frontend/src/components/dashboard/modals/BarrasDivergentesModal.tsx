@@ -88,7 +88,7 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
   )
 
   // Tooltip personalizado
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload?: Record<string, unknown>; value?: number }>; label?: string }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload
       return (

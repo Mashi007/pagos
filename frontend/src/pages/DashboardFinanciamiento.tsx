@@ -574,7 +574,7 @@ export function DashboardFinanciamiento() {
                               ))}
                             </Pie>
                             <Tooltip
-                              formatter={(value: number, name: string, props: any) => [
+                              formatter={(value: number, name: string, props: { payload?: { cantidad?: number; monto?: number } }) => [
                                 `${(value * 100).toFixed(1)}% (${props.payload.cantidad} préstamos, ${formatCurrency(props.payload.monto)})`,
                                 'Porcentaje',
                               ]}

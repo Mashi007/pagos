@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { cn } from '@/utils'
+import { getErrorMessage, isAxiosError } from '@/types/errors'
 
 interface LogoProps {
   className?: string
@@ -138,10 +139,11 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                   clearTimeout(timeoutId)
                   return
                 }
-              } catch (headError: any) {
+              } catch (headError: unknown) {
                 // Si HEAD falla, asumir que no existe (evitar requests repetidos)
-                if (headError?.name !== 'AbortError') {
-                  console.warn('⚠️ Error verificando logo, asumiendo que no existe:', headError)
+                const error = headError as { name?: string }
+                if (error?.name !== 'AbortError') {
+                  console.warn('⚠️ Error verificando logo, asumiendo que no existe:', getErrorMessage(headError))
                 }
                 logoCache.logoNotFound = true
                 logoCache.logoUrl = null
@@ -161,10 +163,11 @@ export function Logo({ className, size = 'md' }: LogoProps) {
               return
             }
           }
-        } catch (configError: any) {
+        } catch (configError: unknown) {
           // Si falla obtener la configuración, marcar como verificado y no hacer más intentos
-          if (configError?.name !== 'AbortError') {
-            console.warn('⚠️ No se pudo obtener logo_filename desde configuración')
+          const error = configError as { name?: string }
+          if (error?.name !== 'AbortError') {
+            console.warn('⚠️ No se pudo obtener logo_filename desde configuración:', getErrorMessage(configError))
           }
           logoCache.hasChecked = true
           logoCache.isChecking = false
@@ -172,9 +175,10 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           clearTimeout(timeoutId)
           return
         }
-      } catch (error: any) {
-        if (error?.name !== 'AbortError') {
-          console.warn('⚠️ Error cargando logo:', error)
+      } catch (error: unknown) {
+        const err = error as { name?: string }
+        if (err?.name !== 'AbortError') {
+          console.warn('⚠️ Error cargando logo:', getErrorMessage(error))
         }
       }
       
