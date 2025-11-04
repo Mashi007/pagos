@@ -85,6 +85,36 @@ class AuthService:
         return token_response, user
 
     @staticmethod
+    def validate_refresh_token(refresh_token: str) -> Optional[int]:
+        """
+        Valida un refresh token y retorna el ID del usuario
+
+        Args:
+            refresh_token: Token de refresh
+
+        Returns:
+            int: ID del usuario si el token es válido, None en caso contrario
+        """
+        from app.core.security import decode_token, get_token_subject
+
+        try:
+            # Decodificar el refresh token
+            payload = decode_token(refresh_token)
+
+            # Verificar que sea un refresh token
+            if payload.get("type") != "refresh":
+                return None
+
+            # Obtener el ID del usuario
+            user_id = get_token_subject(refresh_token)
+            if not user_id:
+                return None
+
+            return int(user_id)
+        except Exception:
+            return None
+
+    @staticmethod
     def refresh_token(db: Session, refresh_token: str) -> TokenResponse:
         """
         Renueva un token de acceso usando un refresh token
