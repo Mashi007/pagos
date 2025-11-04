@@ -475,7 +475,8 @@ def obtener_opciones_filtros(
         from sqlalchemy import text
 
         # Query optimizada: obtener todos los valores únicos en una sola consulta
-        query_sql = text("""
+        query_sql = text(
+            """
             SELECT DISTINCT valor FROM (
                 SELECT DISTINCT analista::text as valor FROM prestamos WHERE analista IS NOT NULL AND analista != ''
                 UNION
@@ -489,8 +490,9 @@ def obtener_opciones_filtros(
             ) AS all_values
             WHERE valor IS NOT NULL AND valor != ''
             ORDER BY valor
-        """)
-        
+        """
+        )
+
         result = db.execute(query_sql)
         all_values = {row[0].strip() for row in result if row[0] and row[0].strip()}
 
@@ -2320,7 +2322,7 @@ def obtener_evolucion_morosidad(
             "c.fecha_vencimiento < :fecha_fin_total",
             "c.estado != 'PAGADO'",
         ]
-        
+
         filtros_params = {
             "fecha_inicio": fecha_inicio_query,
             "fecha_fin_total": hoy,
@@ -2340,17 +2342,21 @@ def obtener_evolucion_morosidad(
         where_clause = " AND ".join(filtros_base)
 
         # Query optimizada: GROUP BY por mes y año (usar bindparams para seguridad)
-        query_sql = text("""
+        query_sql = text(
+            """
             SELECT 
                 EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
                 EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
                 COALESCE(SUM(c.monto_cuota), 0) as morosidad
             FROM cuotas c
             INNER JOIN prestamos p ON c.prestamo_id = p.id
-            WHERE """ + where_clause + """
+            WHERE """
+            + where_clause
+            + """
             GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
             ORDER BY año, mes
-        """).bindparams(**filtros_params)
+        """
+        ).bindparams(**filtros_params)
 
         result = db.execute(query_sql)
         morosidad_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result}

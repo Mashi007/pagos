@@ -550,9 +550,7 @@ def _verificar_logo_existe(filename: str) -> tuple[Path, str]:
     from app.core.config import settings
 
     # Validar que el archivo sea del tipo correcto
-    if not filename.startswith("logo-custom") or not any(
-        filename.endswith(ext) for ext in [".svg", ".png", ".jpg", ".jpeg"]
-    ):
+    if not filename.startswith("logo-custom") or not any(filename.endswith(ext) for ext in [".svg", ".png", ".jpg", ".jpeg"]):
         raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
 
     # Usar path absoluto si UPLOAD_DIR está configurado
@@ -568,7 +566,7 @@ def _verificar_logo_existe(filename: str) -> tuple[Path, str]:
     # Verificar que el archivo sea legible
     if not logo_path.is_file():
         raise HTTPException(status_code=404, detail="Logo no encontrado o archivo inválido")
-    
+
     # Verificar que el archivo tenga contenido
     try:
         if logo_path.stat().st_size == 0:
