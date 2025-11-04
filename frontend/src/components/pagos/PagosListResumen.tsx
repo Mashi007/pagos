@@ -39,7 +39,9 @@ export function PagosListResumen() {
   })
 
   const handleFilterChange = (key: string, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }))
+    // Convertir "all" a cadena vacía para que el servicio no incluya el filtro
+    const filterValue = value === 'all' ? '' : value
+    setFilters(prev => ({ ...prev, [key]: filterValue }))
     setPage(1)
   }
 
@@ -99,14 +101,14 @@ export function PagosListResumen() {
               onChange={e => handleFilterChange('cedula', e.target.value)}
             />
             <Select 
-              value={filters.estado || ''} 
+              value={filters.estado || 'all'} 
               onValueChange={value => handleFilterChange('estado', value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos</SelectItem>
+                <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="PAGADO">Pagado</SelectItem>
                 <SelectItem value="PENDIENTE">Pendiente</SelectItem>
                 <SelectItem value="ATRASADO">Atrasado</SelectItem>
