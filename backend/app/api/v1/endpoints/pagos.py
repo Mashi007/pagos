@@ -1759,10 +1759,12 @@ def listar_pagos_staging(
                             except (ValueError, IndexError):
                                 fecha_pago_dt = None
                 elif isinstance(p.fecha_pago, date):
-                    fecha_pago_dt = datetime.combine(p.fecha_pago, time.min) if not isinstance(p.fecha_pago, datetime) else p.fecha_pago
+                    fecha_pago_dt = (
+                        datetime.combine(p.fecha_pago, time.min) if not isinstance(p.fecha_pago, datetime) else p.fecha_pago
+                    )
                 else:
                     fecha_pago_dt = p.fecha_pago
-            
+
             # Convertir monto_pagado de string a float
             monto_float = None
             if p.monto_pagado:
@@ -1772,23 +1774,25 @@ def listar_pagos_staging(
                         monto_float = float(Decimal(monto_str))
                 except (ValueError, TypeError):
                     monto_float = None
-            
-            items.append({
-                "id": p.id,
-                "cedula_cliente": p.cedula_cliente or "",
-                "prestamo_id": None,  # PagoStaging no tiene prestamo_id
-                "numero_cuota": None,  # PagoStaging no tiene numero_cuota
-                "fecha_pago": fecha_pago_dt.isoformat() if fecha_pago_dt else None,
-                "fecha_registro": None,  # PagoStaging no tiene fecha_registro
-                "monto_pagado": monto_float,
-                "numero_documento": p.numero_documento or "",
-                "institucion_bancaria": None,  # PagoStaging no tiene institucion_bancaria
-                "estado": "REGISTRADO",  # Valor por defecto ya que PagoStaging no tiene estado
-                "conciliado": False,  # Valor por defecto ya que PagoStaging no tiene conciliado
-                "fecha_conciliacion": None,  # PagoStaging no tiene fecha_conciliacion
-                "notas": None,  # PagoStaging no tiene notas
-                "verificado_concordancia": None,  # PagoStaging no tiene verificado_concordancia
-            })
+
+            items.append(
+                {
+                    "id": p.id,
+                    "cedula_cliente": p.cedula_cliente or "",
+                    "prestamo_id": None,  # PagoStaging no tiene prestamo_id
+                    "numero_cuota": None,  # PagoStaging no tiene numero_cuota
+                    "fecha_pago": fecha_pago_dt.isoformat() if fecha_pago_dt else None,
+                    "fecha_registro": None,  # PagoStaging no tiene fecha_registro
+                    "monto_pagado": monto_float,
+                    "numero_documento": p.numero_documento or "",
+                    "institucion_bancaria": None,  # PagoStaging no tiene institucion_bancaria
+                    "estado": "REGISTRADO",  # Valor por defecto ya que PagoStaging no tiene estado
+                    "conciliado": False,  # Valor por defecto ya que PagoStaging no tiene conciliado
+                    "fecha_conciliacion": None,  # PagoStaging no tiene fecha_conciliacion
+                    "notas": None,  # PagoStaging no tiene notas
+                    "verificado_concordancia": None,  # PagoStaging no tiene verificado_concordancia
+                }
+            )
 
         return create_paginated_response(items=items, total=total, page=page, page_size=limit)
 
