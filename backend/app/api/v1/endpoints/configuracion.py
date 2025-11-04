@@ -336,7 +336,7 @@ def obtener_configuracion_general(db: Session = Depends(get_db)):
 
 
 def _validar_logo(logo: UploadFile, contents: bytes) -> None:
-    """Valida el tipo y tamaño del logo"""
+    """Valida el tipo y tamaño del logo, incluyendo magic bytes"""
     allowed_types = ["image/svg+xml", "image/png", "image/jpeg", "image/jpg"]
     if logo.content_type not in allowed_types:
         raise HTTPException(
@@ -347,6 +347,49 @@ def _validar_logo(logo: UploadFile, contents: bytes) -> None:
         raise HTTPException(
             status_code=400,
             detail="El archivo es demasiado grande. Máximo 2MB",
+        )
+    
+    # Validar magic bytes para verificar contenido real del archivo
+    if len(contents) < 4:
+        raise HTTPException(
+            status_code=400,
+            detail="Archivo inválido o corrupto",
+        )
+    
+    # Magic bytes para diferentes formatos
+    # PNG: \x89PNG\r\n\x1a\n
+    # JPEG: \xff\xd8
+    # SVG: <svg o <?xml (texto)
+    
+    is_valid = False
+    
+    # Validar PNG
+    if logo.content_type == "image/png":
+        if contents.startswith(b'\x89PNG'):
+            is_valid = True
+    
+    # Validar JPEG
+    elif logo.content_type in ["image/jpeg", "image/jpg"]:
+        if contents.startswith(b'\xff\xd8'):
+            is_valid = True
+    
+    # Validar SVG (puede empezar con <svg o <?xml)
+    elif logo.content_type == "image/svg+xml":
+        if contents.startswith(b'<svg') or contents.startswith(b'<?xml'):
+            is_valid = True
+        else:
+            # Verificar si contiene etiquetas SVG en los primeros bytes
+            try:
+                content_str = contents[:100].decode('utf-8', errors='ignore').lower()
+                if 'svg' in content_str or '<?xml' in content_str:
+                    is_valid = True
+            except Exception:
+                pass
+    
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="El contenido del archivo no coincide con el tipo declarado. Archivo posiblemente corrupto o malicioso.",
         )
 
 
@@ -359,6 +402,41 @@ def _obtener_extension_logo(content_type: str) -> str:
         "image/jpg": ".jpg",
     }
     return content_type_to_ext.get(content_type, ".svg")
+
+
+def _obtener_logo_anterior(db: Session) -> Optional[str]:
+    """Obtiene el nombre del logo anterior desde la BD"""
+    from app.models.configuracion_sistema import ConfiguracionSistema
+
+    logo_config = (
+        db.query(ConfiguracionSistema)
+        .filter(
+            ConfiguracionSistema.categoria == "GENERAL",
+            ConfiguracionSistema.clave == "logo_filename",
+        )
+        .first()
+    )
+
+    if logo_config and logo_config.valor:
+        return str(logo_config.valor)
+    return None
+
+
+def _eliminar_logo_anterior(
+    db: Session, logos_dir: Path, nuevo_logo_filename: str
+) -> None:
+    """Elimina el logo anterior si existe y es diferente al nuevo"""
+    try:
+        logo_anterior_filename = _obtener_logo_anterior(db)
+        
+        if logo_anterior_filename and logo_anterior_filename != nuevo_logo_filename:
+            logo_anterior_path = logos_dir / logo_anterior_filename
+            if logo_anterior_path.exists():
+                logo_anterior_path.unlink()
+                logger.info(f"🗑️ Logo anterior eliminado: {logo_anterior_filename}")
+    except Exception as e:
+        # No fallar si no se puede eliminar el logo anterior
+        logger.warning(f"⚠️ No se pudo eliminar logo anterior: {str(e)}")
 
 
 def _guardar_logo_en_bd(db: Session, logo_filename: str) -> None:
@@ -412,21 +490,39 @@ async def upload_logo(
         extension = _obtener_extension_logo(logo.content_type)
 
         from app.core.config import settings
-
-        uploads_dir = Path(settings.UPLOAD_DIR) if hasattr(settings, "UPLOAD_DIR") else Path("uploads")
+        
+        # Usar path absoluto si UPLOAD_DIR está configurado, sino usar relativo
+        if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
+            uploads_dir = Path(settings.UPLOAD_DIR).resolve()
+        else:
+            uploads_dir = Path("uploads").resolve()
+        
         logos_dir = uploads_dir / "logos"
         logos_dir.mkdir(parents=True, exist_ok=True)
 
         logo_filename = f"logo-custom{extension}"
         logo_path = logos_dir / logo_filename
 
+        # Eliminar logo anterior si existe y es diferente
+        _eliminar_logo_anterior(db, logos_dir, logo_filename)
+
+        # Guardar nuevo logo
         with open(logo_path, "wb") as f:
             f.write(contents)
 
+        # Intentar guardar en BD, si falla, eliminar archivo
         try:
             _guardar_logo_en_bd(db, logo_filename)
         except Exception as db_error:
             db.rollback()
+            # Rollback: eliminar archivo si falla guardado en BD
+            try:
+                if logo_path.exists():
+                    logo_path.unlink()
+                    logger.info(f"🗑️ Archivo de logo eliminado debido a error en BD: {logo_filename}")
+            except Exception as cleanup_error:
+                logger.error(f"❌ Error eliminando archivo después de fallo en BD: {str(cleanup_error)}")
+            
             logger.error(f"❌ Error guardando configuración de logo en BD: {str(db_error)}", exc_info=True)
             raise HTTPException(
                 status_code=500, detail=f"Error guardando configuración de logo en base de datos: {str(db_error)}"
@@ -464,7 +560,11 @@ async def verificar_logo_existe(
         ):
             raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
 
-        uploads_dir = Path(settings.UPLOAD_DIR) if hasattr(settings, "UPLOAD_DIR") else Path("uploads")
+        # Usar path absoluto si UPLOAD_DIR está configurado
+        if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
+            uploads_dir = Path(settings.UPLOAD_DIR).resolve()
+        else:
+            uploads_dir = Path("uploads").resolve()
         logo_path = uploads_dir / "logos" / filename
 
         if not logo_path.exists():
@@ -508,7 +608,11 @@ async def obtener_logo(
         ):
             raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
 
-        uploads_dir = Path(settings.UPLOAD_DIR) if hasattr(settings, "UPLOAD_DIR") else Path("uploads")
+        # Usar path absoluto si UPLOAD_DIR está configurado
+        if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
+            uploads_dir = Path(settings.UPLOAD_DIR).resolve()
+        else:
+            uploads_dir = Path("uploads").resolve()
         logo_path = uploads_dir / "logos" / filename
 
         if not logo_path.exists():
