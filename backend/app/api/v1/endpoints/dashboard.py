@@ -2301,7 +2301,7 @@ def obtener_evolucion_morosidad(
     OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
     """
     try:
-        from sqlalchemy import text, extract
+        from sqlalchemy import extract, text
 
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
