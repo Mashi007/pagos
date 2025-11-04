@@ -1741,24 +1741,54 @@ def listar_pagos_staging(
         pagos_staging = query.offset(skip).limit(limit).all()
         logger.info(f"📄 [listar_pagos_staging] Registros obtenidos: {len(pagos_staging)}")
 
-        # Serializar resultados
-        items = [
-            {
+        # Serializar resultados - PagoStaging solo tiene: id, cedula_cliente, fecha_pago, monto_pagado, numero_documento
+        items = []
+        for p in pagos_staging:
+            # Convertir fecha_pago de string a datetime si es necesario
+            fecha_pago_dt = None
+            if p.fecha_pago:
+                if isinstance(p.fecha_pago, str):
+                    try:
+                        fecha_pago_dt = datetime.fromisoformat(p.fecha_pago.replace("Z", "+00:00"))
+                    except (ValueError, AttributeError):
+                        try:
+                            fecha_pago_dt = datetime.strptime(p.fecha_pago[:19], "%Y-%m-%d %H:%M:%S")
+                        except (ValueError, IndexError):
+                            try:
+                                fecha_pago_dt = datetime.combine(date.fromisoformat(p.fecha_pago[:10]), time.min)
+                            except (ValueError, IndexError):
+                                fecha_pago_dt = None
+                elif isinstance(p.fecha_pago, date):
+                    fecha_pago_dt = datetime.combine(p.fecha_pago, time.min) if not isinstance(p.fecha_pago, datetime) else p.fecha_pago
+                else:
+                    fecha_pago_dt = p.fecha_pago
+            
+            # Convertir monto_pagado de string a float
+            monto_float = None
+            if p.monto_pagado:
+                try:
+                    monto_str = str(p.monto_pagado).strip()
+                    if monto_str and monto_str != "":
+                        monto_float = float(Decimal(monto_str))
+                except (ValueError, TypeError):
+                    monto_float = None
+            
+            items.append({
                 "id": p.id,
-                "cedula_cliente": p.cedula_cliente,
-                "prestamo_id": p.prestamo_id,
-                "numero_cuota": p.numero_cuota,
-                "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
-                "fecha_registro": p.fecha_registro.isoformat() if p.fecha_registro else None,
-                "monto_pagado": float(p.monto_pagado) if p.monto_pagado else None,
-                "numero_documento": p.numero_documento,
-                "institucion_bancaria": p.institucion_bancaria,
-                "estado": p.estado,
-                "conciliado": p.conciliado,
-                "notas": p.notas,
-            }
-            for p in pagos_staging
-        ]
+                "cedula_cliente": p.cedula_cliente or "",
+                "prestamo_id": None,  # PagoStaging no tiene prestamo_id
+                "numero_cuota": None,  # PagoStaging no tiene numero_cuota
+                "fecha_pago": fecha_pago_dt.isoformat() if fecha_pago_dt else None,
+                "fecha_registro": None,  # PagoStaging no tiene fecha_registro
+                "monto_pagado": monto_float,
+                "numero_documento": p.numero_documento or "",
+                "institucion_bancaria": None,  # PagoStaging no tiene institucion_bancaria
+                "estado": "REGISTRADO",  # Valor por defecto ya que PagoStaging no tiene estado
+                "conciliado": False,  # Valor por defecto ya que PagoStaging no tiene conciliado
+                "fecha_conciliacion": None,  # PagoStaging no tiene fecha_conciliacion
+                "notas": None,  # PagoStaging no tiene notas
+                "verificado_concordancia": None,  # PagoStaging no tiene verificado_concordancia
+            })
 
         return create_paginated_response(items=items, total=total, page=page, page_size=limit)
 
