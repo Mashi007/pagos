@@ -229,18 +229,62 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         // Recargar desde configuración general para obtener logo_filename persistido en BD
         fetch('/api/v1/configuracion/general')
           .then(res => res.json())
-          .then(config => {
+          .then(async config => {
             let newLogoUrl: string | null = null
             
             if (config.logo_filename) {
               const logoPath = `/api/v1/configuracion/logo/${config.logo_filename}`
-              newLogoUrl = `${logoPath}?t=${Date.now()}`
-              console.log('✅ Logo recargado desde configuración (BD):', config.logo_filename)
+              // ✅ Verificar primero si existe con HEAD request
+              try {
+                const headResponse = await fetch(logoPath, { method: 'HEAD' })
+                if (headResponse.ok) {
+                  newLogoUrl = `${logoPath}?t=${Date.now()}`
+                  console.log('✅ Logo recargado desde configuración (BD):', config.logo_filename)
+                } else {
+                  console.warn('⚠️ Logo no encontrado al recargar desde configuración:', config.logo_filename)
+                  logoCache.logoNotFound = true
+                  logoCache.logoUrl = null
+                  logoCache.hasChecked = true
+                  logoCache.version += 1
+                  notifyLogoListeners(null, logoCache.version)
+                  return
+                }
+              } catch (headError) {
+                console.warn('⚠️ Error verificando logo al recargar:', headError)
+                logoCache.logoNotFound = true
+                logoCache.logoUrl = null
+                logoCache.hasChecked = true
+                logoCache.version += 1
+                notifyLogoListeners(null, logoCache.version)
+                return
+              }
             } else if (filename) {
               // Fallback: usar filename del evento si no está en BD aún
               const logoPath = `/api/v1/configuracion/logo/${filename}`
-              newLogoUrl = `${logoPath}?t=${Date.now()}`
-              console.log('✅ Logo actualizado desde evento (fallback):', filename)
+              // ✅ Verificar primero si existe
+              try {
+                const headResponse = await fetch(logoPath, { method: 'HEAD' })
+                if (headResponse.ok) {
+                  newLogoUrl = `${logoPath}?t=${Date.now()}`
+                  console.log('✅ Logo actualizado desde evento (fallback):', filename)
+                } else {
+                  console.warn('⚠️ Logo no encontrado en fallback:', filename)
+                  logoCache.logoNotFound = true
+                  logoCache.logoUrl = null
+                  logoCache.hasChecked = true
+                  logoCache.version += 1
+                  notifyLogoListeners(null, logoCache.version)
+                  return
+                }
+              } catch (headError) {
+                console.warn('⚠️ Error verificando logo en fallback:', headError)
+                logoCache.logoNotFound = true
+                logoCache.logoUrl = null
+                logoCache.hasChecked = true
+                logoCache.version += 1
+                notifyLogoListeners(null, logoCache.version)
+                return
+              }
             }
             
             if (newLogoUrl) {
@@ -254,20 +298,61 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           })
           .catch(err => {
             console.warn('⚠️ Error recargando logo desde configuración:', err)
-            // Fallback: usar valores del evento directamente
+            // Fallback: usar valores del evento directamente, pero verificar primero
             let newLogoUrl: string | null = null
             if (url) {
-              newLogoUrl = `${url}?t=${Date.now()}`
+              // Si tenemos URL directa, verificar que existe
+              fetch(url, { method: 'HEAD' })
+                .then(headRes => {
+                  if (headRes.ok) {
+                    newLogoUrl = `${url}?t=${Date.now()}`
+                    logoCache.logoUrl = newLogoUrl
+                    logoCache.logoNotFound = false
+                    logoCache.hasChecked = true
+                    logoCache.version += 1
+                    notifyLogoListeners(newLogoUrl, logoCache.version)
+                  } else {
+                    logoCache.logoNotFound = true
+                    logoCache.logoUrl = null
+                    logoCache.hasChecked = true
+                    logoCache.version += 1
+                    notifyLogoListeners(null, logoCache.version)
+                  }
+                })
+                .catch(() => {
+                  logoCache.logoNotFound = true
+                  logoCache.logoUrl = null
+                  logoCache.hasChecked = true
+                  logoCache.version += 1
+                  notifyLogoListeners(null, logoCache.version)
+                })
             } else if (filename) {
               const logoPath = `/api/v1/configuracion/logo/${filename}`
-              newLogoUrl = `${logoPath}?t=${Date.now()}`
-            }
-            if (newLogoUrl) {
-              logoCache.logoUrl = newLogoUrl
-              logoCache.logoNotFound = false // ✅ Resetear flag cuando se actualiza el logo
-              logoCache.hasChecked = true
-              logoCache.version += 1
-              notifyLogoListeners(newLogoUrl, logoCache.version)
+              // Verificar primero si existe
+              fetch(logoPath, { method: 'HEAD' })
+                .then(headRes => {
+                  if (headRes.ok) {
+                    newLogoUrl = `${logoPath}?t=${Date.now()}`
+                    logoCache.logoUrl = newLogoUrl
+                    logoCache.logoNotFound = false
+                    logoCache.hasChecked = true
+                    logoCache.version += 1
+                    notifyLogoListeners(newLogoUrl, logoCache.version)
+                  } else {
+                    logoCache.logoNotFound = true
+                    logoCache.logoUrl = null
+                    logoCache.hasChecked = true
+                    logoCache.version += 1
+                    notifyLogoListeners(null, logoCache.version)
+                  }
+                })
+                .catch(() => {
+                  logoCache.logoNotFound = true
+                  logoCache.logoUrl = null
+                  logoCache.hasChecked = true
+                  logoCache.version += 1
+                  notifyLogoListeners(null, logoCache.version)
+                })
             }
           })
         return
