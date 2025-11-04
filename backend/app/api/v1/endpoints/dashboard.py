@@ -2553,6 +2553,7 @@ def obtener_composicion_morosidad(
 
 
 @router.get("/evolucion-general-mensual")
+@cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos
 def obtener_evolucion_general_mensual(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
@@ -2565,7 +2566,11 @@ def obtener_evolucion_general_mensual(
     """
     Obtiene la evolución mensual de Morosidad, Total Activos, Total Financiamiento y Total Pagos
     para los últimos 6 meses o el rango de fechas especificado.
+    ✅ OPTIMIZADO: Usa queries con GROUP BY en lugar de loops por mes
     """
+    import time
+    start_time = time.time()
+    
     try:
         hoy = date.today()
         nombres_meses = [
@@ -2618,21 +2623,100 @@ def obtener_evolucion_general_mensual(
             else:
                 current = current.replace(month=current.month + 1)
 
-        # Inicializar estructura de resultados
-        evolucion = []
+        # ✅ OPTIMIZACIÓN: Calcular datos para todos los meses en queries optimizadas
+        
+        # Obtener el último día de cada mes
+        ultimos_dias = {}
+        primeros_dias = {}
+        for mes_info in meses_lista:
+            año = mes_info["año"]
+            mes = mes_info["mes"]
+            if mes == 12:
+                ultimos_dias[(año, mes)] = date(año, 12, 31)
+                primeros_dias[(año, mes)] = date(año, 12, 1)
+            else:
+                ultimos_dias[(año, mes)] = date(año, mes + 1, 1) - timedelta(days=1)
+                primeros_dias[(año, mes)] = date(año, mes, 1)
+        
+        fecha_ultima = max(ultimos_dias.values())
+        fecha_primera = min(primeros_dias.values())
 
+        # 1. TOTAL FINANCIAMIENTO por mes (nuevos préstamos aprobados)
+        start_financiamiento = time.time()
+        query_financiamiento = (
+            db.query(
+                func.extract('year', Prestamo.fecha_registro).label('año'),
+                func.extract('month', Prestamo.fecha_registro).label('mes'),
+                func.sum(Prestamo.total_financiamiento).label('total')
+            )
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Prestamo.fecha_registro >= fecha_primera,
+                Prestamo.fecha_registro <= fecha_ultima,
+            )
+            .group_by(
+                func.extract('year', Prestamo.fecha_registro),
+                func.extract('month', Prestamo.fecha_registro)
+            )
+        )
+        query_financiamiento = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_financiamiento, analista, concesionario, modelo, None, None
+        )
+        financiamiento_por_mes = {
+            (int(row.año), int(row.mes)): float(row.total or Decimal("0"))
+            for row in query_financiamiento.all()
+        }
+        tiempo_financiamiento = int((time.time() - start_financiamiento) * 1000)
+        logger.info(f"📊 [evolucion-general] Financiamiento por mes: {tiempo_financiamiento}ms")
+
+        # 2. TOTAL PAGOS por mes (usar Pago.monto_pagado, no Pago.monto)
+        start_pagos = time.time()
+        query_pagos = (
+            db.query(
+                func.extract('year', Pago.fecha_pago).label('año'),
+                func.extract('month', Pago.fecha_pago).label('mes'),
+                func.sum(Pago.monto_pagado).label('total')
+            )
+            .join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            .filter(
+                Pago.fecha_pago >= fecha_primera,
+                Pago.fecha_pago <= fecha_ultima,
+                Pago.activo.is_(True),
+            )
+            .group_by(
+                func.extract('year', Pago.fecha_pago),
+                func.extract('month', Pago.fecha_pago)
+            )
+        )
+        # Aplicar filtros de préstamo
+        if analista:
+            query_pagos = query_pagos.filter(or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista))
+        if concesionario:
+            query_pagos = query_pagos.filter(Prestamo.concesionario == concesionario)
+        if modelo:
+            query_pagos = query_pagos.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
+        
+        pagos_por_mes = {
+            (int(row.año), int(row.mes)): float(row.total or Decimal("0"))
+            for row in query_pagos.all()
+        }
+        tiempo_pagos = int((time.time() - start_pagos) * 1000)
+        logger.info(f"📊 [evolucion-general] Pagos por mes: {tiempo_pagos}ms")
+
+        # 3. Construir evolución mensual (calcular morosidad y activos por mes)
+        start_evolucion = time.time()
+        evolucion = []
+        total_activos_acum = Decimal("0")
+        
         for mes_info in meses_lista:
             año = mes_info["año"]
             mes = mes_info["mes"]
             nombre_mes = mes_info["nombre"]
+            mes_key = (año, mes)
+            
+            ultimo_dia_mes = ultimos_dias[mes_key]
 
-            # Calcular último día del mes
-            if mes == 12:
-                ultimo_dia_mes = date(año, 12, 31)
-            else:
-                ultimo_dia_mes = date(año, mes + 1, 1) - timedelta(days=1)
-
-            # 1. MOROSIDAD POR DÍA (monto de cuotas vencidas no pagadas al final del mes)
+            # Morosidad: cuotas vencidas no pagadas al final del mes
             query_morosidad = (
                 db.query(func.sum(Cuota.monto_cuota))
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -2647,7 +2731,7 @@ def obtener_evolucion_general_mensual(
             )
             morosidad = float(query_morosidad.scalar() or Decimal("0"))
 
-            # 2. TOTAL ACTIVOS (total financiamiento de préstamos APROBADO registrados hasta ese mes)
+            # Total activos: acumulado de préstamos hasta el fin del mes
             query_activos = db.query(func.sum(Prestamo.total_financiamiento)).filter(
                 Prestamo.estado == "APROBADO",
                 Prestamo.fecha_registro <= ultimo_dia_mes,
@@ -2657,41 +2741,9 @@ def obtener_evolucion_general_mensual(
             )
             total_activos = float(query_activos.scalar() or Decimal("0"))
 
-            # 3. TOTAL FINANCIAMIENTO (nuevos préstamos aprobados en el mes)
-            primer_dia_mes = date(año, mes, 1)
-            if mes == 12:
-                primer_dia_siguiente = date(año + 1, 1, 1)
-            else:
-                primer_dia_siguiente = date(año, mes + 1, 1)
-
-            query_financiamiento = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-                Prestamo.estado == "APROBADO",
-                Prestamo.fecha_registro >= primer_dia_mes,
-                Prestamo.fecha_registro < primer_dia_siguiente,
-            )
-            query_financiamiento = FiltrosDashboard.aplicar_filtros_prestamo(
-                query_financiamiento, analista, concesionario, modelo, None, None
-            )
-            total_financiamiento = float(query_financiamiento.scalar() or Decimal("0"))
-
-            # 4. TOTAL PAGOS (pagos recibidos en el mes)
-            query_pagos = (
-                db.query(func.sum(Pago.monto))
-                .join(Prestamo, Pago.prestamo_id == Prestamo.id)
-                .filter(
-                    Pago.fecha_pago >= primer_dia_mes,
-                    Pago.fecha_pago < primer_dia_siguiente,
-                    Pago.activo.is_(True),
-                )
-            )
-            # Aplicar filtros de préstamo
-            if analista:
-                query_pagos = query_pagos.filter(or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista))
-            if concesionario:
-                query_pagos = query_pagos.filter(Prestamo.concesionario == concesionario)
-            if modelo:
-                query_pagos = query_pagos.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
-            total_pagos = float(query_pagos.scalar() or Decimal("0"))
+            # Obtener datos pre-calculados
+            total_financiamiento = financiamiento_por_mes.get(mes_key, 0.0)
+            total_pagos = pagos_por_mes.get(mes_key, 0.0)
 
             evolucion.append(
                 {
@@ -2702,6 +2754,10 @@ def obtener_evolucion_general_mensual(
                     "total_pagos": round(total_pagos, 2),
                 }
             )
+        
+        tiempo_evolucion = int((time.time() - start_evolucion) * 1000)
+        total_time = int((time.time() - start_time) * 1000)
+        logger.info(f"⏱️ [evolucion-general] Tiempo total: {total_time}ms (financiamiento: {tiempo_financiamiento}ms, pagos: {tiempo_pagos}ms, evolucion: {tiempo_evolucion}ms)")
 
         return {"evolucion": evolucion}
 

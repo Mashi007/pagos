@@ -122,13 +122,13 @@ export function DashboardMenu() {
     enabled: true, // Asegurar que siempre esté habilitado
   })
 
-  // Cargar financiamiento aprobado por mes
+  // Cargar financiamiento aprobado por mes (últimos 6 meses)
   const { data: datosTendencia, isLoading: loadingTendencia } = useQuery({
     queryKey: ['financiamiento-tendencia', JSON.stringify(filtros)],
     queryFn: async () => {
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
-      queryParams.append('meses', '12')
+      queryParams.append('meses', '6') // Últimos 6 meses
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
@@ -727,8 +727,7 @@ export function DashboardMenu() {
                           <YAxis stroke="#6b7280" />
                           <Tooltip formatter={(value: number) => formatCurrency(value)} />
                           <Legend />
-                          <Area type="monotone" dataKey="monto_nuevos" stroke="#06b6d4" fillOpacity={1} fill="url(#colorMonto)" name="Financiamiento Aprobado" />
-                          <Line type="monotone" dataKey="total_acumulado" stroke="#3b82f6" strokeWidth={2} name="Total Acumulado" />
+                          <Area type="monotone" dataKey="monto_nuevos" stroke="#06b6d4" fillOpacity={1} fill="url(#colorMonto)" name="Total Financiamiento por Mes" />
                         </AreaChart>
                       </ResponsiveContainer>
                     ) : (
