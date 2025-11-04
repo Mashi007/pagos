@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -120,14 +120,16 @@ export function DashboardMenu() {
   const [periodo, setPeriodo] = useState('mes')
   const { construirParams, construirFiltrosObject } = useDashboardFiltros(filtros)
 
-  // Verificar que el componente se está renderizando - NUEVO DISEÑO v2.0
-  console.log('✅✅✅ DASHBOARD MENU - NUEVO DISEÑO v2.0 ACTIVO ✅✅✅')
-  console.log('🎨 Elementos del diseño:', {
-    badge: '✨ NUEVO DISEÑO v2.0',
-    titulo: 'DASHBOARD EJECUTIVO',
-    modulos: categories.length,
-    usuario: userName
-  })
+  // Verificar que el componente se está renderizando - NUEVO DISEÑO v2.0 (solo una vez)
+  useEffect(() => {
+    console.log('✅✅✅ DASHBOARD MENU - NUEVO DISEÑO v2.0 ACTIVO ✅✅✅')
+    console.log('🎨 Elementos del diseño:', {
+      badge: '✨ NUEVO DISEÑO v2.0',
+      titulo: 'DASHBOARD EJECUTIVO',
+      modulos: categories.length,
+      usuario: userName
+    })
+  }, [])
 
   // Cargar opciones de filtros
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
@@ -161,13 +163,14 @@ export function DashboardMenu() {
     staleTime: 5 * 60 * 1000,
   })
 
-  // Cargar datos para gráficos
+  // Cargar datos para gráficos (con timeout extendido)
   const { data: datosDashboard, isLoading: loadingDashboard } = useQuery({
     queryKey: ['dashboard-menu', periodo, filtros],
     queryFn: async () => {
       try {
         const params = construirParams(periodo)
-        const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`) as {
+        // Usar timeout extendido para endpoints lentos
+        const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`, { timeout: 60000 }) as {
           financieros?: { ingresosCapital: number; ingresosInteres: number; ingresosMora: number }
           evolucion_mensual?: Array<{ mes: string; cartera: number; cobrado: number; morosidad: number }>
         }
@@ -178,6 +181,7 @@ export function DashboardMenu() {
       }
     },
     staleTime: 5 * 60 * 1000,
+    retry: 1, // Solo un retry para evitar múltiples intentos
   })
 
   // Cargar tendencia mensual de financiamiento
@@ -215,7 +219,7 @@ export function DashboardMenu() {
     staleTime: 5 * 60 * 1000,
   })
 
-  // Cargar cobranzas mensuales
+  // Cargar cobranzas mensuales (con timeout extendido)
   const { data: datosCobranzas, isLoading: loadingCobranzas } = useQuery({
     queryKey: ['cobranzas-mensuales', filtros],
     queryFn: async () => {
@@ -224,12 +228,15 @@ export function DashboardMenu() {
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
+      // Usar timeout extendido para endpoints lentos
       const response = await apiClient.get(
-        `/api/v1/dashboard/cobranzas-mensuales?${queryParams.toString()}`
+        `/api/v1/dashboard/cobranzas-mensuales?${queryParams.toString()}`,
+        { timeout: 60000 }
       ) as { meses: Array<{ nombre_mes: string; cobranzas_planificadas: number; pagos_reales: number; meta_mensual: number }> }
       return response.meses.slice(-12) // Últimos 12 meses
     },
     staleTime: 5 * 60 * 1000,
+    retry: 1,
   })
 
   // Cargar morosidad por analista
@@ -267,7 +274,7 @@ export function DashboardMenu() {
     staleTime: 5 * 60 * 1000,
   })
 
-  // Cargar evolución de pagos
+  // Cargar evolución de pagos (con timeout extendido)
   const { data: datosEvolucionPagos, isLoading: loadingEvolucionPagos } = useQuery({
     queryKey: ['evolucion-pagos-menu', filtros],
     queryFn: async () => {
@@ -277,12 +284,15 @@ export function DashboardMenu() {
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
+      // Usar timeout extendido para endpoints lentos
       const response = await apiClient.get(
-        `/api/v1/dashboard/evolucion-pagos?${queryParams.toString()}`
+        `/api/v1/dashboard/evolucion-pagos?${queryParams.toString()}`,
+        { timeout: 60000 }
       ) as { meses: Array<{ mes: string; pagos: number; monto: number }> }
       return response.meses
     },
     staleTime: 5 * 60 * 1000,
+    retry: 1,
   })
 
   const [isRefreshing, setIsRefreshing] = useState(false)

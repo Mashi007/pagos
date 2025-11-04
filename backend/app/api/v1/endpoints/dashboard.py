@@ -1818,9 +1818,11 @@ def obtener_morosidad_por_analista(
         hoy = date.today()
 
         # Obtener morosidad por analista (morosidad = cuotas vencidas no pagadas)
+        # Usar la expresión completa en group_by para evitar errores SQL
+        analista_expr = func.coalesce(Prestamo.analista, Prestamo.producto_financiero, "Sin Analista")
         query = (
             db.query(
-                func.coalesce(Prestamo.analista, Prestamo.producto_financiero, "Sin Analista").label("analista"),
+                analista_expr.label("analista"),
                 func.sum(Cuota.monto_cuota).label("total_morosidad"),
                 func.count(func.distinct(Prestamo.cedula)).label("cantidad_clientes"),
                 func.count(Cuota.id).label("cantidad_cuotas_atrasadas"),
@@ -1831,7 +1833,7 @@ def obtener_morosidad_por_analista(
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
             )
-            .group_by("analista")
+            .group_by(analista_expr)
         )
 
         # Aplicar filtros (excepto analista que ya estamos agrupando)
