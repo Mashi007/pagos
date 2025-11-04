@@ -40,8 +40,7 @@ class ConfiguracionSistema(Base):
     # Auditoría
     creado_en = Column(DateTime, server_default=func.now())
     actualizado_en = Column(DateTime, server_default=func.now(), onupdate=func.now())
-    creado_por = Column(String(100), nullable=True)
-    actualizado_por = Column(String(100), nullable=True)
+    # Nota: creado_por y actualizado_por no existen en la tabla de BD
 
     def __repr__(self):
         return f"<ConfiguracionSistema {self.categoria}.{self.clave}={self.valor}>"
@@ -78,8 +77,7 @@ class ConfiguracionSistema(Base):
         else:
             self.valor = str(nuevo_valor)
 
-        if usuario:
-            self.actualizado_por = usuario
+        # Nota: actualizado_por no existe en la tabla BD, se omite
 
     @staticmethod
     def obtener_por_clave(db, categoria: str, clave: str) -> Optional["ConfiguracionSistema"]:
@@ -122,6 +120,5 @@ class ConfiguracionSistema(Base):
             "patron_validacion": self.patron_validacion,
             "creado_en": self.creado_en.isoformat() if self.creado_en else None,
             "actualizado_en": (self.actualizado_en.isoformat() if self.actualizado_en else None),
-            "creado_por": self.creado_por,
-            "actualizado_por": self.actualizado_por,
+            # Nota: creado_por y actualizado_por no existen en la tabla BD
         }

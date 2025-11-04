@@ -33,7 +33,7 @@ class ConfiguracionResponse(BaseModel):
     valor: str
     descripcion: Optional[str]
     fecha_actualizacion: datetime
-    actualizado_por: int
+    # Nota: actualizado_por no existe en la tabla BD
 
     class Config:
         from_attributes = True
@@ -131,7 +131,7 @@ def obtener_configuracion_completa(db: Session = Depends(get_db), current_user: 
                     "clave": config.clave,
                     "valor": config.valor,
                     "descripcion": config.descripcion,
-                    "fecha_actualizacion": config.fecha_actualizacion,
+                    "fecha_actualizacion": config.actualizado_en,
                 }
                 for config in configuraciones
             ],
@@ -193,7 +193,7 @@ def obtener_configuracion_por_categoria(
                     "clave": config.clave,
                     "valor": config.valor,
                     "descripcion": config.descripcion,
-                    "fecha_actualizacion": config.fecha_actualizacion,
+                    "fecha_actualizacion": config.actualizado_en,
                 }
                 for config in configs
             ],
