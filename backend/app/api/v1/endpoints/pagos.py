@@ -1591,9 +1591,10 @@ def listar_pagos_staging(
                             except (ValueError, IndexError):
                                 fecha_pago_dt = None
                 elif isinstance(p.fecha_pago, date):
-                    fecha_pago_dt = (
-                        datetime.combine(p.fecha_pago, time.min) if not isinstance(p.fecha_pago, datetime) else p.fecha_pago
-                    )
+                    if not isinstance(p.fecha_pago, datetime):
+                        fecha_pago_dt = datetime.combine(p.fecha_pago, time.min)
+                    else:
+                        fecha_pago_dt = p.fecha_pago
                 else:
                     fecha_pago_dt = p.fecha_pago
 
