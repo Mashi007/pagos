@@ -1170,7 +1170,8 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
     try:
         db.commit()
         logger.info(
-            f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id} aplicado exitosamente. Cuotas completadas: {cuotas_completadas}"
+            f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id} aplicado exitosamente. "
+            f"Cuotas completadas: {cuotas_completadas}"
         )
     except Exception as e:
         logger.error(f"❌ [aplicar_pago_a_cuotas] Error al guardar cambios en BD: {str(e)}", exc_info=True)
@@ -1323,7 +1324,6 @@ def obtener_kpis_pagos(
     Cacheado por 5 minutos para mejorar rendimiento.
     """
     try:
-        import hashlib
         from datetime import date
 
         from app.core.cache import cache_backend
@@ -1590,7 +1590,9 @@ def listar_pagos_staging(
                             fecha_pago_dt = datetime.strptime(p.fecha_pago[:19], "%Y-%m-%d %H:%M:%S")
                         except (ValueError, IndexError):
                             try:
-                                fecha_pago_dt = datetime.combine(date.fromisoformat(p.fecha_pago[:10]), time.min)
+                                fecha_pago_dt = datetime.combine(
+                                    date.fromisoformat(p.fecha_pago[:10]), time.min
+                                )
                             except (ValueError, IndexError):
                                 fecha_pago_dt = None
                 elif isinstance(p.fecha_pago, date):
@@ -1746,7 +1748,10 @@ def migrar_pago_staging_a_pagos(
         # Validar que tenga datos mínimos
         cedula_final = pago_staging.cedula_cliente
         if not cedula_final:
-            raise HTTPException(status_code=400, detail="El pago staging no tiene cédula de cliente (cedula_cliente o cedula)")
+            raise HTTPException(
+                status_code=400,
+                detail="El pago staging no tiene cédula de cliente (cedula_cliente o cedula)",
+            )
         if not pago_staging.fecha_pago:
             raise HTTPException(status_code=400, detail="El pago staging no tiene fecha_pago")
         if not pago_staging.monto_pagado or pago_staging.monto_pagado <= 0:
@@ -1946,7 +1951,12 @@ def verificar_conexion_pagos_staging(
         logger.info("🔍 [verificar_pagos_staging] Calculando estadísticas...")
         try:
             total = db.query(func.count(PagoStaging.id)).scalar() or 0
-            con_cedula = db.query(func.count(PagoStaging.id)).filter(PagoStaging.cedula_cliente.isnot(None)).scalar() or 0
+            con_cedula = (
+                db.query(func.count(PagoStaging.id))
+                .filter(PagoStaging.cedula_cliente.isnot(None))
+                .scalar()
+                or 0
+            )
             con_fecha = db.query(func.count(PagoStaging.id)).filter(PagoStaging.fecha_pago.isnot(None)).scalar() or 0
             con_monto = (
                 db.query(func.count(PagoStaging.id))
