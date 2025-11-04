@@ -37,7 +37,7 @@ class PagoStaging(Base):
     fecha_pago = Column(String(50), nullable=True)  # Fecha de pago (TEXT en BD)
     monto_pagado = Column(String(50), nullable=True)  # Monto pagado (TEXT en BD)
     numero_documento = Column(String(DOCUMENTO_LENGTH), nullable=True, index=True)
-    
+
     # ESTADO DE CONCILIACIÓN (agregado después de migración)
     conciliado = Column(Boolean, nullable=True, default=False)  # Estado de conciliación
     fecha_conciliacion = Column(String(50), nullable=True)  # Fecha de conciliación (TEXT en BD)

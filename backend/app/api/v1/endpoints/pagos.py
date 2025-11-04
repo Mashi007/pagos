@@ -203,7 +203,7 @@ def _serializar_pago(pago, _hoy: date, cuotas_atrasadas_cache: Optional[dict[str
         if conciliado is None:
             conciliado = False
         fecha_conciliacion = getattr(pago, "fecha_conciliacion", None)
-        
+
         pago_dict = {
             "id": pago.id,
             "cedula_cliente": cedula_cliente,
