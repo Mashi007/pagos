@@ -2267,7 +2267,7 @@ def obtener_evolucion_morosidad(
     try:
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-        
+
         # Calcular fecha inicio (hace N meses)
         año_inicio = hoy.year
         mes_inicio = hoy.month - meses + 1
@@ -2275,17 +2275,17 @@ def obtener_evolucion_morosidad(
             año_inicio -= 1
             mes_inicio += 12
         fecha_inicio_query = date(año_inicio, mes_inicio, 1)
-        
+
         # Generar datos mensuales
         meses_data = []
         current_date = fecha_inicio_query
-        
+
         while current_date <= hoy:
             año_mes = current_date.year
             num_mes = current_date.month
             fecha_mes_inicio = date(año_mes, num_mes, 1)
             fecha_mes_fin = _obtener_fechas_mes_siguiente(num_mes, año_mes)
-            
+
             # Morosidad del mes = suma de monto_cuota de cuotas vencidas no pagadas
             # Consideramos cuotas que vencieron en ese mes y no están pagadas
             query_morosidad = (
@@ -2302,17 +2302,19 @@ def obtener_evolucion_morosidad(
                 query_morosidad, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
             morosidad_mes = float(query_morosidad.scalar() or Decimal("0"))
-            
-            meses_data.append({
-                "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
-                "morosidad": morosidad_mes,
-            })
-            
+
+            meses_data.append(
+                {
+                    "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
+                    "morosidad": morosidad_mes,
+                }
+            )
+
             # Avanzar al siguiente mes
             current_date = fecha_mes_fin
-        
+
         return {"meses": meses_data}
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo evolución de morosidad: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
@@ -2337,7 +2339,7 @@ def obtener_evolucion_pagos(
     try:
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-        
+
         # Calcular fecha inicio (hace N meses)
         año_inicio = hoy.year
         mes_inicio = hoy.month - meses + 1
@@ -2345,21 +2347,21 @@ def obtener_evolucion_pagos(
             año_inicio -= 1
             mes_inicio += 12
         fecha_inicio_query = date(año_inicio, mes_inicio, 1)
-        
+
         # Generar datos mensuales
         meses_data = []
         current_date = fecha_inicio_query
-        
+
         while current_date <= hoy:
             año_mes = current_date.year
             num_mes = current_date.month
             fecha_mes_inicio = date(año_mes, num_mes, 1)
             fecha_mes_fin = _obtener_fechas_mes_siguiente(num_mes, año_mes)
-            
+
             # Pagos del mes desde pagos_staging
             fecha_mes_inicio_dt = datetime.combine(fecha_mes_inicio, datetime.min.time())
             fecha_mes_fin_dt = datetime.combine(fecha_mes_fin, datetime.min.time())
-            
+
             query_pagos = db.execute(
                 text(
                     """
@@ -2379,21 +2381,23 @@ def obtener_evolucion_pagos(
                 ).bindparams(fecha_inicio=fecha_mes_inicio_dt, fecha_fin=fecha_mes_fin_dt)
             )
             resultado = query_pagos.first()
-            
+
             cantidad_pagos = resultado.cantidad if resultado else 0
             monto_total = float(resultado.monto_total or Decimal("0")) if resultado else 0.0
-            
-            meses_data.append({
-                "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
-                "pagos": cantidad_pagos,
-                "monto": monto_total,
-            })
-            
+
+            meses_data.append(
+                {
+                    "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
+                    "pagos": cantidad_pagos,
+                    "monto": monto_total,
+                }
+            )
+
             # Avanzar al siguiente mes
             current_date = fecha_mes_fin
-        
+
         return {"meses": meses_data}
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo evolución de pagos: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
