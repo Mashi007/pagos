@@ -131,7 +131,49 @@ def _calcular_cuotas_atrasadas_batch(db: Session, cedulas: list[str], hoy: date)
     return cuotas_por_cedula
 
 
-def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str, int]] = None):
+def _convertir_fecha_pago(fecha_pago: Any) -> Optional[datetime]:
+    """Convierte fecha_pago a datetime si es necesario"""
+    if fecha_pago is None:
+        return None
+
+    if isinstance(fecha_pago, str):
+        try:
+            return datetime.fromisoformat(fecha_pago.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            try:
+                return datetime.strptime(fecha_pago[:19], "%Y-%m-%d %H:%M:%S")
+            except (ValueError, IndexError):
+                return datetime.combine(date.fromisoformat(fecha_pago[:10]), time.min)
+
+    if isinstance(fecha_pago, date) and not isinstance(fecha_pago, datetime):
+        return datetime.combine(fecha_pago, time.min)
+
+    return fecha_pago
+
+
+def _convertir_monto_pagado(monto: Any, pago_id: Any) -> Decimal:
+    """Convierte monto_pagado de string a Decimal"""
+    if not monto:
+        return Decimal("0.00")
+
+    try:
+        monto_str = str(monto).strip()
+        if monto_str and monto_str != "":
+            return Decimal(monto_str)
+    except (ValueError, TypeError):
+        logger.warning(f"⚠️ [serializar_pago] No se pudo convertir monto_pagado '{monto}' a Decimal para pago {pago_id}")
+    return Decimal("0.00")
+
+
+def _obtener_cuotas_atrasadas(cedula_cliente: str, cuotas_atrasadas_cache: Optional[dict[str, int]], pago_id: Any) -> int:
+    """Obtiene cuotas atrasadas del cache"""
+    if cuotas_atrasadas_cache is not None:
+        return cuotas_atrasadas_cache.get(cedula_cliente, 0)
+    logger.warning(f"⚠️ [serializar_pago] No se proporcionó cache de cuotas atrasadas para pago {pago_id}")
+    return 0
+
+
+def _serializar_pago(pago, _hoy: date, cuotas_atrasadas_cache: Optional[dict[str, int]] = None):
     """
     Serializa un pago de forma segura.
 
@@ -142,69 +184,40 @@ def _serializar_pago(pago, hoy: date, cuotas_atrasadas_cache: Optional[dict[str,
     Si no se proporciona cache, asume 0 (no se calcula individualmente para mejor performance).
     """
     try:
-        # Convertir fecha_pago si es string a datetime si es necesario
         fecha_pago_dt = None
         if hasattr(pago, "fecha_pago") and pago.fecha_pago is not None:
-            if isinstance(pago.fecha_pago, str):
-                # Intentar parsear string a datetime
-                try:
-                    fecha_pago_dt = datetime.fromisoformat(pago.fecha_pago.replace("Z", "+00:00"))
-                except (ValueError, AttributeError):
-                    try:
-                        fecha_pago_dt = datetime.strptime(pago.fecha_pago[:19], "%Y-%m-%d %H:%M:%S")
-                    except (ValueError, IndexError):
-                        fecha_pago_dt = datetime.combine(date.fromisoformat(pago.fecha_pago[:10]), time.min)
-            elif isinstance(pago.fecha_pago, date) and not isinstance(pago.fecha_pago, datetime):
-                fecha_pago_dt = datetime.combine(pago.fecha_pago, time.min)
-            else:
-                fecha_pago_dt = pago.fecha_pago
+            fecha_pago_dt = _convertir_fecha_pago(pago.fecha_pago)
 
-        # Convertir monto_pagado de string a Decimal
         monto_pagado_decimal = Decimal("0.00")
         if hasattr(pago, "monto_pagado") and pago.monto_pagado:
-            try:
-                monto_str = str(pago.monto_pagado).strip()
-                if monto_str and monto_str != "":
-                    monto_pagado_decimal = Decimal(monto_str)
-            except (ValueError, TypeError):
-                logger.warning(
-                    f"⚠️ [serializar_pago] No se pudo convertir monto_pagado '{pago.monto_pagado}' a Decimal para pago {pago.id}"
-                )
+            monto_pagado_decimal = _convertir_monto_pagado(pago.monto_pagado, pago.id)
 
-        # Construir diccionario manualmente porque PagoStaging no tiene todos los campos de PagoResponse
+        cedula_cliente = getattr(pago, "cedula_cliente", "")
+        cuotas_atrasadas = _obtener_cuotas_atrasadas(cedula_cliente, cuotas_atrasadas_cache, pago.id)
+
         pago_dict = {
             "id": pago.id,
-            "cedula_cliente": getattr(pago, "cedula_cliente", ""),
-            "prestamo_id": None,  # PagoStaging no tiene prestamo_id
+            "cedula_cliente": cedula_cliente,
+            "prestamo_id": None,
             "fecha_pago": fecha_pago_dt,
-            "monto_pagado": float(monto_pagado_decimal),  # Convertir a float para serialización
+            "monto_pagado": float(monto_pagado_decimal),
             "numero_documento": getattr(pago, "numero_documento", ""),
-            "institucion_bancaria": None,  # PagoStaging no tiene esta columna
-            "notas": None,  # PagoStaging no tiene esta columna
-            "fecha_registro": None,  # PagoStaging no tiene esta columna
-            "estado": "REGISTRADO",  # Valor por defecto ya que PagoStaging no tiene esta columna
-            "conciliado": False,  # Valor por defecto ya que PagoStaging no tiene esta columna
-            "fecha_conciliacion": None,  # PagoStaging no tiene esta columna
-            "documento_nombre": None,  # PagoStaging no tiene esta columna
-            "documento_tipo": None,  # PagoStaging no tiene esta columna
-            "documento_ruta": None,  # PagoStaging no tiene esta columna
-            "usuario_registro": "SISTEMA",  # Valor por defecto ya que PagoStaging no tiene esta columna
-            "activo": True,  # Valor por defecto ya que PagoStaging no tiene esta columna
-            "fecha_actualizacion": None,  # PagoStaging no tiene esta columna
-            "verificado_concordancia": None,  # PagoStaging no tiene esta columna
+            "institucion_bancaria": None,
+            "notas": None,
+            "fecha_registro": None,
+            "estado": "REGISTRADO",
+            "conciliado": False,
+            "fecha_conciliacion": None,
+            "documento_nombre": None,
+            "documento_tipo": None,
+            "documento_ruta": None,
+            "usuario_registro": "SISTEMA",
+            "activo": True,
+            "fecha_actualizacion": None,
+            "verificado_concordancia": None,
+            "cuotas_atrasadas": cuotas_atrasadas,
         }
 
-        # Obtener cuotas atrasadas del cache (siempre debe proporcionarse)
-        # PagoStaging solo tiene cedula_cliente
-        cedula_cliente = getattr(pago, "cedula_cliente", "")
-        if cuotas_atrasadas_cache is not None:
-            cuotas_atrasadas = cuotas_atrasadas_cache.get(cedula_cliente, 0)
-        else:
-            # Fallback: 0 si no hay cache (para evitar N+1, el cache debe calcularse antes)
-            cuotas_atrasadas = 0
-            logger.warning(f"⚠️ [serializar_pago] No se proporcionó cache de cuotas atrasadas para pago {pago.id}")
-
-        pago_dict["cuotas_atrasadas"] = cuotas_atrasadas
         return pago_dict
     except Exception as e:
         error_detail = str(e)
@@ -458,6 +471,87 @@ def diagnostico_pagos(
     return diagnostico
 
 
+def _contar_total_pagos_validos(db: Session, cedula: Optional[str] = None) -> int:
+    """Cuenta el total de pagos válidos en pagos_staging"""
+    if cedula:
+        result = db.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM pagos_staging
+                WHERE cedula_cliente = :cedula
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                  AND TRIM(monto_pagado) != ''
+                """
+            ).bindparams(cedula=cedula)
+        )
+    else:
+        result = db.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM pagos_staging
+                WHERE cedula_cliente IS NOT NULL
+                  AND cedula_cliente != ''
+                  AND TRIM(cedula_cliente) != ''
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                  AND TRIM(monto_pagado) != ''
+                """
+            )
+        )
+    return result.scalar() or 0
+
+
+def _obtener_pagos_paginados(db: Session, page: int, per_page: int) -> list:
+    """Obtiene pagos paginados de la BD"""
+    offset = (page - 1) * per_page
+    pagos_raw = db.execute(
+        text(
+            """
+            SELECT id_stg, cedula_cliente, fecha_pago, monto_pagado, numero_documento
+            FROM pagos_staging
+                WHERE cedula_cliente IS NOT NULL
+                  AND cedula_cliente != ''
+                  AND TRIM(cedula_cliente) != ''
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                  AND TRIM(monto_pagado) != ''
+                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                  AND monto_pagado::numeric >= 0
+            ORDER BY id_stg DESC
+            LIMIT :limit OFFSET :offset
+        """
+        ).bindparams(limit=per_page, offset=offset)
+    ).fetchall()
+
+    pagos = []
+    for row in pagos_raw:
+        pago = PagoStaging()
+        pago.id = row[0]
+        pago.cedula_cliente = row[1]
+        pago.fecha_pago = row[2]
+        pago.monto_pagado = row[3]
+        pago.numero_documento = row[4]
+        pagos.append(pago)
+    return pagos
+
+
+def _serializar_pagos_con_cache(pagos: list, db: Session, hoy: date) -> list:
+    """Serializa una lista de pagos usando cache de cuotas atrasadas"""
+    cedulas_unicas = list(set(p.cedula_cliente for p in pagos if p.cedula_cliente))
+    cuotas_atrasadas_cache = _calcular_cuotas_atrasadas_batch(db, cedulas_unicas, hoy)
+
+    pagos_serializados = []
+    for pago in pagos:
+        try:
+            pago_dict = _serializar_pago(pago, hoy, cuotas_atrasadas_cache)
+            if pago_dict:
+                pagos_serializados.append(pago_dict)
+        except Exception:
+            continue
+    return pagos_serializados
+
+
 @router.get("/", response_model=dict)
 def listar_pagos(
     page: int = Query(1, ge=1),
@@ -476,7 +570,6 @@ def listar_pagos(
     try:
         logger.info(f"📋 [listar_pagos] Iniciando consulta - página {page}, por página {per_page}")
 
-        # Verificar conexión a BD
         try:
             test_query = db.query(func.count(PagoStaging.id)).scalar()
             logger.info(f"✅ [listar_pagos] Conexión BD OK. Total pagos en pagos_staging: {test_query}")
@@ -487,113 +580,14 @@ def listar_pagos(
                 detail=f"Error de conexión a la base de datos: {str(db_error)}",
             )
 
-        # ⚠️ IMPORTANTE: PagoStaging solo tiene 5 columnas en BD
-        # Usar query directo y evitar que SQLAlchemy seleccione columnas que no existen
-        query = db.query(PagoStaging)
-
-        # Aplicar filtros
-        query = _aplicar_filtros_pagos(query, cedula, estado, fecha_desde, fecha_hasta, analista, db)
-
-        # Contar total - filtrar solo pagos con datos válidos (cedula y monto no vacíos)
-        result = db.execute(
-            text(
-                """
-                SELECT COUNT(*) FROM pagos_staging 
-                WHERE cedula_cliente IS NOT NULL 
-                  AND cedula_cliente != ''
-                  AND TRIM(cedula_cliente) != ''
-                  AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
-                  AND TRIM(monto_pagado) != ''
-                """
-            )
-        )
-        total = result.scalar() or 0
-
-        # Aplicar filtros al count también si hay cedula
-        if cedula:
-            result = db.execute(
-                text(
-                    """
-                    SELECT COUNT(*) FROM pagos_staging 
-                    WHERE cedula_cliente = :cedula
-                      AND monto_pagado IS NOT NULL
-                      AND monto_pagado != ''
-                      AND TRIM(monto_pagado) != ''
-                    """
-                ).bindparams(cedula=cedula)
-            )
-            total = result.scalar() or 0
-
+        total = _contar_total_pagos_validos(db, cedula)
         logger.info(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")
 
-        # Paginación - usar SQL directo para evitar problemas con columnas inexistentes
-        # Filtrar por cedula_cliente válida (no NULL y no vacío) y monto_pagado válido
-        offset = (page - 1) * per_page
-        pagos_raw = db.execute(
-            text(
-                """
-                SELECT id_stg, cedula_cliente, fecha_pago, monto_pagado, numero_documento
-                FROM pagos_staging
-                WHERE cedula_cliente IS NOT NULL
-                  AND cedula_cliente != ''
-                  AND TRIM(cedula_cliente) != ''
-                  AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
-                  AND TRIM(monto_pagado) != ''
-                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-                  AND monto_pagado::numeric > 0
-                ORDER BY id_stg DESC
-                LIMIT :limit OFFSET :offset
-            """
-            ).bindparams(limit=per_page, offset=offset)
-        ).fetchall()
-
-        # Log de diagnóstico: mostrar ejemplos de los datos reales obtenidos
-        if pagos_raw:
-            logger.info(f"📊 [listar_pagos] Ejemplos de datos obtenidos de BD:")
-            for i, row in enumerate(pagos_raw[:3]):  # Mostrar primeros 3
-                logger.info(
-                    f"   Pago {i+1}: ID={row[0]}, Cédula='{row[1]}', " f"Fecha='{row[2]}', Monto='{row[3]}', Doc='{row[4]}'"
-                )
-        else:
-            logger.warning("⚠️ [listar_pagos] No se obtuvieron pagos con datos válidos de la BD")
-
-        # Convertir resultados a objetos PagoStaging simulados
-        pagos = []
-        for row in pagos_raw:
-            pago = PagoStaging()
-            pago.id = row[0]
-            pago.cedula_cliente = row[1]
-            pago.fecha_pago = row[2]
-            pago.monto_pagado = row[3]
-            pago.numero_documento = row[4]
-            pagos.append(pago)
+        pagos = _obtener_pagos_paginados(db, page, per_page)
         logger.info(f"📄 [listar_pagos] Pagos obtenidos de BD: {len(pagos)}")
 
-        # OPTIMIZACIÓN: Calcular todas las cuotas atrasadas de una vez (batch)
         hoy = date.today()
-        # PagoStaging solo tiene cedula_cliente
-        cedulas_unicas = list(set(p.cedula_cliente for p in pagos if p.cedula_cliente))
-        cuotas_atrasadas_cache = _calcular_cuotas_atrasadas_batch(db, cedulas_unicas, hoy)
-
-        logger.debug(f"✅ [listar_pagos] Cache de cuotas atrasadas calculado para {len(cedulas_unicas)} clientes únicos")
-
-        # Serializar pagos usando el cache
-        pagos_serializados = []
-        errores_serializacion = 0
-
-        for pago in pagos:
-            try:
-                pago_dict = _serializar_pago(pago, hoy, cuotas_atrasadas_cache)
-                pagos_serializados.append(pago_dict)
-            except Exception:
-                errores_serializacion += 1
-                continue
-
-        if errores_serializacion > 0:
-            logger.warning(f"⚠️ [listar_pagos] {errores_serializacion} de {len(pagos)} pagos fallaron en serialización")
-
+        pagos_serializados = _serializar_pagos_con_cache(pagos, db, hoy)
         logger.info(f"✅ [listar_pagos] Serializados exitosamente: {len(pagos_serializados)} pagos")
 
         return {
@@ -1023,6 +1017,69 @@ def _aplicar_exceso_a_siguiente_cuota(
     return 1 if estado_completado else 0
 
 
+def _verificar_prestamo_y_cedula(pago: Pago, db: Session) -> tuple[bool, Optional[Any]]:
+    """Verifica que el préstamo existe y la cédula coincide"""
+    from app.models.prestamo import Prestamo
+
+    if not pago.prestamo_id:
+        logger.warning(f"⚠️ [aplicar_pago_a_cuotas] Pago ID {pago.id} no tiene prestamo_id. No se aplicará a cuotas.")
+        return False, None
+
+    prestamo = db.query(Prestamo).filter(Prestamo.id == pago.prestamo_id).first()
+    if not prestamo:
+        logger.error(f"❌ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} no encontrado")
+        return False, None
+
+    if pago.cedula_cliente and prestamo.cedula and pago.cedula_cliente != prestamo.cedula:
+        logger.error(
+            f"❌ [aplicar_pago_a_cuotas] Cédula del pago ({pago.cedula_cliente}) "
+            f"no coincide con cédula del préstamo ({prestamo.cedula}). No se aplicará el pago a las cuotas."
+        )
+        return False, None
+
+    return True, prestamo
+
+
+def _obtener_cuotas_pendientes(db: Session, prestamo_id: int) -> list:
+    """Obtiene las cuotas pendientes del préstamo ordenadas por fecha de vencimiento"""
+    cuotas = (
+        db.query(Cuota)
+        .filter(
+            Cuota.prestamo_id == prestamo_id,
+            Cuota.estado != "PAGADO",
+        )
+        .order_by(Cuota.fecha_vencimiento, Cuota.numero_cuota)
+        .all()
+    )
+    return cuotas
+
+
+def _aplicar_pago_a_cuotas_iterativas(cuotas: list, saldo_restante: Decimal, fecha_pago: date, fecha_hoy: date) -> tuple[int, Decimal]:
+    """Aplica el pago a las cuotas iterativamente"""
+    cuotas_completadas = 0
+
+    for cuota in cuotas:
+        if saldo_restante <= Decimal("0.00"):
+            break
+
+        monto_faltante = cuota.monto_cuota - cuota.total_pagado
+        monto_aplicar = min(saldo_restante, monto_faltante)
+
+        if monto_aplicar <= Decimal("0.00"):
+            continue
+
+        if _aplicar_monto_a_cuota(cuota, monto_aplicar, fecha_pago, fecha_hoy):
+            cuotas_completadas += 1
+
+        saldo_restante -= monto_aplicar
+        logger.debug(
+            f"  💰 [aplicar_pago_a_cuotas] Cuota #{cuota.numero_cuota}: "
+            f"Aplicado ${monto_aplicar}, Saldo restante: ${saldo_restante}, Estado: {cuota.estado}"
+        )
+
+    return cuotas_completadas, saldo_restante
+
+
 def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
     """
     Aplica un pago a las cuotas correspondientes según la regla de negocio:
@@ -1035,26 +1092,10 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
     Returns:
         int: Número de cuotas que se completaron completamente con este pago
     """
-    if not pago.prestamo_id:
-        logger.warning(f"⚠️ [aplicar_pago_a_cuotas] Pago ID {pago.id} no tiene prestamo_id. " f"No se aplicará a cuotas.")
-        return 0
-
     from datetime import date
 
-    from app.models.prestamo import Prestamo
-
-    # ✅ VERIFICACIÓN DE CÉDULA: Verificar que la cédula del pago coincida con la del préstamo
-    prestamo = db.query(Prestamo).filter(Prestamo.id == pago.prestamo_id).first()
-    if not prestamo:
-        logger.error(f"❌ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} no encontrado")
-        return 0
-
-    if pago.cedula_cliente and prestamo.cedula and pago.cedula_cliente != prestamo.cedula:
-        logger.error(
-            f"❌ [aplicar_pago_a_cuotas] Cédula del pago ({pago.cedula_cliente}) "
-            f"no coincide con cédula del préstamo ({prestamo.cedula}). "
-            f"No se aplicará el pago a las cuotas."
-        )
+    validacion_ok, _ = _verificar_prestamo_y_cedula(pago, db)
+    if not validacion_ok:
         return 0
 
     logger.info(
@@ -1062,68 +1103,25 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
         f"(monto: ${pago.monto_pagado}, prestamo_id: {pago.prestamo_id}, cedula: {pago.cedula_cliente})"
     )
 
-    # ✅ ORDENAMIENTO: Ordenar por fecha_vencimiento (más antigua primero), luego por numero_cuota
-    # Esto asegura que se cubran primero las cuotas más antiguas según su fecha de vencimiento
-    cuotas = (
-        db.query(Cuota)
-        .filter(
-            Cuota.prestamo_id == pago.prestamo_id,
-            Cuota.estado != "PAGADO",
-        )
-        .order_by(Cuota.fecha_vencimiento, Cuota.numero_cuota)  # ✅ Más antigua primero por fecha_vencimiento
-        .all()
-    )
-
-    logger.info(f"📋 [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id}: " f"{len(cuotas)} cuotas no pagadas encontradas")
+    cuotas = _obtener_cuotas_pendientes(db, pago.prestamo_id)
+    logger.info(f"📋 [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id}: {len(cuotas)} cuotas no pagadas encontradas")
 
     if len(cuotas) == 0:
-        logger.warning(
-            f"⚠️ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} no tiene cuotas pendientes. " f"No se aplicará el pago."
-        )
+        logger.warning(f"⚠️ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} no tiene cuotas pendientes. No se aplicará el pago.")
         return 0
 
-    saldo_restante = pago.monto_pagado
-    cuotas_completadas = 0
     fecha_hoy = date.today()
-
-    for cuota in cuotas:
-        if saldo_restante <= Decimal("0.00"):
-            break
-
-        monto_faltante = cuota.monto_cuota - cuota.total_pagado
-        monto_aplicar = min(saldo_restante, monto_faltante)
-
-        if monto_aplicar <= Decimal("0.00"):
-            continue
-
-        if _aplicar_monto_a_cuota(cuota, monto_aplicar, pago.fecha_pago, fecha_hoy):
-            cuotas_completadas += 1
-
-        saldo_restante -= monto_aplicar
-        logger.debug(
-            f"  💰 [aplicar_pago_a_cuotas] Cuota #{cuota.numero_cuota}: "
-            f"Aplicado ${monto_aplicar}, Saldo restante: ${saldo_restante}, "
-            f"Estado: {cuota.estado}"
-        )
+    cuotas_completadas, saldo_restante = _aplicar_pago_a_cuotas_iterativas(cuotas, pago.monto_pagado, pago.fecha_pago, fecha_hoy)
 
     if saldo_restante > Decimal("0.00"):
-        logger.info(
-            f"📊 [aplicar_pago_a_cuotas] Saldo restante: ${saldo_restante}. " f"Aplicando a siguiente cuota pendiente..."
-        )
-        cuotas_completadas += _aplicar_exceso_a_siguiente_cuota(
-            db, pago.prestamo_id, saldo_restante, pago.fecha_pago, fecha_hoy
-        )
+        logger.info(f"📊 [aplicar_pago_a_cuotas] Saldo restante: ${saldo_restante}. Aplicando a siguiente cuota pendiente...")
+        cuotas_completadas += _aplicar_exceso_a_siguiente_cuota(db, pago.prestamo_id, saldo_restante, pago.fecha_pago, fecha_hoy)
 
     try:
         db.commit()
-        logger.info(
-            f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id} aplicado exitosamente. " f"Cuotas completadas: {cuotas_completadas}"
-        )
+        logger.info(f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id} aplicado exitosamente. Cuotas completadas: {cuotas_completadas}")
     except Exception as e:
-        logger.error(
-            f"❌ [aplicar_pago_a_cuotas] Error al guardar cambios en BD: {str(e)}",
-            exc_info=True,
-        )
+        logger.error(f"❌ [aplicar_pago_a_cuotas] Error al guardar cambios en BD: {str(e)}", exc_info=True)
         db.rollback()
         raise
 
@@ -1504,7 +1502,7 @@ def obtener_kpis_pagos(
 
         # ✅ LOG FINAL CONFIRMANDO QUE SON DATOS REALES
         logger.info(
-            f"✅ [kpis_pagos] ===== KPIs CALCULADOS CON DATOS REALES DE BD ===== "
+            "✅ [kpis_pagos] ===== KPIs CALCULADOS CON DATOS REALES DE BD ===== "
             f"Monto Cobrado=${float(monto_cobrado_mes):,.2f}, "
             f"Saldo por Cobrar=${float(saldo_por_cobrar):,.2f}, "
             f"Clientes en Mora={clientes_en_mora}, "
@@ -1958,7 +1956,7 @@ def migrar_pago_staging_a_pagos(
 
         # Eliminar de staging (opcional, comentar si se quiere mantener)
         # db.delete(pago_staging)
-        # logger.info(f"🗑️ [migrar_pago_staging] Pago eliminado de staging")
+        # logger.info("🗑️ [migrar_pago_staging] Pago eliminado de staging")
 
         db.commit()
 

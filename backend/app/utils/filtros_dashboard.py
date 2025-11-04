@@ -57,6 +57,55 @@ class FiltrosDashboard:
         return query
 
     @staticmethod
+    def _detectar_tabla_pago(query: Query) -> Any:
+        """Detecta si la query usa Pago o PagoStaging"""
+        try:
+            compiled_sql = str(query.statement.compile(compile_kwargs={"literal_binds": False})).lower()
+            if "pagos_staging" in compiled_sql or "pagostaging" in compiled_sql:
+                return PagoStaging
+            if "pagos" in compiled_sql and "staging" not in compiled_sql:
+                return Pago
+        except (AttributeError, Exception):
+            try:
+                if hasattr(query, "column_descriptions"):
+                    desc = query.column_descriptions
+                    for col in desc:
+                        if "entity" in col and col["entity"]:
+                            entity = col["entity"]
+                            if hasattr(entity, "__tablename__"):
+                                if entity.__tablename__ == "pagos_staging":
+                                    return PagoStaging
+                                if entity.__tablename__ == "pagos":
+                                    return Pago
+            except (AttributeError, Exception):
+                pass
+        return PagoStaging  # Default
+
+    @staticmethod
+    def _verificar_join_prestamo(query: Query) -> bool:
+        """Verifica si ya existe un JOIN con Prestamo"""
+        try:
+            compiled_sql = str(query.statement.compile(compile_kwargs={"literal_binds": False})).lower()
+            prestamo_table_name = Prestamo.__tablename__.lower()
+            if prestamo_table_name in compiled_sql:
+                count_joins = compiled_sql.count("join") + compiled_sql.count("from")
+                return count_joins > 0 and prestamo_table_name in compiled_sql
+        except (AttributeError, Exception):
+            pass
+        return False
+
+    @staticmethod
+    def _aplicar_filtros_prestamo(query: Query, analista: Optional[str], concesionario: Optional[str], modelo: Optional[str]) -> Query:
+        """Aplica filtros de préstamo a la query"""
+        if analista:
+            query = query.filter(or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista))
+        if concesionario:
+            query = query.filter(Prestamo.concesionario == concesionario)
+        if modelo:
+            query = query.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
+        return query
+
+    @staticmethod
     def aplicar_filtros_pago(
         query: Query,
         analista: Optional[str] = None,
@@ -75,78 +124,14 @@ class FiltrosDashboard:
             )
             # NOTA: El método detecta automáticamente si necesita hacer el JOIN
         """
-        # Detectar si la query usa Pago o PagoStaging
-        # Verificar qué modelo está en la query principal
-        tabla_pago = None
-        try:
-            # Intentar detectar qué tabla de pagos se está usando
-            compiled_sql = str(query.statement.compile(compile_kwargs={"literal_binds": False})).lower()
-            if "pagos_staging" in compiled_sql or "pagostaging" in compiled_sql:
-                tabla_pago = PagoStaging
-            elif "pagos" in compiled_sql and "staging" not in compiled_sql:
-                # Puede ser Pago, pero verificar que no sea solo parte de otra palabra
-                if "pagos" in compiled_sql and "pagos_staging" not in compiled_sql:
-                    tabla_pago = Pago
-        except (AttributeError, Exception):
-            # Si no se puede detectar, intentar inferir desde la estructura de la query
-            try:
-                # Verificar si la query tiene columnas específicas de PagoStaging
-                if hasattr(query, "column_descriptions"):
-                    desc = query.column_descriptions
-                    for col in desc:
-                        if "entity" in col and col["entity"]:
-                            entity = col["entity"]
-                            if hasattr(entity, "__tablename__"):
-                                if entity.__tablename__ == "pagos_staging":
-                                    tabla_pago = PagoStaging
-                                    break
-                                elif entity.__tablename__ == "pagos":
-                                    tabla_pago = Pago
-                                    break
-            except (AttributeError, Exception):
-                pass
+        tabla_pago = FiltrosDashboard._detectar_tabla_pago(query)
 
-        # Si no se pudo detectar, usar PagoStaging por defecto (donde están los datos)
-        if tabla_pago is None:
-            tabla_pago = PagoStaging
-
-        # Si hay filtros de préstamo, hacer JOIN solo si no existe ya
         if analista or concesionario or modelo:
-            # Verificar si ya existe un JOIN con Prestamo compilando el SQL
-            necesita_join = True
-            try:
-                # Compilar el statement a SQL para verificar si ya tiene la tabla prestamos
-                compiled_sql = str(query.statement.compile(compile_kwargs={"literal_binds": False})).lower()
-                # Buscar referencias a la tabla prestamos (puede estar como "prestamos" o con esquema)
-                prestamo_table_name = Prestamo.__tablename__
-                # Verificar si la tabla ya aparece en el SQL (puede estar en FROM o JOIN)
-                if prestamo_table_name.lower() in compiled_sql:
-                    # Contar cuántas veces aparece "JOIN prestamos" o "FROM prestamos"
-                    count_joins = compiled_sql.count("join") + compiled_sql.count("from")
-                    # Si ya aparece al menos una vez, probablemente ya hay un JOIN
-                    if count_joins > 0 and prestamo_table_name.lower() in compiled_sql:
-                        necesita_join = False
-            except (AttributeError, Exception):
-                # Si hay error al compilar, asumir que necesita JOIN (seguro fallar que fallar silenciosamente)
-                necesita_join = True
-
-            # Hacer JOIN solo si es necesario, usando la tabla correcta (Pago o PagoStaging)
+            necesita_join = not FiltrosDashboard._verificar_join_prestamo(query)
             if necesita_join:
                 query = query.join(Prestamo, tabla_pago.prestamo_id == Prestamo.id)
+            query = FiltrosDashboard._aplicar_filtros_prestamo(query, analista, concesionario, modelo)
 
-            if analista:
-                query = query.filter(
-                    or_(
-                        Prestamo.analista == analista,
-                        Prestamo.producto_financiero == analista,
-                    )
-                )
-            if concesionario:
-                query = query.filter(Prestamo.concesionario == concesionario)
-            if modelo:
-                query = query.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
-
-        # Aplicar filtros de fecha usando la tabla correcta
         if fecha_inicio:
             query = query.filter(func.date(tabla_pago.fecha_pago) >= fecha_inicio)
         if fecha_fin:

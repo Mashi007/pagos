@@ -335,6 +335,63 @@ def obtener_configuracion_general(db: Session = Depends(get_db)):
     return config
 
 
+def _validar_logo(logo: UploadFile, contents: bytes) -> None:
+    """Valida el tipo y tamaño del logo"""
+    allowed_types = ["image/svg+xml", "image/png", "image/jpeg", "image/jpg"]
+    if logo.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Formato no válido. Use SVG, PNG o JPG",
+        )
+    if len(contents) > 2 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo es demasiado grande. Máximo 2MB",
+        )
+
+
+def _obtener_extension_logo(content_type: str) -> str:
+    """Obtiene la extensión del archivo basada en content_type"""
+    content_type_to_ext = {
+        "image/svg+xml": ".svg",
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+    }
+    return content_type_to_ext.get(content_type, ".svg")
+
+
+def _guardar_logo_en_bd(db: Session, logo_filename: str) -> None:
+    """Guarda o actualiza la referencia del logo en la base de datos"""
+    from app.models.configuracion_sistema import ConfiguracionSistema
+
+    logo_config = (
+        db.query(ConfiguracionSistema)
+        .filter(
+            ConfiguracionSistema.categoria == "GENERAL",
+            ConfiguracionSistema.clave == "logo_filename",
+        )
+        .first()
+    )
+
+    if logo_config:
+        logo_config.valor = logo_filename  # type: ignore[assignment]
+    else:
+        logo_config = ConfiguracionSistema(
+            categoria="GENERAL",
+            clave="logo_filename",
+            valor=logo_filename,
+            tipo_dato="STRING",
+            descripcion="Nombre del archivo del logo de la empresa",
+            visible_frontend=True,
+        )
+        db.add(logo_config)
+
+    db.commit()
+    db.refresh(logo_config)
+    logger.info(f"✅ Logo filename guardado en BD exitosamente: {logo_filename}")
+
+
 @router.post("/upload-logo")
 async def upload_logo(
     logo: UploadFile = File(...),
@@ -349,98 +406,27 @@ async def upload_logo(
         )
 
     try:
-        # Validar tipo de archivo
-        allowed_types = ["image/svg+xml", "image/png", "image/jpeg", "image/jpg"]
-        if logo.content_type not in allowed_types:
-            raise HTTPException(
-                status_code=400,
-                detail="Formato no válido. Use SVG, PNG o JPG",
-            )
-
-        # Validar tamaño (máximo 2MB)
         contents = await logo.read()
-        if len(contents) > 2 * 1024 * 1024:
-            raise HTTPException(
-                status_code=400,
-                detail="El archivo es demasiado grande. Máximo 2MB",
-            )
+        _validar_logo(logo, contents)
 
-        # Determinar extensión basada en content_type
-        content_type_to_ext = {
-            "image/svg+xml": ".svg",
-            "image/png": ".png",
-            "image/jpeg": ".jpg",
-            "image/jpg": ".jpg",
-        }
-        extension = content_type_to_ext.get(logo.content_type, ".svg")
+        extension = _obtener_extension_logo(logo.content_type)
 
-        # Crear directorio de logos en el directorio de uploads del backend
         from app.core.config import settings
-
         uploads_dir = Path(settings.UPLOAD_DIR) if hasattr(settings, "UPLOAD_DIR") else Path("uploads")
         logos_dir = uploads_dir / "logos"
         logos_dir.mkdir(parents=True, exist_ok=True)
 
-        # Nombre del archivo: logo-custom.{ext}
         logo_filename = f"logo-custom{extension}"
         logo_path = logos_dir / logo_filename
 
-        # Guardar archivo
         with open(logo_path, "wb") as f:
             f.write(contents)
 
-        # Guardar referencia del logo en la base de datos
-        from app.models.configuracion_sistema import ConfiguracionSistema
-
         try:
-            # Buscar si ya existe una configuración de logo
-            logo_config = (
-                db.query(ConfiguracionSistema)
-                .filter(
-                    ConfiguracionSistema.categoria == "GENERAL",
-                    ConfiguracionSistema.clave == "logo_filename",
-                )
-                .first()
-            )
-
-            if logo_config:
-                # Actualizar configuración existente
-                logo_config.valor = logo_filename  # type: ignore[assignment]
-                # actualizado_en se actualiza automáticamente por onupdate=func.now()
-            else:
-                # Crear nueva configuración
-                logo_config = ConfiguracionSistema(
-                    categoria="GENERAL",
-                    clave="logo_filename",
-                    valor=logo_filename,
-                    tipo_dato="STRING",
-                    descripcion="Nombre del archivo del logo de la empresa",
-                    visible_frontend=True,
-                    # creado_por y actualizado_por no existen en la tabla BD
-                )
-                db.add(logo_config)
-
-            db.commit()
-            db.refresh(logo_config)  # Refrescar para asegurar que se guardó
-            logger.info(f"✅ Logo filename guardado en BD exitosamente: {logo_filename}")
-
-            # Verificar que se guardó correctamente
-            verificacion = (
-                db.query(ConfiguracionSistema)
-                .filter(
-                    ConfiguracionSistema.categoria == "GENERAL",
-                    ConfiguracionSistema.clave == "logo_filename",
-                )
-                .first()
-            )
-            if verificacion and verificacion.valor == logo_filename:
-                logger.info(f"✅ Verificación exitosa: logo_filename '{logo_filename}' persistido en BD")
-            else:
-                logger.warning(f"⚠️ Advertencia: No se pudo verificar el guardado de logo_filename en BD")
+            _guardar_logo_en_bd(db, logo_filename)
         except Exception as db_error:
             db.rollback()
             logger.error(f"❌ Error guardando configuración de logo en BD: {str(db_error)}", exc_info=True)
-            # FALLAR si no se puede guardar en BD, es crítico para persistencia
             raise HTTPException(
                 status_code=500, detail=f"Error guardando configuración de logo en base de datos: {str(db_error)}"
             )
@@ -566,6 +552,54 @@ async def obtener_logo(
 # ============================================
 
 
+def _obtener_valores_email_por_defecto() -> Dict[str, str]:
+    """Retorna valores por defecto para configuración de email"""
+    return {
+        "smtp_host": "smtp.gmail.com",
+        "smtp_port": "587",
+        "smtp_user": "",
+        "smtp_password": "",
+        "from_email": "",
+        "from_name": "RapiCredit",
+        "smtp_use_tls": "true",
+    }
+
+
+def _consultar_configuracion_email(db: Session) -> Optional[Any]:
+    """Intenta consultar configuración de email desde BD"""
+    try:
+        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "EMAIL").all()
+        logger.info(f"📊 Configuraciones encontradas: {len(configs)}")
+        return configs
+    except Exception as query_error:
+        logger.error(f"❌ Error ejecutando consulta de configuración de email: {str(query_error)}", exc_info=True)
+        try:
+            config_dict = ConfiguracionSistema.obtener_categoria(db, "EMAIL")
+            if config_dict:
+                logger.info(f"✅ Configuración obtenida usando método alternativo: {len(config_dict)} configuraciones")
+                return config_dict
+        except Exception as alt_error:
+            logger.error(f"❌ Error en método alternativo también falló: {str(alt_error)}", exc_info=True)
+        return None
+
+
+def _procesar_configuraciones_email(configs: list) -> Dict[str, Any]:
+    """Procesa una lista de configuraciones y retorna un diccionario"""
+    config_dict = {}
+    for config in configs:
+        try:
+            if hasattr(config, "clave") and config.clave:
+                valor = config.valor if hasattr(config, "valor") and config.valor is not None else ""
+                config_dict[config.clave] = valor
+                logger.debug(f"📝 Configuración: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
+            else:
+                logger.warning(f"⚠️ Configuración sin clave válida: {config}")
+        except Exception as config_error:
+            logger.error(f"❌ Error procesando configuración individual: {config_error}", exc_info=True)
+            continue
+    return config_dict
+
+
 @router.get("/email/configuracion")
 def obtener_configuracion_email(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Obtener configuración de email"""
@@ -582,62 +616,20 @@ def obtener_configuracion_email(db: Session = Depends(get_db), current_user: Use
             )
 
         logger.info("🔍 Consultando configuración de email desde BD...")
+        configs = _consultar_configuracion_email(db)
 
-        # Intentar consulta con manejo robusto de errores
-        configs = None
-        try:
-            configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "EMAIL").all()
-            logger.info(f"📊 Configuraciones encontradas: {len(configs)}")
-        except Exception as query_error:
-            logger.error(f"❌ Error ejecutando consulta de configuración de email: {str(query_error)}", exc_info=True)
-            # Intentar consulta alternativa usando método estático del modelo
-            try:
-                config_dict = ConfiguracionSistema.obtener_categoria(db, "EMAIL")
-                if config_dict:
-                    logger.info(f"✅ Configuración obtenida usando método alternativo: {len(config_dict)} configuraciones")
-                    return config_dict
-            except Exception as alt_error:
-                logger.error(f"❌ Error en método alternativo también falló: {str(alt_error)}", exc_info=True)
-            # Si todo falla, retornar valores por defecto en lugar de fallar con 500
+        if configs is None:
             logger.warning("⚠️ No se pudo obtener configuración de BD, retornando valores por defecto")
-            return {
-                "smtp_host": "smtp.gmail.com",
-                "smtp_port": "587",
-                "smtp_user": "",
-                "smtp_password": "",
-                "from_email": "",
-                "from_name": "RapiCredit",
-                "smtp_use_tls": "true",
-            }
+            return _obtener_valores_email_por_defecto()
+
+        if isinstance(configs, dict):
+            return configs
 
         if not configs:
-            # Valores por defecto
             logger.info("📝 Retornando valores por defecto de email (no hay configuraciones en BD)")
-            return {
-                "smtp_host": "smtp.gmail.com",
-                "smtp_port": "587",
-                "smtp_user": "",
-                "smtp_password": "",
-                "from_email": "",
-                "from_name": "RapiCredit",
-                "smtp_use_tls": "true",
-            }
+            return _obtener_valores_email_por_defecto()
 
-        config_dict = {}
-        for config in configs:
-            try:
-                # Validar que config tiene los atributos necesarios
-                if hasattr(config, "clave") and config.clave:
-                    # Manejar valor None o vacío
-                    valor = config.valor if hasattr(config, "valor") and config.valor is not None else ""
-                    config_dict[config.clave] = valor
-                    logger.debug(f"📝 Configuración: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
-                else:
-                    logger.warning(f"⚠️ Configuración sin clave válida: {config}")
-            except Exception as config_error:
-                logger.error(f"❌ Error procesando configuración individual: {config_error}", exc_info=True)
-                continue
-
+        config_dict = _procesar_configuraciones_email(configs)
         logger.info(f"✅ Configuración de email obtenida exitosamente: {len(config_dict)} configuraciones")
         return config_dict
 
@@ -645,17 +637,8 @@ def obtener_configuracion_email(db: Session = Depends(get_db), current_user: Use
         raise
     except Exception as e:
         logger.error(f"❌ Error obteniendo configuración de email: {str(e)}", exc_info=True)
-        # En caso de error crítico, retornar valores por defecto en lugar de fallar completamente
         logger.warning("⚠️ Retornando valores por defecto debido a error")
-        return {
-            "smtp_host": "smtp.gmail.com",
-            "smtp_port": "587",
-            "smtp_user": "",
-            "smtp_password": "",
-            "from_email": "",
-            "from_name": "RapiCredit",
-            "smtp_use_tls": "true",
-        }
+        return _obtener_valores_email_por_defecto()
 
 
 @router.put("/email/configuracion")
