@@ -561,6 +561,10 @@ def _verificar_logo_existe(filename: str) -> tuple[Path, str]:
     logo_path = uploads_dir / "logos" / filename
 
     if not logo_path.exists():
+        logger.warning(
+            f"⚠️ Logo registrado en BD pero no existe en filesystem: {logo_path} "
+            f"(uploads_dir: {uploads_dir}, filename: {filename})"
+        )
         raise HTTPException(status_code=404, detail="Logo no encontrado")
 
     # Verificar que el archivo sea legible
