@@ -8,6 +8,8 @@ export default {
         'not IE 11',
         'not op_mini all'
       ],
+      // Excluir propiedades que causan errores en navegadores
+      ignoreUnknownVersions: true,
     },
   },
 }

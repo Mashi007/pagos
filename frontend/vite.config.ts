@@ -32,9 +32,11 @@ export default defineConfig({
         },
       },
       onwarn(warning, warn) {
-        // Suprimir warnings de CSS relacionados con propiedades webkit
+        // Suprimir warnings de CSS relacionados con propiedades problemáticas ya corregidas
         if (warning.message && (
           warning.message.includes('webkit-text-size-adjust') ||
+          warning.message.includes('moz-text-size-adjust') ||
+          warning.message.includes('text-size-adjust') ||
           warning.message.includes('mal selector') ||
           warning.message.includes('bad selector')
         )) {
