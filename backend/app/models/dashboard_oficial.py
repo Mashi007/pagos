@@ -11,6 +11,7 @@ from app.db.session import Base
 
 class DashboardMorosidadMensual(Base):
     """Tabla oficial de morosidad mensual"""
+
     __tablename__ = "dashboard_morosidad_mensual"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -27,6 +28,7 @@ class DashboardMorosidadMensual(Base):
 
 class DashboardCobranzasMensuales(Base):
     """Tabla oficial de cobranzas mensuales"""
+
     __tablename__ = "dashboard_cobranzas_mensuales"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -44,6 +46,7 @@ class DashboardCobranzasMensuales(Base):
 
 class DashboardKPIsDiarios(Base):
     """Tabla oficial de KPIs diarios"""
+
     __tablename__ = "dashboard_kpis_diarios"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -64,6 +67,7 @@ class DashboardKPIsDiarios(Base):
 
 class DashboardFinanciamientoMensual(Base):
     """Tabla oficial de financiamiento mensual"""
+
     __tablename__ = "dashboard_financiamiento_mensual"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -81,6 +85,7 @@ class DashboardFinanciamientoMensual(Base):
 
 class DashboardMorosidadPorAnalista(Base):
     """Tabla oficial de morosidad por analista"""
+
     __tablename__ = "dashboard_morosidad_por_analista"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -97,6 +102,7 @@ class DashboardMorosidadPorAnalista(Base):
 
 class DashboardPrestamosPorConcesionario(Base):
     """Tabla oficial de préstamos por concesionario"""
+
     __tablename__ = "dashboard_prestamos_por_concesionario"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -111,6 +117,7 @@ class DashboardPrestamosPorConcesionario(Base):
 
 class DashboardPagosMensuales(Base):
     """Tabla oficial de pagos mensuales"""
+
     __tablename__ = "dashboard_pagos_mensuales"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -127,6 +134,7 @@ class DashboardPagosMensuales(Base):
 
 class DashboardCobrosPorAnalista(Base):
     """Tabla oficial de cobros por analista"""
+
     __tablename__ = "dashboard_cobros_por_analista"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -141,6 +149,7 @@ class DashboardCobrosPorAnalista(Base):
 
 class DashboardMetricasAcumuladas(Base):
     """Tabla oficial de métricas acumuladas"""
+
     __tablename__ = "dashboard_metricas_acumuladas"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -154,4 +163,3 @@ class DashboardMetricasAcumuladas(Base):
 
     def __repr__(self):
         return f"<DashboardMetricasAcumuladas {self.fecha}>"
-

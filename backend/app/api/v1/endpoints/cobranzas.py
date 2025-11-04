@@ -89,7 +89,7 @@ def obtener_clientes_atrasados(
                      Si es None, devuelve todos los clientes atrasados
     """
     start_time = time.time()
-    
+
     try:
         # Calcular fecha límite según días de retraso
         hoy = date.today()
@@ -104,12 +104,12 @@ def obtener_clientes_atrasados(
             Cuota.fecha_vencimiento < hoy,
             Cuota.estado != "PAGADO",
         ]
-        
+
         # Si se especifica días de retraso, agregar filtro adicional
         if dias_retraso:
             fecha_limite = hoy - timedelta(days=dias_retraso)
             cuotas_filtros.append(Cuota.fecha_vencimiento <= fecha_limite)
-        
+
         cuotas_vencidas_subq = (
             db.query(
                 Cuota.prestamo_id,
@@ -146,7 +146,7 @@ def obtener_clientes_atrasados(
         resultados = query.all()
 
         query_time_ms = int((time.time() - start_time) * 1000)
-        
+
         logger.info(
             f"📋 [clientes_atrasados] Encontrados {len(resultados)} clientes atrasados "
             f"(filtro días_retraso={dias_retraso}, query_time={query_time_ms}ms)"

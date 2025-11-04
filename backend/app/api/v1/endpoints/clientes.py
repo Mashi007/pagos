@@ -112,6 +112,7 @@ def listar_clientes(
 ):
     # Listar clientes con paginacion y filtros
     import time
+
     start_time = time.time()
     try:
         logger.info(f"Listar clientes - Usuario: {current_user.email}, page={page}, per_page={per_page}")
@@ -169,7 +170,9 @@ def listar_clientes(
 
         total_time = int((time.time() - start_time) * 1000)
         count_time_str = f"{count_time}ms" if total is not None else "N/A"
-        logger.info(f"⏱️ [clientes] Tiempo total: {total_time}ms (count: {count_time_str}, query: {query_time}ms, serialize: {serialize_time}ms)")
+        logger.info(
+            f"⏱️ [clientes] Tiempo total: {total_time}ms (count: {count_time_str}, query: {query_time}ms, serialize: {serialize_time}ms)"
+        )
 
         return {
             "clientes": clientes_dict,
