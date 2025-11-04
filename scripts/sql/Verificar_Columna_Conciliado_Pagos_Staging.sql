@@ -28,10 +28,14 @@ SELECT
     COUNT(CASE WHEN conciliado = TRUE THEN 1 END) AS pagos_conciliados,
     COUNT(CASE WHEN conciliado = FALSE THEN 1 END) AS pagos_no_conciliados,
     COUNT(CASE WHEN conciliado IS NULL THEN 1 END) AS pagos_con_conciliado_null,
-    ROUND(
-        (COUNT(CASE WHEN conciliado = TRUE THEN 1 END)::numeric / COUNT(*)::numeric) * 100, 
-        2
-    ) AS porcentaje_conciliados
+    CASE 
+        WHEN COUNT(*) > 0 THEN
+            ROUND(
+                (COUNT(CASE WHEN conciliado = TRUE THEN 1 END)::numeric / COUNT(*)::numeric) * 100, 
+                2
+            )
+        ELSE 0
+    END AS porcentaje_conciliados
 FROM pagos_staging;
 */
 
@@ -78,10 +82,14 @@ SELECT
     COUNT(*) AS total_registros,
     COUNT(CASE WHEN conciliado = TRUE THEN 1 END) AS conciliados,
     COUNT(CASE WHEN conciliado = FALSE THEN 1 END) AS no_conciliados,
-    ROUND(
-        (COUNT(CASE WHEN conciliado = TRUE THEN 1 END)::numeric / COUNT(*)::numeric) * 100, 
-        2
-    ) AS porcentaje_conciliados
+    CASE 
+        WHEN COUNT(*) > 0 THEN
+            ROUND(
+                (COUNT(CASE WHEN conciliado = TRUE THEN 1 END)::numeric / COUNT(*)::numeric) * 100, 
+                2
+            )
+        ELSE 0
+    END AS porcentaje_conciliados
 FROM pagos
 UNION ALL
 SELECT 
