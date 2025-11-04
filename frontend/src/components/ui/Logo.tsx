@@ -405,12 +405,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
   }, [])
 
   // ✅ PRIORIDAD: Si el logo está marcado como no encontrado, NO renderizar <img> (evitar GET requests)
-  if (logoCache.logoNotFound) {
-    // Mostrar SVG por defecto sin hacer requests
-    // El SVG ya está definido más abajo, solo retornar null para usar el fallback
-  }
-
-  // Si hay logo personalizado Y no está marcado como no encontrado, mostrar imagen
+  // Si hay logo personalizado Y NO está marcado como no encontrado, mostrar imagen
   if (customLogoUrl && !logoCache.logoNotFound) {
     return (
       <img
