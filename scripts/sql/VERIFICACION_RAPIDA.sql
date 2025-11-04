@@ -31,3 +31,4 @@ SELECT
     END AS estado
 FROM public.prestamos_staging;
 
+

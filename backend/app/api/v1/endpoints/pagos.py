@@ -482,6 +482,8 @@ def _contar_total_pagos_validos(db: Session, cedula: Optional[str] = None) -> in
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
                   AND TRIM(monto_pagado) != ''
+                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                  AND monto_pagado::numeric >= 0
                 """
             ).bindparams(cedula=cedula)
         )
@@ -490,14 +492,9 @@ def _contar_total_pagos_validos(db: Session, cedula: Optional[str] = None) -> in
             text(
                 """
                 SELECT COUNT(*) FROM pagos_staging
-                WHERE cedula_cliente IS NOT NULL 
+                WHERE cedula_cliente IS NOT NULL
                   AND cedula_cliente != ''
                   AND TRIM(cedula_cliente) != ''
-                  AND (
-                      UPPER(TRIM(cedula_cliente)) = 'Z999999999'
-                      OR (cedula_cliente ~ '^[VEJZvejz][0-9]{7,9}$' AND LENGTH(TRIM(cedula_cliente)) >= 8 AND LENGTH(TRIM(cedula_cliente)) <= 10)
-                      OR (cedula_cliente ~ '^[0-9]{7,10}$' AND LENGTH(TRIM(cedula_cliente)) >= 7 AND LENGTH(TRIM(cedula_cliente)) <= 10)
-                  )
                   AND (
                       UPPER(TRIM(cedula_cliente)) = 'Z999999999'
                       OR (cedula_cliente ~ '^[VEJZvejz][0-9]{7,9}$' AND LENGTH(TRIM(cedula_cliente)) >= 8 AND LENGTH(TRIM(cedula_cliente)) <= 10)
@@ -506,6 +503,8 @@ def _contar_total_pagos_validos(db: Session, cedula: Optional[str] = None) -> in
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
                   AND TRIM(monto_pagado) != ''
+                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                  AND monto_pagado::numeric >= 0
                 """
             )
         )
@@ -520,14 +519,9 @@ def _obtener_pagos_paginados(db: Session, page: int, per_page: int) -> list:
             """
             SELECT id_stg, cedula_cliente, fecha_pago, monto_pagado, numero_documento
             FROM pagos_staging
-                WHERE cedula_cliente IS NOT NULL 
+                WHERE cedula_cliente IS NOT NULL
                   AND cedula_cliente != ''
                   AND TRIM(cedula_cliente) != ''
-                  AND (
-                      UPPER(TRIM(cedula_cliente)) = 'Z999999999'
-                      OR (cedula_cliente ~ '^[VEJZvejz][0-9]{7,9}$' AND LENGTH(TRIM(cedula_cliente)) >= 8 AND LENGTH(TRIM(cedula_cliente)) <= 10)
-                      OR (cedula_cliente ~ '^[0-9]{7,10}$' AND LENGTH(TRIM(cedula_cliente)) >= 7 AND LENGTH(TRIM(cedula_cliente)) <= 10)
-                  )
                   AND (
                       UPPER(TRIM(cedula_cliente)) = 'Z999999999'
                       OR (cedula_cliente ~ '^[VEJZvejz][0-9]{7,9}$' AND LENGTH(TRIM(cedula_cliente)) >= 8 AND LENGTH(TRIM(cedula_cliente)) <= 10)
