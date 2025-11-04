@@ -10,13 +10,15 @@ import {
   Upload,
   Loader2,
   CheckCircle,
+  AlertCircle,
+  Info,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { pagoService, type PagoCreate } from '@/services/pagoService'
-import { usePrestamosByCedula } from '@/hooks/usePrestamos'
+import { usePrestamosByCedula, usePrestamo } from '@/hooks/usePrestamos'
 import { useDebounce } from '@/hooks/useDebounce'
 import { getErrorMessage, isAxiosError, getErrorDetail } from '@/types/errors'
 
@@ -50,6 +52,9 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
     debouncedCedula.length >= 2 ? debouncedCedula : ''
   )
   
+  // Obtener información del préstamo seleccionado para validaciones
+  const { data: prestamoSeleccionado } = usePrestamo(formData.prestamo_id || 0)
+  
   // Auto-seleccionar préstamo si hay solo uno disponible
   useEffect(() => {
     if (prestamos && prestamos.length === 1 && !formData.prestamo_id) {
@@ -63,17 +68,50 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Validar
+    // ✅ VALIDACIONES SEGÚN CRITERIOS DOCUMENTADOS
+    
+    // Validar campos básicos
     const newErrors: Record<string, string> = {}
-    if (!formData.cedula_cliente) newErrors.cedula_cliente = 'Cédula requerida'
+    if (!formData.cedula_cliente) {
+      newErrors.cedula_cliente = 'Cédula requerida'
+    }
     
     // Si hay préstamos disponibles, el ID de préstamo es obligatorio
     if (prestamos && prestamos.length > 0 && !formData.prestamo_id) {
       newErrors.prestamo_id = 'Debe seleccionar un crédito'
     }
     
-    if (!formData.monto_pagado || formData.monto_pagado <= 0) newErrors.monto_pagado = 'Monto inválido'
-    if (!formData.numero_documento) newErrors.numero_documento = 'Número de documento requerido'
+    // ✅ CRITERIO 1: Verificación de cédula del pago vs cédula del préstamo
+    if (formData.prestamo_id && prestamoSeleccionado) {
+      if (formData.cedula_cliente !== prestamoSeleccionado.cedula) {
+        newErrors.cedula_cliente = `La cédula del pago (${formData.cedula_cliente}) no coincide con la cédula del préstamo (${prestamoSeleccionado.cedula}). El pago solo se aplicará si las cédulas coinciden.`
+        newErrors.prestamo_id = 'La cédula del pago debe coincidir con la cédula del préstamo seleccionado'
+      }
+    }
+    
+    // ✅ CRITERIO 2: Validación de monto
+    if (!formData.monto_pagado || formData.monto_pagado <= 0) {
+      newErrors.monto_pagado = 'Monto inválido. Debe ser mayor a cero'
+    } else if (formData.monto_pagado > 1000000) {
+      newErrors.monto_pagado = 'Monto muy alto. Por favor verifique el valor'
+    }
+    
+    // ✅ CRITERIO 3: Validación de número de documento
+    if (!formData.numero_documento || formData.numero_documento.trim() === '') {
+      newErrors.numero_documento = 'Número de documento requerido'
+    }
+    
+    // ✅ CRITERIO 4: Validación de fecha
+    if (!formData.fecha_pago) {
+      newErrors.fecha_pago = 'Fecha de pago requerida'
+    } else {
+      const fechaPago = new Date(formData.fecha_pago)
+      const hoy = new Date()
+      hoy.setHours(23, 59, 59, 999) // Permitir hasta el final del día
+      if (fechaPago > hoy) {
+        newErrors.fecha_pago = 'La fecha de pago no puede ser futura'
+      }
+    }
     
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -187,7 +225,7 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                     value={formData.prestamo_id?.toString() || undefined}
                     onValueChange={(value) => setFormData({ ...formData, prestamo_id: parseInt(value) })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className={errors.prestamo_id ? 'border-red-500' : ''}>
                       <SelectValue placeholder="Seleccione un crédito" />
                     </SelectTrigger>
                     <SelectContent>
@@ -205,10 +243,43 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                     onChange={e => setFormData({ ...formData, prestamo_id: e.target.value ? parseInt(e.target.value) : null })}
                     placeholder="ID del crédito"
                     disabled={!formData.cedula_cliente}
+                    className={errors.prestamo_id ? 'border-red-500' : ''}
                   />
                 )}
                 {(errors.prestamo_id || (formData.cedula_cliente && prestamos && prestamos.length > 0 && !formData.prestamo_id)) && (
-                  <p className="text-sm text-red-600">{errors.prestamo_id || 'Debe seleccionar un crédito'}</p>
+                  <p className="text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {errors.prestamo_id || 'Debe seleccionar un crédito'}
+                  </p>
+                )}
+                
+                {/* ✅ Verificación de cédula del préstamo vs cédula del pago */}
+                {formData.prestamo_id && prestamoSeleccionado && formData.cedula_cliente && (
+                  <div className={`text-xs p-2 rounded flex items-start gap-2 ${
+                    formData.cedula_cliente === prestamoSeleccionado.cedula 
+                      ? 'bg-green-50 text-green-700 border border-green-200' 
+                      : 'bg-red-50 text-red-700 border border-red-200'
+                  }`}>
+                    {formData.cedula_cliente === prestamoSeleccionado.cedula ? (
+                      <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    )}
+                    <div>
+                      {formData.cedula_cliente === prestamoSeleccionado.cedula ? (
+                        <span className="font-medium">✅ Cédulas coinciden</span>
+                      ) : (
+                        <div>
+                          <span className="font-medium">⚠️ Cédulas no coinciden</span>
+                          <p className="mt-1">
+                            Cédula del pago: <strong>{formData.cedula_cliente}</strong><br />
+                            Cédula del préstamo: <strong>{prestamoSeleccionado.cedula}</strong><br />
+                            <span className="text-xs">El pago solo se aplicará si las cédulas coinciden.</span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -225,9 +296,16 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                     type="date"
                     value={formData.fecha_pago}
                     onChange={e => setFormData({ ...formData, fecha_pago: e.target.value })}
-                    className="pl-10"
+                    className={`pl-10 ${errors.fecha_pago ? 'border-red-500' : ''}`}
+                    max={new Date().toISOString().split('T')[0]} // ✅ No permitir fechas futuras
                   />
                 </div>
+                {errors.fecha_pago && (
+                  <p className="text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {errors.fecha_pago}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -246,7 +324,29 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                   />
                 </div>
                 {errors.monto_pagado && (
-                  <p className="text-sm text-red-600">{errors.monto_pagado}</p>
+                  <p className="text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {errors.monto_pagado}
+                  </p>
+                )}
+                
+                {/* ✅ Información sobre cómo se aplicará el pago */}
+                {formData.monto_pagado > 0 && formData.prestamo_id && prestamoSeleccionado && (
+                  <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-700">
+                    <div className="flex items-start gap-2">
+                      <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium mb-1">ℹ️ Cómo se aplicará el pago:</p>
+                        <ul className="list-disc list-inside space-y-1 ml-2">
+                          <li>Se aplicará a las cuotas más antiguas primero (por fecha de vencimiento)</li>
+                          <li>Se distribuirá proporcionalmente entre capital e interés</li>
+                          {formData.monto_pagado >= 500 && (
+                            <li>Si el monto cubre una cuota completa y sobra, el exceso se aplicará a la siguiente cuota</li>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

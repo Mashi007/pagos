@@ -11,7 +11,8 @@ import {
   Upload,
   Edit,
   Trash2,
-  FileAlert,
+  FileText,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -125,12 +126,12 @@ export function PagosList() {
             <Plus className="w-5 h-5 mr-2" />
             Registrar Pago
           </Button>
-          <Button 
+          <Button
             variant="outline" 
             onClick={handleDescargarPagosConErrores}
             className="border-red-500 text-red-600 hover:bg-red-50"
           >
-            <FileAlert className="w-5 h-5 mr-2" />
+            <AlertTriangle className="w-5 h-5 mr-2" />
             Pagos con Errores
           </Button>
         </div>
