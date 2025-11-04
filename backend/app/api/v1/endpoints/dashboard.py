@@ -175,9 +175,7 @@ def _calcular_dias_mora_cliente(db: Session, cedula: str, hoy: date) -> int:
     # ✅ CORRECCIÓN: En PostgreSQL, date - date ya devuelve integer (días)
     # No usar date_part, usar la resta directamente con parámetros bind
     dias_mora_query = (
-        db.query(
-            func.max(text("(:hoy::date - cuotas.fecha_vencimiento::date)"))
-        )
+        db.query(func.max(text("(:hoy::date - cuotas.fecha_vencimiento::date)")))
         .params(hoy=hoy)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .filter(
@@ -921,11 +919,7 @@ def dashboard_administrador(
         # No usar date_part, usar la resta directamente
         # Usar SQL directo porque SQLAlchemy tiene problemas con date - date
         cuotas_vencidas_con_dias = (
-            db.query(
-                func.avg(
-                    text("(:hoy::date - cuotas.fecha_vencimiento::date)")
-                ).label("dias_promedio")
-            )
+            db.query(func.avg(text("(:hoy::date - cuotas.fecha_vencimiento::date)")).label("dias_promedio"))
             .params(hoy=hoy)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
