@@ -57,15 +57,15 @@ export function Logo({ className, size = 'md' }: LogoProps) {
   const [logoVersion, setLogoVersion] = useState(logoCache.version)
 
   useEffect(() => {
-    // Si ya tenemos el logo cacheado, usarlo directamente
-    if (logoCache.logoUrl) {
+    // Si ya tenemos el logo cacheado y existe, usarlo directamente
+    if (logoCache.logoUrl && !logoCache.logoNotFound) {
       setCustomLogoUrl(logoCache.logoUrl)
       setHasChecked(true)
       return
     }
 
-    // Si ya verificamos y no hay logo, no hacer nada más
-    if (logoCache.hasChecked) {
+    // Si ya verificamos y no hay logo (o logo no encontrado), no hacer nada más
+    if (logoCache.hasChecked || logoCache.logoNotFound) {
       setHasChecked(true)
       return
     }
@@ -242,6 +242,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
             if (newLogoUrl) {
               // Actualizar caché y notificar a todos los listeners
               logoCache.logoUrl = newLogoUrl
+              logoCache.logoNotFound = false // ✅ Resetear flag cuando se actualiza el logo
               logoCache.hasChecked = true
               logoCache.version += 1
               notifyLogoListeners(newLogoUrl, logoCache.version)
@@ -259,6 +260,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
             }
             if (newLogoUrl) {
               logoCache.logoUrl = newLogoUrl
+              logoCache.logoNotFound = false // ✅ Resetear flag cuando se actualiza el logo
               logoCache.hasChecked = true
               logoCache.version += 1
               notifyLogoListeners(newLogoUrl, logoCache.version)
