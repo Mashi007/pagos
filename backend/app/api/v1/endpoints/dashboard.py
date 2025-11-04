@@ -951,14 +951,16 @@ def dashboard_administrador(
         # Usar SQL directo con bindparams para seguridad
         try:
             promedio_dias_mora_query = db.execute(
-                text("""
+                text(
+                    """
                     SELECT COALESCE(AVG((:hoy::date - fecha_vencimiento::date)), 0)
                     FROM cuotas c
                     INNER JOIN prestamos p ON c.prestamo_id = p.id
                     WHERE c.fecha_vencimiento < :hoy
                       AND c.estado != 'PAGADO'
                       AND p.estado = 'APROBADO'
-                """).bindparams(hoy=hoy)
+                """
+                ).bindparams(hoy=hoy)
             )
             promedio_dias_mora = float(promedio_dias_mora_query.scalar() or 0.0)
         except Exception as e:
