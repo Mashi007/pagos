@@ -472,7 +472,7 @@ def obtener_opciones_filtros(
     """Obtener opciones disponibles para filtros del dashboard - Sin duplicados"""
     try:
         # Optimizar: usar una sola query con UNION para obtener todos los valores únicos
-        from sqlalchemy import text
+        # text ya está importado al inicio del archivo
 
         # Query optimizada: obtener todos los valores únicos en una sola consulta
         query_sql = text(
@@ -748,7 +748,7 @@ def dashboard_administrador(
 
         # 5. PAGOS DE HOY (con filtros)
         # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
-        from sqlalchemy import text
+        # text ya está importado al inicio del archivo
 
         hoy_dt = datetime.combine(hoy, datetime.min.time())
         hoy_dt_end = datetime.combine(hoy, datetime.max.time())
@@ -978,120 +978,124 @@ def dashboard_administrador(
         # 21. EVOLUCIÓN MENSUAL (últimos 6 meses)
         # ✅ Aplicar filtros automáticamente a evolución mensual
         evolucion_mensual = []
-        for i in range(6, -1, -1):
-            mes_fecha = hoy - timedelta(days=30 * i)
-            mes_inicio = date(mes_fecha.year, mes_fecha.month, 1)
-            if mes_fecha.month == 12:
-                mes_fin = date(mes_fecha.year + 1, 1, 1) - timedelta(days=1)
-            else:
-                mes_fin = date(mes_fecha.year, mes_fecha.month + 1, 1) - timedelta(days=1)
+        nombres_meses = [
+            "Ene",
+            "Feb",
+            "Mar",
+            "Abr",
+            "May",
+            "Jun",
+            "Jul",
+            "Ago",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dic",
+        ]
+        try:
+            for i in range(6, -1, -1):
+                mes_fecha = hoy - timedelta(days=30 * i)
+                mes_inicio = date(mes_fecha.year, mes_fecha.month, 1)
+                if mes_fecha.month == 12:
+                    mes_fin = date(mes_fecha.year + 1, 1, 1) - timedelta(days=1)
+                else:
+                    mes_fin = date(mes_fecha.year, mes_fecha.month + 1, 1) - timedelta(days=1)
 
-            # ✅ Cartera del mes con filtros
-            cartera_mes_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-                Prestamo.estado == "APROBADO",
-                func.date(Prestamo.fecha_registro) <= mes_fin,
-            )
-            cartera_mes_query = FiltrosDashboard.aplicar_filtros_prestamo(
-                cartera_mes_query,
-                analista,
-                concesionario,
-                modelo,
-                fecha_inicio,
-                fecha_fin,
-            )
-            cartera_mes = cartera_mes_query.scalar() or Decimal("0")
-
-            # ✅ Cobrado del mes (PagoStaging no tiene conciliado ni prestamo_id)
-            mes_inicio_dt = datetime.combine(mes_inicio, datetime.min.time())
-            mes_fin_dt = datetime.combine(mes_fin, datetime.max.time())
-
-            cobrado_mes_query = db.execute(
-                text(
-                    """
-                    SELECT COALESCE(SUM(monto_pagado::numeric), 0)
-                    FROM pagos_staging
-                    WHERE fecha_pago IS NOT NULL
-                      AND fecha_pago != ''
-                      AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                      AND fecha_pago::timestamp >= :mes_inicio
-                      AND fecha_pago::timestamp <= :mes_fin
-                      AND monto_pagado IS NOT NULL
-                      AND monto_pagado != ''
-                """
-                ).bindparams(mes_inicio=mes_inicio_dt, mes_fin=mes_fin_dt)
-            )
-            cobrado_mes = Decimal(str(cobrado_mes_query.scalar() or 0))
-
-            # ✅ Cuotas vencidas en ese mes con filtros
-            cuotas_vencidas_mes_query = (
-                db.query(func.count(Cuota.id))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Cuota.fecha_vencimiento >= mes_inicio,
-                    Cuota.fecha_vencimiento <= mes_fin,
-                    Cuota.estado != "PAGADO",
-                )
-            )
-            cuotas_vencidas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(
-                cuotas_vencidas_mes_query,
-                analista,
-                concesionario,
-                modelo,
-                fecha_inicio,
-                fecha_fin,
-            )
-            cuotas_vencidas_mes = cuotas_vencidas_mes_query.scalar() or 0
-
-            # ✅ Cuotas pagadas del mes (para calcular morosidad correctamente)
-            cuotas_pagadas_mes_query = (
-                db.query(func.count(Cuota.id))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Cuota.estado == "PAGADO",
-                    Cuota.fecha_pago.isnot(None),
-                    func.date(Cuota.fecha_pago) >= mes_inicio,
-                    func.date(Cuota.fecha_pago) <= mes_fin,
+                # ✅ Cartera del mes con filtros
+                cartera_mes_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
                     Prestamo.estado == "APROBADO",
+                    func.date(Prestamo.fecha_registro) <= mes_fin,
                 )
-            )
-            cuotas_pagadas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(
-                cuotas_pagadas_mes_query,
-                analista,
-                concesionario,
-                modelo,
-                fecha_inicio,
-                fecha_fin,
-            )
-            cuotas_pagadas_mes = cuotas_pagadas_mes_query.scalar() or 0
+                cartera_mes_query = FiltrosDashboard.aplicar_filtros_prestamo(
+                    cartera_mes_query,
+                    analista,
+                    concesionario,
+                    modelo,
+                    fecha_inicio,
+                    fecha_fin,
+                )
+                cartera_mes = cartera_mes_query.scalar() or Decimal("0")
 
-            # ✅ Total cuotas del mes (vencidas + pagadas para calcular morosidad)
-            total_cuotas_mes = cuotas_vencidas_mes + cuotas_pagadas_mes
-            morosidad_mes = (cuotas_vencidas_mes / total_cuotas_mes * 100) if total_cuotas_mes > 0 else 0
+                # ✅ Cobrado del mes (PagoStaging no tiene conciliado ni prestamo_id)
+                mes_inicio_dt = datetime.combine(mes_inicio, datetime.min.time())
+                mes_fin_dt = datetime.combine(mes_fin, datetime.max.time())
 
-            nombres_meses = [
-                "Ene",
-                "Feb",
-                "Mar",
-                "Abr",
-                "May",
-                "Jun",
-                "Jul",
-                "Ago",
-                "Sep",
-                "Oct",
-                "Nov",
-                "Dic",
-            ]
-            evolucion_mensual.append(
-                {
-                    "mes": nombres_meses[mes_fecha.month - 1],
-                    "cartera": float(cartera_mes),
-                    "cobrado": float(cobrado_mes),
-                    "morosidad": round(morosidad_mes, 1),
-                }
-            )
+                cobrado_mes_query = db.execute(
+                    text(
+                        """
+                        SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+                        FROM pagos_staging
+                        WHERE fecha_pago IS NOT NULL
+                          AND fecha_pago != ''
+                          AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                          AND fecha_pago::timestamp >= :mes_inicio
+                          AND fecha_pago::timestamp <= :mes_fin
+                          AND monto_pagado IS NOT NULL
+                          AND monto_pagado != ''
+                    """
+                    ).bindparams(mes_inicio=mes_inicio_dt, mes_fin=mes_fin_dt)
+                )
+                cobrado_mes = Decimal(str(cobrado_mes_query.scalar() or 0))
+
+                # ✅ Cuotas vencidas en ese mes con filtros
+                cuotas_vencidas_mes_query = (
+                    db.query(func.count(Cuota.id))
+                    .select_from(Cuota)
+                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                    .filter(
+                        Cuota.fecha_vencimiento >= mes_inicio,
+                        Cuota.fecha_vencimiento <= mes_fin,
+                        Cuota.estado != "PAGADO",
+                    )
+                )
+                cuotas_vencidas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(
+                    cuotas_vencidas_mes_query,
+                    analista,
+                    concesionario,
+                    modelo,
+                    fecha_inicio,
+                    fecha_fin,
+                )
+                cuotas_vencidas_mes = cuotas_vencidas_mes_query.scalar() or 0
+
+                # ✅ Cuotas pagadas del mes (para calcular morosidad correctamente)
+                cuotas_pagadas_mes_query = (
+                    db.query(func.count(Cuota.id))
+                    .select_from(Cuota)
+                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                    .filter(
+                        Cuota.estado == "PAGADO",
+                        Cuota.fecha_pago.isnot(None),
+                        func.date(Cuota.fecha_pago) >= mes_inicio,
+                        func.date(Cuota.fecha_pago) <= mes_fin,
+                        Prestamo.estado == "APROBADO",
+                    )
+                )
+                cuotas_pagadas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(
+                    cuotas_pagadas_mes_query,
+                    analista,
+                    concesionario,
+                    modelo,
+                    fecha_inicio,
+                    fecha_fin,
+                )
+                cuotas_pagadas_mes = cuotas_pagadas_mes_query.scalar() or 0
+
+                # ✅ Total cuotas del mes (vencidas + pagadas para calcular morosidad)
+                total_cuotas_mes = cuotas_vencidas_mes + cuotas_pagadas_mes
+                morosidad_mes = (cuotas_vencidas_mes / total_cuotas_mes * 100) if total_cuotas_mes > 0 else 0
+
+                evolucion_mensual.append(
+                    {
+                        "mes": nombres_meses[mes_fecha.month - 1],
+                        "cartera": float(cartera_mes),
+                        "cobrado": float(cobrado_mes),
+                        "morosidad": round(morosidad_mes, 1),
+                    }
+                )
+        except Exception as e:
+            logger.warning(f"Error calculando evolución mensual: {e}")
+            evolucion_mensual = []
 
         # 22. ANÁLISIS DE MOROSIDAD - Cálculo real desde BD
         # Total Financiamiento: Suma de todos los préstamos aprobados
@@ -1586,7 +1590,7 @@ def obtener_cobranzas_mensuales(
     OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
     """
     try:
-        from sqlalchemy import text
+        # text ya está importado al inicio del archivo
 
         hoy = date.today()
         nombres_meses = [
@@ -2363,7 +2367,7 @@ def obtener_evolucion_morosidad(
     OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
     """
     try:
-        from sqlalchemy import extract, text
+        # text ya está importado al inicio del archivo
 
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
