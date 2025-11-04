@@ -948,23 +948,22 @@ def dashboard_administrador(
         # 18. PROMEDIO DÍAS DE MORA
         # Calcular desde cuotas vencidas en lugar de usar campo inexistente
         # ✅ CORRECCIÓN: En PostgreSQL, date - date ya devuelve integer (días)
-        # No usar date_part, usar la resta directamente
-        # Usar SQL directo porque SQLAlchemy tiene problemas con date - date
-        cuotas_vencidas_con_dias = (
-            db.query(func.avg(text("(:hoy::date - cuotas.fecha_vencimiento::date)")).label("dias_promedio"))
-            .select_from(Cuota)
-            .params(hoy=hoy)
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                and_(
-                    Cuota.fecha_vencimiento < hoy,
-                    Cuota.estado != "PAGADO",
-                    Prestamo.estado == "APROBADO",
-                )
+        # Usar SQL directo con bindparams para seguridad
+        try:
+            promedio_dias_mora_query = db.execute(
+                text("""
+                    SELECT COALESCE(AVG((:hoy::date - fecha_vencimiento::date)), 0)
+                    FROM cuotas c
+                    INNER JOIN prestamos p ON c.prestamo_id = p.id
+                    WHERE c.fecha_vencimiento < :hoy
+                      AND c.estado != 'PAGADO'
+                      AND p.estado = 'APROBADO'
+                """).bindparams(hoy=hoy)
             )
-            .scalar()
-        )
-        promedio_dias_mora = float(cuotas_vencidas_con_dias) if cuotas_vencidas_con_dias else 0.0
+            promedio_dias_mora = float(promedio_dias_mora_query.scalar() or 0.0)
+        except Exception as e:
+            logger.warning(f"Error calculando promedio días de mora: {e}")
+            promedio_dias_mora = 0.0
 
         # 19. PORCENTAJE CUMPLIMIENTO (clientes al día / total clientes)
         porcentaje_cumplimiento = (
