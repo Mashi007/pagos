@@ -253,47 +253,71 @@ export function Configuracion() {
         }
 
         // Si hay un logo preview, significa que se subió un logo
-        // El logo ya está guardado en el servidor, solo confirmamos visualmente
+        // Verificar explícitamente que el logo esté guardado en la BD
         if (logoPreview && logoInfo) {
-          console.log('✅ Logo confirmado y guardado', logoInfo)
+          console.log('✅ Verificando que logo esté guardado en BD:', logoInfo)
           
-          // Forzar recarga de configuración general para obtener logo_filename actualizado
-          try {
-            const configResponse = await fetch('/api/v1/configuracion/general')
-            if (configResponse.ok) {
-              const updatedConfig = await configResponse.json()
-              console.log('✅ Configuración general recargada:', updatedConfig)
-              if (updatedConfig.logo_filename) {
-                console.log('✅ logo_filename encontrado en configuración:', updatedConfig.logo_filename)
-              } else {
-                console.warn('⚠️ logo_filename NO encontrado en configuración recargada')
-              }
-              // Actualizar estado local con configuración recargada
-              setConfiguracionGeneral(updatedConfig)
-            }
-          } catch (configError) {
-            console.warn('⚠️ Error recargando configuración general:', configError)
+          // Verificar que el logo_filename esté persistido en la BD
+          const configResponse = await fetch('/api/v1/configuracion/general')
+          if (!configResponse.ok) {
+            throw new Error(`Error ${configResponse.status} obteniendo configuración`)
           }
           
-          // Disparar evento para actualizar todos los componentes Logo con la información completa
-          window.dispatchEvent(new CustomEvent('logoUpdated', { 
-            detail: { 
-              confirmed: true,
-              filename: logoInfo.filename, 
-              url: logoInfo.url 
-            } 
-          }))
+          const updatedConfig = await configResponse.json()
+          console.log('✅ Configuración general recargada:', updatedConfig)
           
-          // Limpiar estado después de confirmar
-          setLogoInfo(null)
+          // Verificar que logo_filename esté en la BD y coincida con el logo subido
+          if (updatedConfig.logo_filename) {
+            if (updatedConfig.logo_filename === logoInfo.filename) {
+              console.log('✅ Logo confirmado y guardado correctamente en BD:', updatedConfig.logo_filename)
+              
+              // Actualizar estado local con configuración recargada
+              setConfiguracionGeneral(updatedConfig)
+              
+              // Disparar evento para actualizar todos los componentes Logo con la información completa
+              window.dispatchEvent(new CustomEvent('logoUpdated', { 
+                detail: { 
+                  confirmed: true,
+                  filename: logoInfo.filename, 
+                  url: logoInfo.url 
+                } 
+              }))
+              
+              // Limpiar estado después de confirmar
+              setLogoPreview(null)
+              setLogoInfo(null)
+              
+              toast.success('Logo guardado exitosamente en la base de datos')
+            } else {
+              console.warn('⚠️ Logo filename en BD no coincide:', {
+                esperado: logoInfo.filename,
+                encontrado: updatedConfig.logo_filename
+              })
+              toast.warning('El logo se guardó pero hay una discrepancia. Por favor, verifica.')
+              // Continuar con el guardado aunque haya discrepancia
+              setLogoPreview(null)
+              setLogoInfo(null)
+            }
+          } else {
+            console.error('❌ Logo filename NO encontrado en configuración después de guardar')
+            toast.error('Error: El logo no se guardó correctamente en la base de datos. Por favor, intenta subirlo nuevamente.')
+            // No limpiar estado para que el usuario pueda intentar de nuevo
+            throw new Error('Logo no encontrado en BD después de guardar')
+          }
+        }
+        
+        // Marcar cambios como guardados solo si no hubo errores
+        setCambiosPendientes(false)
+        
+        // Mostrar mensaje de éxito general solo si no hay logo (el logo ya mostró su mensaje)
+        if (!logoPreview || !logoInfo) {
+          toast.success('Configuración guardada exitosamente')
         }
       }
-      
-      setCambiosPendientes(false)
-      toast.success('Configuración guardada exitosamente')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error guardando configuración:', error)
-      toast.error('Error al guardar configuración')
+      const errorMessage = error?.message || 'Error desconocido'
+      toast.error(`Error al guardar configuración: ${errorMessage}`)
     } finally {
       setLoading(false)
     }
