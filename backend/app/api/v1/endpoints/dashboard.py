@@ -1105,7 +1105,8 @@ def dashboard_administrador(
             # Usar una query con CASE WHEN para calcular cartera acumulada por mes
             fecha_ultima = meses_rango[-1]["fin_dt"]
             cartera_por_mes_query = db.execute(
-                text("""
+                text(
+                    """
                     SELECT 
                         EXTRACT(YEAR FROM fecha_registro)::integer as año,
                         EXTRACT(MONTH FROM fecha_registro)::integer as mes,
@@ -1115,7 +1116,8 @@ def dashboard_administrador(
                       AND fecha_registro <= :fecha_fin
                     GROUP BY EXTRACT(YEAR FROM fecha_registro), EXTRACT(MONTH FROM fecha_registro)
                     ORDER BY año, mes
-                """).bindparams(fecha_fin=fecha_ultima)
+                """
+                ).bindparams(fecha_fin=fecha_ultima)
             )
             cartera_por_mes_raw = {(int(row[0]), int(row[1])): Decimal(str(row[2] or 0)) for row in cartera_por_mes_query}
 
@@ -1126,7 +1128,7 @@ def dashboard_administrador(
                 año_mes = mes_info["fecha"].year
                 num_mes = mes_info["fecha"].month
                 mes_key = (año_mes, num_mes)
-                
+
                 # Sumar cartera del mes actual
                 cartera_acum += cartera_por_mes_raw.get(mes_key, Decimal("0"))
                 cartera_acumulada[mes_key] = cartera_acum
