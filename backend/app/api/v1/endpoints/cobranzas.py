@@ -8,17 +8,17 @@ from decimal import Decimal
 from io import BytesIO
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from sqlalchemy import case, func, or_
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[import-untyped]
+from fastapi.responses import StreamingResponse  # type: ignore[import-untyped]
+from openpyxl import Workbook  # type: ignore[import-untyped]
+from openpyxl.styles import Alignment, Font, PatternFill  # type: ignore[import-untyped]
+from reportlab.lib import colors  # type: ignore[import-untyped]
+from reportlab.lib.pagesizes import A4  # type: ignore[import-untyped]
+from reportlab.lib.styles import getSampleStyleSheet  # type: ignore[import-untyped]
+from reportlab.lib.units import inch  # type: ignore[import-untyped]
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle  # type: ignore[import-untyped]
+from sqlalchemy import case, func, or_  # type: ignore[import-untyped]
+from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.models.amortizacion import Cuota

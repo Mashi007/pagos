@@ -11,6 +11,7 @@ import {
   Upload,
   Edit,
   Trash2,
+  FileAlert,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -70,6 +71,29 @@ export function PagosList() {
     )
   }
 
+  const handleDescargarPagosConErrores = async () => {
+    try {
+      toast.loading('Generando informe de pagos con errores...', { id: 'descargar-errores' })
+      const { blob, filename } = await pagoService.descargarPagosConErrores()
+      
+      // Crear URL temporal y descargar
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      
+      toast.success('Informe descargado correctamente', { id: 'descargar-errores' })
+    } catch (error) {
+      console.error('Error descargando informe de errores:', error)
+      toast.error('Error al descargar el informe de pagos con errores', { id: 'descargar-errores' })
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -100,6 +124,14 @@ export function PagosList() {
           <Button onClick={() => setShowRegistrarPago(true)}>
             <Plus className="w-5 h-5 mr-2" />
             Registrar Pago
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={handleDescargarPagosConErrores}
+            className="border-red-500 text-red-600 hover:bg-red-50"
+          >
+            <FileAlert className="w-5 h-5 mr-2" />
+            Pagos con Errores
           </Button>
         </div>
       </div>

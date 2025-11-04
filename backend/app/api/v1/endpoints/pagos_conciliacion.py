@@ -48,13 +48,8 @@ def _conciliar_pago_staging(pago_staging: PagoStaging, db: Session, numero_docum
         logger.info(f"ℹ️ [conciliacion] Pago staging ID {pago_staging.id} ya estaba conciliado (documento: {numero_documento})")
         return False
 
-<<<<<<< HEAD
     pago_staging.conciliado = True  # type: ignore[assignment]
-    pago_staging.fecha_conciliacion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # type: ignore[assignment] # TEXT format
-=======
-    pago_staging.conciliado = True
-    pago_staging.fecha_conciliacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # TEXT format
->>>>>>> 0953ef7e24958819b7c1ef036fb986610b5a64ab
+    pago_staging.fecha_conciliacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # type: ignore[assignment] # TEXT format
 
     db.commit()
     db.refresh(pago_staging)
