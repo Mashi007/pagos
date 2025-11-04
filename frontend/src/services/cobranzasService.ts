@@ -8,6 +8,7 @@ export interface ClienteAtrasado {
   cuotas_vencidas: number
   total_adeudado: number
   fecha_primera_vencida?: string
+  [key: string]: unknown // Firma de índice para compatibilidad con Record<string, unknown>
 }
 
 export interface CobranzasPorAnalista {
