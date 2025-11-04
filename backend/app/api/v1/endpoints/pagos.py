@@ -1305,9 +1305,10 @@ def obtener_kpis_pagos(
     Cacheado por 5 minutos para mejorar rendimiento.
     """
     try:
-        from datetime import date
-        from app.core.cache import cache_backend
         import hashlib
+        from datetime import date
+
+        from app.core.cache import cache_backend
 
         # Determinar mes y año (default: mes/año actual)
         hoy = date.today()
