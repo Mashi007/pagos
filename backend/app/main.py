@@ -45,20 +45,23 @@ from app.core.exceptions import global_exception_handler
 from app.db.init_db import init_db_shutdown, init_db_startup
 
 # Configurar logging básico pero efectivo
+# Evitar duplicación: limpiar handlers existentes antes de configurar
+root_logger = logging.getLogger()
+root_logger.handlers.clear()
+
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL),
     handlers=[
         logging.StreamHandler(sys.stdout),  # Asegurar que vaya a stdout
     ],
     force=True,  # Forzar reconfiguración
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 )
 
 logger = logging.getLogger(__name__)
 
-app_logger = logging.getLogger("app")
-app_logger.setLevel(getattr(logging, settings.LOG_LEVEL))
-app_logger.handlers.clear()
-app_logger.addHandler(logging.StreamHandler(sys.stdout))
+# No crear otro logger duplicado - usar el root logger o el logger del módulo
+# app_logger removido para evitar duplicación
 
 # Log de inicio
 logger.info("=== INICIANDO APLICACIÓN ===")

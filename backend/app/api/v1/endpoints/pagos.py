@@ -3,7 +3,8 @@ Endpoints para el módulo de Pagos
 """
 
 import logging
-from datetime import date, datetime, time
+import time
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -1292,9 +1293,11 @@ def registrar_auditoria_pago(
 def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: int) -> dict:
     """
     Función interna para calcular KPIs (cacheable)
+    Optimizada para reducir número de queries y tiempo de ejecución
     """
     from datetime import date, datetime
 
+    start_total = time.time()
     hoy = date.today()
 
     # Fecha inicio y fin del mes
@@ -1308,14 +1311,29 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
     logger.info(f"📊 [kpis_pagos] Calculando KPIs para mes {mes_consulta}/{año_consulta}")
     logger.info(f"📅 [kpis_pagos] Rango de fechas: {fecha_inicio_mes} a {fecha_fin_mes}")
 
-    # 1. MONTO COBRADO EN EL MES
     fecha_inicio_dt = datetime.combine(fecha_inicio_mes, datetime.min.time())
     fecha_fin_dt = datetime.combine(fecha_fin_mes, datetime.min.time())
 
-    monto_cobrado_mes_query = db.execute(
+    # OPTIMIZACIÓN 1: Combinar ambas queries de pagos_staging en una sola
+    # Esto reduce de 2 queries a 1 y aprovecha mejor los índices
+    start_pagos = time.time()
+    pagos_query = db.execute(
         text(
             """
-            SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+            SELECT 
+                COALESCE(SUM(monto_pagado::numeric), 0) AS monto_total,
+                COALESCE(SUM(
+                    CASE 
+                        WHEN (
+                            conciliado IS FALSE
+                            OR conciliado IS NULL
+                            OR numero_documento IS NULL
+                            OR numero_documento = ''
+                            OR UPPER(TRIM(numero_documento)) = 'NO DEFINIDO'
+                        ) THEN monto_pagado::numeric
+                        ELSE 0
+                    END
+                ), 0) AS monto_no_definido
             FROM pagos_staging
             WHERE fecha_pago IS NOT NULL
               AND fecha_pago != ''
@@ -1329,38 +1347,14 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
         """
         ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
     )
-    monto_cobrado_mes = Decimal(str(monto_cobrado_mes_query.scalar() or 0))
-    logger.info(f"💰 [kpis_pagos] Monto cobrado en el mes: ${monto_cobrado_mes:,.2f}")
+    pagos_result = pagos_query.fetchone()
+    monto_cobrado_mes = Decimal(str(pagos_result[0] or 0))
+    monto_no_definido = Decimal(str(pagos_result[1] or 0))
+    tiempo_pagos = int((time.time() - start_pagos) * 1000)
+    logger.info(f"💰 [kpis_pagos] Monto cobrado: ${monto_cobrado_mes:,.2f}, NO DEFINIDO: ${monto_no_definido:,.2f} ({tiempo_pagos}ms)")
 
-    # ✅ 1.1. MONTO "NO DEFINIDO" (pagos no conciliados o sin numero_documento)
-    monto_no_definido_query = db.execute(
-        text(
-            """
-            SELECT COALESCE(SUM(monto_pagado::numeric), 0)
-            FROM pagos_staging
-            WHERE fecha_pago IS NOT NULL
-              AND fecha_pago != ''
-              AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-              AND fecha_pago::timestamp >= :fecha_inicio
-              AND fecha_pago::timestamp < :fecha_fin
-              AND monto_pagado IS NOT NULL
-              AND monto_pagado != ''
-              AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-              AND monto_pagado::numeric >= 0
-              AND (
-                  conciliado IS FALSE
-                  OR conciliado IS NULL
-                  OR numero_documento IS NULL
-                  OR numero_documento = ''
-                  OR UPPER(TRIM(numero_documento)) = 'NO DEFINIDO'
-              )
-        """
-        ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
-    )
-    monto_no_definido = Decimal(str(monto_no_definido_query.scalar() or 0))
-    logger.info(f"📊 [kpis_pagos] Monto NO DEFINIDO (no conciliado/sin documento): ${monto_no_definido:,.2f}")
-
-    # 2. SALDO POR COBRAR
+    # OPTIMIZACIÓN 2: Saldo por cobrar (query única optimizada)
+    start_saldo = time.time()
     saldo_por_cobrar_query = (
         db.query(
             func.sum(
@@ -1376,32 +1370,42 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
         )
     )
     saldo_por_cobrar = saldo_por_cobrar_query.scalar() or Decimal("0.00")
-    logger.info(f"💳 [kpis_pagos] Saldo por cobrar: ${saldo_por_cobrar:,.2f}")
+    tiempo_saldo = int((time.time() - start_saldo) * 1000)
+    logger.info(f"💳 [kpis_pagos] Saldo por cobrar: ${saldo_por_cobrar:,.2f} ({tiempo_saldo}ms)")
 
-    # 3. CLIENTES EN MORA
-    clientes_en_mora_query = (
-        db.query(func.count(func.distinct(Prestamo.cedula)))
-        .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-        .filter(
-            Cuota.fecha_vencimiento < hoy,
-            Cuota.total_pagado < Cuota.monto_cuota,
-            Prestamo.estado == "APROBADO",
-        )
+    # OPTIMIZACIÓN 3: Combinar queries de clientes en una sola con CTE
+    # Esto reduce de 2 queries a 1 y calcula ambos valores en una sola pasada
+    start_clientes = time.time()
+    clientes_query = db.execute(
+        text("""
+            WITH clientes_prestamos AS (
+                SELECT DISTINCT p.cedula
+                FROM prestamos p
+                INNER JOIN cuotas c ON c.prestamo_id = p.id
+                WHERE p.estado = 'APROBADO'
+            ),
+            clientes_en_mora AS (
+                SELECT DISTINCT p.cedula
+                FROM prestamos p
+                INNER JOIN cuotas c ON c.prestamo_id = p.id
+                WHERE p.estado = 'APROBADO'
+                  AND c.fecha_vencimiento < :hoy
+                  AND c.total_pagado < c.monto_cuota
+            )
+            SELECT 
+                (SELECT COUNT(*) FROM clientes_prestamos) AS total_clientes,
+                (SELECT COUNT(*) FROM clientes_en_mora) AS clientes_mora
+        """).bindparams(hoy=hoy)
     )
-    clientes_en_mora = clientes_en_mora_query.scalar() or 0
-    logger.info(f"⚠️ [kpis_pagos] Clientes en mora: {clientes_en_mora}")
-
-    # 4. CLIENTES AL DÍA
-    clientes_con_cuotas = (
-        db.query(func.count(func.distinct(Prestamo.cedula)))
-        .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-        .filter(Prestamo.estado == "APROBADO")
-        .scalar()
-        or 0
-    )
-
+    clientes_result = clientes_query.fetchone()
+    clientes_con_cuotas = clientes_result[0] or 0
+    clientes_en_mora = clientes_result[1] or 0
     clientes_al_dia = max(0, clientes_con_cuotas - clientes_en_mora)
-    logger.info(f"✅ [kpis_pagos] Clientes al día: {clientes_al_dia}")
+    tiempo_clientes = int((time.time() - start_clientes) * 1000)
+    logger.info(f"👥 [kpis_pagos] Clientes - Total: {clientes_con_cuotas}, En mora: {clientes_en_mora}, Al día: {clientes_al_dia} ({tiempo_clientes}ms)")
+
+    tiempo_total = int((time.time() - start_total) * 1000)
+    logger.info(f"⏱️ [kpis_pagos] Tiempo total: {tiempo_total}ms (pagos: {tiempo_pagos}ms, saldo: {tiempo_saldo}ms, clientes: {tiempo_clientes}ms)")
 
     return {
         "montoCobradoMes": float(monto_cobrado_mes),
