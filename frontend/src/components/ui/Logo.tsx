@@ -26,17 +26,33 @@ interface LogoCache {
   logoUrl: string | null
   isChecking: boolean
   hasChecked: boolean
+  version: number // Contador de versión para forzar actualizaciones
 }
 
 const logoCache: LogoCache = {
   logoUrl: null,
   isChecking: false,
   hasChecked: false,
+  version: 0,
+}
+
+// Listeners para notificar a todos los componentes cuando cambia el logo
+const logoListeners = new Set<(url: string | null, version: number) => void>()
+
+function notifyLogoListeners(url: string | null, version: number) {
+  logoListeners.forEach(listener => {
+    try {
+      listener(url, version)
+    } catch (error) {
+      console.error('Error notificando listener de logo:', error)
+    }
+  })
 }
 
 export function Logo({ className, size = 'md' }: LogoProps) {
   const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(logoCache.logoUrl)
   const [hasChecked, setHasChecked] = useState(logoCache.hasChecked)
+  const [logoVersion, setLogoVersion] = useState(logoCache.version)
 
   useEffect(() => {
     // Si ya tenemos el logo cacheado, usarlo directamente
@@ -93,10 +109,14 @@ export function Logo({ className, size = 'md' }: LogoProps) {
               // Si no existe, el navegador mostrará el logo por defecto
               logoCache.logoUrl = logoUrl
               logoCache.hasChecked = true
+              logoCache.version += 1
               setCustomLogoUrl(logoUrl)
               setHasChecked(true)
+              setLogoVersion(logoCache.version)
               clearTimeout(timeoutId)
               logoCache.isChecking = false
+              // Notificar a todos los listeners sobre el logo cargado
+              notifyLogoListeners(logoUrl, logoCache.version)
               console.log('✅ Logo cargado desde configuración:', config.logo_filename)
               return
             } else {
@@ -135,9 +155,26 @@ export function Logo({ className, size = 'md' }: LogoProps) {
 
     checkCustomLogo()
 
+    // Listener para cambios en el caché compartido
+    const handleCacheUpdate = (url: string | null, version: number) => {
+      console.log('🔄 Actualizando logo desde caché compartido, versión:', version)
+      setCustomLogoUrl(url)
+      setHasChecked(true)
+      setLogoVersion(version)
+    }
+
+    logoListeners.add(handleCacheUpdate)
+    
+    // Si el logo ya estaba cacheado, sincronizar versión
+    if (logoCache.logoUrl && logoCache.version > 0) {
+      setLogoVersion(logoCache.version)
+    }
+
     // Escuchar eventos de actualización del logo
     const handleLogoUpdate = (event: CustomEvent) => {
       const { filename, url, confirmed } = event.detail || {}
+      
+      console.log('📢 Evento logoUpdated recibido:', { filename, url, confirmed })
       
       // Si solo viene confirmed: true sin filename ni url, ignorar
       if (confirmed && !filename && !url) {
@@ -157,23 +194,25 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         fetch('/api/v1/configuracion/general')
           .then(res => res.json())
           .then(config => {
+            let newLogoUrl: string | null = null
+            
             if (config.logo_filename) {
               const logoPath = `/api/v1/configuracion/logo/${config.logo_filename}`
-              const logoUrl = `${logoPath}?t=${Date.now()}`
-              logoCache.logoUrl = logoUrl
-              logoCache.hasChecked = true
-              setCustomLogoUrl(logoUrl)
-              setHasChecked(true)
+              newLogoUrl = `${logoPath}?t=${Date.now()}`
               console.log('✅ Logo recargado desde configuración (BD):', config.logo_filename)
             } else if (filename) {
               // Fallback: usar filename del evento si no está en BD aún
               const logoPath = `/api/v1/configuracion/logo/${filename}`
-              const logoUrl = `${logoPath}?t=${Date.now()}`
-              logoCache.logoUrl = logoUrl
-              logoCache.hasChecked = true
-              setCustomLogoUrl(logoUrl)
-              setHasChecked(true)
+              newLogoUrl = `${logoPath}?t=${Date.now()}`
               console.log('✅ Logo actualizado desde evento (fallback):', filename)
+            }
+            
+            if (newLogoUrl) {
+              // Actualizar caché y notificar a todos los listeners
+              logoCache.logoUrl = newLogoUrl
+              logoCache.hasChecked = true
+              logoCache.version += 1
+              notifyLogoListeners(newLogoUrl, logoCache.version)
             }
           })
           .catch(err => {
@@ -189,8 +228,8 @@ export function Logo({ className, size = 'md' }: LogoProps) {
             if (newLogoUrl) {
               logoCache.logoUrl = newLogoUrl
               logoCache.hasChecked = true
-              setCustomLogoUrl(newLogoUrl)
-              setHasChecked(true)
+              logoCache.version += 1
+              notifyLogoListeners(newLogoUrl, logoCache.version)
             }
           })
         return
@@ -209,12 +248,12 @@ export function Logo({ className, size = 'md' }: LogoProps) {
       }
       
       if (newLogoUrl) {
-        // Actualizar cache y estado (preview temporal)
+        // Actualizar cache y notificar a todos los listeners
         console.log('🔄 Actualizando logo (preview):', newLogoUrl)
         logoCache.logoUrl = newLogoUrl
         logoCache.hasChecked = true
-        setCustomLogoUrl(newLogoUrl)
-        setHasChecked(true)
+        logoCache.version += 1
+        notifyLogoListeners(newLogoUrl, logoCache.version)
       }
     }
 
@@ -222,17 +261,27 @@ export function Logo({ className, size = 'md' }: LogoProps) {
 
     return () => {
       window.removeEventListener('logoUpdated', handleLogoUpdate as EventListener)
+      logoListeners.delete(handleCacheUpdate)
     }
   }, [])
 
   // Si hay logo personalizado, mostrar imagen
+  // Usar logoVersion como key para forzar re-render cuando cambia
   if (customLogoUrl) {
     return (
       <img
+        key={`logo-${logoVersion}-${customLogoUrl}`}
         src={customLogoUrl}
         alt="Logo de la empresa"
         className={cn(sizeMap[size], className, 'object-contain')}
         role="img"
+        onError={(e) => {
+          // Si falla la carga, intentar recargar sin timestamp
+          const urlWithoutTimestamp = customLogoUrl.split('?')[0]
+          if (e.currentTarget.src !== urlWithoutTimestamp) {
+            e.currentTarget.src = urlWithoutTimestamp
+          }
+        }}
       />
     )
   }
