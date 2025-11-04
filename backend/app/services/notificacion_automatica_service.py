@@ -7,7 +7,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from pytz import timezone
+from pytz import timezone  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session
 
 from app.models.amortizacion import Cuota

@@ -6,10 +6,10 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from sqlalchemy import func
-from sqlalchemy.orm import Session
+import pandas as pd  # type: ignore[import-untyped]
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile  # type: ignore[import-untyped]
+from sqlalchemy import func  # type: ignore[import-untyped]
+from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.models.pago import Pago
@@ -172,7 +172,7 @@ async def upload_conciliacion_excel(
         pagos_conciliados = 0
         pagos_no_encontrados = []
         errores = []
-        documentos_procesados = set()
+        documentos_procesados: set[str] = set()
 
         for index, row in df.iterrows():
             conciliados, no_encontrados, fila_errores = _procesar_fila_conciliacion(row, index, db, documentos_procesados)

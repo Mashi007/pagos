@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import List
 
-from dateutil.relativedelta import relativedelta
+from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session
 
 from app.models.amortizacion import Cuota

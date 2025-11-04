@@ -2094,3 +2094,127 @@ def verificar_conexion_pagos_staging(
 
     logger.info(f"✅ [verificar_pagos_staging] Diagnóstico completado - Estado: {diagnostico['estado']}")
     return diagnostico
+
+
+@router.get("/exportar/errores")
+def exportar_pagos_con_errores(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Exporta un informe Excel con pagos que tienen errores:
+    - Cédulas vacías o con valor "Z999999999"
+    - Fechas que no cumplen formato o tienen "31/10/2025"
+    - numero_documento con "NO DEFINIDO" o "Nodefinida"
+    
+    El informe incluye las mismas columnas que la tabla pagos_staging.
+    """
+    try:
+        logger.info("📊 [exportar_pagos_errores] Generando informe de pagos con errores...")
+        
+        # ✅ Consulta SQL para obtener pagos con errores
+        # Solo incluye columnas que existen en pagos_staging
+        query = text("""
+            SELECT 
+                id_stg,
+                cedula_cliente,
+                fecha_pago,
+                monto_pagado,
+                numero_documento,
+                COALESCE(conciliado, FALSE) as conciliado,
+                fecha_conciliacion
+            FROM pagos_staging
+            WHERE (
+                  -- Cédulas vacías o Z999999999
+                  cedula_cliente IS NULL
+                  OR TRIM(cedula_cliente) = ''
+                  OR UPPER(TRIM(cedula_cliente)) = 'Z999999999'
+                  -- Fechas inválidas o con formato incorrecto o 31/10/2025
+                  OR fecha_pago IS NULL
+                  OR fecha_pago = ''
+                  OR fecha_pago !~ '^\\d{4}-\\d{2}-\\d{2}'
+                  OR fecha_pago LIKE '%31/10/2025%'
+                  OR fecha_pago LIKE '%2025-10-31%'
+                  -- numero_documento con "NO DEFINIDO" o "Nodefinida"
+                  OR numero_documento IS NULL
+                  OR TRIM(UPPER(numero_documento)) = 'NO DEFINIDO'
+                  OR TRIM(UPPER(numero_documento)) = 'NODEFINIDA'
+                  OR TRIM(UPPER(numero_documento)) = 'NODEFINIDO'
+              )
+            ORDER BY id_stg DESC
+        """)
+        
+        resultados = db.execute(query).fetchall()
+        
+        logger.info(f"📊 [exportar_pagos_errores] Encontrados {len(resultados)} pagos con errores")
+        
+        # ✅ Generar archivo Excel
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Pagos con Errores"
+        
+        # Estilos
+        header_fill = PatternFill(start_color="DC143C", end_color="DC143C", fill_type="solid")  # Rojo
+        header_font = Font(bold=True, color="FFFFFF", size=12)
+        
+        # Encabezados (mismas columnas que tabla pagos_staging)
+        headers = [
+            "ID",
+            "Cédula Cliente",
+            "Fecha Pago",
+            "Monto Pagado",
+            "Número Documento",
+            "Conciliado",
+            "Fecha Conciliación"
+        ]
+        
+        # Escribir encabezados
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col)
+            cell.value = header
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+        # Escribir datos
+        for row_idx, registro in enumerate(resultados, 2):
+            ws.cell(row=row_idx, column=1, value=registro[0])  # id_stg
+            ws.cell(row=row_idx, column=2, value=registro[1] if registro[1] else "")  # cedula_cliente
+            ws.cell(row=row_idx, column=3, value=registro[2] if registro[2] else "")  # fecha_pago
+            ws.cell(row=row_idx, column=4, value=registro[3] if registro[3] else "")  # monto_pagado
+            ws.cell(row=row_idx, column=5, value=registro[4] if registro[4] else "")  # numero_documento
+            ws.cell(row=row_idx, column=6, value="Sí" if registro[5] else "No")  # conciliado
+            ws.cell(row=row_idx, column=7, value=registro[6] if registro[6] else "")  # fecha_conciliacion
+        
+        # Ajustar anchos de columnas
+        column_widths = [12, 18, 20, 18, 25, 12, 20]
+        for col, width in enumerate(column_widths, 1):
+            ws.column_dimensions[chr(64 + col)].width = width
+        
+        # Agregar fila de totales
+        total_row = len(resultados) + 3
+        ws.cell(row=total_row, column=1, value="TOTAL:")
+        ws.cell(row=total_row, column=1).font = Font(bold=True)
+        ws.cell(row=total_row, column=2, value=f"{len(resultados)} registros con errores")
+        ws.cell(row=total_row, column=2).font = Font(bold=True)
+        
+        # Guardar en BytesIO
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        # Nombre del archivo con fecha
+        fecha = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"pagos_con_errores_{fecha}.xlsx"
+        
+        logger.info(f"✅ [exportar_pagos_errores] Excel generado: {filename} ({len(resultados)} registros)")
+        
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ [exportar_pagos_errores] Error generando informe: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al generar informe: {str(e)}")

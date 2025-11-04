@@ -7,11 +7,11 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from dateutil.parser import parse as date_parse
-from dateutil.relativedelta import relativedelta
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from dateutil.parser import parse as date_parse  # type: ignore[import-untyped]
+from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
+from fastapi import APIRouter, Depends, HTTPException, Path, Query  # type: ignore[import-untyped]
+from sqlalchemy import func, or_  # type: ignore[import-untyped]
+from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente

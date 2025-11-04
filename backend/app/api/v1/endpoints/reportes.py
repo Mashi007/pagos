@@ -4,21 +4,21 @@ from decimal import Decimal
 from io import BytesIO
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[import-untyped]
+from fastapi.responses import StreamingResponse  # type: ignore[import-untyped]
 
 # Imports para Excel
-from pydantic import BaseModel
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import inch
+from pydantic import BaseModel  # type: ignore[import-untyped]
+from reportlab.lib import colors  # type: ignore[import-untyped]
+from reportlab.lib.pagesizes import A4  # type: ignore[import-untyped]
+from reportlab.lib.styles import getSampleStyleSheet  # type: ignore[import-untyped]
+from reportlab.lib.units import inch  # type: ignore[import-untyped]
 
 # Imports para reportes PDF
-from reportlab.pdfgen import canvas
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from sqlalchemy import case, func
-from sqlalchemy.orm import Session
+from reportlab.pdfgen import canvas  # type: ignore[import-untyped]
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle  # type: ignore[import-untyped]
+from sqlalchemy import case, func  # type: ignore[import-untyped]
+from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.core.constants import EstadoPrestamo

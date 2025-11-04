@@ -2,7 +2,7 @@ import calendar
 from datetime import date, timedelta
 from typing import List, Optional
 
-from dateutil.relativedelta import relativedelta
+from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
 
 # backend/app/utils/date_helpers.py
 # Utilidades para manejo de fechas
