@@ -1095,20 +1095,32 @@ def dashboard_administrador(
                 )
         except Exception as e:
             logger.warning(f"Error calculando evolución mensual: {e}")
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass  # Si rollback falla, ignorar
             evolucion_mensual = []
 
         # 22. ANÁLISIS DE MOROSIDAD - Cálculo real desde BD
         # Total Financiamiento: Suma de todos los préstamos aprobados
-        total_financiamiento_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(Prestamo.estado == "APROBADO")
-        total_financiamiento_query = FiltrosDashboard.aplicar_filtros_prestamo(
-            total_financiamiento_query,
-            analista,
-            concesionario,
-            modelo,
-            fecha_inicio,
-            fecha_fin,
-        )
-        total_financiamiento_operaciones = float(total_financiamiento_query.scalar() or Decimal("0"))
+        try:
+            total_financiamiento_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(Prestamo.estado == "APROBADO")
+            total_financiamiento_query = FiltrosDashboard.aplicar_filtros_prestamo(
+                total_financiamiento_query,
+                analista,
+                concesionario,
+                modelo,
+                fecha_inicio,
+                fecha_fin,
+            )
+            total_financiamiento_operaciones = float(total_financiamiento_query.scalar() or Decimal("0"))
+        except Exception as e:
+            logger.error(f"Error calculando total_financiamiento_operaciones: {e}", exc_info=True)
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
+            total_financiamiento_operaciones = 0.0
 
         # Cartera Cobrada: Suma de TODOS los pagos
         # ⚠️ PagoStaging no tiene prestamo_id, así que no podemos aplicar filtros de analista/concesionario/modelo
@@ -1126,12 +1138,20 @@ def dashboard_administrador(
         where_clause = " AND ".join(where_conditions)
         where_clause += " AND fecha_pago IS NOT NULL AND fecha_pago != '' AND fecha_pago ~ '^\\\\d{4}-\\\\d{2}-\\\\d{2}'"
 
-        cartera_cobrada_query = db.execute(
-            text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_clause}").bindparams(
-                **params
+        try:
+            cartera_cobrada_query = db.execute(
+                text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_clause}").bindparams(
+                    **params
+                )
             )
-        )
-        cartera_cobrada_total = float(cartera_cobrada_query.scalar() or Decimal("0"))
+            cartera_cobrada_total = float(cartera_cobrada_query.scalar() or Decimal("0"))
+        except Exception as e:
+            logger.error(f"Error calculando cartera_cobrada_total: {e}", exc_info=True)
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
+            cartera_cobrada_total = 0.0
 
         # Morosidad (Diferencia): Total Financiamiento - Cartera Cobrada
         morosidad_diferencia = max(0, total_financiamiento_operaciones - cartera_cobrada_total)
@@ -1144,19 +1164,27 @@ def dashboard_administrador(
         # 23. META MENSUAL - Total a cobrar del mes actual (suma de monto_cuota de cuotas del mes)
         # Meta = Total a cobrar del mes (cuotas planificadas)
         # Recaudado = Pagos conciliados del mes
-        query_meta_mensual = (
-            db.query(func.sum(Cuota.monto_cuota))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                func.date(Cuota.fecha_vencimiento) >= primer_dia_mes,
-                func.date(Cuota.fecha_vencimiento) <= ultimo_dia_mes,
+        try:
+            query_meta_mensual = (
+                db.query(func.sum(Cuota.monto_cuota))
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    func.date(Cuota.fecha_vencimiento) >= primer_dia_mes,
+                    func.date(Cuota.fecha_vencimiento) <= ultimo_dia_mes,
+                )
             )
-        )
-        query_meta_mensual = FiltrosDashboard.aplicar_filtros_cuota(
-            query_meta_mensual, analista, concesionario, modelo, None, None
-        )
-        meta_mensual_final = float(query_meta_mensual.scalar() or Decimal("0"))
+            query_meta_mensual = FiltrosDashboard.aplicar_filtros_cuota(
+                query_meta_mensual, analista, concesionario, modelo, None, None
+            )
+            meta_mensual_final = float(query_meta_mensual.scalar() or Decimal("0"))
+        except Exception as e:
+            logger.error(f"Error calculando meta_mensual_final: {e}", exc_info=True)
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
+            meta_mensual_final = 0.0
 
         return {
             "cartera_total": float(cartera_total),
@@ -1213,6 +1241,10 @@ def dashboard_administrador(
         raise
     except Exception as e:
         logger.error(f"Error en dashboard admin: {e}", exc_info=True)
+        try:
+            db.rollback()  # ✅ Rollback para restaurar transacción después de error
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
