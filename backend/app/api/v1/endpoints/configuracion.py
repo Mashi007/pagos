@@ -437,10 +437,15 @@ def _eliminar_logo_anterior(db: Session, logos_dir: Path, nuevo_logo_filename: s
         logger.warning(f"⚠️ No se pudo eliminar logo anterior: {str(e)}")
 
 
-def _guardar_logo_en_bd(db: Session, logo_filename: str) -> None:
-    """Guarda o actualiza la referencia del logo en la base de datos"""
+def _guardar_logo_en_bd(db: Session, logo_filename: str, logo_base64: str, content_type: str) -> None:
+    """
+    Guarda o actualiza la referencia del logo en la base de datos.
+    Almacena tanto el filename como el contenido base64 para persistencia.
+    """
     from app.models.configuracion_sistema import ConfiguracionSistema
+    import json
 
+    # Guardar filename
     logo_config = (
         db.query(ConfiguracionSistema)
         .filter(
@@ -463,9 +468,40 @@ def _guardar_logo_en_bd(db: Session, logo_filename: str) -> None:
         )
         db.add(logo_config)
 
+    # Guardar datos del logo (base64 + content_type) en valor_json
+    logo_data_config = (
+        db.query(ConfiguracionSistema)
+        .filter(
+            ConfiguracionSistema.categoria == "GENERAL",
+            ConfiguracionSistema.clave == "logo_data",
+        )
+        .first()
+    )
+
+    logo_data = {
+        "base64": logo_base64,
+        "content_type": content_type,
+        "filename": logo_filename,
+    }
+
+    if logo_data_config:
+        logo_data_config.valor_json = logo_data  # type: ignore[assignment]
+    else:
+        logo_data_config = ConfiguracionSistema(
+            categoria="GENERAL",
+            clave="logo_data",
+            valor=None,
+            valor_json=logo_data,
+            tipo_dato="JSON",
+            descripcion="Datos del logo (base64 y metadata) para persistencia en Render",
+            visible_frontend=False,  # No mostrar en frontend
+        )
+        db.add(logo_data_config)
+
     db.commit()
     db.refresh(logo_config)
-    logger.info(f"✅ Logo filename guardado en BD exitosamente: {logo_filename}")
+    db.refresh(logo_data_config)
+    logger.info(f"✅ Logo filename y datos guardados en BD exitosamente: {logo_filename}")
 
 
 @router.post("/upload-logo")
@@ -504,13 +540,23 @@ async def upload_logo(
         # Eliminar logo anterior si existe y es diferente
         _eliminar_logo_anterior(db, logos_dir, logo_filename)
 
-        # Guardar nuevo logo
-        with open(logo_path, "wb") as f:
-            f.write(contents)
-
-        # Intentar guardar en BD, si falla, eliminar archivo
+        # Guardar nuevo logo en filesystem (si es posible)
         try:
-            _guardar_logo_en_bd(db, logo_filename)
+            with open(logo_path, "wb") as f:
+                f.write(contents)
+            logger.info(f"✅ Logo guardado en filesystem: {logo_path}")
+        except Exception as fs_error:
+            logger.warning(f"⚠️ No se pudo guardar logo en filesystem (puede ser efímero): {str(fs_error)}")
+            # Continuar - guardaremos en BD como base64
+
+        # Convertir logo a base64 para almacenamiento persistente en BD
+        import base64
+        logo_base64 = base64.b64encode(contents).decode('utf-8')
+        content_type = logo.content_type or "image/jpeg"
+
+        # Intentar guardar en BD (filename + base64), si falla, eliminar archivo
+        try:
+            _guardar_logo_en_bd(db, logo_filename, logo_base64, content_type)
         except Exception as db_error:
             db.rollback()
             # Rollback: eliminar archivo si falla guardado en BD
@@ -542,10 +588,46 @@ async def upload_logo(
         raise HTTPException(status_code=500, detail=f"Error al subir logo: {str(e)}")
 
 
-def _verificar_logo_existe(filename: str) -> tuple[Path, str]:
+def _obtener_logo_desde_bd(filename: str, db: Session) -> Optional[tuple[bytes, str]]:
     """
-    Verifica si el logo existe y retorna el path y content type.
+    Intenta obtener el logo desde la BD (base64) como fallback si no existe en filesystem.
+    Retorna (contenido_bytes, content_type) o None si no existe en BD.
+    """
+    from app.models.configuracion_sistema import ConfiguracionSistema
+    import base64
+
+    try:
+        logo_data_config = (
+            db.query(ConfiguracionSistema)
+            .filter(
+                ConfiguracionSistema.categoria == "GENERAL",
+                ConfiguracionSistema.clave == "logo_data",
+            )
+            .first()
+        )
+
+        if not logo_data_config or not logo_data_config.valor_json:
+            return None
+
+        logo_data = logo_data_config.valor_json
+        if isinstance(logo_data, dict) and logo_data.get("base64") and logo_data.get("filename") == filename:
+            # Decodificar base64
+            logo_bytes = base64.b64decode(logo_data["base64"])
+            content_type = logo_data.get("content_type", "image/jpeg")
+            logger.info(f"✅ Logo recuperado desde BD (base64) para: {filename}")
+            return logo_bytes, content_type
+
+        return None
+    except Exception as e:
+        logger.warning(f"⚠️ Error obteniendo logo desde BD: {str(e)}")
+        return None
+
+
+def _verificar_logo_existe(filename: str, db: Optional[Session] = None) -> tuple[Optional[Path], str, Optional[bytes]]:
+    """
+    Verifica si el logo existe y retorna el path, content type y contenido (si viene de BD).
     Función compartida para HEAD y GET para garantizar consistencia.
+    Si no existe en filesystem, intenta obtener desde BD.
     """
     from app.core.config import settings
 
@@ -560,24 +642,6 @@ def _verificar_logo_existe(filename: str) -> tuple[Path, str]:
         uploads_dir = Path("uploads").resolve()
     logo_path = uploads_dir / "logos" / filename
 
-    if not logo_path.exists():
-        logger.warning(
-            f"⚠️ Logo registrado en BD pero no existe en filesystem: {logo_path} "
-            f"(uploads_dir: {uploads_dir}, filename: {filename})"
-        )
-        raise HTTPException(status_code=404, detail="Logo no encontrado")
-
-    # Verificar que el archivo sea legible
-    if not logo_path.is_file():
-        raise HTTPException(status_code=404, detail="Logo no encontrado o archivo inválido")
-
-    # Verificar que el archivo tenga contenido
-    try:
-        if logo_path.stat().st_size == 0:
-            raise HTTPException(status_code=404, detail="Logo no encontrado o archivo inválido")
-    except OSError:
-        raise HTTPException(status_code=404, detail="Logo no encontrado o archivo inválido")
-
     # Determinar content type
     content_type_map = {
         ".svg": "image/svg+xml",
@@ -588,18 +652,39 @@ def _verificar_logo_existe(filename: str) -> tuple[Path, str]:
     ext = Path(filename).suffix.lower()
     media_type = content_type_map.get(ext, "application/octet-stream")
 
-    return logo_path, media_type
+    # Intentar leer desde filesystem primero
+    if logo_path.exists() and logo_path.is_file():
+        try:
+            if logo_path.stat().st_size > 0:
+                return logo_path, media_type, None  # Existe en filesystem
+        except OSError:
+            pass
+
+    # Si no existe en filesystem, intentar desde BD
+    if db:
+        logo_bd = _obtener_logo_desde_bd(filename, db)
+        if logo_bd:
+            logo_bytes, content_type = logo_bd
+            return None, content_type, logo_bytes  # Existe en BD
+
+    # No existe en ningún lado
+    logger.warning(
+        f"⚠️ Logo no encontrado ni en filesystem ni en BD: {filename} "
+        f"(uploads_dir: {uploads_dir})"
+    )
+    raise HTTPException(status_code=404, detail="Logo no encontrado")
 
 
 @router.head("/logo/{filename}")
 async def verificar_logo_existe(
     filename: str,
+    db: Session = Depends(get_db),
 ):
     """Verificar si el logo existe (HEAD request)"""
     try:
         from fastapi.responses import Response
 
-        logo_path, media_type = _verificar_logo_existe(filename)
+        logo_path, media_type, logo_bytes = _verificar_logo_existe(filename, db)
 
         # Devolver respuesta HEAD sin cuerpo
         return Response(
@@ -616,17 +701,25 @@ async def verificar_logo_existe(
 @router.get("/logo/{filename}")
 async def obtener_logo(
     filename: str,
+    db: Session = Depends(get_db),
 ):
     """Obtener logo de la empresa"""
     try:
         from fastapi.responses import Response
 
         # Usar la misma función de verificación que HEAD para garantizar consistencia
-        logo_path, media_type = _verificar_logo_existe(filename)
+        logo_path, media_type, logo_bytes = _verificar_logo_existe(filename, db)
 
-        # Leer el contenido del archivo
-        with open(logo_path, "rb") as f:
-            file_content = f.read()
+        # Si existe en filesystem, leer desde ahí
+        if logo_path and logo_path.exists():
+            with open(logo_path, "rb") as f:
+                file_content = f.read()
+        # Si no existe en filesystem pero existe en BD, usar base64
+        elif logo_bytes:
+            file_content = logo_bytes
+            logger.info(f"✅ Sirviendo logo desde BD (base64) para: {filename}")
+        else:
+            raise HTTPException(status_code=404, detail="Logo no encontrado")
 
         # Crear respuesta con headers de no-caché para forzar recarga
         return Response(
