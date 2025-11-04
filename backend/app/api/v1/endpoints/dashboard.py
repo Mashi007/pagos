@@ -1101,22 +1101,44 @@ def dashboard_administrador(
             )
             cuotas_pagadas_por_mes = {(int(row[0]), int(row[1])): int(row[2] or 0) for row in cuotas_pagadas_query}
 
+            # ✅ OPTIMIZACIÓN: Calcular cartera acumulada para todos los meses en una sola query
+            # Usar una query con CASE WHEN para calcular cartera acumulada por mes
+            fecha_ultima = meses_rango[-1]["fin_dt"]
+            cartera_por_mes_query = db.execute(
+                text("""
+                    SELECT 
+                        EXTRACT(YEAR FROM fecha_registro)::integer as año,
+                        EXTRACT(MONTH FROM fecha_registro)::integer as mes,
+                        SUM(total_financiamiento) as monto_mes
+                    FROM prestamos
+                    WHERE estado = 'APROBADO'
+                      AND fecha_registro <= :fecha_fin
+                    GROUP BY EXTRACT(YEAR FROM fecha_registro), EXTRACT(MONTH FROM fecha_registro)
+                    ORDER BY año, mes
+                """).bindparams(fecha_fin=fecha_ultima)
+            )
+            cartera_por_mes_raw = {(int(row[0]), int(row[1])): Decimal(str(row[2] or 0)) for row in cartera_por_mes_query}
+
+            # Calcular cartera acumulada por mes (suma acumulativa)
+            cartera_acumulada = {}
+            cartera_acum = Decimal("0")
+            for mes_info in sorted(meses_rango, key=lambda x: (x["fecha"].year, x["fecha"].month)):
+                año_mes = mes_info["fecha"].year
+                num_mes = mes_info["fecha"].month
+                mes_key = (año_mes, num_mes)
+                
+                # Sumar cartera del mes actual
+                cartera_acum += cartera_por_mes_raw.get(mes_key, Decimal("0"))
+                cartera_acumulada[mes_key] = cartera_acum
+
             # Construir evolución mensual con datos pre-calculados
             for mes_info in meses_rango:
                 año_mes = mes_info["fecha"].year
                 num_mes = mes_info["fecha"].month
                 mes_key = (año_mes, num_mes)
 
-                # Cartera acumulada hasta el fin del mes
-                mes_fin_dt = mes_info["fin_dt"]
-                cartera_mes_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-                    Prestamo.estado == "APROBADO",
-                    Prestamo.fecha_registro <= mes_fin_dt,
-                )
-                cartera_mes_query = FiltrosDashboard.aplicar_filtros_prestamo(
-                    cartera_mes_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
-                )
-                cartera_mes = cartera_mes_query.scalar() or Decimal("0")
+                # Cartera acumulada hasta el fin del mes (de datos pre-calculados)
+                cartera_mes = float(cartera_acumulada.get(mes_key, Decimal("0")))
 
                 # Cobrado del mes (de datos pre-calculados)
                 cobrado_mes = pagos_por_mes.get(mes_key, Decimal("0"))
