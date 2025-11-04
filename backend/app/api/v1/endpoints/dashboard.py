@@ -952,6 +952,7 @@ def dashboard_administrador(
         # Usar SQL directo porque SQLAlchemy tiene problemas con date - date
         cuotas_vencidas_con_dias = (
             db.query(func.avg(text("(:hoy::date - cuotas.fecha_vencimiento::date)")).label("dias_promedio"))
+            .select_from(Cuota)
             .params(hoy=hoy)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(

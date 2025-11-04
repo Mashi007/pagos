@@ -38,6 +38,7 @@ export function DashboardFiltrosPanel({
   const { tieneFiltrosActivos, cantidadFiltrosActivos } = useDashboardFiltros(filtros)
 
   const handleLimpiarFiltros = () => {
+    console.log('🧹 Limpiando filtros...')
     setFiltros({})
   }
 
@@ -92,12 +93,14 @@ export function DashboardFiltrosPanel({
               <label className="text-sm font-medium">Analista</label>
               <Select
                 value={filtros.analista ?? '__ALL__'}
-                onValueChange={(value) =>
-                  setFiltros({
+                onValueChange={(value) => {
+                  const nuevoFiltro = {
                     ...filtros,
                     analista: value === '__ALL__' ? undefined : value,
-                  })
-                }
+                  }
+                  console.log('🔍 [Filtro Analista] Cambiando filtro:', { anterior: filtros.analista, nuevo: nuevoFiltro.analista, todosLosFiltros: nuevoFiltro })
+                  setFiltros(nuevoFiltro)
+                }}
                 disabled={loadingOpcionesFiltros}
               >
                 <SelectTrigger>
@@ -138,12 +141,14 @@ export function DashboardFiltrosPanel({
               <label className="text-sm font-medium">Concesionario</label>
               <Select
                 value={filtros.concesionario ?? '__ALL__'}
-                onValueChange={(value) =>
-                  setFiltros({
+                onValueChange={(value) => {
+                  const nuevoFiltro = {
                     ...filtros,
                     concesionario: value === '__ALL__' ? undefined : value,
-                  })
-                }
+                  }
+                  console.log('🔍 [Filtro Concesionario] Cambiando filtro:', { anterior: filtros.concesionario, nuevo: nuevoFiltro.concesionario, todosLosFiltros: nuevoFiltro })
+                  setFiltros(nuevoFiltro)
+                }}
                 disabled={loadingOpcionesFiltros}
               >
                 <SelectTrigger>
@@ -184,12 +189,14 @@ export function DashboardFiltrosPanel({
               <label className="text-sm font-medium">Modelo</label>
               <Select
                 value={filtros.modelo ?? '__ALL__'}
-                onValueChange={(value) =>
-                  setFiltros({
+                onValueChange={(value) => {
+                  const nuevoFiltro = {
                     ...filtros,
                     modelo: value === '__ALL__' ? undefined : value,
-                  })
-                }
+                  }
+                  console.log('🔍 [Filtro Modelo] Cambiando filtro:', { anterior: filtros.modelo, nuevo: nuevoFiltro.modelo, todosLosFiltros: nuevoFiltro })
+                  setFiltros(nuevoFiltro)
+                }}
                 disabled={loadingOpcionesFiltros}
               >
                 <SelectTrigger>
@@ -232,12 +239,14 @@ export function DashboardFiltrosPanel({
                 <Input
                   type="date"
                   value={filtros.fecha_inicio || ''}
-                  onChange={(e) =>
-                    setFiltros({
+                  onChange={(e) => {
+                    const nuevoFiltro = {
                       ...filtros,
                       fecha_inicio: e.target.value || undefined,
-                    })
-                  }
+                    }
+                    console.log('🔍 [Filtro Fecha Inicio] Cambiando filtro:', { anterior: filtros.fecha_inicio, nuevo: nuevoFiltro.fecha_inicio, todosLosFiltros: nuevoFiltro })
+                    setFiltros(nuevoFiltro)
+                  }}
                 />
               </div>
               <div className="space-y-2">
@@ -245,12 +254,14 @@ export function DashboardFiltrosPanel({
                 <Input
                   type="date"
                   value={filtros.fecha_fin || ''}
-                  onChange={(e) =>
-                    setFiltros({
+                  onChange={(e) => {
+                    const nuevoFiltro = {
                       ...filtros,
                       fecha_fin: e.target.value || undefined,
-                    })
-                  }
+                    }
+                    console.log('🔍 [Filtro Fecha Fin] Cambiando filtro:', { anterior: filtros.fecha_fin, nuevo: nuevoFiltro.fecha_fin, todosLosFiltros: nuevoFiltro })
+                    setFiltros(nuevoFiltro)
+                  }}
                 />
               </div>
             </div>

@@ -41,15 +41,17 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
       const params = new URLSearchParams()
       params.append('periodo', periodo)
       
-      // Aplicar todos los filtros disponibles
-      if (filtros.analista) params.append('analista', normalizarValor(filtros.analista)!)
-      if (filtros.concesionario) params.append('concesionario', normalizarValor(filtros.concesionario)!)
-      if (filtros.modelo) params.append('modelo', normalizarValor(filtros.modelo)!)
-      if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio)
-      if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin)
+      // Aplicar todos los filtros disponibles (ignorar valores especiales)
+      if (filtros.analista && filtros.analista !== '__ALL__') params.append('analista', normalizarValor(filtros.analista)!)
+      if (filtros.concesionario && filtros.concesionario !== '__ALL__') params.append('concesionario', normalizarValor(filtros.concesionario)!)
+      if (filtros.modelo && filtros.modelo !== '__ALL__') params.append('modelo', normalizarValor(filtros.modelo)!)
+      if (filtros.fecha_inicio && filtros.fecha_inicio !== '') params.append('fecha_inicio', filtros.fecha_inicio)
+      if (filtros.fecha_fin && filtros.fecha_fin !== '') params.append('fecha_fin', filtros.fecha_fin)
       if (filtros.consolidado) params.append('consolidado', 'true')
       
-      return params.toString()
+      const result = params.toString()
+      console.log('🔧 [useDashboardFiltros] Construyendo params:', { filtrosOriginales: filtros, periodo, paramsConstruidos: result })
+      return result
     }
   }, [filtros])
 
@@ -66,11 +68,12 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
       fecha_fin?: string
     } => {
       const obj: any = {}
-      if (filtros.analista) obj.analista = normalizarValor(filtros.analista)
-      if (filtros.concesionario) obj.concesionario = normalizarValor(filtros.concesionario)
-      if (filtros.modelo) obj.modelo = normalizarValor(filtros.modelo)
-      if (filtros.fecha_inicio) obj.fecha_inicio = filtros.fecha_inicio
-      if (filtros.fecha_fin) obj.fecha_fin = filtros.fecha_fin
+      if (filtros.analista && filtros.analista !== '__ALL__') obj.analista = normalizarValor(filtros.analista)
+      if (filtros.concesionario && filtros.concesionario !== '__ALL__') obj.concesionario = normalizarValor(filtros.concesionario)
+      if (filtros.modelo && filtros.modelo !== '__ALL__') obj.modelo = normalizarValor(filtros.modelo)
+      if (filtros.fecha_inicio && filtros.fecha_inicio !== '') obj.fecha_inicio = filtros.fecha_inicio
+      if (filtros.fecha_fin && filtros.fecha_fin !== '') obj.fecha_fin = filtros.fecha_fin
+      console.log('🔧 [useDashboardFiltros] Construyendo objeto de filtros:', { filtrosOriginales: filtros, objetoConstruido: obj })
       return obj
     }
   }, [filtros])

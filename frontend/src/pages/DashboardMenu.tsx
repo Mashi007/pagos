@@ -142,14 +142,17 @@ export function DashboardMenu() {
 
   // Cargar KPIs principales
   const { data: kpisPrincipales, isLoading: loadingKPIs, refetch } = useQuery({
-    queryKey: ['kpis-principales-menu', filtros],
+    queryKey: ['kpis-principales-menu', JSON.stringify(filtros)],
     queryFn: async () => {
       const params = construirFiltrosObject()
+      console.log('🔍 [KPIs Principales] Filtros aplicados:', filtros)
+      console.log('🔍 [KPIs Principales] Parámetros construidos:', params)
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
       const queryString = queryParams.toString()
+      console.log('🔍 [KPIs Principales] Query string:', queryString)
       const response = await apiClient.get(
         `/api/v1/dashboard/kpis-principales${queryString ? '?' + queryString : ''}`
       ) as {
@@ -161,14 +164,17 @@ export function DashboardMenu() {
       return response
     },
     staleTime: 5 * 60 * 1000,
+    enabled: true, // Asegurar que siempre esté habilitado
   })
 
   // Cargar datos para gráficos (con timeout extendido)
   const { data: datosDashboard, isLoading: loadingDashboard } = useQuery({
-    queryKey: ['dashboard-menu', periodo, filtros],
+    queryKey: ['dashboard-menu', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
       try {
         const params = construirParams(periodo)
+        console.log('🔍 [Dashboard Admin] Filtros aplicados:', filtros)
+        console.log('🔍 [Dashboard Admin] Parámetros construidos:', params)
         // Usar timeout extendido para endpoints lentos
         const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`, { timeout: 60000 }) as {
           financieros?: { ingresosCapital: number; ingresosInteres: number; ingresosMora: number }
@@ -182,11 +188,12 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     retry: 1, // Solo un retry para evitar múltiples intentos
+    enabled: true, // Asegurar que siempre esté habilitado
   })
 
   // Cargar tendencia mensual de financiamiento
   const { data: datosTendencia, isLoading: loadingTendencia } = useQuery({
-    queryKey: ['financiamiento-tendencia', filtros],
+    queryKey: ['financiamiento-tendencia', JSON.stringify(filtros)],
     queryFn: async () => {
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
@@ -200,11 +207,12 @@ export function DashboardMenu() {
       return response.meses
     },
     staleTime: 5 * 60 * 1000,
+    enabled: true,
   })
 
   // Cargar préstamos por concesionario
   const { data: datosConcesionarios, isLoading: loadingConcesionarios } = useQuery({
-    queryKey: ['prestamos-concesionario', filtros],
+    queryKey: ['prestamos-concesionario', JSON.stringify(filtros)],
     queryFn: async () => {
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
@@ -217,11 +225,12 @@ export function DashboardMenu() {
       return response.concesionarios.slice(0, 10) // Top 10
     },
     staleTime: 5 * 60 * 1000,
+    enabled: true,
   })
 
   // Cargar cobranzas mensuales (con timeout extendido)
   const { data: datosCobranzas, isLoading: loadingCobranzas } = useQuery({
-    queryKey: ['cobranzas-mensuales', filtros],
+    queryKey: ['cobranzas-mensuales', JSON.stringify(filtros)],
     queryFn: async () => {
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
@@ -237,11 +246,12 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
+    enabled: true,
   })
 
   // Cargar morosidad por analista
   const { data: datosMorosidadAnalista, isLoading: loadingMorosidadAnalista } = useQuery({
-    queryKey: ['morosidad-analista', filtros],
+    queryKey: ['morosidad-analista', JSON.stringify(filtros)],
     queryFn: async () => {
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
@@ -254,11 +264,12 @@ export function DashboardMenu() {
       return response.analistas.slice(0, 10) // Top 10
     },
     staleTime: 5 * 60 * 1000,
+    enabled: true,
   })
 
   // Cargar evolución de morosidad
   const { data: datosEvolucionMorosidad, isLoading: loadingEvolucionMorosidad } = useQuery({
-    queryKey: ['evolucion-morosidad-menu', filtros],
+    queryKey: ['evolucion-morosidad-menu', JSON.stringify(filtros)],
     queryFn: async () => {
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
@@ -272,11 +283,12 @@ export function DashboardMenu() {
       return response.meses
     },
     staleTime: 5 * 60 * 1000,
+    enabled: true,
   })
 
   // Cargar evolución de pagos (con timeout extendido)
   const { data: datosEvolucionPagos, isLoading: loadingEvolucionPagos } = useQuery({
-    queryKey: ['evolucion-pagos-menu', filtros],
+    queryKey: ['evolucion-pagos-menu', JSON.stringify(filtros)],
     queryFn: async () => {
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
@@ -293,6 +305,7 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
+    enabled: true,
   })
 
   const [isRefreshing, setIsRefreshing] = useState(false)
