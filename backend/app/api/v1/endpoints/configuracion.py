@@ -348,44 +348,44 @@ def _validar_logo(logo: UploadFile, contents: bytes) -> None:
             status_code=400,
             detail="El archivo es demasiado grande. Máximo 2MB",
         )
-    
+
     # Validar magic bytes para verificar contenido real del archivo
     if len(contents) < 4:
         raise HTTPException(
             status_code=400,
             detail="Archivo inválido o corrupto",
         )
-    
+
     # Magic bytes para diferentes formatos
     # PNG: \x89PNG\r\n\x1a\n
     # JPEG: \xff\xd8
     # SVG: <svg o <?xml (texto)
-    
+
     is_valid = False
-    
+
     # Validar PNG
     if logo.content_type == "image/png":
-        if contents.startswith(b'\x89PNG'):
+        if contents.startswith(b"\x89PNG"):
             is_valid = True
-    
+
     # Validar JPEG
     elif logo.content_type in ["image/jpeg", "image/jpg"]:
-        if contents.startswith(b'\xff\xd8'):
+        if contents.startswith(b"\xff\xd8"):
             is_valid = True
-    
+
     # Validar SVG (puede empezar con <svg o <?xml)
     elif logo.content_type == "image/svg+xml":
-        if contents.startswith(b'<svg') or contents.startswith(b'<?xml'):
+        if contents.startswith(b"<svg") or contents.startswith(b"<?xml"):
             is_valid = True
         else:
             # Verificar si contiene etiquetas SVG en los primeros bytes
             try:
-                content_str = contents[:100].decode('utf-8', errors='ignore').lower()
-                if 'svg' in content_str or '<?xml' in content_str:
+                content_str = contents[:100].decode("utf-8", errors="ignore").lower()
+                if "svg" in content_str or "<?xml" in content_str:
                     is_valid = True
             except Exception:
                 pass
-    
+
     if not is_valid:
         raise HTTPException(
             status_code=400,
@@ -422,13 +422,11 @@ def _obtener_logo_anterior(db: Session) -> Optional[str]:
     return None
 
 
-def _eliminar_logo_anterior(
-    db: Session, logos_dir: Path, nuevo_logo_filename: str
-) -> None:
+def _eliminar_logo_anterior(db: Session, logos_dir: Path, nuevo_logo_filename: str) -> None:
     """Elimina el logo anterior si existe y es diferente al nuevo"""
     try:
         logo_anterior_filename = _obtener_logo_anterior(db)
-        
+
         if logo_anterior_filename and logo_anterior_filename != nuevo_logo_filename:
             logo_anterior_path = logos_dir / logo_anterior_filename
             if logo_anterior_path.exists():
@@ -490,13 +488,13 @@ async def upload_logo(
         extension = _obtener_extension_logo(logo.content_type)
 
         from app.core.config import settings
-        
+
         # Usar path absoluto si UPLOAD_DIR está configurado, sino usar relativo
         if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
             uploads_dir = Path(settings.UPLOAD_DIR).resolve()
         else:
             uploads_dir = Path("uploads").resolve()
-        
+
         logos_dir = uploads_dir / "logos"
         logos_dir.mkdir(parents=True, exist_ok=True)
 
@@ -522,7 +520,7 @@ async def upload_logo(
                     logger.info(f"🗑️ Archivo de logo eliminado debido a error en BD: {logo_filename}")
             except Exception as cleanup_error:
                 logger.error(f"❌ Error eliminando archivo después de fallo en BD: {str(cleanup_error)}")
-            
+
             logger.error(f"❌ Error guardando configuración de logo en BD: {str(db_error)}", exc_info=True)
             raise HTTPException(
                 status_code=500, detail=f"Error guardando configuración de logo en base de datos: {str(db_error)}"
