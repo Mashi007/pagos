@@ -22,6 +22,7 @@
   "reportUnusedClass": false,
   "reportUnusedFunction": false,
   "reportUnusedVariable": false,
+  "reportUndefinedVariable": false,
   "reportGeneralTypeIssues": false,
   "reportImportCycles": false,
   "reportUnusedCoroutine": false,
