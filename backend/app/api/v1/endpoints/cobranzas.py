@@ -3,6 +3,7 @@ Endpoints para el módulo de Cobranzas
 """
 
 import logging
+import time
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from io import BytesIO
@@ -87,6 +88,8 @@ def obtener_clientes_atrasados(
         dias_retraso: Filtrar por días específicos de retraso (1, 3, 5, etc.)
                      Si es None, devuelve todos los clientes atrasados
     """
+    start_time = time.time()
+    
     try:
         # Calcular fecha límite según días de retraso
         hoy = date.today()
@@ -95,44 +98,58 @@ def obtener_clientes_atrasados(
         # Excluir admin del listado
         from app.core.config import settings
 
+        # Optimización: Usar subquery para filtrar cuotas vencidas primero
+        # Esto reduce el tamaño del dataset antes de hacer los JOINs
+        cuotas_filtros = [
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.estado != "PAGADO",
+        ]
+        
+        # Si se especifica días de retraso, agregar filtro adicional
+        if dias_retraso:
+            fecha_limite = hoy - timedelta(days=dias_retraso)
+            cuotas_filtros.append(Cuota.fecha_vencimiento <= fecha_limite)
+        
+        cuotas_vencidas_subq = (
+            db.query(
+                Cuota.prestamo_id,
+                func.count(Cuota.id).label("cuotas_vencidas"),
+                func.sum(Cuota.monto_cuota).label("total_adeudado"),
+                func.min(Cuota.fecha_vencimiento).label("fecha_primera_vencida"),
+            )
+            .filter(*cuotas_filtros)
+            .group_by(Cuota.prestamo_id)
+            .subquery()
+        )
+
+        # Query principal con JOINs optimizados
         query = (
             db.query(
                 Cliente.cedula,
                 Cliente.nombres,
                 Prestamo.usuario_proponente.label("analista"),
                 Prestamo.id.label("prestamo_id"),
-                func.count(Cuota.id).label("cuotas_vencidas"),
-                func.sum(Cuota.monto_cuota).label("total_adeudado"),
-                func.min(Cuota.fecha_vencimiento).label("fecha_primera_vencida"),
+                cuotas_vencidas_subq.c.cuotas_vencidas,
+                cuotas_vencidas_subq.c.total_adeudado,
+                cuotas_vencidas_subq.c.fecha_primera_vencida,
             )
             .join(Prestamo, Prestamo.cedula == Cliente.cedula)
-            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .join(cuotas_vencidas_subq, cuotas_vencidas_subq.c.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
             .filter(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
                 or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
             )
-            .group_by(
-                Cliente.cedula,
-                Cliente.nombres,
-                Prestamo.usuario_proponente,
-                Prestamo.id,
-            )
         )
-
-        # Si se especifica días de retraso, filtrar por rango
-        if dias_retraso:
-            fecha_limite = hoy - timedelta(days=dias_retraso)
-            query = query.filter(Cuota.fecha_vencimiento <= fecha_limite)
 
         resultados = query.all()
 
+        query_time_ms = int((time.time() - start_time) * 1000)
+        
         logger.info(
             f"📋 [clientes_atrasados] Encontrados {len(resultados)} clientes atrasados "
-            f"(filtro días_retraso={dias_retraso})"
+            f"(filtro días_retraso={dias_retraso}, query_time={query_time_ms}ms)"
         )
 
         # Convertir a diccionarios

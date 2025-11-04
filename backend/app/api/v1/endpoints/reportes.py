@@ -17,7 +17,7 @@ from reportlab.lib.units import inch  # type: ignore[import-untyped]
 # Imports para reportes PDF
 from reportlab.pdfgen import canvas  # type: ignore[import-untyped]
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle  # type: ignore[import-untyped]
-from sqlalchemy import case, func  # type: ignore[import-untyped]
+from sqlalchemy import case, func, text  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
@@ -261,11 +261,25 @@ def reporte_pagos(
     """Genera reporte de pagos en un rango de fechas."""
     try:
         logger.info(f"[reportes.pagos] Generando reporte pagos desde {fecha_inicio} hasta {fecha_fin}")
-        # Total de pagos: usar monto_pagado (usa PagoStaging donde están los datos)
-        total_pagos = db.query(func.sum(PagoStaging.monto_pagado)).filter(
-            PagoStaging.fecha_pago >= fecha_inicio,
-            PagoStaging.fecha_pago <= fecha_fin,
-        ).scalar() or Decimal("0")
+        # Total de pagos: usar monto_pagado con cast a numeric (PagoStaging.monto_pagado es TEXT)
+        fecha_inicio_dt = datetime.combine(fecha_inicio, datetime.min.time())
+        fecha_fin_dt = datetime.combine(fecha_fin, datetime.max.time())
+        
+        total_pagos_query = db.execute(
+            text("""
+                SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+                FROM pagos_staging
+                WHERE fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                  AND fecha_pago::timestamp >= :fecha_inicio
+                  AND fecha_pago::timestamp <= :fecha_fin
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+            """).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+        )
+        total_pagos = Decimal(str(total_pagos_query.scalar() or 0))
 
         logger.info(f"[reportes.pagos] Total pagos: {total_pagos}")
 
@@ -280,10 +294,6 @@ def reporte_pagos(
 
         # Pagos por método: PagoStaging no tiene institucion_bancaria
         # Usar SQL directo para agrupar por número de documento o cédula
-        from sqlalchemy import text
-
-        fecha_inicio_dt = datetime.combine(fecha_inicio, datetime.min.time())
-        fecha_fin_dt = datetime.combine(fecha_fin, datetime.max.time())
 
         pagos_por_metodo_raw = db.execute(
             text(
@@ -321,20 +331,31 @@ def reporte_pagos(
 
         logger.info(f"[reportes.pagos] Pagos por método: {len(pagos_por_metodo)} métodos")
 
-        # Pagos por día: usar monto_pagado
-        pagos_por_dia = (
-            db.query(
-                func.date(PagoStaging.fecha_pago).label("fecha"),
-                func.count(PagoStaging.id).label("cantidad"),
-                func.sum(PagoStaging.monto_pagado).label("monto"),
-            )
-            .filter(
-                PagoStaging.fecha_pago >= fecha_inicio,
-                PagoStaging.fecha_pago <= fecha_fin,
-            )
-            .group_by(func.date(PagoStaging.fecha_pago))
-            .all()
-        )
+        # Pagos por día: usar monto_pagado con cast a numeric
+        pagos_por_dia_raw = db.execute(
+            text("""
+                SELECT 
+                    DATE(fecha_pago::timestamp) AS fecha,
+                    COUNT(*) AS cantidad,
+                    COALESCE(SUM(monto_pagado::numeric), 0) AS monto
+                FROM pagos_staging
+                WHERE fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                  AND fecha_pago::timestamp >= :fecha_inicio
+                  AND fecha_pago::timestamp <= :fecha_fin
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                GROUP BY DATE(fecha_pago::timestamp)
+                ORDER BY fecha
+            """).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+        ).fetchall()
+        
+        pagos_por_dia = [
+            {"fecha": row[0].isoformat() if row[0] else None, "cantidad": row[1], "monto": float(row[2])}
+            for row in pagos_por_dia_raw
+        ]
 
         logger.info(f"[reportes.pagos] Pagos por día: {len(pagos_por_dia)} días")
 
@@ -785,13 +806,26 @@ def resumen_dashboard(
 
         logger.info(f"[reportes.resumen] Préstamos en mora: {prestamos_mora}")
 
-        # Pagos del mes: usar monto_pagado y fecha_pago correctamente
+        # Pagos del mes: usar monto_pagado con cast a numeric (PagoStaging.monto_pagado es TEXT)
         fecha_inicio_mes = hoy.replace(day=1)
-        pagos_mes_query = db.query(func.sum(PagoStaging.monto_pagado)).filter(
-            PagoStaging.fecha_pago >= fecha_inicio_mes,
-            PagoStaging.fecha_pago <= hoy,
+        fecha_inicio_mes_dt = datetime.combine(fecha_inicio_mes, datetime.min.time())
+        fecha_fin_mes_dt = datetime.combine(hoy, datetime.max.time())
+        
+        pagos_mes_query = db.execute(
+            text("""
+                SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+                FROM pagos_staging
+                WHERE fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                  AND fecha_pago::timestamp >= :fecha_inicio
+                  AND fecha_pago::timestamp <= :fecha_fin
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+            """).bindparams(fecha_inicio=fecha_inicio_mes_dt, fecha_fin=fecha_fin_mes_dt)
         )
-        pagos_mes = float(pagos_mes_query.scalar() or Decimal("0"))
+        pagos_mes = float(str(pagos_mes_query.scalar() or Decimal("0")))
 
         logger.info(f"[reportes.resumen] Pagos del mes: {pagos_mes} (desde {fecha_inicio_mes} hasta {hoy})")
 

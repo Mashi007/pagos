@@ -5,6 +5,7 @@ Configuración central de la aplicación y registro de endpoints
 
 import logging
 import sys
+import time
 import uuid
 from contextlib import asynccontextmanager
 
@@ -86,6 +87,67 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class PerformanceLoggingMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware para registrar tiempo de respuesta de las peticiones
+    Loggea información útil para monitoreo y debugging de rendimiento
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        # Obtener request ID si existe
+        request_id = getattr(request.state, "request_id", None)
+        
+        # Obtener IP del cliente
+        client_ip = request.client.host if request.client else "unknown"
+        
+        # Obtener user agent
+        user_agent = request.headers.get("user-agent", "unknown")
+        
+        # Iniciar timer
+        start_time = time.time()
+        
+        # Procesar request
+        response = await call_next(request)
+        
+        # Calcular tiempo de respuesta en milisegundos
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        # Obtener tamaño de respuesta del header Content-Length si está disponible
+        content_length = response.headers.get("content-length")
+        response_bytes = int(content_length) if content_length else 0
+        
+        # Determinar nivel de log según tiempo de respuesta
+        if response_time_ms > 5000:  # > 5 segundos
+            log_level = logging.ERROR
+            emoji = "🐌"
+        elif response_time_ms > 2000:  # > 2 segundos
+            log_level = logging.WARNING
+            emoji = "⚠️"
+        elif response_time_ms > 1000:  # > 1 segundo
+            log_level = logging.INFO
+            emoji = "⏱️"
+        else:
+            log_level = logging.DEBUG
+            emoji = "✅"
+        
+        # Log estructurado compatible con formato de Render
+        logger.log(
+            log_level,
+            f'{emoji} {request.method} {request.url.path} - '
+            f'responseTimeMS={response_time_ms} '
+            f'responseBytes={response_bytes} '
+            f'status={response.status_code} '
+            f'requestID="{request_id}" '
+            f'clientIP="{client_ip}" '
+            f'userAgent="{user_agent}"'
+        )
+        
+        # Agregar headers de performance
+        response.headers["X-Response-Time-Ms"] = str(response_time_ms)
+        
+        return response
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     Middleware para agregar security headers según OWASP
@@ -159,6 +221,9 @@ app.add_exception_handler(Exception, global_exception_handler)
 
 # Request ID - Para correlación de logs (debe ir primero)
 app.add_middleware(RequestIDMiddleware)
+
+# Performance Logging - Registrar tiempos de respuesta (después de RequestID)
+app.add_middleware(PerformanceLoggingMiddleware)
 
 # Compresión GZip - Para optimizar tamaño de respuestas
 app.add_middleware(GZipMiddleware, minimum_size=1000)
