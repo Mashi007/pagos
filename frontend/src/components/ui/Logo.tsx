@@ -58,34 +58,45 @@ export function Logo({ className, size = 'md' }: LogoProps) {
   const [logoVersion, setLogoVersion] = useState(logoCache.version)
 
   useEffect(() => {
-    // Si ya tenemos el logo cacheado y existe, usarlo directamente
-    if (logoCache.logoUrl && !logoCache.logoNotFound) {
+    // ✅ PRIORIDAD 1: Si ya verificamos y el logo NO existe, no hacer nada más
+    if (logoCache.logoNotFound) {
+      setHasChecked(true)
+      setCustomLogoUrl(null)
+      return
+    }
+
+    // ✅ PRIORIDAD 2: Si ya tenemos el logo cacheado y existe, usarlo directamente
+    if (logoCache.logoUrl && logoCache.hasChecked) {
       setCustomLogoUrl(logoCache.logoUrl)
       setHasChecked(true)
       return
     }
 
-    // Si ya verificamos y no hay logo (o logo no encontrado), no hacer nada más
-    if (logoCache.hasChecked || logoCache.logoNotFound) {
-      setHasChecked(true)
-      return
-    }
-
-    // Si otra instancia ya está verificando, esperar
+    // ✅ PRIORIDAD 3: Si otra instancia ya está verificando, esperar a que termine
     if (logoCache.isChecking) {
       // Esperar hasta que termine la verificación
       const checkInterval = setInterval(() => {
         if (!logoCache.isChecking) {
-          setCustomLogoUrl(logoCache.logoUrl)
-          setHasChecked(logoCache.hasChecked)
+          if (logoCache.logoNotFound) {
+            setCustomLogoUrl(null)
+          } else {
+            setCustomLogoUrl(logoCache.logoUrl)
+          }
+          setHasChecked(true)
           clearInterval(checkInterval)
         }
-      }, 100)
+      }, 50) // ✅ Reducir intervalo para respuesta más rápida
 
       return () => clearInterval(checkInterval)
     }
 
-    // Marcar que estamos verificando
+    // ✅ PRIORIDAD 4: Si ya verificamos pero no hay logo (sin logoNotFound), no hacer nada
+    if (logoCache.hasChecked && !logoCache.logoUrl) {
+      setHasChecked(true)
+      return
+    }
+
+    // ✅ Marcar que estamos verificando ANTES de hacer cualquier request
     logoCache.isChecking = true
 
     // Intentar cargar el logo personalizado desde el API
@@ -130,27 +141,31 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                   return
                 } else {
                   // Logo no existe (404), marcar como no encontrado
-                  console.warn('⚠️ Logo no encontrado en servidor:', config.logo_filename)
+                  console.warn('⚠️ Logo no encontrado en servidor (HEAD 404):', config.logo_filename)
                   logoCache.logoNotFound = true
                   logoCache.logoUrl = null
                   logoCache.hasChecked = true
                   logoCache.isChecking = false
+                  setCustomLogoUrl(null)
                   setHasChecked(true)
                   clearTimeout(timeoutId)
+                  notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
                   return
                 }
               } catch (headError: unknown) {
                 // Si HEAD falla, asumir que no existe (evitar requests repetidos)
                 const error = headError as { name?: string }
                 if (error?.name !== 'AbortError') {
-                  console.warn('⚠️ Error verificando logo, asumiendo que no existe:', getErrorMessage(headError))
+                  console.warn('⚠️ Error verificando logo (HEAD), asumiendo que no existe:', getErrorMessage(headError))
                 }
                 logoCache.logoNotFound = true
                 logoCache.logoUrl = null
                 logoCache.hasChecked = true
                 logoCache.isChecking = false
+                setCustomLogoUrl(null)
                 setHasChecked(true)
                 clearTimeout(timeoutId)
+                notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
                 return
               }
             } else {
@@ -389,8 +404,13 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     }
   }, [])
 
-  // Si hay logo personalizado, mostrar imagen
-  // Usar logoVersion como key para forzar re-render cuando cambia
+  // ✅ PRIORIDAD: Si el logo está marcado como no encontrado, NO renderizar <img> (evitar GET requests)
+  if (logoCache.logoNotFound) {
+    // Mostrar SVG por defecto sin hacer requests
+    // El SVG ya está definido más abajo, solo retornar null para usar el fallback
+  }
+
+  // Si hay logo personalizado Y no está marcado como no encontrado, mostrar imagen
   if (customLogoUrl && !logoCache.logoNotFound) {
     return (
       <img
@@ -401,13 +421,14 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         role="img"
         onError={(e) => {
           // ✅ Si falla la carga (404), marcar como no encontrado y evitar más intentos
-          console.warn('⚠️ Error cargando logo, marcando como no encontrado:', customLogoUrl)
+          console.warn('⚠️ Error cargando logo (GET falló), marcando como no encontrado:', customLogoUrl)
           logoCache.logoNotFound = true
           logoCache.logoUrl = null
           logoCache.version += 1
           setCustomLogoUrl(null)
           setHasChecked(true)
           setLogoVersion(logoCache.version)
+          notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
           // No intentar recargar - el logo no existe
         }}
       />
