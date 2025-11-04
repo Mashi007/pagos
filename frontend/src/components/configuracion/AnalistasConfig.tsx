@@ -418,8 +418,13 @@ export function AnalistasConfig() {
                   const fileInput = document.getElementById('excel-file-analistas-config') as HTMLInputElement
                   if (fileInput) fileInput.value = ''
                   await refetch()
-                } catch (err: any) {
-                  toast.error(err?.response?.data?.detail || 'Error al importar')
+                } catch (err: unknown) {
+                  const { getErrorMessage, isAxiosError } = await import('@/types/errors')
+                  let errorMessage = getErrorMessage(err)
+                  if (isAxiosError(err)) {
+                    errorMessage = err.response?.data?.detail || errorMessage
+                  }
+                  toast.error(errorMessage || 'Error al importar')
                 }
               }}
             >
