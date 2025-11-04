@@ -115,27 +115,27 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
 
         # ⚠️ IMPORTANTE: Insertar en pagos_staging (donde el dashboard consulta)
         # pagos_staging tiene fecha_pago y monto_pagado como TEXT
-        
+
         # ✅ VERIFICAR CONCILIACIÓN: Si el numero_documento ya existe EXACTAMENTE, marcar como conciliado
         # Normalizar numero_documento (trim espacios) para comparación exacta
         numero_documento_normalizado = numero_documento.strip()
-        
+
         # Buscar con comparación exacta (case-sensitive, sin espacios)
-        pago_existente = db.query(PagoStaging).filter(
-            func.trim(PagoStaging.numero_documento) == numero_documento_normalizado
-        ).first()
-        
+        pago_existente = (
+            db.query(PagoStaging).filter(func.trim(PagoStaging.numero_documento) == numero_documento_normalizado).first()
+        )
+
         conciliado = False
         fecha_conciliacion = None
         if pago_existente:
             # Si ya existe un pago con este número de documento EXACTAMENTE, marcarlo como conciliado
             conciliado = True
-            fecha_conciliacion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            fecha_conciliacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             logger.info(
                 f"✅ [carga_masiva] Número de documento '{numero_documento_normalizado}' "
                 f"coincide EXACTAMENTE - marcando como conciliado"
             )
-        
+
         pago_staging = PagoStaging(
             cedula_cliente=cedula,
             cedula=cedula,  # Columna alternativa
