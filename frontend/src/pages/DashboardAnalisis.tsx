@@ -146,7 +146,7 @@ export function DashboardAnalisis() {
   })
 
   // Cargar evolución mensual
-  const evolucionMensual = dashboardData?.evolucion_mensual || []
+  const datosEvolucionMensual = dashboardData?.evolucion_mensual || []
 
   const [isRefreshing, setIsRefreshing] = useState(false)
   const handleRefresh = async () => {
@@ -166,10 +166,10 @@ export function DashboardAnalisis() {
   // Usar evolucion_mensual si está disponible, o estimar desde variación mensual
   let crecimientoAnual = 0
   
-  if (evolucionMensual.length >= 12) {
+  if (datosEvolucionMensual.length >= 12) {
     // Si tenemos 12 meses de datos, comparar mes actual (último) con mes del año anterior (hace 12 meses)
-    const mesActual = evolucionMensual[evolucionMensual.length - 1]
-    const mesAnoAnterior = evolucionMensual[evolucionMensual.length - 13] // Hace 13 meses (incluye mes actual)
+    const mesActual = datosEvolucionMensual[datosEvolucionMensual.length - 1]
+    const mesAnoAnterior = datosEvolucionMensual[datosEvolucionMensual.length - 13] // Hace 13 meses (incluye mes actual)
     if (mesAnoAnterior && mesActual && mesAnoAnterior.cartera > 0) {
       crecimientoAnual = ((mesActual.cartera - mesAnoAnterior.cartera) / mesAnoAnterior.cartera) * 100
     }
@@ -377,9 +377,9 @@ export function DashboardAnalisis() {
                   <div className="h-[300px] flex items-center justify-center">
                     <div className="animate-pulse text-gray-400">Cargando...</div>
                   </div>
-                ) : evolucionMensual.length > 0 ? (
+                ) : datosEvolucionMensual.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
-                    <RechartsLineChart data={evolucionMensual}>
+                    <RechartsLineChart data={datosEvolucionMensual}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis dataKey="mes" stroke="#6b7280" />
                       <YAxis stroke="#6b7280" />
