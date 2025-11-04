@@ -43,7 +43,7 @@ export function KpiCardLarge({
     }
   }
 
-  const textSize = size === 'large' ? 'text-4xl' : 'text-3xl'
+  const textSize = size === 'large' ? 'text-5xl' : 'text-4xl'
   const cardHeight = size === 'large' ? 'min-h-[180px]' : 'min-h-[150px]'
 
   return (
@@ -79,14 +79,14 @@ export function KpiCardLarge({
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center space-x-3">
             <div className={`p-3 rounded-lg ${bgColor} border-2 border-white/50 shadow-lg`}>
-              <Icon className={`h-6 w-6 ${color}`} />
+              <Icon className={`h-7 w-7 ${color}`} />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+              <h3 className="text-base font-semibold text-gray-600 uppercase tracking-wide">
                 {title}
               </h3>
               {subtitle && (
-                <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
+                <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>
               )}
             </div>
           </div>
@@ -101,7 +101,7 @@ export function KpiCardLarge({
             {variation && (
               <div className="flex items-center space-x-1 mt-2">
                 <span
-                  className={`text-sm font-bold ${
+                  className={`text-base font-bold ${
                     variation.percent >= 0 ? 'text-green-600' : 'text-red-600'
                   }`}
                 >
@@ -109,7 +109,7 @@ export function KpiCardLarge({
                   {variation.percent.toFixed(1)}%
                 </span>
                 {variation.label && (
-                  <span className="text-xs text-gray-500">{variation.label}</span>
+                  <span className="text-sm text-gray-500">{variation.label}</span>
                 )}
               </div>
             )}

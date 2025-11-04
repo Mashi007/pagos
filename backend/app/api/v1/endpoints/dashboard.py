@@ -717,7 +717,7 @@ def dashboard_administrador(
 
         hoy = date.today()
         logger.info(
-            f"📊 [dashboard/admin] Iniciando cálculo - filtros: analista={analista}, concesionario={concesionario}, modelo={modelo}"
+            f"📊 [dashboard/admin] Iniciando cálculo - período={periodo}, filtros: analista={analista}, concesionario={concesionario}, modelo={modelo}"
         )
 
         # Aplicar filtros base a queries de préstamos (usando clase centralizada)
@@ -1574,22 +1574,65 @@ def obtener_kpis_principales(
             float(creditos_nuevos_actual), float(creditos_nuevos_anterior)
         )
 
-        # 3. TOTAL CLIENTES
-        query_clientes_actual = db.query(func.count(func.distinct(Prestamo.cedula))).filter(Prestamo.estado == "APROBADO")
-        query_clientes_actual = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_clientes_actual, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        # 3. CLIENTES POR ESTADO (ACTIVOS, INACTIVOS, FINALIZADOS)
+        # ACTIVOS: clientes con préstamos APROBADO
+        query_clientes_activos = db.query(func.count(func.distinct(Prestamo.cedula))).filter(Prestamo.estado == "APROBADO")
+        query_clientes_activos = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_clientes_activos, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        total_clientes_actual = query_clientes_actual.scalar() or 0
+        clientes_activos_actual = query_clientes_activos.scalar() or 0
 
-        query_clientes_anterior = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
+        # FINALIZADOS: clientes con préstamos FINALIZADO
+        query_clientes_finalizados = db.query(func.count(func.distinct(Prestamo.cedula))).filter(Prestamo.estado == "FINALIZADO")
+        query_clientes_finalizados = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_clientes_finalizados, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+        clientes_finalizados_actual = query_clientes_finalizados.scalar() or 0
+
+        # INACTIVOS: clientes con préstamos en otros estados (DRAFT, EN_REVISION, RECHAZADO, etc.)
+        query_clientes_inactivos = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
+            Prestamo.estado.notin_(["APROBADO", "FINALIZADO"])
+        )
+        query_clientes_inactivos = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_clientes_inactivos, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+        clientes_inactivos_actual = query_clientes_inactivos.scalar() or 0
+
+        # TOTAL CLIENTES (suma de todos)
+        total_clientes_actual = clientes_activos_actual + clientes_finalizados_actual + clientes_inactivos_actual
+
+        # Calcular valores del mes anterior para comparación
+        query_clientes_activos_anterior = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
             Prestamo.estado == "APROBADO",
             Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
             Prestamo.fecha_registro < fecha_fin_mes_anterior,
         )
-        query_clientes_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_clientes_anterior, analista, concesionario, modelo, None, None
+        query_clientes_activos_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_clientes_activos_anterior, analista, concesionario, modelo, None, None
         )
-        total_clientes_anterior = query_clientes_anterior.scalar() or 0
+        clientes_activos_anterior = query_clientes_activos_anterior.scalar() or 0
+
+        query_clientes_finalizados_anterior = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
+            Prestamo.estado == "FINALIZADO",
+            Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
+            Prestamo.fecha_registro < fecha_fin_mes_anterior,
+        )
+        query_clientes_finalizados_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_clientes_finalizados_anterior, analista, concesionario, modelo, None, None
+        )
+        clientes_finalizados_anterior = query_clientes_finalizados_anterior.scalar() or 0
+
+        query_clientes_inactivos_anterior = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
+            Prestamo.estado.notin_(["APROBADO", "FINALIZADO"]),
+            Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
+            Prestamo.fecha_registro < fecha_fin_mes_anterior,
+        )
+        query_clientes_inactivos_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_clientes_inactivos_anterior, analista, concesionario, modelo, None, None
+        )
+        clientes_inactivos_anterior = query_clientes_inactivos_anterior.scalar() or 0
+
+        total_clientes_anterior = clientes_activos_anterior + clientes_finalizados_anterior + clientes_inactivos_anterior
 
         variacion_clientes, variacion_clientes_abs = _calcular_variacion(
             float(total_clientes_actual), float(total_clientes_anterior)
@@ -1663,6 +1706,23 @@ def obtener_kpis_principales(
                 "variacion_porcentual": round(variacion_clientes, 2),
                 "variacion_absoluta": variacion_clientes_abs,
             },
+            "clientes_por_estado": {
+                "activos": {
+                    "valor_actual": clientes_activos_actual,
+                    "valor_mes_anterior": clientes_activos_anterior,
+                    "variacion_porcentual": round(_calcular_variacion(float(clientes_activos_actual), float(clientes_activos_anterior))[0], 2),
+                },
+                "inactivos": {
+                    "valor_actual": clientes_inactivos_actual,
+                    "valor_mes_anterior": clientes_inactivos_anterior,
+                    "variacion_porcentual": round(_calcular_variacion(float(clientes_inactivos_actual), float(clientes_inactivos_anterior))[0], 2),
+                },
+                "finalizados": {
+                    "valor_actual": clientes_finalizados_actual,
+                    "valor_mes_anterior": clientes_finalizados_anterior,
+                    "variacion_porcentual": round(_calcular_variacion(float(clientes_finalizados_actual), float(clientes_finalizados_anterior))[0], 2),
+                },
+            },
             "total_morosidad_usd": {
                 "valor_actual": morosidad_actual,
                 "valor_mes_anterior": morosidad_anterior,
@@ -1695,9 +1755,10 @@ def obtener_cobranzas_mensuales(
     Meta mensual se actualiza el día 1 de cada mes.
     OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
     """
+    import time
+    start_time = time.time()
+    
     try:
-        # text ya está importado al inicio del archivo
-
         hoy = date.today()
         nombres_meses = [
             "Enero",
@@ -1722,7 +1783,8 @@ def obtener_cobranzas_mensuales(
             mes_inicio += 12
         fecha_inicio_query = date(año_inicio, mes_inicio, 1)
 
-        # OPTIMIZACIÓN: Query única para cobranzas planificadas con GROUP BY
+        # ✅ OPTIMIZACIÓN: Query única para cobranzas planificadas con GROUP BY
+        start_cobranzas = time.time()
         filtros_cobranzas = [
             "p.estado = 'APROBADO'",
             "c.fecha_vencimiento >= :fecha_inicio",
@@ -1760,8 +1822,11 @@ def obtener_cobranzas_mensuales(
 
         result_cobranzas = db.execute(query_cobranzas_sql)
         cobranzas_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_cobranzas}
+        tiempo_cobranzas = int((time.time() - start_cobranzas) * 1000)
+        logger.info(f"📊 [cobranzas-mensuales] Query cobranzas completada en {tiempo_cobranzas}ms, {len(cobranzas_por_mes)} meses")
 
-        # OPTIMIZACIÓN: Query única para pagos reales con GROUP BY
+        # ✅ OPTIMIZACIÓN: Query única para pagos reales con GROUP BY
+        start_pagos = time.time()
         fecha_inicio_dt = datetime.combine(fecha_inicio_query, datetime.min.time())
         fecha_fin_dt = datetime.combine(hoy, datetime.max.time())
 
@@ -1779,6 +1844,7 @@ def obtener_cobranzas_mensuales(
               AND fecha_pago::timestamp <= :fecha_fin
               AND monto_pagado IS NOT NULL
               AND monto_pagado != ''
+              AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
             GROUP BY EXTRACT(YEAR FROM fecha_pago::timestamp), EXTRACT(MONTH FROM fecha_pago::timestamp)
             ORDER BY año, mes
         """
@@ -1786,6 +1852,8 @@ def obtener_cobranzas_mensuales(
 
         result_pagos = db.execute(query_pagos_sql)
         pagos_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_pagos}
+        tiempo_pagos = int((time.time() - start_pagos) * 1000)
+        logger.info(f"📊 [cobranzas-mensuales] Query pagos completada en {tiempo_pagos}ms, {len(pagos_por_mes)} meses")
 
         # Generar datos mensuales (incluyendo meses sin datos)
         meses_data = []
@@ -1812,26 +1880,36 @@ def obtener_cobranzas_mensuales(
             # Avanzar al siguiente mes
             current_date = _obtener_fechas_mes_siguiente(num_mes, año_mes)
 
-        # Meta actual = cobranzas planificadas del mes actual
-        mes_actual_inicio = date(hoy.year, hoy.month, 1)
-        if hoy.month == 12:
-            mes_actual_fin = date(hoy.year + 1, 1, 1)
-        else:
-            mes_actual_fin = date(hoy.year, hoy.month + 1, 1)
+        # Meta actual = cobranzas planificadas del mes actual (usar datos ya calculados si es posible)
+        start_meta = time.time()
+        mes_actual_key = (hoy.year, hoy.month)
+        meta_actual = cobranzas_por_mes.get(mes_actual_key, 0.0)
+        
+        # Si no está en los datos calculados, hacer query adicional solo si es necesario
+        if meta_actual == 0.0:
+            mes_actual_inicio = date(hoy.year, hoy.month, 1)
+            if hoy.month == 12:
+                mes_actual_fin = date(hoy.year + 1, 1, 1)
+            else:
+                mes_actual_fin = date(hoy.year, hoy.month + 1, 1)
 
-        query_meta = (
-            db.query(func.sum(Cuota.monto_cuota))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento >= mes_actual_inicio,
-                Cuota.fecha_vencimiento < mes_actual_fin,
+            query_meta = (
+                db.query(func.sum(Cuota.monto_cuota))
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento >= mes_actual_inicio,
+                    Cuota.fecha_vencimiento < mes_actual_fin,
+                )
             )
-        )
-        query_meta = FiltrosDashboard.aplicar_filtros_cuota(
-            query_meta, analista, concesionario, modelo, fecha_inicio, fecha_fin
-        )
-        meta_actual = float(query_meta.scalar() or Decimal("0"))
+            query_meta = FiltrosDashboard.aplicar_filtros_cuota(
+                query_meta, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            )
+            meta_actual = float(query_meta.scalar() or Decimal("0"))
+        
+        tiempo_meta = int((time.time() - start_meta) * 1000)
+        total_time = int((time.time() - start_time) * 1000)
+        logger.info(f"⏱️ [cobranzas-mensuales] Tiempo total: {total_time}ms (cobranzas: {tiempo_cobranzas}ms, pagos: {tiempo_pagos}ms, meta: {tiempo_meta}ms)")
 
         return {
             "meses": meses_data,
@@ -2147,6 +2225,481 @@ def obtener_prestamos_por_concesionario(
 
     except Exception as e:
         logger.error(f"Error obteniendo préstamos por concesionario: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/prestamos-por-modelo")
+def obtener_prestamos_por_modelo(
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Préstamos por Modelo (expresado en porcentaje)
+    Agrupa por producto y modelo_vehiculo
+    """
+    try:
+        # Obtener total general de préstamos
+        query_base = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
+        query_base = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+
+        total_general = float(query_base.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
+
+        # Agrupar por modelo (usar producto o modelo_vehiculo)
+        query_modelos = (
+            db.query(
+                func.coalesce(
+                    func.coalesce(Prestamo.modelo_vehiculo, Prestamo.producto),
+                    "Sin Modelo"
+                ).label("modelo"),
+                func.sum(Prestamo.total_financiamiento).label("total_prestamos"),
+                func.count(Prestamo.id).label("cantidad_prestamos"),
+            )
+            .filter(Prestamo.estado == "APROBADO")
+            .group_by("modelo")
+        )
+
+        # Aplicar filtros
+        if analista:
+            query_modelos = query_modelos.filter(
+                or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
+            )
+        if concesionario:
+            query_modelos = query_modelos.filter(Prestamo.concesionario == concesionario)
+        if fecha_inicio:
+            query_modelos = query_modelos.filter(Prestamo.fecha_registro >= fecha_inicio)
+        if fecha_fin:
+            query_modelos = query_modelos.filter(Prestamo.fecha_registro <= fecha_fin)
+
+        resultados = query_modelos.all()
+
+        modelos_data = []
+        for row in resultados:
+            total_prestamos = float(row.total_prestamos or Decimal("0"))
+            porcentaje = (total_prestamos / total_general * 100) if total_general > 0 else 0
+
+            modelos_data.append(
+                {
+                    "modelo": row.modelo or "Sin Modelo",
+                    "total_prestamos": total_prestamos,
+                    "cantidad_prestamos": row.cantidad_prestamos or 0,
+                    "porcentaje": round(porcentaje, 2),
+                }
+            )
+
+        # Ordenar por total_prestamos descendente
+        modelos_data.sort(key=lambda x: x["total_prestamos"], reverse=True)
+
+        return {
+            "modelos": modelos_data,
+            "total_general": total_general,
+        }
+
+    except Exception as e:
+        logger.error(f"Error obteniendo préstamos por modelo: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/pagos-conciliados")
+def obtener_pagos_conciliados(
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obtiene estadísticas de pagos totales vs pagos conciliados
+    """
+    try:
+        hoy = date.today()
+        
+        # Query base para pagos (usar tabla Pago que tiene conciliado)
+        query_base = db.query(Pago).filter(Pago.activo.is_(True))
+        
+        # Aplicar filtros de fecha si existen
+        if fecha_inicio:
+            query_base = query_base.filter(Pago.fecha_pago >= fecha_inicio)
+        if fecha_fin:
+            query_base = query_base.filter(Pago.fecha_pago <= fecha_fin)
+        
+        # Aplicar filtros de analista/concesionario/modelo mediante join con Prestamo
+        # Solo hacer join si hay filtros que requieran datos de Prestamo
+        if analista or concesionario or modelo:
+            query_base = query_base.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            if analista:
+                query_base = query_base.filter(
+                    or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
+                )
+            if concesionario:
+                query_base = query_base.filter(Prestamo.concesionario == concesionario)
+            if modelo:
+                query_base = query_base.filter(
+                    or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
+                )
+        
+        # Total de pagos
+        total_pagos = query_base.count()
+        
+        # Total de pagos conciliados
+        total_pagos_conciliados = query_base.filter(Pago.conciliado.is_(True)).count()
+        
+        # Monto total de pagos
+        monto_total = float(
+            query_base.with_entities(func.sum(Pago.monto_pagado)).scalar() or Decimal("0")
+        )
+        
+        # Monto total de pagos conciliados
+        monto_conciliado = float(
+            query_base.filter(Pago.conciliado.is_(True))
+            .with_entities(func.sum(Pago.monto_pagado))
+            .scalar() or Decimal("0")
+        )
+        
+        # Porcentaje de conciliación
+        porcentaje_conciliacion = (total_pagos_conciliados / total_pagos * 100) if total_pagos > 0 else 0
+        porcentaje_monto_conciliado = (monto_conciliado / monto_total * 100) if monto_total > 0 else 0
+        
+        return {
+            "total_pagos": total_pagos,
+            "total_pagos_conciliados": total_pagos_conciliados,
+            "total_pagos_no_conciliados": total_pagos - total_pagos_conciliados,
+            "monto_total": monto_total,
+            "monto_conciliado": monto_conciliado,
+            "monto_no_conciliado": monto_total - monto_conciliado,
+            "porcentaje_conciliacion": round(porcentaje_conciliacion, 2),
+            "porcentaje_monto_conciliado": round(porcentaje_monto_conciliado, 2),
+        }
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo estadísticas de pagos conciliados: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/financiamiento-por-rangos")
+def obtener_financiamiento_por_rangos(
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obtiene distribución de financiamiento por rangos de monto para gráfico de pirámide
+    Los rangos están ordenados de mayor a menor para crear efecto de pirámide
+    """
+    try:
+        query_base = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
+        query_base = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+
+        total_prestamos = query_base.count()
+        total_monto = float(query_base.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
+
+        # Rangos de financiamiento (de mayor a menor para efecto pirámide)
+        rangos = [
+            (50000, None, "$50,000+"),
+            (20000, 50000, "$20,000 - $50,000"),
+            (10000, 20000, "$10,000 - $20,000"),
+            (5000, 10000, "$5,000 - $10,000"),
+            (0, 5000, "$0 - $5,000"),
+        ]
+
+        distribucion_data = _procesar_distribucion_rango_monto(query_base, rangos, total_prestamos, total_monto)
+        
+        # Ordenar de mayor a menor monto para efecto pirámide
+        distribucion_data.sort(key=lambda x: x["monto_total"], reverse=True)
+
+        return {
+            "rangos": distribucion_data,
+            "total_prestamos": total_prestamos,
+            "total_monto": total_monto,
+        }
+
+    except Exception as e:
+        logger.error(f"Error obteniendo financiamiento por rangos: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/composicion-morosidad")
+def obtener_composicion_morosidad(
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obtiene composición de morosidad por rangos de días de atraso para gráfico de pastel
+    Rangos: 1 día, 3 días, 15 días, 1 mes, 2 meses, 3 o más meses
+    """
+    try:
+        hoy = date.today()
+        
+        # Query base para cuotas vencidas no pagadas
+        query_base = (
+            db.query(
+                Cuota.id,
+                Cuota.monto_cuota,
+                Cuota.fecha_vencimiento,
+                text("(:hoy::date - cuotas.fecha_vencimiento::date) as dias_atraso")
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+            )
+            .params(hoy=hoy)
+        )
+        
+        # Aplicar filtros
+        if analista:
+            query_base = query_base.filter(
+                or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
+            )
+        if concesionario:
+            query_base = query_base.filter(Prestamo.concesionario == concesionario)
+        if modelo:
+            query_base = query_base.filter(
+                or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
+            )
+        if fecha_inicio:
+            query_base = query_base.filter(Prestamo.fecha_registro >= fecha_inicio)
+        if fecha_fin:
+            query_base = query_base.filter(Prestamo.fecha_registro <= fecha_fin)
+        
+        # Obtener todas las cuotas con sus días de atraso
+        cuotas = query_base.all()
+        
+        # Inicializar rangos
+        rangos = {
+            "1_dia": {"nombre": "1 Día Atrasado", "monto": Decimal("0"), "cantidad": 0, "min_dias": 1, "max_dias": 1},
+            "3_dias": {"nombre": "3 Días Atrasado", "monto": Decimal("0"), "cantidad": 0, "min_dias": 2, "max_dias": 3},
+            "15_dias": {"nombre": "15 Días Atrasado", "monto": Decimal("0"), "cantidad": 0, "min_dias": 4, "max_dias": 15},
+            "1_mes": {"nombre": "1 Mes Atrasado", "monto": Decimal("0"), "cantidad": 0, "min_dias": 16, "max_dias": 30},
+            "2_meses": {"nombre": "2 Meses Atrasado", "monto": Decimal("0"), "cantidad": 0, "min_dias": 31, "max_dias": 60},
+            "3_mas_meses": {"nombre": "3 o Más Atrasado", "monto": Decimal("0"), "cantidad": 0, "min_dias": 61, "max_dias": None},
+        }
+        
+        # Clasificar cuotas por rango
+        for cuota in cuotas:
+            dias_atraso = int(cuota.dias_atraso) if cuota.dias_atraso else 0
+            monto = Decimal(str(cuota.monto_cuota)) if cuota.monto_cuota else Decimal("0")
+            
+            # Determinar rango
+            if dias_atraso == 1:
+                rangos["1_dia"]["monto"] += monto
+                rangos["1_dia"]["cantidad"] += 1
+            elif 2 <= dias_atraso <= 3:
+                rangos["3_dias"]["monto"] += monto
+                rangos["3_dias"]["cantidad"] += 1
+            elif 4 <= dias_atraso <= 15:
+                rangos["15_dias"]["monto"] += monto
+                rangos["15_dias"]["cantidad"] += 1
+            elif 16 <= dias_atraso <= 30:
+                rangos["1_mes"]["monto"] += monto
+                rangos["1_mes"]["cantidad"] += 1
+            elif 31 <= dias_atraso <= 60:
+                rangos["2_meses"]["monto"] += monto
+                rangos["2_meses"]["cantidad"] += 1
+            elif dias_atraso >= 61:
+                rangos["3_mas_meses"]["monto"] += monto
+                rangos["3_mas_meses"]["cantidad"] += 1
+        
+        # Calcular total
+        total_morosidad = sum(float(r["monto"]) for r in rangos.values())
+        
+        # Preparar respuesta con porcentajes (ordenado por días de atraso)
+        orden_claves = ["1_dia", "3_dias", "15_dias", "1_mes", "2_meses", "3_mas_meses"]
+        composicion = []
+        
+        for key in orden_claves:
+            rango = rangos[key]
+            monto_float = float(rango["monto"])
+            porcentaje = (monto_float / total_morosidad * 100) if total_morosidad > 0 else 0
+            
+            composicion.append({
+                "categoria": rango["nombre"],
+                "monto": monto_float,
+                "cantidad": rango["cantidad"],
+                "porcentaje": round(porcentaje, 2),
+            })
+        
+        return {
+            "composicion": composicion,
+            "total_morosidad": total_morosidad,
+            "total_cuotas": sum(r["cantidad"] for r in rangos.values()),
+        }
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo composición de morosidad: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/evolucion-general-mensual")
+def obtener_evolucion_general_mensual(
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obtiene la evolución mensual de Morosidad, Total Activos, Total Financiamiento y Total Pagos
+    para los últimos 6 meses o el rango de fechas especificado.
+    """
+    try:
+        hoy = date.today()
+        nombres_meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
+                        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+        
+        # Calcular rango de fechas (últimos 6 meses por defecto)
+        if fecha_fin:
+            fecha_fin_mes = fecha_fin.replace(day=1)
+        else:
+            fecha_fin_mes = hoy.replace(day=1)
+        
+        if fecha_inicio:
+            fecha_inicio_mes = fecha_inicio.replace(day=1)
+        else:
+            # Últimos 6 meses
+            año_inicio = fecha_fin_mes.year
+            mes_inicio = fecha_fin_mes.month - 5
+            if mes_inicio <= 0:
+                año_inicio -= 1
+                mes_inicio += 12
+            fecha_inicio_mes = date(año_inicio, mes_inicio, 1)
+        
+        # Generar lista de meses
+        meses_lista = []
+        current = fecha_inicio_mes
+        while current <= fecha_fin_mes:
+            meses_lista.append({
+                "año": current.year,
+                "mes": current.month,
+                "nombre": f"{nombres_meses[current.month - 1]} {current.year}",
+                "fecha": current,
+            })
+            # Siguiente mes
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
+        
+        # Inicializar estructura de resultados
+        evolucion = []
+        
+        for mes_info in meses_lista:
+            año = mes_info["año"]
+            mes = mes_info["mes"]
+            nombre_mes = mes_info["nombre"]
+            fecha_mes = mes_info["fecha"]
+            
+            # Calcular último día del mes
+            if mes == 12:
+                ultimo_dia_mes = date(año, 12, 31)
+            else:
+                ultimo_dia_mes = date(año, mes + 1, 1) - timedelta(days=1)
+            
+            # 1. MOROSIDAD POR DÍA (monto de cuotas vencidas no pagadas al final del mes)
+            query_morosidad = (
+                db.query(func.sum(Cuota.monto_cuota))
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento <= ultimo_dia_mes,
+                    Cuota.estado != "PAGADO",
+                )
+            )
+            query_morosidad = FiltrosDashboard.aplicar_filtros_cuota(
+                query_morosidad, analista, concesionario, modelo, None, None
+            )
+            morosidad = float(query_morosidad.scalar() or Decimal("0"))
+            
+            # 2. TOTAL ACTIVOS (total financiamiento de préstamos APROBADO registrados hasta ese mes)
+            query_activos = (
+                db.query(func.sum(Prestamo.total_financiamiento))
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    Prestamo.fecha_registro <= ultimo_dia_mes,
+                )
+            )
+            query_activos = FiltrosDashboard.aplicar_filtros_prestamo(
+                query_activos, analista, concesionario, modelo, None, None
+            )
+            total_activos = float(query_activos.scalar() or Decimal("0"))
+            
+            # 3. TOTAL FINANCIAMIENTO (nuevos préstamos aprobados en el mes)
+            primer_dia_mes = date(año, mes, 1)
+            if mes == 12:
+                primer_dia_siguiente = date(año + 1, 1, 1)
+            else:
+                primer_dia_siguiente = date(año, mes + 1, 1)
+            
+            query_financiamiento = (
+                db.query(func.sum(Prestamo.total_financiamiento))
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    Prestamo.fecha_registro >= primer_dia_mes,
+                    Prestamo.fecha_registro < primer_dia_siguiente,
+                )
+            )
+            query_financiamiento = FiltrosDashboard.aplicar_filtros_prestamo(
+                query_financiamiento, analista, concesionario, modelo, None, None
+            )
+            total_financiamiento = float(query_financiamiento.scalar() or Decimal("0"))
+            
+            # 4. TOTAL PAGOS (pagos recibidos en el mes)
+            query_pagos = (
+                db.query(func.sum(Pago.monto))
+                .join(Prestamo, Pago.prestamo_id == Prestamo.id)
+                .filter(
+                    Pago.fecha_pago >= primer_dia_mes,
+                    Pago.fecha_pago < primer_dia_siguiente,
+                    Pago.activo.is_(True),
+                )
+            )
+            # Aplicar filtros de préstamo
+            if analista:
+                query_pagos = query_pagos.filter(
+                    or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
+                )
+            if concesionario:
+                query_pagos = query_pagos.filter(Prestamo.concesionario == concesionario)
+            if modelo:
+                query_pagos = query_pagos.filter(
+                    or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
+                )
+            total_pagos = float(query_pagos.scalar() or Decimal("0"))
+            
+            evolucion.append({
+                "mes": nombre_mes,
+                "morosidad": round(morosidad, 2),
+                "total_activos": round(total_activos, 2),
+                "total_financiamiento": round(total_financiamiento, 2),
+                "total_pagos": round(total_pagos, 2),
+            })
+        
+        return {"evolucion": evolucion}
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo evolución general mensual: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -2643,7 +3196,11 @@ def obtener_evolucion_pagos(
     """
     Evolución de pagos (últimos N meses) para DashboardPagos
     Consulta tabla pagos_staging para obtener pagos reales por mes
+    ✅ OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
     """
+    import time
+    start_time = time.time()
+    
     try:
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
@@ -2657,6 +3214,7 @@ def obtener_evolucion_pagos(
         fecha_inicio_query = date(año_inicio, mes_inicio, 1)
 
         # ✅ OPTIMIZACIÓN: Una sola query con GROUP BY en lugar de múltiples queries en loop
+        start_query = time.time()
         fecha_inicio_query_dt = datetime.combine(fecha_inicio_query, datetime.min.time())
         hoy_dt = datetime.combine(hoy, datetime.max.time())
 
@@ -2685,6 +3243,8 @@ def obtener_evolucion_pagos(
             ).bindparams(fecha_inicio=fecha_inicio_query_dt, fecha_fin=hoy_dt)
         )
         resultados = query_pagos.fetchall()
+        query_time = int((time.time() - start_query) * 1000)
+        logger.info(f"📊 [evolucion-pagos] Query completada en {query_time}ms, {len(resultados)} registros")
 
         # Crear diccionario de resultados por año-mes para acceso rápido
         pagos_por_mes: dict[tuple[int, int], dict[str, Any]] = {}
@@ -2697,6 +3257,7 @@ def obtener_evolucion_pagos(
             }
 
         # Generar datos mensuales (incluir todos los meses en el rango, incluso sin pagos)
+        start_process = time.time()
         meses_data = []
         current_date = fecha_inicio_query
 
@@ -2718,6 +3279,10 @@ def obtener_evolucion_pagos(
 
             # Avanzar al siguiente mes
             current_date = fecha_mes_fin
+
+        process_time = int((time.time() - start_process) * 1000)
+        total_time = int((time.time() - start_time) * 1000)
+        logger.info(f"⏱️ [evolucion-pagos] Tiempo total: {total_time}ms (query: {query_time}ms, process: {process_time}ms)")
 
         return {"meses": meses_data}
 

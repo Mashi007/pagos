@@ -280,10 +280,10 @@ export function DashboardFinanciamiento() {
               ← Menú
             </Button>
             <div>
-              <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tight">
+              <h1 className="text-6xl font-black text-gray-900 uppercase tracking-tight">
                 Financiamiento
               </h1>
-              <p className="text-lg text-gray-600 font-medium mt-1">
+              <p className="text-xl text-gray-600 font-medium mt-1">
                 Monitoreo Estratégico • {userName}
               </p>
             </div>
@@ -300,8 +300,8 @@ export function DashboardFinanciamiento() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center space-x-2">
-                  <div className="flex items-center space-x-2 text-sm font-semibold text-gray-700">
-                    <Filter className="h-4 w-4 text-cyan-600" />
+                  <div className="flex items-center space-x-2 text-base font-semibold text-gray-700">
+                    <Filter className="h-5 w-5 text-cyan-600" />
                     <span>Filtros Rápidos</span>
                   </div>
                 </div>
@@ -407,8 +407,8 @@ export function DashboardFinanciamiento() {
             className="lg:col-span-3"
           >
             <Card className="shadow-lg border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-blue-50 sticky top-4">
-              <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 rounded-t-lg -m-0.5 mb-4">
-                <CardTitle className="text-xl font-bold text-white flex items-center space-x-2">
+                  <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 rounded-t-lg -m-0.5 mb-4">
+                <CardTitle className="text-2xl font-bold text-white flex items-center space-x-2">
                   <span>🔍</span>
                   <span>Explorar Detalles</span>
                 </CardTitle>
@@ -422,9 +422,9 @@ export function DashboardFinanciamiento() {
                     console.log('Ver Financiamientos Activos Detalle')
                   }}
                 >
-                  <FileText className="h-5 w-5 mr-3 text-cyan-600" />
-                  <span className="font-semibold flex-1 text-left">Ver Financiamientos Activos</span>
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                  <FileText className="h-6 w-6 mr-3 text-cyan-600" />
+                  <span className="font-semibold text-base flex-1 text-left">Ver Financiamientos Activos</span>
+                  <ChevronRight className="h-5 w-5 text-gray-400" />
                 </Button>
                 <Button
                   variant="outline"
@@ -434,18 +434,18 @@ export function DashboardFinanciamiento() {
                     console.log('Análisis por Estado Completo')
                   }}
                 >
-                  <BarChart3 className="h-5 w-5 mr-3 text-cyan-600" />
-                  <span className="font-semibold flex-1 text-left">Análisis por Estado</span>
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                  <BarChart3 className="h-6 w-6 mr-3 text-cyan-600" />
+                  <span className="font-semibold text-base flex-1 text-left">Análisis por Estado</span>
+                  <ChevronRight className="h-5 w-5 text-gray-400" />
                 </Button>
                 <Button
                   variant="outline"
                   className="w-full justify-start bg-white hover:bg-cyan-50 text-gray-800 border-2 border-cyan-200 hover:border-cyan-400 h-auto py-3 px-4"
                   onClick={() => navigate('/dashboard/analisis')}
                 >
-                  <PieChart className="h-5 w-5 mr-3 text-cyan-600" />
-                  <span className="font-semibold flex-1 text-left">Distribución Concesionarios</span>
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                  <PieChart className="h-6 w-6 mr-3 text-cyan-600" />
+                  <span className="font-semibold text-base flex-1 text-left">Distribución Concesionarios</span>
+                  <ChevronRight className="h-5 w-5 text-gray-400" />
                 </Button>
                 <Button
                   variant="outline"
@@ -455,18 +455,18 @@ export function DashboardFinanciamiento() {
                     console.log('Tendencias Temporales Detalladas')
                   }}
                 >
-                  <TrendingUp className="h-5 w-5 mr-3 text-cyan-600" />
-                  <span className="font-semibold flex-1 text-left">Tendencias Temporales</span>
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                  <TrendingUp className="h-6 w-6 mr-3 text-cyan-600" />
+                  <span className="font-semibold text-base flex-1 text-left">Tendencias Temporales</span>
+                  <ChevronRight className="h-5 w-5 text-gray-400" />
                 </Button>
                 <Button
                   variant="outline"
                   className="w-full justify-start bg-white hover:bg-cyan-50 text-gray-800 border-2 border-cyan-200 hover:border-cyan-400 h-auto py-3 px-4"
                   onClick={() => navigate('/dashboard/analisis')}
                 >
-                  <PieChart className="h-5 w-5 mr-3 text-cyan-600" />
-                  <span className="font-semibold flex-1 text-left">Por Tipo Producto</span>
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                  <PieChart className="h-6 w-6 mr-3 text-cyan-600" />
+                  <span className="font-semibold text-base flex-1 text-left">Por Tipo Producto</span>
+                  <ChevronRight className="h-5 w-5 text-gray-400" />
                 </Button>
               </CardContent>
             </Card>
@@ -484,8 +484,8 @@ export function DashboardFinanciamiento() {
               >
                 <Card className="shadow-lg border-2 border-gray-200">
                   <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b-2 border-cyan-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <BarChart3 className="h-6 w-6 text-cyan-600" />
+                    <CardTitle className="flex items-center space-x-2 text-2xl font-bold text-gray-800">
+                      <BarChart3 className="h-7 w-7 text-cyan-600" />
                       <span>Financiamiento por Estado</span>
                     </CardTitle>
                   </CardHeader>
@@ -536,7 +536,7 @@ export function DashboardFinanciamiento() {
               >
                 <Card className="shadow-lg border-2 border-gray-200">
                   <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <CardTitle className="flex items-center space-x-2 text-2xl font-bold text-gray-800">
                       <PieChart className="h-6 w-6 text-purple-600" />
                       <span>Distribución por Concesionario</span>
                     </CardTitle>

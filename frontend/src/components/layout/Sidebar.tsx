@@ -538,22 +538,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                     className="overflow-hidden"
                   >
                     <div className="mt-2 bg-white rounded-lg border border-blue-200 shadow-xl shadow-blue-500/10">
-                      <div className="p-4 border-b border-blue-100 bg-gradient-to-r from-blue-50 to-slate-50">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-full flex items-center justify-center text-lg font-medium shadow-md">
-                            {userInitials}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-slate-900 truncate">
-                              {userName}
-                            </div>
-                            <Badge className={cn("mt-1", getRoleColor(user?.is_admin || false))}>
-                              {userRoleDisplay}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-
                       <div className="py-2">
                         <button className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center space-x-2">
                           <User className="h-4 w-4" />
