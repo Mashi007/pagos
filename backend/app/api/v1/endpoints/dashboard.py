@@ -12,6 +12,16 @@ from app.api.deps import get_current_user, get_db
 from app.core.cache import cache_result
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
+from app.models.dashboard_oficial import (
+    DashboardCobranzasMensuales,
+    DashboardFinanciamientoMensual,
+    DashboardKPIsDiarios,
+    DashboardMetricasAcumuladas,
+    DashboardMorosidadMensual,
+    DashboardMorosidadPorAnalista,
+    DashboardPagosMensuales,
+    DashboardPrestamosPorConcesionario,
+)
 from app.models.pago import Pago  # Mantener para operaciones que necesiten tabla pagos
 from app.models.pago_staging import PagoStaging  # Usar para consultas principales (donde están los datos)
 from app.models.prestamo import Prestamo
@@ -2405,12 +2415,9 @@ def obtener_evolucion_morosidad(
 ):
     """
     Evolución de morosidad (últimos N meses) para DashboardCuotas
-    Consulta tabla cuotas para obtener morosidad real por mes
-    OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
+    ✅ MIGRADO: Ahora consulta tabla oficial dashboard_morosidad_mensual
     """
     try:
-        # text ya está importado al inicio del archivo
-
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
@@ -2422,52 +2429,14 @@ def obtener_evolucion_morosidad(
             mes_inicio += 12
         fecha_inicio_query = date(año_inicio, mes_inicio, 1)
 
-        # OPTIMIZACIÓN: Una sola query con GROUP BY en lugar de múltiples queries
-        # Construir filtros base
-        filtros_base = [
-            "p.estado = 'APROBADO'",
-            "c.fecha_vencimiento >= :fecha_inicio",
-            "c.fecha_vencimiento < :fecha_fin_total",
-            "c.estado != 'PAGADO'",
-        ]
+        # ✅ CONSULTA TABLA OFICIAL: dashboard_morosidad_mensual
+        query = db.query(DashboardMorosidadMensual).filter(
+            DashboardMorosidadMensual.año * 100 + DashboardMorosidadMensual.mes >= año_inicio * 100 + mes_inicio,
+            DashboardMorosidadMensual.año * 100 + DashboardMorosidadMensual.mes <= hoy.year * 100 + hoy.month
+        ).order_by(DashboardMorosidadMensual.año, DashboardMorosidadMensual.mes)
 
-        filtros_params = {
-            "fecha_inicio": fecha_inicio_query,
-            "fecha_fin_total": hoy,
-        }
-
-        # Aplicar filtros opcionales
-        if analista:
-            filtros_base.append("(p.analista = :analista OR p.producto_financiero = :analista)")
-            filtros_params["analista"] = analista
-        if concesionario:
-            filtros_base.append("p.concesionario = :concesionario")
-            filtros_params["concesionario"] = concesionario
-        if modelo:
-            filtros_base.append("(p.producto = :modelo OR p.modelo_vehiculo = :modelo)")
-            filtros_params["modelo"] = modelo
-
-        where_clause = " AND ".join(filtros_base)
-
-        # Query optimizada: GROUP BY por mes y año (usar bindparams para seguridad)
-        query_sql = text(
-            """
-            SELECT 
-                EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
-                EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
-                COALESCE(SUM(c.monto_cuota), 0) as morosidad
-            FROM cuotas c
-            INNER JOIN prestamos p ON c.prestamo_id = p.id
-            WHERE """
-            + where_clause
-            + """
-            GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
-            ORDER BY año, mes
-        """
-        ).bindparams(**filtros_params)
-
-        result = db.execute(query_sql)
-        morosidad_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result}
+        resultados = query.all()
+        morosidad_por_mes = {(r.año, r.mes): float(r.morosidad_total or Decimal("0")) for r in resultados}
 
         # Generar datos mensuales (incluyendo meses sin datos)
         meses_data = []
@@ -2492,7 +2461,45 @@ def obtener_evolucion_morosidad(
 
     except Exception as e:
         logger.error(f"Error obteniendo evolución de morosidad: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        # Fallback: Si la tabla oficial no existe, usar consulta original
+        logger.warning("Tabla oficial no disponible, usando consulta original como fallback")
+        try:
+            # Consulta original como fallback
+            fecha_inicio_query = date(año_inicio, mes_inicio, 1)
+            query_sql = text(
+                """
+                SELECT 
+                    EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
+                    EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
+                    COALESCE(SUM(c.monto_cuota), 0) as morosidad
+                FROM cuotas c
+                INNER JOIN prestamos p ON c.prestamo_id = p.id
+                WHERE 
+                    p.estado = 'APROBADO'
+                    AND c.fecha_vencimiento >= :fecha_inicio
+                    AND c.fecha_vencimiento < :fecha_fin_total
+                    AND c.estado != 'PAGADO'
+                GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+                ORDER BY año, mes
+            """
+            ).bindparams(fecha_inicio=fecha_inicio_query, fecha_fin_total=hoy)
+            result = db.execute(query_sql)
+            morosidad_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result}
+            meses_data = []
+            current_date = fecha_inicio_query
+            while current_date <= hoy:
+                año_mes = current_date.year
+                num_mes = current_date.month
+                morosidad_mes = morosidad_por_mes.get((año_mes, num_mes), 0.0)
+                meses_data.append({
+                    "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
+                    "morosidad": morosidad_mes,
+                })
+                current_date = _obtener_fechas_mes_siguiente(num_mes, año_mes)
+            return {"meses": meses_data}
+        except Exception as fallback_error:
+            logger.error(f"Error en fallback: {fallback_error}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
 @router.get("/evolucion-pagos")

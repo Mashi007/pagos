@@ -213,10 +213,20 @@ class NotificacionAutomaticaService:
     def _procesar_cuota(self, cuota: Cuota, stats: Dict[str, int]) -> bool:
         """Procesa una cuota individual. Returns: True si se procesó exitosamente"""
         try:
-            cliente = self.db.query(Cliente).filter(Cliente.id == cuota.cliente_id).first()
+            # Obtener cliente a través del préstamo (Cuota -> Prestamo -> Cliente)
+            prestamo = self.db.query(Prestamo).filter(Prestamo.id == cuota.prestamo_id).first()
+            if not prestamo:
+                logger.warning(f"Préstamo {cuota.prestamo_id} no encontrado para cuota {cuota.id}")
+                return False
+            
+            # Obtener cliente por cédula o por cliente_id
+            if prestamo.cliente_id:
+                cliente = self.db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
+            else:
+                cliente = self.db.query(Cliente).filter(Cliente.cedula == prestamo.cedula).first()
 
             if not cliente:
-                logger.warning(f"Cliente {cuota.cliente_id} no encontrado")
+                logger.warning(f"Cliente no encontrado para préstamo {prestamo.id} (cédula: {prestamo.cedula})")
                 return False
 
             if not cuota.fecha_vencimiento:

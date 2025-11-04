@@ -200,13 +200,17 @@ def reporte_cartera(
         ]
 
         distribucion_por_mora = []
+        hoy = date.today()
         for rango in rangos_mora:
-            # CORREGIDO: Prestamo no tiene dias_mora ni monto_mora, usar Cuota
+            # CORREGIDO: Los préstamos en mora se identifican por tener cuotas vencidas no pagadas
+            # No existe EstadoPrestamo.EN_MORA, usar filtros de cuotas vencidas
             cantidad = (
                 db.query(func.count(func.distinct(Prestamo.id)))
                 .join(Cuota, Prestamo.id == Cuota.prestamo_id)
                 .filter(
-                    Prestamo.estado == EstadoPrestamo.EN_MORA,
+                    Prestamo.estado == EstadoPrestamo.APROBADO,  # Solo préstamos aprobados
+                    Cuota.fecha_vencimiento < hoy,  # Cuotas vencidas
+                    Cuota.estado != "PAGADO",  # Cuotas no pagadas
                     Cuota.dias_mora >= rango["min"],
                     Cuota.dias_mora <= rango["max"],
                 )
@@ -217,7 +221,9 @@ def reporte_cartera(
                 db.query(func.sum(Cuota.monto_mora))
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .filter(
-                    Prestamo.estado == EstadoPrestamo.EN_MORA,
+                    Prestamo.estado == EstadoPrestamo.APROBADO,  # Solo préstamos aprobados
+                    Cuota.fecha_vencimiento < hoy,  # Cuotas vencidas
+                    Cuota.estado != "PAGADO",  # Cuotas no pagadas
                     Cuota.dias_mora >= rango["min"],
                     Cuota.dias_mora <= rango["max"],
                 )
