@@ -2488,58 +2488,51 @@ def obtener_evolucion_morosidad(
         mes_inicio += 12
     fecha_inicio_query = date(año_inicio, mes_inicio, 1)
 
+    # Intentar usar tabla oficial si existe, sino usar fallback directamente
+    morosidad_por_mes = {}
+    query_time = 0
+    
     try:
-        # ✅ OPTIMIZACIÓN: Usar filtros separados en año y mes para aprovechar el índice idx_dashboard_morosidad_año_mes
-        # En lugar de año * 100 + mes, usar filtros separados que permiten usar el índice compuesto
-        query = (
-            db.query(DashboardMorosidadMensual)
-            .filter(
-                or_(
-                    and_(DashboardMorosidadMensual.año == año_inicio, DashboardMorosidadMensual.mes >= mes_inicio),
-                    and_(DashboardMorosidadMensual.año > año_inicio, DashboardMorosidadMensual.año < hoy.year),
-                    and_(DashboardMorosidadMensual.año == hoy.year, DashboardMorosidadMensual.mes <= hoy.month),
+        # Verificar si la tabla existe antes de intentar usarla
+        table_exists = db.execute(
+            text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'dashboard_morosidad_mensual'
                 )
-            )
-            .order_by(DashboardMorosidadMensual.año, DashboardMorosidadMensual.mes)
-        )
-
-        resultados = query.all()
-        query_time = int((time.time() - start_time) * 1000)
-        logger.info(f"📊 [evolucion-morosidad] Query completada en {query_time}ms, {len(resultados)} registros")
-
-        morosidad_por_mes = {(r.año, r.mes): float(r.morosidad_total or Decimal("0")) for r in resultados}
-
-        # Generar datos mensuales (incluyendo meses sin datos)
-        start_process = time.time()
-        meses_data = []
-        current_date = fecha_inicio_query
-
-        while current_date <= hoy:
-            año_mes = current_date.year
-            num_mes = current_date.month
-            morosidad_mes = morosidad_por_mes.get((año_mes, num_mes), 0.0)
-
-            meses_data.append(
-                {
-                    "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
-                    "morosidad": morosidad_mes,
-                }
+            """)
+        ).scalar()
+        
+        if table_exists:
+            # ✅ OPTIMIZACIÓN: Usar filtros separados en año y mes para aprovechar el índice idx_dashboard_morosidad_año_mes
+            query = (
+                db.query(DashboardMorosidadMensual)
+                .filter(
+                    or_(
+                        and_(DashboardMorosidadMensual.año == año_inicio, DashboardMorosidadMensual.mes >= mes_inicio),
+                        and_(DashboardMorosidadMensual.año > año_inicio, DashboardMorosidadMensual.año < hoy.year),
+                        and_(DashboardMorosidadMensual.año == hoy.year, DashboardMorosidadMensual.mes <= hoy.month),
+                    )
+                )
+                .order_by(DashboardMorosidadMensual.año, DashboardMorosidadMensual.mes)
             )
 
-            # Avanzar al siguiente mes
-            current_date = _obtener_fechas_mes_siguiente(num_mes, año_mes)
+            resultados = query.all()
+            query_time = int((time.time() - start_time) * 1000)
+            logger.info(f"📊 [evolucion-morosidad] Query tabla oficial completada en {query_time}ms, {len(resultados)} registros")
 
-        process_time = int((time.time() - start_process) * 1000)
-        total_time = int((time.time() - start_time) * 1000)
-        logger.info(f"⏱️ [evolucion-morosidad] Tiempo total: {total_time}ms (query: {query_time}ms, process: {process_time}ms)")
-
-        return {"meses": meses_data}
-
-    except Exception as e:
-        logger.error(f"Error obteniendo evolución de morosidad desde tabla oficial: {e}", exc_info=True)
+            morosidad_por_mes = {(r.año, r.mes): float(r.morosidad_total or Decimal("0")) for r in resultados}
+        else:
+            # Tabla no existe, usar fallback
+            logger.warning("Tabla dashboard_morosidad_mensual no existe, usando fallback")
+            raise ValueError("Tabla no existe")
+            
+    except (ValueError, Exception) as e:
         # Fallback: Si la tabla oficial no existe o hay error, usar consulta original
-        logger.warning("Tabla oficial no disponible o error, usando consulta original como fallback")
+        logger.warning(f"Error accediendo tabla oficial: {e}, usando consulta original como fallback")
         try:
+            start_fallback = time.time()
             query_sql = text(
                 """
                 SELECT 
@@ -2559,23 +2552,37 @@ def obtener_evolucion_morosidad(
             ).bindparams(fecha_inicio=fecha_inicio_query, fecha_fin_total=hoy)
             result = db.execute(query_sql)
             morosidad_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result}
-            meses_data = []
-            current_date = fecha_inicio_query
-            while current_date <= hoy:
-                año_mes = current_date.year
-                num_mes = current_date.month
-                morosidad_mes = morosidad_por_mes.get((año_mes, num_mes), 0.0)
-                meses_data.append(
-                    {
-                        "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
-                        "morosidad": morosidad_mes,
-                    }
-                )
-                current_date = _obtener_fechas_mes_siguiente(num_mes, año_mes)
-            return {"meses": meses_data}
+            query_time = int((time.time() - start_fallback) * 1000)
+            logger.info(f"📊 [evolucion-morosidad] Query fallback completada en {query_time}ms, {len(morosidad_por_mes)} registros")
         except Exception as fallback_error:
             logger.error(f"Error en fallback: {fallback_error}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Error interno: {str(fallback_error)}")
+
+    # Generar datos mensuales (incluyendo meses sin datos) - se ejecuta tanto para tabla oficial como fallback
+    start_process = time.time()
+    meses_data = []
+    current_date = fecha_inicio_query
+
+    while current_date <= hoy:
+        año_mes = current_date.year
+        num_mes = current_date.month
+        morosidad_mes = morosidad_por_mes.get((año_mes, num_mes), 0.0)
+
+        meses_data.append(
+            {
+                "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
+                "morosidad": morosidad_mes,
+            }
+        )
+
+        # Avanzar al siguiente mes
+        current_date = _obtener_fechas_mes_siguiente(num_mes, año_mes)
+
+    process_time = int((time.time() - start_process) * 1000)
+    total_time = int((time.time() - start_time) * 1000)
+    logger.info(f"⏱️ [evolucion-morosidad] Tiempo total: {total_time}ms (query: {query_time}ms, process: {process_time}ms)")
+
+    return {"meses": meses_data}
 
 
 @router.get("/evolucion-pagos")
