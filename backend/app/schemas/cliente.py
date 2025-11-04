@@ -291,13 +291,20 @@ class ClienteUpdate(BaseModel):
 
 
 class ClienteResponse(ClienteBase):
-    """Schema de respuesta para cliente"""
+    """Schema de respuesta para cliente - Validación flexible para datos históricos"""
 
     id: int
     activo: bool
     usuario_registro: str  # Email del usuario que registró
     fecha_registro: Optional[datetime] = Field(None, description="Fecha de creación del cliente")
     fecha_actualizacion: Optional[datetime] = Field(None, description="Fecha de última actualización del cliente")
+
+    # ✅ Sobrescribir campo email para permitir datos históricos con emails inválidos
+    # (en lectura, aceptamos emails con errores menores para no romper datos existentes)
+    email: Optional[str] = Field(
+        None,
+        description="Email del cliente (validación flexible para lectura de datos históricos)",
+    )
 
     # Sobrescribir campo telefono para permitir datos históricos
     # (en lectura, aceptamos formatos no estándar para no romper datos existentes)
@@ -307,6 +314,25 @@ class ClienteResponse(ClienteBase):
         max_length=20,  # Máximo 20 caracteres (permite formatos variados)
         description="Teléfono del cliente (formato flexible para lectura de datos históricos)",
     )
+
+    # ✅ Sobrescribir validador de email para permitir datos históricos
+    # (en lectura, aceptamos emails con errores menores como puntos antes de @ o dobles puntos)
+    @field_validator("email", mode="before")
+    @classmethod
+    def validate_email_response(cls, v) -> Optional[str]:
+        """Validación flexible para respuestas: permite emails con errores menores"""
+        if not v:
+            return None
+        v_str = str(v).strip()
+        if not v_str:
+            return None
+        # Intentar limpiar errores comunes pero no rechazar el email
+        # Limpiar puntos antes de @
+        v_str = v_str.replace(".@", "@")
+        # Limpiar dobles puntos
+        v_str = v_str.replace("..", ".")
+        # En respuestas, devolvemos el email (limpiado si es posible) sin validación estricta
+        return v_str if v_str else None
 
     # Sobrescribir validador de telefono para permitir datos históricos
     # (en lectura, aceptamos formatos no estándar para no romper datos existentes)

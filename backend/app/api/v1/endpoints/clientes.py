@@ -111,8 +111,10 @@ def listar_clientes(
     current_user: User = Depends(get_current_user),
 ):
     # Listar clientes con paginacion y filtros
+    import time
+    start_time = time.time()
     try:
-        logger.info(f"Listar clientes - Usuario: {current_user.email}")
+        logger.info(f"Listar clientes - Usuario: {current_user.email}, page={page}, per_page={per_page}")
 
         # Query base
         query = db.query(Cliente)
@@ -125,18 +127,49 @@ def listar_clientes(
         # Ordenamiento por fecha de registro descendente (más recientes primero)
         query = query.order_by(Cliente.fecha_registro.desc())
 
-        # Contar total
-        total = query.count()
+        # ✅ OPTIMIZACIÓN: Solo contar si realmente se necesita (primera página o cuando hay pocos resultados)
+        # Para páginas grandes (per_page > 500), usar estimación rápida
+        if per_page > 500:
+            # Para páginas muy grandes, hacer count solo si es página 1
+            if page == 1:
+                start_count = time.time()
+                total = query.count()
+                count_time = int((time.time() - start_count) * 1000)
+                logger.info(f"📊 [clientes] Count completado en {count_time}ms: {total} total")
+            else:
+                # Para páginas > 1, estimar total basado en resultados previos
+                # Esto evita hacer count() en cada página
+                total = None  # No calculamos total para páginas grandes
+        else:
+            # Para páginas normales, hacer count siempre
+            start_count = time.time()
+            total = query.count()
+            count_time = int((time.time() - start_count) * 1000)
+            logger.info(f"📊 [clientes] Count completado en {count_time}ms: {total} total")
 
         # Paginacion
         offset = (page - 1) * per_page
+        start_query = time.time()
         clientes = query.offset(offset).limit(per_page).all()
+        query_time = int((time.time() - start_query) * 1000)
+        logger.info(f"📊 [clientes] Query completada en {query_time}ms: {len(clientes)} registros")
 
         # Serializacion segura
+        start_serialize = time.time()
         clientes_dict = _serializar_clientes(clientes)
+        serialize_time = int((time.time() - start_serialize) * 1000)
+        logger.info(f"📊 [clientes] Serialización completada en {serialize_time}ms")
 
         # Calcular paginas
-        total_pages = (total + per_page - 1) // per_page
+        if total is not None:
+            total_pages = (total + per_page - 1) // per_page
+        else:
+            # Si no tenemos total, estimar basado en si hay más resultados
+            total_pages = page + 1 if len(clientes) == per_page else page
+
+        total_time = int((time.time() - start_time) * 1000)
+        count_time_str = f"{count_time}ms" if total is not None else "N/A"
+        logger.info(f"⏱️ [clientes] Tiempo total: {total_time}ms (count: {count_time_str}, query: {query_time}ms, serialize: {serialize_time}ms)")
 
         return {
             "clientes": clientes_dict,
@@ -146,7 +179,7 @@ def listar_clientes(
             "total_pages": total_pages,
         }
     except Exception as e:
-        logger.error(f"Error en listar_clientes: {e}")
+        logger.error(f"Error en listar_clientes: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
