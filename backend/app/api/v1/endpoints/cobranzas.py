@@ -109,7 +109,7 @@ def obtener_clientes_atrasados(
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
             .filter(
-                Prestamo.estado == "APROBADO",  # Solo préstamos aprobados
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
@@ -236,6 +236,7 @@ def obtener_cobranzas_por_analista(
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
             .filter(
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente.isnot(None),
@@ -290,6 +291,7 @@ def obtener_clientes_por_analista(
             .join(Prestamo, Prestamo.cedula == Cliente.cedula)
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
                 Prestamo.usuario_proponente == analista,
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
@@ -370,20 +372,42 @@ def obtener_resumen_cobranzas(
 ):
     """
     Obtener resumen general de cobranzas
-    Excluye admin y solo cuenta préstamos aprobados
+    Excluye admin y solo cuenta préstamos aprobados o activos
     """
     try:
         hoy = date.today()
         from app.core.config import settings
 
+        # DIAGNÓSTICO: Verificar estados de préstamos con cuotas vencidas
+        estados_prestamos = (
+            db.query(Prestamo.estado, func.count(Prestamo.id))
+            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+            )
+            .group_by(Prestamo.estado)
+            .all()
+        )
+        logger.info(f"🔍 [resumen_cobranzas] Estados de préstamos con cuotas vencidas: {dict(estados_prestamos)}")
+
+        # Total de cuotas vencidas SIN filtro de estado (para diagnóstico)
+        total_cuotas_sin_filtro = (
+            db.query(func.count(Cuota.id))
+            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
+            .scalar() or 0
+        )
+        logger.info(f"🔍 [resumen_cobranzas] Total cuotas vencidas SIN filtro estado: {total_cuotas_sin_filtro}")
+
         # Base query con joins necesarios y filtros
+        # Incluir préstamos APROBADO y ACTIVO (ambos son válidos para cobranzas)
         base_query = (
             db.query(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .join(Cliente, Prestamo.cedula == Cliente.cedula)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
             .filter(
-                Prestamo.estado == "APROBADO",  # Solo préstamos aprobados
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
@@ -400,7 +424,7 @@ def obtener_resumen_cobranzas(
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
             .filter(
-                Prestamo.estado == "APROBADO",
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
@@ -415,7 +439,7 @@ def obtener_resumen_cobranzas(
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
             .filter(
-                Prestamo.estado == "APROBADO",
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
@@ -506,6 +530,7 @@ def _construir_query_clientes_atrasados(db: Session, hoy: date, analista: Option
         .join(Cuota, Cuota.prestamo_id == Prestamo.id)
         .outerjoin(User, User.email == Prestamo.usuario_proponente)
         .filter(
+            Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
             Cuota.fecha_vencimiento < hoy,
             Cuota.estado != "PAGADO",
             Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
@@ -643,6 +668,7 @@ def informe_rendimiento_analista(
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
             .filter(
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente.isnot(None),
@@ -1126,22 +1152,38 @@ def informe_resumen_ejecutivo(
     try:
         hoy = date.today()
 
-        # Resumen general
+        # Resumen general - Solo préstamos aprobados o activos
         total_cuotas_vencidas = (
-            db.query(func.count(Cuota.id)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar() or 0
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+            )
+            .scalar() or 0
         )
 
         monto_total_adeudado = (
-            db.query(func.sum(Cuota.monto_cuota)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar()
-            or 0.0
+            db.query(func.sum(Cuota.monto_cuota))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+            )
+            .scalar() or 0.0
         )
 
         clientes_atrasados = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
-            .scalar()
-            or 0
+            .filter(
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+            )
+            .scalar() or 0
         )
 
         # Top 5 analistas con más mora - Excluir admin
@@ -1155,6 +1197,7 @@ def informe_resumen_ejecutivo(
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
             .filter(
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
                 Prestamo.usuario_proponente.isnot(None),
@@ -1177,7 +1220,11 @@ def informe_resumen_ejecutivo(
             )
             .join(Prestamo, Prestamo.cedula == Cliente.cedula)
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
+            .filter(
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+            )
             .group_by(Cliente.cedula, Cliente.nombres)
             .order_by(func.sum(Cuota.monto_cuota).desc())
             .limit(5)
