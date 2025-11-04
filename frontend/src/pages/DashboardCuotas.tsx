@@ -11,6 +11,7 @@ import {
   BarChart3,
   PieChart,
   ChevronRight,
+  Filter,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -199,15 +200,37 @@ export function DashboardCuotas() {
               </p>
             </div>
           </div>
-          <DashboardFiltrosPanel
-            filtros={filtros}
-            setFiltros={setFiltros}
-            onRefresh={handleRefresh}
-            isRefreshing={isRefreshing}
-            opcionesFiltros={opcionesFiltros}
-            loadingOpcionesFiltros={loadingOpcionesFiltros}
-            errorOpcionesFiltros={errorOpcionesFiltros}
-          />
+        </motion.div>
+
+        {/* BARRA DE FILTROS HORIZONTAL */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Card className="shadow-md border-2 border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 text-sm font-semibold text-gray-700">
+                    <Filter className="h-4 w-4 text-purple-600" />
+                    <span>Filtros Rápidos</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <DashboardFiltrosPanel
+                    filtros={filtros}
+                    setFiltros={setFiltros}
+                    onRefresh={handleRefresh}
+                    isRefreshing={isRefreshing}
+                    opcionesFiltros={opcionesFiltros}
+                    loadingOpcionesFiltros={loadingOpcionesFiltros}
+                    errorOpcionesFiltros={errorOpcionesFiltros}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
 
         {/* KPIs PRINCIPALES */}
@@ -288,225 +311,233 @@ export function DashboardCuotas() {
           </div>
         ) : null}
 
-        {/* GRÁFICOS PRINCIPALES */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Gráfico 1: Estado de Cuotas del Mes */}
+        {/* LAYOUT: BOTONES IZQUIERDA + GRÁFICOS CENTRO */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* COLUMNA IZQUIERDA: BOTONES EXPLORAR DETALLES */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
+            className="lg:col-span-3"
           >
-            <Card className="shadow-lg border-2 border-gray-200">
-              <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
-                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                  <BarChart3 className="h-6 w-6 text-purple-600" />
-                  <span>Estado de Cuotas del Mes</span>
+            <Card className="shadow-lg border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 sticky top-4">
+              <CardHeader className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-t-lg -m-0.5 mb-4">
+                <CardTitle className="text-xl font-bold text-white flex items-center space-x-2">
+                  <span>🔍</span>
+                  <span>Explorar Detalles</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6">
-                {loadingKpis ? (
-                  <div className="h-[300px] flex items-center justify-center">
-                    <div className="animate-pulse text-gray-400">Cargando...</div>
-                  </div>
-                ) : datosEstadoCuotas.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={datosEstadoCuotas}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis dataKey="estado" stroke="#6b7280" />
-                      <YAxis stroke="#6b7280" />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="cantidad" radius={[8, 8, 0, 0]}>
-                        {datosEstadoCuotas.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-gray-400">
-                    No hay datos disponibles
-                  </div>
-                )}
+              <CardContent className="space-y-3">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start bg-white hover:bg-purple-50 text-gray-800 border-2 border-purple-200 hover:border-purple-400 h-auto py-3 px-4"
+                  onClick={() => {
+                    // TODO: Navegar a cuotas pendientes detalle
+                    console.log('Cuotas Pendientes Detalle')
+                  }}
+                >
+                  <Calendar className="h-5 w-5 mr-3 text-purple-600" />
+                  <span className="font-semibold flex-1 text-left">Cuotas Pendientes</span>
+                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start bg-white hover:bg-purple-50 text-gray-800 border-2 border-purple-200 hover:border-purple-400 h-auto py-3 px-4"
+                  onClick={() => {
+                    // TODO: Navegar a análisis de morosidad
+                    console.log('Análisis de Morosidad Avanzada')
+                  }}
+                >
+                  <AlertTriangle className="h-5 w-5 mr-3 text-purple-600" />
+                  <span className="font-semibold flex-1 text-left">Análisis de Morosidad</span>
+                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start bg-white hover:bg-purple-50 text-gray-800 border-2 border-purple-200 hover:border-purple-400 h-auto py-3 px-4"
+                  onClick={() => {
+                    // TODO: Navegar a cuotas por cliente
+                    console.log('Cuotas por Cliente (2+ impagas)')
+                  }}
+                >
+                  <Users className="h-5 w-5 mr-3 text-purple-600" />
+                  <span className="font-semibold flex-1 text-left">Cuotas por Cliente</span>
+                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start bg-white hover:bg-purple-50 text-gray-800 border-2 border-purple-200 hover:border-purple-400 h-auto py-3 px-4"
+                  onClick={() => {
+                    // TODO: Navegar a historial de pagos
+                    console.log('Historial de Pagos')
+                  }}
+                >
+                  <CheckCircle className="h-5 w-5 mr-3 text-purple-600" />
+                  <span className="font-semibold flex-1 text-left">Historial de Pagos</span>
+                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                </Button>
               </CardContent>
             </Card>
           </motion.div>
 
-          {/* Gráfico 2: Cuotas por Estado de Conciliación */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Card className="shadow-lg border-2 border-gray-200">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b-2 border-blue-200">
-                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                  <PieChart className="h-6 w-6 text-blue-600" />
-                  <span>Cuotas por Estado de Conciliación</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                {loadingKpis ? (
-                  <div className="h-[300px] flex items-center justify-center">
-                    <div className="animate-pulse text-gray-400">Cargando...</div>
-                  </div>
-                ) : datosConciliacion.length > 0 ? (
-                  <div className="relative">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <RechartsPieChart>
-                        <Pie
-                          data={datosConciliacion.map((c) => ({
-                            name: c.estado,
-                            value: c.porcentaje,
-                            cantidad: c.cantidad,
-                          }))}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                          outerRadius={100}
-                          innerRadius={60}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {datosConciliacion.map((entry, index) => (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={COLORS_CONCILIACION[index % COLORS_CONCILIACION.length]}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </RechartsPieChart>
-                    </ResponsiveContainer>
-                    {/* Centro del donut */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="text-center">
-                        <div className="text-2xl font-black text-gray-800">
-                          {kpisData?.total_cuotas_mes.toLocaleString()}
-                        </div>
-                        <div className="text-xs text-gray-500">Total Cuotas</div>
+          {/* COLUMNA CENTRO/DERECHA: GRÁFICOS PRINCIPALES */}
+          <div className="lg:col-span-9 space-y-6">
+            {/* Gráficos en Grid 2 Columnas */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Gráfico 1: Estado de Cuotas del Mes */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
+                  <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                      <BarChart3 className="h-6 w-6 text-purple-600" />
+                      <span>Estado de Cuotas del Mes</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {loadingKpis ? (
+                      <div className="h-[300px] flex items-center justify-center">
+                        <div className="animate-pulse text-gray-400">Cargando...</div>
                       </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-gray-400">
-                    No hay datos disponibles
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
+                    ) : datosEstadoCuotas.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={datosEstadoCuotas}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="estado" stroke="#6b7280" />
+                          <YAxis stroke="#6b7280" />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="cantidad" radius={[8, 8, 0, 0]}>
+                            {datosEstadoCuotas.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[300px] flex items-center justify-center text-gray-400">
+                        No hay datos disponibles
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
 
-        {/* Gráfico 3: Evolución de Morosidad */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <Card className="shadow-lg border-2 border-gray-200">
-            <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 border-b-2 border-red-200">
-              <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                <TrendingUp className="h-6 w-6 text-red-600" />
-                <span>Evolución de Morosidad (Últimos 6 Meses)</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              {loadingEvolucion ? (
-                <div className="h-[300px] flex items-center justify-center">
-                  <div className="animate-pulse text-gray-400">Cargando...</div>
-                </div>
-              ) : datosEvolucionMorosidad && datosEvolucionMorosidad.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={datosEvolucionMorosidad}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="mes" stroke="#6b7280" />
-                    <YAxis stroke="#6b7280" />
-                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="morosidad"
-                      stroke="#ef4444"
-                      strokeWidth={3}
-                      name="Morosidad"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[300px] flex items-center justify-center text-gray-400">
-                  No hay datos disponibles
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* BOTONES EXPLORAR DETALLES */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="mt-8"
-        >
-          <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-6 shadow-xl">
-            <h2 className="text-2xl font-bold text-white mb-4 flex items-center space-x-2">
-              <span>🔍</span>
-              <span>Explorar Análisis Detallados</span>
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Button
-                variant="secondary"
-                className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-transparent hover:border-purple-300 h-auto py-4 flex flex-col items-center space-y-2"
-                onClick={() => {
-                  // TODO: Navegar a cuotas pendientes detalle
-                  console.log('Cuotas Pendientes Detalle')
-                }}
+              {/* Gráfico 2: Cuotas por Estado de Conciliación */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
               >
-                <Calendar className="h-6 w-6" />
-                <span className="font-semibold">Cuotas Pendientes</span>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="secondary"
-                className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-transparent hover:border-purple-300 h-auto py-4 flex flex-col items-center space-y-2"
-                onClick={() => {
-                  // TODO: Navegar a análisis de morosidad
-                  console.log('Análisis de Morosidad Avanzada')
-                }}
-              >
-                <AlertTriangle className="h-6 w-6" />
-                <span className="font-semibold">Análisis de Morosidad</span>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="secondary"
-                className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-transparent hover:border-purple-300 h-auto py-4 flex flex-col items-center space-y-2"
-                onClick={() => {
-                  // TODO: Navegar a cuotas por cliente
-                  console.log('Cuotas por Cliente (2+ impagas)')
-                }}
-              >
-                <Users className="h-6 w-6" />
-                <span className="font-semibold">Cuotas por Cliente</span>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="secondary"
-                className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-transparent hover:border-purple-300 h-auto py-4 flex flex-col items-center space-y-2"
-                onClick={() => {
-                  // TODO: Navegar a historial de pagos
-                  console.log('Historial de Pagos')
-                }}
-              >
-                <CheckCircle className="h-6 w-6" />
-                <span className="font-semibold">Historial de Pagos</span>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+                <Card className="shadow-lg border-2 border-gray-200">
+                  <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b-2 border-blue-200">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                      <PieChart className="h-6 w-6 text-blue-600" />
+                      <span>Cuotas por Estado de Conciliación</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {loadingKpis ? (
+                      <div className="h-[300px] flex items-center justify-center">
+                        <div className="animate-pulse text-gray-400">Cargando...</div>
+                      </div>
+                    ) : datosConciliacion.length > 0 ? (
+                      <div className="relative">
+                        <ResponsiveContainer width="100%" height={300}>
+                          <RechartsPieChart>
+                            <Pie
+                              data={datosConciliacion.map((c) => ({
+                                name: c.estado,
+                                value: c.porcentaje,
+                                cantidad: c.cantidad,
+                              }))}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                              outerRadius={100}
+                              innerRadius={60}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {datosConciliacion.map((entry, index) => (
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={COLORS_CONCILIACION[index % COLORS_CONCILIACION.length]}
+                                />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </RechartsPieChart>
+                        </ResponsiveContainer>
+                        {/* Centro del donut */}
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="text-center">
+                            <div className="text-2xl font-black text-gray-800">
+                              {kpisData?.total_cuotas_mes.toLocaleString()}
+                            </div>
+                            <div className="text-xs text-gray-500">Total Cuotas</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-[300px] flex items-center justify-center text-gray-400">
+                        No hay datos disponibles
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
             </div>
+
+            {/* Gráfico 3: Evolución de Morosidad */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <Card className="shadow-lg border-2 border-gray-200">
+                <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 border-b-2 border-red-200">
+                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <TrendingUp className="h-6 w-6 text-red-600" />
+                    <span>Evolución de Morosidad (Últimos 6 Meses)</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  {loadingEvolucion ? (
+                    <div className="h-[300px] flex items-center justify-center">
+                      <div className="animate-pulse text-gray-400">Cargando...</div>
+                    </div>
+                  ) : datosEvolucionMorosidad && datosEvolucionMorosidad.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={datosEvolucionMorosidad}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="mes" stroke="#6b7280" />
+                        <YAxis stroke="#6b7280" />
+                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="morosidad"
+                          stroke="#ef4444"
+                          strokeWidth={3}
+                          name="Morosidad"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[300px] flex items-center justify-center text-gray-400">
+                      No hay datos disponibles
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
           </div>
-        </motion.div>
+        </div>
       </div>
     </div>
   )

@@ -1261,64 +1261,8 @@ def obtener_kpis_pagos(
         )
         monto_cobrado_mes = Decimal(str(monto_cobrado_mes_query.scalar() or 0))
 
-        # Log detallado para verificación - contar solo pagos con montos válidos > 0
-        total_pagos_mes_query = db.execute(
-            text(
-                """
-                SELECT COUNT(*) FROM pagos_staging
-                WHERE fecha_pago IS NOT NULL
-                  AND fecha_pago != ''
-                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                  AND fecha_pago::timestamp >= :fecha_inicio
-                  AND fecha_pago::timestamp < :fecha_fin
-                  AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
-                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-                  AND monto_pagado::numeric >= 0
-            """
-            ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
-        )
-        total_pagos_mes = total_pagos_mes_query.scalar() or 0
-
-        # ✅ DIAGNÓSTICO: Verificar algunos pagos reales del mes (usar SQL directo para mejor control)
-        pagos_ejemplo_query = db.execute(
-            text(
-                """
-                SELECT id_stg, monto_pagado, fecha_pago, cedula_cliente
-                FROM pagos_staging
-                WHERE fecha_pago IS NOT NULL
-                  AND fecha_pago != ''
-                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                  AND fecha_pago::timestamp >= :fecha_inicio
-                  AND fecha_pago::timestamp < :fecha_fin
-                  AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
-                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-                  AND monto_pagado::numeric >= 0
-                LIMIT 5
-            """
-            ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
-        )
-        pagos_ejemplo_raw = pagos_ejemplo_query.fetchall()
-        pagos_ejemplo_mes = []
-        for row in pagos_ejemplo_raw:
-            pago_ej = type(
-                "obj", (object,), {"id": row[0], "monto_pagado": row[1], "fecha_pago": row[2], "cedula_cliente": row[3]}
-            )()
-            pagos_ejemplo_mes.append(pago_ej)
-
-        logger.info(
-            f"💰 [kpis_pagos] Monto cobrado en el mes: ${monto_cobrado_mes:,.2f} "
-            f"(de {total_pagos_mes} pagos - DATOS REALES DESDE BD)"
-        )
-
-        if pagos_ejemplo_mes:
-            ejemplos_pagos = "; ".join(
-                [f"Pago ID {p.id}: ${float(p.monto_pagado):,.2f} ({p.fecha_pago.date()})" for p in pagos_ejemplo_mes[:3]]
-            )
-            logger.info(f"📋 [kpis_pagos] Ejemplos de pagos del mes: {ejemplos_pagos}")
-        else:
-            logger.info(f"⚠️ [kpis_pagos] No se encontraron pagos en el mes {mes_consulta}/{año_consulta}")
+        # Log básico (sin consultas adicionales innecesarias en producción)
+        logger.info(f"💰 [kpis_pagos] Monto cobrado en el mes: ${monto_cobrado_mes:,.2f}")
 
         # 2. SALDO POR COBRAR
         # Suma de capital_pendiente + interes_pendiente + monto_mora de todas las cuotas no pagadas (DATOS REALES DESDE BD - SIN VALORES HARDCODEADOS)
@@ -1337,97 +1281,11 @@ def obtener_kpis_pagos(
             )
         )
         saldo_por_cobrar = saldo_por_cobrar_query.scalar() or Decimal("0.00")
-
-        # Log detallado para verificación
-        total_cuotas_pendientes = (
-            db.query(func.count(Cuota.id))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Cuota.estado != "PAGADO",
-                Prestamo.estado == "APROBADO",
-            )
-            .scalar()
-            or 0
-        )
-
-        # ✅ DIAGNÓSTICO: Verificar algunas cuotas pendientes reales
-        cuotas_pendientes_ejemplo = (
-            db.query(
-                Cuota.id,
-                Cuota.prestamo_id,
-                Cuota.capital_pendiente,
-                Cuota.interes_pendiente,
-                Cuota.monto_mora,
-                Cuota.estado,
-            )
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Cuota.estado != "PAGADO",
-                Prestamo.estado == "APROBADO",
-            )
-            .limit(5)
-            .all()
-        )
-
-        logger.info(
-            f"💳 [kpis_pagos] Saldo por cobrar: ${saldo_por_cobrar:,.2f} "
-            f"(de {total_cuotas_pendientes} cuotas pendientes - DATOS REALES DESDE BD)"
-        )
-
-        if cuotas_pendientes_ejemplo:
-            ejemplos_cuotas = "; ".join(
-                [
-                    f"Cuota ID {c.id} (Préstamo {c.prestamo_id}): "
-                    f"${float(c.capital_pendiente + c.interes_pendiente + (c.monto_mora or 0)):,.2f} ({c.estado})"
-                    for c in cuotas_pendientes_ejemplo[:3]
-                ]
-            )
-            logger.info(f"📋 [kpis_pagos] Ejemplos de cuotas pendientes: {ejemplos_cuotas}")
+        logger.info(f"💳 [kpis_pagos] Saldo por cobrar: ${saldo_por_cobrar:,.2f}")
 
         # 3. CLIENTES EN MORA
         # Clientes únicos con cuotas vencidas Y con pago incompleto (total_pagado < monto_cuota) (DATOS REALES DESDE BD)
         # Esto asegura que pagos parciales cuenten como mora si están vencidos
-
-        # ✅ DIAGNÓSTICO: Verificar datos en BD antes del cálculo
-        total_prestamos_aprobados = db.query(func.count(Prestamo.id)).filter(Prestamo.estado == "APROBADO").scalar() or 0
-        total_cuotas = db.query(func.count(Cuota.id)).scalar() or 0
-        cuotas_vencidas = db.query(func.count(Cuota.id)).filter(Cuota.fecha_vencimiento < hoy).scalar() or 0
-        cuotas_pendientes = db.query(func.count(Cuota.id)).filter(Cuota.estado != "PAGADO").scalar() or 0
-
-        # ✅ DIAGNÓSTICO ADICIONAL: Contar clientes únicos con préstamos aprobados
-        clientes_unicos_aprobados = (
-            db.query(func.count(func.distinct(Prestamo.cedula))).filter(Prestamo.estado == "APROBADO").scalar() or 0
-        )
-
-        # ✅ DIAGNÓSTICO ADICIONAL: Contar préstamos aprobados CON cuotas generadas
-        prestamos_con_cuotas = (
-            db.query(func.count(func.distinct(Prestamo.id)))
-            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-            .filter(Prestamo.estado == "APROBADO")
-            .scalar()
-            or 0
-        )
-
-        # ✅ DIAGNÓSTICO ADICIONAL: Contar cuotas de préstamos aprobados
-        cuotas_prestamos_aprobados = (
-            db.query(func.count(Cuota.id))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(Prestamo.estado == "APROBADO")
-            .scalar()
-            or 0
-        )
-
-        logger.info(
-            f"🔍 [kpis_pagos] DIAGNÓSTICO PRE-CÁLCULO: "
-            f"Préstamos aprobados={total_prestamos_aprobados}, "
-            f"Préstamos aprobados CON cuotas={prestamos_con_cuotas}, "
-            f"Clientes únicos aprobados={clientes_unicos_aprobados}, "
-            f"Total cuotas={total_cuotas}, "
-            f"Cuotas de préstamos aprobados={cuotas_prestamos_aprobados}, "
-            f"Cuotas vencidas={cuotas_vencidas}, "
-            f"Cuotas pendientes={cuotas_pendientes}, "
-            f"Fecha hoy={hoy}"
-        )
 
         clientes_en_mora_query = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
@@ -1439,73 +1297,7 @@ def obtener_kpis_pagos(
             )
         )
         clientes_en_mora = clientes_en_mora_query.scalar() or 0
-
-        # Log detallado para verificación
-        cuotas_en_mora_count = (
-            db.query(func.count(Cuota.id))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.total_pagado < Cuota.monto_cuota,
-                Prestamo.estado == "APROBADO",
-            )
-            .scalar()
-            or 0
-        )
-
-        # ✅ DIAGNÓSTICO ADICIONAL: Verificar si hay clientes con préstamos pero sin cuotas
-        clientes_sin_cuotas = (
-            db.query(func.count(func.distinct(Prestamo.cedula)))
-            .filter(
-                Prestamo.estado == "APROBADO",
-                ~Prestamo.id.in_(db.query(Cuota.prestamo_id).distinct()),
-            )
-            .scalar()
-            or 0
-        )
-
-        # ✅ DIAGNÓSTICO ADICIONAL: Detalles de cuotas en mora
-        # Obtener algunos ejemplos de cuotas en mora para verificación
-        cuotas_mora_ejemplo = (
-            db.query(
-                Cuota.id,
-                Cuota.prestamo_id,
-                Cuota.fecha_vencimiento,
-                Cuota.total_pagado,
-                Cuota.monto_cuota,
-            )
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.total_pagado < Cuota.monto_cuota,
-                Prestamo.estado == "APROBADO",
-            )
-            .limit(5)
-            .all()
-        )
-
-        ejemplos_info = []
-        for c in cuotas_mora_ejemplo:
-            ejemplos_info.append(
-                f"Cuota ID {c.id} (Préstamo {c.prestamo_id}): "
-                f"Vencida {c.fecha_vencimiento}, "
-                f"Pagado ${float(c.total_pagado):.2f} de ${float(c.monto_cuota):.2f}"
-            )
-
-        logger.info(
-            f"⚠️ [kpis_pagos] Clientes en mora: {clientes_en_mora} "
-            f"(con {cuotas_en_mora_count} cuotas vencidas e incompletas), "
-            f"Clientes aprobados sin cuotas={clientes_sin_cuotas}"
-        )
-
-        if ejemplos_info:
-            logger.info(
-                f"📋 [kpis_pagos] Ejemplos de cuotas en mora ({min(len(ejemplos_info), 3)}): " + "; ".join(ejemplos_info[:3])
-            )
-        else:
-            logger.info(
-                "✅ [kpis_pagos] No hay cuotas en mora detectadas (todas las cuotas están pagadas o no están vencidas)"
-            )
+        logger.info(f"⚠️ [kpis_pagos] Clientes en mora: {clientes_en_mora}")
         # 4. CLIENTES AL DÍA
         # Clientes únicos que tienen préstamos aprobados pero NO tienen cuotas vencidas sin pagar
         # Es decir: clientes con préstamos aprobados que no están en la lista de clientes en mora
@@ -1529,23 +1321,7 @@ def obtener_kpis_pagos(
         # Clientes al día = clientes con préstamos aprobados Y cuotas - clientes en mora
         # (Un cliente al día es uno que tiene préstamos aprobados con cuotas pero no está en mora)
         clientes_al_dia = max(0, clientes_con_cuotas - clientes_en_mora)
-
-        logger.info(
-            f"✅ [kpis_pagos] Clientes al día: {clientes_al_dia} "
-            f"(de {clientes_con_cuotas} clientes con cuotas, "
-            f"{todos_clientes_aprobados} totales aprobados, "
-            f"{clientes_en_mora} en mora)"
-        )
-
-        # ✅ LOG FINAL CONFIRMANDO QUE SON DATOS REALES
-        logger.info(
-            "✅ [kpis_pagos] ===== KPIs CALCULADOS CON DATOS REALES DE BD ===== "
-            f"Monto Cobrado=${float(monto_cobrado_mes):,.2f}, "
-            f"Saldo por Cobrar=${float(saldo_por_cobrar):,.2f}, "
-            f"Clientes en Mora={clientes_en_mora}, "
-            f"Clientes al Día={clientes_al_dia} "
-            f"(Mes: {mes_consulta}/{año_consulta})"
-        )
+        logger.info(f"✅ [kpis_pagos] Clientes al día: {clientes_al_dia}")
 
         return {
             "montoCobradoMes": float(monto_cobrado_mes),

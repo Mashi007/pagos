@@ -30,7 +30,10 @@ if DATABASE_URL.startswith("postgresql"):
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
-    pool_recycle=300,
+    pool_recycle=3600,  # 1 hora - reducir reciclaje innecesario
+    pool_size=5,  # 5 conexiones permanentes
+    max_overflow=10,  # 10 conexiones adicionales bajo carga
+    pool_timeout=30,  # 30 segundos timeout para obtener conexión
     echo=False,
     connect_args=connect_args,
     # Manejar encoding de manera más robusta

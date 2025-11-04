@@ -10,6 +10,7 @@ import {
   PieChart,
   LineChart,
   ChevronRight,
+  Filter,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -187,17 +188,39 @@ export function DashboardAnalisis() {
               </p>
             </div>
           </div>
-          <DashboardFiltrosPanel
-            filtros={filtros}
-            setFiltros={setFiltros}
-            periodo={periodo}
-            setPeriodo={setPeriodo}
-            onRefresh={handleRefresh}
-            isRefreshing={isRefreshing}
-            opcionesFiltros={opcionesFiltros}
-            loadingOpcionesFiltros={loadingOpcionesFiltros}
-            errorOpcionesFiltros={errorOpcionesFiltros}
-          />
+        </motion.div>
+
+        {/* BARRA DE FILTROS HORIZONTAL */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Card className="shadow-md border-2 border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 text-sm font-semibold text-gray-700">
+                    <Filter className="h-4 w-4 text-amber-600" />
+                    <span>Filtros Rápidos</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <DashboardFiltrosPanel
+                    filtros={filtros}
+                    setFiltros={setFiltros}
+                    periodo={periodo}
+                    setPeriodo={setPeriodo}
+                    onRefresh={handleRefresh}
+                    isRefreshing={isRefreshing}
+                    opcionesFiltros={opcionesFiltros}
+                    loadingOpcionesFiltros={loadingOpcionesFiltros}
+                    errorOpcionesFiltros={errorOpcionesFiltros}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
 
         {/* KPIs PRINCIPALES */}
