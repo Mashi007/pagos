@@ -2246,3 +2246,154 @@ def obtener_cobros_por_analista(
     except Exception as e:
         logger.error(f"Error obteniendo cobros por analista: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/evolucion-morosidad")
+@cache_result(ttl=300, key_prefix="dashboard")
+def obtener_evolucion_morosidad(
+    meses: int = Query(6, description="Número de meses a mostrar (últimos N meses)"),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Evolución de morosidad (últimos N meses) para DashboardCuotas
+    Consulta tabla cuotas para obtener morosidad real por mes
+    """
+    try:
+        hoy = date.today()
+        nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+        
+        # Calcular fecha inicio (hace N meses)
+        año_inicio = hoy.year
+        mes_inicio = hoy.month - meses + 1
+        if mes_inicio <= 0:
+            año_inicio -= 1
+            mes_inicio += 12
+        fecha_inicio_query = date(año_inicio, mes_inicio, 1)
+        
+        # Generar datos mensuales
+        meses_data = []
+        current_date = fecha_inicio_query
+        
+        while current_date <= hoy:
+            año_mes = current_date.year
+            num_mes = current_date.month
+            fecha_mes_inicio = date(año_mes, num_mes, 1)
+            fecha_mes_fin = _obtener_fechas_mes_siguiente(num_mes, año_mes)
+            
+            # Morosidad del mes = suma de monto_cuota de cuotas vencidas no pagadas
+            # Consideramos cuotas que vencieron en ese mes y no están pagadas
+            query_morosidad = (
+                db.query(func.sum(Cuota.monto_cuota))
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento >= fecha_mes_inicio,
+                    Cuota.fecha_vencimiento < fecha_mes_fin,
+                    Cuota.estado != "PAGADO",
+                )
+            )
+            query_morosidad = FiltrosDashboard.aplicar_filtros_cuota(
+                query_morosidad, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            )
+            morosidad_mes = float(query_morosidad.scalar() or Decimal("0"))
+            
+            meses_data.append({
+                "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
+                "morosidad": morosidad_mes,
+            })
+            
+            # Avanzar al siguiente mes
+            current_date = fecha_mes_fin
+        
+        return {"meses": meses_data}
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo evolución de morosidad: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/evolucion-pagos")
+@cache_result(ttl=300, key_prefix="dashboard")
+def obtener_evolucion_pagos(
+    meses: int = Query(6, description="Número de meses a mostrar (últimos N meses)"),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Evolución de pagos (últimos N meses) para DashboardPagos
+    Consulta tabla pagos_staging para obtener pagos reales por mes
+    """
+    try:
+        hoy = date.today()
+        nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+        
+        # Calcular fecha inicio (hace N meses)
+        año_inicio = hoy.year
+        mes_inicio = hoy.month - meses + 1
+        if mes_inicio <= 0:
+            año_inicio -= 1
+            mes_inicio += 12
+        fecha_inicio_query = date(año_inicio, mes_inicio, 1)
+        
+        # Generar datos mensuales
+        meses_data = []
+        current_date = fecha_inicio_query
+        
+        while current_date <= hoy:
+            año_mes = current_date.year
+            num_mes = current_date.month
+            fecha_mes_inicio = date(año_mes, num_mes, 1)
+            fecha_mes_fin = _obtener_fechas_mes_siguiente(num_mes, año_mes)
+            
+            # Pagos del mes desde pagos_staging
+            fecha_mes_inicio_dt = datetime.combine(fecha_mes_inicio, datetime.min.time())
+            fecha_mes_fin_dt = datetime.combine(fecha_mes_fin, datetime.min.time())
+            
+            query_pagos = db.execute(
+                text(
+                    """
+                    SELECT 
+                        COALESCE(COUNT(*), 0) as cantidad,
+                        COALESCE(SUM(monto_pagado::numeric), 0) as monto_total
+                    FROM pagos_staging
+                    WHERE fecha_pago IS NOT NULL
+                      AND fecha_pago != ''
+                      AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                      AND fecha_pago::timestamp >= :fecha_inicio
+                      AND fecha_pago::timestamp < :fecha_fin
+                      AND monto_pagado IS NOT NULL
+                      AND monto_pagado != ''
+                      AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                """
+                ).bindparams(fecha_inicio=fecha_mes_inicio_dt, fecha_fin=fecha_mes_fin_dt)
+            )
+            resultado = query_pagos.first()
+            
+            cantidad_pagos = resultado.cantidad if resultado else 0
+            monto_total = float(resultado.monto_total or Decimal("0")) if resultado else 0.0
+            
+            meses_data.append({
+                "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
+                "pagos": cantidad_pagos,
+                "monto": monto_total,
+            })
+            
+            # Avanzar al siguiente mes
+            current_date = fecha_mes_fin
+        
+        return {"meses": meses_data}
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo evolución de pagos: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")

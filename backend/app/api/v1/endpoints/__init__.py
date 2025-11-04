@@ -17,7 +17,6 @@ from . import (
     dashboard,
     health,
     kpis,
-    migracion_emergencia,
     modelos_vehiculos,
     notificaciones,
     pagos,
@@ -53,7 +52,6 @@ __all__ = [
     "modelos_vehiculos",
     "solicitudes",
     "scheduler_notificaciones",
-    "migracion_emergencia",
     "validadores",
     "cobranzas",
 ]

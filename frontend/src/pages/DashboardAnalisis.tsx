@@ -159,9 +159,26 @@ export function DashboardAnalisis() {
   const carteraCobrada = dashboardData?.financieros?.ingresosInteres || 0
   const morosidad = dashboardData?.financieros?.ingresosMora || 0
 
-  // Calcular variación mes anterior (simulado por ahora)
+  // Calcular variación mes anterior y crecimiento anual desde datos reales
   const variacionMesAnterior = kpisPrincipales?.variacion_mes_anterior || 0
-  const crecimientoAnual = variacionMesAnterior * 1.2 // Simulado
+  
+  // Calcular crecimiento anual comparando mes actual con mismo mes del año anterior
+  // Usar evolucion_mensual si está disponible, o estimar desde variación mensual
+  const evolucionMensual = dashboardData?.evolucion_mensual || []
+  let crecimientoAnual = 0
+  
+  if (evolucionMensual.length >= 12) {
+    // Si tenemos 12 meses de datos, comparar mes actual (último) con mes del año anterior (hace 12 meses)
+    const mesActual = evolucionMensual[evolucionMensual.length - 1]
+    const mesAnoAnterior = evolucionMensual[evolucionMensual.length - 13] // Hace 13 meses (incluye mes actual)
+    if (mesAnoAnterior && mesActual && mesAnoAnterior.cartera > 0) {
+      crecimientoAnual = ((mesActual.cartera - mesAnoAnterior.cartera) / mesAnoAnterior.cartera) * 100
+    }
+  } else if (variacionMesAnterior !== 0) {
+    // Si no hay datos suficientes, estimar crecimiento anual como promedio de variación mensual * 12
+    // (estimación conservadora)
+    crecimientoAnual = variacionMesAnterior * 12 * 0.8 // Factor de ajuste para crecimiento compuesto
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">

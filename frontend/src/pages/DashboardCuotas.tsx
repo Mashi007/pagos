@@ -146,21 +146,22 @@ export function DashboardCuotas() {
       ]
     : []
 
-  // Cargar evolución de morosidad (últimos 6 meses)
+  // Cargar evolución de morosidad (últimos 6 meses) - DATOS REALES
   const { data: datosEvolucionMorosidad, isLoading: loadingEvolucion } = useQuery({
     queryKey: ['evolucion-morosidad', filtros],
     queryFn: async () => {
-      // Usar datos simulados por ahora, o crear endpoint específico
-      const hoy = new Date()
-      const meses: Array<{ mes: string; morosidad: number }> = []
-      for (let i = 5; i >= 0; i--) {
-        const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)
-        meses.push({
-          mes: fecha.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' }),
-          morosidad: Math.random() * 1000000 + 500000, // Datos simulados
-        })
+      const params = construirFiltrosObject()
+      const queryParams = new URLSearchParams()
+      queryParams.append('meses', '6')
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString())
+      })
+      const response = await apiClient.get(
+        `/api/v1/dashboard/evolucion-morosidad?${queryParams.toString()}`
+      ) as {
+        meses: Array<{ mes: string; morosidad: number }>
       }
-      return meses
+      return response.meses
     },
     staleTime: 5 * 60 * 1000,
   })

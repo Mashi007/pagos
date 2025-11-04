@@ -109,22 +109,22 @@ export function DashboardPagos() {
     porcentaje: pagosPorEstado.total_pagos > 0 ? (item.count / pagosPorEstado.total_pagos) * 100 : 0,
   })) || []
 
-  // Cargar evolución de pagos (últimos 6 meses)
+  // Cargar evolución de pagos (últimos 6 meses) - DATOS REALES
   const { data: datosEvolucion, isLoading: loadingEvolucion } = useQuery({
     queryKey: ['evolucion-pagos', filtros],
     queryFn: async () => {
-      // Datos simulados - se puede crear endpoint específico
-      const hoy = new Date()
-      const meses: Array<{ mes: string; pagos: number; monto: number }> = []
-      for (let i = 5; i >= 0; i--) {
-        const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)
-        meses.push({
-          mes: fecha.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' }),
-          pagos: Math.random() * 500 + 100,
-          monto: Math.random() * 1000000 + 500000,
-        })
+      const params = construirFiltrosObject()
+      const queryParams = new URLSearchParams()
+      queryParams.append('meses', '6')
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString())
+      })
+      const response = await apiClient.get(
+        `/api/v1/dashboard/evolucion-pagos?${queryParams.toString()}`
+      ) as {
+        meses: Array<{ mes: string; pagos: number; monto: number }>
       }
-      return meses
+      return response.meses
     },
     staleTime: 5 * 60 * 1000,
   })
