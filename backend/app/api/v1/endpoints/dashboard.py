@@ -2320,8 +2320,6 @@ def obtener_pagos_conciliados(
     Obtiene estadísticas de pagos totales vs pagos conciliados
     """
     try:
-        hoy = date.today()
-        
         # Query base para pagos (usar tabla Pago que tiene conciliado)
         query_base = db.query(Pago).filter(Pago.activo.is_(True))
         
@@ -2566,9 +2564,21 @@ def obtener_evolucion_general_mensual(
     """
     try:
         hoy = date.today()
-        nombres_meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
-                        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-        
+        nombres_meses = [
+            "Enero",
+            "Febrero",
+            "Marzo",
+            "Abril",
+            "Mayo",
+            "Junio",
+            "Julio",
+            "Agosto",
+            "Septiembre",
+            "Octubre",
+            "Noviembre",
+            "Diciembre",
+        ]
+
         # Calcular rango de fechas (últimos 6 meses por defecto)
         if fecha_fin:
             fecha_fin_mes = fecha_fin.replace(day=1)
@@ -2609,8 +2619,7 @@ def obtener_evolucion_general_mensual(
             año = mes_info["año"]
             mes = mes_info["mes"]
             nombre_mes = mes_info["nombre"]
-            fecha_mes = mes_info["fecha"]
-            
+
             # Calcular último día del mes
             if mes == 12:
                 ultimo_dia_mes = date(año, 12, 31)

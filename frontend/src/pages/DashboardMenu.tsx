@@ -4,10 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   DollarSign,
-  CreditCard,
-  Calendar,
   BarChart3,
-  Activity,
   ChevronRight,
   Filter,
   TrendingUp,
@@ -47,69 +44,7 @@ import {
   AreaChart,
 } from 'recharts'
 
-interface KpiCategory {
-  id: string
-  title: string
-  description: string
-  icon: typeof DollarSign
-  color: string
-  hoverColor: string
-  bgColor: string
-  route: string
-}
-
-const categories: KpiCategory[] = [
-  {
-    id: 'financiamiento',
-    title: 'Financiamiento',
-    description: 'Total y por estado',
-    icon: DollarSign,
-    color: 'text-cyan-600',
-    hoverColor: 'hover:border-cyan-500 hover:shadow-[0_8px_30px_rgba(6,182,212,0.3)] hover:bg-gradient-to-br hover:from-cyan-50 hover:to-blue-50',
-    bgColor: 'bg-gradient-to-br from-cyan-100 to-blue-100',
-    route: '/dashboard/financiamiento',
-  },
-  {
-    id: 'cuotas',
-    title: 'Cuotas y Amortizaciones',
-    description: 'Gestión de cuotas y pagos',
-    icon: Calendar,
-    color: 'text-purple-600',
-    hoverColor: 'hover:border-purple-500 hover:shadow-[0_8px_30px_rgba(168,85,247,0.3)] hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50',
-    bgColor: 'bg-gradient-to-br from-purple-100 to-pink-100',
-    route: '/dashboard/cuotas',
-  },
-  {
-    id: 'cobranza',
-    title: 'Cobranza',
-    description: 'Recaudación y metas',
-    icon: CreditCard,
-    color: 'text-emerald-600',
-    hoverColor: 'hover:border-emerald-500 hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)] hover:bg-gradient-to-br hover:from-emerald-50 hover:to-teal-50',
-    bgColor: 'bg-gradient-to-br from-emerald-100 to-teal-100',
-    route: '/dashboard/cobranza',
-  },
-  {
-    id: 'analisis',
-    title: 'Análisis y Gráficos',
-    description: 'Visualizaciones detalladas',
-    icon: BarChart3,
-    color: 'text-amber-600',
-    hoverColor: 'hover:border-amber-500 hover:shadow-[0_8px_30px_rgba(245,158,11,0.3)] hover:bg-gradient-to-br hover:from-amber-50 hover:to-orange-50',
-    bgColor: 'bg-gradient-to-br from-amber-100 to-orange-100',
-    route: '/dashboard/analisis',
-  },
-  {
-    id: 'pagos',
-    title: 'Pagos',
-    description: 'KPIs de transacciones',
-    icon: Activity,
-    color: 'text-violet-600',
-    hoverColor: 'hover:border-violet-500 hover:shadow-[0_8px_30px_rgba(139,92,246,0.3)] hover:bg-gradient-to-br hover:from-violet-50 hover:to-indigo-50',
-    bgColor: 'bg-gradient-to-br from-violet-100 to-indigo-100',
-    route: '/dashboard/pagos',
-  },
-]
+// Submenús eliminados: financiamiento, cuotas, cobranza, analisis, pagos
 
 export function DashboardMenu() {
   const navigate = useNavigate()
@@ -560,24 +495,7 @@ export function DashboardMenu() {
                     errorOpcionesFiltros={errorOpcionesFiltros}
                   />
                 </div>
-                {/* Botones de navegación rápida */}
-                <div className="flex items-center gap-2">
-                  {categories.map((category) => {
-                    const Icon = category.icon
-                    return (
-                      <Button
-                        key={category.id}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigate(category.route)}
-                        className={`${category.color} border-2 hover:bg-opacity-10`}
-                      >
-                        <Icon className="h-4 w-4 mr-2" />
-                        {category.title.split(' ')[0]}
-                      </Button>
-                    )
-                  })}
-                </div>
+                {/* Botones de navegación rápida - Eliminados */}
               </div>
             </CardContent>
           </Card>
