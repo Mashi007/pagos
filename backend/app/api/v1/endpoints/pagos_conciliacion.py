@@ -48,8 +48,13 @@ def _conciliar_pago_staging(pago_staging: PagoStaging, db: Session, numero_docum
         logger.info(f"ℹ️ [conciliacion] Pago staging ID {pago_staging.id} ya estaba conciliado (documento: {numero_documento})")
         return False
 
+<<<<<<< HEAD
     pago_staging.conciliado = True  # type: ignore[assignment]
     pago_staging.fecha_conciliacion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # type: ignore[assignment] # TEXT format
+=======
+    pago_staging.conciliado = True
+    pago_staging.fecha_conciliacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # TEXT format
+>>>>>>> 0953ef7e24958819b7c1ef036fb986610b5a64ab
 
     db.commit()
     db.refresh(pago_staging)
@@ -93,12 +98,12 @@ def _procesar_fila_conciliacion(row, index: int, db: Session, documentos_procesa
         # ✅ Buscar primero en pagos_staging (donde están los datos)
         # Normalizar numero_documento para comparación EXACTA (trim espacios, case-sensitive)
         numero_documento_normalizado = numero_documento.strip()
-        
+
         # Comparación exacta usando func.trim() para normalizar espacios en BD
-        pago_staging = db.query(PagoStaging).filter(
-            func.trim(PagoStaging.numero_documento) == numero_documento_normalizado
-        ).first()
-        
+        pago_staging = (
+            db.query(PagoStaging).filter(func.trim(PagoStaging.numero_documento) == numero_documento_normalizado).first()
+        )
+
         if pago_staging:
             # ✅ VERIFICACIÓN: Confirmar que el numero_documento coincide EXACTAMENTE
             # Normalizar el valor de la BD para comparación
@@ -109,16 +114,14 @@ def _procesar_fila_conciliacion(row, index: int, db: Session, documentos_procesa
                     f"BD='{numero_documento_bd}' vs Excel='{numero_documento_normalizado}'"
                 )
                 return (0, [numero_documento_normalizado], [])
-            
+
             # ✅ CONFIRMADO: El numero_documento coincide EXACTAMENTE
             logger.info(f"✅ [conciliacion] Número de documento coincide exactamente: '{numero_documento_normalizado}'")
             conciliado = _conciliar_pago_staging(pago_staging, db, numero_documento_normalizado)
             return (1 if conciliado else 0, [], [])
-        
+
         # Si no está en staging, buscar en pagos (tabla principal) con comparación exacta
-        pago = db.query(Pago).filter(
-            func.trim(Pago.numero_documento) == numero_documento_normalizado
-        ).first()
+        pago = db.query(Pago).filter(func.trim(Pago.numero_documento) == numero_documento_normalizado).first()
         if pago:
             # ✅ VERIFICACIÓN: Confirmar que el numero_documento coincide EXACTAMENTE
             numero_documento_bd = str(pago.numero_documento).strip() if pago.numero_documento else ""
@@ -128,7 +131,7 @@ def _procesar_fila_conciliacion(row, index: int, db: Session, documentos_procesa
                     f"BD='{numero_documento_bd}' vs Excel='{numero_documento_normalizado}'"
                 )
                 return (0, [numero_documento_normalizado], [])
-            
+
             # ✅ CONFIRMADO: El numero_documento coincide EXACTAMENTE
             logger.info(f"✅ [conciliacion] Número de documento coincide exactamente: '{numero_documento_normalizado}'")
             conciliado = _conciliar_pago(pago, db, numero_documento_normalizado)

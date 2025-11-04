@@ -974,52 +974,52 @@ def _verificar_pagos_conciliados_cuota(db: Session, cuota_id: int, prestamo_id: 
     """
     Verifica si TODOS los pagos que afectan una cuota están conciliados.
     Busca en pagos_staging por numero_documento vinculado al préstamo.
-    
+
     ✅ ESTRATEGIA:
     - Obtener todos los pagos de la tabla `pagos` que tienen este prestamo_id
     - Verificar si cada uno está conciliado en `pagos_staging` por numero_documento
     - Si TODOS están conciliados → True, sino → False
-    
+
     Returns: True si todos los pagos están conciliados, False en caso contrario.
     """
     from app.models.pago_staging import PagoStaging
-    
+
     # Obtener todos los pagos del préstamo que podrían afectar esta cuota
     # Como los pagos se aplican desde la cuota más antigua, verificamos todos los pagos del préstamo
     pagos_prestamo = db.execute(
-        text("""
+        text(
+            """
             SELECT DISTINCT numero_documento, conciliado
             FROM pagos
             WHERE prestamo_id = :prestamo_id
                AND numero_documento IS NOT NULL
                AND numero_documento != ''
-        """),
-        {"prestamo_id": prestamo_id}
+        """
+        ),
+        {"prestamo_id": prestamo_id},
     ).fetchall()
-    
+
     if not pagos_prestamo:
         # No hay pagos para este préstamo, asumir que no está conciliado
         return False
-    
+
     # Verificar si todos los pagos están conciliados en pagos_staging
     for pago in pagos_prestamo:
         numero_documento = pago.numero_documento
         # Primero verificar en pagos (tabla principal)
         if not pago.conciliado:
             # Si no está conciliado en pagos, verificar en pagos_staging
-            pago_staging = db.query(PagoStaging).filter(
-                PagoStaging.numero_documento == numero_documento
-            ).first()
+            pago_staging = db.query(PagoStaging).filter(PagoStaging.numero_documento == numero_documento).first()
             if not pago_staging or not pago_staging.conciliado:
                 return False
-    
+
     return True
 
 
 def _actualizar_estado_cuota(cuota, fecha_hoy: date, db: Session = None, es_exceso: bool = False) -> bool:
     """
     Actualiza el estado de una cuota según las reglas de negocio.
-    
+
     ✅ REGLAS ACTUALIZADAS CON CONCILIACIÓN:
     - PAGADO: total_pagado >= monto_cuota Y todos los pagos están conciliados
     - PENDIENTE: total_pagado >= monto_cuota PERO NO todos los pagos están conciliados
@@ -1027,18 +1027,18 @@ def _actualizar_estado_cuota(cuota, fecha_hoy: date, db: Session = None, es_exce
     - PARCIAL: total_pagado > 0 pero < monto_cuota y fecha_vencimiento < hoy (cuota atrasada)
     - ATRASADO: total_pagado = 0 y fecha_vencimiento < hoy
     - ADELANTADO: total_pagado > 0 pero < monto_cuota y fecha_vencimiento >= hoy (exceso de pago)
-    
+
     Returns:
         bool: True si la cuota se completó completamente (pasó de incompleta a PAGADO)
     """
     estado_previo_completo = cuota.total_pagado >= cuota.monto_cuota
     estado_completado = False
-    
+
     # Verificar si todos los pagos están conciliados
     todos_conciliados = False
     if db and cuota.total_pagado > Decimal("0.00"):
         todos_conciliados = _verificar_pagos_conciliados_cuota(db, cuota.id, cuota.prestamo_id)
-    
+
     if cuota.total_pagado >= cuota.monto_cuota:
         # ✅ Cuota completa: PAGADO solo si está conciliado, sino PENDIENTE
         if todos_conciliados:
@@ -1127,7 +1127,9 @@ def _aplicar_exceso_a_siguiente_cuota(
     if monto_aplicar_exceso <= Decimal("0.00"):
         return 0
 
-    estado_completado = _aplicar_monto_a_cuota(siguiente_cuota, monto_aplicar_exceso, fecha_pago, fecha_hoy, db, es_exceso=True)
+    estado_completado = _aplicar_monto_a_cuota(
+        siguiente_cuota, monto_aplicar_exceso, fecha_pago, fecha_hoy, db, es_exceso=True
+    )
 
     logger.debug(
         f"  💰 [aplicar_pago_a_cuotas] Cuota #{siguiente_cuota.numero_cuota} "
