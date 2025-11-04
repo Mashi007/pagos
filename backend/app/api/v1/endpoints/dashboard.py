@@ -2365,7 +2365,7 @@ def obtener_cobros_por_analista(
         # Obtener cobros por analista (pagos del mes)
         # ⚠️ PagoStaging no tiene prestamo_id ni conciliado, no podemos hacer JOIN ni filtrar por conciliado
         # Retornar lista vacía ya que no podemos relacionar pagos con analistas
-        resultados = []
+        resultados: list[dict[str, Any]] = []
         logger.warning(
             f"⚠️ [obtener_cobros_por_analista] No se puede obtener cobros por analista: "
             f"PagoStaging no tiene prestamo_id para hacer JOIN con Prestamo"
