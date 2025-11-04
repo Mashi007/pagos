@@ -153,7 +153,11 @@ def obtener_clientes_atrasados(
         return clientes_atrasados
 
     except Exception as e:
-        logger.error(f"Error obteniendo clientes atrasados: {e}")
+        logger.error(f"Error obteniendo clientes atrasados: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -459,6 +463,10 @@ def obtener_resumen_cobranzas(
 
     except Exception as e:
         logger.error(f"Error obteniendo resumen de cobranzas: {e}", exc_info=True)
+        try:
+            db.rollback()  # Rollback para restaurar transacción después de error
+        except Exception:
+            pass  # Si rollback falla, ignorar
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 

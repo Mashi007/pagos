@@ -52,9 +52,11 @@ def _calcular_cartera_anterior(
     if periodo == "dia":
         return float(cartera_total)
 
+    # Usar comparación directa con timestamp en lugar de func.date()
+    fecha_fin_periodo_anterior_dt = datetime.combine(fecha_fin_periodo_anterior, datetime.max.time())
     cartera_anterior_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
         Prestamo.estado == "APROBADO",
-        func.date(Prestamo.fecha_registro) <= fecha_fin_periodo_anterior,
+        Prestamo.fecha_registro <= fecha_fin_periodo_anterior_dt,
     )
     cartera_anterior_query = FiltrosDashboard.aplicar_filtros_prestamo(
         cartera_anterior_query, analista, concesionario, modelo, None, None
@@ -1002,9 +1004,11 @@ def dashboard_administrador(
                     mes_fin = date(mes_fecha.year, mes_fecha.month + 1, 1) - timedelta(days=1)
 
                 # ✅ Cartera del mes con filtros
+                # Usar comparación directa con timestamp en lugar de func.date()
+                mes_fin_dt = datetime.combine(mes_fin, datetime.max.time())
                 cartera_mes_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
                     Prestamo.estado == "APROBADO",
-                    func.date(Prestamo.fecha_registro) <= mes_fin,
+                    Prestamo.fecha_registro <= mes_fin_dt,
                 )
                 cartera_mes_query = FiltrosDashboard.aplicar_filtros_prestamo(
                     cartera_mes_query,

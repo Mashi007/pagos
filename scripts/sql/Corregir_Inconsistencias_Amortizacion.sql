@@ -47,8 +47,7 @@ WHERE c.total_pagado > 0
 -- ⚠️ IMPORTANTE: Solo marcar como PAGADO si TODOS los pagos están conciliados
 -- Si no están conciliados, mantener PENDIENTE pero registrar el problema
 
--- Primero, identificar cuotas que deberían ser PAGADO pero están PENDIENTE
--- Verificar si tienen pagos conciliados
+-- OPCIÓN 2.1: Cuotas con pagos conciliados → Marcar como PAGADO
 UPDATE cuotas c
 SET estado = 'PAGADO',
     fecha_pago = COALESCE(
@@ -73,6 +72,24 @@ WHERE c.total_pagado >= c.monto_cuota
       FROM pagos p
       WHERE p.prestamo_id = c.prestamo_id
         AND p.conciliado = false
+  );
+
+-- OPCIÓN 2.2: Cuotas sin pagos en tabla pagos (pagos históricos/migrados) → Marcar como PAGADO
+-- Si total_pagado >= monto_cuota pero no hay registros en pagos, probablemente son pagos históricos
+UPDATE cuotas c
+SET estado = 'PAGADO',
+    fecha_pago = COALESCE(
+        c.fecha_pago,
+        c.fecha_vencimiento, -- Usar fecha de vencimiento como referencia
+        CURRENT_DATE
+    )
+WHERE c.total_pagado >= c.monto_cuota
+  AND c.estado = 'PENDIENTE'
+  AND NOT EXISTS (
+      -- No hay pagos en la tabla pagos para este préstamo
+      SELECT 1 
+      FROM pagos p
+      WHERE p.prestamo_id = c.prestamo_id
   );
 
 -- ================================================================
