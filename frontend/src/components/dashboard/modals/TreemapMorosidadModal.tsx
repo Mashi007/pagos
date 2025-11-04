@@ -91,22 +91,29 @@ export function TreemapMorosidadModal({ isOpen, onClose }: TreemapMorosidadModal
   const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload?: { name?: string; value?: number; cantidad_clientes?: number; cantidad_cuotas_atrasadas?: number; promedio_morosidad_por_cliente?: number } }> }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload
+      if (!data) return null
+      
+      const value = typeof data.value === 'number' ? data.value : 0
+      const cantidadClientes = typeof data.cantidad_clientes === 'number' ? data.cantidad_clientes : 0
+      const cantidadCuotas = typeof data.cantidad_cuotas_atrasadas === 'number' ? data.cantidad_cuotas_atrasadas : 0
+      const promedio = typeof data.promedio_morosidad_por_cliente === 'number' ? data.promedio_morosidad_por_cliente : 0
+      
       return (
         <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg">
-          <p className="font-bold text-lg mb-2">{data.name}</p>
+          <p className="font-bold text-lg mb-2">{typeof data.name === 'string' ? data.name : 'N/A'}</p>
           <p className="text-sm mb-1">
             <span className="font-semibold">Morosidad Total:</span>{' '}
-            <span className="text-red-600">{formatCurrency(data.value)}</span>
+            <span className="text-red-600">{formatCurrency(value)}</span>
           </p>
           <p className="text-sm mb-1">
-            <span className="font-semibold">Clientes:</span> {data.cantidad_clientes}
+            <span className="font-semibold">Clientes:</span> {cantidadClientes}
           </p>
           <p className="text-sm mb-1">
-            <span className="font-semibold">Cuotas Atrasadas:</span> {data.cantidad_cuotas_atrasadas}
+            <span className="font-semibold">Cuotas Atrasadas:</span> {cantidadCuotas}
           </p>
           <p className="text-sm">
             <span className="font-semibold">Promedio por Cliente:</span>{' '}
-            {formatCurrency(data.promedio_morosidad_por_cliente)}
+            {formatCurrency(promedio)}
           </p>
         </div>
       )

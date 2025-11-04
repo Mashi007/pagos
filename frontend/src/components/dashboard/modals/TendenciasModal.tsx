@@ -124,18 +124,23 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
       return (
         <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
           <p className="font-semibold mb-2">{label}</p>
-          {payload.map((entry, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}:{' '}
-              {entry.dataKey.includes('cuotas_en_dias')
-                ? `${entry.value?.toFixed(0) || 'N/A'} días`
-                : entry.value !== null
-                ? formatCurrency(entry.value)
-                : 'N/A'}
-              {entry.dataKey.includes('proyectado') && <span className="text-xs text-gray-500 ml-1">(proy.)</span>}
-            </p>
-          ))}
-          {data.es_proyeccion && (
+          {payload.map((entry, index: number) => {
+            const dataKey = entry.dataKey || ''
+            const value = entry.value
+            const isProyectado = dataKey.includes('proyectado')
+            return (
+              <p key={index} className="text-sm" style={{ color: entry.color }}>
+                {entry.name}:{' '}
+                {dataKey.includes('cuotas_en_dias')
+                  ? `${typeof value === 'number' ? value.toFixed(0) : 'N/A'} días`
+                  : typeof value === 'number'
+                  ? formatCurrency(value)
+                  : 'N/A'}
+                {isProyectado && <span className="text-xs text-gray-500 ml-1">(proy.)</span>}
+              </p>
+            )
+          })}
+          {typeof data?.es_proyeccion === 'boolean' && data.es_proyeccion && (
             <p className="text-xs text-amber-600 mt-2 font-semibold">Datos proyectados</p>
           )}
         </div>

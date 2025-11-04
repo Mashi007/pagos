@@ -3,8 +3,6 @@
  * Evita el uso de 'any' en props de tooltips, formatters, etc.
  */
 
-import { TooltipProps } from 'recharts'
-
 export interface TooltipPayload {
   name?: string
   value?: number | string
@@ -13,7 +11,7 @@ export interface TooltipPayload {
   color?: string
 }
 
-export interface CustomTooltipProps extends TooltipProps<number, string> {
+export interface CustomTooltipProps {
   active?: boolean
   payload?: TooltipPayload[]
   label?: string | number

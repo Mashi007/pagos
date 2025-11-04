@@ -115,13 +115,13 @@ export function DonutConcesionariosModal({ isOpen, onClose }: DonutConcesionario
         <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
           <p className="font-semibold mb-2">{data.name}</p>
           <p className="text-sm mb-1">
-            <span className="font-semibold">Total:</span> {formatCurrency(data.value)}
+            <span className="font-semibold">Total:</span> {formatCurrency(data.value ?? 0)}
           </p>
           <p className="text-sm mb-1">
-            <span className="font-semibold">Porcentaje:</span> {data.payload.porcentaje.toFixed(2)}%
+            <span className="font-semibold">Porcentaje:</span> {typeof data.payload?.porcentaje === 'number' ? data.payload.porcentaje.toFixed(2) : '0.00'}%
           </p>
           <p className="text-sm">
-            <span className="font-semibold">Cantidad:</span> {data.payload.cantidad_prestamos} préstamos
+            <span className="font-semibold">Cantidad:</span> {typeof data.payload?.cantidad_prestamos === 'number' ? data.payload.cantidad_prestamos : 0} préstamos
           </p>
         </div>
       )
@@ -131,7 +131,7 @@ export function DonutConcesionariosModal({ isOpen, onClose }: DonutConcesionario
 
   // Label personalizado
   const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: { cx?: number; cy?: number; midAngle?: number; innerRadius?: number; outerRadius?: number; percent?: number }) => {
-    if (percent < 0.05) return null // No mostrar etiquetas para segmentos muy pequeños
+    if (!percent || percent < 0.05 || !cx || !cy || !midAngle || !innerRadius || !outerRadius) return null
     
     const RADIAN = Math.PI / 180
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5

@@ -139,10 +139,11 @@ export function Cobranzas() {
         toast.info('No hay notificaciones pendientes para procesar')
       }
     } catch (error: unknown) {
-      const { getErrorMessage, isAxiosError } = await import('@/types/errors')
+      const { getErrorMessage, getErrorDetail } = await import('@/types/errors')
       let errorMessage = getErrorMessage(error)
-      if (isAxiosError(error)) {
-        errorMessage = error.response?.data?.detail || errorMessage
+      const detail = getErrorDetail(error)
+      if (detail) {
+        errorMessage = detail
       }
       console.error('Error exportando a Excel:', errorMessage)
       toast.error(errorMessage || 'Error al procesar notificaciones')

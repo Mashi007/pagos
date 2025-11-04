@@ -13,6 +13,7 @@ import { AlertWithIcon } from '@/components/ui/alert'
 import { Logo } from '@/components/ui/Logo'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { LoginForm as LoginFormType } from '@/types'
+import { isAxiosError } from '@/types/errors'
 
 // Constantes de configuración
 const MIN_PASSWORD_LENGTH = 6
@@ -89,7 +90,8 @@ export function LoginForm() {
       
       if (isAxiosError(error) && error.response?.status === 422) {
         // Errores de validación del servidor
-        const details = error.response.data.detail
+        const responseData = error.response.data as { detail?: Array<{ loc?: string[]; msg?: string }> | string } | undefined
+        const details = responseData?.detail
         if (Array.isArray(details)) {
           details.forEach((err: { loc?: string[]; msg?: string }) => {
             if (err.loc?.includes('email')) {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { getErrorMessage, isAxiosError, getErrorDetail } from '@/types/errors'
 import {
   Settings,
   Save,
@@ -416,8 +417,9 @@ export function Configuracion() {
     } catch (error: unknown) {
       console.error('Error cargando logo:', error)
       let errorMessage = getErrorMessage(error)
-      if (isAxiosError(error)) {
-        errorMessage = error.response?.data?.detail || errorMessage
+      const detail = getErrorDetail(error)
+      if (detail) {
+        errorMessage = detail
       }
       toast.error(`Error al cargar logo: ${errorMessage}`)
     } finally {

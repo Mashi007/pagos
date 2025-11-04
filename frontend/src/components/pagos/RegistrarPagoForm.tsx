@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { pagoService, type PagoCreate } from '@/services/pagoService'
 import { usePrestamosByCedula } from '@/hooks/usePrestamos'
 import { useDebounce } from '@/hooks/useDebounce'
+import { getErrorMessage, isAxiosError } from '@/types/errors'
 
 interface RegistrarPagoFormProps {
   onClose: () => void

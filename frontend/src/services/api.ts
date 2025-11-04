@@ -159,17 +159,18 @@ class ApiClient {
     if (error.response) {
       // Error del servidor
       const { status, data } = error.response
+      const responseData = data as { detail?: string | Array<{ loc?: string[]; msg?: string }>; message?: string } | undefined
       
       // Evitar mostrar toast de 401 cuando está siendo manejado por el interceptor
-      const isBeingHandledByInterceptor = error.config?._retry !== undefined
+      const isBeingHandledByInterceptor = (error.config as { _retry?: boolean } | undefined)?._retry !== undefined
       
       switch (status) {
         case 400:
           // Error de validación o cliente duplicado (misma cédula y mismo nombre)
-          if (typeof data?.detail === 'string') {
-            toast.error(data.detail)
+          if (typeof responseData?.detail === 'string') {
+            toast.error(responseData.detail)
           } else {
-            toast.error(data?.message || 'Error de validación')
+            toast.error(responseData?.message || 'Error de validación')
           }
           break
         case 401:
@@ -185,16 +186,16 @@ class ApiClient {
           toast.error('Recurso no encontrado')
           break
         case 409:
-          toast.error(data?.message || 'Conflicto de datos. Verifica la información.')
+          toast.error(responseData?.message || 'Conflicto de datos. Verifica la información.')
           break
         case 422:
           // Errores de validación
-          if (data.detail && Array.isArray(data.detail)) {
-            data.detail.forEach((err: { loc?: string[]; msg?: string }) => {
+          if (responseData?.detail && Array.isArray(responseData.detail)) {
+            responseData.detail.forEach((err: { loc?: string[]; msg?: string }) => {
               toast.error(`${err.loc?.join(' ') || 'Campo'}: ${err.msg || 'Error de validación'}`)
             })
           } else {
-            toast.error(data.message || 'Error de validación')
+            toast.error(responseData?.message || 'Error de validación')
           }
           break
         case 500:
@@ -203,9 +204,11 @@ class ApiClient {
         case 503:
           // NO mostrar toast genérico para errores 503 de duplicados
           // Permitir que el componente maneje el error específico
-          if (data?.detail?.includes('duplicate key') || data?.detail?.includes('already exists') ||
-              data?.detail?.includes('violates unique constraint') || data?.detail?.includes('cédula') ||
-              data?.message?.includes('duplicate key') || data?.message?.includes('already exists')) {
+          const detailStr = typeof responseData?.detail === 'string' ? responseData.detail : ''
+          const messageStr = responseData?.message || ''
+          if (detailStr.includes('duplicate key') || detailStr.includes('already exists') ||
+              detailStr.includes('violates unique constraint') || detailStr.includes('cédula') ||
+              messageStr.includes('duplicate key') || messageStr.includes('already exists')) {
             // No mostrar toast, dejar que el componente maneje el popup
             return Promise.reject(error) // ✅ CORRECCIÓN: Asegurar que se propague el error
           } else {
@@ -218,7 +221,7 @@ class ApiClient {
           } else if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK') {
             toast.error('Error de conexión. Verifica que el servidor esté funcionando.')
           } else {
-            toast.error(data.message || 'Error desconocido')
+            toast.error(responseData?.message || 'Error desconocido')
           }
       }
     } else if (error.request) {

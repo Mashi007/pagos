@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { getErrorMessage, getErrorDetail } from '@/types/errors'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -152,10 +153,12 @@ export function Reportes() {
         toast.dismiss()
         toast.info(`Generación de reporte ${tipo} próximamente disponible`)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error generando reporte:', error)
       toast.dismiss()
-      toast.error(error.response?.data?.detail || `Error al generar reporte de ${tipo}`)
+      const errorMessage = getErrorMessage(error)
+      const detail = getErrorDetail(error)
+      toast.error(detail || errorMessage || `Error al generar reporte de ${tipo}`)
     } finally {
       setGenerandoReporte(null)
     }

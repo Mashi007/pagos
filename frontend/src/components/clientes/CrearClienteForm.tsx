@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { logger } from '@/utils/logger'
-import { getErrorMessage, isAxiosError } from '@/types/errors'
+import { getErrorMessage, isAxiosError, getErrorDetail } from '@/types/errors'
 import {
   User,
   CreditCard,
@@ -910,8 +910,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error)
       const status = isAxiosError(error) ? error.response?.status : undefined
-      const detail = isAxiosError(error) ? error.response?.data?.detail : undefined
-      const message = isAxiosError(error) ? error.response?.data?.message : undefined
+      const detail = getErrorDetail(error)
+      const responseData = isAxiosError(error) ? error.response?.data as { message?: string } | undefined : undefined
+      const message = responseData?.message
       logger.error('Error creando cliente', {
         action: 'create_client_error',
         component: 'CrearClienteForm',
@@ -925,19 +926,21 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       let errorMessageUser = 'Error al crear el cliente. Por favor, intente nuevamente.'
       
       if (isAxiosError(error)) {
+        const errorDetail = getErrorDetail(error)
+        const responseData = error.response?.data as { message?: string } | undefined
         if (error.response?.status === 400) {
           // Error de cliente duplicado (misma cédula y mismo nombre)
-          errorMessageUser = error.response?.data?.detail || 'No se puede crear un cliente con la misma cédula y el mismo nombre. Ya existe un cliente con estos datos.'
-        } else if (error.response?.data?.detail) {
-          errorMessageUser = error.response.data.detail
-        } else if (error.response?.data?.message) {
-          errorMessageUser = error.response.data.message
+          errorMessageUser = errorDetail || 'No se puede crear un cliente con la misma cédula y el mismo nombre. Ya existe un cliente con estos datos.'
+        } else if (errorDetail) {
+          errorMessageUser = errorDetail
+        } else if (responseData?.message) {
+          errorMessageUser = responseData.message
         }
       }
 
       // Intentar extraer ID existente del mensaje
       let existingId: number | null = null
-      const detailText: string = isAxiosError(error) ? error.response?.data?.detail || '' : ''
+      const detailText: string = getErrorDetail(error) || ''
       const match = detailText.match(/ID:\s*(\d+)/i)
       if (match && match[1]) {
         existingId = Number(match[1])

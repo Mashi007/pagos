@@ -451,10 +451,11 @@ export function Analistas() {
                   if (fileInput) fileInput.value = ''
                   await refetch()
                 } catch (err: unknown) {
-                  const { getErrorMessage, isAxiosError } = await import('@/types/errors')
+                  const { getErrorMessage, getErrorDetail } = await import('@/types/errors')
                   let errorMessage = getErrorMessage(err)
-                  if (isAxiosError(err)) {
-                    errorMessage = err.response?.data?.detail || errorMessage
+                  const detail = getErrorDetail(err)
+                  if (detail) {
+                    errorMessage = detail
                   }
                   toast.error(errorMessage || 'Error al importar')
                 }

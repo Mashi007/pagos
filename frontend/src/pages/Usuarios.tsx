@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PasswordField } from '@/components/ui/PasswordField'
 import { userService, User, UserCreate } from '@/services/userService'
 import { toast } from 'sonner'
+import { getErrorMessage, getErrorDetail } from '@/types/errors'
 
 export function Usuarios() {
   const [usuarios, setUsuarios] = useState<User[]>([])
@@ -149,9 +150,11 @@ export function Usuarios() {
       setEditingUsuario(null)
       resetForm()
       cargarUsuarios()
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error guardando usuario:', err)
-      toast.error(err.response?.data?.detail || 'Error al guardar usuario')
+      const errorMessage = getErrorMessage(err)
+      const detail = getErrorDetail(err)
+      toast.error(detail || errorMessage || 'Error al guardar usuario')
     } finally {
       setIsSubmitting(false)
     }

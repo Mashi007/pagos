@@ -130,7 +130,7 @@ export function CobranzaPorDiaModal({ isOpen, onClose }: CobranzaPorDiaModalProp
           <p className="font-semibold mb-2">{label}</p>
           {payload.map((entry, index: number) => (
             <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {formatCurrency(entry.value)}
+              {entry.name}: {formatCurrency(entry.value ?? 0)}
             </p>
           ))}
         </div>

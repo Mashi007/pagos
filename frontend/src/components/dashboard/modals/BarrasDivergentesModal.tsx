@@ -91,17 +91,23 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
   const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload?: Record<string, unknown>; value?: number }>; label?: string }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload
+      if (!data) return null
+      
+      const cantidad = typeof data.cantidad_prestamos === 'number' ? data.cantidad_prestamos : 0
+      const montoTotal = typeof data.monto_total === 'number' ? data.monto_total : 0
+      const porcentaje = typeof data.porcentaje_monto === 'number' ? data.porcentaje_monto : 0
+      
       return (
         <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
           <p className="font-semibold mb-2">{label}</p>
           <p className="text-sm mb-1">
-            <span className="font-semibold">Cantidad:</span> {data.cantidad_prestamos} préstamos
+            <span className="font-semibold">Cantidad:</span> {cantidad} préstamos
           </p>
           <p className="text-sm mb-1">
-            <span className="font-semibold">Monto Total:</span> {formatCurrency(data.monto_total)}
+            <span className="font-semibold">Monto Total:</span> {formatCurrency(montoTotal)}
           </p>
           <p className="text-sm">
-            <span className="font-semibold">Porcentaje:</span> {data.porcentaje_monto.toFixed(2)}%
+            <span className="font-semibold">Porcentaje:</span> {porcentaje.toFixed(2)}%
           </p>
         </div>
       )

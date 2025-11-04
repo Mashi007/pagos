@@ -38,9 +38,10 @@ export function getErrorMessage(error: unknown): string {
     return error.message
   }
   if (isAxiosError(error)) {
+    const responseData = error.response?.data as { detail?: string; message?: string } | undefined
     return (
-      error.response?.data?.detail ||
-      error.response?.data?.message ||
+      responseData?.detail ||
+      responseData?.message ||
       error.message ||
       'Error de red'
     )
@@ -49,6 +50,17 @@ export function getErrorMessage(error: unknown): string {
     return error
   }
   return 'Error desconocido'
+}
+
+/**
+ * Obtiene el detail del error de respuesta de forma segura
+ */
+export function getErrorDetail(error: unknown): string | undefined {
+  if (isAxiosError(error)) {
+    const data = error.response?.data as { detail?: string } | undefined
+    return typeof data?.detail === 'string' ? data.detail : undefined
+  }
+  return undefined
 }
 
 /**
