@@ -442,8 +442,9 @@ def _guardar_logo_en_bd(db: Session, logo_filename: str, logo_base64: str, conte
     Guarda o actualiza la referencia del logo en la base de datos.
     Almacena tanto el filename como el contenido base64 para persistencia.
     """
-    from app.models.configuracion_sistema import ConfiguracionSistema
     import json
+
+    from app.models.configuracion_sistema import ConfiguracionSistema
 
     # Guardar filename
     logo_config = (
@@ -594,8 +595,9 @@ def _obtener_logo_desde_bd(filename: str, db: Session) -> Optional[tuple[bytes, 
     Intenta obtener el logo desde la BD (base64) como fallback si no existe en filesystem.
     Retorna (contenido_bytes, content_type) o None si no existe en BD.
     """
-    from app.models.configuracion_sistema import ConfiguracionSistema
     import base64
+
+    from app.models.configuracion_sistema import ConfiguracionSistema
 
     try:
         logo_data_config = (
