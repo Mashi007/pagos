@@ -2431,18 +2431,18 @@ def obtener_evolucion_morosidad(
     """
     import time
     start_time = time.time()
+    hoy = date.today()
+    nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+
+    # Calcular fecha inicio (hace N meses) - FUERA del try para que esté disponible en el fallback
+    año_inicio = hoy.year
+    mes_inicio = hoy.month - meses + 1
+    if mes_inicio <= 0:
+        año_inicio -= 1
+        mes_inicio += 12
+    fecha_inicio_query = date(año_inicio, mes_inicio, 1)
+
     try:
-        hoy = date.today()
-        nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-
-        # Calcular fecha inicio (hace N meses)
-        año_inicio = hoy.year
-        mes_inicio = hoy.month - meses + 1
-        if mes_inicio <= 0:
-            año_inicio -= 1
-            mes_inicio += 12
-        fecha_inicio_query = date(año_inicio, mes_inicio, 1)
-
         # ✅ OPTIMIZACIÓN: Usar filtros separados en año y mes para aprovechar el índice idx_dashboard_morosidad_año_mes
         # En lugar de año * 100 + mes, usar filtros separados que permiten usar el índice compuesto
         query = db.query(DashboardMorosidadMensual).filter(
@@ -2495,12 +2495,10 @@ def obtener_evolucion_morosidad(
         return {"meses": meses_data}
 
     except Exception as e:
-        logger.error(f"Error obteniendo evolución de morosidad: {e}", exc_info=True)
-        # Fallback: Si la tabla oficial no existe, usar consulta original
-        logger.warning("Tabla oficial no disponible, usando consulta original como fallback")
+        logger.error(f"Error obteniendo evolución de morosidad desde tabla oficial: {e}", exc_info=True)
+        # Fallback: Si la tabla oficial no existe o hay error, usar consulta original
+        logger.warning("Tabla oficial no disponible o error, usando consulta original como fallback")
         try:
-            # Consulta original como fallback
-            fecha_inicio_query = date(año_inicio, mes_inicio, 1)
             query_sql = text(
                 """
                 SELECT 
@@ -2534,7 +2532,7 @@ def obtener_evolucion_morosidad(
             return {"meses": meses_data}
         except Exception as fallback_error:
             logger.error(f"Error en fallback: {fallback_error}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error interno: {str(fallback_error)}")
 
 
 @router.get("/evolucion-pagos")
