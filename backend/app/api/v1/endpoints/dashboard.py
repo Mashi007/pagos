@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[import-untyped]
-from sqlalchemy import and_, cast, func, or_, text  # type: ignore[import-untyped]
+from sqlalchemy import Integer, and_, cast, func, or_, text  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
@@ -172,8 +172,13 @@ def _calcular_total_a_cobrar_fecha(
 
 def _calcular_dias_mora_cliente(db: Session, cedula: str, hoy: date) -> int:
     """Calcula días de mora máximo para un cliente"""
+    # ✅ CORRECCIÓN: En PostgreSQL, date - date ya devuelve integer (días)
+    # No usar date_part, usar la resta directamente con parámetros bind
     dias_mora_query = (
-        db.query(func.max(func.date_part("day", hoy - Cuota.fecha_vencimiento)))
+        db.query(
+            func.max(text("(:hoy::date - cuotas.fecha_vencimiento::date)"))
+        )
+        .params(hoy=hoy)
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .filter(
             Prestamo.cedula == cedula,
@@ -912,8 +917,16 @@ def dashboard_administrador(
 
         # 18. PROMEDIO DÍAS DE MORA
         # Calcular desde cuotas vencidas en lugar de usar campo inexistente
+        # ✅ CORRECCIÓN: En PostgreSQL, date - date ya devuelve integer (días)
+        # No usar date_part, usar la resta directamente
+        # Usar SQL directo porque SQLAlchemy tiene problemas con date - date
         cuotas_vencidas_con_dias = (
-            db.query(func.avg(func.date_part("day", hoy - Cuota.fecha_vencimiento)).label("dias_promedio"))
+            db.query(
+                func.avg(
+                    text("(:hoy::date - cuotas.fecha_vencimiento::date)")
+                ).label("dias_promedio")
+            )
+            .params(hoy=hoy)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 and_(
