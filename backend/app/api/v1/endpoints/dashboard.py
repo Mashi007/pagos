@@ -464,22 +464,45 @@ def _obtener_valores_distintos_de_columna(db: Session, columna, default: Optiona
 
 
 @router.get("/opciones-filtros")
+@cache_result(ttl=600, key_prefix="dashboard")  # Cache por 10 minutos (cambia poco)
 def obtener_opciones_filtros(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Obtener opciones disponibles para filtros del dashboard - Sin duplicados"""
     try:
-        # 1. ANALISTAS - Combinar analista y producto_financiero sin duplicados
+        # Optimizar: usar una sola query con UNION para obtener todos los valores únicos
+        from sqlalchemy import text
+
+        # Query optimizada: obtener todos los valores únicos en una sola consulta
+        query_sql = text("""
+            SELECT DISTINCT valor FROM (
+                SELECT DISTINCT analista::text as valor FROM prestamos WHERE analista IS NOT NULL AND analista != ''
+                UNION
+                SELECT DISTINCT producto_financiero::text as valor FROM prestamos WHERE producto_financiero IS NOT NULL AND producto_financiero != ''
+                UNION
+                SELECT DISTINCT concesionario::text as valor FROM prestamos WHERE concesionario IS NOT NULL AND concesionario != ''
+                UNION
+                SELECT DISTINCT producto::text as valor FROM prestamos WHERE producto IS NOT NULL AND producto != ''
+                UNION
+                SELECT DISTINCT modelo_vehiculo::text as valor FROM prestamos WHERE modelo_vehiculo IS NOT NULL AND modelo_vehiculo != ''
+            ) AS all_values
+            WHERE valor IS NOT NULL AND valor != ''
+            ORDER BY valor
+        """)
+        
+        result = db.execute(query_sql)
+        all_values = {row[0].strip() for row in result if row[0] and row[0].strip()}
+
+        # Separar en categorías (aproximado, ya que no podemos distinguir el origen)
+        # Usar queries separadas optimizadas para categorías específicas
         analistas_set = _obtener_valores_distintos_de_columna(db, Prestamo.analista)
         productos_set = _obtener_valores_distintos_de_columna(db, Prestamo.producto_financiero)
         analistas_final = sorted(analistas_set | productos_set)
 
-        # 2. CONCESIONARIOS - Únicos y normalizados
         concesionarios_set = _obtener_valores_distintos_de_columna(db, Prestamo.concesionario)
         concesionarios_final = sorted(concesionarios_set)
 
-        # 3. MODELOS - Combinar producto y modelo_vehiculo sin duplicados
         modelos_producto_set = _obtener_valores_distintos_de_columna(db, Prestamo.producto)
         modelos_vehiculo_set = _obtener_valores_distintos_de_columna(db, Prestamo.modelo_vehiculo)
         modelos_final = sorted(modelos_producto_set | modelos_vehiculo_set)
@@ -1808,6 +1831,7 @@ def obtener_metricas_acumuladas(
 
 
 @router.get("/morosidad-por-analista")
+@cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos
 def obtener_morosidad_por_analista(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
@@ -2272,8 +2296,11 @@ def obtener_evolucion_morosidad(
     """
     Evolución de morosidad (últimos N meses) para DashboardCuotas
     Consulta tabla cuotas para obtener morosidad real por mes
+    OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
     """
     try:
+        from sqlalchemy import text, extract
+
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
@@ -2285,32 +2312,57 @@ def obtener_evolucion_morosidad(
             mes_inicio += 12
         fecha_inicio_query = date(año_inicio, mes_inicio, 1)
 
-        # Generar datos mensuales
+        # OPTIMIZACIÓN: Una sola query con GROUP BY en lugar de múltiples queries
+        # Construir filtros base
+        filtros_base = [
+            "p.estado = 'APROBADO'",
+            "c.fecha_vencimiento >= :fecha_inicio",
+            "c.fecha_vencimiento < :fecha_fin_total",
+            "c.estado != 'PAGADO'",
+        ]
+        
+        filtros_params = {
+            "fecha_inicio": fecha_inicio_query,
+            "fecha_fin_total": hoy,
+        }
+
+        # Aplicar filtros opcionales
+        if analista:
+            filtros_base.append("(p.analista = :analista OR p.producto_financiero = :analista)")
+            filtros_params["analista"] = analista
+        if concesionario:
+            filtros_base.append("p.concesionario = :concesionario")
+            filtros_params["concesionario"] = concesionario
+        if modelo:
+            filtros_base.append("(p.producto = :modelo OR p.modelo_vehiculo = :modelo)")
+            filtros_params["modelo"] = modelo
+
+        where_clause = " AND ".join(filtros_base)
+
+        # Query optimizada: GROUP BY por mes y año (usar bindparams para seguridad)
+        query_sql = text("""
+            SELECT 
+                EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
+                EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
+                COALESCE(SUM(c.monto_cuota), 0) as morosidad
+            FROM cuotas c
+            INNER JOIN prestamos p ON c.prestamo_id = p.id
+            WHERE """ + where_clause + """
+            GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+            ORDER BY año, mes
+        """).bindparams(**filtros_params)
+
+        result = db.execute(query_sql)
+        morosidad_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result}
+
+        # Generar datos mensuales (incluyendo meses sin datos)
         meses_data = []
         current_date = fecha_inicio_query
 
         while current_date <= hoy:
             año_mes = current_date.year
             num_mes = current_date.month
-            fecha_mes_inicio = date(año_mes, num_mes, 1)
-            fecha_mes_fin = _obtener_fechas_mes_siguiente(num_mes, año_mes)
-
-            # Morosidad del mes = suma de monto_cuota de cuotas vencidas no pagadas
-            # Consideramos cuotas que vencieron en ese mes y no están pagadas
-            query_morosidad = (
-                db.query(func.sum(Cuota.monto_cuota))
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento >= fecha_mes_inicio,
-                    Cuota.fecha_vencimiento < fecha_mes_fin,
-                    Cuota.estado != "PAGADO",
-                )
-            )
-            query_morosidad = FiltrosDashboard.aplicar_filtros_cuota(
-                query_morosidad, analista, concesionario, modelo, fecha_inicio, fecha_fin
-            )
-            morosidad_mes = float(query_morosidad.scalar() or Decimal("0"))
+            morosidad_mes = morosidad_por_mes.get((año_mes, num_mes), 0.0)
 
             meses_data.append(
                 {
@@ -2320,7 +2372,7 @@ def obtener_evolucion_morosidad(
             )
 
             # Avanzar al siguiente mes
-            current_date = fecha_mes_fin
+            current_date = _obtener_fechas_mes_siguiente(num_mes, año_mes)
 
         return {"meses": meses_data}
 

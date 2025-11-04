@@ -542,6 +542,53 @@ async def upload_logo(
         raise HTTPException(status_code=500, detail=f"Error al subir logo: {str(e)}")
 
 
+def _verificar_logo_existe(filename: str) -> tuple[Path, str]:
+    """
+    Verifica si el logo existe y retorna el path y content type.
+    Función compartida para HEAD y GET para garantizar consistencia.
+    """
+    from app.core.config import settings
+
+    # Validar que el archivo sea del tipo correcto
+    if not filename.startswith("logo-custom") or not any(
+        filename.endswith(ext) for ext in [".svg", ".png", ".jpg", ".jpeg"]
+    ):
+        raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
+
+    # Usar path absoluto si UPLOAD_DIR está configurado
+    if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
+        uploads_dir = Path(settings.UPLOAD_DIR).resolve()
+    else:
+        uploads_dir = Path("uploads").resolve()
+    logo_path = uploads_dir / "logos" / filename
+
+    if not logo_path.exists():
+        raise HTTPException(status_code=404, detail="Logo no encontrado")
+
+    # Verificar que el archivo sea legible
+    if not logo_path.is_file():
+        raise HTTPException(status_code=404, detail="Logo no encontrado o archivo inválido")
+    
+    # Verificar que el archivo tenga contenido
+    try:
+        if logo_path.stat().st_size == 0:
+            raise HTTPException(status_code=404, detail="Logo no encontrado o archivo inválido")
+    except OSError:
+        raise HTTPException(status_code=404, detail="Logo no encontrado o archivo inválido")
+
+    # Determinar content type
+    content_type_map = {
+        ".svg": "image/svg+xml",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+    }
+    ext = Path(filename).suffix.lower()
+    media_type = content_type_map.get(ext, "application/octet-stream")
+
+    return logo_path, media_type
+
+
 @router.head("/logo/{filename}")
 async def verificar_logo_existe(
     filename: str,
@@ -550,33 +597,7 @@ async def verificar_logo_existe(
     try:
         from fastapi.responses import Response
 
-        from app.core.config import settings
-
-        # Validar que el archivo sea del tipo correcto
-        if not filename.startswith("logo-custom") or not any(
-            filename.endswith(ext) for ext in [".svg", ".png", ".jpg", ".jpeg"]
-        ):
-            raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
-
-        # Usar path absoluto si UPLOAD_DIR está configurado
-        if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
-            uploads_dir = Path(settings.UPLOAD_DIR).resolve()
-        else:
-            uploads_dir = Path("uploads").resolve()
-        logo_path = uploads_dir / "logos" / filename
-
-        if not logo_path.exists():
-            raise HTTPException(status_code=404, detail="Logo no encontrado")
-
-        # Determinar content type
-        content_type_map = {
-            ".svg": "image/svg+xml",
-            ".png": "image/png",
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-        }
-        ext = Path(filename).suffix.lower()
-        media_type = content_type_map.get(ext, "application/octet-stream")
+        logo_path, media_type = _verificar_logo_existe(filename)
 
         # Devolver respuesta HEAD sin cuerpo
         return Response(
@@ -596,37 +617,10 @@ async def obtener_logo(
 ):
     """Obtener logo de la empresa"""
     try:
-        from fastapi.responses import FileResponse
-
-        from app.core.config import settings
-
-        # Validar que el archivo sea del tipo correcto
-        if not filename.startswith("logo-custom") or not any(
-            filename.endswith(ext) for ext in [".svg", ".png", ".jpg", ".jpeg"]
-        ):
-            raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
-
-        # Usar path absoluto si UPLOAD_DIR está configurado
-        if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
-            uploads_dir = Path(settings.UPLOAD_DIR).resolve()
-        else:
-            uploads_dir = Path("uploads").resolve()
-        logo_path = uploads_dir / "logos" / filename
-
-        if not logo_path.exists():
-            raise HTTPException(status_code=404, detail="Logo no encontrado")
-
-        # Determinar content type
-        content_type_map = {
-            ".svg": "image/svg+xml",
-            ".png": "image/png",
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-        }
-        ext = Path(filename).suffix.lower()
-        media_type = content_type_map.get(ext, "application/octet-stream")
-
         from fastapi.responses import Response
+
+        # Usar la misma función de verificación que HEAD para garantizar consistencia
+        logo_path, media_type = _verificar_logo_existe(filename)
 
         # Leer el contenido del archivo
         with open(logo_path, "rb") as f:
