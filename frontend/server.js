@@ -290,9 +290,16 @@ app.get('*', (req, res) => {
   
   // ✅ CRÍTICO: Si es una ruta de assets y no se encontró el archivo, devolver 404
   // NO servir index.html para archivos de assets que no existen
+  // IMPORTANTE: No devolver JSON para archivos estáticos, solo 404 simple
   if (req.path.startsWith('/assets/')) {
     console.error(`❌ Archivo estático no encontrado: ${req.path}`);
-    return res.status(404).json({ error: 'Archivo estático no encontrado', path: req.path });
+    // Determinar el tipo MIME apropiado basado en la extensión
+    if (req.path.endsWith('.js')) {
+      res.type('application/javascript');
+    } else if (req.path.endsWith('.css')) {
+      res.type('text/css');
+    }
+    return res.status(404).send('Not Found');
   }
   
   // ✅ También devolver 404 para otros archivos estáticos que no existen (favicon, imágenes, etc.)
@@ -300,7 +307,15 @@ app.get('*', (req, res) => {
   const isStaticFile = staticFileExtensions.some(ext => req.path.endsWith(ext));
   if (isStaticFile) {
     console.error(`❌ Archivo estático no encontrado: ${req.path}`);
-    return res.status(404).json({ error: 'Archivo estático no encontrado', path: req.path });
+    // Establecer tipo MIME apropiado según la extensión
+    if (req.path.endsWith('.js')) {
+      res.type('application/javascript');
+    } else if (req.path.endsWith('.css')) {
+      res.type('text/css');
+    } else if (req.path.endsWith('.svg')) {
+      res.type('image/svg+xml');
+    }
+    return res.status(404).send('Not Found');
   }
   
   // Si llegamos aquí, NO es un archivo estático
