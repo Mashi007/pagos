@@ -8,10 +8,12 @@ from typing import List, Optional
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.pago import Pago
+from app.models.pago_staging import PagoStaging  # ✅ Usar PagoStaging donde están los datos
 from app.models.user import User
 
 router = APIRouter()
@@ -40,8 +42,23 @@ def _validar_numero_documento(numero_documento: str) -> bool:
     return True
 
 
+def _conciliar_pago_staging(pago_staging: PagoStaging, db: Session, numero_documento: str) -> bool:
+    """Concilia un pago en staging si no está ya conciliado. Returns: True si se concilió, False si ya estaba conciliado"""
+    if pago_staging.conciliado:
+        logger.info(f"ℹ️ [conciliacion] Pago staging ID {pago_staging.id} ya estaba conciliado (documento: {numero_documento})")
+        return False
+
+    pago_staging.conciliado = True
+    pago_staging.fecha_conciliacion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # TEXT format
+
+    db.commit()
+    db.refresh(pago_staging)
+    logger.info(f"✅ [conciliacion] Pago staging ID {pago_staging.id} conciliado (documento: {numero_documento})")
+    return True
+
+
 def _conciliar_pago(pago: Pago, db: Session, numero_documento: str) -> bool:
-    """Concilia un pago si no está ya conciliado. Returns: True si se concilió, False si ya estaba conciliado"""
+    """Concilia un pago en tabla pagos si no está ya conciliado. Returns: True si se concilió, False si ya estaba conciliado"""
     if pago.conciliado:
         logger.info(f"ℹ️ [conciliacion] Pago ID {pago.id} ya estaba conciliado (documento: {numero_documento})")
         return False
@@ -73,14 +90,52 @@ def _procesar_fila_conciliacion(row, index: int, db: Session, documentos_procesa
             return (0, [], [])
         documentos_procesados.add(numero_documento)
 
-        pago = db.query(Pago).filter(Pago.numero_documento == numero_documento).first()
-
+        # ✅ Buscar primero en pagos_staging (donde están los datos)
+        # Normalizar numero_documento para comparación EXACTA (trim espacios, case-sensitive)
+        numero_documento_normalizado = numero_documento.strip()
+        
+        # Comparación exacta usando func.trim() para normalizar espacios en BD
+        pago_staging = db.query(PagoStaging).filter(
+            func.trim(PagoStaging.numero_documento) == numero_documento_normalizado
+        ).first()
+        
+        if pago_staging:
+            # ✅ VERIFICACIÓN: Confirmar que el numero_documento coincide EXACTAMENTE
+            # Normalizar el valor de la BD para comparación
+            numero_documento_bd = str(pago_staging.numero_documento).strip() if pago_staging.numero_documento else ""
+            if numero_documento_bd != numero_documento_normalizado:
+                logger.warning(
+                    f"⚠️ [conciliacion] Número de documento no coincide exactamente: "
+                    f"BD='{numero_documento_bd}' vs Excel='{numero_documento_normalizado}'"
+                )
+                return (0, [numero_documento_normalizado], [])
+            
+            # ✅ CONFIRMADO: El numero_documento coincide EXACTAMENTE
+            logger.info(f"✅ [conciliacion] Número de documento coincide exactamente: '{numero_documento_normalizado}'")
+            conciliado = _conciliar_pago_staging(pago_staging, db, numero_documento_normalizado)
+            return (1 if conciliado else 0, [], [])
+        
+        # Si no está en staging, buscar en pagos (tabla principal) con comparación exacta
+        pago = db.query(Pago).filter(
+            func.trim(Pago.numero_documento) == numero_documento_normalizado
+        ).first()
         if pago:
-            conciliado = _conciliar_pago(pago, db, numero_documento)
+            # ✅ VERIFICACIÓN: Confirmar que el numero_documento coincide EXACTAMENTE
+            numero_documento_bd = str(pago.numero_documento).strip() if pago.numero_documento else ""
+            if numero_documento_bd != numero_documento_normalizado:
+                logger.warning(
+                    f"⚠️ [conciliacion] Número de documento no coincide exactamente: "
+                    f"BD='{numero_documento_bd}' vs Excel='{numero_documento_normalizado}'"
+                )
+                return (0, [numero_documento_normalizado], [])
+            
+            # ✅ CONFIRMADO: El numero_documento coincide EXACTAMENTE
+            logger.info(f"✅ [conciliacion] Número de documento coincide exactamente: '{numero_documento_normalizado}'")
+            conciliado = _conciliar_pago(pago, db, numero_documento_normalizado)
             return (1 if conciliado else 0, [], [])
         else:
-            logger.warning(f"⚠️ [conciliacion] Documento no encontrado: {numero_documento}")
-            return (0, [numero_documento], [])
+            logger.warning(f"⚠️ [conciliacion] Documento no encontrado: '{numero_documento_normalizado}'")
+            return (0, [numero_documento_normalizado], [])
 
     except Exception as e:
         logger.error(f"❌ [conciliacion] Error procesando fila {index + 2}: {e}", exc_info=True)

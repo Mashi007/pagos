@@ -10,6 +10,7 @@ from typing import Optional
 import pandas as pd  # type: ignore[import-untyped]
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile  # type: ignore[import-untyped]
 from openpyxl import load_workbook  # type: ignore[import-untyped]
+from sqlalchemy import func  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
@@ -114,6 +115,27 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
 
         # ⚠️ IMPORTANTE: Insertar en pagos_staging (donde el dashboard consulta)
         # pagos_staging tiene fecha_pago y monto_pagado como TEXT
+        
+        # ✅ VERIFICAR CONCILIACIÓN: Si el numero_documento ya existe EXACTAMENTE, marcar como conciliado
+        # Normalizar numero_documento (trim espacios) para comparación exacta
+        numero_documento_normalizado = numero_documento.strip()
+        
+        # Buscar con comparación exacta (case-sensitive, sin espacios)
+        pago_existente = db.query(PagoStaging).filter(
+            func.trim(PagoStaging.numero_documento) == numero_documento_normalizado
+        ).first()
+        
+        conciliado = False
+        fecha_conciliacion = None
+        if pago_existente:
+            # Si ya existe un pago con este número de documento EXACTAMENTE, marcarlo como conciliado
+            conciliado = True
+            fecha_conciliacion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            logger.info(
+                f"✅ [carga_masiva] Número de documento '{numero_documento_normalizado}' "
+                f"coincide EXACTAMENTE - marcando como conciliado"
+            )
+        
         pago_staging = PagoStaging(
             cedula_cliente=cedula,
             cedula=cedula,  # Columna alternativa
@@ -121,11 +143,12 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
             fecha_pago=fecha_pago,  # SQLAlchemy maneja la conversión si es necesario
             fecha_registro=datetime.now(),
             monto_pagado=monto_pagado,  # SQLAlchemy maneja la conversión si es necesario
-            numero_documento=numero_documento,
+            numero_documento=numero_documento_normalizado,  # ✅ Guardar normalizado (sin espacios)
             institucion_bancaria=None,
             estado="PAGADO",
             usuario_registro=current_user.email,
-            conciliado=False,
+            conciliado=conciliado,  # ✅ Marcar como conciliado si el documento ya existe
+            fecha_conciliacion=fecha_conciliacion,  # ✅ Fecha de conciliación si está conciliado
             activo=True,
         )
 

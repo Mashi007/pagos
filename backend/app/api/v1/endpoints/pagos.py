@@ -970,25 +970,97 @@ def _calcular_proporcion_capital_interes(cuota, monto_aplicar: Decimal) -> tuple
     return capital, interes
 
 
-def _actualizar_estado_cuota(cuota, fecha_hoy: date, es_exceso: bool = False) -> bool:
+def _verificar_pagos_conciliados_cuota(db: Session, cuota_id: int, prestamo_id: int) -> bool:
+    """
+    Verifica si TODOS los pagos que afectan una cuota están conciliados.
+    Busca en pagos_staging por numero_documento vinculado al préstamo.
+    
+    ✅ ESTRATEGIA:
+    - Obtener todos los pagos de la tabla `pagos` que tienen este prestamo_id
+    - Verificar si cada uno está conciliado en `pagos_staging` por numero_documento
+    - Si TODOS están conciliados → True, sino → False
+    
+    Returns: True si todos los pagos están conciliados, False en caso contrario.
+    """
+    from app.models.pago_staging import PagoStaging
+    
+    # Obtener todos los pagos del préstamo que podrían afectar esta cuota
+    # Como los pagos se aplican desde la cuota más antigua, verificamos todos los pagos del préstamo
+    pagos_prestamo = db.execute(
+        text("""
+            SELECT DISTINCT numero_documento, conciliado
+            FROM pagos
+            WHERE prestamo_id = :prestamo_id
+               AND numero_documento IS NOT NULL
+               AND numero_documento != ''
+        """),
+        {"prestamo_id": prestamo_id}
+    ).fetchall()
+    
+    if not pagos_prestamo:
+        # No hay pagos para este préstamo, asumir que no está conciliado
+        return False
+    
+    # Verificar si todos los pagos están conciliados en pagos_staging
+    for pago in pagos_prestamo:
+        numero_documento = pago.numero_documento
+        # Primero verificar en pagos (tabla principal)
+        if not pago.conciliado:
+            # Si no está conciliado en pagos, verificar en pagos_staging
+            pago_staging = db.query(PagoStaging).filter(
+                PagoStaging.numero_documento == numero_documento
+            ).first()
+            if not pago_staging or not pago_staging.conciliado:
+                return False
+    
+    return True
+
+
+def _actualizar_estado_cuota(cuota, fecha_hoy: date, db: Session = None, es_exceso: bool = False) -> bool:
     """
     Actualiza el estado de una cuota según las reglas de negocio.
+    
+    ✅ REGLAS ACTUALIZADAS CON CONCILIACIÓN:
+    - PAGADO: total_pagado >= monto_cuota Y todos los pagos están conciliados
+    - PENDIENTE: total_pagado >= monto_cuota PERO NO todos los pagos están conciliados
+    - PENDIENTE: total_pagado > 0 pero < monto_cuota y fecha_vencimiento >= hoy
+    - PARCIAL: total_pagado > 0 pero < monto_cuota y fecha_vencimiento < hoy (cuota atrasada)
+    - ATRASADO: total_pagado = 0 y fecha_vencimiento < hoy
+    - ADELANTADO: total_pagado > 0 pero < monto_cuota y fecha_vencimiento >= hoy (exceso de pago)
+    
     Returns:
         bool: True si la cuota se completó completamente (pasó de incompleta a PAGADO)
     """
     estado_previo_completo = cuota.total_pagado >= cuota.monto_cuota
     estado_completado = False
-
+    
+    # Verificar si todos los pagos están conciliados
+    todos_conciliados = False
+    if db and cuota.total_pagado > Decimal("0.00"):
+        todos_conciliados = _verificar_pagos_conciliados_cuota(db, cuota.id, cuota.prestamo_id)
+    
     if cuota.total_pagado >= cuota.monto_cuota:
-        cuota.estado = "PAGADO"
-        if not estado_previo_completo:
-            estado_completado = True
-    elif cuota.total_pagado > Decimal("0.00"):
-        if cuota.fecha_vencimiento and cuota.fecha_vencimiento < fecha_hoy:
-            cuota.estado = "ATRASADO"
+        # ✅ Cuota completa: PAGADO solo si está conciliado, sino PENDIENTE
+        if todos_conciliados:
+            cuota.estado = "PAGADO"
+            if not estado_previo_completo:
+                estado_completado = True
         else:
-            cuota.estado = "ADELANTADO" if es_exceso else "PENDIENTE"
+            # Pagada pero no conciliada → PENDIENTE
+            cuota.estado = "PENDIENTE"
+    elif cuota.total_pagado > Decimal("0.00"):
+        # ✅ Pago parcial
+        if cuota.fecha_vencimiento and cuota.fecha_vencimiento < fecha_hoy:
+            # Cuota vencida con pago parcial → PARCIAL
+            cuota.estado = "PARCIAL"
+        else:
+            # Cuota no vencida con pago parcial
+            if es_exceso:
+                cuota.estado = "ADELANTADO"
+            else:
+                cuota.estado = "PENDIENTE"
     else:
+        # ✅ Sin pagos
         if cuota.fecha_vencimiento and cuota.fecha_vencimiento < fecha_hoy:
             cuota.estado = "ATRASADO"
         else:
@@ -1002,6 +1074,7 @@ def _aplicar_monto_a_cuota(
     monto_aplicar: Decimal,
     fecha_pago: date,
     fecha_hoy: date,
+    db: Session = None,
     es_exceso: bool = False,
 ) -> bool:
     """
@@ -1023,7 +1096,7 @@ def _aplicar_monto_a_cuota(
     if monto_aplicar > Decimal("0.00"):
         cuota.fecha_pago = fecha_pago
 
-    return _actualizar_estado_cuota(cuota, fecha_hoy, es_exceso)
+    return _actualizar_estado_cuota(cuota, fecha_hoy, db, es_exceso)
 
 
 def _aplicar_exceso_a_siguiente_cuota(
@@ -1054,7 +1127,7 @@ def _aplicar_exceso_a_siguiente_cuota(
     if monto_aplicar_exceso <= Decimal("0.00"):
         return 0
 
-    estado_completado = _aplicar_monto_a_cuota(siguiente_cuota, monto_aplicar_exceso, fecha_pago, fecha_hoy, es_exceso=True)
+    estado_completado = _aplicar_monto_a_cuota(siguiente_cuota, monto_aplicar_exceso, fecha_pago, fecha_hoy, db, es_exceso=True)
 
     logger.debug(
         f"  💰 [aplicar_pago_a_cuotas] Cuota #{siguiente_cuota.numero_cuota} "
@@ -1102,7 +1175,7 @@ def _obtener_cuotas_pendientes(db: Session, prestamo_id: int) -> list:
 
 
 def _aplicar_pago_a_cuotas_iterativas(
-    cuotas: list, saldo_restante: Decimal, fecha_pago: date, fecha_hoy: date
+    cuotas: list, saldo_restante: Decimal, fecha_pago: date, fecha_hoy: date, db: Session
 ) -> tuple[int, Decimal]:
     """Aplica el pago a las cuotas iterativamente"""
     cuotas_completadas = 0
@@ -1117,7 +1190,7 @@ def _aplicar_pago_a_cuotas_iterativas(
         if monto_aplicar <= Decimal("0.00"):
             continue
 
-        if _aplicar_monto_a_cuota(cuota, monto_aplicar, fecha_pago, fecha_hoy):
+        if _aplicar_monto_a_cuota(cuota, monto_aplicar, fecha_pago, fecha_hoy, db):
             cuotas_completadas += 1
 
         saldo_restante -= monto_aplicar
@@ -1163,7 +1236,7 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
 
     fecha_hoy = date.today()
     cuotas_completadas, saldo_restante = _aplicar_pago_a_cuotas_iterativas(
-        cuotas, pago.monto_pagado, pago.fecha_pago, fecha_hoy
+        cuotas, pago.monto_pagado, pago.fecha_pago, fecha_hoy, db
     )
 
     if saldo_restante > Decimal("0.00"):
@@ -1257,6 +1330,34 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
     monto_cobrado_mes = Decimal(str(monto_cobrado_mes_query.scalar() or 0))
     logger.info(f"💰 [kpis_pagos] Monto cobrado en el mes: ${monto_cobrado_mes:,.2f}")
 
+    # ✅ 1.1. MONTO "NO DEFINIDO" (pagos no conciliados o sin numero_documento)
+    monto_no_definido_query = db.execute(
+        text(
+            """
+            SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+            FROM pagos_staging
+            WHERE fecha_pago IS NOT NULL
+              AND fecha_pago != ''
+              AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+              AND fecha_pago::timestamp >= :fecha_inicio
+              AND fecha_pago::timestamp < :fecha_fin
+              AND monto_pagado IS NOT NULL
+              AND monto_pagado != ''
+              AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+              AND monto_pagado::numeric >= 0
+              AND (
+                  conciliado IS FALSE
+                  OR conciliado IS NULL
+                  OR numero_documento IS NULL
+                  OR numero_documento = ''
+                  OR UPPER(TRIM(numero_documento)) = 'NO DEFINIDO'
+              )
+        """
+        ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+    )
+    monto_no_definido = Decimal(str(monto_no_definido_query.scalar() or 0))
+    logger.info(f"📊 [kpis_pagos] Monto NO DEFINIDO (no conciliado/sin documento): ${monto_no_definido:,.2f}")
+
     # 2. SALDO POR COBRAR
     saldo_por_cobrar_query = (
         db.query(
@@ -1302,6 +1403,7 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
 
     return {
         "montoCobradoMes": float(monto_cobrado_mes),
+        "montoNoDefinido": float(monto_no_definido),  # ✅ Categoría "NO DEFINIDO"
         "saldoPorCobrar": float(saldo_por_cobrar),
         "clientesEnMora": clientes_en_mora,
         "clientesAlDia": clientes_al_dia,
@@ -1322,6 +1424,7 @@ def obtener_kpis_pagos(
 
     Devuelve:
     - montoCobradoMes: Suma de todos los pagos del mes especificado
+    - montoNoDefinido: Suma de pagos no conciliados o sin numero_documento (agrupados como "NO DEFINIDO")
     - saldoPorCobrar: Suma de capital_pendiente + interes_pendiente + monto_mora de todas las cuotas no pagadas
     - clientesEnMora: Conteo de clientes únicos con cuotas vencidas y no pagadas
     - clientesAlDia: Conteo de clientes únicos sin cuotas vencidas sin pagar
