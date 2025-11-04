@@ -1,0 +1,44 @@
+{
+  "include": [
+    "backend/app",
+    "backend/scripts",
+    "backend/tests"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/node_modules",
+    "**/.venv",
+    "**/venv",
+    "**/alembic/versions",
+    "**/migrations",
+    "frontend",
+    "node_modules"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "off",
+  "reportMissingImports": false,
+  "reportMissingTypeStubs": false,
+  "reportUnusedImport": false,
+  "reportUnusedClass": false,
+  "reportUnusedFunction": false,
+  "reportUnusedVariable": false,
+  "reportGeneralTypeIssues": false,
+  "reportImportCycles": false,
+  "reportUnusedCoroutine": false,
+  "reportPrivateUsage": false,
+  "pythonPlatform": "All",
+  "executionEnvironments": [
+    {
+      "root": "backend",
+      "pythonVersion": "3.11",
+      "extraPaths": [
+        "backend",
+        "backend/app"
+      ]
+    }
+  ],
+  "stubPath": ""
+}
+
