@@ -259,7 +259,7 @@ def obtener_estadisticas_notificaciones(
 ):
     """
     Obtener estadísticas de notificaciones.
-    
+
     OPTIMIZADO: Usa una sola query GROUP BY en lugar de 5 queries COUNT separadas.
     Cache: 5 minutos para mejorar performance.
     """
@@ -270,29 +270,22 @@ def obtener_estadisticas_notificaciones(
         # ✅ OPTIMIZACIÓN: Una sola query con GROUP BY en lugar de 5 queries COUNT
         # Esto es 5-10x más rápido, especialmente con índices en la columna 'estado'
         estadisticas = (
-            db.query(
-                Notificacion.estado,
-                func.count(Notificacion.id).label('cantidad')
-            )
-            .group_by(Notificacion.estado)
-            .all()
+            db.query(Notificacion.estado, func.count(Notificacion.id).label("cantidad")).group_by(Notificacion.estado).all()
         )
-        
+
         # Convertir resultados a diccionario
         stats_dict = {row.estado: row.cantidad for row in estadisticas}
-        
+
         # Calcular totales
         total = sum(stats_dict.values())
-        enviadas = stats_dict.get('ENVIADA', 0)
-        pendientes = stats_dict.get('PENDIENTE', 0)
-        fallidas = stats_dict.get('FALLIDA', 0)
-        
+        enviadas = stats_dict.get("ENVIADA", 0)
+        pendientes = stats_dict.get("PENDIENTE", 0)
+        fallidas = stats_dict.get("FALLIDA", 0)
+
         # Query separada solo para no_leidas (si la columna existe)
         no_leidas = 0
         try:
-            no_leidas = db.query(func.count(Notificacion.id)).filter(
-                Notificacion.leida.is_(False)
-            ).scalar() or 0
+            no_leidas = db.query(func.count(Notificacion.id)).filter(Notificacion.leida.is_(False)).scalar() or 0
         except ProgrammingError as pe:
             # Si la columna 'leida' no existe en la BD, usar aproximación
             if "column notificaciones.leida does not exist" in str(pe):
