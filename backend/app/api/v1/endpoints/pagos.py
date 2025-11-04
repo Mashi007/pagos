@@ -479,6 +479,9 @@ def _contar_total_pagos_validos(db: Session, cedula: Optional[str] = None) -> in
                 """
                 SELECT COUNT(*) FROM pagos_staging
                 WHERE cedula_cliente = :cedula
+                  AND fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
                   AND TRIM(monto_pagado) != ''
@@ -500,6 +503,9 @@ def _contar_total_pagos_validos(db: Session, cedula: Optional[str] = None) -> in
                       OR (cedula_cliente ~ '^[VEJZvejz][0-9]{7,9}$' AND LENGTH(TRIM(cedula_cliente)) >= 8 AND LENGTH(TRIM(cedula_cliente)) <= 10)
                       OR (cedula_cliente ~ '^[0-9]{7,10}$' AND LENGTH(TRIM(cedula_cliente)) >= 7 AND LENGTH(TRIM(cedula_cliente)) <= 10)
                   )
+                  AND fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
                   AND TRIM(monto_pagado) != ''
@@ -527,6 +533,9 @@ def _obtener_pagos_paginados(db: Session, page: int, per_page: int) -> list:
                       OR (cedula_cliente ~ '^[VEJZvejz][0-9]{7,9}$' AND LENGTH(TRIM(cedula_cliente)) >= 8 AND LENGTH(TRIM(cedula_cliente)) <= 10)
                       OR (cedula_cliente ~ '^[0-9]{7,10}$' AND LENGTH(TRIM(cedula_cliente)) >= 7 AND LENGTH(TRIM(cedula_cliente)) <= 10)
                   )
+                  AND fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
                   AND TRIM(monto_pagado) != ''
