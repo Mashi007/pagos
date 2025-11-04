@@ -12,6 +12,7 @@ from sqlalchemy import func, or_, text  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
+from app.core.cache import cache_result
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.pago import Pago  # Mantener para operaciones que necesiten tabla pagos (crear, actualizar)
@@ -1188,6 +1189,102 @@ def registrar_auditoria_pago(
     db.commit()
 
 
+def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: int) -> dict:
+    """
+    Función interna para calcular KPIs (cacheable)
+    """
+    from datetime import date, datetime
+
+    hoy = date.today()
+
+    # Fecha inicio y fin del mes
+    fecha_inicio_mes = date(año_consulta, mes_consulta, 1)
+    # Calcular último día del mes
+    if mes_consulta == 12:
+        fecha_fin_mes = date(año_consulta + 1, 1, 1)
+    else:
+        fecha_fin_mes = date(año_consulta, mes_consulta + 1, 1)
+
+    logger.info(f"📊 [kpis_pagos] Calculando KPIs para mes {mes_consulta}/{año_consulta}")
+    logger.info(f"📅 [kpis_pagos] Rango de fechas: {fecha_inicio_mes} a {fecha_fin_mes}")
+
+    # 1. MONTO COBRADO EN EL MES
+    fecha_inicio_dt = datetime.combine(fecha_inicio_mes, datetime.min.time())
+    fecha_fin_dt = datetime.combine(fecha_fin_mes, datetime.min.time())
+
+    monto_cobrado_mes_query = db.execute(
+        text(
+            """
+            SELECT COALESCE(SUM(monto_pagado::numeric), 0)
+            FROM pagos_staging
+            WHERE fecha_pago IS NOT NULL
+              AND fecha_pago != ''
+              AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+              AND fecha_pago::timestamp >= :fecha_inicio
+              AND fecha_pago::timestamp < :fecha_fin
+              AND monto_pagado IS NOT NULL
+              AND monto_pagado != ''
+              AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+              AND monto_pagado::numeric >= 0
+        """
+        ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+    )
+    monto_cobrado_mes = Decimal(str(monto_cobrado_mes_query.scalar() or 0))
+    logger.info(f"💰 [kpis_pagos] Monto cobrado en el mes: ${monto_cobrado_mes:,.2f}")
+
+    # 2. SALDO POR COBRAR
+    saldo_por_cobrar_query = (
+        db.query(
+            func.sum(
+                func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
+                + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
+                + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
+            )
+        )
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            Cuota.estado != "PAGADO",
+            Prestamo.estado == "APROBADO",
+        )
+    )
+    saldo_por_cobrar = saldo_por_cobrar_query.scalar() or Decimal("0.00")
+    logger.info(f"💳 [kpis_pagos] Saldo por cobrar: ${saldo_por_cobrar:,.2f}")
+
+    # 3. CLIENTES EN MORA
+    clientes_en_mora_query = (
+        db.query(func.count(func.distinct(Prestamo.cedula)))
+        .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.total_pagado < Cuota.monto_cuota,
+            Prestamo.estado == "APROBADO",
+        )
+    )
+    clientes_en_mora = clientes_en_mora_query.scalar() or 0
+    logger.info(f"⚠️ [kpis_pagos] Clientes en mora: {clientes_en_mora}")
+
+    # 4. CLIENTES AL DÍA
+    clientes_con_cuotas = (
+        db.query(func.count(func.distinct(Prestamo.cedula)))
+        .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+        .filter(Prestamo.estado == "APROBADO")
+        .scalar()
+        or 0
+    )
+
+    clientes_al_dia = max(0, clientes_con_cuotas - clientes_en_mora)
+    logger.info(f"✅ [kpis_pagos] Clientes al día: {clientes_al_dia}")
+
+    return {
+        "montoCobradoMes": float(monto_cobrado_mes),
+        "saldoPorCobrar": float(saldo_por_cobrar),
+        "clientesEnMora": clientes_en_mora,
+        "clientesAlDia": clientes_al_dia,
+        "mes": mes_consulta,
+        "año": año_consulta,
+    }
+
+
 @router.get("/kpis")
 def obtener_kpis_pagos(
     mes: Optional[int] = Query(None, description="Mes (1-12), default: mes actual"),
@@ -1205,14 +1302,45 @@ def obtener_kpis_pagos(
     - clientesAlDia: Conteo de clientes únicos sin cuotas vencidas sin pagar
 
     Los KPIs son fijos por mes (mes/año especificados o mes/año actual)
+    Cacheado por 5 minutos para mejorar rendimiento.
     """
     try:
-        from datetime import date, datetime
+        from datetime import date
+        from app.core.cache import cache_backend
+        import hashlib
 
         # Determinar mes y año (default: mes/año actual)
         hoy = date.today()
         mes_consulta = mes if mes is not None else hoy.month
         año_consulta = año if año is not None else hoy.year
+
+        # Validar mes
+        if mes_consulta < 1 or mes_consulta > 12:
+            raise HTTPException(status_code=400, detail="El mes debe estar entre 1 y 12")
+
+        # Construir clave de caché única por mes/año
+        cache_key = f"pagos_kpis:obtener_kpis_pagos:{mes_consulta}:{año_consulta}"
+
+        # Intentar obtener del caché
+        cached_result = cache_backend.get(cache_key)
+        if cached_result is not None:
+            logger.info(f"✅ [kpis_pagos] Cache HIT para mes {mes_consulta}/{año_consulta}")
+            return cached_result
+
+        # Cache miss - calcular KPIs
+        logger.info(f"❌ [kpis_pagos] Cache MISS para mes {mes_consulta}/{año_consulta}, calculando...")
+        result = _calcular_kpis_pagos_interno(db, mes_consulta, año_consulta)
+
+        # Guardar en caché por 5 minutos (300 segundos)
+        cache_backend.set(cache_key, result, ttl=300)
+        logger.info(f"💾 [kpis_pagos] Resultados guardados en caché para mes {mes_consulta}/{año_consulta}")
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ [kpis_pagos] Error obteniendo KPIs: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno al obtener KPIs: {str(e)}")
 
         # Validar mes
         if mes_consulta < 1 or mes_consulta > 12:
