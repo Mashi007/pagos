@@ -1148,8 +1148,7 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
 
     if len(cuotas) == 0:
         logger.warning(
-            f"⚠️ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} "
-            f"no tiene cuotas pendientes. No se aplicará el pago."
+            f"⚠️ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} " f"no tiene cuotas pendientes. No se aplicará el pago."
         )
         return 0
 
@@ -1160,8 +1159,7 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
 
     if saldo_restante > Decimal("0.00"):
         logger.info(
-            f"📊 [aplicar_pago_a_cuotas] Saldo restante: ${saldo_restante}. "
-            f"Aplicando a siguiente cuota pendiente..."
+            f"📊 [aplicar_pago_a_cuotas] Saldo restante: ${saldo_restante}. " f"Aplicando a siguiente cuota pendiente..."
         )
         cuotas_completadas += _aplicar_exceso_a_siguiente_cuota(
             db, pago.prestamo_id, saldo_restante, pago.fecha_pago, fecha_hoy
@@ -1170,8 +1168,7 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
     try:
         db.commit()
         logger.info(
-            f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id} aplicado exitosamente. "
-            f"Cuotas completadas: {cuotas_completadas}"
+            f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id} aplicado exitosamente. " f"Cuotas completadas: {cuotas_completadas}"
         )
     except Exception as e:
         logger.error(f"❌ [aplicar_pago_a_cuotas] Error al guardar cambios en BD: {str(e)}", exc_info=True)
@@ -1590,9 +1587,7 @@ def listar_pagos_staging(
                             fecha_pago_dt = datetime.strptime(p.fecha_pago[:19], "%Y-%m-%d %H:%M:%S")
                         except (ValueError, IndexError):
                             try:
-                                fecha_pago_dt = datetime.combine(
-                                    date.fromisoformat(p.fecha_pago[:10]), time.min
-                                )
+                                fecha_pago_dt = datetime.combine(date.fromisoformat(p.fecha_pago[:10]), time.min)
                             except (ValueError, IndexError):
                                 fecha_pago_dt = None
                 elif isinstance(p.fecha_pago, date):
@@ -1951,12 +1946,7 @@ def verificar_conexion_pagos_staging(
         logger.info("🔍 [verificar_pagos_staging] Calculando estadísticas...")
         try:
             total = db.query(func.count(PagoStaging.id)).scalar() or 0
-            con_cedula = (
-                db.query(func.count(PagoStaging.id))
-                .filter(PagoStaging.cedula_cliente.isnot(None))
-                .scalar()
-                or 0
-            )
+            con_cedula = db.query(func.count(PagoStaging.id)).filter(PagoStaging.cedula_cliente.isnot(None)).scalar() or 0
             con_fecha = db.query(func.count(PagoStaging.id)).filter(PagoStaging.fecha_pago.isnot(None)).scalar() or 0
             con_monto = (
                 db.query(func.count(PagoStaging.id))
