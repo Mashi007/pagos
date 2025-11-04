@@ -31,6 +31,17 @@ export default defineConfig({
           utils: ['clsx', 'tailwind-merge', 'date-fns'],
         },
       },
+      onwarn(warning, warn) {
+        // Suprimir warnings de CSS relacionados con propiedades webkit
+        if (warning.message && (
+          warning.message.includes('webkit-text-size-adjust') ||
+          warning.message.includes('mal selector') ||
+          warning.message.includes('bad selector')
+        )) {
+          return;
+        }
+        warn(warning);
+      },
     },
     chunkSizeWarningLimit: 1000,
     target: 'esnext',
@@ -40,6 +51,8 @@ export default defineConfig({
     // Configuración adicional para producción
     reportCompressedSize: true,
     cssCodeSplit: true,
+    // Suprimir warnings de CSS durante el build
+    cssMinify: 'esbuild',
   },
   base: '/',
   preview: {

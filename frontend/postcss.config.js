@@ -1,6 +1,13 @@
 export default {
   plugins: {
     tailwindcss: {},
-    autoprefixer: {},
+    autoprefixer: {
+      // Configuración para evitar propiedades problemáticas
+      overrideBrowserslist: [
+        'defaults',
+        'not IE 11',
+        'not op_mini all'
+      ],
+    },
   },
 }
