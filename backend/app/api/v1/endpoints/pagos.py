@@ -198,6 +198,12 @@ def _serializar_pago(pago, _hoy: date, cuotas_atrasadas_cache: Optional[dict[str
         cedula_cliente = getattr(pago, "cedula_cliente", "")
         cuotas_atrasadas = _obtener_cuotas_atrasadas(cedula_cliente, cuotas_atrasadas_cache, pago.id)
 
+        # Obtener valores de conciliación del pago (si existen)
+        conciliado = getattr(pago, "conciliado", False)
+        if conciliado is None:
+            conciliado = False
+        fecha_conciliacion = getattr(pago, "fecha_conciliacion", None)
+        
         pago_dict = {
             "id": pago.id,
             "cedula_cliente": cedula_cliente,
@@ -209,8 +215,8 @@ def _serializar_pago(pago, _hoy: date, cuotas_atrasadas_cache: Optional[dict[str
             "notas": None,
             "fecha_registro": None,
             "estado": "REGISTRADO",
-            "conciliado": False,
-            "fecha_conciliacion": None,
+            "conciliado": conciliado,  # ✅ Usar valor real de la BD
+            "fecha_conciliacion": fecha_conciliacion,  # ✅ Usar valor real de la BD
             "documento_nombre": None,
             "documento_tipo": None,
             "documento_ruta": None,
@@ -526,7 +532,8 @@ def _obtener_pagos_paginados(db: Session, page: int, per_page: int) -> list:
     pagos_raw = db.execute(
         text(
             """
-            SELECT id_stg, cedula_cliente, fecha_pago, monto_pagado, numero_documento
+            SELECT id_stg, cedula_cliente, fecha_pago, monto_pagado, numero_documento, 
+                   COALESCE(conciliado, FALSE) as conciliado, fecha_conciliacion
             FROM pagos_staging
                 WHERE cedula_cliente IS NOT NULL
                   AND cedula_cliente != ''
@@ -558,6 +565,8 @@ def _obtener_pagos_paginados(db: Session, page: int, per_page: int) -> list:
         pago.fecha_pago = row[2]
         pago.monto_pagado = row[3]
         pago.numero_documento = row[4]
+        pago.conciliado = row[5] if len(row) > 5 else False
+        pago.fecha_conciliacion = row[6] if len(row) > 6 else None
         pagos.append(pago)
     return pagos
 

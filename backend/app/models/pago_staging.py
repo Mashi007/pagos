@@ -26,16 +26,21 @@ class PagoStaging(Base):
     # ⚠️ NOTA: No hay columna 'cedula' en pagos_staging, solo 'cedula_cliente'
 
     # DATOS DEL PAGO
-    # ⚠️ IMPORTANTE: pagos_staging solo tiene estas columnas básicas en la BD real:
+    # ⚠️ IMPORTANTE: pagos_staging tiene estas columnas en la BD real:
     # - id_stg (ya mapeado arriba)
     # - cedula_cliente (ya mapeado arriba)
     # - fecha_pago (TEXT en BD: 'YYYY-MM-DD HH24:MI:SS')
     # - monto_pagado (TEXT en BD)
     # - numero_documento
-    # Las demás columnas NO EXISTEN en la BD real y causan errores
+    # - conciliado (BOOLEAN, agregado después de migración)
+    # - fecha_conciliacion (TEXT, agregado después de migración)
     fecha_pago = Column(String(50), nullable=True)  # Fecha de pago (TEXT en BD)
     monto_pagado = Column(String(50), nullable=True)  # Monto pagado (TEXT en BD)
     numero_documento = Column(String(DOCUMENTO_LENGTH), nullable=True, index=True)
+    
+    # ESTADO DE CONCILIACIÓN (agregado después de migración)
+    conciliado = Column(Boolean, nullable=True, default=False)  # Estado de conciliación
+    fecha_conciliacion = Column(String(50), nullable=True)  # Fecha de conciliación (TEXT en BD)
 
     def __repr__(self):
         return f"<PagoStaging(id={self.id}, cedula={self.cedula_cliente}, monto={self.monto_pagado})>"
