@@ -393,9 +393,7 @@ def obtener_resumen_cobranzas(
 
         # Total de cuotas vencidas SIN filtro de estado (para diagnóstico)
         total_cuotas_sin_filtro = (
-            db.query(func.count(Cuota.id))
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
-            .scalar() or 0
+            db.query(func.count(Cuota.id)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar() or 0
         )
         logger.info(f"🔍 [resumen_cobranzas] Total cuotas vencidas SIN filtro estado: {total_cuotas_sin_filtro}")
 
@@ -1161,7 +1159,8 @@ def informe_resumen_ejecutivo(
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         monto_total_adeudado = (
@@ -1172,7 +1171,8 @@ def informe_resumen_ejecutivo(
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
             )
-            .scalar() or 0.0
+            .scalar()
+            or 0.0
         )
 
         clientes_atrasados = (
@@ -1183,7 +1183,8 @@ def informe_resumen_ejecutivo(
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
             )
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         # Top 5 analistas con más mora - Excluir admin
