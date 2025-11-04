@@ -88,7 +88,7 @@ export function TreemapMorosidadModal({ isOpen, onClose }: TreemapMorosidadModal
   const maxValue = Math.max(...datosTreemap.map((d) => d.value), 0)
 
   // Tooltip personalizado
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload?: { name?: string; value?: number; cantidad_clientes?: number; cantidad_cuotas_atrasadas?: number; promedio_morosidad_por_cliente?: number } }> }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload
       return (
@@ -115,7 +115,7 @@ export function TreemapMorosidadModal({ isOpen, onClose }: TreemapMorosidadModal
   }
 
   // Componente personalizado para cada celda del Treemap
-  const CustomCell = ({ x, y, width, height, payload }: any) => {
+  const CustomCell = ({ x, y, width, height, payload }: { x?: number; y?: number; width?: number; height?: number; payload?: { name?: string; value?: number } }) => {
     const color = getColor(payload.value, maxValue)
     return (
       <g>

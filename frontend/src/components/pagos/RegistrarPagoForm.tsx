@@ -91,9 +91,13 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
         console.log('✅ Pago registrado exitosamente:', result)
       }
       onSuccess()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`❌ Error ${isEditing ? 'actualizando' : 'registrando'} pago:`, error)
-      setErrors({ general: error.response?.data?.detail || error.message || `Error al ${isEditing ? 'actualizar' : 'registrar'} el pago` })
+      let errorMessage = getErrorMessage(error)
+      if (isAxiosError(error)) {
+        errorMessage = error.response?.data?.detail || errorMessage
+      }
+      setErrors({ general: errorMessage || `Error al ${isEditing ? 'actualizar' : 'registrar'} el pago` })
     } finally {
       setIsSubmitting(false)
     }

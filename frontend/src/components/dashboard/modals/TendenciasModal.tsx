@@ -118,13 +118,13 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
   const datosGrafico = tendenciasData?.datos || []
 
   // Tooltip personalizado
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number; dataKey?: string; color?: string; payload?: Record<string, unknown> }>; label?: string | number }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload
       return (
         <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
           <p className="font-semibold mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
+          {payload.map((entry, index: number) => (
             <p key={index} className="text-sm" style={{ color: entry.color }}>
               {entry.name}:{' '}
               {entry.dataKey.includes('cuotas_en_dias')

@@ -66,7 +66,7 @@ export function Cobranzas() {
   }
 
   // Función para exportar a Excel
-  const exportarAExcel = async (data: any[], nombre: string, columnas?: string[]) => {
+  const exportarAExcel = async (data: Record<string, unknown>[], nombre: string, columnas?: string[]) => {
     if (!data || data.length === 0) {
       alert('No hay datos para exportar')
       return
@@ -74,16 +74,15 @@ export function Cobranzas() {
 
     try {
       // Importar dinámicamente xlsx
-      const XLSXModule = await import('xlsx')
-      // @ts-ignore - xlsx es un CommonJS module, necesitamos usar 'as any'
-      const XLSX: any = XLSXModule
+      const { importXLSX } = await import('@/types/xlsx')
+      const XLSX = await importXLSX()
       
       // Obtener columnas del primer objeto si no se especifican
       const keys = columnas || Object.keys(data[0])
       
       // Preparar datos para Excel
       const datosExcel = data.map(item => {
-        const row: any = {}
+        const row: Record<string, unknown> = {}
         keys.forEach(key => {
           row[key] = item[key] ?? ''
         })
@@ -139,8 +138,14 @@ export function Cobranzas() {
       } else {
         toast.info('No hay notificaciones pendientes para procesar')
       }
-    } catch (error: any) {
-      toast.error(error?.response?.data?.detail || 'Error al procesar notificaciones')
+    } catch (error: unknown) {
+      const { getErrorMessage, isAxiosError } = await import('@/types/errors')
+      let errorMessage = getErrorMessage(error)
+      if (isAxiosError(error)) {
+        errorMessage = error.response?.data?.detail || errorMessage
+      }
+      console.error('Error exportando a Excel:', errorMessage)
+      toast.error(errorMessage || 'Error al procesar notificaciones')
     } finally {
       setProcesandoNotificaciones(false)
     }

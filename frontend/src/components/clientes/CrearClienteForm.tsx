@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { logger } from '@/utils/logger'
+import { getErrorMessage, isAxiosError } from '@/types/errors'
 import {
   User,
   CreditCard,
@@ -63,7 +64,7 @@ interface ValidationResult {
 }
 
 interface CrearClienteFormProps {
-  cliente?: any // Cliente existente para edición
+  cliente?: { id?: number; cedula?: string; nombre?: string; apellido?: string; [key: string]: unknown } // Cliente existente para edición
   onClose: () => void
   onSuccess: () => void
   onClienteCreated?: () => void
@@ -906,38 +907,44 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       onSuccess()
       onClienteCreated?.()
       onClose()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error)
+      const status = isAxiosError(error) ? error.response?.status : undefined
+      const detail = isAxiosError(error) ? error.response?.data?.detail : undefined
+      const message = isAxiosError(error) ? error.response?.data?.message : undefined
       logger.error('Error creando cliente', {
         action: 'create_client_error',
         component: 'CrearClienteForm',
-        error: error instanceof Error ? error.message : String(error),
-        status: error?.response?.status,
-        detail: error?.response?.data?.detail,
-        message: error?.response?.data?.message
+        error: errorMessage,
+        status,
+        detail,
+        message
       })
       
       // Mostrar mensaje de error al usuario
-      let errorMessage = 'Error al crear el cliente. Por favor, intente nuevamente.'
+      let errorMessageUser = 'Error al crear el cliente. Por favor, intente nuevamente.'
       
-      if (error.response?.status === 400) {
-        // Error de cliente duplicado (misma cédula y mismo nombre)
-        errorMessage = error.response?.data?.detail || 'No se puede crear un cliente con la misma cédula y el mismo nombre. Ya existe un cliente con estos datos.'
-      } else if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message
+      if (isAxiosError(error)) {
+        if (error.response?.status === 400) {
+          // Error de cliente duplicado (misma cédula y mismo nombre)
+          errorMessageUser = error.response?.data?.detail || 'No se puede crear un cliente con la misma cédula y el mismo nombre. Ya existe un cliente con estos datos.'
+        } else if (error.response?.data?.detail) {
+          errorMessageUser = error.response.data.detail
+        } else if (error.response?.data?.message) {
+          errorMessageUser = error.response.data.message
+        }
       }
 
       // Intentar extraer ID existente del mensaje
       let existingId: number | null = null
-      const detailText: string = error.response?.data?.detail || ''
+      const detailText: string = isAxiosError(error) ? error.response?.data?.detail || '' : ''
       const match = detailText.match(/ID:\s*(\d+)/i)
       if (match && match[1]) {
         existingId = Number(match[1])
       }
 
       // Notificar y ofrecer abrir en edición
-      if (error.response?.status === 400) {
+      if (isAxiosError(error) && error.response?.status === 400) {
         // Mensaje amigable unificado para regla de duplicados
         const friendly = existingId
           ? `No puedes crear un cliente con el mismo nombre o número de cédula.\n\nYa existe un registro con ID: ${existingId}.\n\n¿Deseas abrir el cliente existente para editarlo?`

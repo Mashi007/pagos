@@ -1,5 +1,6 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEvent, AxiosResponse } from 'axios'
 import toast from 'react-hot-toast'
+import { getErrorMessage, isAxiosError } from '@/types/errors'
 import { env } from '@/config/env'
 import { 
   safeGetItem, 
@@ -149,7 +150,12 @@ class ApiClient {
     )
   }
 
-  private handleError(error: any) {
+  private handleError(error: unknown) {
+    if (!isAxiosError(error)) {
+      toast.error(getErrorMessage(error))
+      return
+    }
+
     if (error.response) {
       // Error del servidor
       const { status, data } = error.response
@@ -184,8 +190,8 @@ class ApiClient {
         case 422:
           // Errores de validación
           if (data.detail && Array.isArray(data.detail)) {
-            data.detail.forEach((err: any) => {
-              toast.error(`${err.loc?.join(' ')}: ${err.msg}`)
+            data.detail.forEach((err: { loc?: string[]; msg?: string }) => {
+              toast.error(`${err.loc?.join(' ') || 'Campo'}: ${err.msg || 'Error de validación'}`)
             })
           } else {
             toast.error(data.message || 'Error de validación')
@@ -230,17 +236,17 @@ class ApiClient {
     return response.data
   }
 
-  async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     const response: AxiosResponse<T> = await this.client.post(url, data, config)
     return response.data
   }
 
-  async put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     const response: AxiosResponse<T> = await this.client.put(url, data, config)
     return response.data
   }
 
-  async patch<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     const response: AxiosResponse<T> = await this.client.patch(url, data, config)
     return response.data
   }
@@ -254,7 +260,7 @@ class ApiClient {
   async uploadFile<T>(
     url: string,
     file: File,
-    onUploadProgress?: (progressEvent: any) => void
+    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
   ): Promise<T> {
     const formData = new FormData()
     formData.append('file', file)
@@ -312,7 +318,7 @@ export const apiClient = new ApiClient()
 // FUNCIÓN GLOBAL DE EMERGENCIA: Limpiar storage desde consola del navegador
 // Uso: window.clearAuthStorage() en la consola del navegador
 if (typeof window !== 'undefined') {
-  (window as any).clearAuthStorage = () => {
+  (window as Window & { clearAuthStorage?: () => void }).clearAuthStorage = () => {
     apiClient.emergencyClearStorage()
     window.location.reload()
   }

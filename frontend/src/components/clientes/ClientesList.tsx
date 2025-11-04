@@ -55,13 +55,13 @@ export function ClientesList() {
   const debouncedSearch = useDebounce(searchTerm, 300)
 
   // Funciones para manejar acciones
-  const handleVerCliente = (cliente: any) => {
+  const handleVerCliente = (cliente: { id: number; cedula?: string; nombre?: string; [key: string]: unknown }) => {
     setClienteSeleccionado(cliente)
     // Aquí podrías abrir un modal o navegar a una página de detalles
     console.log('Ver cliente:', cliente)
   }
 
-  const handleEditarCliente = async (cliente: any) => {
+  const handleEditarCliente = async (cliente: { id: number; [key: string]: unknown }) => {
     try {
       // ✅ Obtener cliente completo desde la API para asegurar todos los campos
       console.log('📝 Obteniendo datos completos del cliente ID:', cliente.id)
@@ -78,7 +78,7 @@ export function ClientesList() {
     }
   }
 
-  const handleEliminarCliente = (cliente: any) => {
+  const handleEliminarCliente = (cliente: { id: number; nombre?: string; cedula?: string; [key: string]: unknown }) => {
     setClienteSeleccionado(cliente)
     setShowEliminarCliente(true)
   }
@@ -171,7 +171,7 @@ export function ClientesList() {
     setCurrentPage(1)
   }
 
-  const handleFilterChange = (key: keyof ClienteFilters, value: any) => {
+  const handleFilterChange = (key: keyof ClienteFilters, value: string | number | boolean | null | undefined) => {
     setFilters(prev => ({ ...prev, [key]: value }))
     setCurrentPage(1)
   }
@@ -433,7 +433,7 @@ export function ClientesList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {clientes.map((cliente: any) => (
+                {clientes.map((cliente) => (
                   <TableRow key={cliente.id}>
                     <TableCell>
                       <div>

@@ -78,20 +78,20 @@ export function LoginForm() {
       
       await login(loginData)
       navigate(from, { replace: true })
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Manejar diferentes tipos de errores
-      if (error.code === 'NETWORK_ERROR' || !error.response) {
+      if (!isAxiosError(error) || !error.response) {
         setError('root', { 
           message: 'Error de conexión. Verifica que el servidor esté funcionando.' 
         })
         return
       }
       
-      if (error.response?.status === 422) {
+      if (isAxiosError(error) && error.response?.status === 422) {
         // Errores de validación del servidor
         const details = error.response.data.detail
         if (Array.isArray(details)) {
-          details.forEach((err: any) => {
+          details.forEach((err: { loc?: string[]; msg?: string }) => {
             if (err.loc?.includes('email')) {
               setError('email', { message: err.msg })
             } else if (err.loc?.includes('password')) {

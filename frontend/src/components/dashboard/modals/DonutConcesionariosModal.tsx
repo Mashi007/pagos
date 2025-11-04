@@ -108,7 +108,7 @@ export function DonutConcesionariosModal({ isOpen, onClose }: DonutConcesionario
   ]
 
   // Tooltip personalizado
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name?: string; value?: number; payload?: { porcentaje?: number; cantidad_prestamos?: number } }> }) => {
     if (active && payload && payload.length) {
       const data = payload[0]
       return (
@@ -130,7 +130,7 @@ export function DonutConcesionariosModal({ isOpen, onClose }: DonutConcesionario
   }
 
   // Label personalizado
-  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: { cx?: number; cy?: number; midAngle?: number; innerRadius?: number; outerRadius?: number; percent?: number }) => {
     if (percent < 0.05) return null // No mostrar etiquetas para segmentos muy pequeños
     
     const RADIAN = Math.PI / 180

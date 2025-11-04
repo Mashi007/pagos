@@ -63,9 +63,10 @@ export function useSidebarCounts() {
           cuotasEnMora,
           notificacionesNoLeidas,
         })
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Ignorar errores de cancelación
-        if (error?.name === 'AbortError' || signal.aborted) return
+        const err = error as { name?: string }
+        if (err?.name === 'AbortError' || signal.aborted) return
         // Silenciar errores para no interrumpir la UI
         console.error('Error obteniendo contadores del sidebar:', error)
       } finally {
