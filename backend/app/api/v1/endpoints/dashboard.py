@@ -777,7 +777,7 @@ def dashboard_administrador(
         clientes_activos = base_prestamo_query.with_entities(func.count(func.distinct(Prestamo.cedula))).scalar() or 0
 
         # 7. CLIENTES EN MORA - Clientes con cuotas vencidas
-        # ✅ Usar select_from para evitar ambigüedad en JOIN
+        # ✅ Usar select_from con Cuota como base y JOIN explícito
         clientes_mora_query = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
             .select_from(Cuota)
@@ -790,14 +790,16 @@ def dashboard_administrador(
                 )
             )
         )
-        clientes_mora_query = FiltrosDashboard.aplicar_filtros_cuota(
-            clientes_mora_query,
-            analista,
-            concesionario,
-            modelo,
-            fecha_inicio,
-            fecha_fin,
-        )
+        # Aplicar filtros solo si se proporcionan (evitar errores si no hay filtros)
+        if analista or concesionario or modelo or fecha_inicio or fecha_fin:
+            clientes_mora_query = FiltrosDashboard.aplicar_filtros_cuota(
+                clientes_mora_query,
+                analista,
+                concesionario,
+                modelo,
+                fecha_inicio,
+                fecha_fin,
+            )
         clientes_en_mora = clientes_mora_query.scalar() or 0
 
         # 8. PRÉSTAMOS ACTIVOS (calculado pero no usado actualmente en respuesta)
@@ -1021,6 +1023,7 @@ def dashboard_administrador(
             # ✅ Cuotas vencidas en ese mes con filtros
             cuotas_vencidas_mes_query = (
                 db.query(func.count(Cuota.id))
+                .select_from(Cuota)
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .filter(
                     Cuota.fecha_vencimiento >= mes_inicio,
@@ -1041,6 +1044,7 @@ def dashboard_administrador(
             # ✅ Cuotas pagadas del mes (para calcular morosidad correctamente)
             cuotas_pagadas_mes_query = (
                 db.query(func.count(Cuota.id))
+                .select_from(Cuota)
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .filter(
                     Cuota.estado == "PAGADO",
@@ -1199,8 +1203,10 @@ def dashboard_administrador(
             "fecha_consulta": hoy.isoformat(),
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error en dashboard admin: {e}")
+        logger.error(f"Error en dashboard admin: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
