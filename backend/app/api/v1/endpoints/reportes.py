@@ -270,9 +270,10 @@ def reporte_pagos(
         # Total de pagos: usar monto_pagado con cast a numeric (PagoStaging.monto_pagado es TEXT)
         fecha_inicio_dt = datetime.combine(fecha_inicio, datetime.min.time())
         fecha_fin_dt = datetime.combine(fecha_fin, datetime.max.time())
-        
+
         total_pagos_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT COALESCE(SUM(monto_pagado::numeric), 0)
                 FROM pagos_staging
                 WHERE fecha_pago IS NOT NULL
@@ -283,7 +284,8 @@ def reporte_pagos(
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
                   AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-            """).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+            """
+            ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
         )
         total_pagos = Decimal(str(total_pagos_query.scalar() or 0))
 
@@ -339,7 +341,8 @@ def reporte_pagos(
 
         # Pagos por día: usar monto_pagado con cast a numeric
         pagos_por_dia_raw = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     DATE(fecha_pago::timestamp) AS fecha,
                     COUNT(*) AS cantidad,
@@ -355,9 +358,10 @@ def reporte_pagos(
                   AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
                 GROUP BY DATE(fecha_pago::timestamp)
                 ORDER BY fecha
-            """).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+            """
+            ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
         ).fetchall()
-        
+
         pagos_por_dia = [
             {"fecha": row[0].isoformat() if row[0] else None, "cantidad": row[1], "monto": float(row[2])}
             for row in pagos_por_dia_raw
@@ -816,9 +820,10 @@ def resumen_dashboard(
         fecha_inicio_mes = hoy.replace(day=1)
         fecha_inicio_mes_dt = datetime.combine(fecha_inicio_mes, datetime.min.time())
         fecha_fin_mes_dt = datetime.combine(hoy, datetime.max.time())
-        
+
         pagos_mes_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT COALESCE(SUM(monto_pagado::numeric), 0)
                 FROM pagos_staging
                 WHERE fecha_pago IS NOT NULL
@@ -829,7 +834,8 @@ def resumen_dashboard(
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado != ''
                   AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-            """).bindparams(fecha_inicio=fecha_inicio_mes_dt, fecha_fin=fecha_fin_mes_dt)
+            """
+            ).bindparams(fecha_inicio=fecha_inicio_mes_dt, fecha_fin=fecha_fin_mes_dt)
         )
         pagos_mes = float(str(pagos_mes_query.scalar() or Decimal("0")))
 

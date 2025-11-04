@@ -56,7 +56,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout),  # Asegurar que vaya a stdout
     ],
     force=True,  # Forzar reconfiguración
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
 logger = logging.getLogger(__name__)
@@ -100,26 +100,26 @@ class PerformanceLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Obtener request ID si existe
         request_id = getattr(request.state, "request_id", None)
-        
+
         # Obtener IP del cliente
         client_ip = request.client.host if request.client else "unknown"
-        
+
         # Obtener user agent
         user_agent = request.headers.get("user-agent", "unknown")
-        
+
         # Iniciar timer
         start_time = time.time()
-        
+
         # Procesar request
         response = await call_next(request)
-        
+
         # Calcular tiempo de respuesta en milisegundos
         response_time_ms = int((time.time() - start_time) * 1000)
-        
+
         # Obtener tamaño de respuesta del header Content-Length si está disponible
         content_length = response.headers.get("content-length")
         response_bytes = int(content_length) if content_length else 0
-        
+
         # Determinar nivel de log según tiempo de respuesta
         if response_time_ms > 5000:  # > 5 segundos
             log_level = logging.ERROR
@@ -133,19 +133,19 @@ class PerformanceLoggingMiddleware(BaseHTTPMiddleware):
         else:
             log_level = logging.DEBUG
             emoji = "✅"
-        
+
         # Log estructurado compatible con formato de Render
         logger.log(
             log_level,
-            f'{emoji} {request.method} {request.url.path} - '
-            f'responseTimeMS={response_time_ms} '
-            f'responseBytes={response_bytes} '
-            f'status={response.status_code} '
+            f"{emoji} {request.method} {request.url.path} - "
+            f"responseTimeMS={response_time_ms} "
+            f"responseBytes={response_bytes} "
+            f"status={response.status_code} "
             f'requestID="{request_id}" '
             f'clientIP="{client_ip}" '
-            f'userAgent="{user_agent}"'
+            f'userAgent="{user_agent}"',
         )
-        
+
         # Registrar en el monitor de performance
         try:
             performance_monitor.record_request(
@@ -157,10 +157,10 @@ class PerformanceLoggingMiddleware(BaseHTTPMiddleware):
             )
         except Exception as e:
             logger.warning(f"Error registrando métrica en monitor: {e}")
-        
+
         # Agregar headers de performance
         response.headers["X-Response-Time-Ms"] = str(response_time_ms)
-        
+
         return response
 
 

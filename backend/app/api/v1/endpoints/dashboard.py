@@ -709,13 +709,16 @@ def dashboard_administrador(
     ✅ OPTIMIZADO: Reducción de queries y mejor uso de índices
     """
     import time
+
     start_total = time.time()
     try:
         if not current_user.is_admin:
             raise HTTPException(status_code=403, detail="Acceso denegado. Solo administradores.")
 
         hoy = date.today()
-        logger.info(f"📊 [dashboard/admin] Iniciando cálculo - filtros: analista={analista}, concesionario={concesionario}, modelo={modelo}")
+        logger.info(
+            f"📊 [dashboard/admin] Iniciando cálculo - filtros: analista={analista}, concesionario={concesionario}, modelo={modelo}"
+        )
 
         # Aplicar filtros base a queries de préstamos (usando clase centralizada)
         # Prestamo NO tiene campo 'activo', usar estado == "APROBADO"
@@ -739,9 +742,9 @@ def dashboard_administrador(
             .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
-            and_(
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                and_(
+                    Cuota.fecha_vencimiento < hoy,
+                    Cuota.estado != "PAGADO",
                     Prestamo.estado == "APROBADO",
                 )
             )
@@ -996,8 +999,18 @@ def dashboard_administrador(
         start_evolucion = time.time()
         evolucion_mensual = []
         nombres_meses = [
-            "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-            "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+            "Ene",
+            "Feb",
+            "Mar",
+            "Abr",
+            "May",
+            "Jun",
+            "Jul",
+            "Ago",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dic",
         ]
         try:
             # Calcular rango de meses (últimos 7 meses)
@@ -1009,19 +1022,22 @@ def dashboard_administrador(
                     mes_fin = date(mes_fecha.year + 1, 1, 1) - timedelta(days=1)
                 else:
                     mes_fin = date(mes_fecha.year, mes_fecha.month + 1, 1) - timedelta(days=1)
-                meses_rango.append({
-                    "fecha": mes_fecha,
-                    "inicio": mes_inicio,
-                    "fin": mes_fin,
-                    "inicio_dt": datetime.combine(mes_inicio, datetime.min.time()),
-                    "fin_dt": datetime.combine(mes_fin, datetime.max.time()),
-                })
+                meses_rango.append(
+                    {
+                        "fecha": mes_fecha,
+                        "inicio": mes_inicio,
+                        "fin": mes_fin,
+                        "inicio_dt": datetime.combine(mes_inicio, datetime.min.time()),
+                        "fin_dt": datetime.combine(mes_fin, datetime.max.time()),
+                    }
+                )
 
             # ✅ OPTIMIZACIÓN: Una sola query para obtener todos los pagos del rango
             fecha_primera = meses_rango[0]["inicio_dt"]
             fecha_ultima = meses_rango[-1]["fin_dt"]
             pagos_evolucion_query = db.execute(
-                text("""
+                text(
+                    """
                     SELECT 
                         EXTRACT(YEAR FROM fecha_pago::timestamp)::integer as año,
                         EXTRACT(MONTH FROM fecha_pago::timestamp)::integer as mes,
@@ -1037,13 +1053,15 @@ def dashboard_administrador(
                       AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
                     GROUP BY EXTRACT(YEAR FROM fecha_pago::timestamp), EXTRACT(MONTH FROM fecha_pago::timestamp)
                     ORDER BY año, mes
-                """).bindparams(fecha_inicio=fecha_primera, fecha_fin=fecha_ultima)
+                """
+                ).bindparams(fecha_inicio=fecha_primera, fecha_fin=fecha_ultima)
             )
             pagos_por_mes = {(int(row[0]), int(row[1])): Decimal(str(row[2] or 0)) for row in pagos_evolucion_query}
 
             # ✅ OPTIMIZACIÓN: Una sola query para obtener cuotas vencidas por mes
             cuotas_vencidas_query = db.execute(
-                text("""
+                text(
+                    """
                     SELECT 
                         EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
                         EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
@@ -1056,13 +1074,15 @@ def dashboard_administrador(
                       AND c.fecha_vencimiento <= :fecha_fin
                     GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
                     ORDER BY año, mes
-                """).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
+                """
+                ).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
             )
             cuotas_vencidas_por_mes = {(int(row[0]), int(row[1])): int(row[2] or 0) for row in cuotas_vencidas_query}
 
             # ✅ OPTIMIZACIÓN: Una sola query para obtener cuotas pagadas por mes
             cuotas_pagadas_query = db.execute(
-                text("""
+                text(
+                    """
                     SELECT 
                         EXTRACT(YEAR FROM DATE(c.fecha_pago))::integer as año,
                         EXTRACT(MONTH FROM DATE(c.fecha_pago))::integer as mes,
@@ -1076,7 +1096,8 @@ def dashboard_administrador(
                       AND DATE(c.fecha_pago) <= :fecha_fin
                     GROUP BY EXTRACT(YEAR FROM DATE(c.fecha_pago)), EXTRACT(MONTH FROM DATE(c.fecha_pago))
                     ORDER BY año, mes
-                """).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
+                """
+                ).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
             )
             cuotas_pagadas_por_mes = {(int(row[0]), int(row[1])): int(row[2] or 0) for row in cuotas_pagadas_query}
 
@@ -1106,12 +1127,14 @@ def dashboard_administrador(
                 total_cuotas_mes = cuotas_vencidas_mes + cuotas_pagadas_mes
                 morosidad_mes = (cuotas_vencidas_mes / total_cuotas_mes * 100) if total_cuotas_mes > 0 else 0
 
-                evolucion_mensual.append({
-                    "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
-                    "cartera": float(cartera_mes),
-                    "cobrado": float(cobrado_mes),
-                    "morosidad": round(morosidad_mes, 1),
-                })
+                evolucion_mensual.append(
+                    {
+                        "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
+                        "cartera": float(cartera_mes),
+                        "cobrado": float(cobrado_mes),
+                        "morosidad": round(morosidad_mes, 1),
+                    }
+                )
 
             tiempo_evolucion = int((time.time() - start_evolucion) * 1000)
             logger.info(f"📊 [dashboard/admin] Evolución mensual calculada en {tiempo_evolucion}ms")
@@ -1260,7 +1283,7 @@ def dashboard_administrador(
             "evolucion_mensual": evolucion_mensual,
             "fecha_consulta": hoy.isoformat(),
         }
-        
+
         tiempo_total = int((time.time() - start_total) * 1000)
         logger.info(f"⏱️ [dashboard/admin] Endpoint completado en {tiempo_total}ms")
 
@@ -2430,6 +2453,7 @@ def obtener_evolucion_morosidad(
     ✅ OPTIMIZADO: Usa filtros separados en año y mes para aprovechar índices
     """
     import time
+
     start_time = time.time()
     hoy = date.today()
     nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
@@ -2445,27 +2469,22 @@ def obtener_evolucion_morosidad(
     try:
         # ✅ OPTIMIZACIÓN: Usar filtros separados en año y mes para aprovechar el índice idx_dashboard_morosidad_año_mes
         # En lugar de año * 100 + mes, usar filtros separados que permiten usar el índice compuesto
-        query = db.query(DashboardMorosidadMensual).filter(
-            or_(
-                and_(
-                    DashboardMorosidadMensual.año == año_inicio,
-                    DashboardMorosidadMensual.mes >= mes_inicio
-                ),
-                and_(
-                    DashboardMorosidadMensual.año > año_inicio,
-                    DashboardMorosidadMensual.año < hoy.year
-                ),
-                and_(
-                    DashboardMorosidadMensual.año == hoy.year,
-                    DashboardMorosidadMensual.mes <= hoy.month
+        query = (
+            db.query(DashboardMorosidadMensual)
+            .filter(
+                or_(
+                    and_(DashboardMorosidadMensual.año == año_inicio, DashboardMorosidadMensual.mes >= mes_inicio),
+                    and_(DashboardMorosidadMensual.año > año_inicio, DashboardMorosidadMensual.año < hoy.year),
+                    and_(DashboardMorosidadMensual.año == hoy.year, DashboardMorosidadMensual.mes <= hoy.month),
                 )
             )
-        ).order_by(DashboardMorosidadMensual.año, DashboardMorosidadMensual.mes)
+            .order_by(DashboardMorosidadMensual.año, DashboardMorosidadMensual.mes)
+        )
 
         resultados = query.all()
         query_time = int((time.time() - start_time) * 1000)
         logger.info(f"📊 [evolucion-morosidad] Query completada en {query_time}ms, {len(resultados)} registros")
-        
+
         morosidad_por_mes = {(r.año, r.mes): float(r.morosidad_total or Decimal("0")) for r in resultados}
 
         # Generar datos mensuales (incluyendo meses sin datos)
@@ -2491,7 +2510,7 @@ def obtener_evolucion_morosidad(
         process_time = int((time.time() - start_process) * 1000)
         total_time = int((time.time() - start_time) * 1000)
         logger.info(f"⏱️ [evolucion-morosidad] Tiempo total: {total_time}ms (query: {query_time}ms, process: {process_time}ms)")
-        
+
         return {"meses": meses_data}
 
     except Exception as e:
@@ -2524,10 +2543,12 @@ def obtener_evolucion_morosidad(
                 año_mes = current_date.year
                 num_mes = current_date.month
                 morosidad_mes = morosidad_por_mes.get((año_mes, num_mes), 0.0)
-                meses_data.append({
-                    "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
-                    "morosidad": morosidad_mes,
-                })
+                meses_data.append(
+                    {
+                        "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
+                        "morosidad": morosidad_mes,
+                    }
+                )
                 current_date = _obtener_fechas_mes_siguiente(num_mes, año_mes)
             return {"meses": meses_data}
         except Exception as fallback_error:

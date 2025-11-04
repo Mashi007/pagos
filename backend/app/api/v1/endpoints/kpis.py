@@ -381,7 +381,9 @@ def dashboard_kpis_principales(
     """
     fecha_corte_normalizada = _normalizar_fecha_corte(fecha_corte)
 
-    kpis_basicos = _calcular_kpis_basicos(db, fecha_corte_normalizada, analista, concesionario, modelo, fecha_inicio, fecha_fin)
+    kpis_basicos = _calcular_kpis_basicos(
+        db, fecha_corte_normalizada, analista, concesionario, modelo, fecha_inicio, fecha_fin
+    )
     kpis_amortizaciones = _calcular_kpis_amortizaciones(
         db, fecha_corte_normalizada, analista, concesionario, modelo, fecha_inicio, fecha_fin
     )

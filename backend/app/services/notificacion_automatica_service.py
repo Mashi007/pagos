@@ -46,10 +46,10 @@ class NotificacionAutomaticaService:
         """
         try:
             hoy = datetime.now(CARACAS_TZ).date()
-            
+
             # Calcular fechas relevantes para filtrar
             fechas_relevantes = [hoy + timedelta(days=d) for d in DIAS_NOTIFICACION]
-            
+
             # Query optimizada con JOINs para evitar N+1
             # Usar cliente_id primero (más confiable), luego cédula como fallback
             cuotas_con_relaciones = (
@@ -118,7 +118,7 @@ class NotificacionAutomaticaService:
         # Usar cache para evitar queries repetidas
         if tipo in self._plantillas_cache:
             return self._plantillas_cache[tipo]
-        
+
         try:
             plantilla = (
                 self.db.query(NotificacionPlantilla)
@@ -137,16 +137,12 @@ class NotificacionAutomaticaService:
             logger.error(f"Error obteniendo plantilla {tipo}: {e}")
             self._plantillas_cache[tipo] = None
             return None
-    
+
     def _cargar_todas_plantillas(self) -> Dict[str, NotificacionPlantilla]:
         """Cargar todas las plantillas activas en memoria para evitar queries repetidas"""
         try:
-            plantillas = (
-                self.db.query(NotificacionPlantilla)
-                .filter(NotificacionPlantilla.activa.is_(True))
-                .all()
-            )
-            
+            plantillas = self.db.query(NotificacionPlantilla).filter(NotificacionPlantilla.activa.is_(True)).all()
+
             cache = {p.tipo: p for p in plantillas}
             self._plantillas_cache.update(cache)
             logger.info(f"Cargadas {len(cache)} plantillas activas en cache")
@@ -263,7 +259,7 @@ class NotificacionAutomaticaService:
             if not prestamo:
                 logger.error(f"Préstamo {cuota.prestamo_id} no encontrado")
                 return False
-            
+
             # Usar método optimizado
             return self.enviar_notificacion_optimizada(cuota, prestamo, plantilla, cliente)
 
@@ -286,14 +282,17 @@ class NotificacionAutomaticaService:
         return mapeo_dias.get(dias)
 
     def _procesar_cuota_optimizada(
-        self, cuota: Cuota, prestamo: Prestamo, cliente: Cliente, 
+        self,
+        cuota: Cuota,
+        prestamo: Prestamo,
+        cliente: Cliente,
         plantillas: Dict[str, NotificacionPlantilla],
         notificaciones_existentes: Dict[Tuple[int, str], bool],
-        stats: Dict[str, int]
+        stats: Dict[str, int],
     ) -> bool:
         """
         Procesa una cuota individual con datos ya cargados (optimizado)
-        
+
         Args:
             cuota: Cuota ya cargada
             prestamo: Prestamo ya cargado
@@ -301,7 +300,7 @@ class NotificacionAutomaticaService:
             plantillas: Diccionario de plantillas en cache
             notificaciones_existentes: Set de (cliente_id, tipo) ya procesadas hoy
             stats: Estadísticas a actualizar
-            
+
         Returns:
             True si se procesó exitosamente
         """
@@ -348,7 +347,7 @@ class NotificacionAutomaticaService:
             if not prestamo:
                 logger.warning(f"Préstamo {cuota.prestamo_id} no encontrado para cuota {cuota.id}")
                 return False
-            
+
             # Obtener cliente por cédula o por cliente_id
             if prestamo.cliente_id:
                 cliente = self.db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
@@ -390,7 +389,7 @@ class NotificacionAutomaticaService:
     def procesar_notificaciones_automaticas(self) -> Dict[str, int]:
         """
         Procesar todas las notificaciones automáticas necesarias (OPTIMIZADO)
-        
+
         Optimizaciones aplicadas:
         - JOINs para cargar cuotas, préstamos y clientes en una query
         - Cache de plantillas para evitar queries repetidas
@@ -438,7 +437,7 @@ class NotificacionAutomaticaService:
                     tipo = self._determinar_tipo_plantilla(dias)
                     if tipo:
                         tipos_plantillas.add(tipo)
-            
+
             notificaciones_existentes_raw = (
                 self.db.query(Notificacion.cliente_id, Notificacion.tipo)
                 .filter(
@@ -448,22 +447,16 @@ class NotificacionAutomaticaService:
                 )
                 .all()
             )
-            
+
             # Crear diccionario de notificaciones existentes
-            notificaciones_existentes = {
-                (cliente_id, tipo): True 
-                for cliente_id, tipo in notificaciones_existentes_raw
-            }
+            notificaciones_existentes = {(cliente_id, tipo): True for cliente_id, tipo in notificaciones_existentes_raw}
             tiempo_check = int((time.time() - start_check) * 1000)
             logger.info(f"✅ Verificadas notificaciones existentes: {tiempo_check}ms")
 
             # Procesar cada cuota (ya tiene préstamo y cliente cargados)
             start_proceso = time.time()
             for cuota, prestamo, cliente in cuotas_con_relaciones:
-                if self._procesar_cuota_optimizada(
-                    cuota, prestamo, cliente, plantillas, 
-                    notificaciones_existentes, stats
-                ):
+                if self._procesar_cuota_optimizada(cuota, prestamo, cliente, plantillas, notificaciones_existentes, stats):
                     stats["procesadas"] += 1
             tiempo_proceso = int((time.time() - start_proceso) * 1000)
             logger.info(f"⚙️ Procesamiento de cuotas: {tiempo_proceso}ms")
@@ -475,7 +468,7 @@ class NotificacionAutomaticaService:
                 f"{stats['errores']} errores (cache: {tiempo_cache}ms, query: {tiempo_query}ms, "
                 f"check: {tiempo_check}ms, proceso: {tiempo_proceso}ms)"
             )
-            
+
             return stats
 
         except Exception as e:
