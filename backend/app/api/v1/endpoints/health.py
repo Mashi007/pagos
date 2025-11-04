@@ -13,6 +13,7 @@ from fastapi import APIRouter, Response, status
 from sqlalchemy import text
 
 from app.core.config import settings
+from app.core.performance_monitor import performance_monitor
 from app.db.session import engine
 
 # Constantes de configuración
@@ -249,3 +250,116 @@ async def liveness_check():
         status_code=status.HTTP_200_OK,
         media_type="application/json",
     )
+
+
+@router.get("/performance/summary")
+async def performance_summary():
+    """Obtener resumen general de performance de todos los endpoints"""
+    try:
+        summary = performance_monitor.get_summary()
+        return {
+            "status": "success",
+            "summary": summary,
+            "timestamp": time.time(),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo resumen de performance: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "timestamp": time.time(),
+        }
+
+
+@router.get("/performance/slow")
+async def performance_slow_endpoints(
+    threshold_ms: float = 1000,
+    limit: int = 20
+):
+    """
+    Obtener endpoints lentos ordenados por tiempo promedio
+    
+    Args:
+        threshold_ms: Umbral mínimo de tiempo en ms (default: 1000ms)
+        limit: Número máximo de resultados (default: 20)
+    """
+    try:
+        slow_endpoints = performance_monitor.get_slow_endpoints(
+            threshold_ms=threshold_ms,
+            limit=limit
+        )
+        
+        return {
+            "status": "success",
+            "threshold_ms": threshold_ms,
+            "count": len(slow_endpoints),
+            "endpoints": slow_endpoints,
+            "timestamp": time.time(),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo endpoints lentos: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "timestamp": time.time(),
+        }
+
+
+@router.get("/performance/endpoint/{method}/{path:path}")
+async def performance_endpoint_stats(method: str, path: str):
+    """
+    Obtener estadísticas detalladas de un endpoint específico
+    
+    Args:
+        method: Método HTTP (GET, POST, etc.)
+        path: Ruta del endpoint
+    """
+    try:
+        stats = performance_monitor.get_endpoint_stats(method=method.upper(), path=path)
+        
+        if not stats:
+            return Response(
+                content='{"status": "not_found", "message": "Endpoint no encontrado en métricas"}',
+                status_code=status.HTTP_404_NOT_FOUND,
+                media_type="application/json",
+            )
+        
+        return {
+            "status": "success",
+            "stats": stats,
+            "timestamp": time.time(),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo estadísticas de endpoint: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "timestamp": time.time(),
+        }
+
+
+@router.get("/performance/recent")
+async def performance_recent_requests(limit: int = 50):
+    """
+    Obtener peticiones recientes
+    
+    Args:
+        limit: Número máximo de peticiones a retornar (default: 50, max: 200)
+    """
+    try:
+        limit = min(limit, 200)  # Limitar máximo a 200
+        recent = performance_monitor.get_recent_requests(limit=limit)
+        
+        return {
+            "status": "success",
+            "count": len(recent),
+            "requests": recent,
+            "timestamp": time.time(),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo peticiones recientes: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "timestamp": time.time(),
+        }

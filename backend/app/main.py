@@ -42,6 +42,7 @@ from app.api.v1.endpoints import (
 )
 from app.core.config import settings
 from app.core.exceptions import global_exception_handler
+from app.core.performance_monitor import performance_monitor
 from app.db.init_db import init_db_shutdown, init_db_startup
 
 # Configurar logging básico pero efectivo
@@ -144,6 +145,18 @@ class PerformanceLoggingMiddleware(BaseHTTPMiddleware):
             f'clientIP="{client_ip}" '
             f'userAgent="{user_agent}"'
         )
+        
+        # Registrar en el monitor de performance
+        try:
+            performance_monitor.record_request(
+                method=request.method,
+                path=request.url.path,
+                response_time_ms=response_time_ms,
+                status_code=response.status_code,
+                response_bytes=response_bytes,
+            )
+        except Exception as e:
+            logger.warning(f"Error registrando métrica en monitor: {e}")
         
         # Agregar headers de performance
         response.headers["X-Response-Time-Ms"] = str(response_time_ms)
