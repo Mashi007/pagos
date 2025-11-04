@@ -176,7 +176,7 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                 </label>
                 {prestamos && prestamos.length > 0 ? (
                   <Select
-                    value={formData.prestamo_id?.toString() || ''}
+                    value={formData.prestamo_id?.toString() || undefined}
                     onValueChange={(value) => setFormData({ ...formData, prestamo_id: parseInt(value) })}
                   >
                     <SelectTrigger>
