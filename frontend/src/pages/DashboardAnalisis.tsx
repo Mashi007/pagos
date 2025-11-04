@@ -164,7 +164,6 @@ export function DashboardAnalisis() {
   
   // Calcular crecimiento anual comparando mes actual con mismo mes del año anterior
   // Usar evolucion_mensual si está disponible, o estimar desde variación mensual
-  const evolucionMensual = dashboardData?.evolucion_mensual || []
   let crecimientoAnual = 0
   
   if (evolucionMensual.length >= 12) {
@@ -341,11 +340,12 @@ export function DashboardAnalisis() {
                         fill="url(#colorCobrado)"
                         name="Total Cobrado"
                       />
-                      <Line
+                      <Area
                         type="monotone"
                         dataKey="total_a_cobrar"
                         stroke="#3b82f6"
-                        strokeWidth={2}
+                        fillOpacity={0.3}
+                        fill="#3b82f6"
                         name="Total a Cobrar"
                       />
                     </AreaChart>

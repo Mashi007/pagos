@@ -79,8 +79,14 @@ export function DashboardMenu() {
   const { user } = useSimpleAuth()
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
 
-  // Verificar que el componente se está renderizando
-  console.log('✅ DashboardMenu renderizado - diseño nuevo')
+  // Verificar que el componente se está renderizando - NUEVO DISEÑO v2.0
+  console.log('✅✅✅ DASHBOARD MENU - NUEVO DISEÑO v2.0 ACTIVO ✅✅✅')
+  console.log('🎨 Elementos del diseño:', {
+    badge: '✨ NUEVO DISEÑO v2.0',
+    titulo: 'DASHBOARD EJECUTIVO',
+    modulos: categories.length,
+    usuario: userName
+  })
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 p-6 relative overflow-hidden">
@@ -110,8 +116,8 @@ export function DashboardMenu() {
           {/* Línea superior decorativa con efecto neón */}
           <div className="absolute -top-3 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 via-purple-400 to-transparent opacity-60"></div>
           
-          {/* Badge de identificación del nuevo diseño */}
-          <div className="absolute top-0 right-0 bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg z-20">
+          {/* Badge de identificación del nuevo diseño - MÁS VISIBLE */}
+          <div className="absolute top-0 right-0 bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-black shadow-2xl z-50 border-2 border-emerald-400 animate-pulse">
             ✨ NUEVO DISEÑO v2.0
           </div>
           
