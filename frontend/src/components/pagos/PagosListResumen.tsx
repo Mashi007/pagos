@@ -99,13 +99,14 @@ export function PagosListResumen() {
               onChange={e => handleFilterChange('cedula', e.target.value)}
             />
             <Select 
-              value={filters.estado || undefined} 
+              value={filters.estado || ''} 
               onValueChange={value => handleFilterChange('estado', value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="">Todos</SelectItem>
                 <SelectItem value="PAGADO">Pagado</SelectItem>
                 <SelectItem value="PENDIENTE">Pendiente</SelectItem>
                 <SelectItem value="ATRASADO">Atrasado</SelectItem>
