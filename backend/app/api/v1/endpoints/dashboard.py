@@ -1528,10 +1528,14 @@ def obtener_kpis_principales(
         fecha_fin_mes_anterior = _obtener_fechas_mes_siguiente(mes_anterior, año_anterior)
         fecha_fin_mes_actual = _obtener_fechas_mes_siguiente(mes_actual, año_actual)
 
-        # 1. TOTAL PRESTAMOS
-        query_prestamos_actual = db.query(func.count(Prestamo.id)).filter(Prestamo.estado == "APROBADO")
+        # 1. TOTAL PRESTAMOS (Conteo de préstamos concedidos en el mes actual)
+        query_prestamos_actual = db.query(func.count(Prestamo.id)).filter(
+            Prestamo.estado == "APROBADO",
+            Prestamo.fecha_registro >= fecha_inicio_mes_actual,
+            Prestamo.fecha_registro < fecha_fin_mes_actual,
+        )
         query_prestamos_actual = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_prestamos_actual, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            query_prestamos_actual, analista, concesionario, modelo, None, None
         )
         total_prestamos_actual = query_prestamos_actual.scalar() or 0
 

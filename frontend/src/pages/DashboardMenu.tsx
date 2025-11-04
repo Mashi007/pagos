@@ -526,7 +526,7 @@ export function DashboardMenu() {
             ) : kpisPrincipales ? (
               <div className="space-y-4 sticky top-4">
                 <KpiCardLarge
-                  title={`Préstamos Generados en ${new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase())}`}
+                  title="Conteo de Cantidad de Préstamos Concedidos en el Mes en Curso"
                   value={kpisPrincipales.total_prestamos.valor_actual}
                   icon={FileText}
                   color="text-cyan-600"
