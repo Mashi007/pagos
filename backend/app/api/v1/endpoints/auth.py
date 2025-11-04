@@ -197,11 +197,9 @@ async def refresh_token(
 
         # Generar nuevo access token (4 horas)
         new_access_token = create_access_token(subject=str(user.id))
-        # Generar nuevo refresh token (7 días)
-        new_refresh_token = create_access_token(
-            subject=str(user.id),
-            expires_delta=timedelta(days=7),
-        )
+        # Generar nuevo refresh token (7 días) - usar create_refresh_token para tipo correcto
+        from app.core.security import create_refresh_token
+        new_refresh_token = create_refresh_token(subject=str(user.id))
 
         # Calcular tiempo de expiración en segundos (4 horas = 240 minutos)
         expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # 14400 segundos
