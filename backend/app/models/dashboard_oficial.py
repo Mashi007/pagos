@@ -3,7 +3,7 @@ Modelos para las tablas oficiales del dashboard
 Estas tablas contienen datos pre-agregados para reporting
 """
 
-from sqlalchemy import Column, Date, Integer, Numeric, String, TIMESTAMP
+from sqlalchemy import TIMESTAMP, Column, Date, Integer, Numeric, String
 from sqlalchemy.sql import func
 
 from app.db.session import Base
