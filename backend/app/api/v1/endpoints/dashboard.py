@@ -2493,19 +2493,21 @@ def obtener_evolucion_morosidad(
     # Intentar usar tabla oficial si existe, sino usar fallback directamente
     morosidad_por_mes = {}
     query_time = 0
-    
+
     try:
         # Verificar si la tabla existe antes de intentar usarla
         table_exists = db.execute(
-            text("""
+            text(
+                """
                 SELECT EXISTS (
                     SELECT FROM information_schema.tables 
                     WHERE table_schema = 'public' 
                     AND table_name = 'dashboard_morosidad_mensual'
                 )
-            """)
+            """
+            )
         ).scalar()
-        
+
         if table_exists:
             # ✅ OPTIMIZACIÓN: Usar filtros separados en año y mes para aprovechar el índice idx_dashboard_morosidad_año_mes
             query = (
@@ -2522,14 +2524,16 @@ def obtener_evolucion_morosidad(
 
             resultados = query.all()
             query_time = int((time.time() - start_time) * 1000)
-            logger.info(f"📊 [evolucion-morosidad] Query tabla oficial completada en {query_time}ms, {len(resultados)} registros")
+            logger.info(
+                f"📊 [evolucion-morosidad] Query tabla oficial completada en {query_time}ms, {len(resultados)} registros"
+            )
 
             morosidad_por_mes = {(r.año, r.mes): float(r.morosidad_total or Decimal("0")) for r in resultados}
         else:
             # Tabla no existe, usar fallback
             logger.warning("Tabla dashboard_morosidad_mensual no existe, usando fallback")
             raise ValueError("Tabla no existe")
-            
+
     except (ValueError, Exception) as e:
         # Fallback: Si la tabla oficial no existe o hay error, usar consulta original
         logger.warning(f"Error accediendo tabla oficial: {e}, usando consulta original como fallback")
@@ -2555,7 +2559,9 @@ def obtener_evolucion_morosidad(
             result = db.execute(query_sql)
             morosidad_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result}
             query_time = int((time.time() - start_fallback) * 1000)
-            logger.info(f"📊 [evolucion-morosidad] Query fallback completada en {query_time}ms, {len(morosidad_por_mes)} registros")
+            logger.info(
+                f"📊 [evolucion-morosidad] Query fallback completada en {query_time}ms, {len(morosidad_por_mes)} registros"
+            )
         except Exception as fallback_error:
             logger.error(f"Error en fallback: {fallback_error}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Error interno: {str(fallback_error)}")
