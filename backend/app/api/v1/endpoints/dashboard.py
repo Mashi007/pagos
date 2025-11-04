@@ -1104,7 +1104,9 @@ def dashboard_administrador(
         # 22. ANÁLISIS DE MOROSIDAD - Cálculo real desde BD
         # Total Financiamiento: Suma de todos los préstamos aprobados
         try:
-            total_financiamiento_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(Prestamo.estado == "APROBADO")
+            total_financiamiento_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
+                Prestamo.estado == "APROBADO"
+            )
             total_financiamiento_query = FiltrosDashboard.aplicar_filtros_prestamo(
                 total_financiamiento_query,
                 analista,
