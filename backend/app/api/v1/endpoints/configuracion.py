@@ -551,7 +551,8 @@ async def upload_logo(
 
         # Convertir logo a base64 para almacenamiento persistente en BD
         import base64
-        logo_base64 = base64.b64encode(contents).decode('utf-8')
+
+        logo_base64 = base64.b64encode(contents).decode("utf-8")
         content_type = logo.content_type or "image/jpeg"
 
         # Intentar guardar en BD (filename + base64), si falla, eliminar archivo
@@ -668,10 +669,7 @@ def _verificar_logo_existe(filename: str, db: Optional[Session] = None) -> tuple
             return None, content_type, logo_bytes  # Existe en BD
 
     # No existe en ningún lado
-    logger.warning(
-        f"⚠️ Logo no encontrado ni en filesystem ni en BD: {filename} "
-        f"(uploads_dir: {uploads_dir})"
-    )
+    logger.warning(f"⚠️ Logo no encontrado ni en filesystem ni en BD: {filename} " f"(uploads_dir: {uploads_dir})")
     raise HTTPException(status_code=404, detail="Logo no encontrado")
 
 
