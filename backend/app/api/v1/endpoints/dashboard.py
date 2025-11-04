@@ -1999,6 +1999,9 @@ def obtener_morosidad_por_analista(
                 }
             )
 
+        # Ordenar de mayor a menor por total_morosidad
+        analistas_data.sort(key=lambda x: x["total_morosidad"], reverse=True)
+
         return {"analistas": analistas_data}
 
     except Exception as e:

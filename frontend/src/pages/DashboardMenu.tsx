@@ -678,7 +678,10 @@ export function DashboardMenu() {
                       </div>
                     ) : datosMorosidadAnalista && datosMorosidadAnalista.length > 0 ? (
                       <ResponsiveContainer width="100%" height={350}>
-                        <BarChart data={datosMorosidadAnalista} layout="vertical">
+                        <BarChart 
+                          data={[...datosMorosidadAnalista].sort((a, b) => b.total_morosidad - a.total_morosidad)} 
+                          layout="vertical"
+                        >
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                           <XAxis type="number" stroke="#6b7280" />
                           <YAxis dataKey="analista" type="category" stroke="#6b7280" width={120} />
