@@ -77,7 +77,8 @@ def _calcular_kpis_basicos(
 
     # Pagos del mes (usa PagoStaging donde están los datos)
     # ⚠️ PagoStaging tiene fecha_pago como TEXT, usar SQL directo
-    fecha_corte_dt = datetime.combine(fecha_corte, datetime.min.time())
+    # fecha_corte_dt calculado pero no usado
+    # fecha_corte_dt = datetime.combine(fecha_corte, datetime.min.time())
     mes_inicio = date(fecha_corte.year, fecha_corte.month, 1)
     if fecha_corte.month == 12:
         mes_fin = date(fecha_corte.year + 1, 1, 1)
@@ -378,13 +379,13 @@ def dashboard_kpis_principales(
 
     Cualquier KPI nuevo agregado aquí debe usar FiltrosDashboard para aplicar filtros automáticamente.
     """
-    fecha_corte = _normalizar_fecha_corte(fecha_corte)
+    fecha_corte_normalizada = _normalizar_fecha_corte(fecha_corte)
 
-    kpis_basicos = _calcular_kpis_basicos(db, fecha_corte, analista, concesionario, modelo, fecha_inicio, fecha_fin)
+    kpis_basicos = _calcular_kpis_basicos(db, fecha_corte_normalizada, analista, concesionario, modelo, fecha_inicio, fecha_fin)
     kpis_amortizaciones = _calcular_kpis_amortizaciones(
-        db, fecha_corte, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        db, fecha_corte_normalizada, analista, concesionario, modelo, fecha_inicio, fecha_fin
     )
-    kpis_mes = _calcular_kpis_mes_actual(db, fecha_corte, analista, concesionario, modelo)
+    kpis_mes = _calcular_kpis_mes_actual(db, fecha_corte_normalizada, analista, concesionario, modelo)
     kpis_financiamiento = _calcular_kpis_financiamiento_por_estado(
         db, analista, concesionario, modelo, fecha_inicio, fecha_fin
     )

@@ -560,13 +560,13 @@ def _obtener_pagos_paginados(db: Session, page: int, per_page: int) -> list:
     pagos = []
     for row in pagos_raw:
         pago = PagoStaging()
-        pago.id = row[0]
-        pago.cedula_cliente = row[1]
-        pago.fecha_pago = row[2]
-        pago.monto_pagado = row[3]
-        pago.numero_documento = row[4]
-        pago.conciliado = row[5] if len(row) > 5 else False
-        pago.fecha_conciliacion = row[6] if len(row) > 6 else None
+        pago.id = row[0]  # type: ignore[assignment]
+        pago.cedula_cliente = row[1]  # type: ignore[assignment]
+        pago.fecha_pago = row[2]  # type: ignore[assignment]
+        pago.monto_pagado = row[3]  # type: ignore[assignment]
+        pago.numero_documento = row[4]  # type: ignore[assignment]
+        pago.conciliado = row[5] if len(row) > 5 else False  # type: ignore[assignment]
+        pago.fecha_conciliacion = row[6] if len(row) > 6 else None  # type: ignore[assignment]
         pagos.append(pago)
     return pagos
 
@@ -788,7 +788,7 @@ def actualizar_pago(
                     db=db,
                 )
 
-        pago.fecha_actualizacion = datetime.now()
+        pago.fecha_actualizacion = datetime.now()  # type: ignore[assignment]
         db.commit()
         db.refresh(pago)
 

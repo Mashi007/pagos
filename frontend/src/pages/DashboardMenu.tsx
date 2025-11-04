@@ -522,11 +522,11 @@ export function DashboardMenu() {
                   </CardHeader>
                   <CardContent className="p-6">
                     {loadingTendencia ? (
-                      <div className="h-[300px] flex items-center justify-center">
+                      <div className="h-[350px] flex items-center justify-center">
                         <div className="animate-pulse text-gray-400">Cargando...</div>
                       </div>
                     ) : datosTendencia && datosTendencia.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
+                      <ResponsiveContainer width="100%" height={350}>
                         <AreaChart data={datosTendencia}>
                           <defs>
                             <linearGradient id="colorMonto" x1="0" y1="0" x2="0" y2="1">
@@ -544,7 +544,7 @@ export function DashboardMenu() {
                         </AreaChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="h-[300px] flex items-center justify-center text-gray-400">
+                      <div className="h-[350px] flex items-center justify-center text-gray-400">
                         No hay datos disponibles
                       </div>
                     )}
@@ -572,33 +572,43 @@ export function DashboardMenu() {
                       </div>
                     ) : datosConcesionarios && datosConcesionarios.length > 0 ? (
                       <div className="relative">
-                        <ResponsiveContainer width="100%" height={300}>
+                        <ResponsiveContainer width="100%" height={400}>
                           <RechartsPieChart>
                             <Pie
                               data={datosConcesionarios.map((c) => ({
-                                name: c.concesionario,
+                                name: c.concesionario.length > 20 ? c.concesionario.substring(0, 20) + '...' : c.concesionario,
                                 value: c.porcentaje,
                                 total: c.total_prestamos,
+                                fullName: c.concesionario,
                               }))}
                               cx="50%"
                               cy="50%"
-                              labelLine={false}
-                              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                              outerRadius={100}
-                              innerRadius={60}
+                              labelLine={true}
+                              label={({ name, percent, fullName }) => {
+                                const labelText = `${name}: ${(percent * 100).toFixed(1)}%`
+                                return labelText
+                              }}
+                              outerRadius={120}
+                              innerRadius={70}
                               fill="#8884d8"
                               dataKey="value"
+                              paddingAngle={2}
                             >
                               {datosConcesionarios.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} />
                               ))}
                             </Pie>
-                            <Tooltip />
+                            <Tooltip 
+                              formatter={(value: number, name: string, props: any) => [
+                                `${props.payload.fullName || props.payload.name}: ${(value as number).toFixed(1)}%`,
+                                'Porcentaje'
+                              ]}
+                            />
                           </RechartsPieChart>
                         </ResponsiveContainer>
                       </div>
                     ) : (
-                      <div className="h-[300px] flex items-center justify-center text-gray-400">
+                      <div className="h-[400px] flex items-center justify-center text-gray-400">
                         No hay datos disponibles
                       </div>
                     )}
@@ -624,11 +634,11 @@ export function DashboardMenu() {
                   </CardHeader>
                   <CardContent className="p-6">
                     {loadingCobranzas ? (
-                      <div className="h-[300px] flex items-center justify-center">
+                      <div className="h-[350px] flex items-center justify-center">
                         <div className="animate-pulse text-gray-400">Cargando...</div>
                       </div>
                     ) : datosCobranzas && datosCobranzas.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
+                      <ResponsiveContainer width="100%" height={350}>
                         <BarChart data={datosCobranzas}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                           <XAxis dataKey="nombre_mes" stroke="#6b7280" />
@@ -640,7 +650,7 @@ export function DashboardMenu() {
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="h-[300px] flex items-center justify-center text-gray-400">
+                      <div className="h-[350px] flex items-center justify-center text-gray-400">
                         No hay datos disponibles
                       </div>
                     )}
@@ -663,11 +673,11 @@ export function DashboardMenu() {
                   </CardHeader>
                   <CardContent className="p-6">
                     {loadingMorosidadAnalista ? (
-                      <div className="h-[300px] flex items-center justify-center">
+                      <div className="h-[350px] flex items-center justify-center">
                         <div className="animate-pulse text-gray-400">Cargando...</div>
                       </div>
                     ) : datosMorosidadAnalista && datosMorosidadAnalista.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
+                      <ResponsiveContainer width="100%" height={350}>
                         <BarChart data={datosMorosidadAnalista} layout="vertical">
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                           <XAxis type="number" stroke="#6b7280" />
@@ -678,7 +688,7 @@ export function DashboardMenu() {
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="h-[300px] flex items-center justify-center text-gray-400">
+                      <div className="h-[350px] flex items-center justify-center text-gray-400">
                         No hay datos disponibles
                       </div>
                     )}
@@ -704,11 +714,11 @@ export function DashboardMenu() {
                   </CardHeader>
                   <CardContent className="p-6">
                     {loadingEvolucionMorosidad ? (
-                      <div className="h-[300px] flex items-center justify-center">
+                      <div className="h-[350px] flex items-center justify-center">
                         <div className="animate-pulse text-gray-400">Cargando...</div>
                       </div>
                     ) : datosEvolucionMorosidad && datosEvolucionMorosidad.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
+                      <ResponsiveContainer width="100%" height={350}>
                         <RechartsLineChart data={datosEvolucionMorosidad}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                           <XAxis dataKey="mes" stroke="#6b7280" />
@@ -719,7 +729,7 @@ export function DashboardMenu() {
                         </RechartsLineChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="h-[300px] flex items-center justify-center text-gray-400">
+                      <div className="h-[350px] flex items-center justify-center text-gray-400">
                         No hay datos disponibles
                       </div>
                     )}
@@ -742,11 +752,11 @@ export function DashboardMenu() {
                   </CardHeader>
                   <CardContent className="p-6">
                     {loadingEvolucionPagos ? (
-                      <div className="h-[300px] flex items-center justify-center">
+                      <div className="h-[350px] flex items-center justify-center">
                         <div className="animate-pulse text-gray-400">Cargando...</div>
                       </div>
                     ) : datosEvolucionPagos && datosEvolucionPagos.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
+                      <ResponsiveContainer width="100%" height={350}>
                         <AreaChart data={datosEvolucionPagos}>
                           <defs>
                             <linearGradient id="colorEvolucionPagos" x1="0" y1="0" x2="0" y2="1">

@@ -723,9 +723,9 @@ def dashboard_administrador(
             .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
-                and_(
-                    Cuota.fecha_vencimiento < hoy,
-                    Cuota.estado != "PAGADO",
+            and_(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
                     Prestamo.estado == "APROBADO",
                 )
             )
@@ -1039,7 +1039,7 @@ def dashboard_administrador(
 
                 # ✅ Cuotas vencidas en ese mes con filtros
                 cuotas_vencidas_mes_query = (
-                    db.query(func.count(Cuota.id))
+            db.query(func.count(Cuota.id))
                     .select_from(Cuota)
                     .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                     .filter(
@@ -2355,7 +2355,8 @@ def obtener_cobros_por_analista(
     """
     try:
         hoy = date.today()
-        fecha_inicio_mes = date(hoy.year, hoy.month, 1)
+        # fecha_inicio_mes calculado pero no usado en esta función
+        # fecha_inicio_mes = date(hoy.year, hoy.month, 1)
 
         # Obtener cobros por analista (pagos del mes)
         # ⚠️ PagoStaging no tiene prestamo_id ni conciliado, no podemos hacer JOIN ni filtrar por conciliado

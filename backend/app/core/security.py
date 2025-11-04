@@ -31,7 +31,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True si la contraseña es correcta, False en caso contrario
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    return bool(pwd_context.verify(plain_password, hashed_password))  # type: ignore[no-any-return]
 
 
 def get_password_hash(password: str) -> str:
@@ -44,7 +44,7 @@ def get_password_hash(password: str) -> str:
     Returns:
         Hash de la contraseña
     """
-    return pwd_context.hash(password)
+    return str(pwd_context.hash(password))  # type: ignore[no-any-return]
 
 
 def create_access_token(
@@ -109,7 +109,7 @@ def decode_token(token: str) -> Dict[str, Any]:
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
+        return dict(payload)  # type: ignore[no-any-return]
     except jwt.ExpiredSignatureError as e:
         # Token expirado
         raise Exception(f"Token expirado: {str(e)}")

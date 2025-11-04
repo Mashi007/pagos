@@ -25,7 +25,7 @@ def sumar_monto_pagado_staging(
         FROM pagos_staging
         WHERE monto_pagado IS NOT NULL
           AND monto_pagado != ''
-          AND monto_pagado ~ '^[0-9]+(\.[0-9]+)?$'
+          AND monto_pagado ~ '^[0-9]+(\.[0-9]+)?$'  # type: ignore[invalid-escape-sequence]
     """
 
     params = {}
@@ -43,7 +43,7 @@ def sumar_monto_pagado_staging(
         conditions.append("fecha_pago IS NOT NULL")
         conditions.append("fecha_pago != ''")
         conditions.append("LENGTH(TRIM(fecha_pago)) >= 10")
-        conditions.append("fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'")
+        conditions.append(r"fecha_pago ~ '^\d{4}-\d{2}-\d{2}'")
 
     if conditions:
         query_sql += " AND " + " AND ".join(conditions)
@@ -82,7 +82,7 @@ def contar_pagos_staging(
         conditions.append("fecha_pago IS NOT NULL")
         conditions.append("fecha_pago != ''")
         conditions.append("LENGTH(TRIM(fecha_pago)) >= 10")
-        conditions.append("fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'")
+        conditions.append(r"fecha_pago ~ '^\d{4}-\d{2}-\d{2}'")
 
     if cedula_cliente:
         conditions.append("cedula_cliente = :cedula_cliente")

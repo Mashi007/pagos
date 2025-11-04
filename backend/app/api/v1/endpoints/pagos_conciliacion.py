@@ -48,8 +48,8 @@ def _conciliar_pago_staging(pago_staging: PagoStaging, db: Session, numero_docum
         logger.info(f"ℹ️ [conciliacion] Pago staging ID {pago_staging.id} ya estaba conciliado (documento: {numero_documento})")
         return False
 
-    pago_staging.conciliado = True
-    pago_staging.fecha_conciliacion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # TEXT format
+    pago_staging.conciliado = True  # type: ignore[assignment]
+    pago_staging.fecha_conciliacion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # type: ignore[assignment] # TEXT format
 
     db.commit()
     db.refresh(pago_staging)
@@ -63,8 +63,8 @@ def _conciliar_pago(pago: Pago, db: Session, numero_documento: str) -> bool:
         logger.info(f"ℹ️ [conciliacion] Pago ID {pago.id} ya estaba conciliado (documento: {numero_documento})")
         return False
 
-    pago.conciliado = True
-    pago.fecha_conciliacion = datetime.now()
+    pago.conciliado = True  # type: ignore[assignment]
+    pago.fecha_conciliacion = datetime.now()  # type: ignore[assignment]
 
     if hasattr(pago, "verificado_concordancia"):
         pago.verificado_concordancia = "SI"
@@ -75,7 +75,7 @@ def _conciliar_pago(pago: Pago, db: Session, numero_documento: str) -> bool:
     return True
 
 
-def _procesar_fila_conciliacion(row, index: int, db: Session, documentos_procesados: set) -> tuple[int, list[str], list[str]]:
+def _procesar_fila_conciliacion(row, index: int, db: Session, documentos_procesados: set[str]) -> tuple[int, list[str], list[str]]:
     """
     Procesa una fila del Excel de conciliación.
     Returns: (pagos_conciliados, pagos_no_encontrados, errores)
