@@ -2339,8 +2339,9 @@ def obtener_financiamiento_tendencia_mensual(
     ✅ OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
     """
     import time
+
     start_time = time.time()
-    
+
     try:
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
@@ -2360,7 +2361,7 @@ def obtener_financiamiento_tendencia_mensual(
 
         # ✅ OPTIMIZACIÓN: Una sola query para obtener todos los nuevos financiamientos por mes con GROUP BY
         start_query = time.time()
-        
+
         # Construir filtros base
         filtros_base = [Prestamo.estado == "APROBADO"]
         if fecha_inicio_query:
@@ -2371,20 +2372,14 @@ def obtener_financiamiento_tendencia_mensual(
         # Query optimizada: GROUP BY año y mes
         query_nuevos = (
             db.query(
-                func.extract('year', Prestamo.fecha_registro).label('año'),
-                func.extract('month', Prestamo.fecha_registro).label('mes'),
-                func.count(Prestamo.id).label('cantidad'),
-                func.sum(Prestamo.total_financiamiento).label('monto_total')
+                func.extract("year", Prestamo.fecha_registro).label("año"),
+                func.extract("month", Prestamo.fecha_registro).label("mes"),
+                func.count(Prestamo.id).label("cantidad"),
+                func.sum(Prestamo.total_financiamiento).label("monto_total"),
             )
             .filter(*filtros_base)
-            .group_by(
-                func.extract('year', Prestamo.fecha_registro),
-                func.extract('month', Prestamo.fecha_registro)
-            )
-            .order_by(
-                func.extract('year', Prestamo.fecha_registro),
-                func.extract('month', Prestamo.fecha_registro)
-            )
+            .group_by(func.extract("year", Prestamo.fecha_registro), func.extract("month", Prestamo.fecha_registro))
+            .order_by(func.extract("year", Prestamo.fecha_registro), func.extract("month", Prestamo.fecha_registro))
         )
 
         # Aplicar filtros adicionales (si hay)
@@ -2403,7 +2398,7 @@ def obtener_financiamiento_tendencia_mensual(
             num_mes = int(row.mes)
             nuevos_por_mes[(año_mes, num_mes)] = {
                 "cantidad": row.cantidad or 0,
-                "monto": float(row.monto_total or Decimal("0"))
+                "monto": float(row.monto_total or Decimal("0")),
             }
 
         # Generar datos mensuales (incluyendo meses sin datos) y calcular acumulados
@@ -2422,7 +2417,7 @@ def obtener_financiamiento_tendencia_mensual(
             datos_mes = nuevos_por_mes.get((año_mes, num_mes), {"cantidad": 0, "monto": Decimal("0")})
             cantidad_nuevos = datos_mes["cantidad"]
             monto_nuevos = datos_mes["monto"]
-            
+
             # Calcular acumulado: sumar los nuevos financiamientos del mes
             total_acumulado += Decimal(str(monto_nuevos))
 
@@ -2443,7 +2438,9 @@ def obtener_financiamiento_tendencia_mensual(
 
         process_time = int((time.time() - start_process) * 1000)
         total_time = int((time.time() - start_time) * 1000)
-        logger.info(f"⏱️ [financiamiento-tendencia] Tiempo total: {total_time}ms (query: {query_time}ms, process: {process_time}ms)")
+        logger.info(
+            f"⏱️ [financiamiento-tendencia] Tiempo total: {total_time}ms (query: {query_time}ms, process: {process_time}ms)"
+        )
 
         return {"meses": meses_data, "fecha_inicio": fecha_inicio_query.isoformat(), "fecha_fin": hoy.isoformat()}
 
