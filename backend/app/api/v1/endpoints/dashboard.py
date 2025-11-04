@@ -1556,6 +1556,7 @@ def obtener_kpis_principales(
 
 
 @router.get("/cobranzas-mensuales")
+@cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos
 def obtener_cobranzas_mensuales(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
@@ -1569,8 +1570,11 @@ def obtener_cobranzas_mensuales(
     Componente 1: Cobranzas mensuales vs Pagos y Meta Mensual
     Suma las cobranzas mensuales (amortizaciones de todos los clientes) y las grafica contra pagos.
     Meta mensual se actualiza el día 1 de cada mes.
+    OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
     """
     try:
+        from sqlalchemy import text
+
         hoy = date.today()
         nombres_meses = [
             "Enero",
@@ -1587,58 +1591,99 @@ def obtener_cobranzas_mensuales(
             "Diciembre",
         ]
 
-        # Obtener últimos 12 meses
+        # Calcular fecha inicio (hace 12 meses)
+        año_inicio = hoy.year
+        mes_inicio = hoy.month - 11
+        if mes_inicio <= 0:
+            año_inicio -= 1
+            mes_inicio += 12
+        fecha_inicio_query = date(año_inicio, mes_inicio, 1)
+
+        # OPTIMIZACIÓN: Query única para cobranzas planificadas con GROUP BY
+        filtros_cobranzas = [
+            "p.estado = 'APROBADO'",
+            "c.fecha_vencimiento >= :fecha_inicio",
+            "c.fecha_vencimiento <= :fecha_fin_total",
+        ]
+        params_cobranzas = {
+            "fecha_inicio": fecha_inicio_query,
+            "fecha_fin_total": hoy,
+        }
+        
+        if analista:
+            filtros_cobranzas.append("(p.analista = :analista OR p.producto_financiero = :analista)")
+            params_cobranzas["analista"] = analista
+        if concesionario:
+            filtros_cobranzas.append("p.concesionario = :concesionario")
+            params_cobranzas["concesionario"] = concesionario
+        if modelo:
+            filtros_cobranzas.append("(p.producto = :modelo OR p.modelo_vehiculo = :modelo)")
+            params_cobranzas["modelo"] = modelo
+
+        where_clause_cobranzas = " AND ".join(filtros_cobranzas)
+        query_cobranzas_sql = text(f"""
+            SELECT 
+                EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
+                EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
+                COALESCE(SUM(c.monto_cuota), 0) as cobranzas
+            FROM cuotas c
+            INNER JOIN prestamos p ON c.prestamo_id = p.id
+            WHERE {where_clause_cobranzas}
+            GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+            ORDER BY año, mes
+        """).bindparams(**params_cobranzas)
+
+        result_cobranzas = db.execute(query_cobranzas_sql)
+        cobranzas_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_cobranzas}
+
+        # OPTIMIZACIÓN: Query única para pagos reales con GROUP BY
+        fecha_inicio_dt = datetime.combine(fecha_inicio_query, datetime.min.time())
+        fecha_fin_dt = datetime.combine(hoy, datetime.max.time())
+        
+        query_pagos_sql = text("""
+            SELECT 
+                EXTRACT(YEAR FROM fecha_pago::timestamp)::int as año,
+                EXTRACT(MONTH FROM fecha_pago::timestamp)::int as mes,
+                COALESCE(SUM(monto_pagado::numeric), 0) as pagos
+            FROM pagos_staging
+            WHERE fecha_pago IS NOT NULL
+              AND fecha_pago != ''
+              AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+              AND fecha_pago::timestamp >= :fecha_inicio
+              AND fecha_pago::timestamp <= :fecha_fin
+              AND monto_pagado IS NOT NULL
+              AND monto_pagado != ''
+            GROUP BY EXTRACT(YEAR FROM fecha_pago::timestamp), EXTRACT(MONTH FROM fecha_pago::timestamp)
+            ORDER BY año, mes
+        """).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+
+        result_pagos = db.execute(query_pagos_sql)
+        pagos_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_pagos}
+
+        # Generar datos mensuales (incluyendo meses sin datos)
         meses_data = []
+        current_date = fecha_inicio_query
         for i in range(12):
-            mes_fecha = date(hoy.year, hoy.month, 1) - timedelta(days=32 * i)
-            mes_fecha = date(mes_fecha.year, mes_fecha.month, 1)
-            siguiente_mes = _obtener_fechas_mes_siguiente(mes_fecha.month, mes_fecha.year)
-
-            # Cobranzas planificadas: Suma de monto_cuota de cuotas con fecha_vencimiento en ese mes
-            query_cobranzas = (
-                db.query(func.sum(Cuota.monto_cuota))
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento >= mes_fecha,
-                    Cuota.fecha_vencimiento < siguiente_mes,
-                )
-            )
-            query_cobranzas = FiltrosDashboard.aplicar_filtros_cuota(
-                query_cobranzas, analista, concesionario, modelo, fecha_inicio, fecha_fin
-            )
-            cobranzas_planificadas = float(query_cobranzas.scalar() or Decimal("0"))
-
-            # Pagos reales: Suma de pagos en ese mes (PagoStaging no tiene conciliado ni prestamo_id)
-            mes_fecha_dt = datetime.combine(mes_fecha, datetime.min.time())
-            siguiente_mes_dt = datetime.combine(siguiente_mes, datetime.min.time())
-
-            query_pagos = db.execute(
-                text(
-                    """
-                    SELECT COALESCE(SUM(monto_pagado::numeric), 0)
-                    FROM pagos_staging
-                    WHERE fecha_pago IS NOT NULL
-                      AND fecha_pago != ''
-                      AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                      AND fecha_pago::timestamp >= :mes_fecha
-                      AND fecha_pago::timestamp < :siguiente_mes
-                      AND monto_pagado IS NOT NULL
-                      AND monto_pagado != ''
-                """
-                ).bindparams(mes_fecha=mes_fecha_dt, siguiente_mes=siguiente_mes_dt)
-            )
-            pagos_reales = float(query_pagos.scalar() or Decimal("0"))
+            if current_date > hoy:
+                break
+            año_mes = current_date.year
+            num_mes = current_date.month
+            
+            cobranzas_planificadas = cobranzas_por_mes.get((año_mes, num_mes), 0.0)
+            pagos_reales = pagos_por_mes.get((año_mes, num_mes), 0.0)
 
             meses_data.append(
                 {
-                    "mes": mes_fecha.strftime("%Y-%m"),
-                    "nombre_mes": nombres_meses[mes_fecha.month - 1],
+                    "mes": current_date.strftime("%Y-%m"),
+                    "nombre_mes": nombres_meses[num_mes - 1],
                     "cobranzas_planificadas": cobranzas_planificadas,
                     "pagos_reales": pagos_reales,
                     "meta_mensual": cobranzas_planificadas,  # Meta = cobranzas planificadas
                 }
             )
+            
+            # Avanzar al siguiente mes
+            current_date = _obtener_fechas_mes_siguiente(num_mes, año_mes)
 
         # Meta actual = cobranzas planificadas del mes actual
         mes_actual_inicio = date(hoy.year, hoy.month, 1)
