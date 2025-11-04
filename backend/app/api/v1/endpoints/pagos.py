@@ -63,7 +63,9 @@ def _aplicar_filtros_pagos(
         logger.info(f"🔍 [listar_pagos] Filtro fecha_hasta: {fecha_hasta}")
     if analista:
         # ⚠️ PagoStaging no tiene columna 'prestamo_id' en la BD real
-        # query = query.join(Prestamo, PagoStaging.prestamo_id == Prestamo.id).filter(Prestamo.usuario_proponente == analista)
+        # query = query.join(
+        #     Prestamo, PagoStaging.prestamo_id == Prestamo.id
+        # ).filter(Prestamo.usuario_proponente == analista)
         logger.info(f"🔍 [listar_pagos] Filtro analista: {analista} (ignorado - prestamo_id no existe)")
     return query
 
@@ -649,7 +651,8 @@ def crear_pago(
         pago_dict["usuario_registro"] = current_user.email
         pago_dict["fecha_registro"] = datetime.now()
 
-        # Eliminar cualquier campo que no exista en el modelo (por ejemplo, referencia_pago si la migración no se ha ejecutado)
+        # Eliminar cualquier campo que no exista en el modelo
+        # (por ejemplo, referencia_pago si la migración no se ha ejecutado)
         campos_validos = [col.key for col in Pago.__table__.columns]
         pago_dict = {k: v for k, v in pago_dict.items() if k in campos_validos}
 
@@ -985,7 +988,13 @@ def _actualizar_estado_cuota(cuota, fecha_hoy: date, es_exceso: bool = False) ->
     return estado_completado
 
 
-def _aplicar_monto_a_cuota(cuota, monto_aplicar: Decimal, fecha_pago: date, fecha_hoy: date, es_exceso: bool = False) -> bool:
+def _aplicar_monto_a_cuota(
+    cuota,
+    monto_aplicar: Decimal,
+    fecha_pago: date,
+    fecha_hoy: date,
+    es_exceso: bool = False,
+) -> bool:
     """
     Aplica un monto a una cuota, actualizando todos los campos correspondientes.
     Returns:
@@ -1011,7 +1020,12 @@ def _aplicar_monto_a_cuota(cuota, monto_aplicar: Decimal, fecha_pago: date, fech
 def _aplicar_exceso_a_siguiente_cuota(
     db: Session, prestamo_id: int, saldo_restante: Decimal, fecha_pago: date, fecha_hoy: date
 ) -> int:
-    """Aplica el exceso de pago a la siguiente cuota pendiente (más antigua primero). Returns: número de cuotas completadas"""
+    """
+    Aplica el exceso de pago a la siguiente cuota pendiente (más antigua primero).
+
+    Returns:
+        número de cuotas completadas
+    """
     siguiente_cuota = (
         db.query(Cuota)
         .filter(
@@ -1134,7 +1148,8 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
 
     if len(cuotas) == 0:
         logger.warning(
-            f"⚠️ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} no tiene cuotas pendientes. No se aplicará el pago."
+            f"⚠️ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} "
+            f"no tiene cuotas pendientes. No se aplicará el pago."
         )
         return 0
 
@@ -1144,7 +1159,10 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
     )
 
     if saldo_restante > Decimal("0.00"):
-        logger.info(f"📊 [aplicar_pago_a_cuotas] Saldo restante: ${saldo_restante}. Aplicando a siguiente cuota pendiente...")
+        logger.info(
+            f"📊 [aplicar_pago_a_cuotas] Saldo restante: ${saldo_restante}. "
+            f"Aplicando a siguiente cuota pendiente..."
+        )
         cuotas_completadas += _aplicar_exceso_a_siguiente_cuota(
             db, pago.prestamo_id, saldo_restante, pago.fecha_pago, fecha_hoy
         )
