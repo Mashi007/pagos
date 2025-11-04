@@ -32,7 +32,9 @@ export function Notificaciones() {
   const { data: notificacionesData, isLoading, error, refetch } = useQuery({
     queryKey: ['notificaciones', filterEstado, page, perPage],
     queryFn: () => notificacionService.listarNotificaciones(page, perPage, filterEstado || undefined),
-    refetchInterval: 30000, // Refrescar cada 30 segundos
+    staleTime: 30 * 1000, // Cache de 30 segundos
+    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos (reducido de 30s)
+    refetchOnWindowFocus: true, // Refrescar al enfocar ventana
   })
 
   const notificaciones = notificacionesData?.items || []
@@ -43,7 +45,9 @@ export function Notificaciones() {
   const { data: estadisticas } = useQuery({
     queryKey: ['notificaciones-estadisticas'],
     queryFn: () => notificacionService.obtenerEstadisticas(),
-    refetchInterval: 30000,
+    staleTime: 30 * 1000, // Cache de 30 segundos
+    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos (reducido de 30s)
+    refetchOnWindowFocus: true, // Refrescar al enfocar ventana
   })
 
   // Filtrar notificaciones localmente por búsqueda y canal

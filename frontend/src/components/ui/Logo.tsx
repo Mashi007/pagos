@@ -84,62 +84,41 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           if (configResponse.ok) {
             const config = await configResponse.json()
             if (config.logo_filename) {
-              // Si tenemos el nombre del logo, usarlo directamente
+              // Si tenemos el nombre del logo, usarlo directamente sin verificar HEAD
+              // El GET fallará si no existe, pero evitamos hacer HEAD innecesarios
               const logoPath = `/api/v1/configuracion/logo/${config.logo_filename}`
               const logoUrl = `${logoPath}?t=${Date.now()}`
               
-              // Verificar que el archivo existe
-              const headResponse = await fetch(logoPath, {
-                method: 'HEAD',
-                signal: controller.signal,
-              })
-              
-              if (headResponse.ok) {
-                logoCache.logoUrl = logoUrl
-                logoCache.hasChecked = true
-                setCustomLogoUrl(logoUrl)
-                setHasChecked(true)
-                clearTimeout(timeoutId)
-                logoCache.isChecking = false
-                console.log('✅ Logo cargado desde configuración:', config.logo_filename)
-                return
-              }
-            }
-          }
-        } catch (configError: any) {
-          // Si falla obtener la configuración, continuar con método alternativo
-          console.warn('⚠️ No se pudo obtener logo_filename desde configuración, usando método alternativo')
-        }
-
-        // MÉTODO ALTERNATIVO: Intentar cada extensión (para retrocompatibilidad)
-        for (const ext of LOGO_EXTENSIONS) {
-          const filename = `logo-custom${ext}`
-          const logoPath = `/api/v1/configuracion/logo/${filename}`
-          try {
-            // Usar fetch HEAD para verificar si el archivo existe sin descargarlo completo
-            const response = await fetch(logoPath, {
-              method: 'HEAD',
-              signal: controller.signal,
-            })
-            
-            if (response.ok) {
-              // Si el archivo existe, usar imagen con timestamp para evitar caché
-              const logoUrl = `${logoPath}?t=${Date.now()}`
+              // Confiar en que si está en la BD, el archivo existe
+              // Si no existe, el navegador mostrará el logo por defecto
               logoCache.logoUrl = logoUrl
               logoCache.hasChecked = true
               setCustomLogoUrl(logoUrl)
               setHasChecked(true)
               clearTimeout(timeoutId)
               logoCache.isChecking = false
+              console.log('✅ Logo cargado desde configuración:', config.logo_filename)
+              return
+            } else {
+              // Si no hay logo_filename en la configuración, no hay logo personalizado
+              // No hacer solicitudes HEAD innecesarias
+              logoCache.hasChecked = true
+              logoCache.isChecking = false
+              setHasChecked(true)
+              clearTimeout(timeoutId)
               return
             }
-          } catch (error: any) {
-            // Ignorar errores de red o timeout, continuar con siguiente extensión
-            if (error?.name === 'AbortError') {
-              break
-            }
-            continue
           }
+        } catch (configError: any) {
+          // Si falla obtener la configuración, marcar como verificado y no hacer más intentos
+          if (configError?.name !== 'AbortError') {
+            console.warn('⚠️ No se pudo obtener logo_filename desde configuración')
+          }
+          logoCache.hasChecked = true
+          logoCache.isChecking = false
+          setHasChecked(true)
+          clearTimeout(timeoutId)
+          return
         }
       } catch (error: any) {
         if (error?.name !== 'AbortError') {
