@@ -94,7 +94,7 @@ class FiltrosDashboard:
                         if hasattr(entity, "__tablename__"):
                             if entity.__tablename__ == Prestamo.__tablename__:
                                 return True
-            
+
             # Verificar en el statement compilado
             compiled_sql = str(query.statement.compile(compile_kwargs={"literal_binds": False})).lower()
             prestamo_table_name = Prestamo.__tablename__.lower()
@@ -173,7 +173,7 @@ class FiltrosDashboard:
         """
         # Verificar si ya existe un JOIN con Prestamo
         necesita_join = not FiltrosDashboard._verificar_join_prestamo(query)
-        
+
         # Si necesita filtros de Prestamo y no hay JOIN, hacerlo explícitamente
         if (analista or concesionario or modelo or fecha_inicio or fecha_fin) and necesita_join:
             # Intentar hacer el JOIN directamente
@@ -189,11 +189,12 @@ class FiltrosDashboard:
                     # Si aún falla, loggear pero continuar sin JOIN
                     # Los filtros fallarán después pero al menos no romperá la query
                     import logging
+
                     logger = logging.getLogger(__name__)
                     logger.warning(f"No se pudo hacer JOIN con Prestamo en aplicar_filtros_cuota: {e}")
                     # Retornar query sin filtros de Prestamo
                     return query
-        
+
         # Aplicar filtros
         if analista:
             query = query.filter(
