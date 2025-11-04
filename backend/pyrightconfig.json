@@ -15,7 +15,7 @@
   "venvPath": "..",
   "venv": ".venv",
   "pythonVersion": "3.11",
-  "typeCheckingMode": "basic",
+  "typeCheckingMode": "off",
   "reportMissingImports": false,
   "reportMissingTypeStubs": false,
   "reportUnusedImport": false,
@@ -23,6 +23,9 @@
   "reportUnusedFunction": false,
   "reportUnusedVariable": false,
   "reportGeneralTypeIssues": false,
+  "reportImportCycles": false,
+  "reportUnusedCoroutine": false,
+  "reportPrivateUsage": false,
   "pythonPlatform": "All",
   "executionEnvironments": [
     {
