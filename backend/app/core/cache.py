@@ -83,6 +83,7 @@ cache_backend: CacheBackend = MemoryCache()
 
 try:
     import redis
+
     from app.core.config import settings
 
     # ✅ CONFIGURACIÓN DESDE VARIABLES DE ENTORNO
