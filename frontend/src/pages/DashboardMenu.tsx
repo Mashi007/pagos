@@ -146,7 +146,7 @@ export function DashboardMenu() {
       })
       const response = await apiClient.get(
         `/api/v1/dashboard/financiamiento-tendencia-mensual?${queryParams.toString()}`
-      ) as { meses: Array<{ mes: string; cantidad_nuevos: number; monto_nuevos: number; total_acumulado: number; monto_cuotas_programadas: number; monto_pagado: number; monto_cuota: number; morosidad: number }> }
+      ) as { meses: Array<{ mes: string; cantidad_nuevos: number; monto_nuevos: number; total_acumulado: number; monto_cuotas_programadas: number; monto_pagado: number; monto_cuota: number; morosidad: number; morosidad_mensual: number }> }
       return response.meses
     },
     staleTime: 5 * 60 * 1000,
@@ -816,13 +816,12 @@ export function DashboardMenu() {
                         />
                         <Line 
                           type="monotone" 
-                          dataKey="morosidad" 
+                          dataKey="morosidad_mensual" 
                           stroke="#ef4444" 
                           strokeWidth={3}
                           dot={{ fill: '#ef4444', strokeWidth: 2, r: 4 }}
                           activeDot={{ r: 6, stroke: '#ef4444', strokeWidth: 2 }}
-                          name="Morosidad por Mes"
-                          strokeDasharray="8 4"
+                          name="Morosidad Mensual"
                         />
                       </ComposedChart>
                     </ResponsiveContainer>
