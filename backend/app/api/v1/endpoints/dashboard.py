@@ -1528,36 +1528,38 @@ def obtener_kpis_principales(
         fecha_fin_mes_anterior = _obtener_fechas_mes_siguiente(mes_anterior, año_anterior)
         fecha_fin_mes_actual = _obtener_fechas_mes_siguiente(mes_actual, año_actual)
 
-        # 1. TOTAL PRESTAMOS (Conteo de préstamos concedidos en el mes actual)
-        query_prestamos_actual = db.query(func.count(Prestamo.id)).filter(
+        # 1. TOTAL PRESTAMOS (Suma de total_financiamiento de préstamos concedidos en el mes actual)
+        # ⚠️ TEMPORAL: Usar fecha_aprobacion porque fecha_registro no migró correctamente
+        query_prestamos_actual = db.query(func.sum(Prestamo.total_financiamiento)).filter(
             Prestamo.estado == "APROBADO",
-            Prestamo.fecha_registro >= fecha_inicio_mes_actual,
-            Prestamo.fecha_registro < fecha_fin_mes_actual,
+            Prestamo.fecha_aprobacion >= fecha_inicio_mes_actual,
+            Prestamo.fecha_aprobacion < fecha_fin_mes_actual,
         )
         query_prestamos_actual = FiltrosDashboard.aplicar_filtros_prestamo(
             query_prestamos_actual, analista, concesionario, modelo, None, None
         )
-        total_prestamos_actual = query_prestamos_actual.scalar() or 0
+        total_prestamos_actual = float(query_prestamos_actual.scalar() or Decimal("0"))
 
-        query_prestamos_anterior = db.query(func.count(Prestamo.id)).filter(
+        query_prestamos_anterior = db.query(func.sum(Prestamo.total_financiamiento)).filter(
             Prestamo.estado == "APROBADO",
-            Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
-            Prestamo.fecha_registro < fecha_fin_mes_anterior,
+            Prestamo.fecha_aprobacion >= fecha_inicio_mes_anterior,
+            Prestamo.fecha_aprobacion < fecha_fin_mes_anterior,
         )
         query_prestamos_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
             query_prestamos_anterior, analista, concesionario, modelo, None, None
         )
-        total_prestamos_anterior = query_prestamos_anterior.scalar() or 0
+        total_prestamos_anterior = float(query_prestamos_anterior.scalar() or Decimal("0"))
 
         variacion_prestamos, variacion_prestamos_abs = _calcular_variacion(
             float(total_prestamos_actual), float(total_prestamos_anterior)
         )
 
         # 2. CREDITOS NUEVOS EN EL MES
+        # ⚠️ TEMPORAL: Usar fecha_aprobacion porque fecha_registro no migró correctamente
         query_creditos_nuevos_actual = db.query(func.count(Prestamo.id)).filter(
             Prestamo.estado == "APROBADO",
-            Prestamo.fecha_registro >= fecha_inicio_mes_actual,
-            Prestamo.fecha_registro < fecha_fin_mes_actual,
+            Prestamo.fecha_aprobacion >= fecha_inicio_mes_actual,
+            Prestamo.fecha_aprobacion < fecha_fin_mes_actual,
         )
         query_creditos_nuevos_actual = FiltrosDashboard.aplicar_filtros_prestamo(
             query_creditos_nuevos_actual, analista, concesionario, modelo, None, None
@@ -1566,8 +1568,8 @@ def obtener_kpis_principales(
 
         query_creditos_nuevos_anterior = db.query(func.count(Prestamo.id)).filter(
             Prestamo.estado == "APROBADO",
-            Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
-            Prestamo.fecha_registro < fecha_fin_mes_anterior,
+            Prestamo.fecha_aprobacion >= fecha_inicio_mes_anterior,
+            Prestamo.fecha_aprobacion < fecha_fin_mes_anterior,
         )
         query_creditos_nuevos_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
             query_creditos_nuevos_anterior, analista, concesionario, modelo, None, None
@@ -2976,23 +2978,24 @@ def obtener_financiamiento_tendencia_mensual(
         start_query = time.time()
 
         # Construir filtros base
+        # ⚠️ TEMPORAL: Usar fecha_aprobacion porque fecha_registro no migró correctamente
         filtros_base = [Prestamo.estado == "APROBADO"]
         if fecha_inicio_query:
-            filtros_base.append(Prestamo.fecha_registro >= fecha_inicio_query)
+            filtros_base.append(Prestamo.fecha_aprobacion >= fecha_inicio_query)
         if fecha_fin_query:
-            filtros_base.append(Prestamo.fecha_registro <= fecha_fin_query)
+            filtros_base.append(Prestamo.fecha_aprobacion <= fecha_fin_query)
 
         # Query optimizada: GROUP BY año y mes
         query_nuevos = (
             db.query(
-                func.extract("year", Prestamo.fecha_registro).label("año"),
-                func.extract("month", Prestamo.fecha_registro).label("mes"),
+                func.extract("year", Prestamo.fecha_aprobacion).label("año"),
+                func.extract("month", Prestamo.fecha_aprobacion).label("mes"),
                 func.count(Prestamo.id).label("cantidad"),
                 func.sum(Prestamo.total_financiamiento).label("monto_total"),
             )
             .filter(*filtros_base)
-            .group_by(func.extract("year", Prestamo.fecha_registro), func.extract("month", Prestamo.fecha_registro))
-            .order_by(func.extract("year", Prestamo.fecha_registro), func.extract("month", Prestamo.fecha_registro))
+            .group_by(func.extract("year", Prestamo.fecha_aprobacion), func.extract("month", Prestamo.fecha_aprobacion))
+            .order_by(func.extract("year", Prestamo.fecha_aprobacion), func.extract("month", Prestamo.fecha_aprobacion))
         )
 
         # Aplicar filtros adicionales (si hay)
@@ -3020,6 +3023,7 @@ def obtener_financiamiento_tendencia_mensual(
         current_date = fecha_inicio_query
         total_acumulado = Decimal("0")
 
+        # ⚠️ TEMPORAL: Usar fecha_aprobacion en lugar de fecha_registro
         while current_date <= hoy:
             año_mes = current_date.year
             num_mes = current_date.month

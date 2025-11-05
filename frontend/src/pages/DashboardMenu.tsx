@@ -526,13 +526,13 @@ export function DashboardMenu() {
             ) : kpisPrincipales ? (
               <div className="space-y-4 sticky top-4">
                 <KpiCardLarge
-                  title="Conteo de Cantidad de Préstamos Concedidos en el Mes en Curso"
+                  title="Total Financiamiento de Préstamos Concedidos en el Mes en Curso"
                   value={kpisPrincipales.total_prestamos.valor_actual}
                   icon={FileText}
                   color="text-cyan-600"
                   bgColor="bg-cyan-100"
                   borderColor="border-cyan-500"
-                  format="number"
+                  format="currency"
                   variation={{
                     percent: kpisPrincipales.total_prestamos.variacion_porcentual,
                     label: 'vs mes anterior',
