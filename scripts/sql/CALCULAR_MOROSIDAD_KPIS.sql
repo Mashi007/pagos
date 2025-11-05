@@ -322,73 +322,49 @@ dias_mora_por_cliente AS (
 -- Dinero no cobrado este mes
 dinero_no_cobrado_mes AS (
     SELECT 
-        DATE_TRUNC('month', c.fecha_vencimiento) AS mes,
-        SUM(c.monto_cuota) AS monto_programado,
-        COALESCE((
-            -- Sumar monto_pagado de pagos relacionados con cuotas de este mes
-            SELECT SUM(p.monto_pagado)
-            FROM pagos p
-            LEFT JOIN prestamos pr_p ON p.prestamo_id = pr_p.id
-            LEFT JOIN cuotas c_p ON (
-                p.prestamo_id IS NOT NULL
-                AND c_p.prestamo_id = p.prestamo_id 
-                AND (
-                    (p.numero_cuota IS NOT NULL AND c_p.numero_cuota = p.numero_cuota)
-                    OR (p.numero_cuota IS NULL 
-                        AND c_p.fecha_vencimiento >= DATE_TRUNC('month', c.fecha_vencimiento)
-                        AND c_p.fecha_vencimiento < DATE_TRUNC('month', c.fecha_vencimiento) + INTERVAL '1 month'
+        mes_vencimiento AS mes,
+        SUM(monto_programado) AS monto_programado,
+        SUM(monto_pagado_real) AS monto_pagado_real,
+        SUM(monto_programado) - SUM(monto_pagado_real) AS dinero_no_cobrado
+    FROM (
+        SELECT 
+            DATE_TRUNC('month', c.fecha_vencimiento) AS mes_vencimiento,
+            c.monto_cuota AS monto_programado,
+            COALESCE((
+                -- Sumar monto_pagado de pagos relacionados con cuotas de este mes
+                SELECT SUM(p.monto_pagado)
+                FROM pagos p
+                LEFT JOIN prestamos pr_p ON p.prestamo_id = pr_p.id
+                LEFT JOIN cuotas c_p ON (
+                    p.prestamo_id IS NOT NULL
+                    AND c_p.prestamo_id = p.prestamo_id 
+                    AND (
+                        (p.numero_cuota IS NOT NULL AND c_p.numero_cuota = p.numero_cuota)
+                        OR (p.numero_cuota IS NULL 
+                            AND DATE_TRUNC('month', c_p.fecha_vencimiento) = DATE_TRUNC('month', c.fecha_vencimiento)
+                        )
                     )
                 )
-            )
-            WHERE (
-                -- Pagos relacionados con cuotas de este mes
-                (c_p.fecha_vencimiento >= DATE_TRUNC('month', c.fecha_vencimiento)
-                 AND c_p.fecha_vencimiento < DATE_TRUNC('month', c.fecha_vencimiento) + INTERVAL '1 month')
-                -- O pagos sin prestamo_id pero con fecha_pago en este mes
-                OR (p.prestamo_id IS NULL 
-                    AND DATE_TRUNC('month', p.fecha_pago::date) = DATE_TRUNC('month', c.fecha_vencimiento))
-            )
-              AND p.activo = TRUE
-              AND p.monto_pagado IS NOT NULL
-              AND p.monto_pagado > 0
-              AND (pr_p.estado = 'APROBADO' OR p.prestamo_id IS NULL)
-        ), 0) AS monto_pagado_real,
-        SUM(c.monto_cuota) - COALESCE((
-            -- Sumar monto_pagado de pagos relacionados con cuotas de este mes
-            SELECT SUM(p.monto_pagado)
-            FROM pagos p
-            LEFT JOIN prestamos pr_p ON p.prestamo_id = pr_p.id
-            LEFT JOIN cuotas c_p ON (
-                p.prestamo_id IS NOT NULL
-                AND c_p.prestamo_id = p.prestamo_id 
-                AND (
-                    (p.numero_cuota IS NOT NULL AND c_p.numero_cuota = p.numero_cuota)
-                    OR (p.numero_cuota IS NULL 
-                        AND c_p.fecha_vencimiento >= DATE_TRUNC('month', c.fecha_vencimiento)
-                        AND c_p.fecha_vencimiento < DATE_TRUNC('month', c.fecha_vencimiento) + INTERVAL '1 month'
-                    )
+                WHERE (
+                    -- Pagos relacionados con cuotas de este mes
+                    DATE_TRUNC('month', c_p.fecha_vencimiento) = DATE_TRUNC('month', c.fecha_vencimiento)
+                    -- O pagos sin prestamo_id pero con fecha_pago en este mes
+                    OR (p.prestamo_id IS NULL 
+                        AND DATE_TRUNC('month', p.fecha_pago::date) = DATE_TRUNC('month', c.fecha_vencimiento))
                 )
-            )
-            WHERE (
-                -- Pagos relacionados con cuotas de este mes
-                (c_p.fecha_vencimiento >= DATE_TRUNC('month', c.fecha_vencimiento)
-                 AND c_p.fecha_vencimiento < DATE_TRUNC('month', c.fecha_vencimiento) + INTERVAL '1 month')
-                -- O pagos sin prestamo_id pero con fecha_pago en este mes
-                OR (p.prestamo_id IS NULL 
-                    AND DATE_TRUNC('month', p.fecha_pago::date) = DATE_TRUNC('month', c.fecha_vencimiento))
-            )
-              AND p.activo = TRUE
-              AND p.monto_pagado IS NOT NULL
-              AND p.monto_pagado > 0
-              AND (pr_p.estado = 'APROBADO' OR p.prestamo_id IS NULL)
-        ), 0) AS dinero_no_cobrado
-    FROM cuotas c
-    INNER JOIN prestamos pr ON c.prestamo_id = pr.id
-    WHERE pr.estado = 'APROBADO'
-      AND c.fecha_vencimiento < CURRENT_DATE
-      AND c.estado != 'PAGADO'
-      AND DATE_TRUNC('month', c.fecha_vencimiento) >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
-    GROUP BY DATE_TRUNC('month', c.fecha_vencimiento)
+                  AND p.activo = TRUE
+                  AND p.monto_pagado IS NOT NULL
+                  AND p.monto_pagado > 0
+                  AND (pr_p.estado = 'APROBADO' OR p.prestamo_id IS NULL)
+            ), 0) AS monto_pagado_real
+        FROM cuotas c
+        INNER JOIN prestamos pr ON c.prestamo_id = pr.id
+        WHERE pr.estado = 'APROBADO'
+          AND c.fecha_vencimiento < CURRENT_DATE
+          AND c.estado != 'PAGADO'
+          AND DATE_TRUNC('month', c.fecha_vencimiento) >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+    ) AS subquery
+    GROUP BY mes_vencimiento
 )
 SELECT 
     '=== RESUMEN GENERAL PARA KPIs ===' AS tipo_calculo,
