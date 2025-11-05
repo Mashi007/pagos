@@ -149,6 +149,16 @@ class Settings(BaseSettings):
     REPORTS_CACHE_TTL: int = 1800
 
     # ============================================
+    # REDIS / CACHÉ
+    # ============================================
+    REDIS_URL: Optional[str] = Field(default=None, env="REDIS_URL", description="URL completa de Redis (ej: redis://localhost:6379/0)")
+    REDIS_HOST: str = Field(default="localhost", env="REDIS_HOST", description="Host de Redis")
+    REDIS_PORT: int = Field(default=6379, env="REDIS_PORT", description="Puerto de Redis")
+    REDIS_DB: int = Field(default=0, env="REDIS_DB", description="Base de datos de Redis")
+    REDIS_PASSWORD: Optional[str] = Field(default=None, env="REDIS_PASSWORD", description="Contraseña de Redis (opcional)")
+    REDIS_SOCKET_TIMEOUT: int = Field(default=5, env="REDIS_SOCKET_TIMEOUT", description="Timeout de socket en segundos")
+
+    # ============================================
     # FILE UPLOADS
     # ============================================
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10 MB

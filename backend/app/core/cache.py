@@ -83,8 +83,35 @@ cache_backend: CacheBackend = MemoryCache()
 
 try:
     import redis
+    from app.core.config import settings
 
-    redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=False)
+    # ✅ CONFIGURACIÓN DESDE VARIABLES DE ENTORNO
+    # Prioridad: REDIS_URL > REDIS_HOST/REDIS_PORT/REDIS_DB
+    if settings.REDIS_URL:
+        # Usar URL completa si está disponible
+        redis_url = settings.REDIS_URL
+        # Si tiene password, incluirla en la URL
+        if settings.REDIS_PASSWORD and "@" not in redis_url:
+            # Extraer componentes de la URL si es necesario
+            if redis_url.startswith("redis://"):
+                parts = redis_url.replace("redis://", "").split("/")
+                host_port = parts[0]
+                db = parts[1] if len(parts) > 1 else str(settings.REDIS_DB)
+                redis_url = f"redis://:{settings.REDIS_PASSWORD}@{host_port}/{db}"
+        redis_client = redis.from_url(redis_url, decode_responses=False, socket_timeout=settings.REDIS_SOCKET_TIMEOUT)
+        logger.info(f"🔗 Conectando a Redis usando REDIS_URL: {redis_url.split('@')[-1] if '@' in redis_url else redis_url}")
+    else:
+        # Usar componentes individuales
+        redis_client = redis.Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            db=settings.REDIS_DB,
+            password=settings.REDIS_PASSWORD,
+            decode_responses=False,
+            socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
+        )
+        logger.info(f"🔗 Conectando a Redis: {settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}")
+
     # Test de conexión
     redis_client.ping()
 
