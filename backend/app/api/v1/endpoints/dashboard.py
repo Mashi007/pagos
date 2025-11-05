@@ -3226,6 +3226,22 @@ def obtener_financiamiento_tendencia_mensual(
             # Obtener suma de monto_cuota de cuotas relacionadas con pagos del mes
             monto_cuota_pagos = cuotas_pagos_por_mes.get((año_mes, num_mes), 0.0)
 
+            # Calcular morosidad al final del mes (cuotas vencidas no pagadas hasta el último día del mes)
+            ultimo_dia_mes = fecha_mes_fin - timedelta(days=1)  # Último día del mes
+            query_morosidad = (
+                db.query(func.sum(Cuota.monto_cuota))
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento <= ultimo_dia_mes,
+                    Cuota.estado != "PAGADO",
+                )
+            )
+            query_morosidad = FiltrosDashboard.aplicar_filtros_cuota(
+                query_morosidad, analista, concesionario, modelo, None, None
+            )
+            morosidad_mes = float(query_morosidad.scalar() or Decimal("0"))
+
             # Calcular acumulado: sumar los nuevos financiamientos del mes
             total_acumulado += Decimal(str(monto_nuevos))
 
@@ -3240,6 +3256,7 @@ def obtener_financiamiento_tendencia_mensual(
                     "monto_cuotas_programadas": monto_cuotas_programadas,
                     "monto_pagado": monto_pagado_mes,
                     "monto_cuota": monto_cuota_pagos,
+                    "morosidad": morosidad_mes,
                     "fecha_mes": fecha_mes_inicio.isoformat(),
                 }
             )
