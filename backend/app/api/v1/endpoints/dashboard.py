@@ -2145,9 +2145,7 @@ def obtener_cobranzas_mensuales(
             """
             )
 
-            result_pagos = db.execute(
-                query_pagos_sql.bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
-            )
+            result_pagos = db.execute(query_pagos_sql.bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt))
             pagos_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_pagos}
             tiempo_pagos = int((time.time() - start_pagos) * 1000)
             logger.info(f"📊 [cobranzas-mensuales] Query pagos completada en {tiempo_pagos}ms, {len(pagos_por_mes)} meses")
