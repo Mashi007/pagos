@@ -615,8 +615,6 @@ def obtener_opciones_filtros(
         )
 
         result = db.execute(query_sql)
-        all_values = {row[0].strip() for row in result if row[0] and row[0].strip()}  # type: ignore[assignment]
-
         # Separar en categorías (aproximado, ya que no podemos distinguir el origen)
         # Usar queries separadas optimizadas para categorías específicas
         analistas_set = _obtener_valores_distintos_de_columna(db, Prestamo.analista)
@@ -3027,7 +3025,6 @@ def obtener_evolucion_general_mensual(
         activos_por_mes = {}
         try:
             if ultimos_dias_lista:
-                fecha_primera_activos = min(ultimos_dias_lista)
                 fecha_ultima_activos = max(ultimos_dias_lista)
                 
                 # Query optimizada: activos acumulados por mes usando GROUP BY
