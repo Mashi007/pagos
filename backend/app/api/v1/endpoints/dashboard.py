@@ -4109,3 +4109,118 @@ def obtener_evolucion_pagos(
         except Exception:
             pass
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/resumen-financiamiento-pagado")
+@cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos
+def obtener_resumen_financiamiento_pagado(
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obtiene el resumen total de financiamiento y pagos para gráfico de barras comparativo.
+    Devuelve:
+    - total_financiamiento: Suma de todos los total_financiamiento de préstamos aprobados
+    - total_pagado: Suma de todos los monto_pagado de la tabla pagos (activos)
+    """
+    try:
+        # 1. Calcular total financiamiento (suma de todos los préstamos aprobados)
+        query_financiamiento = (
+            db.query(func.sum(Prestamo.total_financiamiento))
+            .filter(Prestamo.estado == "APROBADO")
+        )
+        query_financiamiento = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_financiamiento, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+        total_financiamiento = float(query_financiamiento.scalar() or Decimal("0"))
+
+        # 2. Calcular total pagado (suma de todos los pagos activos)
+        # ✅ Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
+        fecha_inicio_dt = None
+        fecha_fin_dt = None
+        if fecha_inicio:
+            fecha_inicio_dt = datetime.combine(fecha_inicio, datetime.min.time())
+        if fecha_fin:
+            fecha_fin_dt = datetime.combine(fecha_fin, datetime.max.time())
+
+        # Construir filtros de préstamo si existen
+        prestamo_conditions = []
+        bind_params = {}
+
+        if analista or concesionario or modelo:
+            if analista:
+                prestamo_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+                bind_params["analista"] = analista
+            if concesionario:
+                prestamo_conditions.append("pr.concesionario = :concesionario")
+                bind_params["concesionario"] = concesionario
+            if modelo:
+                prestamo_conditions.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
+                bind_params["modelo"] = modelo
+
+            where_clause = """p.monto_pagado IS NOT NULL
+              AND p.monto_pagado > 0
+              AND p.activo = TRUE
+              AND pr.estado = 'APROBADO'"""
+
+            if fecha_inicio_dt:
+                where_clause += " AND p.fecha_pago >= :fecha_inicio"
+                bind_params["fecha_inicio"] = fecha_inicio_dt
+            if fecha_fin_dt:
+                where_clause += " AND p.fecha_pago <= :fecha_fin"
+                bind_params["fecha_fin"] = fecha_fin_dt
+
+            if prestamo_conditions:
+                where_clause += " AND " + " AND ".join(prestamo_conditions)
+
+            query_pagado_sql = text(
+                f"""
+                SELECT COALESCE(SUM(p.monto_pagado), 0) as total_pagado
+                FROM pagos p
+                INNER JOIN prestamos pr ON (
+                    (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
+                    OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
+                )
+                WHERE {where_clause}
+                """
+            ).bindparams(**bind_params)
+        else:
+            # Sin filtros, query más simple
+            where_clause = """monto_pagado IS NOT NULL
+              AND monto_pagado > 0
+              AND activo = TRUE"""
+
+            if fecha_inicio_dt:
+                where_clause += " AND fecha_pago >= :fecha_inicio"
+                bind_params["fecha_inicio"] = fecha_inicio_dt
+            if fecha_fin_dt:
+                where_clause += " AND fecha_pago <= :fecha_fin"
+                bind_params["fecha_fin"] = fecha_fin_dt
+
+            query_pagado_sql = text(
+                f"""
+                SELECT COALESCE(SUM(monto_pagado), 0) as total_pagado
+                FROM pagos
+                WHERE {where_clause}
+                """
+            ).bindparams(**bind_params)
+
+        resultado_pagado = db.execute(query_pagado_sql).fetchone()
+        total_pagado = float(resultado_pagado[0] or Decimal("0"))
+
+        return {
+            "total_financiamiento": total_financiamiento,
+            "total_pagado": total_pagado,
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo resumen financiamiento/pagado: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")

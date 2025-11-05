@@ -344,6 +344,27 @@ export function DashboardMenu() {
     enabled: true,
   })
 
+  // Cargar resumen financiamiento vs pagado para gráfico de barras
+  const { data: datosResumenFinanciamiento, isLoading: loadingResumenFinanciamiento } = useQuery({
+    queryKey: ['resumen-financiamiento-pagado', JSON.stringify(filtros)],
+    queryFn: async () => {
+      const params = construirFiltrosObject()
+      const queryParams = new URLSearchParams()
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString())
+      })
+      const response = await apiClient.get(
+        `/api/v1/dashboard/resumen-financiamiento-pagado?${queryParams.toString()}`
+      ) as {
+        total_financiamiento: number
+        total_pagado: number
+      }
+      return response
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: true,
+  })
+
   // Cargar evolución de pagos (con timeout extendido)
   const { data: datosEvolucionPagos, isLoading: loadingEvolucionPagos } = useQuery({
     queryKey: ['evolucion-pagos-menu', JSON.stringify(filtros)],
@@ -409,6 +430,7 @@ export function DashboardMenu() {
       await queryClient.invalidateQueries({ queryKey: ['morosidad-analista'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['evolucion-pagos-menu'], exact: false })
+      await queryClient.invalidateQueries({ queryKey: ['resumen-financiamiento-pagado'], exact: false })
       
       // Refrescar todas las queries activas
       await queryClient.refetchQueries({ queryKey: ['kpis-principales-menu'], exact: false })
@@ -424,6 +446,7 @@ export function DashboardMenu() {
       await queryClient.refetchQueries({ queryKey: ['morosidad-analista'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['evolucion-pagos-menu'], exact: false })
+      await queryClient.refetchQueries({ queryKey: ['resumen-financiamiento-pagado'], exact: false })
       
       // También refrescar la query de kpisPrincipales usando su refetch
       await refetch()
@@ -807,6 +830,89 @@ export function DashboardMenu() {
                     </ResponsiveContainer>
                   ) : (
                     <div className="h-[450px] flex items-center justify-center text-gray-400">
+                      No hay datos disponibles
+                    </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+            {/* Gráfico de Barras: Financiamiento vs Pagado */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+            >
+              <Card className="shadow-lg border-2 border-gray-200">
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <BarChart3 className="h-6 w-6 text-blue-600" />
+                    <span>RESUMEN: FINANCIAMIENTO VS PAGADO</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  {loadingResumenFinanciamiento ? (
+                    <div className="h-[350px] flex items-center justify-center">
+                      <div className="animate-pulse text-gray-400">Cargando...</div>
+                    </div>
+                  ) : datosResumenFinanciamiento ? (
+                    <ResponsiveContainer width="100%" height={350}>
+                      <BarChart
+                        data={[
+                          {
+                            nombre: 'Financiamiento',
+                            valor: datosResumenFinanciamiento.total_financiamiento,
+                          },
+                          {
+                            nombre: 'Pagado',
+                            valor: datosResumenFinanciamiento.total_pagado,
+                          },
+                        ]}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                        <XAxis 
+                          dataKey="nombre" 
+                          stroke="#6b7280"
+                          style={{ fontSize: '14px', fontWeight: 600 }}
+                          tick={{ fill: '#6b7280' }}
+                        />
+                        <YAxis 
+                          stroke="#6b7280"
+                          style={{ fontSize: '12px', fontWeight: 500 }}
+                          tick={{ fill: '#6b7280' }}
+                          tickFormatter={(value) => formatCurrency(value)}
+                        />
+                        <Tooltip 
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            padding: '12px',
+                          }}
+                          formatter={(value: number) => formatCurrency(value)}
+                        />
+                        <Legend />
+                        <Bar 
+                          dataKey="valor" 
+                          name="Monto"
+                          radius={[8, 8, 0, 0]}
+                        >
+                          {[
+                            { nombre: 'Financiamiento', valor: datosResumenFinanciamiento.total_financiamiento },
+                            { nombre: 'Pagado', valor: datosResumenFinanciamiento.total_pagado },
+                          ].map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={entry.nombre === 'Financiamiento' ? '#3b82f6' : '#10b981'} 
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[350px] flex items-center justify-center text-gray-400">
                       No hay datos disponibles
                     </div>
                   )}
