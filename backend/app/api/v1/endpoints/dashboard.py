@@ -3031,27 +3031,17 @@ def obtener_financiamiento_tendencia_mensual(
                 Cuota.fecha_vencimiento >= fecha_inicio_query,
                 Cuota.fecha_vencimiento <= fecha_fin_query,
             )
-            .group_by(
-                func.extract("year", Cuota.fecha_vencimiento),
-                func.extract("month", Cuota.fecha_vencimiento)
-            )
-            .order_by(
-                func.extract("year", Cuota.fecha_vencimiento),
-                func.extract("month", Cuota.fecha_vencimiento)
-            )
+            .group_by(func.extract("year", Cuota.fecha_vencimiento), func.extract("month", Cuota.fecha_vencimiento))
+            .order_by(func.extract("year", Cuota.fecha_vencimiento), func.extract("month", Cuota.fecha_vencimiento))
         )
 
         # Aplicar filtros de préstamo a las cuotas
         if analista:
-            query_cuotas = query_cuotas.filter(
-                or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
-            )
+            query_cuotas = query_cuotas.filter(or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista))
         if concesionario:
             query_cuotas = query_cuotas.filter(Prestamo.concesionario == concesionario)
         if modelo:
-            query_cuotas = query_cuotas.filter(
-                or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
-            )
+            query_cuotas = query_cuotas.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
 
         resultados_cuotas = query_cuotas.all()
         cuotas_por_mes = {}
