@@ -3557,42 +3557,42 @@ def obtener_financiamiento_tendencia_mensual(
             }
 
         # ✅ Query para calcular suma de monto_cuota programado por mes (cuotas que vencen en cada mes)
-        # ⚠️ IMPORTANTE: Esto representa "Cuánto DEBERÍAMOS COBRAR este mes" (cuotas que vencen)
-        # No incluye pagos de meses anteriores ni anticipados
+        # ✅ CORRECCIÓN: Usar exactamente la misma lógica que el script SQL
+        # Suma TODAS las cuotas de TODOS los clientes que vencen en cada mes (desde 2024)
         start_cuotas = time.time()
         cuotas_por_mes = {}
         try:
-            query_cuotas = (
-                db.query(
-                    func.extract("year", Cuota.fecha_vencimiento).label("año"),
-                    func.extract("month", Cuota.fecha_vencimiento).label("mes"),
-                    func.sum(Cuota.monto_cuota).label("total_cuotas_programadas"),
+            # ✅ Usar SQL directo para coincidir exactamente con el script SQL
+            query_cuotas_sql = text("""
+                SELECT 
+                    EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
+                    EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
+                    COALESCE(SUM(c.monto_cuota), 0) as total_cuotas_programadas
+                FROM cuotas c
+                INNER JOIN prestamos p ON c.prestamo_id = p.id
+                WHERE p.estado = 'APROBADO'
+                  AND EXTRACT(YEAR FROM c.fecha_vencimiento) >= 2024
+                  AND (:analista IS NULL OR (p.analista = :analista OR p.producto_financiero = :analista))
+                  AND (:concesionario IS NULL OR p.concesionario = :concesionario)
+                  AND (:modelo IS NULL OR (p.producto = :modelo OR p.modelo_vehiculo = :modelo))
+                GROUP BY 
+                    EXTRACT(YEAR FROM c.fecha_vencimiento),
+                    EXTRACT(MONTH FROM c.fecha_vencimiento)
+                ORDER BY año, mes
+            """)
+            
+            resultados_cuotas = db.execute(
+                query_cuotas_sql.bindparams(
+                    analista=analista,
+                    concesionario=concesionario,
+                    modelo=modelo
                 )
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento >= fecha_inicio_query,
-                    Cuota.fecha_vencimiento <= fecha_fin_query,
-                )
-                .group_by(func.extract("year", Cuota.fecha_vencimiento), func.extract("month", Cuota.fecha_vencimiento))
-                .order_by(func.extract("year", Cuota.fecha_vencimiento), func.extract("month", Cuota.fecha_vencimiento))
-            )
-
-            # Aplicar filtros de préstamo a las cuotas
-            if analista:
-                query_cuotas = query_cuotas.filter(
-                    or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
-                )
-            if concesionario:
-                query_cuotas = query_cuotas.filter(Prestamo.concesionario == concesionario)
-            if modelo:
-                query_cuotas = query_cuotas.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
-
-            resultados_cuotas = query_cuotas.all()
+            ).fetchall()
+            
             for row in resultados_cuotas:
-                año_mes = int(row.año)
-                num_mes = int(row.mes)
-                cuotas_por_mes[(año_mes, num_mes)] = float(row.total_cuotas_programadas or Decimal("0"))
+                año_mes = int(row[0])
+                num_mes = int(row[1])
+                cuotas_por_mes[(año_mes, num_mes)] = float(row[2] or Decimal("0"))
 
             cuotas_time = int((time.time() - start_cuotas) * 1000)
             logger.info(f"📊 [financiamiento-tendencia] Query cuotas programadas completada en {cuotas_time}ms")
@@ -3665,7 +3665,8 @@ def obtener_financiamiento_tendencia_mensual(
                     """
                 ).bindparams(**bind_params_pagos)
             else:
-                # Sin filtros, query más simple sin JOIN (solo tabla pagos)
+                # ✅ Sin filtros, query más simple - Usar exactamente la misma lógica que el script SQL
+                # ✅ CORRECCIÓN: Sumar TODOS los pagos desde 2024, sin límite de fecha fin
                 query_pagos_sql = text(
                     """
                     SELECT 
@@ -3673,23 +3674,22 @@ def obtener_financiamiento_tendencia_mensual(
                         EXTRACT(MONTH FROM fecha_pago)::integer as mes,
                         COALESCE(SUM(monto_pagado), 0) as total_pagado
                     FROM pagos
-                    WHERE fecha_pago >= :fecha_inicio
-                      AND fecha_pago <= :fecha_fin
-                      AND monto_pagado IS NOT NULL
+                    WHERE monto_pagado IS NOT NULL
                       AND monto_pagado > 0
                       AND activo = TRUE
+                      AND EXTRACT(YEAR FROM fecha_pago) >= 2024
                     GROUP BY 
                         EXTRACT(YEAR FROM fecha_pago),
                         EXTRACT(MONTH FROM fecha_pago)
                     ORDER BY año, mes
                     """
-                ).bindparams(fecha_inicio=fecha_inicio_query_dt, fecha_fin=fecha_fin_query_dt)
+                )
 
             resultados_pagos = db.execute(query_pagos_sql).fetchall()
             for row in resultados_pagos:
-                año_mes = int(row.año)
-                num_mes = int(row.mes)
-                pagos_por_mes[(año_mes, num_mes)] = float(row.total_pagado or Decimal("0"))
+                año_mes = int(row[0])  # Índice de tupla
+                num_mes = int(row[1])  # Índice de tupla
+                pagos_por_mes[(año_mes, num_mes)] = float(row[2] or Decimal("0"))
         except Exception as e:
             logger.error(f"⚠️ [financiamiento-tendencia] Error consultando pagos: {e}", exc_info=True)
             try:
@@ -3811,6 +3811,15 @@ def obtener_financiamiento_tendencia_mensual(
 
             # ✅ CÁLCULO CORREGIDO: Morosidad mensual = MAX(0, Programado - Pagado)
             morosidad_mensual = max(0.0, monto_cuotas_programadas - monto_pagado_mes)
+            
+            # ✅ Logging para diagnóstico
+            if morosidad_mensual > 0 or monto_cuotas_programadas > 0:
+                logger.info(
+                    f"📊 [financiamiento-tendencia] {fecha_mes_inicio.strftime('%Y-%m')}: "
+                    f"Programado=${monto_cuotas_programadas:,.2f}, "
+                    f"Pagado=${monto_pagado_mes:,.2f}, "
+                    f"Morosidad=${morosidad_mensual:,.2f}"
+                )
 
             # ✅ CÁLCULO CORREGIDO: Morosidad acumulada = Morosidad acumulada anterior + Morosidad mensual
             # NOTA: La morosidad acumulada solo aumenta, nunca disminuye (incluso si hay sobrepagos)
