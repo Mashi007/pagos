@@ -1320,28 +1320,60 @@ export function DashboardMenu() {
                         <div className="animate-pulse text-gray-400">Cargando...</div>
           </div>
                     ) : datosFinanciamientoRangos && datosFinanciamientoRangos.rangos.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={450}>
-                        <BarChart
-                          data={datosFinanciamientoRangos.rangos}
-                          layout="vertical"
-                          margin={{ top: 20, right: 30, left: 120, bottom: 5 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis 
-                            type="number" 
-                            stroke="#6b7280"
-                            domain={[0, 'dataMax']}
-                            tickFormatter={(value) => formatCurrency(value)}
-                            style={{ fontSize: '12px', fontWeight: 500 }}
-                            tick={{ fill: '#6b7280' }}
-                          />
-                          <YAxis 
-                            type="category" 
-                            dataKey="categoria" 
-                            stroke="#6b7280" 
-                            width={110}
-                            tick={{ fontSize: 12 }}
-                          />
+                      (() => {
+                        // Calcular máximo y mínimo de los datos para ajustar escala automáticamente
+                        const valores = datosFinanciamientoRangos.rangos.map(r => r.monto_total || 0)
+                        const maxValor = Math.max(...valores)
+                        const valoresNoCero = valores.filter(v => v > 0)
+                        const minValor = valoresNoCero.length > 0 ? Math.min(...valoresNoCero) : 0
+                        
+                        // Calcular dominio con padding inteligente (10% o mínimo 1000, lo que sea mayor)
+                        const padding = Math.max(maxValor * 0.1, 1000)
+                        const dominioMax = maxValor + padding
+                        const dominioMin = 0 // Siempre empezar desde 0 para mejor visualización
+                        
+                        // Ordenar rangos por valor numérico del rango (de mayor a menor para efecto pirámide)
+                        const rangosOrdenados = [...datosFinanciamientoRangos.rangos].sort((a, b) => {
+                          // Extraer el valor mínimo del rango para ordenar
+                          const getMinValue = (categoria: string) => {
+                            // Limpiar formato: remover puntos y comas
+                            const cleanCategoria = categoria.replace(/[.,]/g, '')
+                            if (cleanCategoria.includes('+')) {
+                              // Formato: $50000+
+                              const match = cleanCategoria.match(/\$(\d+)\+/)
+                              return match ? parseInt(match[1]) : 999999
+                            }
+                            // Formato: $6000 - $6500
+                            const match = cleanCategoria.match(/\$(\d+)\s*-\s*\$\d+/)
+                            return match ? parseInt(match[1]) : 0
+                          }
+                          return getMinValue(b.categoria) - getMinValue(a.categoria)
+                        })
+                        
+                        return (
+                          <ResponsiveContainer width="100%" height={450}>
+                            <BarChart
+                              data={rangosOrdenados}
+                              layout="vertical"
+                              margin={{ top: 20, right: 30, left: 120, bottom: 5 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                              <XAxis 
+                                type="number" 
+                                stroke="#6b7280"
+                                domain={[dominioMin, dominioMax]}
+                                tickFormatter={(value) => formatCurrency(value)}
+                                style={{ fontSize: '12px', fontWeight: 500 }}
+                                tick={{ fill: '#6b7280' }}
+                                allowDataOverflow={false}
+                              />
+                              <YAxis 
+                                type="category" 
+                                dataKey="categoria" 
+                                stroke="#6b7280" 
+                                width={110}
+                                tick={{ fontSize: 12 }}
+                              />
                           <Tooltip
                             formatter={(value: number, name: string, props: any) => {
                               if (name === 'monto_total') {
@@ -1359,22 +1391,24 @@ export function DashboardMenu() {
                               borderRadius: '8px',
                             }}
                           />
-                          <Legend />
-                          <Bar
-                            dataKey="monto_total"
-                            fill="#f97316"
-                            radius={[0, 8, 8, 0]}
-                            name="Total Financiamiento"
-                          >
-                            {datosFinanciamientoRangos.rangos.map((entry, index) => (
-                              <Cell
-                                key={`cell-rango-${index}`}
-                                fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]}
-                              />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
+                              <Legend />
+                              <Bar
+                                dataKey="monto_total"
+                                fill="#f97316"
+                                radius={[0, 8, 8, 0]}
+                                name="Total Financiamiento"
+                              >
+                                {rangosOrdenados.map((entry, index) => (
+                                  <Cell
+                                    key={`cell-rango-${index}`}
+                                    fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]}
+                                  />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )
+                      })()
                     ) : (
                       <div className="h-[450px] flex items-center justify-center text-gray-400">
                         No hay datos disponibles

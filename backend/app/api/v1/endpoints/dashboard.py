@@ -3390,6 +3390,7 @@ def obtener_financiamiento_tendencia_mensual(
         # ✅ OPTIMIZACIÓN: Una sola query para obtener todos los nuevos financiamientos por mes con GROUP BY
         start_query = time.time()
         resultados_nuevos = []
+        query_time = 0  # Inicializar query_time
         try:
             # Construir filtros base
             # ⚠️ TEMPORAL: Usar fecha_aprobacion porque fecha_registro no migró correctamente
@@ -3427,6 +3428,7 @@ def obtener_financiamiento_tendencia_mensual(
             except Exception:
                 pass
             resultados_nuevos = []
+            query_time = int((time.time() - start_query) * 1000)
 
         # Crear diccionario de nuevos financiamientos por mes
         nuevos_por_mes = {}
@@ -3668,6 +3670,8 @@ def obtener_financiamiento_tendencia_mensual(
         total_acumulado = Decimal("0")
         morosidad_acumulada = Decimal("0")  # ✅ Morosidad acumulada inicial
 
+        logger.info(f"📊 [financiamiento-tendencia] Generando meses desde {fecha_inicio_query} hasta {hoy}")
+
         # ⚠️ TEMPORAL: Usar fecha_aprobacion en lugar de fecha_registro
         while current_date <= hoy:
             año_mes = current_date.year
@@ -3724,6 +3728,10 @@ def obtener_financiamiento_tendencia_mensual(
         logger.info(
             f"⏱️ [financiamiento-tendencia] Tiempo total: {total_time}ms (query: {query_time}ms, process: {process_time}ms)"
         )
+        logger.info(f"📊 [financiamiento-tendencia] Generados {len(meses_data)} meses de datos")
+
+        if len(meses_data) == 0:
+            logger.warning("⚠️ [financiamiento-tendencia] No se generaron meses de datos. Verificar fecha_inicio_query y hoy")
 
         return {"meses": meses_data, "fecha_inicio": fecha_inicio_query.isoformat(), "fecha_fin": hoy.isoformat()}
 
