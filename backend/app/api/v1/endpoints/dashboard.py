@@ -3093,53 +3093,52 @@ def obtener_financiamiento_tendencia_mensual(
         logger.info(f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms")
 
         # ✅ Query para calcular suma de monto_cuota de cuotas relacionadas con pagos_staging del mes
+        # OPTIMIZACIÓN SIMPLIFICADA: Obtener préstamos únicos con pagos, luego sumar cuotas agrupadas por mes de vencimiento
         start_cuotas_pagos = time.time()
         # ⚠️ PagoStaging no tiene prestamo_id ni numero_cuota, usar SQL directo relacionando por cedula_cliente
-        # Relacionar pagos_staging -> prestamos (por cedula) -> cuotas
-        # Relacionar cuotas por fecha de vencimiento cercana a la fecha de pago (dentro del mismo mes)
-        # para evitar duplicados y obtener la cuota más probable relacionada con cada pago
+        # Estrategia simplificada: Obtener préstamos que tienen pagos en el período, luego sumar todas sus cuotas por mes
         
-        # Construir condiciones WHERE para filtros
-        where_conditions = [
-            "ps.fecha_pago IS NOT NULL",
-            "ps.fecha_pago != ''",
-            "ps.fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'",
-            "ps.fecha_pago::timestamp >= :fecha_inicio",
-            "ps.fecha_pago::timestamp <= :fecha_fin",
-            "ps.monto_pagado IS NOT NULL",
-            "ps.monto_pagado != ''",
-            "pr.estado = 'APROBADO'",
-            "ps.cedula_cliente = pr.cedula",
-            "c.prestamo_id = pr.id",
-            "EXTRACT(YEAR FROM c.fecha_vencimiento) = EXTRACT(YEAR FROM ps.fecha_pago::timestamp)",
-            "EXTRACT(MONTH FROM c.fecha_vencimiento) = EXTRACT(MONTH FROM ps.fecha_pago::timestamp)"
-        ]
-        
-        # Aplicar filtros adicionales si existen
+        # Construir condiciones WHERE base para filtros de préstamos
+        prestamo_conditions = ["pr.estado = 'APROBADO'"]
         bind_params = {"fecha_inicio": fecha_inicio_query_dt, "fecha_fin": fecha_fin_query_dt}
+        
         if analista:
-            where_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+            prestamo_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
             bind_params["analista"] = analista
         if concesionario:
-            where_conditions.append("pr.concesionario = :concesionario")
+            prestamo_conditions.append("pr.concesionario = :concesionario")
             bind_params["concesionario"] = concesionario
         if modelo:
-            where_conditions.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
+            prestamo_conditions.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
             bind_params["modelo"] = modelo
         
+        # Query simplificada: Una sola CTE para préstamos únicos, luego JOIN directo con cuotas
         query_cuotas_pagos_sql = text(
             f"""
+            WITH prestamos_con_pagos AS (
+                SELECT DISTINCT pr.id as prestamo_id
+                FROM pagos_staging ps
+                INNER JOIN prestamos pr ON ps.cedula_cliente = pr.cedula
+                WHERE ps.fecha_pago IS NOT NULL
+                  AND ps.fecha_pago != ''
+                  AND ps.fecha_pago ~ '^\\d{{4}}-\\d{{2}}-\\d{{2}}'
+                  AND ps.fecha_pago::timestamp >= :fecha_inicio
+                  AND ps.fecha_pago::timestamp <= :fecha_fin
+                  AND ps.monto_pagado IS NOT NULL
+                  AND ps.monto_pagado != ''
+                  AND {' AND '.join(prestamo_conditions)}
+            )
             SELECT 
-                EXTRACT(YEAR FROM ps.fecha_pago::timestamp)::integer as año,
-                EXTRACT(MONTH FROM ps.fecha_pago::timestamp)::integer as mes,
-                COALESCE(SUM(c.monto_cuota), 0) as total_monto_cuota
-            FROM pagos_staging ps
-            INNER JOIN prestamos pr ON ps.cedula_cliente = pr.cedula
-            INNER JOIN cuotas c ON c.prestamo_id = pr.id
-            WHERE {' AND '.join(where_conditions)}
+                EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
+                EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
+                SUM(c.monto_cuota) as total_monto_cuota
+            FROM cuotas c
+            INNER JOIN prestamos_con_pagos pcp ON c.prestamo_id = pcp.prestamo_id
+            WHERE c.fecha_vencimiento >= :fecha_inicio
+              AND c.fecha_vencimiento <= :fecha_fin
             GROUP BY 
-                EXTRACT(YEAR FROM ps.fecha_pago::timestamp),
-                EXTRACT(MONTH FROM ps.fecha_pago::timestamp)
+                EXTRACT(YEAR FROM c.fecha_vencimiento),
+                EXTRACT(MONTH FROM c.fecha_vencimiento)
             ORDER BY año, mes
             """
         ).bindparams(**bind_params)
