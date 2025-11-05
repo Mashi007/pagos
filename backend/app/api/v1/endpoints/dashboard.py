@@ -1104,12 +1104,12 @@ def dashboard_administrador(
 
         # Total cobrado mes anterior
         try:
-        mes_anterior, año_anterior = _calcular_mes_anterior(mes_actual, año_actual)
-        primer_dia_mes_anterior, ultimo_dia_mes_anterior = _obtener_fechas_mes(mes_anterior, año_anterior)
+            mes_anterior, año_anterior = _calcular_mes_anterior(mes_actual, año_actual)
+            primer_dia_mes_anterior, ultimo_dia_mes_anterior = _obtener_fechas_mes(mes_anterior, año_anterior)
 
-        total_cobrado_anterior = _calcular_total_cobrado_mes(
-            db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
-        )
+            total_cobrado_anterior = _calcular_total_cobrado_mes(
+                db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
+            )
         except Exception as e:
             logger.warning(f"Error calculando total cobrado anterior: {e}")
             try:
@@ -1133,9 +1133,9 @@ def dashboard_administrador(
 
         # Tasa recuperación mes anterior
         try:
-        tasa_recuperacion_anterior = _calcular_tasa_recuperacion(
-            db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
-        )
+            tasa_recuperacion_anterior = _calcular_tasa_recuperacion(
+                db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
+            )
         except Exception as e:
             logger.warning(f"Error calculando tasa recuperación anterior: {e}")
             try:
@@ -2077,7 +2077,7 @@ def obtener_cobranzas_mensuales(
 
         # Si no está en los datos calculados, hacer query adicional solo si es necesario
         if meta_actual == 0.0:
-        mes_actual_inicio = date(hoy.year, hoy.month, 1)
+            mes_actual_inicio = date(hoy.year, hoy.month, 1)
         if hoy.month == 12:
             mes_actual_fin = date(hoy.year + 1, 1, 1)
         else:
@@ -3333,35 +3333,35 @@ def obtener_financiamiento_tendencia_mensual(
         start_query = time.time()
         resultados_nuevos = []
         try:
-        # Construir filtros base
+            # Construir filtros base
             # ⚠️ TEMPORAL: Usar fecha_aprobacion porque fecha_registro no migró correctamente
-        filtros_base = [Prestamo.estado == "APROBADO"]
-        if fecha_inicio_query:
+            filtros_base = [Prestamo.estado == "APROBADO"]
+            if fecha_inicio_query:
                 filtros_base.append(Prestamo.fecha_aprobacion >= fecha_inicio_query)
-        if fecha_fin_query:
+            if fecha_fin_query:
                 filtros_base.append(Prestamo.fecha_aprobacion <= fecha_fin_query)
 
-        # Query optimizada: GROUP BY año y mes
-        query_nuevos = (
-            db.query(
+            # Query optimizada: GROUP BY año y mes
+            query_nuevos = (
+                db.query(
                     func.extract("year", Prestamo.fecha_aprobacion).label("año"),
                     func.extract("month", Prestamo.fecha_aprobacion).label("mes"),
-                func.count(Prestamo.id).label("cantidad"),
-                func.sum(Prestamo.total_financiamiento).label("monto_total"),
-            )
-            .filter(*filtros_base)
+                    func.count(Prestamo.id).label("cantidad"),
+                    func.sum(Prestamo.total_financiamiento).label("monto_total"),
+                )
+                .filter(*filtros_base)
                 .group_by(func.extract("year", Prestamo.fecha_aprobacion), func.extract("month", Prestamo.fecha_aprobacion))
                 .order_by(func.extract("year", Prestamo.fecha_aprobacion), func.extract("month", Prestamo.fecha_aprobacion))
-        )
+            )
 
-        # Aplicar filtros adicionales (si hay)
-        query_nuevos = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_nuevos, analista, concesionario, modelo, fecha_inicio, fecha_fin
-        )
+            # Aplicar filtros adicionales (si hay)
+            query_nuevos = FiltrosDashboard.aplicar_filtros_prestamo(
+                query_nuevos, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            )
 
-        resultados_nuevos = query_nuevos.all()
-        query_time = int((time.time() - start_query) * 1000)
-        logger.info(f"📊 [financiamiento-tendencia] Query completada en {query_time}ms, {len(resultados_nuevos)} meses")
+            resultados_nuevos = query_nuevos.all()
+            query_time = int((time.time() - start_query) * 1000)
+            logger.info(f"📊 [financiamiento-tendencia] Query completada en {query_time}ms, {len(resultados_nuevos)} meses")
         except Exception as e:
             logger.error(f"⚠️ [financiamiento-tendencia] Error en query nuevos financiamientos: {e}", exc_info=True)
             try:
