@@ -1,4 +1,5 @@
 import logging
+import time
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -1216,50 +1217,67 @@ def dashboard_administrador(
             fecha_primera = meses_rango[0]["inicio_dt"]
             fecha_ultima = meses_rango[-1]["fin_dt"]
             # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
-            pagos_evolucion_query = db.execute(
-                text(
+            try:
+                pagos_evolucion_query = db.execute(
+                    text(
+                        """
+                        SELECT 
+                            EXTRACT(YEAR FROM fecha_pago)::integer as año,
+                            EXTRACT(MONTH FROM fecha_pago)::integer as mes,
+                            COALESCE(SUM(monto_pagado), 0) as monto_total
+                        FROM pagos
+                        WHERE fecha_pago >= :fecha_inicio
+                          AND fecha_pago <= :fecha_fin
+                          AND monto_pagado IS NOT NULL
+                          AND monto_pagado > 0
+                          AND activo = TRUE
+                        GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
+                        ORDER BY año, mes
                     """
-                    SELECT 
-                        EXTRACT(YEAR FROM fecha_pago)::integer as año,
-                        EXTRACT(MONTH FROM fecha_pago)::integer as mes,
-                        COALESCE(SUM(monto_pagado), 0) as monto_total
-                    FROM pagos
-                    WHERE fecha_pago >= :fecha_inicio
-                      AND fecha_pago <= :fecha_fin
-                      AND monto_pagado IS NOT NULL
-                      AND monto_pagado > 0
-                      AND activo = TRUE
-                    GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
-                    ORDER BY año, mes
-                """
-                ).bindparams(fecha_inicio=fecha_primera, fecha_fin=fecha_ultima)
-            )
-            pagos_por_mes = {(int(row[0]), int(row[1])): Decimal(str(row[2] or 0)) for row in pagos_evolucion_query}
+                    ).bindparams(fecha_inicio=fecha_primera, fecha_fin=fecha_ultima)
+                )
+                pagos_por_mes = {(int(row[0]), int(row[1])): Decimal(str(row[2] or 0)) for row in pagos_evolucion_query}
+            except Exception as e:
+                logger.error(f"Error consultando pagos en dashboard_administrador: {e}", exc_info=True)
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                pagos_por_mes = {}
 
             # ✅ OPTIMIZACIÓN: Una sola query para obtener cuotas vencidas por mes
-            cuotas_vencidas_query = db.execute(
-                text(
+            try:
+                cuotas_vencidas_query = db.execute(
+                    text(
+                        """
+                        SELECT 
+                            EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
+                            EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
+                            COUNT(*) as cantidad_vencidas
+                        FROM cuotas c
+                        INNER JOIN prestamos p ON c.prestamo_id = p.id
+                        WHERE p.estado = 'APROBADO'
+                          AND c.estado != 'PAGADO'
+                          AND c.fecha_vencimiento >= :fecha_inicio
+                          AND c.fecha_vencimiento <= :fecha_fin
+                        GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+                        ORDER BY año, mes
                     """
-                    SELECT 
-                        EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
-                        EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
-                        COUNT(*) as cantidad_vencidas
-                    FROM cuotas c
-                    INNER JOIN prestamos p ON c.prestamo_id = p.id
-                    WHERE p.estado = 'APROBADO'
-                      AND c.estado != 'PAGADO'
-                      AND c.fecha_vencimiento >= :fecha_inicio
-                      AND c.fecha_vencimiento <= :fecha_fin
-                    GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
-                    ORDER BY año, mes
-                """
-                ).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
-            )
-            cuotas_vencidas_por_mes = {(int(row[0]), int(row[1])): int(row[2] or 0) for row in cuotas_vencidas_query}
+                    ).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
+                )
+                cuotas_vencidas_por_mes = {(int(row[0]), int(row[1])): int(row[2] or 0) for row in cuotas_vencidas_query}
+            except Exception as e:
+                logger.error(f"Error consultando cuotas vencidas en dashboard_administrador: {e}", exc_info=True)
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                cuotas_vencidas_por_mes = {}
 
             # ✅ OPTIMIZACIÓN: Una sola query para obtener cuotas pagadas por mes
-            cuotas_pagadas_query = db.execute(
-                text(
+            try:
+                cuotas_pagadas_query = db.execute(
+                    text(
                     """
                     SELECT 
                         EXTRACT(YEAR FROM DATE(c.fecha_pago))::integer as año,
@@ -1276,8 +1294,15 @@ def dashboard_administrador(
                     ORDER BY año, mes
                 """
                 ).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
-            )
-            cuotas_pagadas_por_mes = {(int(row[0]), int(row[1])): int(row[2] or 0) for row in cuotas_pagadas_query}
+                )
+                cuotas_pagadas_por_mes = {(int(row[0]), int(row[1])): int(row[2] or 0) for row in cuotas_pagadas_query}
+            except Exception as e:
+                logger.error(f"Error consultando cuotas pagadas en dashboard_administrador: {e}", exc_info=True)
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                cuotas_pagadas_por_mes = {}
 
             # ✅ OPTIMIZACIÓN: Calcular cartera acumulada para todos los meses en una sola query
             # Usar una query con CASE WHEN para calcular cartera acumulada por mes
@@ -1688,6 +1713,7 @@ def obtener_kpis_principales(
     - Total Clientes
     - Total Morosidad en Dólares
     """
+    start_time = time.time()
     try:
         hoy = date.today()
         mes_actual = hoy.month
@@ -1870,6 +1896,9 @@ def obtener_kpis_principales(
             "Diciembre",
         ]
 
+        total_time = int((time.time() - start_time) * 1000)
+        logger.info(f"📊 [kpis-principales] Completado en {total_time}ms")
+
         return {
             "total_prestamos": {
                 "valor_actual": total_prestamos_actual,
@@ -1924,6 +1953,10 @@ def obtener_kpis_principales(
 
     except Exception as e:
         logger.error(f"Error obteniendo KPIs principales: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -1996,26 +2029,35 @@ def obtener_cobranzas_mensuales(
             params_cobranzas["modelo"] = modelo
 
         where_clause_cobranzas = " AND ".join(filtros_cobranzas)
-        query_cobranzas_sql = text(
-            f"""
-            SELECT 
-                EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
-                EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
-                COALESCE(SUM(c.monto_cuota), 0) as cobranzas
-            FROM cuotas c
-            INNER JOIN prestamos p ON c.prestamo_id = p.id
-            WHERE {where_clause_cobranzas}
-            GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
-            ORDER BY año, mes
-        """
-        ).bindparams(**params_cobranzas)
+        try:
+            query_cobranzas_sql = text(
+                f"""
+                SELECT 
+                    EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
+                    EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
+                    COALESCE(SUM(c.monto_cuota), 0) as cobranzas
+                FROM cuotas c
+                INNER JOIN prestamos p ON c.prestamo_id = p.id
+                WHERE {where_clause_cobranzas}
+                GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+                ORDER BY año, mes
+            """
+            ).bindparams(**params_cobranzas)
 
-        result_cobranzas = db.execute(query_cobranzas_sql)
-        cobranzas_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_cobranzas}
-        tiempo_cobranzas = int((time.time() - start_cobranzas) * 1000)
-        logger.info(
-            f"📊 [cobranzas-mensuales] Query cobranzas completada en {tiempo_cobranzas}ms, {len(cobranzas_por_mes)} meses"
-        )
+            result_cobranzas = db.execute(query_cobranzas_sql)
+            cobranzas_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_cobranzas}
+            tiempo_cobranzas = int((time.time() - start_cobranzas) * 1000)
+            logger.info(
+                f"📊 [cobranzas-mensuales] Query cobranzas completada en {tiempo_cobranzas}ms, {len(cobranzas_por_mes)} meses"
+            )
+        except Exception as e:
+            logger.error(f"Error consultando cobranzas en cobranzas-mensuales: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            cobranzas_por_mes = {}
+            tiempo_cobranzas = int((time.time() - start_cobranzas) * 1000)
 
         # ✅ OPTIMIZACIÓN: Query única para pagos reales con GROUP BY
         start_pagos = time.time()
@@ -2023,27 +2065,36 @@ def obtener_cobranzas_mensuales(
         fecha_fin_dt = datetime.combine(hoy, datetime.max.time())
 
         # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
-        query_pagos_sql = text(
+        try:
+            query_pagos_sql = text(
+                """
+                SELECT 
+                    EXTRACT(YEAR FROM fecha_pago)::int as año,
+                    EXTRACT(MONTH FROM fecha_pago)::int as mes,
+                    COALESCE(SUM(monto_pagado), 0) as pagos
+                FROM pagos
+                WHERE fecha_pago >= :fecha_inicio
+                  AND fecha_pago <= :fecha_fin
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado > 0
+                  AND activo = TRUE
+                GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
+                ORDER BY año, mes
             """
-            SELECT 
-                EXTRACT(YEAR FROM fecha_pago)::int as año,
-                EXTRACT(MONTH FROM fecha_pago)::int as mes,
-                COALESCE(SUM(monto_pagado), 0) as pagos
-            FROM pagos
-            WHERE fecha_pago >= :fecha_inicio
-              AND fecha_pago <= :fecha_fin
-              AND monto_pagado IS NOT NULL
-              AND monto_pagado > 0
-              AND activo = TRUE
-            GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
-            ORDER BY año, mes
-        """
-        ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+            ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
 
-        result_pagos = db.execute(query_pagos_sql)
-        pagos_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_pagos}
-        tiempo_pagos = int((time.time() - start_pagos) * 1000)
-        logger.info(f"📊 [cobranzas-mensuales] Query pagos completada en {tiempo_pagos}ms, {len(pagos_por_mes)} meses")
+            result_pagos = db.execute(query_pagos_sql)
+            pagos_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_pagos}
+            tiempo_pagos = int((time.time() - start_pagos) * 1000)
+            logger.info(f"📊 [cobranzas-mensuales] Query pagos completada en {tiempo_pagos}ms, {len(pagos_por_mes)} meses")
+        except Exception as e:
+            logger.error(f"Error consultando pagos en cobranzas-mensuales: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            pagos_por_mes = {}
+            tiempo_pagos = int((time.time() - start_pagos) * 1000)
 
         # Generar datos mensuales (incluyendo meses sin datos)
         meses_data = []
@@ -2078,24 +2129,32 @@ def obtener_cobranzas_mensuales(
         # Si no está en los datos calculados, hacer query adicional solo si es necesario
         if meta_actual == 0.0:
             mes_actual_inicio = date(hoy.year, hoy.month, 1)
-        if hoy.month == 12:
-            mes_actual_fin = date(hoy.year + 1, 1, 1)
-        else:
-            mes_actual_fin = date(hoy.year, hoy.month + 1, 1)
+            if hoy.month == 12:
+                mes_actual_fin = date(hoy.year + 1, 1, 1)
+            else:
+                mes_actual_fin = date(hoy.year, hoy.month + 1, 1)
 
-        query_meta = (
-            db.query(func.sum(Cuota.monto_cuota))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento >= mes_actual_inicio,
-                Cuota.fecha_vencimiento < mes_actual_fin,
-            )
-        )
-        query_meta = FiltrosDashboard.aplicar_filtros_cuota(
-            query_meta, analista, concesionario, modelo, fecha_inicio, fecha_fin
-        )
-        meta_actual = float(query_meta.scalar() or Decimal("0"))
+            try:
+                query_meta = (
+                    db.query(func.sum(Cuota.monto_cuota))
+                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                    .filter(
+                        Prestamo.estado == "APROBADO",
+                        Cuota.fecha_vencimiento >= mes_actual_inicio,
+                        Cuota.fecha_vencimiento < mes_actual_fin,
+                    )
+                )
+                query_meta = FiltrosDashboard.aplicar_filtros_cuota(
+                    query_meta, analista, concesionario, modelo, fecha_inicio, fecha_fin
+                )
+                meta_actual = float(query_meta.scalar() or Decimal("0"))
+            except Exception as e:
+                logger.error(f"Error consultando meta en cobranzas-mensuales: {e}", exc_info=True)
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                meta_actual = 0.0
 
         tiempo_meta = int((time.time() - start_meta) * 1000)
         total_time = int((time.time() - start_time) * 1000)
@@ -2293,6 +2352,7 @@ def obtener_morosidad_por_analista(
     Componente 3: Morosidad por Analista
     Todos los clientes que tienen morosidad desde 1 día
     """
+    start_time = time.time()
     try:
         hoy = date.today()
 
@@ -2322,6 +2382,7 @@ def obtener_morosidad_por_analista(
             query = query.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
 
         resultados = query.all()
+        query_time = int((time.time() - start_time) * 1000)
 
         analistas_data = []
         for row in resultados:
@@ -2344,10 +2405,17 @@ def obtener_morosidad_por_analista(
         # Ordenar de mayor a menor por total_morosidad
         analistas_data.sort(key=lambda x: x["total_morosidad"], reverse=True)
 
+        total_time = int((time.time() - start_time) * 1000)
+        logger.info(f"📊 [morosidad-por-analista] Query: {query_time}ms, Total: {total_time}ms, {len(analistas_data)} analistas")
+
         return {"analistas": analistas_data}
 
     except Exception as e:
         logger.error(f"Error obteniendo morosidad por analista: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -3965,30 +4033,39 @@ def obtener_evolucion_pagos(
         hoy_dt = datetime.combine(hoy, datetime.max.time())
 
         # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
-        query_pagos = db.execute(
-            text(
-                """
-                SELECT 
-                    EXTRACT(YEAR FROM fecha_pago)::integer as año,
-                    EXTRACT(MONTH FROM fecha_pago)::integer as mes,
-                    COUNT(*) as cantidad,
-                    COALESCE(SUM(monto_pagado), 0) as monto_total
-                FROM pagos
-                WHERE fecha_pago >= :fecha_inicio
-                  AND fecha_pago <= :fecha_fin
-                  AND monto_pagado IS NOT NULL
-                  AND monto_pagado > 0
-                  AND activo = TRUE
-                GROUP BY 
-                    EXTRACT(YEAR FROM fecha_pago),
-                    EXTRACT(MONTH FROM fecha_pago)
-                ORDER BY año, mes
-                """
-            ).bindparams(fecha_inicio=fecha_inicio_query_dt, fecha_fin=hoy_dt)
-        )
-        resultados = query_pagos.fetchall()
-        query_time = int((time.time() - start_query) * 1000)
-        logger.info(f"📊 [evolucion-pagos] Query completada en {query_time}ms, {len(resultados)} registros")
+        try:
+            query_pagos = db.execute(
+                text(
+                    """
+                    SELECT 
+                        EXTRACT(YEAR FROM fecha_pago)::integer as año,
+                        EXTRACT(MONTH FROM fecha_pago)::integer as mes,
+                        COUNT(*) as cantidad,
+                        COALESCE(SUM(monto_pagado), 0) as monto_total
+                    FROM pagos
+                    WHERE fecha_pago >= :fecha_inicio
+                      AND fecha_pago <= :fecha_fin
+                      AND monto_pagado IS NOT NULL
+                      AND monto_pagado > 0
+                      AND activo = TRUE
+                    GROUP BY 
+                        EXTRACT(YEAR FROM fecha_pago),
+                        EXTRACT(MONTH FROM fecha_pago)
+                    ORDER BY año, mes
+                    """
+                ).bindparams(fecha_inicio=fecha_inicio_query_dt, fecha_fin=hoy_dt)
+            )
+            resultados = query_pagos.fetchall()
+            query_time = int((time.time() - start_query) * 1000)
+            logger.info(f"📊 [evolucion-pagos] Query completada en {query_time}ms, {len(resultados)} registros")
+        except Exception as e:
+            logger.error(f"Error consultando pagos en evolucion-pagos: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            resultados = []
+            query_time = int((time.time() - start_query) * 1000)
 
         # Crear diccionario de resultados por año-mes para acceso rápido
         # ✅ CORRECCIÓN: Usar acceso por índice en lugar de atributo para compatibilidad con Row
