@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Filter,
   TrendingUp,
+  TrendingDown,
   Users,
   Target,
   AlertTriangle,
@@ -111,7 +112,15 @@ export function DashboardMenu() {
         console.log('🔍 [Dashboard Admin] Parámetros construidos:', params)
         // Usar timeout extendido para endpoints lentos
         const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`, { timeout: 60000 }) as {
-          financieros?: { ingresosCapital: number; ingresosInteres: number; ingresosMora: number }
+          financieros?: { 
+            ingresosCapital: number
+            ingresosInteres: number
+            ingresosMora: number
+            totalCobrado: number
+            totalCobradoAnterior: number
+          }
+          meta_mensual?: number
+          avance_meta?: number
           evolucion_mensual?: Array<{ mes: string; cartera: number; cobrado: number; morosidad: number }>
         }
         return response
@@ -252,7 +261,7 @@ export function DashboardMenu() {
         `/api/v1/dashboard/composicion-morosidad?${queryParams.toString()}`
       ) as {
         puntos: Array<{
-          dias_atraso: number
+          categoria: string
           monto: number
           cantidad_cuotas: number
         }>
@@ -425,12 +434,12 @@ export function DashboardMenu() {
       await queryClient.refetchQueries({ queryKey: ['resumen-financiamiento-pagado'], exact: false })
       
       // También refrescar la query de kpisPrincipales usando su refetch
-      await refetch()
+    await refetch()
       console.log('✅ [DashboardMenu] Todas las queries refrescadas exitosamente')
     } catch (error) {
       console.error('❌ [DashboardMenu] Error al refrescar queries:', error)
     } finally {
-      setIsRefreshing(false)
+    setIsRefreshing(false)
     }
   }
 
@@ -539,17 +548,13 @@ export function DashboardMenu() {
                   }}
                 />
                 <KpiCardLarge
-                  title="Créditos Nuevos"
+                  title="Créditos Aprobados"
                   value={kpisPrincipales.creditos_nuevos_mes.valor_actual}
                   icon={TrendingUp}
                   color="text-green-600"
                   bgColor="bg-green-100"
                   borderColor="border-green-500"
                   format="number"
-                  variation={{
-                    percent: kpisPrincipales.creditos_nuevos_mes.variacion_porcentual,
-                    label: 'vs mes anterior',
-                  }}
                 />
                 {/* Card de Clientes por Estado */}
                 <motion.div
@@ -557,34 +562,39 @@ export function DashboardMenu() {
                   animate={{ opacity: 1, y: 0 }}
                   whileHover={{ scale: 1.02, y: -4 }}
                   transition={{ duration: 0.2 }}
-                  className="relative min-h-[180px] bg-white rounded-xl border-2 border-blue-500 shadow-[0_4px_20px_rgba(0,0,0,0.12)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.18)] transition-all duration-300 overflow-hidden group"
+                  className="relative min-h-[200px] bg-white rounded-xl border-2 border-blue-500 shadow-[0_4px_20px_rgba(0,0,0,0.12)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.18)] transition-all duration-300 overflow-hidden group"
                 >
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-blue-100 opacity-80"></div>
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300 bg-blue-100"></div>
+                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-blue-100 opacity-90"></div>
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-300 bg-gradient-to-br bg-blue-100 to-transparent"></div>
                   
-                  <div className="relative z-10 p-6 h-full flex flex-col">
-                    {/* Header */}
+                  <div className="relative z-10 p-5 md:p-6 h-full flex flex-col">
+                    {/* Header mejorado */}
                     <div className="flex items-center space-x-3 mb-4">
-                      <div className="p-3 rounded-lg bg-blue-100 border-2 border-white/50 shadow-lg">
-                        <Users className="h-6 w-6 text-blue-600" />
+                      <div className="p-2.5 md:p-3 rounded-xl bg-blue-100 border-2 border-white/50 shadow-lg flex-shrink-0">
+                        <Users className="h-6 w-6 md:h-7 md:w-7 text-blue-600" />
                       </div>
-                      <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+                      <h3 className="text-sm md:text-base font-bold text-gray-700 uppercase tracking-tight leading-tight">
                         Clientes: Activos, Inactivos, Finalizados
                       </h3>
                     </div>
 
-                    {/* Valores */}
+                    {/* Valores mejorados */}
                     {kpisPrincipales.clientes_por_estado ? (
-                      <div className="grid grid-cols-3 gap-4 flex-1">
+                      <div className="grid grid-cols-3 gap-3 md:gap-4 flex-1">
                         {/* Activos */}
-                        <div className="flex flex-col justify-center">
-                          <div className="text-3xl font-black text-green-600 mb-1">
+                        <div className="flex flex-col justify-center items-center text-center">
+                          <div className="text-2xl md:text-3xl font-black text-green-600 mb-2 leading-none">
                             {kpisPrincipales.clientes_por_estado.activos.valor_actual.toLocaleString('es-EC')}
                           </div>
-                          <div className="text-xs font-semibold text-gray-600 uppercase mb-1">Activos</div>
-                          <div className="flex items-center space-x-1">
+                          <div className="text-xs md:text-sm font-bold text-gray-700 uppercase mb-2">Activos</div>
+                          <div className="flex items-center justify-center gap-1">
+                            {kpisPrincipales.clientes_por_estado.activos.variacion_porcentual >= 0 ? (
+                              <TrendingUp className="h-3 w-3 text-green-600" />
+                            ) : (
+                              <TrendingDown className="h-3 w-3 text-red-600" />
+                            )}
                             <span
-                              className={`text-xs font-bold ${
+                              className={`text-xs md:text-sm font-semibold ${
                                 kpisPrincipales.clientes_por_estado.activos.variacion_porcentual >= 0
                                   ? 'text-green-600'
                                   : 'text-red-600'
@@ -597,14 +607,19 @@ export function DashboardMenu() {
                         </div>
 
                         {/* Inactivos */}
-                        <div className="flex flex-col justify-center">
-                          <div className="text-3xl font-black text-orange-600 mb-1">
+                        <div className="flex flex-col justify-center items-center text-center">
+                          <div className="text-2xl md:text-3xl font-black text-orange-600 mb-2 leading-none">
                             {kpisPrincipales.clientes_por_estado.inactivos.valor_actual.toLocaleString('es-EC')}
                           </div>
-                          <div className="text-xs font-semibold text-gray-600 uppercase mb-1">Inactivos</div>
-                          <div className="flex items-center space-x-1">
+                          <div className="text-xs md:text-sm font-bold text-gray-700 uppercase mb-2">Inactivos</div>
+                          <div className="flex items-center justify-center gap-1">
+                            {kpisPrincipales.clientes_por_estado.inactivos.variacion_porcentual >= 0 ? (
+                              <TrendingUp className="h-3 w-3 text-green-600" />
+                            ) : (
+                              <TrendingDown className="h-3 w-3 text-red-600" />
+                            )}
                             <span
-                              className={`text-xs font-bold ${
+                              className={`text-xs md:text-sm font-semibold ${
                                 kpisPrincipales.clientes_por_estado.inactivos.variacion_porcentual >= 0
                                   ? 'text-green-600'
                                   : 'text-red-600'
@@ -617,14 +632,19 @@ export function DashboardMenu() {
                         </div>
 
                         {/* Finalizados */}
-                        <div className="flex flex-col justify-center">
-                          <div className="text-3xl font-black text-blue-600 mb-1">
+                        <div className="flex flex-col justify-center items-center text-center">
+                          <div className="text-2xl md:text-3xl font-black text-blue-600 mb-2 leading-none">
                             {kpisPrincipales.clientes_por_estado.finalizados.valor_actual.toLocaleString('es-EC')}
                           </div>
-                          <div className="text-xs font-semibold text-gray-600 uppercase mb-1">Finalizados</div>
-                          <div className="flex items-center space-x-1">
+                          <div className="text-xs md:text-sm font-bold text-gray-700 uppercase mb-2">Finalizados</div>
+                          <div className="flex items-center justify-center gap-1">
+                            {kpisPrincipales.clientes_por_estado.finalizados.variacion_porcentual >= 0 ? (
+                              <TrendingUp className="h-3 w-3 text-green-600" />
+                            ) : (
+                              <TrendingDown className="h-3 w-3 text-red-600" />
+                            )}
                             <span
-                              className={`text-xs font-bold ${
+                              className={`text-xs md:text-sm font-semibold ${
                                 kpisPrincipales.clientes_por_estado.finalizados.variacion_porcentual >= 0
                                   ? 'text-green-600'
                                   : 'text-red-600'
@@ -641,6 +661,8 @@ export function DashboardMenu() {
                         <div className="text-gray-400">Cargando datos...</div>
                       </div>
                     )}
+                    {/* Decoración sutil */}
+                    <div className="absolute bottom-0 right-0 w-20 h-20 bg-blue-100 opacity-5 rounded-tl-full -mr-10 -mb-10"></div>
                   </div>
                 </motion.div>
                 <KpiCardLarge
@@ -674,15 +696,15 @@ export function DashboardMenu() {
                   borderColor="border-emerald-500"
                   format="currency"
                   variation={
-                    datosDashboard?.financieros?.totalCobradoAnterior !== undefined &&
-                    datosDashboard?.financieros?.totalCobradoAnterior !== null &&
-                    datosDashboard?.financieros?.totalCobradoAnterior > 0
+                    datosDashboard?.meta_mensual !== undefined &&
+                    datosDashboard?.meta_mensual !== null &&
+                    datosDashboard?.meta_mensual > 0
                       ? {
                           percent:
-                            ((datosDashboard.financieros.totalCobrado - datosDashboard.financieros.totalCobradoAnterior) /
-                              datosDashboard.financieros.totalCobradoAnterior) *
+                            ((datosDashboard.financieros?.totalCobrado || 0) /
+                              datosDashboard.meta_mensual) *
                             100,
-                          label: 'vs mes anterior',
+                          label: 'avance del mes',
                         }
                       : undefined
                   }
@@ -694,33 +716,33 @@ export function DashboardMenu() {
           {/* COLUMNA DERECHA: 6 GRÁFICOS PRINCIPALES (2x3) */}
           <div className="lg:col-span-9 space-y-6">
             {/* Fila 1: Gráfico de Financiamiento (Fila completa) */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card className="shadow-lg border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b-2 border-cyan-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <TrendingUp className="h-6 w-6 text-cyan-600" />
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
+                  <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b-2 border-cyan-200">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                      <TrendingUp className="h-6 w-6 text-cyan-600" />
                     <span>MONITOREO FINANCIERO</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  {loadingTendencia ? (
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {loadingTendencia ? (
                     <div className="h-[450px] flex items-center justify-center">
-                      <div className="animate-pulse text-gray-400">Cargando...</div>
-                    </div>
+                        <div className="animate-pulse text-gray-400">Cargando...</div>
+                      </div>
                     ) : datosTendencia && datosTendencia.length > 0 ? (
                     <ResponsiveContainer width="100%" height={450}>
                       <ComposedChart data={datosTendencia} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                        <defs>
+                          <defs>
                           <linearGradient id="colorMontoGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.8} />
+                              <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.8} />
                             <stop offset="50%" stopColor="#06b6d4" stopOpacity={0.4} />
-                            <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.1} />
-                          </linearGradient>
-                        </defs>
+                              <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.1} />
+                            </linearGradient>
+                          </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
                         <XAxis 
                           dataKey="mes" 
@@ -869,7 +891,7 @@ export function DashboardMenu() {
                           }}
                           formatter={(value: number) => formatCurrency(value)}
                         />
-                        <Legend />
+                          <Legend />
                         <Bar 
                           dataKey="valor" 
                           name="Monto"
@@ -886,64 +908,65 @@ export function DashboardMenu() {
                           ))}
                         </Bar>
                       </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-[350px] flex items-center justify-center text-gray-400">
-                      No hay datos disponibles
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[350px] flex items-center justify-center text-gray-400">
+                        No hay datos disponibles
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
 
             {/* Gráfico de Barras: Préstamos por Concesionario (Fila completa) */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card className="shadow-lg border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
+                  <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                     <BarChart3 className="h-6 w-6 text-purple-600" />
-                    <span>Préstamos por Concesionario</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  {loadingConcesionarios ? (
+                      <span>Préstamos por Concesionario</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {loadingConcesionarios ? (
                     <div className="h-[350px] flex items-center justify-center">
-                      <div className="animate-pulse text-gray-400">Cargando...</div>
-                    </div>
-                  ) : datosConcesionarios && datosConcesionarios.length > 0 ? (
+                        <div className="animate-pulse text-gray-400">Cargando...</div>
+                      </div>
+                    ) : datosConcesionarios && datosConcesionarios.length > 0 ? (
                     <ResponsiveContainer width="100%" height={350}>
                       <BarChart
                         data={[...datosConcesionarios]
-                          .sort((a, b) => b.total_prestamos - a.total_prestamos) // ✅ Ordenar de mayor a menor
+                          .sort((a, b) => b.porcentaje - a.porcentaje) // ✅ Ordenar de mayor a menor por porcentaje
                           .map((c) => ({
-                            concesionario: c.concesionario.length > 25 ? c.concesionario.substring(0, 25) + '...' : c.concesionario,
-                            total_prestamos: c.total_prestamos,
+                            concesionario: c.concesionario.length > 30 ? c.concesionario.substring(0, 30) + '...' : c.concesionario,
                             porcentaje: c.porcentaje,
-                            fullName: c.concesionario,
-                          }))}
-                        margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                        layout="vertical"
+                            total_prestamos: c.total_prestamos,
+                                fullName: c.concesionario,
+                              }))}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
                         <XAxis 
-                          type="number"
-                          stroke="#6b7280"
-                          style={{ fontSize: '12px', fontWeight: 500 }}
-                          tick={{ fill: '#6b7280' }}
-                        />
-                        <YAxis 
-                          type="category"
                           dataKey="concesionario"
                           stroke="#6b7280"
+                          style={{ fontSize: '11px', fontWeight: 500 }}
+                          tick={{ fill: '#6b7280' }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                        />
+                        <YAxis 
+                          stroke="#6b7280"
                           style={{ fontSize: '12px', fontWeight: 500 }}
                           tick={{ fill: '#6b7280' }}
-                          width={200}
+                          label={{ value: 'Porcentaje (%)', angle: -90, position: 'insideLeft' }}
+                          tickFormatter={(value) => `${value}%`}
                         />
-                        <Tooltip 
+                            <Tooltip 
                           contentStyle={{
                             backgroundColor: 'rgba(255, 255, 255, 0.98)',
                             border: '1px solid #e5e7eb',
@@ -952,42 +975,43 @@ export function DashboardMenu() {
                             padding: '12px',
                           }}
                           formatter={(value: number, name: string, props: any) => {
-                            const porcentaje = props.payload.porcentaje || 0
                             return [
-                              `${value.toLocaleString('es-EC')} préstamos (${porcentaje.toFixed(1)}%)`,
-                              'Cantidad'
+                              `${value.toFixed(1)}% (${props.payload.total_prestamos.toLocaleString('es-EC')} préstamos)`,
+                                'Porcentaje'
                             ]
                           }}
                           labelFormatter={(label) => {
                             const data = datosConcesionarios?.find(c => 
-                              (c.concesionario.length > 25 ? c.concesionario.substring(0, 25) + '...' : c.concesionario) === label
+                              (c.concesionario.length > 30 ? c.concesionario.substring(0, 30) + '...' : c.concesionario) === label
                             )
                             return data?.concesionario || label
                           }}
-                        />
+                            />
                         <Legend />
                         <Bar 
-                          dataKey="total_prestamos" 
-                          name="Cantidad de Préstamos"
-                          radius={[0, 8, 8, 0]}
+                          dataKey="porcentaje" 
+                          name="Porcentaje"
+                          radius={[8, 8, 0, 0]}
                         >
-                          {datosConcesionarios.map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} 
-                            />
-                          ))}
+                          {[...datosConcesionarios]
+                            .sort((a, b) => b.porcentaje - a.porcentaje)
+                            .map((entry, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} 
+                              />
+                            ))}
                         </Bar>
                       </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
+                        </ResponsiveContainer>
+                    ) : (
                     <div className="h-[350px] flex items-center justify-center text-gray-400">
-                      No hay datos disponibles
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
+                        No hay datos disponibles
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
 
             {/* Fila 2: 2 Gráficos */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1135,7 +1159,7 @@ export function DashboardMenu() {
                 <Card className="shadow-lg border-2 border-gray-200">
                   <CardHeader className="bg-gradient-to-r from-violet-50 to-indigo-50 border-b-2 border-violet-200">
                     <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <PieChart className="h-6 w-6 text-violet-600" />
+                      <BarChart3 className="h-6 w-6 text-violet-600" />
                       <span>Préstamos por Modelo</span>
                     </CardTitle>
                   </CardHeader>
@@ -1145,40 +1169,73 @@ export function DashboardMenu() {
                         <div className="animate-pulse text-gray-400">Cargando...</div>
                       </div>
                     ) : datosModelos && datosModelos.length > 0 ? (
-                      <div className="relative">
-                        <ResponsiveContainer width="100%" height={400}>
-                          <RechartsPieChart>
-                            <Pie
-                              data={datosModelos.map((m) => ({
-                                name: m.modelo.length > 20 ? m.modelo.substring(0, 20) + '...' : m.modelo,
-                                value: m.porcentaje,
-                                total: m.total_prestamos,
-                                fullName: m.modelo,
-                              }))}
-                              cx="50%"
-                              cy="50%"
-                              labelLine={true}
-                              label={({ name, percent, fullName }) => {
-                                return `${name}: ${(percent * 100).toFixed(1)}%`
-                              }}
-                              outerRadius={120}
-                              fill="#8884d8"
-                              dataKey="value"
-                            >
-                              {datosModelos.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} />
+                      <ResponsiveContainer width="100%" height={350}>
+                        <BarChart
+                          data={[...datosModelos]
+                            .sort((a, b) => b.porcentaje - a.porcentaje) // ✅ Ordenar de mayor a menor por porcentaje
+                            .map((m) => ({
+                              modelo: m.modelo.length > 30 ? m.modelo.substring(0, 30) + '...' : m.modelo,
+                              porcentaje: m.porcentaje,
+                              total_prestamos: m.total_prestamos,
+                              fullName: m.modelo,
+                            }))}
+                          margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                          <XAxis 
+                            dataKey="modelo"
+                            stroke="#6b7280"
+                            style={{ fontSize: '11px', fontWeight: 500 }}
+                            tick={{ fill: '#6b7280' }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={80}
+                          />
+                          <YAxis 
+                            stroke="#6b7280"
+                            style={{ fontSize: '12px', fontWeight: 500 }}
+                            tick={{ fill: '#6b7280' }}
+                            label={{ value: 'Porcentaje (%)', angle: -90, position: 'insideLeft' }}
+                            tickFormatter={(value) => `${value}%`}
+                          />
+                          <Tooltip 
+                            contentStyle={{
+                              backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                              padding: '12px',
+                            }}
+                            formatter={(value: number, name: string, props: any) => {
+                              return [
+                                `${value.toFixed(1)}% (${formatCurrency(props.payload.total_prestamos)})`,
+                                'Porcentaje'
+                              ]
+                            }}
+                            labelFormatter={(label) => {
+                              const data = datosModelos?.find(m => 
+                                (m.modelo.length > 30 ? m.modelo.substring(0, 30) + '...' : m.modelo) === label
+                              )
+                              return data?.modelo || label
+                            }}
+                          />
+                          <Legend />
+                          <Bar 
+                            dataKey="porcentaje" 
+                            name="Porcentaje"
+                            radius={[8, 8, 0, 0]}
+                          >
+                            {[...datosModelos]
+                              .sort((a, b) => b.porcentaje - a.porcentaje)
+                              .map((entry, index) => (
+                                <Cell 
+                                  key={`cell-${index}`} 
+                                  fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} 
+                                />
                               ))}
-                            </Pie>
-                            <Tooltip
-                              formatter={(value: number, name: string, props: any) => [
-                                `${value.toFixed(2)}%`,
-                                `${formatCurrency(props.payload.total)}`,
-                              ]}
-                            />
-                            <Legend />
-                          </RechartsPieChart>
-                        </ResponsiveContainer>
-                      </div>
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
                     ) : (
                       <div className="h-[350px] flex items-center justify-center text-gray-400">
                         No hay datos disponibles
@@ -1189,82 +1246,13 @@ export function DashboardMenu() {
               </motion.div>
             </div>
 
-            {/* Fila 4: 2 Gráficos adicionales */}
+            {/* Fila 4: Gráficos adicionales */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Gráfico 7: Modelos Financiados (Pastel mejorado) */}
+              {/* Gráfico 7: Total Pagos vs Total Conciliado */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.9 }}
-              >
-                <Card className="shadow-lg border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-teal-50 to-cyan-50 border-b-2 border-teal-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <PieChart className="h-6 w-6 text-teal-600" />
-                      <span>Modelos Financiados</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    {loadingModelos ? (
-                      <div className="h-[400px] flex items-center justify-center">
-                        <div className="animate-pulse text-gray-400">Cargando...</div>
-                      </div>
-                    ) : datosModelos && datosModelos.length > 0 ? (
-                      <div className="relative">
-                        <ResponsiveContainer width="100%" height={400}>
-                          <RechartsPieChart>
-                            <Pie
-                              data={datosModelos.map((m) => ({
-                                name: m.modelo.length > 25 ? m.modelo.substring(0, 25) + '...' : m.modelo,
-                                value: m.porcentaje,
-                                total: m.total_prestamos,
-                                cantidad: m.cantidad_prestamos || 0,
-                                fullName: m.modelo,
-                              }))}
-                              cx="50%"
-                              cy="50%"
-                              labelLine={false}
-                              label={({ percent, fullName }) => {
-                                return `${fullName.length > 20 ? fullName.substring(0, 20) + '...' : fullName}\n${(percent * 100).toFixed(1)}%`
-                              }}
-                              outerRadius={140}
-                              fill="#8884d8"
-                              dataKey="value"
-                            >
-                              {datosModelos.map((entry, index) => (
-                                <Cell key={`cell-modelo-${index}`} fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} />
-                              ))}
-                            </Pie>
-                            <Tooltip
-                              formatter={(value: number, name: string, props: any) => [
-                                `${value.toFixed(2)}%`,
-                                `Monto: ${formatCurrency(props.payload.total)}`,
-                                `Cantidad: ${props.payload.cantidad || 0}`,
-                              ]}
-                            />
-                            <Legend
-                              formatter={(value, entry) => {
-                                const item = datosModelos.find(m => (m.modelo.length > 25 ? m.modelo.substring(0, 25) + '...' : m.modelo) === value)
-                                return item ? `${value} (${item.porcentaje.toFixed(1)}%)` : value
-                              }}
-                            />
-                          </RechartsPieChart>
-                        </ResponsiveContainer>
-                      </div>
-                    ) : (
-                      <div className="h-[400px] flex items-center justify-center text-gray-400">
-                        No hay datos disponibles
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              {/* Gráfico 8: Total Pagos vs Total Conciliado */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.0 }}
               >
                 <Card className="shadow-lg border-2 border-gray-200">
                   <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
@@ -1330,7 +1318,7 @@ export function DashboardMenu() {
                     {loadingFinanciamientoRangos ? (
                       <div className="h-[450px] flex items-center justify-center">
                         <div className="animate-pulse text-gray-400">Cargando...</div>
-                      </div>
+          </div>
                     ) : datosFinanciamientoRangos && datosFinanciamientoRangos.rangos.length > 0 ? (
                       <ResponsiveContainer width="100%" height={450}>
                         <BarChart
@@ -1339,7 +1327,14 @@ export function DashboardMenu() {
                           margin={{ top: 20, right: 30, left: 120, bottom: 5 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis type="number" stroke="#6b7280" />
+                          <XAxis 
+                            type="number" 
+                            stroke="#6b7280"
+                            domain={[0, 'dataMax']}
+                            tickFormatter={(value) => formatCurrency(value)}
+                            style={{ fontSize: '12px', fontWeight: 500 }}
+                            tick={{ fill: '#6b7280' }}
+                          />
                           <YAxis 
                             type="category" 
                             dataKey="categoria" 
@@ -1383,13 +1378,13 @@ export function DashboardMenu() {
                     ) : (
                       <div className="h-[450px] flex items-center justify-center text-gray-400">
                         No hay datos disponibles
-                      </div>
+        </div>
                     )}
                   </CardContent>
                 </Card>
               </motion.div>
 
-              {/* Gráfico de Dispersión - Morosidad: Días de Atraso vs Monto */}
+              {/* Gráfico de Barras - Morosidad por Categorías de Días de Atraso */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1398,8 +1393,8 @@ export function DashboardMenu() {
                 <Card className="shadow-lg border-2 border-gray-200">
                   <CardHeader className="bg-gradient-to-r from-red-50 to-pink-50 border-b-2 border-red-200">
                     <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <LineChart className="h-6 w-6 text-red-600" />
-                      <span>Dispersión de Morosidad: Días de Atraso vs Monto</span>
+                      <BarChart3 className="h-6 w-6 text-red-600" />
+                      <span>Composición de Morosidad por Días de Atraso</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">
@@ -1410,72 +1405,59 @@ export function DashboardMenu() {
                     ) : datosComposicionMorosidad && datosComposicionMorosidad.puntos && datosComposicionMorosidad.puntos.length > 0 ? (
                       <div className="flex flex-col">
                         <ResponsiveContainer width="100%" height={400}>
-                          <ScatterChart
-                            data={datosComposicionMorosidad.puntos.map(p => ({
-                              x: p.dias_atraso,
-                              y: p.monto,
-                              dias_atraso: p.dias_atraso,
-                              monto: p.monto,
-                              cantidad_cuotas: p.cantidad_cuotas,
-                            }))}
-                            margin={{ top: 20, right: 30, left: 80, bottom: 60 }}
+                          <BarChart
+                            data={datosComposicionMorosidad.puntos}
+                            margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
                             <XAxis 
-                              type="number"
-                              dataKey="x"
-                              name="Días de Atraso"
-                              label={{ value: 'Días de Atraso', position: 'insideBottom', offset: -5 }}
+                              dataKey="categoria"
                               stroke="#6b7280"
-                              style={{ fontSize: '12px', fontWeight: 500 }}
+                              style={{ fontSize: '11px', fontWeight: 500 }}
                               tick={{ fill: '#6b7280' }}
+                              angle={-45}
+                              textAnchor="end"
+                              height={80}
                             />
                             <YAxis 
-                              type="number"
-                              dataKey="y"
-                              name="Monto"
-                              label={{ value: 'Monto de Morosidad', angle: -90, position: 'insideLeft' }}
                               stroke="#6b7280"
                               style={{ fontSize: '12px', fontWeight: 500 }}
                               tick={{ fill: '#6b7280' }}
+                              label={{ value: 'Monto de Morosidad', angle: -90, position: 'insideLeft' }}
                               tickFormatter={(value) => formatCurrency(value)}
+                              domain={[0, 'dataMax']}
                             />
                             <Tooltip
-                              cursor={{ strokeDasharray: '3 3' }}
-                              content={({ active, payload }) => {
-                                if (active && payload && payload.length) {
-                                  const data = payload[0].payload
-                                  return (
-                                    <div style={{
-                                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                                      border: '1px solid #e5e7eb',
-                                      borderRadius: '8px',
-                                      padding: '12px',
-                                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                                    }}>
-                                      <p style={{ margin: 0, fontWeight: 600, marginBottom: '4px' }}>
-                                        {data.dias_atraso} días de atraso
-                                      </p>
-                                      <p style={{ margin: 0, color: '#6b7280' }}>
-                                        Monto: {formatCurrency(data.monto)}
-                                      </p>
-                                      <p style={{ margin: 0, color: '#6b7280', fontSize: '12px' }}>
-                                        Cuotas: {data.cantidad_cuotas}
-                                      </p>
-                                    </div>
-                                  )
-                                }
-                                return null
+                              contentStyle={{
+                                backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '8px',
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                                padding: '12px',
                               }}
+                              formatter={(value: number, name: string, props: any) => {
+                                return [
+                                  formatCurrency(value),
+                                  `Cuotas: ${props.payload.cantidad_cuotas}`,
+                                ]
+                              }}
+                              labelFormatter={(label) => `Categoría: ${label}`}
                             />
                             <Legend />
-                            <Scatter
-                              name="Morosidad"
-                              dataKey="y"
+                            <Bar
+                              dataKey="monto"
+                              name="Monto de Morosidad"
                               fill="#ef4444"
-                              shape="circle"
-                            />
-                          </ScatterChart>
+                              radius={[8, 8, 0, 0]}
+                            >
+                              {datosComposicionMorosidad.puntos.map((entry, index) => (
+                                <Cell
+                                  key={`cell-morosidad-${index}`}
+                                  fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]}
+                                />
+                              ))}
+                            </Bar>
+                          </BarChart>
                         </ResponsiveContainer>
                         <div className="mt-4 text-center">
                           <div className="text-sm text-gray-600">

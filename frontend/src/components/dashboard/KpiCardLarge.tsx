@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { formatCurrency } from '@/utils'
+import { TrendingUp, TrendingDown } from 'lucide-react'
 
 interface KpiCardLargeProps {
   title: string
@@ -43,8 +44,11 @@ export function KpiCardLarge({
     }
   }
 
-  const textSize = size === 'large' ? 'text-5xl' : 'text-4xl'
-  const cardHeight = size === 'large' ? 'min-h-[180px]' : 'min-h-[150px]'
+  // Mejor proporcionalidad: tamaño base más grande pero ajustado
+  const textSize = size === 'large' ? 'text-4xl md:text-5xl' : 'text-3xl md:text-4xl'
+  const cardHeight = size === 'large' ? 'min-h-[200px]' : 'min-h-[170px]'
+  const titleSize = 'text-sm md:text-base' // Título más legible
+  const variationSize = 'text-sm md:text-base' // Variación más visible
 
   return (
     <motion.div
@@ -66,55 +70,67 @@ export function KpiCardLarge({
         group
       `}
     >
-      {/* Borde superior decorativo */}
-      <div className={`absolute top-0 left-0 right-0 h-1 ${bgColor} opacity-80`}></div>
+      {/* Borde superior decorativo más prominente */}
+      <div className={`absolute top-0 left-0 right-0 h-1.5 ${bgColor} opacity-90`}></div>
 
-      {/* Efecto de brillo en hover */}
+      {/* Gradiente sutil de fondo */}
       <div
-        className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300 ${bgColor}`}
+        className={`absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-300 bg-gradient-to-br ${bgColor} to-transparent`}
       ></div>
 
-      <div className="relative z-10 p-6 h-full flex flex-col justify-between">
-        {/* Header con icono y título */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <div className={`p-3 rounded-lg ${bgColor} border-2 border-white/50 shadow-lg`}>
-              <Icon className={`h-7 w-7 ${color}`} />
+      <div className="relative z-10 p-5 md:p-6 h-full flex flex-col">
+        {/* Header con icono y título mejorado */}
+        <div className="flex items-start justify-between mb-3 md:mb-4">
+          <div className="flex items-center space-x-3 flex-1 min-w-0">
+            <div className={`p-2.5 md:p-3 rounded-xl ${bgColor} border-2 border-white/50 shadow-lg flex-shrink-0`}>
+              <Icon className={`h-6 w-6 md:h-7 md:w-7 ${color}`} />
             </div>
-            <div>
-              <h3 className="text-base font-semibold text-gray-600 uppercase tracking-wide">
+            <div className="min-w-0 flex-1">
+              <h3 className={`${titleSize} font-bold text-gray-700 uppercase tracking-tight leading-tight line-clamp-2`}>
                 {title}
               </h3>
               {subtitle && (
-                <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>
+                <p className="text-xs md:text-sm text-gray-500 mt-1">{subtitle}</p>
               )}
             </div>
           </div>
         </div>
 
-        {/* Valor principal */}
-        <div className="flex items-end justify-between">
-          <div>
-            <div className={`${textSize} font-black ${color} mb-1 leading-tight`}>
-              {formatValue()}
-            </div>
-            {variation && (
-              <div className="flex items-center space-x-1 mt-2">
-                <span
-                  className={`text-base font-bold ${
-                    variation.percent >= 0 ? 'text-green-600' : 'text-red-600'
-                  }`}
-                >
+        {/* Valor principal con mejor espaciado */}
+        <div className="flex-1 flex flex-col justify-center">
+          <div className={`${textSize} font-black ${color} mb-2 leading-none tracking-tight`}>
+            {formatValue()}
+          </div>
+          
+          {/* Variación mejorada con icono y mejor diseño */}
+          {variation && (
+            <div className="flex items-center gap-2 mt-3">
+              <div className={`flex items-center gap-1 px-2 py-1 rounded-md ${
+                variation.percent >= 0 
+                  ? 'bg-green-50 text-green-700' 
+                  : 'bg-red-50 text-red-700'
+              }`}>
+                {variation.percent >= 0 ? (
+                  <TrendingUp className="h-3.5 w-3.5" />
+                ) : (
+                  <TrendingDown className="h-3.5 w-3.5" />
+                )}
+                <span className={`${variationSize} font-semibold`}>
                   {variation.percent >= 0 ? '+' : ''}
                   {variation.percent.toFixed(1)}%
                 </span>
-                {variation.label && (
-                  <span className="text-sm text-gray-500">{variation.label}</span>
-                )}
               </div>
-            )}
-          </div>
+              {variation.label && (
+                <span className={`${variationSize} text-gray-600 font-medium`}>
+                  {variation.label}
+                </span>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* Decoración sutil en la esquina inferior */}
+        <div className={`absolute bottom-0 right-0 w-20 h-20 ${bgColor} opacity-5 rounded-tl-full -mr-10 -mb-10`}></div>
       </div>
     </motion.div>
   )
