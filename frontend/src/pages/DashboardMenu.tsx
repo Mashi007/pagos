@@ -42,6 +42,7 @@ import {
   ResponsiveContainer,
   Area,
   AreaChart,
+  ComposedChart,
 } from 'recharts'
 
 // Submenús eliminados: financiamiento, cuotas, cobranza, analisis, pagos
@@ -711,9 +712,9 @@ export function DashboardMenu() {
                     <div className="h-[450px] flex items-center justify-center">
                       <div className="animate-pulse text-gray-400">Cargando...</div>
                     </div>
-                  ) : datosTendencia && datosTendencia.length > 0 ? (
+                    ) : datosTendencia && datosTendencia.length > 0 ? (
                     <ResponsiveContainer width="100%" height={450}>
-                      <AreaChart data={datosTendencia} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                      <ComposedChart data={datosTendencia} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                         <defs>
                           <linearGradient id="colorMontoGradient" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.8} />
@@ -811,7 +812,7 @@ export function DashboardMenu() {
                           name="Monto Cuota de Pagos por Mes"
                           strokeDasharray="3 3"
                         />
-                      </AreaChart>
+                      </ComposedChart>
                     </ResponsiveContainer>
                   ) : (
                     <div className="h-[450px] flex items-center justify-center text-gray-400">

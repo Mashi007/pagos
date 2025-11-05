@@ -3053,44 +3053,36 @@ def obtener_financiamiento_tendencia_mensual(
         cuotas_time = int((time.time() - start_cuotas) * 1000)
         logger.info(f"📊 [financiamiento-tendencia] Query cuotas programadas completada en {cuotas_time}ms")
 
-        # ✅ Query para calcular suma de monto_pagado de tabla pagos por mes
+        # ✅ Query para calcular suma de monto_pagado de tabla pagos_staging por mes
         start_pagos = time.time()
-        query_pagos = (
-            db.query(
-                func.extract("year", Pago.fecha_pago).label("año"),
-                func.extract("month", Pago.fecha_pago).label("mes"),
-                func.sum(Pago.monto_pagado).label("total_pagado"),
-            )
-            .filter(
-                Pago.activo.is_(True),
-                Pago.fecha_pago >= fecha_inicio_query,
-                Pago.fecha_pago <= fecha_fin_query,
-            )
-            .group_by(
-                func.extract("year", Pago.fecha_pago),
-                func.extract("month", Pago.fecha_pago)
-            )
-            .order_by(
-                func.extract("year", Pago.fecha_pago),
-                func.extract("month", Pago.fecha_pago)
-            )
-        )
+        fecha_inicio_query_dt = datetime.combine(fecha_inicio_query, datetime.min.time())
+        fecha_fin_query_dt = datetime.combine(fecha_fin_query, datetime.max.time())
 
-        # Aplicar filtros de préstamo a los pagos (mediante join con Prestamo)
-        if analista or concesionario or modelo:
-            query_pagos = query_pagos.join(Prestamo, Pago.prestamo_id == Prestamo.id)
-            if analista:
-                query_pagos = query_pagos.filter(
-                    or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
-                )
-            if concesionario:
-                query_pagos = query_pagos.filter(Prestamo.concesionario == concesionario)
-            if modelo:
-                query_pagos = query_pagos.filter(
-                    or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
-                )
+        # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
+        # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
+        query_pagos_sql = text(
+            """
+            SELECT 
+                EXTRACT(YEAR FROM fecha_pago::timestamp)::integer as año,
+                EXTRACT(MONTH FROM fecha_pago::timestamp)::integer as mes,
+                COALESCE(SUM(monto_pagado::numeric), 0) as total_pagado
+            FROM pagos_staging
+            WHERE fecha_pago IS NOT NULL
+              AND fecha_pago != ''
+              AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+              AND fecha_pago::timestamp >= :fecha_inicio
+              AND fecha_pago::timestamp <= :fecha_fin
+              AND monto_pagado IS NOT NULL
+              AND monto_pagado != ''
+              AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+            GROUP BY 
+                EXTRACT(YEAR FROM fecha_pago::timestamp),
+                EXTRACT(MONTH FROM fecha_pago::timestamp)
+            ORDER BY año, mes
+            """
+        ).bindparams(fecha_inicio=fecha_inicio_query_dt, fecha_fin=fecha_fin_query_dt)
 
-        resultados_pagos = query_pagos.all()
+        resultados_pagos = db.execute(query_pagos_sql).fetchall()
         pagos_por_mes = {}
         for row in resultados_pagos:
             año_mes = int(row.año)
@@ -3100,48 +3092,59 @@ def obtener_financiamiento_tendencia_mensual(
         pagos_time = int((time.time() - start_pagos) * 1000)
         logger.info(f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms")
 
-        # ✅ Query para calcular suma de monto_cuota de cuotas relacionadas con pagos del mes
+        # ✅ Query para calcular suma de monto_cuota de cuotas relacionadas con pagos_staging del mes
         start_cuotas_pagos = time.time()
-        query_cuotas_pagos = (
-            db.query(
-                func.extract("year", Pago.fecha_pago).label("año"),
-                func.extract("month", Pago.fecha_pago).label("mes"),
-                func.sum(Cuota.monto_cuota).label("total_monto_cuota"),
-            )
-            .join(Prestamo, Pago.prestamo_id == Prestamo.id)
-            .join(Cuota, and_(
-                Cuota.prestamo_id == Prestamo.id,
-                Cuota.numero_cuota == Pago.numero_cuota
-            ))
-            .filter(
-                Pago.activo.is_(True),
-                Prestamo.estado == "APROBADO",
-                Pago.fecha_pago >= fecha_inicio_query,
-                Pago.fecha_pago <= fecha_fin_query,
-            )
-            .group_by(
-                func.extract("year", Pago.fecha_pago),
-                func.extract("month", Pago.fecha_pago)
-            )
-            .order_by(
-                func.extract("year", Pago.fecha_pago),
-                func.extract("month", Pago.fecha_pago)
-            )
-        )
-
-        # Aplicar filtros adicionales
+        # ⚠️ PagoStaging no tiene prestamo_id ni numero_cuota, usar SQL directo relacionando por cedula_cliente
+        # Relacionar pagos_staging -> prestamos (por cedula) -> cuotas
+        # Relacionar cuotas por fecha de vencimiento cercana a la fecha de pago (dentro del mismo mes)
+        # para evitar duplicados y obtener la cuota más probable relacionada con cada pago
+        
+        # Construir condiciones WHERE para filtros
+        where_conditions = [
+            "ps.fecha_pago IS NOT NULL",
+            "ps.fecha_pago != ''",
+            "ps.fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'",
+            "ps.fecha_pago::timestamp >= :fecha_inicio",
+            "ps.fecha_pago::timestamp <= :fecha_fin",
+            "ps.monto_pagado IS NOT NULL",
+            "ps.monto_pagado != ''",
+            "pr.estado = 'APROBADO'",
+            "ps.cedula_cliente = pr.cedula",
+            "c.prestamo_id = pr.id",
+            "EXTRACT(YEAR FROM c.fecha_vencimiento) = EXTRACT(YEAR FROM ps.fecha_pago::timestamp)",
+            "EXTRACT(MONTH FROM c.fecha_vencimiento) = EXTRACT(MONTH FROM ps.fecha_pago::timestamp)"
+        ]
+        
+        # Aplicar filtros adicionales si existen
+        bind_params = {"fecha_inicio": fecha_inicio_query_dt, "fecha_fin": fecha_fin_query_dt}
         if analista:
-            query_cuotas_pagos = query_cuotas_pagos.filter(
-                or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
-            )
+            where_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+            bind_params["analista"] = analista
         if concesionario:
-            query_cuotas_pagos = query_cuotas_pagos.filter(Prestamo.concesionario == concesionario)
+            where_conditions.append("pr.concesionario = :concesionario")
+            bind_params["concesionario"] = concesionario
         if modelo:
-            query_cuotas_pagos = query_cuotas_pagos.filter(
-                or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
-            )
+            where_conditions.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
+            bind_params["modelo"] = modelo
+        
+        query_cuotas_pagos_sql = text(
+            f"""
+            SELECT 
+                EXTRACT(YEAR FROM ps.fecha_pago::timestamp)::integer as año,
+                EXTRACT(MONTH FROM ps.fecha_pago::timestamp)::integer as mes,
+                COALESCE(SUM(c.monto_cuota), 0) as total_monto_cuota
+            FROM pagos_staging ps
+            INNER JOIN prestamos pr ON ps.cedula_cliente = pr.cedula
+            INNER JOIN cuotas c ON c.prestamo_id = pr.id
+            WHERE {' AND '.join(where_conditions)}
+            GROUP BY 
+                EXTRACT(YEAR FROM ps.fecha_pago::timestamp),
+                EXTRACT(MONTH FROM ps.fecha_pago::timestamp)
+            ORDER BY año, mes
+            """
+        ).bindparams(**bind_params)
 
-        resultados_cuotas_pagos = query_cuotas_pagos.all()
+        resultados_cuotas_pagos = db.execute(query_cuotas_pagos_sql).fetchall()
         cuotas_pagos_por_mes = {}
         for row in resultados_cuotas_pagos:
             año_mes = int(row.año)
