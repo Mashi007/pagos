@@ -3062,7 +3062,7 @@ def obtener_financiamiento_tendencia_mensual(
         # Aplicar filtros de analista/concesionario/modelo mediante JOIN con prestamos
         prestamo_conditions_pagos = []
         bind_params_pagos = {"fecha_inicio": fecha_inicio_query_dt, "fecha_fin": fecha_fin_query_dt}
-        
+
         if analista or concesionario or modelo:
             # Si hay filtros, necesitamos JOIN con prestamos
             if analista:
@@ -3074,7 +3074,7 @@ def obtener_financiamiento_tendencia_mensual(
             if modelo:
                 prestamo_conditions_pagos.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
                 bind_params_pagos["modelo"] = modelo
-            
+
             # Construir WHERE completo
             where_clause = """ps.fecha_pago IS NOT NULL
                   AND ps.fecha_pago != ''
@@ -3085,10 +3085,10 @@ def obtener_financiamiento_tendencia_mensual(
                   AND ps.monto_pagado != ''
                   AND ps.monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
                   AND pr.estado = 'APROBADO'"""
-            
+
             if prestamo_conditions_pagos:
                 where_clause += " AND " + " AND ".join(prestamo_conditions_pagos)
-            
+
             query_pagos_sql = text(
                 f"""
                 SELECT 
@@ -3143,11 +3143,11 @@ def obtener_financiamiento_tendencia_mensual(
         start_cuotas_pagos = time.time()
         # ⚠️ PagoStaging no tiene prestamo_id ni numero_cuota, usar SQL directo relacionando por cedula_cliente
         # Estrategia simplificada: Obtener préstamos que tienen pagos en el período, luego sumar todas sus cuotas por mes
-        
+
         # Construir condiciones WHERE base para filtros de préstamos
         prestamo_conditions = ["pr.estado = 'APROBADO'"]
         bind_params = {"fecha_inicio": fecha_inicio_query_dt, "fecha_fin": fecha_fin_query_dt}
-        
+
         if analista:
             prestamo_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
             bind_params["analista"] = analista
@@ -3157,7 +3157,7 @@ def obtener_financiamiento_tendencia_mensual(
         if modelo:
             prestamo_conditions.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
             bind_params["modelo"] = modelo
-        
+
         # Query simplificada: Una sola CTE para préstamos únicos, luego JOIN directo con cuotas
         query_cuotas_pagos_sql = text(
             f"""
