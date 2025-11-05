@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
 from app.models.pago import Pago
+from app.models.prestamo import Prestamo
 # ⚠️ PagoStaging eliminado - usar Pago
 from app.models.user import User
 
