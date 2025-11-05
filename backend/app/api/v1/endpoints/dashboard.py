@@ -3840,7 +3840,9 @@ def obtener_financiamiento_tendencia_mensual(
                     "monto_pagado": monto_pagado_mes,
                     "monto_cuota": monto_cuota_pagos,
                     "morosidad": float(morosidad_acumulada),  # ✅ Retornar morosidad acumulada
-                    "morosidad_mensual": float(morosidad_mensual),  # ✅ Agregar morosidad mensual (convertir a float explícitamente)
+                    "morosidad_mensual": float(
+                        morosidad_mensual
+                    ),  # ✅ Agregar morosidad mensual (convertir a float explícitamente)
                     "fecha_mes": fecha_mes_inicio.isoformat(),
                 }
             )
@@ -4081,11 +4083,13 @@ def obtener_cobranzas_semanales(
 
         total_time = int((time.time() - start_time) * 1000)
         logger.info(f"⏱️ [cobranzas-semanales] Tiempo total: {total_time}ms, {len(semanas_data)} semanas generadas")
-        
+
         if len(semanas_data) == 0:
             logger.warning("⚠️ [cobranzas-semanales] No se generaron semanas. Verificar datos y fechas.")
         else:
-            logger.info(f"📊 [cobranzas-semanales] Primera semana: {semanas_data[0]['nombre_semana']}, Última: {semanas_data[-1]['nombre_semana']}")
+            logger.info(
+                f"📊 [cobranzas-semanales] Primera semana: {semanas_data[0]['nombre_semana']}, Última: {semanas_data[-1]['nombre_semana']}"
+            )
             logger.info(f"📊 [cobranzas-semanales] Devolviendo {len(semanas_data)} semanas de datos")
 
         return {
