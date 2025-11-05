@@ -1449,13 +1449,30 @@ def obtener_kpis_pagos(
 
         # Cache miss - calcular KPIs
         logger.info(f"❌ [kpis_pagos] Cache MISS para mes {mes_consulta}/{año_consulta}, calculando...")
-        result = _calcular_kpis_pagos_interno(db, mes_consulta, año_consulta)
+        try:
+            result = _calcular_kpis_pagos_interno(db, mes_consulta, año_consulta)
 
-        # Guardar en caché por 5 minutos (300 segundos)
-        cache_backend.set(cache_key, result, ttl=300)
-        logger.info(f"💾 [kpis_pagos] Resultados guardados en caché para mes {mes_consulta}/{año_consulta}")
+            # Guardar en caché por 5 minutos (300 segundos)
+            cache_backend.set(cache_key, result, ttl=300)
+            logger.info(f"💾 [kpis_pagos] Resultados guardados en caché para mes {mes_consulta}/{año_consulta}")
 
-        return result
+            return result
+        except Exception as calc_error:
+            logger.error(f"❌ [kpis_pagos] Error calculando KPIs: {calc_error}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            # Retornar valores por defecto en lugar de fallar completamente
+            return {
+                "montoCobradoMes": 0.0,
+                "montoNoDefinido": 0.0,
+                "saldoPorCobrar": 0.0,
+                "clientesEnMora": 0,
+                "clientesAlDia": 0,
+                "mes": mes_consulta,
+                "año": año_consulta,
+            }
     except HTTPException:
         raise
     except Exception as e:

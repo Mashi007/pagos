@@ -23,7 +23,7 @@ from app.models.dashboard_oficial import (
     DashboardPrestamosPorConcesionario,
 )
 from app.models.pago import Pago  # Mantener para operaciones que necesiten tabla pagos
-from app.models.pago_staging import PagoStaging  # Usar para consultas principales (donde están los datos)
+# ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) - PagoStaging removido de imports
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.utils.filtros_dashboard import FiltrosDashboard
@@ -102,6 +102,8 @@ def _calcular_total_cobrado_mes(
             prestamo_conditions.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
             bind_params["modelo"] = modelo
 
+        # ✅ CORRECCIÓN: Cuando hay filtros, usar INNER JOIN y asegurar que pr.estado = 'APROBADO'
+        # Si no hay filtros de préstamo, incluir pagos sin préstamo asociado
         where_clause = """p.fecha_pago >= :primer_dia
           AND p.fecha_pago <= :ultimo_dia
           AND p.monto_pagado IS NOT NULL
@@ -116,7 +118,7 @@ def _calcular_total_cobrado_mes(
             f"""
             SELECT COALESCE(SUM(p.monto_pagado), 0)
             FROM pagos p
-            LEFT JOIN prestamos pr ON (
+            INNER JOIN prestamos pr ON (
                 (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
                 OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
             )
@@ -395,25 +397,58 @@ def _calcular_pagos_fecha(
     fecha_fin: Optional[date],
 ) -> float:
     """Calcula pagos en una fecha específica"""
-    # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
+    # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
     fecha_dt = datetime.combine(fecha, datetime.min.time())
     fecha_dt_end = datetime.combine(fecha, datetime.max.time())
 
-    query_sql = text(
-        """
-        SELECT COALESCE(SUM(monto_pagado::numeric), 0)
-        FROM pagos_staging
-        WHERE fecha_pago IS NOT NULL
-          AND fecha_pago != ''
-          AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-          AND fecha_pago::timestamp >= :fecha_inicio
-          AND fecha_pago::timestamp <= :fecha_fin
-          AND monto_pagado IS NOT NULL
-          AND monto_pagado != ''
-    """
-    ).bindparams(fecha_inicio=fecha_dt, fecha_fin=fecha_dt_end)
+    # Construir query con filtros opcionales
+    if analista or concesionario or modelo:
+        prestamo_conditions = []
+        bind_params = {"fecha_inicio": fecha_dt, "fecha_fin": fecha_dt_end}
+        
+        if analista:
+            prestamo_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+            bind_params["analista"] = analista
+        if concesionario:
+            prestamo_conditions.append("pr.concesionario = :concesionario")
+            bind_params["concesionario"] = concesionario
+        if modelo:
+            prestamo_conditions.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
+            bind_params["modelo"] = modelo
 
-    # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
+        where_clause = """p.fecha_pago >= :fecha_inicio
+          AND p.fecha_pago <= :fecha_fin
+          AND p.monto_pagado IS NOT NULL
+          AND p.monto_pagado > 0
+          AND p.activo = TRUE
+          AND pr.estado = 'APROBADO'"""
+        
+        if prestamo_conditions:
+            where_clause += " AND " + " AND ".join(prestamo_conditions)
+
+        query_sql = text(
+            f"""
+            SELECT COALESCE(SUM(p.monto_pagado), 0)
+            FROM pagos p
+            INNER JOIN prestamos pr ON (
+                (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
+                OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
+            )
+            WHERE {where_clause}
+            """
+        ).bindparams(**bind_params)
+    else:
+        query_sql = text(
+            """
+            SELECT COALESCE(SUM(monto_pagado), 0)
+            FROM pagos
+            WHERE fecha_pago >= :fecha_inicio
+              AND fecha_pago <= :fecha_fin
+              AND monto_pagado IS NOT NULL
+              AND monto_pagado > 0
+              AND activo = TRUE
+        """
+        ).bindparams(fecha_inicio=fecha_dt, fecha_fin=fecha_dt_end)
 
     result = db.execute(query_sql)
     return float(result.scalar() or Decimal("0"))
@@ -610,23 +645,58 @@ def _calcular_total_cobrado(
 ) -> float:
     """Calcula total cobrado para una fecha específica"""
     try:
-        # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
+        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
         fecha_dt = datetime.combine(fecha_dia, datetime.min.time())
         fecha_dt_end = datetime.combine(fecha_dia, datetime.max.time())
 
-        query_sql = text(
+        # Construir query con filtros opcionales
+        if analista or concesionario or modelo:
+            prestamo_conditions = []
+            bind_params = {"fecha_inicio": fecha_dt, "fecha_fin": fecha_dt_end}
+            
+            if analista:
+                prestamo_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+                bind_params["analista"] = analista
+            if concesionario:
+                prestamo_conditions.append("pr.concesionario = :concesionario")
+                bind_params["concesionario"] = concesionario
+            if modelo:
+                prestamo_conditions.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
+                bind_params["modelo"] = modelo
+
+            where_clause = """p.fecha_pago >= :fecha_inicio
+              AND p.fecha_pago <= :fecha_fin
+              AND p.monto_pagado IS NOT NULL
+              AND p.monto_pagado > 0
+              AND p.activo = TRUE
+              AND pr.estado = 'APROBADO'"""
+            
+            if prestamo_conditions:
+                where_clause += " AND " + " AND ".join(prestamo_conditions)
+
+            query_sql = text(
+                f"""
+                SELECT COALESCE(SUM(p.monto_pagado), 0)
+                FROM pagos p
+                INNER JOIN prestamos pr ON (
+                    (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
+                    OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
+                )
+                WHERE {where_clause}
+                """
+            ).bindparams(**bind_params)
+        else:
+            query_sql = text(
+                """
+                SELECT COALESCE(SUM(monto_pagado), 0)
+                FROM pagos
+                WHERE fecha_pago >= :fecha_inicio
+                  AND fecha_pago <= :fecha_fin
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado > 0
+                  AND activo = TRUE
             """
-            SELECT COALESCE(SUM(monto_pagado::numeric), 0)
-            FROM pagos_staging
-            WHERE fecha_pago IS NOT NULL
-              AND fecha_pago != ''
-              AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-              AND fecha_pago::timestamp >= :fecha_inicio
-              AND fecha_pago::timestamp <= :fecha_fin
-              AND monto_pagado IS NOT NULL
-              AND monto_pagado != ''
-        """
-        ).bindparams(fecha_inicio=fecha_dt, fecha_fin=fecha_dt_end)
+            ).bindparams(fecha_inicio=fecha_dt, fecha_fin=fecha_dt_end)
 
         result = db.execute(query_sql)
         return float(result.scalar() or Decimal("0"))
@@ -798,27 +868,28 @@ def dashboard_administrador(
         porcentaje_mora = (float(cartera_vencida) / float(cartera_total) * 100) if cartera_total > 0 else 0
 
         # 5. PAGOS DE HOY (con filtros)
-        # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
+        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
         # text ya está importado al inicio del archivo
 
         hoy_dt = datetime.combine(hoy, datetime.min.time())
         hoy_dt_end = datetime.combine(hoy, datetime.max.time())
 
+        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
         pagos_hoy_query = db.execute(
             text(
-                "SELECT COUNT(*) FROM pagos_staging WHERE fecha_pago::timestamp >= :inicio AND fecha_pago::timestamp <= :fin"
+                "SELECT COUNT(*) FROM pagos WHERE fecha_pago >= :inicio AND fecha_pago <= :fin AND activo = TRUE"
             ).bindparams(inicio=hoy_dt, fin=hoy_dt_end)
         )
         pagos_hoy = pagos_hoy_query.scalar() or 0
 
         monto_pagos_hoy_query = db.execute(
             text(
-                "SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE fecha_pago::timestamp >= :inicio AND fecha_pago::timestamp <= :fin"
+                "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE fecha_pago >= :inicio AND fecha_pago <= :fin AND monto_pagado IS NOT NULL AND monto_pagado > 0 AND activo = TRUE"
             ).bindparams(inicio=hoy_dt, fin=hoy_dt_end)
         )
         monto_pagos_hoy = Decimal(str(monto_pagos_hoy_query.scalar() or 0))
 
-        # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
+        # ⚠️ Filtros por analista/concesionario/modelo no aplicados aquí (requeriría JOIN con prestamos)
         # if analista or concesionario or modelo:
         #     # No disponible sin prestamo_id
 
@@ -882,22 +953,20 @@ def dashboard_administrador(
         # )
 
         # 11. TOTAL PAGADO (histórico o con filtros)
-        # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
-        query_sql = "SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE monto_pagado IS NOT NULL AND monto_pagado != ''"
-        params = {}
+        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
+        # Nota: Esta query está comentada porque no se usa en la respuesta actual
+        # query_sql = "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE monto_pagado IS NOT NULL AND monto_pagado > 0 AND activo = TRUE"
+        # params = {}
 
         # Aplicar filtros de fecha si existen
-        if fecha_inicio:
-            query_sql += " AND fecha_pago::timestamp >= :fecha_inicio"
-            params["fecha_inicio"] = datetime.combine(fecha_inicio, datetime.min.time())
-        if fecha_fin:
-            query_sql += " AND fecha_pago::timestamp <= :fecha_fin"
-            params["fecha_fin"] = datetime.combine(fecha_fin, datetime.max.time())
+        # if fecha_inicio:
+        #     query_sql += " AND fecha_pago >= :fecha_inicio"
+        #     params["fecha_inicio"] = datetime.combine(fecha_inicio, datetime.min.time())
+        # if fecha_fin:
+        #     query_sql += " AND fecha_pago <= :fecha_fin"
+        #     params["fecha_fin"] = datetime.combine(fecha_fin, datetime.max.time())
 
-        if fecha_inicio or fecha_fin:
-            query_sql += " AND fecha_pago IS NOT NULL AND fecha_pago != '' AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'"
-
-        # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
+        # ⚠️ Filtros por analista/concesionario/modelo requerirían JOIN con prestamos
 
         # total_cobrado_query = db.execute(text(query_sql).bindparams(**params))
         # total_cobrado se calcula pero no se usa en la respuesta actual
@@ -1266,24 +1335,23 @@ def dashboard_administrador(
             total_financiamiento_operaciones = 0.0
 
         # Cartera Cobrada: Suma de TODOS los pagos
-        # ⚠️ PagoStaging no tiene prestamo_id, así que no podemos aplicar filtros de analista/concesionario/modelo
+        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
         # Usar SQL directo para sumar monto_pagado con filtros de fecha únicamente
-        where_conditions = ["monto_pagado IS NOT NULL", "monto_pagado != ''"]
+        where_conditions = ["monto_pagado IS NOT NULL", "monto_pagado > 0", "activo = TRUE"]
         params = {}
 
         if fecha_inicio:
-            where_conditions.append("fecha_pago::timestamp >= :fecha_inicio")
+            where_conditions.append("fecha_pago >= :fecha_inicio")
             params["fecha_inicio"] = datetime.combine(fecha_inicio, datetime.min.time())
         if fecha_fin:
-            where_conditions.append("fecha_pago::timestamp <= :fecha_fin")
+            where_conditions.append("fecha_pago <= :fecha_fin")
             params["fecha_fin"] = datetime.combine(fecha_fin, datetime.max.time())
 
         where_clause = " AND ".join(where_conditions)
-        where_clause += " AND fecha_pago IS NOT NULL AND fecha_pago != '' AND fecha_pago ~ '^\\\\d{4}-\\\\d{2}-\\\\d{2}'"
 
         try:
             cartera_cobrada_query = db.execute(
-                text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_clause}").bindparams(
+                text(f"SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE {where_clause}").bindparams(
                     **params
                 )
             )
@@ -1919,22 +1987,20 @@ def obtener_cobranzas_mensuales(
         fecha_inicio_dt = datetime.combine(fecha_inicio_query, datetime.min.time())
         fecha_fin_dt = datetime.combine(hoy, datetime.max.time())
 
+        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
         query_pagos_sql = text(
             """
             SELECT 
-                EXTRACT(YEAR FROM fecha_pago::timestamp)::int as año,
-                EXTRACT(MONTH FROM fecha_pago::timestamp)::int as mes,
-                COALESCE(SUM(monto_pagado::numeric), 0) as pagos
-            FROM pagos_staging
-            WHERE fecha_pago IS NOT NULL
-              AND fecha_pago != ''
-              AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-              AND fecha_pago::timestamp >= :fecha_inicio
-              AND fecha_pago::timestamp <= :fecha_fin
+                EXTRACT(YEAR FROM fecha_pago)::int as año,
+                EXTRACT(MONTH FROM fecha_pago)::int as mes,
+                COALESCE(SUM(monto_pagado), 0) as pagos
+            FROM pagos
+            WHERE fecha_pago >= :fecha_inicio
+              AND fecha_pago <= :fecha_fin
               AND monto_pagado IS NOT NULL
-              AND monto_pagado != ''
-              AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-            GROUP BY EXTRACT(YEAR FROM fecha_pago::timestamp), EXTRACT(MONTH FROM fecha_pago::timestamp)
+              AND monto_pagado > 0
+              AND activo = TRUE
+            GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
             ORDER BY año, mes
         """
         ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
@@ -2094,37 +2160,35 @@ def obtener_metricas_acumuladas(
         fecha_inicio_mes = date(hoy.year, hoy.month, 1)
         fecha_inicio_anio = date(hoy.year, 1, 1)
 
-        # Acumulado mensual: Pagos desde inicio del mes (PagoStaging no tiene conciliado ni prestamo_id)
+        # Acumulado mensual: Pagos desde inicio del mes
+        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
         fecha_inicio_mes_dt = datetime.combine(fecha_inicio_mes, datetime.min.time())
         query_acumulado_mensual = db.execute(
             text(
                 """
-                SELECT COALESCE(SUM(monto_pagado::numeric), 0)
-                FROM pagos_staging
-                WHERE fecha_pago IS NOT NULL
-                  AND fecha_pago != ''
-                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                  AND fecha_pago::timestamp >= :fecha_inicio_mes
+                SELECT COALESCE(SUM(monto_pagado), 0)
+                FROM pagos
+                WHERE fecha_pago >= :fecha_inicio_mes
                   AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
+                  AND monto_pagado > 0
+                  AND activo = TRUE
             """
             ).bindparams(fecha_inicio_mes=fecha_inicio_mes_dt)
         )
         acumulado_mensual = float(query_acumulado_mensual.scalar() or Decimal("0"))
 
-        # Acumulado anual: Pagos desde inicio del año (PagoStaging no tiene conciliado ni prestamo_id)
+        # Acumulado anual: Pagos desde inicio del año
+        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
         fecha_inicio_anio_dt = datetime.combine(fecha_inicio_anio, datetime.min.time())
         query_acumulado_anual = db.execute(
             text(
                 """
-                SELECT COALESCE(SUM(monto_pagado::numeric), 0)
-                FROM pagos_staging
-                WHERE fecha_pago IS NOT NULL
-                  AND fecha_pago != ''
-                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                  AND fecha_pago::timestamp >= :fecha_inicio_anio
+                SELECT COALESCE(SUM(monto_pagado), 0)
+                FROM pagos
+                WHERE fecha_pago >= :fecha_inicio_anio
                   AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
+                  AND monto_pagado > 0
+                  AND activo = TRUE
             """
             ).bindparams(fecha_inicio_anio=fecha_inicio_anio_dt)
         )
@@ -2538,12 +2602,12 @@ def obtener_composicion_morosidad(
         hoy = date.today()
 
         # Query base para cuotas vencidas no pagadas
+        # ✅ CORRECCIÓN: Obtener cuotas primero, luego calcular días de atraso en Python
         query_base = (
             db.query(
                 Cuota.id,
                 Cuota.monto_cuota,
                 Cuota.fecha_vencimiento,
-                text("(:hoy::date - cuotas.fecha_vencimiento::date) as dias_atraso"),
             )
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
@@ -2551,7 +2615,6 @@ def obtener_composicion_morosidad(
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.estado != "PAGADO",
             )
-            .params(hoy=hoy)
         )
 
         # Aplicar filtros
@@ -2566,7 +2629,7 @@ def obtener_composicion_morosidad(
         if fecha_fin:
             query_base = query_base.filter(Prestamo.fecha_registro <= fecha_fin)
 
-        # Obtener todas las cuotas con sus días de atraso
+        # Obtener todas las cuotas y calcular días de atraso en Python
         cuotas = query_base.all()
 
         # Inicializar rangos
@@ -2587,7 +2650,8 @@ def obtener_composicion_morosidad(
 
         # Clasificar cuotas por rango
         for cuota in cuotas:
-            dias_atraso = int(cuota.dias_atraso) if cuota.dias_atraso else 0
+            # Calcular días de atraso en Python
+            dias_atraso = (hoy - cuota.fecha_vencimiento).days if cuota.fecha_vencimiento else 0
             monto = Decimal(str(cuota.monto_cuota)) if cuota.monto_cuota else Decimal("0")
 
             # Determinar rango
@@ -3542,13 +3606,40 @@ def obtener_cobros_por_analista(
         # fecha_inicio_mes = date(hoy.year, hoy.month, 1)
 
         # Obtener cobros por analista (pagos del mes)
-        # ⚠️ PagoStaging no tiene prestamo_id ni conciliado, no podemos hacer JOIN ni filtrar por conciliado
-        # Retornar lista vacía ya que no podemos relacionar pagos con analistas
-        resultados: list[dict[str, Any]] = []
-        logger.warning(
-            f"⚠️ [obtener_cobros_por_analista] No se puede obtener cobros por analista: "
-            f"PagoStaging no tiene prestamo_id para hacer JOIN con Prestamo"
-        )
+        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
+        # Ahora podemos hacer JOIN con prestamos para obtener analista
+        try:
+            # Query con JOIN para obtener cobros por analista
+            query_cobros = db.execute(
+                text(
+                    """
+                    SELECT 
+                        COALESCE(pr.analista, 'Sin Analista') as analista,
+                        COALESCE(SUM(p.monto_pagado), 0) as total_cobrado,
+                        COUNT(p.id) as cantidad_pagos
+                    FROM pagos p
+                    LEFT JOIN prestamos pr ON (
+                        (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
+                        OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
+                    )
+                    WHERE p.activo = TRUE
+                      AND p.monto_pagado IS NOT NULL
+                      AND p.monto_pagado > 0
+                      AND p.fecha_pago >= :fecha_inicio
+                      AND p.fecha_pago <= :fecha_fin
+                    GROUP BY pr.analista
+                    ORDER BY total_cobrado DESC
+                    LIMIT 10
+                    """
+                ).bindparams(
+                    fecha_inicio=datetime.combine(date(hoy.year, hoy.month, 1), datetime.min.time()),
+                    fecha_fin=datetime.combine(hoy, datetime.max.time())
+                )
+            )
+            resultados = [{"analista": row[0], "total_cobrado": float(row[1]), "cantidad_pagos": int(row[2])} for row in query_cobros]
+        except Exception as e:
+            logger.warning(f"⚠️ [obtener_cobros_por_analista] Error obteniendo cobros: {e}")
+            resultados: list[dict[str, Any]] = []
 
         analistas_data = []
         for row in resultados:
@@ -3715,7 +3806,7 @@ def obtener_evolucion_pagos(
 ):
     """
     Evolución de pagos (últimos N meses) para DashboardPagos
-    Consulta tabla pagos_staging para obtener pagos reales por mes
+    ✅ ACTUALIZADO: Consulta tabla pagos (no pagos_staging) con prestamo_id y cedula
     ✅ OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
     """
     import time
@@ -3739,26 +3830,24 @@ def obtener_evolucion_pagos(
         fecha_inicio_query_dt = datetime.combine(fecha_inicio_query, datetime.min.time())
         hoy_dt = datetime.combine(hoy, datetime.max.time())
 
+        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
         query_pagos = db.execute(
             text(
                 """
                 SELECT 
-                    EXTRACT(YEAR FROM fecha_pago::timestamp)::integer as año,
-                    EXTRACT(MONTH FROM fecha_pago::timestamp)::integer as mes,
+                    EXTRACT(YEAR FROM fecha_pago)::integer as año,
+                    EXTRACT(MONTH FROM fecha_pago)::integer as mes,
                     COUNT(*) as cantidad,
-                    COALESCE(SUM(monto_pagado::numeric), 0) as monto_total
-                FROM pagos_staging
-                WHERE fecha_pago IS NOT NULL
-                  AND fecha_pago != ''
-                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                  AND fecha_pago::timestamp >= :fecha_inicio
-                  AND fecha_pago::timestamp <= :fecha_fin
+                    COALESCE(SUM(monto_pagado), 0) as monto_total
+                FROM pagos
+                WHERE fecha_pago >= :fecha_inicio
+                  AND fecha_pago <= :fecha_fin
                   AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
-                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                  AND monto_pagado > 0
+                  AND activo = TRUE
                 GROUP BY 
-                    EXTRACT(YEAR FROM fecha_pago::timestamp),
-                    EXTRACT(MONTH FROM fecha_pago::timestamp)
+                    EXTRACT(YEAR FROM fecha_pago),
+                    EXTRACT(MONTH FROM fecha_pago)
                 ORDER BY año, mes
                 """
             ).bindparams(fecha_inicio=fecha_inicio_query_dt, fecha_fin=hoy_dt)
@@ -3768,13 +3857,14 @@ def obtener_evolucion_pagos(
         logger.info(f"📊 [evolucion-pagos] Query completada en {query_time}ms, {len(resultados)} registros")
 
         # Crear diccionario de resultados por año-mes para acceso rápido
+        # ✅ CORRECCIÓN: Usar acceso por índice en lugar de atributo para compatibilidad con Row
         pagos_por_mes: dict[tuple[int, int], dict[str, Any]] = {}
         for row in resultados:
-            año = int(row.año)
-            mes = int(row.mes)
+            año = int(row[0])
+            mes = int(row[1])
             pagos_por_mes[(año, mes)] = {
-                "cantidad": int(row.cantidad),
-                "monto": float(row.monto_total or Decimal("0")),
+                "cantidad": int(row[2]),
+                "monto": float(row[3] or Decimal("0")),
             }
 
         # Generar datos mensuales (incluir todos los meses en el rango, incluso sin pagos)
