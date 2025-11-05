@@ -182,18 +182,119 @@ def _calcular_morosidad(
     fecha_inicio: Optional[date],
     fecha_fin: Optional[date],
 ) -> float:
-    """Calcula morosidad (cuotas vencidas no pagadas) hasta una fecha"""
-    query = (
-        db.query(func.sum(Cuota.monto_cuota))
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .filter(
-            Prestamo.estado == "APROBADO",
-            Cuota.fecha_vencimiento <= fecha,
-            Cuota.estado != "PAGADO",
-        )
-    )
-    query = FiltrosDashboard.aplicar_filtros_cuota(query, analista, concesionario, modelo, fecha_inicio, fecha_fin)
-    return float(query.scalar() or Decimal("0"))
+    """
+    Calcula morosidad acumulada usando la misma lógica que la tabla SQL:
+    - Morosidad mensual = MAX(0, Monto Programado del mes - Monto Pagado del mes)
+    - Morosidad acumulada = Suma de todas las morosidades mensuales desde 2024 hasta la fecha
+    
+    ✅ CORRECCIÓN: Usa la misma lógica que obtener_financiamiento_tendencia_mensual
+    """
+    # Fecha de inicio: 2024-01-01 o fecha_inicio si es más reciente
+    fecha_inicio_calculo = date(2024, 1, 1)
+    if fecha_inicio and fecha_inicio > fecha_inicio_calculo:
+        fecha_inicio_calculo = fecha_inicio
+    
+    # Construir filtros para WHERE clause
+    filtros_prestamo = []
+    bind_params = {"fecha_limite": fecha, "fecha_inicio_calculo": fecha_inicio_calculo}
+    
+    if analista:
+        filtros_prestamo.append("(p.analista = :analista OR p.producto_financiero = :analista)")
+        bind_params["analista"] = analista
+    if concesionario:
+        filtros_prestamo.append("p.concesionario = :concesionario")
+        bind_params["concesionario"] = concesionario
+    if modelo:
+        filtros_prestamo.append("(p.producto = :modelo OR p.modelo_vehiculo = :modelo)")
+        bind_params["modelo"] = modelo
+    if fecha_inicio:
+        filtros_prestamo.append("p.fecha_aprobacion >= :fecha_inicio")
+        bind_params["fecha_inicio"] = fecha_inicio
+    if fecha_fin:
+        filtros_prestamo.append("p.fecha_aprobacion <= :fecha_fin")
+        bind_params["fecha_fin"] = fecha_fin
+    
+    where_prestamo = " AND " + " AND ".join(filtros_prestamo) if filtros_prestamo else ""
+    
+    # ✅ Query que calcula morosidad acumulada mes por mes
+    # Suma todas las morosidades mensuales desde 2024 hasta la fecha
+    # Usa la misma lógica que obtener_financiamiento_tendencia_mensual
+    
+    if filtros_prestamo:
+        # Con filtros: filtrar pagos a través de préstamos
+        query_sql = text(f"""
+            WITH meses AS (
+                SELECT 
+                    EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
+                    EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
+                    COALESCE(SUM(c.monto_cuota), 0) as monto_programado
+                FROM cuotas c
+                INNER JOIN prestamos p ON c.prestamo_id = p.id
+                WHERE p.estado = 'APROBADO'
+                  AND c.fecha_vencimiento >= :fecha_inicio_calculo
+                  AND c.fecha_vencimiento <= :fecha_limite
+                  {where_prestamo}
+                GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+            ),
+            pagos_por_mes AS (
+                SELECT 
+                    EXTRACT(YEAR FROM pa.fecha_pago)::integer as año,
+                    EXTRACT(MONTH FROM pa.fecha_pago)::integer as mes,
+                    COALESCE(SUM(pa.monto_pagado), 0) as monto_pagado
+                FROM pagos pa
+                LEFT JOIN prestamos pr ON (
+                    (pa.prestamo_id IS NOT NULL AND pr.id = pa.prestamo_id)
+                    OR (pa.prestamo_id IS NULL AND pr.cedula = pa.cedula AND pr.estado = 'APROBADO')
+                )
+                WHERE pa.fecha_pago >= :fecha_inicio_calculo
+                  AND pa.fecha_pago <= :fecha_limite
+                  AND pa.monto_pagado IS NOT NULL
+                  AND pa.monto_pagado > 0
+                  AND pa.activo = TRUE
+                  AND pr.estado = 'APROBADO'
+                  {where_prestamo}
+                GROUP BY EXTRACT(YEAR FROM pa.fecha_pago), EXTRACT(MONTH FROM pa.fecha_pago)
+            )
+            SELECT COALESCE(SUM(GREATEST(0, m.monto_programado - COALESCE(p.monto_pagado, 0))), 0) as morosidad_acumulada
+            FROM meses m
+            LEFT JOIN pagos_por_mes p ON m.año = p.año AND m.mes = p.mes
+        """)
+    else:
+        # Sin filtros: query más simple (suma todos los pagos)
+        query_sql = text("""
+            WITH meses AS (
+                SELECT 
+                    EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
+                    EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
+                    COALESCE(SUM(c.monto_cuota), 0) as monto_programado
+                FROM cuotas c
+                INNER JOIN prestamos p ON c.prestamo_id = p.id
+                WHERE p.estado = 'APROBADO'
+                  AND c.fecha_vencimiento >= :fecha_inicio_calculo
+                  AND c.fecha_vencimiento <= :fecha_limite
+                GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+            ),
+            pagos_por_mes AS (
+                SELECT 
+                    EXTRACT(YEAR FROM pa.fecha_pago)::integer as año,
+                    EXTRACT(MONTH FROM pa.fecha_pago)::integer as mes,
+                    COALESCE(SUM(pa.monto_pagado), 0) as monto_pagado
+                FROM pagos pa
+                WHERE pa.fecha_pago >= :fecha_inicio_calculo
+                  AND pa.fecha_pago <= :fecha_limite
+                  AND pa.monto_pagado IS NOT NULL
+                  AND pa.monto_pagado > 0
+                  AND pa.activo = TRUE
+                GROUP BY EXTRACT(YEAR FROM pa.fecha_pago), EXTRACT(MONTH FROM pa.fecha_pago)
+            )
+            SELECT COALESCE(SUM(GREATEST(0, m.monto_programado - COALESCE(p.monto_pagado, 0))), 0) as morosidad_acumulada
+            FROM meses m
+            LEFT JOIN pagos_por_mes p ON m.año = p.año AND m.mes = p.mes
+        """)
+    
+    resultado = db.execute(query_sql.bindparams(**bind_params)).scalar()
+    
+    return float(resultado or Decimal("0"))
 
 
 def _calcular_total_a_cobrar_fecha(
@@ -1848,36 +1949,18 @@ def obtener_kpis_principales(
         )
 
         # 4. TOTAL MOROSIDAD EN DOLARES
-        # Morosidad = cuotas vencidas no pagadas
-        query_morosidad_actual = (
-            db.query(func.sum(Cuota.monto_cuota))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
-            )
+        # ✅ CORRECCIÓN: Morosidad = cuotas vencidas - pagos aplicados (morosidad neta)
+        # Usar función helper que calcula correctamente restando pagos
+        morosidad_actual = _calcular_morosidad(
+            db, hoy, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        query_morosidad_actual = FiltrosDashboard.aplicar_filtros_cuota(
-            query_morosidad_actual, analista, concesionario, modelo, fecha_inicio, fecha_fin
-        )
-        morosidad_actual = float(query_morosidad_actual.scalar() or Decimal("0"))
 
-        # Para mes anterior, filtrar por cuotas que vencieron en ese mes
-        query_morosidad_anterior = (
-            db.query(func.sum(Cuota.monto_cuota))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento >= fecha_inicio_mes_anterior,
-                Cuota.fecha_vencimiento < fecha_fin_mes_anterior,
-                Cuota.estado != "PAGADO",
-            )
+        # ✅ CORRECCIÓN: Para mes anterior, calcular morosidad total hasta el último día del mes anterior
+        # No solo cuotas que vencieron EN ese mes, sino todas las cuotas vencidas HASTA ese momento
+        fecha_fin_mes_anterior_menos_1 = fecha_fin_mes_anterior - timedelta(days=1)
+        morosidad_anterior = _calcular_morosidad(
+            db, fecha_fin_mes_anterior_menos_1, analista, concesionario, modelo, None, None
         )
-        query_morosidad_anterior = FiltrosDashboard.aplicar_filtros_cuota(
-            query_morosidad_anterior, analista, concesionario, modelo, None, None
-        )
-        morosidad_anterior = float(query_morosidad_anterior.scalar() or Decimal("0"))
 
         variacion_morosidad, variacion_morosidad_abs = _calcular_variacion(morosidad_actual, morosidad_anterior)
 

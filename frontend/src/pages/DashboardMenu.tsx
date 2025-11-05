@@ -1332,7 +1332,7 @@ export function DashboardMenu() {
                         const dominioMax = maxValor + padding
                         const dominioMin = 0 // Siempre empezar desde 0 para mejor visualización
                         
-                        // Ordenar rangos por valor numérico del rango (de mayor a menor para efecto pirámide)
+                        // Ordenar rangos por valor numérico del rango (de menor a mayor - invertido)
                         const rangosOrdenados = [...datosFinanciamientoRangos.rangos].sort((a, b) => {
                           // Extraer el valor mínimo del rango para ordenar
                           const getMinValue = (categoria: string) => {
@@ -1347,7 +1347,7 @@ export function DashboardMenu() {
                             const match = cleanCategoria.match(/\$(\d+)\s*-\s*\$\d+/)
                             return match ? parseInt(match[1]) : 0
                           }
-                          return getMinValue(b.categoria) - getMinValue(a.categoria)
+                          return getMinValue(a.categoria) - getMinValue(b.categoria)
                         })
                         
                         return (
@@ -1374,6 +1374,7 @@ export function DashboardMenu() {
                                 stroke="#6b7280" 
                                 width={110}
                                 tick={{ fontSize: 12 }}
+                                reversed={true}
                               />
                           <Tooltip
                             formatter={(value: number, name: string, props: any) => {
