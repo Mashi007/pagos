@@ -284,11 +284,21 @@ export function DashboardMenu() {
         if (value) queryParams.append(key, value.toString())
       })
       // Usar timeout extendido para endpoints lentos
-      const response = await apiClient.get(
+      const response = (await apiClient.get(
         `/api/v1/dashboard/cobranzas-mensuales?${queryParams.toString()}`,
         { timeout: 60000 }
-      )
-      return response.data as { meses: Array<{ mes: string; nombre_mes: string; cobranzas_planificadas: number; pagos_reales: number; meta_mensual: number }> }
+      )) as {
+        data: {
+          meses: Array<{
+            mes: string
+            nombre_mes: string
+            cobranzas_planificadas: number
+            pagos_reales: number
+            meta_mensual: number
+          }>
+        }
+      }
+      return response.data
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
   })
@@ -303,11 +313,20 @@ export function DashboardMenu() {
         if (value) queryParams.append(key, value.toString())
       })
       queryParams.append('semanas', '12') // Últimas 12 semanas
-      const response = await apiClient.get(
+      const response = (await apiClient.get(
         `/api/v1/dashboard/cobranzas-semanales?${queryParams.toString()}`,
         { timeout: 60000 }
-      )
-      return response.data as { semanas: Array<{ semana_inicio: string; nombre_semana: string; cobranzas_planificadas: number; pagos_reales: number }> }
+      )) as {
+        data: {
+          semanas: Array<{
+            semana_inicio: string
+            nombre_semana: string
+            cobranzas_planificadas: number
+            pagos_reales: number
+          }>
+        }
+      }
+      return response.data
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
   })
