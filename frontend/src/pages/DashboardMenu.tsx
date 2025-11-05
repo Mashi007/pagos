@@ -934,10 +934,8 @@ export function DashboardMenu() {
                           dataKey="concesionario"
                           stroke="#6b7280"
                           style={{ fontSize: '12px', fontWeight: 500 }}
-                          tick={{ fill: '#6b7280' }}
+                          tick={{ fill: '#6b7280', angle: -45, textAnchor: 'end' }}
                           width={200}
-                          angle={-45}
-                          textAnchor="end"
                         />
                         <Tooltip 
                           contentStyle={{
