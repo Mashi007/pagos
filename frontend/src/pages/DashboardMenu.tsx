@@ -260,32 +260,6 @@ export function DashboardMenu() {
     enabled: true,
   })
 
-  // Cargar evolución general mensual (Morosidad, Total Activos, Total Financiamiento, Total Pagos)
-  const { data: datosEvolucionGeneral, isLoading: loadingEvolucionGeneral } = useQuery({
-    queryKey: ['evolucion-general-mensual', JSON.stringify(filtros)],
-    queryFn: async () => {
-      const params = construirFiltrosObject()
-      const queryParams = new URLSearchParams()
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-      const response = await apiClient.get(
-        `/api/v1/dashboard/evolucion-general-mensual?${queryParams.toString()}`
-      ) as {
-        evolucion: Array<{
-          mes: string
-          morosidad: number
-          total_activos: number
-          total_financiamiento: number
-          total_pagos: number
-        }>
-      }
-      return response
-    },
-    staleTime: 5 * 60 * 1000,
-    enabled: true,
-  })
-
   // Cargar cobranzas mensuales (con timeout extendido)
   const { data: datosCobranzas, isLoading: loadingCobranzas } = useQuery({
     queryKey: ['cobranzas-mensuales', JSON.stringify(filtros)],
@@ -425,7 +399,6 @@ export function DashboardMenu() {
       await queryClient.invalidateQueries({ queryKey: ['pagos-conciliados'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['financiamiento-rangos'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['composicion-morosidad'], exact: false })
-      await queryClient.invalidateQueries({ queryKey: ['evolucion-general-mensual'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['cobranzas-mensuales'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['morosidad-analista'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
@@ -441,7 +414,6 @@ export function DashboardMenu() {
       await queryClient.refetchQueries({ queryKey: ['pagos-conciliados'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['financiamiento-rangos'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['composicion-morosidad'], exact: false })
-      await queryClient.refetchQueries({ queryKey: ['evolucion-general-mensual'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['cobranzas-mensuales'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['morosidad-analista'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
@@ -920,73 +892,98 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-            {/* Fila 2: 2 Gráficos */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-              {/* Gráfico 2: Distribución por Concesionario */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-              >
-                <Card className="shadow-lg border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <PieChart className="h-6 w-6 text-purple-600" />
-                      <span>Préstamos por Concesionario</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    {loadingConcesionarios ? (
-                      <div className="h-[300px] flex items-center justify-center">
-                        <div className="animate-pulse text-gray-400">Cargando...</div>
-                      </div>
-                    ) : datosConcesionarios && datosConcesionarios.length > 0 ? (
-                      <div className="relative">
-                        <ResponsiveContainer width="100%" height={400}>
-                          <RechartsPieChart>
-                            <Pie
-                              data={datosConcesionarios.map((c) => ({
-                                name: c.concesionario.length > 20 ? c.concesionario.substring(0, 20) + '...' : c.concesionario,
-                                value: c.porcentaje,
-                                total: c.total_prestamos,
-                                fullName: c.concesionario,
-                              }))}
-                              cx="50%"
-                              cy="50%"
-                              labelLine={true}
-                              label={({ name, percent, fullName }) => {
-                                const labelText = `${name}: ${(percent * 100).toFixed(1)}%`
-                                return labelText
-                              }}
-                              outerRadius={120}
-                              innerRadius={70}
-                              fill="#8884d8"
-                              dataKey="value"
-                              paddingAngle={2}
-                            >
-                              {datosConcesionarios.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} />
-                              ))}
-                            </Pie>
-                            <Tooltip 
-                              formatter={(value: number, name: string, props: any) => [
-                                `${props.payload.fullName || props.payload.name}: ${(value as number).toFixed(1)}%`,
-                                'Porcentaje'
-                              ]}
+            {/* Gráfico de Barras: Préstamos por Concesionario (Fila completa) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card className="shadow-lg border-2 border-gray-200">
+                <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
+                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <BarChart3 className="h-6 w-6 text-purple-600" />
+                    <span>Préstamos por Concesionario</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  {loadingConcesionarios ? (
+                    <div className="h-[350px] flex items-center justify-center">
+                      <div className="animate-pulse text-gray-400">Cargando...</div>
+                    </div>
+                  ) : datosConcesionarios && datosConcesionarios.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={350}>
+                      <BarChart
+                        data={datosConcesionarios.map((c) => ({
+                          concesionario: c.concesionario.length > 25 ? c.concesionario.substring(0, 25) + '...' : c.concesionario,
+                          total_prestamos: c.total_prestamos,
+                          porcentaje: c.porcentaje,
+                          fullName: c.concesionario,
+                        }))}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                        layout="vertical"
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                        <XAxis 
+                          type="number"
+                          stroke="#6b7280"
+                          style={{ fontSize: '12px', fontWeight: 500 }}
+                          tick={{ fill: '#6b7280' }}
+                        />
+                        <YAxis 
+                          type="category"
+                          dataKey="concesionario"
+                          stroke="#6b7280"
+                          style={{ fontSize: '12px', fontWeight: 500 }}
+                          tick={{ fill: '#6b7280' }}
+                          width={200}
+                          angle={-45}
+                          textAnchor="end"
+                        />
+                        <Tooltip 
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            padding: '12px',
+                          }}
+                          formatter={(value: number, name: string, props: any) => {
+                            const porcentaje = props.payload.porcentaje || 0
+                            return [
+                              `${value.toLocaleString('es-EC')} préstamos (${porcentaje.toFixed(1)}%)`,
+                              'Cantidad'
+                            ]
+                          }}
+                          labelFormatter={(label) => {
+                            const data = datosConcesionarios?.find(c => 
+                              (c.concesionario.length > 25 ? c.concesionario.substring(0, 25) + '...' : c.concesionario) === label
+                            )
+                            return data?.concesionario || label
+                          }}
+                        />
+                        <Legend />
+                        <Bar 
+                          dataKey="total_prestamos" 
+                          name="Cantidad de Préstamos"
+                          radius={[0, 8, 8, 0]}
+                        >
+                          {datosConcesionarios.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} 
                             />
-                          </RechartsPieChart>
-                        </ResponsiveContainer>
-                      </div>
-                    ) : (
-                      <div className="h-[400px] flex items-center justify-center text-gray-400">
-                        No hay datos disponibles
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </div>
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[350px] flex items-center justify-center text-gray-400">
+                      No hay datos disponibles
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
 
             {/* Fila 2: 2 Gráficos */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1481,132 +1478,6 @@ export function DashboardMenu() {
               </motion.div>
             </div>
 
-            {/* Fila 6: Gráfico de Evolución General Mensual */}
-            <div className="grid grid-cols-1 gap-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.3 }}
-              >
-                <Card className="shadow-lg border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b-2 border-purple-200">
-                    <CardTitle className="flex items-center space-x-2 text-2xl font-bold text-gray-800">
-                      <LineChart className="h-7 w-7 text-purple-600" />
-                      <span>Evolución General Mensual (Últimos 6 Meses)</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    {loadingEvolucionGeneral ? (
-                      <div className="h-[500px] flex items-center justify-center">
-                        <div className="animate-pulse text-gray-400">Cargando...</div>
-                      </div>
-                    ) : datosEvolucionGeneral && datosEvolucionGeneral.evolucion.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={500}>
-                        <RechartsLineChart
-                          data={datosEvolucionGeneral.evolucion}
-                          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis 
-                            dataKey="mes" 
-                            stroke="#6b7280"
-                            tick={{ fontSize: 12 }}
-                            angle={-45}
-                            textAnchor="end"
-                            height={80}
-                          />
-                          <YAxis 
-                            yAxisId="left"
-                            stroke="#6b7280"
-                            tick={{ fontSize: 12 }}
-                            tickFormatter={(value) => formatCurrency(value)}
-                          />
-                          <YAxis 
-                            yAxisId="right"
-                            orientation="right"
-                            stroke="#6b7280"
-                            tick={{ fontSize: 12 }}
-                            tickFormatter={(value) => formatCurrency(value)}
-                          />
-                          <Tooltip
-                            formatter={(value: number, name: string) => {
-                              const labels: Record<string, string> = {
-                                'morosidad': 'Morosidad por Día',
-                                'total_activos': 'Total Activos',
-                                'total_financiamiento': 'Total Financiamiento',
-                                'total_pagos': 'Total Pagos'
-                              }
-                              return [formatCurrency(value), labels[name] || name]
-                            }}
-                            contentStyle={{
-                              backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                              border: '1px solid #e5e7eb',
-                              borderRadius: '8px',
-                            }}
-                          />
-                          <Legend 
-                            wrapperStyle={{ paddingTop: '20px' }}
-                            formatter={(value) => {
-                              const labels: Record<string, string> = {
-                                'morosidad': 'Morosidad por Día',
-                                'total_activos': 'Total Activos',
-                                'total_financiamiento': 'Total Financiamiento',
-                                'total_pagos': 'Total Pagos'
-                              }
-                              return labels[value] || value
-                            }}
-                          />
-                          <Line
-                            yAxisId="left"
-                            type="monotone"
-                            dataKey="morosidad"
-                            stroke="#ef4444"
-                            strokeWidth={3}
-                            dot={{ r: 5 }}
-                            activeDot={{ r: 8 }}
-                            name="morosidad"
-                          />
-                          <Line
-                            yAxisId="left"
-                            type="monotone"
-                            dataKey="total_activos"
-                            stroke="#3b82f6"
-                            strokeWidth={3}
-                            dot={{ r: 5 }}
-                            activeDot={{ r: 8 }}
-                            name="total_activos"
-                          />
-                          <Line
-                            yAxisId="left"
-                            type="monotone"
-                            dataKey="total_financiamiento"
-                            stroke="#10b981"
-                            strokeWidth={3}
-                            dot={{ r: 5 }}
-                            activeDot={{ r: 8 }}
-                            name="total_financiamiento"
-                          />
-                          <Line
-                            yAxisId="right"
-                            type="monotone"
-                            dataKey="total_pagos"
-                            stroke="#f59e0b"
-                            strokeWidth={3}
-                            dot={{ r: 5 }}
-                            activeDot={{ r: 8 }}
-                            name="total_pagos"
-                          />
-                        </RechartsLineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-[500px] flex items-center justify-center text-gray-400">
-                        No hay datos disponibles
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </div>
           </div>
         </div>
       </div>
