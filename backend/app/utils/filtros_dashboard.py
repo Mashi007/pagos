@@ -11,7 +11,7 @@ from sqlalchemy.orm import Query
 
 from app.models.amortizacion import Cuota
 from app.models.pago import Pago
-from app.models.pago_staging import PagoStaging
+# ⚠️ PagoStaging eliminado - usar Pago
 from app.models.prestamo import Prestamo
 
 
@@ -58,11 +58,9 @@ class FiltrosDashboard:
 
     @staticmethod
     def _detectar_tabla_pago(query: Query) -> Any:
-        """Detecta si la query usa Pago o PagoStaging"""
+        """Detecta si la query usa Pago (siempre retorna Pago ahora)"""
         try:
             compiled_sql = str(query.statement.compile(compile_kwargs={"literal_binds": False})).lower()
-            if "pagos_staging" in compiled_sql or "pagostaging" in compiled_sql:
-                return PagoStaging
             if "pagos" in compiled_sql and "staging" not in compiled_sql:
                 return Pago
         except (AttributeError, Exception):
@@ -73,13 +71,11 @@ class FiltrosDashboard:
                         if "entity" in col and col["entity"]:
                             entity = col["entity"]
                             if hasattr(entity, "__tablename__"):
-                                if entity.__tablename__ == "pagos_staging":
-                                    return PagoStaging
                                 if entity.__tablename__ == "pagos":
                                     return Pago
             except (AttributeError, Exception):
                 pass
-        return PagoStaging  # Default
+        return Pago  # Default: siempre usar tabla pagos
 
     @staticmethod
     def _verificar_join_prestamo(query: Query) -> bool:

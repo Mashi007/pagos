@@ -1663,474 +1663,16 @@ def obtener_auditoria_pago(
 
 
 # ============================================
-# ENDPOINTS PARA PAGOS_STAGING
+# ENDPOINTS PARA PAGOS_STAGING - ELIMINADOS
+# La tabla pagos_staging ya fue migrada a pagos
 # ============================================
 
-
-@router.get("/staging")
-def listar_pagos_staging(
-    page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
-    cedula: Optional[str] = None,
-    estado: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Listar pagos de la tabla pagos_staging con filtros y paginación
-    """
-    try:
-        logger.info(f"📋 [listar_pagos_staging] Consultando pagos_staging - página {page}, por página {per_page}")
-
-        # Verificar si la tabla existe
-        try:
-            test_query = db.query(func.count(PagoStaging.id)).scalar()
-            logger.info(f"✅ [listar_pagos_staging] Conexión a pagos_staging OK. Total registros: {test_query}")
-        except Exception as db_error:
-            logger.error(f"❌ [listar_pagos_staging] Error de conexión a pagos_staging: {db_error}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error de conexión a pagos_staging: {str(db_error)}",
-            )
-
-        query = db.query(PagoStaging)
-
-        # Aplicar filtros
-        if cedula:
-            query = query.filter(PagoStaging.cedula_cliente == cedula)
-            logger.info(f"🔍 [listar_pagos_staging] Filtro cédula: {cedula}")
-        if estado:
-            # ⚠️ PagoStaging no tiene columna estado
-            # query = query.filter(PagoStaging.estado == estado)
-            logger.info(f"🔍 [listar_pagos_staging] Filtro estado: {estado}")
-
-        # Contar total antes de aplicar paginación
-        total = query.count()
-        logger.info(f"📊 [listar_pagos_staging] Total registros encontrados (sin paginación): {total}")
-
-        # Ordenar por fecha de registro descendente (más actual primero)
-        if hasattr(PagoStaging, "fecha_registro"):
-            # ⚠️ PagoStaging no tiene fecha_registro
-            query = query.order_by(PagoStaging.id.desc())
-        else:
-            query = query.order_by(PagoStaging.id.desc())
-
-        # Paginación
-        from app.utils.pagination import calculate_pagination_params, create_paginated_response
-
-        skip, limit = calculate_pagination_params(page=page, per_page=per_page, max_per_page=100)
-        pagos_staging = query.offset(skip).limit(limit).all()
-        logger.info(f"📄 [listar_pagos_staging] Registros obtenidos: {len(pagos_staging)}")
-
-        # Serializar resultados - PagoStaging solo tiene: id, cedula_cliente, fecha_pago, monto_pagado, numero_documento
-        items = []
-        for p in pagos_staging:
-            # Convertir fecha_pago de string a datetime si es necesario
-            fecha_pago_dt = None
-            if p.fecha_pago:
-                if isinstance(p.fecha_pago, str):
-                    try:
-                        fecha_pago_dt = datetime.fromisoformat(p.fecha_pago.replace("Z", "+00:00"))
-                    except (ValueError, AttributeError):
-                        try:
-                            fecha_pago_dt = datetime.strptime(p.fecha_pago[:19], "%Y-%m-%d %H:%M:%S")
-                        except (ValueError, IndexError):
-                            try:
-                                fecha_pago_dt = datetime.combine(date.fromisoformat(p.fecha_pago[:10]), time.min)
-                            except (ValueError, IndexError):
-                                fecha_pago_dt = None
-                elif isinstance(p.fecha_pago, date):
-                    if not isinstance(p.fecha_pago, datetime):
-                        fecha_pago_dt = datetime.combine(p.fecha_pago, time.min)
-                    else:
-                        fecha_pago_dt = p.fecha_pago
-                else:
-                    fecha_pago_dt = p.fecha_pago
-
-            # Convertir monto_pagado de string a float
-            monto_float = None
-            if p.monto_pagado:
-                try:
-                    monto_str = str(p.monto_pagado).strip()
-                    if monto_str and monto_str != "":
-                        monto_float = float(Decimal(monto_str))
-                except (ValueError, TypeError):
-                    monto_float = None
-
-            items.append(
-                {
-                    "id": p.id,
-                    "cedula_cliente": p.cedula_cliente or "",
-                    "prestamo_id": None,  # PagoStaging no tiene prestamo_id
-                    "numero_cuota": None,  # PagoStaging no tiene numero_cuota
-                    "fecha_pago": fecha_pago_dt.isoformat() if fecha_pago_dt else None,
-                    "fecha_registro": None,  # PagoStaging no tiene fecha_registro
-                    "monto_pagado": monto_float,
-                    "numero_documento": p.numero_documento or "",
-                    "institucion_bancaria": None,  # PagoStaging no tiene institucion_bancaria
-                    "estado": "REGISTRADO",  # Valor por defecto ya que PagoStaging no tiene estado
-                    "conciliado": False,  # Valor por defecto ya que PagoStaging no tiene conciliado
-                    "fecha_conciliacion": None,  # PagoStaging no tiene fecha_conciliacion
-                    "notas": None,  # PagoStaging no tiene notas
-                    "verificado_concordancia": None,  # PagoStaging no tiene verificado_concordancia
-                }
-            )
-
-        return create_paginated_response(items=items, total=total, page=page, page_size=limit)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ [listar_pagos_staging] Error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error al listar pagos_staging: {str(e)}")
-
-
-@router.get("/staging/estadisticas")
-def estadisticas_pagos_staging(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Obtener estadísticas de la tabla pagos_staging
-    """
-    try:
-        logger.info("📊 [estadisticas_pagos_staging] Obteniendo estadísticas de pagos_staging")
-
-        # Verificar si la tabla existe
-        try:
-            total_registros = db.query(func.count(PagoStaging.id)).scalar() or 0
-        except Exception as db_error:
-            logger.error(f"❌ [estadisticas_pagos_staging] Error de conexión: {db_error}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error de conexión a pagos_staging: {str(db_error)}",
-            )
-
-        if total_registros == 0:
-            return {
-                "total_registros": 0,
-                "con_datos_completos": 0,
-                "con_cedula": 0,
-                "con_fecha_pago": 0,
-                "con_monto": 0,
-                "sin_prestamo_id": 0,
-                "por_estado": {},
-            }
-
-        # Estadísticas detalladas
-        con_cedula = (
-            db.query(func.count(PagoStaging.id))
-            .filter(or_(PagoStaging.cedula_cliente.isnot(None), PagoStaging.cedula.isnot(None)))
-            .scalar()
-            or 0
-        )
-
-        con_fecha_pago = db.query(func.count(PagoStaging.id)).filter(PagoStaging.fecha_pago.isnot(None)).scalar() or 0
-
-        con_monto = (
-            db.query(func.count(PagoStaging.id))
-            .filter(PagoStaging.monto_pagado.isnot(None), text("pagos_staging.monto_pagado::numeric >= 0"))
-            .scalar()
-            or 0
-        )
-
-        # ⚠️ PagoStaging no tiene prestamo_id
-        sin_prestamo_id = 0  # No aplica para pagos_staging
-
-        con_datos_completos = (
-            db.query(func.count(PagoStaging.id))
-            .filter(
-                PagoStaging.cedula_cliente.isnot(None),
-                PagoStaging.fecha_pago.isnot(None),
-                PagoStaging.monto_pagado.isnot(None),
-                text("pagos_staging.monto_pagado::numeric > 0"),
-            )
-            .scalar()
-            or 0
-        )
-
-        # ⚠️ PagoStaging no tiene columna estado
-        por_estado = {"SIN_ESTADO": 0}  # No disponible
-
-        estadisticas = {
-            "total_registros": total_registros,
-            "con_datos_completos": con_datos_completos,
-            "con_cedula": con_cedula,
-            "con_fecha_pago": con_fecha_pago,
-            "con_monto": con_monto,
-            "sin_prestamo_id": sin_prestamo_id,
-            "por_estado": por_estado,
-        }
-
-        logger.info(f"✅ [estadisticas_pagos_staging] Estadísticas obtenidas: {estadisticas}")
-        return estadisticas
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ [estadisticas_pagos_staging] Error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error al obtener estadísticas: {str(e)}")
-
-
-@router.post("/staging/migrar/{pago_staging_id}")
-def migrar_pago_staging_a_pagos(
-    pago_staging_id: int = Path(..., description="ID del pago en staging a migrar"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Migra un pago de pagos_staging a la tabla pagos
-    """
-    try:
-        logger.info(f"🔄 [migrar_pago_staging] Iniciando migración de pago_staging_id={pago_staging_id}")
-
-        # Buscar el pago en staging
-        pago_staging = db.query(PagoStaging).filter(PagoStaging.id == pago_staging_id).first()
-
-        if not pago_staging:
-            raise HTTPException(status_code=404, detail=f"Pago staging con ID {pago_staging_id} no encontrado")
-
-        # Validar que tenga datos mínimos
-        cedula_final = pago_staging.cedula_cliente
-        if not cedula_final:
-            raise HTTPException(
-                status_code=400,
-                detail="El pago staging no tiene cédula de cliente (cedula_cliente o cedula)",
-            )
-        if not pago_staging.fecha_pago:
-            raise HTTPException(status_code=400, detail="El pago staging no tiene fecha_pago")
-        if not pago_staging.monto_pagado or pago_staging.monto_pagado <= 0:
-            raise HTTPException(status_code=400, detail="El pago staging no tiene monto_pagado válido")
-        if not pago_staging.numero_documento:
-            raise HTTPException(status_code=400, detail="El pago staging no tiene numero_documento")
-
-        # Crear el pago en la tabla principal
-        nuevo_pago = Pago(
-            cedula_cliente=cedula_final,
-            prestamo_id=pago_staging.prestamo_id,
-            numero_cuota=pago_staging.numero_cuota,
-            fecha_pago=pago_staging.fecha_pago,
-            fecha_registro=pago_staging.fecha_registro or datetime.now(),
-            monto_pagado=pago_staging.monto_pagado,
-            numero_documento=pago_staging.numero_documento,
-            institucion_bancaria=pago_staging.institucion_bancaria,
-            documento_nombre=pago_staging.documento_nombre,
-            documento_tipo=pago_staging.documento_tipo,
-            documento_tamaño=pago_staging.documento_tamaño,
-            documento_ruta=pago_staging.documento_ruta,
-            conciliado=pago_staging.conciliado or False,
-            fecha_conciliacion=pago_staging.fecha_conciliacion,
-            estado=pago_staging.estado or "PAGADO",
-            activo=True,
-            notas=pago_staging.notas,
-            usuario_registro=current_user.email,
-            verificado_concordancia=pago_staging.verificado_concordancia or "NO",
-        )
-
-        db.add(nuevo_pago)
-        db.flush()  # Para obtener el ID
-
-        logger.info(f"✅ [migrar_pago_staging] Pago creado en tabla principal con ID={nuevo_pago.id}")
-
-        # Si tiene prestamo_id, intentar aplicar a cuotas
-        if nuevo_pago.prestamo_id:
-            try:
-                # Llamar directamente a la función (está definida en este mismo archivo)
-                aplicar_pago_a_cuotas(nuevo_pago, db, current_user)
-                logger.info(f"✅ [migrar_pago_staging] Pago aplicado a cuotas del préstamo {nuevo_pago.prestamo_id}")
-            except Exception as e:
-                logger.warning(f"⚠️ [migrar_pago_staging] No se pudo aplicar pago a cuotas: {e}")
-
-        # Eliminar de staging (opcional, comentar si se quiere mantener)
-        # db.delete(pago_staging)
-        # logger.info("🗑️ [migrar_pago_staging] Pago eliminado de staging")
-
-        db.commit()
-
-        return {
-            "mensaje": "Pago migrado exitosamente",
-            "pago_staging_id": pago_staging_id,
-            "pago_id": nuevo_pago.id,
-            "prestamo_id": nuevo_pago.prestamo_id,
-            "monto": float(nuevo_pago.monto_pagado),
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error(f"❌ [migrar_pago_staging] Error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error al migrar pago: {str(e)}")
-
-
-@router.get("/verificar-pagos-staging")
-def verificar_conexion_pagos_staging(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Endpoint de diagnóstico para verificar la conexión y estado de pagos_staging
-    """
-    diagnostico = {
-        "timestamp": datetime.now().isoformat(),
-        "estado": "ok",
-        "verificaciones": {},
-        "errores": [],
-        "datos": {},
-    }
-
-    try:
-        # 1. Verificar que el modelo existe
-        logger.info("🔍 [verificar_pagos_staging] Verificando modelo PagoStaging...")
-        try:
-            diagnostico["verificaciones"]["modelo_existe"] = {
-                "status": "ok",
-                "mensaje": "Modelo PagoStaging importado correctamente",
-                "tablename": PagoStaging.__tablename__,
-            }
-        except Exception as e:
-            diagnostico["verificaciones"]["modelo_existe"] = {
-                "status": "error",
-                "mensaje": f"Error al acceder al modelo: {str(e)}",
-            }
-            diagnostico["errores"].append(f"Modelo: {str(e)}")
-            diagnostico["estado"] = "error"
-            logger.error(f"❌ [verificar_pagos_staging] Error en modelo: {e}", exc_info=True)
-
-        # 2. Verificar conexión básica a la tabla
-        logger.info("🔍 [verificar_pagos_staging] Verificando conexión a tabla pagos_staging...")
-        try:
-            test_count = db.query(func.count(PagoStaging.id)).scalar()
-            diagnostico["verificaciones"]["conexion_tabla"] = {
-                "status": "ok",
-                "mensaje": "Conexión a tabla pagos_staging exitosa",
-                "total_registros": test_count or 0,
-            }
-            diagnostico["datos"]["total_registros"] = test_count or 0
-        except Exception as e:
-            diagnostico["verificaciones"]["conexion_tabla"] = {
-                "status": "error",
-                "mensaje": f"Error de conexión a tabla: {str(e)}",
-            }
-            diagnostico["errores"].append(f"Conexión tabla: {str(e)}")
-            diagnostico["estado"] = "error"
-            logger.error(f"❌ [verificar_pagos_staging] Error conexión tabla: {e}", exc_info=True)
-
-        # 3. Verificar estructura de columnas
-        logger.info("🔍 [verificar_pagos_staging] Verificando estructura de columnas...")
-        try:
-            # Intentar consultar columnas que existen en PagoStaging (solo las 5 columnas reales)
-            muestra = (
-                db.query(
-                    PagoStaging.id,
-                    PagoStaging.cedula_cliente,
-                    PagoStaging.fecha_pago,
-                    PagoStaging.monto_pagado,
-                    PagoStaging.numero_documento,
-                )
-                .limit(1)
-                .first()
-            )
-
-            columnas_verificadas = []
-            if muestra:
-                columnas_verificadas = [
-                    "id_stg",
-                    "cedula_cliente",
-                    "fecha_pago",
-                    "monto_pagado",
-                    "numero_documento",
-                ]
-
-            diagnostico["verificaciones"]["estructura_columnas"] = {
-                "status": "ok",
-                "mensaje": "Estructura de columnas verificada",
-                "columnas_verificadas": columnas_verificadas,
-                "tiene_datos": muestra is not None,
-            }
-            diagnostico["datos"]["tiene_datos"] = muestra is not None
-        except Exception as e:
-            diagnostico["verificaciones"]["estructura_columnas"] = {
-                "status": "error",
-                "mensaje": f"Error verificando columnas: {str(e)}",
-            }
-            diagnostico["errores"].append(f"Estructura columnas: {str(e)}")
-            diagnostico["estado"] = "error"
-            logger.error(f"❌ [verificar_pagos_staging] Error estructura: {e}", exc_info=True)
-
-        # 4. Consulta completa de ejemplo
-        logger.info("🔍 [verificar_pagos_staging] Ejecutando consulta de ejemplo...")
-        try:
-            query_ejemplo = db.query(PagoStaging).limit(5).all()
-            diagnostico["verificaciones"]["consulta_ejemplo"] = {
-                "status": "ok",
-                "mensaje": "Consulta de ejemplo ejecutada correctamente",
-                "registros_obtenidos": len(query_ejemplo),
-            }
-            diagnostico["datos"]["muestra_registros"] = len(query_ejemplo)
-
-            # Datos de muestra si existen
-            if query_ejemplo:
-                muestra_datos = []
-                for p in query_ejemplo[:3]:
-                    muestra_datos.append(
-                        {
-                            "id": p.id,
-                            "cedula": p.cedula_cliente,
-                            "monto": float(p.monto_pagado) if p.monto_pagado else None,
-                            "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
-                            "estado": p.estado,
-                        }
-                    )
-                diagnostico["datos"]["muestra"] = muestra_datos
-        except Exception as e:
-            diagnostico["verificaciones"]["consulta_ejemplo"] = {
-                "status": "error",
-                "mensaje": f"Error en consulta ejemplo: {str(e)}",
-            }
-            diagnostico["errores"].append(f"Consulta ejemplo: {str(e)}")
-            diagnostico["estado"] = "error"
-            logger.error(f"❌ [verificar_pagos_staging] Error consulta: {e}", exc_info=True)
-
-        # 5. Estadísticas rápidas
-        logger.info("🔍 [verificar_pagos_staging] Calculando estadísticas...")
-        try:
-            total = db.query(func.count(PagoStaging.id)).scalar() or 0
-            con_cedula = db.query(func.count(PagoStaging.id)).filter(PagoStaging.cedula_cliente.isnot(None)).scalar() or 0
-            con_fecha = db.query(func.count(PagoStaging.id)).filter(PagoStaging.fecha_pago.isnot(None)).scalar() or 0
-            con_monto = (
-                db.query(func.count(PagoStaging.id))
-                .filter(PagoStaging.monto_pagado.isnot(None), text("pagos_staging.monto_pagado::numeric >= 0"))
-                .scalar()
-                or 0
-            )
-
-            diagnostico["datos"]["estadisticas"] = {
-                "total": total,
-                "con_cedula": con_cedula,
-                "con_fecha_pago": con_fecha,
-                "con_monto": con_monto,
-                "completos": min(con_cedula, con_fecha, con_monto),
-            }
-            diagnostico["verificaciones"]["estadisticas"] = {
-                "status": "ok",
-                "mensaje": "Estadísticas calculadas correctamente",
-            }
-        except Exception as e:
-            diagnostico["verificaciones"]["estadisticas"] = {
-                "status": "error",
-                "mensaje": f"Error calculando estadísticas: {str(e)}",
-            }
-            diagnostico["errores"].append(f"Estadísticas: {str(e)}")
-            logger.warning(f"⚠️ [verificar_pagos_staging] Error estadísticas: {e}", exc_info=True)
-
-    except Exception as e:
-        logger.error(f"❌ [verificar_pagos_staging] Error general: {e}", exc_info=True)
-        diagnostico["estado"] = "error"
-        diagnostico["errores"].append(f"Error general: {str(e)}")
-
-    logger.info(f"✅ [verificar_pagos_staging] Diagnóstico completado - Estado: {diagnostico['estado']}")
-    return diagnostico
+# ⚠️ NOTA: Los siguientes endpoints fueron eliminados porque pagos_staging ya no existe:
+# - listar_pagos_staging
+# - estadisticas_pagos_staging
+# - migrar_pago_staging_a_pagos
+# - verificar_conexion_pagos_staging
+# Todo ahora usa la tabla 'pagos' directamente
 
 
 @router.get("/exportar/errores")
@@ -2144,42 +1686,40 @@ def exportar_pagos_con_errores(
     - Fechas que no cumplen formato o tienen "31/10/2025"
     - numero_documento con "NO DEFINIDO" o "Nodefinida"
 
-    El informe incluye las mismas columnas que la tabla pagos_staging.
+    El informe incluye las mismas columnas que la tabla pagos.
     """
     try:
         logger.info("📊 [exportar_pagos_errores] Generando informe de pagos con errores...")
 
-        # ✅ Consulta SQL para obtener pagos con errores
-        # Solo incluye columnas que existen en pagos_staging
+        # ✅ Consulta SQL para obtener pagos con errores de la tabla pagos
         query = text(
             """
             SELECT 
-                id_stg,
-                cedula_cliente,
+                id,
+                cedula,
                 fecha_pago,
                 monto_pagado,
                 numero_documento,
                 COALESCE(conciliado, FALSE) as conciliado,
                 fecha_conciliacion
-            FROM pagos_staging
-            WHERE (
+            FROM pagos
+            WHERE activo = TRUE
+              AND (
                   -- Cédulas vacías o Z999999999
-                  cedula_cliente IS NULL
-                  OR TRIM(cedula_cliente) = ''
-                  OR UPPER(TRIM(cedula_cliente)) = 'Z999999999'
+                  cedula IS NULL
+                  OR TRIM(cedula) = ''
+                  OR UPPER(TRIM(cedula)) = 'Z999999999'
                   -- Fechas inválidas o con formato incorrecto o 31/10/2025
                   OR fecha_pago IS NULL
-                  OR fecha_pago = ''
-                  OR fecha_pago !~ '^\\d{4}-\\d{2}-\\d{2}'
-                  OR fecha_pago LIKE '%31/10/2025%'
-                  OR fecha_pago LIKE '%2025-10-31%'
+                  OR fecha_pago::text LIKE '%31/10/2025%'
+                  OR fecha_pago::text LIKE '%2025-10-31%'
                   -- numero_documento con "NO DEFINIDO" o "Nodefinida"
                   OR numero_documento IS NULL
                   OR TRIM(UPPER(numero_documento)) = 'NO DEFINIDO'
                   OR TRIM(UPPER(numero_documento)) = 'NODEFINIDA'
                   OR TRIM(UPPER(numero_documento)) = 'NODEFINIDO'
               )
-            ORDER BY id_stg DESC
+            ORDER BY id DESC
         """
         )
 
@@ -2196,10 +1736,10 @@ def exportar_pagos_con_errores(
         header_fill = PatternFill(start_color="DC143C", end_color="DC143C", fill_type="solid")  # Rojo
         header_font = Font(bold=True, color="FFFFFF", size=12)
 
-        # Encabezados (mismas columnas que tabla pagos_staging)
+        # Encabezados (columnas de la tabla pagos)
         headers = [
             "ID",
-            "Cédula Cliente",
+            "Cédula",
             "Fecha Pago",
             "Monto Pagado",
             "Número Documento",
@@ -2217,13 +1757,13 @@ def exportar_pagos_con_errores(
 
         # Escribir datos
         for row_idx, registro in enumerate(resultados, 2):
-            ws.cell(row=row_idx, column=1, value=registro[0])  # id_stg
-            ws.cell(row=row_idx, column=2, value=registro[1] if registro[1] else "")  # cedula_cliente
-            ws.cell(row=row_idx, column=3, value=registro[2] if registro[2] else "")  # fecha_pago
-            ws.cell(row=row_idx, column=4, value=registro[3] if registro[3] else "")  # monto_pagado
+            ws.cell(row=row_idx, column=1, value=registro[0])  # id
+            ws.cell(row=row_idx, column=2, value=registro[1] if registro[1] else "")  # cedula
+            ws.cell(row=row_idx, column=3, value=registro[2].isoformat() if registro[2] else "")  # fecha_pago
+            ws.cell(row=row_idx, column=4, value=float(registro[3]) if registro[3] else "")  # monto_pagado
             ws.cell(row=row_idx, column=5, value=registro[4] if registro[4] else "")  # numero_documento
             ws.cell(row=row_idx, column=6, value="Sí" if registro[5] else "No")  # conciliado
-            ws.cell(row=row_idx, column=7, value=registro[6] if registro[6] else "")  # fecha_conciliacion
+            ws.cell(row=row_idx, column=7, value=registro[6].isoformat() if registro[6] else "")  # fecha_conciliacion
 
         # Ajustar anchos de columnas
         column_widths = [12, 18, 20, 18, 25, 12, 20]
@@ -2254,6 +1794,8 @@ def exportar_pagos_con_errores(
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"❌ [exportar_pagos_errores] Error generando informe: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error al generar informe: {str(e)}")
+        logger.error(f"❌ [exportar_pagos_errores] Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al exportar pagos con errores: {str(e)}")

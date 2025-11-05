@@ -25,8 +25,7 @@ from app.core.constants import EstadoPrestamo
 from app.models.amortizacion import Cuota
 from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
-from app.models.pago import Pago  # Mantener para operaciones que necesiten tabla pagos
-from app.models.pago_staging import PagoStaging  # Usar para consultas principales (donde están los datos)
+from app.models.pago import Pago  # Tabla oficial de pagos
 from app.models.prestamo import Prestamo
 from app.models.user import User
 
@@ -48,7 +47,7 @@ def healthcheck_reportes(
         logger.info("[reportes.health] Verificando conexión a BD y métricas básicas")
 
         total_prestamos = db.query(func.count(Prestamo.id)).scalar() or 0
-        total_pagos = db.query(func.count(PagoStaging.id)).scalar() or 0
+        total_pagos = db.query(func.count(Pago.id)).filter(Pago.activo == True).scalar() or 0
 
         return {
             "status": "ok",
@@ -267,23 +266,20 @@ def reporte_pagos(
     """Genera reporte de pagos en un rango de fechas."""
     try:
         logger.info(f"[reportes.pagos] Generando reporte pagos desde {fecha_inicio} hasta {fecha_fin}")
-        # Total de pagos: usar monto_pagado con cast a numeric (PagoStaging.monto_pagado es TEXT)
+        # Total de pagos: usar tabla pagos (tipos nativos)
         fecha_inicio_dt = datetime.combine(fecha_inicio, datetime.min.time())
         fecha_fin_dt = datetime.combine(fecha_fin, datetime.max.time())
 
         total_pagos_query = db.execute(
             text(
                 """
-                SELECT COALESCE(SUM(monto_pagado::numeric), 0)
-                FROM pagos_staging
-                WHERE fecha_pago IS NOT NULL
-                  AND fecha_pago != ''
-                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                  AND fecha_pago::timestamp >= :fecha_inicio
-                  AND fecha_pago::timestamp <= :fecha_fin
+                SELECT COALESCE(SUM(monto_pagado), 0)
+                FROM pagos
+                WHERE fecha_pago >= :fecha_inicio
+                  AND fecha_pago <= :fecha_fin
                   AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
-                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                  AND monto_pagado > 0
+                  AND activo = TRUE
             """
             ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
         )
@@ -292,71 +288,55 @@ def reporte_pagos(
         logger.info(f"[reportes.pagos] Total pagos: {total_pagos}")
 
         cantidad_pagos = (
-            db.query(PagoStaging)
+            db.query(Pago)
             .filter(
-                PagoStaging.fecha_pago >= fecha_inicio,
-                PagoStaging.fecha_pago <= fecha_fin,
+                Pago.fecha_pago >= fecha_inicio_dt,
+                Pago.fecha_pago <= fecha_fin_dt,
+                Pago.activo == True,
             )
             .count()
         )
 
-        # Pagos por método: PagoStaging no tiene institucion_bancaria
-        # Usar SQL directo para agrupar por número de documento o cédula
-
+        # Pagos por método: usar institucion_bancaria de la tabla pagos
         pagos_por_metodo_raw = db.execute(
             text(
                 """
                 SELECT 
-                    COALESCE(numero_documento, 'Sin especificar') AS metodo,
+                    COALESCE(institucion_bancaria, 'Sin especificar') AS metodo,
                     COUNT(*) AS cantidad,
-                    COALESCE(SUM(monto_pagado::numeric), 0) AS monto
-                FROM pagos_staging
-                WHERE fecha_pago::timestamp >= :fecha_inicio
-                  AND fecha_pago::timestamp <= :fecha_fin
+                    COALESCE(SUM(monto_pagado), 0) AS monto
+                FROM pagos
+                WHERE fecha_pago >= :fecha_inicio
+                  AND fecha_pago <= :fecha_fin
                   AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
-                GROUP BY numero_documento
+                  AND monto_pagado > 0
+                  AND activo = TRUE
+                GROUP BY institucion_bancaria
             """
             ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
         ).fetchall()
 
         pagos_por_metodo = [{"metodo": row[0], "cantidad": row[1], "monto": float(row[2])} for row in pagos_por_metodo_raw]
 
-        # OLD CODE (comentado porque no tiene institucion_bancaria):
-        # pagos_por_metodo = (
-        #     db.query(
-        #         func.coalesce(PagoStaging.institucion_bancaria, "Sin especificar").label("metodo"),
-        #         func.count(PagoStaging.id).label("cantidad"),
-        #         func.sum(PagoStaging.monto_pagado).label("monto"),
-        #     )
-        #     .filter(
-        #         PagoStaging.fecha_pago >= fecha_inicio,
-        #         PagoStaging.fecha_pago <= fecha_fin,
-        #     )
-        #     .group_by("metodo")
-        #     .all()
-        # )
+        # ✅ Usar tabla pagos con institucion_bancaria
 
         logger.info(f"[reportes.pagos] Pagos por método: {len(pagos_por_metodo)} métodos")
 
-        # Pagos por día: usar monto_pagado con cast a numeric
+        # Pagos por día: usar tabla pagos (tipos nativos)
         pagos_por_dia_raw = db.execute(
             text(
                 """
                 SELECT 
-                    DATE(fecha_pago::timestamp) AS fecha,
+                    DATE(fecha_pago) AS fecha,
                     COUNT(*) AS cantidad,
-                    COALESCE(SUM(monto_pagado::numeric), 0) AS monto
-                FROM pagos_staging
-                WHERE fecha_pago IS NOT NULL
-                  AND fecha_pago != ''
-                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                  AND fecha_pago::timestamp >= :fecha_inicio
-                  AND fecha_pago::timestamp <= :fecha_fin
+                    COALESCE(SUM(monto_pagado), 0) AS monto
+                FROM pagos
+                WHERE fecha_pago >= :fecha_inicio
+                  AND fecha_pago <= :fecha_fin
                   AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
-                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-                GROUP BY DATE(fecha_pago::timestamp)
+                  AND monto_pagado > 0
+                  AND activo = TRUE
+                GROUP BY DATE(fecha_pago)
                 ORDER BY fecha
             """
             ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
@@ -816,7 +796,7 @@ def resumen_dashboard(
 
         logger.info(f"[reportes.resumen] Préstamos en mora: {prestamos_mora}")
 
-        # Pagos del mes: usar monto_pagado con cast a numeric (PagoStaging.monto_pagado es TEXT)
+        # Pagos del mes: usar tabla pagos (tipos nativos)
         fecha_inicio_mes = hoy.replace(day=1)
         fecha_inicio_mes_dt = datetime.combine(fecha_inicio_mes, datetime.min.time())
         fecha_fin_mes_dt = datetime.combine(hoy, datetime.max.time())
@@ -824,16 +804,13 @@ def resumen_dashboard(
         pagos_mes_query = db.execute(
             text(
                 """
-                SELECT COALESCE(SUM(monto_pagado::numeric), 0)
-                FROM pagos_staging
-                WHERE fecha_pago IS NOT NULL
-                  AND fecha_pago != ''
-                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                  AND fecha_pago::timestamp >= :fecha_inicio
-                  AND fecha_pago::timestamp <= :fecha_fin
+                SELECT COALESCE(SUM(monto_pagado), 0)
+                FROM pagos
+                WHERE fecha_pago >= :fecha_inicio
+                  AND fecha_pago <= :fecha_fin
                   AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
-                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                  AND monto_pagado > 0
+                  AND activo = TRUE
             """
             ).bindparams(fecha_inicio=fecha_inicio_mes_dt, fecha_fin=fecha_fin_mes_dt)
         )

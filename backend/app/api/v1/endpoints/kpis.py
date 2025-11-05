@@ -13,8 +13,7 @@ from app.core.cache import cache_result
 from app.models.amortizacion import Cuota, pago_cuotas
 from app.models.analista import Analista
 from app.models.cliente import Cliente
-from app.models.pago import Pago  # Mantener para operaciones que necesiten tabla pagos
-from app.models.pago_staging import PagoStaging  # Usar para consultas principales (donde están los datos)
+from app.models.pago import Pago  # Tabla oficial de pagos
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.utils.filtros_dashboard import FiltrosDashboard
@@ -75,8 +74,7 @@ def _calcular_kpis_basicos(
     clientes_en_mora = clientes_en_mora_query.scalar() or 0
     clientes_al_dia = max(0, clientes_con_cuotas - clientes_en_mora)
 
-    # Pagos del mes (usa PagoStaging donde están los datos)
-    # ⚠️ PagoStaging tiene fecha_pago como TEXT, usar SQL directo
+    # Pagos del mes (usa tabla pagos)
     # fecha_corte_dt calculado pero no usado
     # fecha_corte_dt = datetime.combine(fecha_corte, datetime.min.time())
     mes_inicio = date(fecha_corte.year, fecha_corte.month, 1)
@@ -91,15 +89,13 @@ def _calcular_kpis_basicos(
     pagos_query = db.execute(
         text(
             """
-            SELECT COALESCE(SUM(monto_pagado::numeric), 0)
-            FROM pagos_staging
-            WHERE fecha_pago IS NOT NULL
-              AND fecha_pago != ''
-              AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-              AND fecha_pago::timestamp >= :mes_inicio
-              AND fecha_pago::timestamp < :mes_fin
+            SELECT COALESCE(SUM(monto_pagado), 0)
+            FROM pagos
+            WHERE fecha_pago >= :mes_inicio
+              AND fecha_pago < :mes_fin
               AND monto_pagado IS NOT NULL
-              AND monto_pagado != ''
+              AND monto_pagado > 0
+              AND activo = TRUE
         """
         ).bindparams(mes_inicio=mes_inicio_dt, mes_fin=mes_fin_dt)
     )
@@ -233,14 +229,14 @@ def _calcular_kpis_mes_actual(
     cuotas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(cuotas_mes_query, analista, concesionario, modelo, None, None)
     total_cuotas_mes = cuotas_mes_query.scalar() or 0
 
-    # Cuotas conciliadas (usa PagoStaging donde están los datos)
+    # Cuotas conciliadas (usa tabla pagos)
     cuotas_conciliadas_query = (
         db.query(func.count(func.distinct(Cuota.id)))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(pago_cuotas, pago_cuotas.c.cuota_id == Cuota.id)
-        # ⚠️ No se puede filtrar por conciliado porque no existe en pagos_staging
-        # .join(PagoStaging, pago_cuotas.c.pago_id == PagoStaging.id)
-        # .filter(PagoStaging.conciliado.is_(True))
+        # ✅ Usar tabla pagos con campo conciliado
+        # .join(Pago, pago_cuotas.c.pago_id == Pago.id)
+        # .filter(Pago.conciliado.is_(True))
     )
     if analista or concesionario or modelo:
         if analista:
@@ -267,9 +263,9 @@ def _calcular_kpis_mes_actual(
         .filter(
             ~Cuota.id.in_(
                 db.query(pago_cuotas.c.cuota_id)
-                # ⚠️ No se puede filtrar por conciliado porque PagoStaging no tiene esta columna
-                # .join(PagoStaging, pago_cuotas.c.pago_id == PagoStaging.id)
-                # .filter(PagoStaging.conciliado.is_(True))
+                # ✅ Usar tabla pagos con campo conciliado
+                # .join(Pago, pago_cuotas.c.pago_id == Pago.id)
+                # .filter(Pago.conciliado.is_(True))
             )
         )
     )

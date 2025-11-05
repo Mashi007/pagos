@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
 from app.models.pago import Pago
-from app.models.pago_staging import PagoStaging  # Para insertar en staging
+# ⚠️ PagoStaging eliminado - usar Pago
 from app.models.user import User
 
 router = APIRouter()
@@ -113,16 +113,17 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
             except Exception:
                 return None, f"Fila {index + 2}: Fecha inválida ({fecha_pago_str}). Formato esperado: MM/DD/YYYY o YYYY-MM-DD"
 
-        # ⚠️ IMPORTANTE: Insertar en pagos_staging (donde el dashboard consulta)
-        # pagos_staging tiene fecha_pago y monto_pagado como TEXT
-
-        # ✅ VERIFICAR CONCILIACIÓN: Si el numero_documento ya existe EXACTAMENTE, marcar como conciliado
+        # ✅ Insertar directamente en tabla pagos (tabla oficial)
         # Normalizar numero_documento (trim espacios) para comparación exacta
         numero_documento_normalizado = numero_documento.strip()
 
+        # ✅ VERIFICAR CONCILIACIÓN: Si el numero_documento ya existe EXACTAMENTE, marcar como conciliado
         # Buscar con comparación exacta (case-sensitive, sin espacios)
         pago_existente = (
-            db.query(PagoStaging).filter(func.trim(PagoStaging.numero_documento) == numero_documento_normalizado).first()
+            db.query(Pago).filter(
+                func.trim(Pago.numero_documento) == numero_documento_normalizado,
+                Pago.activo == True
+            ).first()
         )
 
         conciliado = False
@@ -130,31 +131,36 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
         if pago_existente:
             # Si ya existe un pago con este número de documento EXACTAMENTE, marcarlo como conciliado
             conciliado = True
-            fecha_conciliacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            fecha_conciliacion = datetime.now()
             logger.info(
                 f"✅ [carga_masiva] Número de documento '{numero_documento_normalizado}' "
                 f"coincide EXACTAMENTE - marcando como conciliado"
             )
 
-        pago_staging = PagoStaging(
-            cedula_cliente=cedula,
-            cedula=cedula,  # Columna alternativa
-            prestamo_id=None,  # TODO: Buscar préstamo del cliente
-            fecha_pago=fecha_pago,  # SQLAlchemy maneja la conversión si es necesario
+        # Buscar préstamo del cliente si es posible
+        prestamo = db.query(Prestamo).filter(
+            Prestamo.cedula == cedula,
+            Prestamo.estado == "APROBADO"
+        ).first()
+
+        nuevo_pago = Pago(
+            cedula=cedula,
+            prestamo_id=prestamo.id if prestamo else None,
+            fecha_pago=fecha_pago,
             fecha_registro=datetime.now(),
-            monto_pagado=monto_pagado,  # SQLAlchemy maneja la conversión si es necesario
+            monto_pagado=monto_pagado,
             numero_documento=numero_documento_normalizado,  # ✅ Guardar normalizado (sin espacios)
             institucion_bancaria=None,
-            estado="PAGADO",
+            estado="REGISTRADO",
             usuario_registro=current_user.email,
             conciliado=conciliado,  # ✅ Marcar como conciliado si el documento ya existe
             fecha_conciliacion=fecha_conciliacion,  # ✅ Fecha de conciliación si está conciliado
             activo=True,
         )
 
-        db.add(pago_staging)
+        db.add(nuevo_pago)
         db.commit()
-        db.refresh(pago_staging)
+        db.refresh(nuevo_pago)
 
         return {
             "fila": index + 2,
