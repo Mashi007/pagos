@@ -3691,7 +3691,7 @@ def obtener_financiamiento_tendencia_mensual(
 
             # ✅ CÁLCULO CORREGIDO: Morosidad mensual = MAX(0, Programado - Pagado)
             morosidad_mensual = max(0.0, monto_cuotas_programadas - monto_pagado_mes)
-            
+
             # ✅ CÁLCULO CORREGIDO: Morosidad acumulada = Morosidad acumulada anterior + Morosidad mensual
             # NOTA: La morosidad acumulada solo aumenta, nunca disminuye (incluso si hay sobrepagos)
             morosidad_acumulada += Decimal(str(morosidad_mensual))
