@@ -54,9 +54,7 @@ def _aplicar_filtros_pagos(
         query = query.filter(Pago.fecha_pago <= datetime.combine(fecha_hasta, time.max))
         logger.info(f"🔍 [listar_pagos] Filtro fecha_hasta: {fecha_hasta}")
     if analista:
-        query = query.join(
-            Prestamo, Pago.prestamo_id == Prestamo.id
-        ).filter(Prestamo.usuario_proponente == analista)
+        query = query.join(Prestamo, Pago.prestamo_id == Prestamo.id).filter(Prestamo.usuario_proponente == analista)
         logger.info(f"🔍 [listar_pagos] Filtro analista: {analista}")
     return query
 
@@ -254,28 +252,17 @@ def healthcheck_pagos(
         primer_dia_mes = date(hoy.year, hoy.month, 1)
         pagos_mes = (
             db.query(func.count(Pago.id))
-            .filter(
-                Pago.activo == True,
-                Pago.fecha_pago >= datetime.combine(primer_dia_mes, datetime.min.time())
-            )
+            .filter(Pago.activo == True, Pago.fecha_pago >= datetime.combine(primer_dia_mes, datetime.min.time()))
             .scalar()
             or 0
         )
 
         # Monto total pagado
-        monto_total_query = (
-            db.query(func.sum(Pago.monto_pagado))
-            .filter(Pago.activo == True, Pago.monto_pagado.isnot(None))
-        )
+        monto_total_query = db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo == True, Pago.monto_pagado.isnot(None))
         monto_total = Decimal(str(monto_total_query.scalar() or 0))
 
         # Pagos por estado
-        pagos_por_estado = (
-            db.query(Pago.estado, func.count(Pago.id))
-            .filter(Pago.activo == True)
-            .group_by(Pago.estado)
-            .all()
-        )
+        pagos_por_estado = db.query(Pago.estado, func.count(Pago.id)).filter(Pago.activo == True).group_by(Pago.estado).all()
         estados_dict = {estado: count for estado, count in pagos_por_estado}
 
         return {
@@ -475,24 +462,17 @@ def diagnostico_pagos(
 def _contar_total_pagos_validos(db: Session, cedula: Optional[str] = None) -> int:
     """Cuenta el total de pagos válidos en tabla pagos"""
     query = db.query(func.count(Pago.id)).filter(Pago.activo == True)
-    
+
     if cedula:
         query = query.filter(Pago.cedula == cedula)
-    
+
     return query.scalar() or 0
 
 
 def _obtener_pagos_paginados(db: Session, page: int, per_page: int) -> list:
     """Obtiene pagos paginados de la tabla pagos"""
     offset = (page - 1) * per_page
-    pagos = (
-        db.query(Pago)
-        .filter(Pago.activo == True)
-        .order_by(Pago.id.desc())
-        .offset(offset)
-        .limit(per_page)
-        .all()
-    )
+    pagos = db.query(Pago).filter(Pago.activo == True).order_by(Pago.id.desc()).offset(offset).limit(per_page).all()
     return pagos
 
 
@@ -533,9 +513,10 @@ def listar_pagos(
         try:
             # Verificar que la tabla existe antes de consultarla
             from sqlalchemy import inspect
+
             inspector = inspect(db.bind)
             tablas_disponibles = inspector.get_table_names()
-            
+
             if "pagos" not in tablas_disponibles:
                 # Obtener nombre de BD actual para diagnóstico
                 try:
@@ -543,7 +524,7 @@ def listar_pagos(
                     bd_nombre = resultado.scalar()
                 except Exception:
                     bd_nombre = "No se pudo determinar"
-                
+
                 logger.error(
                     f"❌ [listar_pagos] Tabla 'pagos' NO EXISTE en BD '{bd_nombre}'. "
                     f"Tablas disponibles: {', '.join(tablas_disponibles[:10])}"
@@ -555,7 +536,7 @@ def listar_pagos(
                         f"Verifique que está conectado a la base de datos 'pagos' y que las migraciones se han ejecutado."
                     ),
                 )
-            
+
             test_query = db.query(func.count(Pago.id)).scalar()
             logger.info(f"✅ [listar_pagos] Conexión BD OK. Total pagos en tabla pagos: {test_query}")
         except HTTPException:
@@ -563,7 +544,7 @@ def listar_pagos(
             raise
         except Exception as db_error:
             logger.error(f"❌ [listar_pagos] Error de conexión BD: {db_error}", exc_info=True)
-            
+
             # Verificar si es un error de tabla no encontrada
             error_str = str(db_error)
             if "does not exist" in error_str or "UndefinedTable" in error_str:
@@ -572,7 +553,7 @@ def listar_pagos(
                     bd_nombre = resultado.scalar()
                 except Exception:
                     bd_nombre = "No se pudo determinar"
-                
+
                 raise HTTPException(
                     status_code=500,
                     detail=(
@@ -799,10 +780,14 @@ def listar_ultimos_pagos(
         )
 
         # Join para obtener el registro de pago completo de esa fecha más reciente
-        pagos_ultimos_q = db.query(Pago).join(
-            sub_ultimos,
-            (Pago.cedula == sub_ultimos.c.cedula) & (Pago.fecha_registro == sub_ultimos.c.max_fecha_registro),
-        ).filter(Pago.activo == True)
+        pagos_ultimos_q = (
+            db.query(Pago)
+            .join(
+                sub_ultimos,
+                (Pago.cedula == sub_ultimos.c.cedula) & (Pago.fecha_registro == sub_ultimos.c.max_fecha_registro),
+            )
+            .filter(Pago.activo == True)
+        )
 
         # Filtros
         if cedula:
@@ -955,11 +940,7 @@ def _verificar_pagos_conciliados_cuota(db: Session, cuota_id: int, prestamo_id: 
     # Como los pagos se aplican desde la cuota más antigua, verificamos todos los pagos del préstamo
     pagos_prestamo = (
         db.query(Pago)
-        .filter(
-            Pago.prestamo_id == prestamo_id,
-            Pago.numero_documento.isnot(None),
-            Pago.numero_documento != ""
-        )
+        .filter(Pago.prestamo_id == prestamo_id, Pago.numero_documento.isnot(None), Pago.numero_documento != "")
         .all()
     )
 
@@ -1279,33 +1260,27 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
 
     try:
         # Monto total cobrado en el mes
-        monto_total_query = (
-            db.query(func.sum(Pago.monto_pagado))
-            .filter(
-                Pago.activo == True,
-                Pago.fecha_pago >= fecha_inicio_dt,
-                Pago.fecha_pago < fecha_fin_dt,
-                Pago.monto_pagado.isnot(None)
-            )
+        monto_total_query = db.query(func.sum(Pago.monto_pagado)).filter(
+            Pago.activo == True,
+            Pago.fecha_pago >= fecha_inicio_dt,
+            Pago.fecha_pago < fecha_fin_dt,
+            Pago.monto_pagado.isnot(None),
         )
         monto_cobrado_mes = Decimal(str(monto_total_query.scalar() or 0))
 
         # Monto no definido (sin conciliar o sin número de documento)
-        monto_no_definido_query = (
-            db.query(func.sum(Pago.monto_pagado))
-            .filter(
-                Pago.activo == True,
-                Pago.fecha_pago >= fecha_inicio_dt,
-                Pago.fecha_pago < fecha_fin_dt,
-                Pago.monto_pagado.isnot(None),
-                or_(
-                    Pago.conciliado == False,
-                    Pago.conciliado.is_(None),
-                    Pago.numero_documento.is_(None),
-                    Pago.numero_documento == "",
-                    func.upper(func.trim(Pago.numero_documento)) == "NO DEFINIDO"
-                )
-            )
+        monto_no_definido_query = db.query(func.sum(Pago.monto_pagado)).filter(
+            Pago.activo == True,
+            Pago.fecha_pago >= fecha_inicio_dt,
+            Pago.fecha_pago < fecha_fin_dt,
+            Pago.monto_pagado.isnot(None),
+            or_(
+                Pago.conciliado == False,
+                Pago.conciliado.is_(None),
+                Pago.numero_documento.is_(None),
+                Pago.numero_documento == "",
+                func.upper(func.trim(Pago.numero_documento)) == "NO DEFINIDO",
+            ),
         )
         monto_no_definido = Decimal(str(monto_no_definido_query.scalar() or 0))
     except Exception as e:
@@ -1502,7 +1477,7 @@ def obtener_estadisticas_pagos(
 
         # ✅ Base query para pagos - usar tabla pagos
         base_pago_query = db.query(Pago).filter(Pago.activo == True)
-        
+
         # Aplicar filtros de fecha directamente
         if fecha_inicio:
             base_pago_query = base_pago_query.filter(Pago.fecha_pago >= datetime.combine(fecha_inicio, datetime.min.time()))
@@ -1537,9 +1512,13 @@ def obtener_estadisticas_pagos(
         # Pagos por estado - necesitamos una query separada para agrupar
         pagos_por_estado_query = db.query(Pago.estado, func.count(Pago.id)).filter(Pago.activo == True)
         if fecha_inicio:
-            pagos_por_estado_query = pagos_por_estado_query.filter(Pago.fecha_pago >= datetime.combine(fecha_inicio, datetime.min.time()))
+            pagos_por_estado_query = pagos_por_estado_query.filter(
+                Pago.fecha_pago >= datetime.combine(fecha_inicio, datetime.min.time())
+            )
         if fecha_fin:
-            pagos_por_estado_query = pagos_por_estado_query.filter(Pago.fecha_pago <= datetime.combine(fecha_fin, datetime.max.time()))
+            pagos_por_estado_query = pagos_por_estado_query.filter(
+                Pago.fecha_pago <= datetime.combine(fecha_fin, datetime.max.time())
+            )
         if analista or concesionario or modelo:
             pagos_por_estado_query = pagos_por_estado_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
             pagos_por_estado_query = FiltrosDashboard.aplicar_filtros_pago(
@@ -1553,12 +1532,11 @@ def obtener_estadisticas_pagos(
         pagos_por_estado = pagos_por_estado_query.group_by(Pago.estado).all()
 
         # Monto total pagado usando ORM
-        total_pagado_query = (
-            db.query(func.sum(Pago.monto_pagado))
-            .filter(Pago.activo == True, Pago.monto_pagado.isnot(None))
-        )
+        total_pagado_query = db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo == True, Pago.monto_pagado.isnot(None))
         if fecha_inicio:
-            total_pagado_query = total_pagado_query.filter(Pago.fecha_pago >= datetime.combine(fecha_inicio, datetime.min.time()))
+            total_pagado_query = total_pagado_query.filter(
+                Pago.fecha_pago >= datetime.combine(fecha_inicio, datetime.min.time())
+            )
         if fecha_fin:
             total_pagado_query = total_pagado_query.filter(Pago.fecha_pago <= datetime.combine(fecha_fin, datetime.max.time()))
         if analista or concesionario or modelo:
@@ -1574,9 +1552,8 @@ def obtener_estadisticas_pagos(
         total_pagado = Decimal(str(total_pagado_query.scalar() or 0))
 
         # Pagos del día actual
-        pagos_hoy_query = (
-            db.query(func.sum(Pago.monto_pagado))
-            .filter(Pago.activo == True, Pago.monto_pagado.isnot(None), func.date(Pago.fecha_pago) == hoy)
+        pagos_hoy_query = db.query(func.sum(Pago.monto_pagado)).filter(
+            Pago.activo == True, Pago.monto_pagado.isnot(None), func.date(Pago.fecha_pago) == hoy
         )
         if analista or concesionario or modelo:
             pagos_hoy_query = pagos_hoy_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
