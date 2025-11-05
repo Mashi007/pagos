@@ -1323,7 +1323,7 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
     start_pagos = time.time()
     monto_cobrado_mes = Decimal("0")
     monto_no_definido = Decimal("0")
-    
+
     try:
         pagos_query = db.execute(
             text(
@@ -1363,7 +1363,7 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
         # Si la tabla no existe o hay error, usar valores por defecto (0)
         monto_cobrado_mes = Decimal("0")
         monto_no_definido = Decimal("0")
-    
+
     tiempo_pagos = int((time.time() - start_pagos) * 1000)
     logger.info(
         f"💰 [kpis_pagos] Monto cobrado: ${monto_cobrado_mes:,.2f}, NO DEFINIDO: ${monto_no_definido:,.2f} ({tiempo_pagos}ms)"
