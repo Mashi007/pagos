@@ -3066,29 +3066,19 @@ def obtener_financiamiento_tendencia_mensual(
                 Pago.fecha_pago >= fecha_inicio_query,
                 Pago.fecha_pago <= fecha_fin_query,
             )
-            .group_by(
-                func.extract("year", Pago.fecha_pago),
-                func.extract("month", Pago.fecha_pago)
-            )
-            .order_by(
-                func.extract("year", Pago.fecha_pago),
-                func.extract("month", Pago.fecha_pago)
-            )
+            .group_by(func.extract("year", Pago.fecha_pago), func.extract("month", Pago.fecha_pago))
+            .order_by(func.extract("year", Pago.fecha_pago), func.extract("month", Pago.fecha_pago))
         )
 
         # Aplicar filtros de préstamo a los pagos (mediante join con Prestamo)
         if analista or concesionario or modelo:
             query_pagos = query_pagos.join(Prestamo, Pago.prestamo_id == Prestamo.id)
             if analista:
-                query_pagos = query_pagos.filter(
-                    or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
-                )
+                query_pagos = query_pagos.filter(or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista))
             if concesionario:
                 query_pagos = query_pagos.filter(Prestamo.concesionario == concesionario)
             if modelo:
-                query_pagos = query_pagos.filter(
-                    or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
-                )
+                query_pagos = query_pagos.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
 
         resultados_pagos = query_pagos.all()
         pagos_por_mes = {}
@@ -3109,24 +3099,15 @@ def obtener_financiamiento_tendencia_mensual(
                 func.sum(Cuota.monto_cuota).label("total_monto_cuota"),
             )
             .join(Prestamo, Pago.prestamo_id == Prestamo.id)
-            .join(Cuota, and_(
-                Cuota.prestamo_id == Prestamo.id,
-                Cuota.numero_cuota == Pago.numero_cuota
-            ))
+            .join(Cuota, and_(Cuota.prestamo_id == Prestamo.id, Cuota.numero_cuota == Pago.numero_cuota))
             .filter(
                 Pago.activo.is_(True),
                 Prestamo.estado == "APROBADO",
                 Pago.fecha_pago >= fecha_inicio_query,
                 Pago.fecha_pago <= fecha_fin_query,
             )
-            .group_by(
-                func.extract("year", Pago.fecha_pago),
-                func.extract("month", Pago.fecha_pago)
-            )
-            .order_by(
-                func.extract("year", Pago.fecha_pago),
-                func.extract("month", Pago.fecha_pago)
-            )
+            .group_by(func.extract("year", Pago.fecha_pago), func.extract("month", Pago.fecha_pago))
+            .order_by(func.extract("year", Pago.fecha_pago), func.extract("month", Pago.fecha_pago))
         )
 
         # Aplicar filtros adicionales
