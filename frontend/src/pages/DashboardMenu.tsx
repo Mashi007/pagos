@@ -582,8 +582,8 @@ export function DashboardMenu() {
                     {kpisPrincipales.clientes_por_estado ? (
                       <div className="grid grid-cols-3 gap-3 md:gap-4 flex-1">
                         {/* Activos */}
-                        <div className="flex flex-col justify-center items-center text-center">
-                          <div className="text-2xl md:text-3xl font-black text-green-600 mb-2 leading-none">
+                        <div className="flex flex-col justify-center items-center text-center min-w-0 w-full overflow-hidden">
+                          <div className="text-xl md:text-2xl font-black text-green-600 mb-2 leading-tight w-full">
                             {kpisPrincipales.clientes_por_estado.activos.valor_actual.toLocaleString('es-EC')}
                           </div>
                           <div className="text-xs md:text-sm font-bold text-gray-700 uppercase mb-2">Activos</div>
@@ -607,8 +607,8 @@ export function DashboardMenu() {
                         </div>
 
                         {/* Inactivos */}
-                        <div className="flex flex-col justify-center items-center text-center">
-                          <div className="text-2xl md:text-3xl font-black text-orange-600 mb-2 leading-none">
+                        <div className="flex flex-col justify-center items-center text-center min-w-0 w-full overflow-hidden">
+                          <div className="text-xl md:text-2xl font-black text-orange-600 mb-2 leading-tight w-full">
                             {kpisPrincipales.clientes_por_estado.inactivos.valor_actual.toLocaleString('es-EC')}
                           </div>
                           <div className="text-xs md:text-sm font-bold text-gray-700 uppercase mb-2">Inactivos</div>
@@ -632,8 +632,8 @@ export function DashboardMenu() {
                         </div>
 
                         {/* Finalizados */}
-                        <div className="flex flex-col justify-center items-center text-center">
-                          <div className="text-2xl md:text-3xl font-black text-blue-600 mb-2 leading-none">
+                        <div className="flex flex-col justify-center items-center text-center min-w-0 w-full overflow-hidden">
+                          <div className="text-xl md:text-2xl font-black text-blue-600 mb-2 leading-tight w-full">
                             {kpisPrincipales.clientes_por_estado.finalizados.valor_actual.toLocaleString('es-EC')}
                           </div>
                           <div className="text-xs md:text-sm font-bold text-gray-700 uppercase mb-2">Finalizados</div>

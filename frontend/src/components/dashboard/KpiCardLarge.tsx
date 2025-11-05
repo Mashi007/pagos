@@ -44,8 +44,8 @@ export function KpiCardLarge({
     }
   }
 
-  // Mejor proporcionalidad: tamaño base más grande pero ajustado
-  const textSize = size === 'large' ? 'text-4xl md:text-5xl' : 'text-3xl md:text-4xl'
+  // ✅ Tamaños balanceados para evitar desbordes
+  const textSize = size === 'large' ? 'text-3xl md:text-4xl' : 'text-2xl md:text-3xl'
   const cardHeight = size === 'large' ? 'min-h-[200px]' : 'min-h-[170px]'
   const titleSize = 'text-sm md:text-base' // Título más legible
   const variationSize = 'text-sm md:text-base' // Variación más visible
@@ -96,9 +96,9 @@ export function KpiCardLarge({
           </div>
         </div>
 
-        {/* Valor principal con mejor espaciado */}
-        <div className="flex-1 flex flex-col justify-center">
-          <div className={`${textSize} font-black ${color} mb-2 leading-none tracking-tight`}>
+        {/* Valor principal con mejor espaciado y sin desbordes */}
+        <div className="flex-1 flex flex-col justify-center min-w-0 w-full overflow-hidden">
+          <div className={`${textSize} font-black ${color} mb-2 leading-tight tracking-tight w-full`}>
             {formatValue()}
           </div>
           
