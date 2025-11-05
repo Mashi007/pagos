@@ -3540,7 +3540,8 @@ def obtener_financiamiento_tendencia_mensual(
         cuotas_por_mes = {}
         try:
             # ✅ Usar SQL directo para coincidir exactamente con el script SQL
-            query_cuotas_sql = text("""
+            query_cuotas_sql = text(
+                """
                 SELECT 
                     EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
                     EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
@@ -3556,16 +3557,13 @@ def obtener_financiamiento_tendencia_mensual(
                     EXTRACT(YEAR FROM c.fecha_vencimiento),
                     EXTRACT(MONTH FROM c.fecha_vencimiento)
                 ORDER BY año, mes
-            """)
-            
+            """
+            )
+
             resultados_cuotas = db.execute(
-                query_cuotas_sql.bindparams(
-                    analista=analista,
-                    concesionario=concesionario,
-                    modelo=modelo
-                )
+                query_cuotas_sql.bindparams(analista=analista, concesionario=concesionario, modelo=modelo)
             ).fetchall()
-            
+
             for row in resultados_cuotas:
                 año_mes = int(row[0])
                 num_mes = int(row[1])
@@ -3575,7 +3573,9 @@ def obtener_financiamiento_tendencia_mensual(
                     logger.debug(f"📊 [financiamiento-tendencia] Cuotas {año_mes}-{num_mes:02d}: ${monto:,.2f}")
 
             cuotas_time = int((time.time() - start_cuotas) * 1000)
-            logger.info(f"📊 [financiamiento-tendencia] Query cuotas programadas completada en {cuotas_time}ms, {len(cuotas_por_mes)} meses con datos")
+            logger.info(
+                f"📊 [financiamiento-tendencia] Query cuotas programadas completada en {cuotas_time}ms, {len(cuotas_por_mes)} meses con datos"
+            )
         except Exception as e:
             logger.error(f"⚠️ [financiamiento-tendencia] Error en query cuotas programadas: {e}", exc_info=True)
             try:
@@ -3673,9 +3673,11 @@ def obtener_financiamiento_tendencia_mensual(
                 pagos_por_mes[(año_mes, num_mes)] = monto
                 if monto > 0:
                     logger.debug(f"📊 [financiamiento-tendencia] Pagos {año_mes}-{num_mes:02d}: ${monto:,.2f}")
-            
+
             pagos_time = int((time.time() - start_pagos) * 1000)
-            logger.info(f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms, {len(pagos_por_mes)} meses con datos")
+            logger.info(
+                f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms, {len(pagos_por_mes)} meses con datos"
+            )
         except Exception as e:
             logger.error(f"⚠️ [financiamiento-tendencia] Error consultando pagos: {e}", exc_info=True)
             try:
@@ -3797,7 +3799,7 @@ def obtener_financiamiento_tendencia_mensual(
 
             # ✅ CÁLCULO CORREGIDO: Morosidad mensual = MAX(0, Programado - Pagado)
             morosidad_mensual = max(0.0, monto_cuotas_programadas - monto_pagado_mes)
-            
+
             # ✅ Logging para diagnóstico (siempre mostrar para depuración)
             logger.info(
                 f"📊 [financiamiento-tendencia] {fecha_mes_inicio.strftime('%Y-%m')} (año={año_mes}, mes={num_mes}): "
@@ -3839,7 +3841,7 @@ def obtener_financiamiento_tendencia_mensual(
             f"⏱️ [financiamiento-tendencia] Tiempo total: {total_time}ms (query: {query_time}ms, process: {process_time}ms)"
         )
         logger.info(f"📊 [financiamiento-tendencia] Generados {len(meses_data)} meses de datos")
-        
+
         # ✅ Resumen de morosidad por mes para diagnóstico
         meses_con_morosidad = [m for m in meses_data if m.get("morosidad_mensual", 0) > 0]
         if meses_con_morosidad:
@@ -3892,15 +3894,15 @@ def obtener_cobranzas_semanales(
 
     try:
         hoy = date.today()
-        
+
         # Calcular fecha inicio (últimas N semanas desde el lunes más reciente)
         # Retroceder al lunes más reciente
         dias_desde_lunes = hoy.weekday()  # 0 = lunes, 6 = domingo
         lunes_actual = hoy - timedelta(days=dias_desde_lunes)
-        
+
         # Calcular fecha inicio (N semanas hacia atrás desde el lunes actual)
         fecha_inicio_query = lunes_actual - timedelta(weeks=semanas - 1)
-        
+
         # Aplicar filtros de fecha si se proporcionan
         if fecha_inicio:
             fecha_inicio_query = max(fecha_inicio_query, fecha_inicio)
@@ -4000,7 +4002,9 @@ def obtener_cobranzas_semanales(
                 semana_inicio = row[0]
                 pagos_por_semana[semana_inicio] = float(row[1] or Decimal("0"))
             tiempo_pagos = int((time.time() - start_pagos) * 1000)
-            logger.info(f"📊 [cobranzas-semanales] Query pagos completada en {tiempo_pagos}ms, {len(pagos_por_semana)} semanas")
+            logger.info(
+                f"📊 [cobranzas-semanales] Query pagos completada en {tiempo_pagos}ms, {len(pagos_por_semana)} semanas"
+            )
         except Exception as e:
             logger.error(f"Error consultando pagos en cobranzas-semanales: {e}", exc_info=True)
             try:
@@ -4013,27 +4017,27 @@ def obtener_cobranzas_semanales(
         # Generar datos semanales (incluyendo semanas sin datos)
         semanas_data = []
         current_date = fecha_inicio_query
-        
+
         # Asegurar que empezamos en lunes
         while current_date.weekday() != 0:  # 0 = lunes
             current_date -= timedelta(days=1)
-        
+
         semanas_generadas = 0
         while current_date <= fecha_fin_query and semanas_generadas < semanas:
             # Calcular inicio de semana (lunes)
             dias_desde_lunes = current_date.weekday()
             semana_inicio = current_date - timedelta(days=dias_desde_lunes)
             semana_fin = semana_inicio + timedelta(days=4)  # Viernes
-            
+
             if semana_inicio > fecha_fin_query:
                 break
-                
+
             cobranzas_planificadas = cobranzas_por_semana.get(semana_inicio, 0.0)
             pagos_reales = pagos_por_semana.get(semana_inicio, 0.0)
-            
+
             # Formatear nombre de semana: "Semana del DD/MM - DD/MM"
             nombre_semana = f"Sem {semana_inicio.strftime('%d/%m')} - {semana_fin.strftime('%d/%m')}"
-            
+
             semanas_data.append(
                 {
                     "semana_inicio": semana_inicio.isoformat(),
@@ -4042,7 +4046,7 @@ def obtener_cobranzas_semanales(
                     "pagos_reales": pagos_reales,
                 }
             )
-            
+
             # Avanzar a la siguiente semana (próximo lunes)
             current_date = semana_inicio + timedelta(days=7)
             semanas_generadas += 1
@@ -4050,7 +4054,11 @@ def obtener_cobranzas_semanales(
         total_time = int((time.time() - start_time) * 1000)
         logger.info(f"⏱️ [cobranzas-semanales] Tiempo total: {total_time}ms")
 
-        return {"semanas": semanas_data, "fecha_inicio": fecha_inicio_query.isoformat(), "fecha_fin": fecha_fin_query.isoformat()}
+        return {
+            "semanas": semanas_data,
+            "fecha_inicio": fecha_inicio_query.isoformat(),
+            "fecha_fin": fecha_fin_query.isoformat(),
+        }
 
     except HTTPException:
         raise
