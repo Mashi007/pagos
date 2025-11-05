@@ -704,7 +704,7 @@ export function DashboardMenu() {
                 <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b-2 border-cyan-200">
                   <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                     <TrendingUp className="h-6 w-6 text-cyan-600" />
-                    <span>Financiamiento Aprobado por Mes (Último Año)</span>
+                    <span>MONITOREO FINANCIERO</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">

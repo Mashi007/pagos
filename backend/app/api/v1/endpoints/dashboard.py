@@ -4063,3 +4063,71 @@ def obtener_evolucion_pagos(
         except Exception:
             pass
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/porcentaje-prestamos-aprobados")
+def obtener_porcentaje_prestamos_aprobados(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Calcula el porcentaje de préstamos que tienen estado APROBADO.
+    
+    Returns:
+        - total_prestamos: Total de préstamos en el sistema
+        - prestamos_aprobados: Cantidad de préstamos con estado APROBADO
+        - prestamos_no_aprobados: Cantidad de préstamos con otros estados
+        - porcentaje_aprobados: Porcentaje de préstamos aprobados (0-100)
+        - porcentaje_no_aprobados: Porcentaje de préstamos no aprobados (0-100)
+        - distribucion_por_estado: Desglose de préstamos por cada estado
+    """
+    try:
+        # Calcular totales y porcentajes
+        total_prestamos = db.query(Prestamo).count()
+        prestamos_aprobados = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
+        prestamos_no_aprobados = total_prestamos - prestamos_aprobados
+        
+        # Calcular porcentajes
+        porcentaje_aprobados = (
+            round((prestamos_aprobados / total_prestamos * 100), 2) if total_prestamos > 0 else 0.0
+        )
+        porcentaje_no_aprobados = (
+            round((prestamos_no_aprobados / total_prestamos * 100), 2) if total_prestamos > 0 else 0.0
+        )
+        
+        # Obtener distribución por estado
+        distribucion_query = (
+            db.query(
+                Prestamo.estado,
+                func.count(Prestamo.id).label("cantidad")
+            )
+            .group_by(Prestamo.estado)
+            .order_by(func.count(Prestamo.id).desc())
+            .all()
+        )
+        
+        distribucion_por_estado = [
+            {
+                "estado": row.estado or "Sin Estado",
+                "cantidad": row.cantidad,
+                "porcentaje": round((row.cantidad / total_prestamos * 100), 2) if total_prestamos > 0 else 0.0
+            }
+            for row in distribucion_query
+        ]
+        
+        return {
+            "total_prestamos": total_prestamos,
+            "prestamos_aprobados": prestamos_aprobados,
+            "prestamos_no_aprobados": prestamos_no_aprobados,
+            "porcentaje_aprobados": porcentaje_aprobados,
+            "porcentaje_no_aprobados": porcentaje_no_aprobados,
+            "distribucion_por_estado": distribucion_por_estado
+        }
+        
+    except Exception as e:
+        logger.error(f"Error calculando porcentaje de préstamos aprobados: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
