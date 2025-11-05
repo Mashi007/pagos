@@ -1486,6 +1486,10 @@ def obtener_kpis_pagos(
         raise
     except Exception as e:
         logger.error(f"❌ [kpis_pagos] Error obteniendo KPIs: {e}", exc_info=True)
+        try:
+            db.rollback()  # ✅ Rollback para restaurar transacción después de error
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Error interno al obtener KPIs: {str(e)}")
 
 

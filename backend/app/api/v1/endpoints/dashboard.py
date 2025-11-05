@@ -1935,8 +1935,14 @@ def obtener_cobranzas_mensuales(
             "meta_actual": meta_actual,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error obteniendo cobranzas mensuales: {e}", exc_info=True)
+        try:
+            db.rollback()  # ✅ Rollback para restaurar transacción después de error
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -2431,8 +2437,14 @@ def obtener_financiamiento_por_rangos(
             "total_monto": total_monto,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error obteniendo financiamiento por rangos: {e}", exc_info=True)
+        try:
+            db.rollback()  # ✅ Rollback para restaurar transacción después de error
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -2553,8 +2565,14 @@ def obtener_composicion_morosidad(
             "total_cuotas": sum(r["cantidad"] for r in rangos.values()),
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error obteniendo composición de morosidad: {e}", exc_info=True)
+        try:
+            db.rollback()  # ✅ Rollback para restaurar transacción después de error
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -3137,6 +3155,10 @@ def obtener_financiamiento_tendencia_mensual(
                 pagos_por_mes[(año_mes, num_mes)] = float(row.total_pagado or Decimal("0"))
         except Exception as e:
             logger.warning(f"⚠️ [financiamiento-tendencia] Error consultando pagos_staging: {e}, usando valores por defecto")
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
             # Si la tabla no existe o hay error, usar valores por defecto (0)
             pagos_por_mes = {}
 
@@ -3205,6 +3227,10 @@ def obtener_financiamiento_tendencia_mensual(
             logger.warning(
                 f"⚠️ [financiamiento-tendencia] Error consultando cuotas de pagos_staging: {e}, usando valores por defecto"
             )
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
             # Si la tabla no existe o hay error, usar valores por defecto (0)
             cuotas_pagos_por_mes = {}
 
@@ -3273,29 +3299,43 @@ def obtener_financiamiento_tendencia_mensual(
                 morosidad_por_mes[(año_morosidad, mes_morosidad)] = float(row.morosidad or Decimal("0"))
         except Exception as e:
             logger.error(f"Error en query optimizada de morosidad: {e}, usando cálculo por mes", exc_info=True)
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
             # Fallback: calcular mes por mes (más lento pero funciona)
             temp_date = fecha_inicio_query
             while temp_date <= hoy:
-                año_temp = temp_date.year
-                mes_temp = temp_date.month
-                fecha_mes_fin_temp = _obtener_fechas_mes_siguiente(mes_temp, año_temp)
-                ultimo_dia_mes_temp = fecha_mes_fin_temp - timedelta(days=1)
+                try:
+                    año_temp = temp_date.year
+                    mes_temp = temp_date.month
+                    fecha_mes_fin_temp = _obtener_fechas_mes_siguiente(mes_temp, año_temp)
+                    ultimo_dia_mes_temp = fecha_mes_fin_temp - timedelta(days=1)
 
-                query_morosidad = (
-                    db.query(func.sum(Cuota.monto_cuota))
-                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                    .filter(
-                        Prestamo.estado == "APROBADO",
-                        Cuota.fecha_vencimiento <= ultimo_dia_mes_temp,
-                        Cuota.estado != "PAGADO",
+                    query_morosidad = (
+                        db.query(func.sum(Cuota.monto_cuota))
+                        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                        .filter(
+                            Prestamo.estado == "APROBADO",
+                            Cuota.fecha_vencimiento <= ultimo_dia_mes_temp,
+                            Cuota.estado != "PAGADO",
+                        )
                     )
-                )
-                query_morosidad = FiltrosDashboard.aplicar_filtros_cuota(
-                    query_morosidad, analista, concesionario, modelo, None, None
-                )
-                morosidad_valor = float(query_morosidad.scalar() or Decimal("0"))
-                morosidad_por_mes[(año_temp, mes_temp)] = morosidad_valor
-                temp_date = fecha_mes_fin_temp
+                    query_morosidad = FiltrosDashboard.aplicar_filtros_cuota(
+                        query_morosidad, analista, concesionario, modelo, None, None
+                    )
+                    morosidad_valor = float(query_morosidad.scalar() or Decimal("0"))
+                    morosidad_por_mes[(año_temp, mes_temp)] = morosidad_valor
+                    temp_date = fecha_mes_fin_temp
+                except Exception as fallback_error:
+                    logger.warning(f"Error calculando morosidad para mes {temp_date}: {fallback_error}")
+                    try:
+                        db.rollback()  # ✅ Rollback para restaurar transacción después de error
+                    except Exception:
+                        pass
+                    morosidad_por_mes[(temp_date.year, temp_date.month)] = 0.0
+                    # Avanzar al siguiente mes para evitar loop infinito
+                    temp_date = _obtener_fechas_mes_siguiente(temp_date.month, temp_date.year)
 
         morosidad_time = int((time.time() - start_morosidad) * 1000)
         logger.info(
@@ -3362,8 +3402,14 @@ def obtener_financiamiento_tendencia_mensual(
 
         return {"meses": meses_data, "fecha_inicio": fecha_inicio_query.isoformat(), "fecha_fin": hoy.isoformat()}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error obteniendo tendencia mensual de financiamiento: {e}", exc_info=True)
+        try:
+            db.rollback()  # ✅ Rollback para restaurar transacción después de error
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -3652,6 +3698,12 @@ def obtener_evolucion_pagos(
 
         return {"meses": meses_data}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error obteniendo evolución de pagos: {e}", exc_info=True)
+        try:
+            db.rollback()  # ✅ Rollback para restaurar transacción después de error
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
