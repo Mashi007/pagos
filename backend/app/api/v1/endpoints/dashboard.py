@@ -3563,7 +3563,8 @@ def obtener_financiamiento_tendencia_mensual(
         cuotas_por_mes = {}
         try:
             # ✅ Usar SQL directo para coincidir exactamente con el script SQL
-            query_cuotas_sql = text("""
+            query_cuotas_sql = text(
+                """
                 SELECT 
                     EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
                     EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
@@ -3579,16 +3580,13 @@ def obtener_financiamiento_tendencia_mensual(
                     EXTRACT(YEAR FROM c.fecha_vencimiento),
                     EXTRACT(MONTH FROM c.fecha_vencimiento)
                 ORDER BY año, mes
-            """)
-            
+            """
+            )
+
             resultados_cuotas = db.execute(
-                query_cuotas_sql.bindparams(
-                    analista=analista,
-                    concesionario=concesionario,
-                    modelo=modelo
-                )
+                query_cuotas_sql.bindparams(analista=analista, concesionario=concesionario, modelo=modelo)
             ).fetchall()
-            
+
             for row in resultados_cuotas:
                 año_mes = int(row[0])
                 num_mes = int(row[1])
@@ -3811,7 +3809,7 @@ def obtener_financiamiento_tendencia_mensual(
 
             # ✅ CÁLCULO CORREGIDO: Morosidad mensual = MAX(0, Programado - Pagado)
             morosidad_mensual = max(0.0, monto_cuotas_programadas - monto_pagado_mes)
-            
+
             # ✅ Logging para diagnóstico
             if morosidad_mensual > 0 or monto_cuotas_programadas > 0:
                 logger.info(
