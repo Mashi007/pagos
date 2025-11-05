@@ -3063,6 +3063,104 @@ def obtener_financiamiento_tendencia_mensual(
         cuotas_time = int((time.time() - start_cuotas) * 1000)
         logger.info(f"📊 [financiamiento-tendencia] Query cuotas programadas completada en {cuotas_time}ms")
 
+        # ✅ Query para calcular suma de monto_pagado de tabla pagos por mes
+        start_pagos = time.time()
+        query_pagos = (
+            db.query(
+                func.extract("year", Pago.fecha_pago).label("año"),
+                func.extract("month", Pago.fecha_pago).label("mes"),
+                func.sum(Pago.monto_pagado).label("total_pagado"),
+            )
+            .filter(
+                Pago.activo.is_(True),
+                Pago.fecha_pago >= fecha_inicio_query,
+                Pago.fecha_pago <= fecha_fin_query,
+            )
+            .group_by(
+                func.extract("year", Pago.fecha_pago),
+                func.extract("month", Pago.fecha_pago)
+            )
+            .order_by(
+                func.extract("year", Pago.fecha_pago),
+                func.extract("month", Pago.fecha_pago)
+            )
+        )
+
+        # Aplicar filtros de préstamo a los pagos (mediante join con Prestamo)
+        if analista or concesionario or modelo:
+            query_pagos = query_pagos.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            if analista:
+                query_pagos = query_pagos.filter(
+                    or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
+                )
+            if concesionario:
+                query_pagos = query_pagos.filter(Prestamo.concesionario == concesionario)
+            if modelo:
+                query_pagos = query_pagos.filter(
+                    or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
+                )
+
+        resultados_pagos = query_pagos.all()
+        pagos_por_mes = {}
+        for row in resultados_pagos:
+            año_mes = int(row.año)
+            num_mes = int(row.mes)
+            pagos_por_mes[(año_mes, num_mes)] = float(row.total_pagado or Decimal("0"))
+
+        pagos_time = int((time.time() - start_pagos) * 1000)
+        logger.info(f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms")
+
+        # ✅ Query para calcular suma de monto_cuota de cuotas relacionadas con pagos del mes
+        start_cuotas_pagos = time.time()
+        query_cuotas_pagos = (
+            db.query(
+                func.extract("year", Pago.fecha_pago).label("año"),
+                func.extract("month", Pago.fecha_pago).label("mes"),
+                func.sum(Cuota.monto_cuota).label("total_monto_cuota"),
+            )
+            .join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            .join(Cuota, and_(
+                Cuota.prestamo_id == Prestamo.id,
+                Cuota.numero_cuota == Pago.numero_cuota
+            ))
+            .filter(
+                Pago.activo.is_(True),
+                Prestamo.estado == "APROBADO",
+                Pago.fecha_pago >= fecha_inicio_query,
+                Pago.fecha_pago <= fecha_fin_query,
+            )
+            .group_by(
+                func.extract("year", Pago.fecha_pago),
+                func.extract("month", Pago.fecha_pago)
+            )
+            .order_by(
+                func.extract("year", Pago.fecha_pago),
+                func.extract("month", Pago.fecha_pago)
+            )
+        )
+
+        # Aplicar filtros adicionales
+        if analista:
+            query_cuotas_pagos = query_cuotas_pagos.filter(
+                or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
+            )
+        if concesionario:
+            query_cuotas_pagos = query_cuotas_pagos.filter(Prestamo.concesionario == concesionario)
+        if modelo:
+            query_cuotas_pagos = query_cuotas_pagos.filter(
+                or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
+            )
+
+        resultados_cuotas_pagos = query_cuotas_pagos.all()
+        cuotas_pagos_por_mes = {}
+        for row in resultados_cuotas_pagos:
+            año_mes = int(row.año)
+            num_mes = int(row.mes)
+            cuotas_pagos_por_mes[(año_mes, num_mes)] = float(row.total_monto_cuota or Decimal("0"))
+
+        cuotas_pagos_time = int((time.time() - start_cuotas_pagos) * 1000)
+        logger.info(f"📊 [financiamiento-tendencia] Query monto_cuota de pagos completada en {cuotas_pagos_time}ms")
+
         # Generar datos mensuales (incluyendo meses sin datos) y calcular acumulados
         start_process = time.time()
         meses_data = []
@@ -3084,6 +3182,12 @@ def obtener_financiamiento_tendencia_mensual(
             # Obtener suma de cuotas programadas del mes
             monto_cuotas_programadas = cuotas_por_mes.get((año_mes, num_mes), 0.0)
 
+            # Obtener suma de monto_pagado de tabla pagos del mes
+            monto_pagado_mes = pagos_por_mes.get((año_mes, num_mes), 0.0)
+
+            # Obtener suma de monto_cuota de cuotas relacionadas con pagos del mes
+            monto_cuota_pagos = cuotas_pagos_por_mes.get((año_mes, num_mes), 0.0)
+
             # Calcular acumulado: sumar los nuevos financiamientos del mes
             total_acumulado += Decimal(str(monto_nuevos))
 
@@ -3096,6 +3200,8 @@ def obtener_financiamiento_tendencia_mensual(
                     "monto_nuevos": float(monto_nuevos),
                     "total_acumulado": float(total_acumulado),
                     "monto_cuotas_programadas": monto_cuotas_programadas,
+                    "monto_pagado": monto_pagado_mes,
+                    "monto_cuota": monto_cuota_pagos,
                     "fecha_mes": fecha_mes_inicio.isoformat(),
                 }
             )
