@@ -3098,7 +3098,7 @@ def obtener_financiamiento_tendencia_mensual(
         # Relacionar pagos_staging -> prestamos (por cedula) -> cuotas
         # Relacionar cuotas por fecha de vencimiento cercana a la fecha de pago (dentro del mismo mes)
         # para evitar duplicados y obtener la cuota más probable relacionada con cada pago
-        
+
         # Construir condiciones WHERE para filtros
         where_conditions = [
             "ps.fecha_pago IS NOT NULL",
@@ -3112,9 +3112,9 @@ def obtener_financiamiento_tendencia_mensual(
             "ps.cedula_cliente = pr.cedula",
             "c.prestamo_id = pr.id",
             "EXTRACT(YEAR FROM c.fecha_vencimiento) = EXTRACT(YEAR FROM ps.fecha_pago::timestamp)",
-            "EXTRACT(MONTH FROM c.fecha_vencimiento) = EXTRACT(MONTH FROM ps.fecha_pago::timestamp)"
+            "EXTRACT(MONTH FROM c.fecha_vencimiento) = EXTRACT(MONTH FROM ps.fecha_pago::timestamp)",
         ]
-        
+
         # Aplicar filtros adicionales si existen
         bind_params = {"fecha_inicio": fecha_inicio_query_dt, "fecha_fin": fecha_fin_query_dt}
         if analista:
@@ -3126,7 +3126,7 @@ def obtener_financiamiento_tendencia_mensual(
         if modelo:
             where_conditions.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
             bind_params["modelo"] = modelo
-        
+
         query_cuotas_pagos_sql = text(
             f"""
             SELECT 
