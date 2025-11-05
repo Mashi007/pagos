@@ -218,7 +218,9 @@ class DashboardMorosidadDineroNoCobradoPorPersona(Base):
     fecha_actualizacion = Column(TIMESTAMP, default=func.now())
 
     def __repr__(self):
-        return f"<DashboardMorosidadDineroNoCobradoPorPersona {self.cedula} {self.año}-{self.mes:02d}: ${self.dinero_no_cobrado}>"
+        return (
+            f"<DashboardMorosidadDineroNoCobradoPorPersona {self.cedula} {self.año}-{self.mes:02d}: ${self.dinero_no_cobrado}>"
+        )
 
 
 class DashboardMorosidadDiasMoraPorPersona(Base):
