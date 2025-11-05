@@ -3058,29 +3058,75 @@ def obtener_financiamiento_tendencia_mensual(
         fecha_inicio_query_dt = datetime.combine(fecha_inicio_query, datetime.min.time())
         fecha_fin_query_dt = datetime.combine(fecha_fin_query, datetime.max.time())
 
-        # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo
-        # ⚠️ No se pueden aplicar filtros por analista/concesionario/modelo porque no hay prestamo_id
-        query_pagos_sql = text(
-            """
-            SELECT 
-                EXTRACT(YEAR FROM fecha_pago::timestamp)::integer as año,
-                EXTRACT(MONTH FROM fecha_pago::timestamp)::integer as mes,
-                COALESCE(SUM(monto_pagado::numeric), 0) as total_pagado
-            FROM pagos_staging
-            WHERE fecha_pago IS NOT NULL
-              AND fecha_pago != ''
-              AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-              AND fecha_pago::timestamp >= :fecha_inicio
-              AND fecha_pago::timestamp <= :fecha_fin
-              AND monto_pagado IS NOT NULL
-              AND monto_pagado != ''
-              AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-            GROUP BY 
-                EXTRACT(YEAR FROM fecha_pago::timestamp),
-                EXTRACT(MONTH FROM fecha_pago::timestamp)
-            ORDER BY año, mes
-            """
-        ).bindparams(fecha_inicio=fecha_inicio_query_dt, fecha_fin=fecha_fin_query_dt)
+        # ⚠️ PagoStaging no tiene prestamo_id, usar SQL directo relacionando por cedula_cliente
+        # Aplicar filtros de analista/concesionario/modelo mediante JOIN con prestamos
+        prestamo_conditions_pagos = []
+        bind_params_pagos = {"fecha_inicio": fecha_inicio_query_dt, "fecha_fin": fecha_fin_query_dt}
+        
+        if analista or concesionario or modelo:
+            # Si hay filtros, necesitamos JOIN con prestamos
+            if analista:
+                prestamo_conditions_pagos.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+                bind_params_pagos["analista"] = analista
+            if concesionario:
+                prestamo_conditions_pagos.append("pr.concesionario = :concesionario")
+                bind_params_pagos["concesionario"] = concesionario
+            if modelo:
+                prestamo_conditions_pagos.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
+                bind_params_pagos["modelo"] = modelo
+            
+            # Construir WHERE completo
+            where_clause = """ps.fecha_pago IS NOT NULL
+                  AND ps.fecha_pago != ''
+                  AND ps.fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                  AND ps.fecha_pago::timestamp >= :fecha_inicio
+                  AND ps.fecha_pago::timestamp <= :fecha_fin
+                  AND ps.monto_pagado IS NOT NULL
+                  AND ps.monto_pagado != ''
+                  AND ps.monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                  AND pr.estado = 'APROBADO'"""
+            
+            if prestamo_conditions_pagos:
+                where_clause += " AND " + " AND ".join(prestamo_conditions_pagos)
+            
+            query_pagos_sql = text(
+                f"""
+                SELECT 
+                    EXTRACT(YEAR FROM ps.fecha_pago::timestamp)::integer as año,
+                    EXTRACT(MONTH FROM ps.fecha_pago::timestamp)::integer as mes,
+                    COALESCE(SUM(ps.monto_pagado::numeric), 0) as total_pagado
+                FROM pagos_staging ps
+                INNER JOIN prestamos pr ON ps.cedula_cliente = pr.cedula
+                WHERE {where_clause}
+                GROUP BY 
+                    EXTRACT(YEAR FROM ps.fecha_pago::timestamp),
+                    EXTRACT(MONTH FROM ps.fecha_pago::timestamp)
+                ORDER BY año, mes
+                """
+            ).bindparams(**bind_params_pagos)
+        else:
+            # Sin filtros, query más simple sin JOIN
+            query_pagos_sql = text(
+                """
+                SELECT 
+                    EXTRACT(YEAR FROM fecha_pago::timestamp)::integer as año,
+                    EXTRACT(MONTH FROM fecha_pago::timestamp)::integer as mes,
+                    COALESCE(SUM(monto_pagado::numeric), 0) as total_pagado
+                FROM pagos_staging
+                WHERE fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                  AND fecha_pago::timestamp >= :fecha_inicio
+                  AND fecha_pago::timestamp <= :fecha_fin
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                GROUP BY 
+                    EXTRACT(YEAR FROM fecha_pago::timestamp),
+                    EXTRACT(MONTH FROM fecha_pago::timestamp)
+                ORDER BY año, mes
+                """
+            ).bindparams(fecha_inicio=fecha_inicio_query_dt, fecha_fin=fecha_fin_query_dt)
 
         resultados_pagos = db.execute(query_pagos_sql).fetchall()
         pagos_por_mes = {}
