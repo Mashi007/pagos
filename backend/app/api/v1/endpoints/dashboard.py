@@ -1278,7 +1278,7 @@ def dashboard_administrador(
             try:
                 cuotas_pagadas_query = db.execute(
                     text(
-                    """
+                        """
                     SELECT 
                         EXTRACT(YEAR FROM DATE(c.fecha_pago))::integer as año,
                         EXTRACT(MONTH FROM DATE(c.fecha_pago))::integer as mes,
@@ -1293,7 +1293,7 @@ def dashboard_administrador(
                     GROUP BY EXTRACT(YEAR FROM DATE(c.fecha_pago)), EXTRACT(MONTH FROM DATE(c.fecha_pago))
                     ORDER BY año, mes
                 """
-                ).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
+                    ).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
                 )
                 cuotas_pagadas_por_mes = {(int(row[0]), int(row[1])): int(row[2] or 0) for row in cuotas_pagadas_query}
             except Exception as e:
@@ -2406,7 +2406,9 @@ def obtener_morosidad_por_analista(
         analistas_data.sort(key=lambda x: x["total_morosidad"], reverse=True)
 
         total_time = int((time.time() - start_time) * 1000)
-        logger.info(f"📊 [morosidad-por-analista] Query: {query_time}ms, Total: {total_time}ms, {len(analistas_data)} analistas")
+        logger.info(
+            f"📊 [morosidad-por-analista] Query: {query_time}ms, Total: {total_time}ms, {len(analistas_data)} analistas"
+        )
 
         return {"analistas": analistas_data}
 
