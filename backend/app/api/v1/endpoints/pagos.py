@@ -20,9 +20,8 @@ from app.api.deps import get_current_user, get_db
 from app.core.cache import cache_result
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
-from app.models.pago import Pago  # Mantener para operaciones que necesiten tabla pagos (crear, actualizar)
+from app.models.pago import Pago  # Tabla oficial de pagos
 from app.models.pago_auditoria import PagoAuditoria
-from app.models.pago_staging import PagoStaging  # Usar para consultas principales (listar, stats, kpis)
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.schemas.pago import PagoCreate, PagoResponse, PagoUpdate
@@ -41,37 +40,24 @@ def _aplicar_filtros_pagos(
     analista: Optional[str],
     db: Session,
 ):
-    """Aplica filtros a la query de pagos (usa PagoStaging)"""
+    """Aplica filtros a la query de pagos (usa tabla pagos)"""
     if cedula:
-        # PagoStaging solo tiene cedula_cliente (no existe columna cedula)
-        query = query.filter(PagoStaging.cedula_cliente == cedula)
+        query = query.filter(Pago.cedula == cedula)
         logger.info(f"🔍 [listar_pagos] Filtro cédula: {cedula}")
     if estado:
-        # ⚠️ PagoStaging no tiene columna 'estado' en la BD real
-        # query = query.filter(PagoStaging.estado == estado)
-        logger.info(f"🔍 [listar_pagos] Filtro estado: {estado} (ignorado - columna no existe)")
+        query = query.filter(Pago.estado == estado)
+        logger.info(f"🔍 [listar_pagos] Filtro estado: {estado}")
     if fecha_desde:
-        # Convertir fecha_pago (TEXT) a timestamp para comparar
-        query = query.filter(
-            text("pagos_staging.fecha_pago::timestamp >= :fecha_desde").bindparams(
-                fecha_desde=datetime.combine(fecha_desde, datetime.min.time())
-            )
-        )
+        query = query.filter(Pago.fecha_pago >= datetime.combine(fecha_desde, datetime.min.time()))
         logger.info(f"🔍 [listar_pagos] Filtro fecha_desde: {fecha_desde}")
     if fecha_hasta:
-        # Convertir fecha_pago (TEXT) a timestamp para comparar
-        query = query.filter(
-            text("pagos_staging.fecha_pago::timestamp <= :fecha_hasta").bindparams(
-                fecha_hasta=datetime.combine(fecha_hasta, time.max)
-            )
-        )
+        query = query.filter(Pago.fecha_pago <= datetime.combine(fecha_hasta, time.max))
         logger.info(f"🔍 [listar_pagos] Filtro fecha_hasta: {fecha_hasta}")
     if analista:
-        # ⚠️ PagoStaging no tiene columna 'prestamo_id' en la BD real
-        # query = query.join(
-        #     Prestamo, PagoStaging.prestamo_id == Prestamo.id
-        # ).filter(Prestamo.usuario_proponente == analista)
-        logger.info(f"🔍 [listar_pagos] Filtro analista: {analista} (ignorado - prestamo_id no existe)")
+        query = query.join(
+            Prestamo, Pago.prestamo_id == Prestamo.id
+        ).filter(Prestamo.usuario_proponente == analista)
+        logger.info(f"🔍 [listar_pagos] Filtro analista: {analista}")
     return query
 
 
@@ -185,8 +171,8 @@ def _serializar_pago(pago, _hoy: date, cuotas_atrasadas_cache: Optional[dict[str
     """
     Serializa un pago de forma segura.
 
-    Maneja PagoStaging que no tiene: estado, conciliado, usuario_registro, activo, fecha_registro, etc.
-    Convierte monto_pagado de string a Decimal.
+    Serializa un pago de la tabla pagos.
+    Maneja conversión de tipos de datos.
 
     OPTIMIZACIÓN: Recibe cache de cuotas_atrasadas para evitar N+1 queries.
     Si no se proporciona cache, asume 0 (no se calcula individualmente para mejor performance).
@@ -211,24 +197,24 @@ def _serializar_pago(pago, _hoy: date, cuotas_atrasadas_cache: Optional[dict[str
 
         pago_dict = {
             "id": pago.id,
-            "cedula": cedula_cliente,  # Unificado: ahora usa 'cedula' en lugar de 'cedula_cliente'
-            "prestamo_id": None,
+            "cedula": cedula_cliente,
+            "prestamo_id": getattr(pago, "prestamo_id", None),
             "fecha_pago": fecha_pago_dt,
             "monto_pagado": float(monto_pagado_decimal),
             "numero_documento": getattr(pago, "numero_documento", ""),
-            "institucion_bancaria": None,
-            "notas": None,
-            "fecha_registro": None,
-            "estado": "REGISTRADO",
-            "conciliado": conciliado,  # ✅ Usar valor real de la BD
-            "fecha_conciliacion": fecha_conciliacion,  # ✅ Usar valor real de la BD
-            "documento_nombre": None,
-            "documento_tipo": None,
-            "documento_ruta": None,
-            "usuario_registro": "SISTEMA",
-            "activo": True,
-            "fecha_actualizacion": None,
-            "verificado_concordancia": None,
+            "institucion_bancaria": getattr(pago, "institucion_bancaria", None),
+            "notas": getattr(pago, "notas", None),
+            "fecha_registro": getattr(pago, "fecha_registro", None),
+            "estado": getattr(pago, "estado", "PAGADO"),
+            "conciliado": conciliado,
+            "fecha_conciliacion": fecha_conciliacion,
+            "documento_nombre": getattr(pago, "documento_nombre", None),
+            "documento_tipo": getattr(pago, "documento_tipo", None),
+            "documento_ruta": getattr(pago, "documento_ruta", None),
+            "usuario_registro": getattr(pago, "usuario_registro", "SISTEMA"),
+            "activo": getattr(pago, "activo", True),
+            "fecha_actualizacion": getattr(pago, "fecha_actualizacion", None),
+            "verificado_concordancia": getattr(pago, "verificado_concordancia", None),
             "cuotas_atrasadas": cuotas_atrasadas,
         }
 
@@ -260,34 +246,36 @@ def healthcheck_pagos(
     y disponibilidad de datos para alimentar el dashboard.
     """
     try:
-        # Verificar conexión a BD con prueba de consulta (usa PagoStaging)
-        total_pagos = db.query(func.count(PagoStaging.id)).scalar() or 0
+        # Verificar conexión a BD con prueba de consulta (usa tabla pagos)
+        total_pagos = db.query(func.count(Pago.id)).filter(Pago.activo == True).scalar() or 0
 
         # Pagos del mes actual
         hoy = date.today()
         primer_dia_mes = date(hoy.year, hoy.month, 1)
-        # Convertir fecha_pago (TEXT) a timestamp para comparar
         pagos_mes = (
-            db.query(func.count(PagoStaging.id))
+            db.query(func.count(Pago.id))
             .filter(
-                text("pagos_staging.fecha_pago::timestamp >= :primer_dia").bindparams(
-                    primer_dia=datetime.combine(primer_dia_mes, datetime.min.time())
-                )
+                Pago.activo == True,
+                Pago.fecha_pago >= datetime.combine(primer_dia_mes, datetime.min.time())
             )
             .scalar()
             or 0
         )
 
-        # Monto total pagado (convertir monto_pagado TEXT a NUMERIC)
-        monto_total_query = db.execute(
-            text(
-                "SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE monto_pagado IS NOT NULL AND monto_pagado != ''"
-            )
+        # Monto total pagado
+        monto_total_query = (
+            db.query(func.sum(Pago.monto_pagado))
+            .filter(Pago.activo == True, Pago.monto_pagado.isnot(None))
         )
         monto_total = Decimal(str(monto_total_query.scalar() or 0))
 
-        # Pagos por estado (PagoStaging no tiene columna estado)
-        pagos_por_estado = []  # Vacío porque no hay columna estado
+        # Pagos por estado
+        pagos_por_estado = (
+            db.query(Pago.estado, func.count(Pago.id))
+            .filter(Pago.activo == True)
+            .group_by(Pago.estado)
+            .all()
+        )
         estados_dict = {estado: count for estado, count in pagos_por_estado}
 
         return {
@@ -354,9 +342,8 @@ def _verificar_query_compleja(db: Session, diagnostico: dict):
     logger.info("🔍 [diagnostico_pagos] Verificando query compleja (listar_pagos)...")
     try:
         hoy = date.today()
-        # Usar PagoStaging donde están los datos reales
-        # ⚠️ PagoStaging no tiene fecha_registro, usar id
-        query_test = db.query(PagoStaging).order_by(PagoStaging.id.desc()).limit(5)
+        # Usar tabla pagos
+        query_test = db.query(Pago).filter(Pago.activo == True).order_by(Pago.id.desc()).limit(5)
         pagos_test = query_test.all()
 
         if not pagos_test:
@@ -428,8 +415,8 @@ def _verificar_serializacion(db: Session, diagnostico: dict):
     """Verifica serialización de PagoResponse"""
     logger.info("🔍 [diagnostico_pagos] Verificando serialización...")
     try:
-        # Usar PagoStaging donde están los datos reales
-        query_test = db.query(PagoStaging).order_by(PagoStaging.fecha_registro.desc()).limit(1)
+        # Usar tabla pagos
+        query_test = db.query(Pago).filter(Pago.activo == True).order_by(Pago.fecha_registro.desc()).limit(1)
         pagos_test = query_test.all()
 
         if not pagos_test:
@@ -486,93 +473,26 @@ def diagnostico_pagos(
 
 
 def _contar_total_pagos_validos(db: Session, cedula: Optional[str] = None) -> int:
-    """Cuenta el total de pagos válidos en pagos_staging"""
+    """Cuenta el total de pagos válidos en tabla pagos"""
+    query = db.query(func.count(Pago.id)).filter(Pago.activo == True)
+    
     if cedula:
-        result = db.execute(
-            text(
-                """
-                SELECT COUNT(*) FROM pagos_staging
-                WHERE cedula_cliente = :cedula
-                  AND fecha_pago IS NOT NULL
-                  AND fecha_pago != ''
-                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                  AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
-                  AND TRIM(monto_pagado) != ''
-                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-                  AND monto_pagado::numeric >= 0
-                """
-            ).bindparams(cedula=cedula)
-        )
-    else:
-        result = db.execute(
-            text(
-                """
-                SELECT COUNT(*) FROM pagos_staging
-                WHERE cedula_cliente IS NOT NULL
-                  AND cedula_cliente != ''
-                  AND TRIM(cedula_cliente) != ''
-                  AND (
-                      UPPER(TRIM(cedula_cliente)) = 'Z999999999'
-                      OR (cedula_cliente ~ '^[VEJZvejz][0-9]{7,9}$' AND LENGTH(TRIM(cedula_cliente)) >= 8 AND LENGTH(TRIM(cedula_cliente)) <= 10)
-                      OR (cedula_cliente ~ '^[0-9]{7,10}$' AND LENGTH(TRIM(cedula_cliente)) >= 7 AND LENGTH(TRIM(cedula_cliente)) <= 10)
-                  )
-                  AND fecha_pago IS NOT NULL
-                  AND fecha_pago != ''
-                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                  AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
-                  AND TRIM(monto_pagado) != ''
-                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-                  AND monto_pagado::numeric >= 0
-                """
-            )
-        )
-    return result.scalar() or 0
+        query = query.filter(Pago.cedula == cedula)
+    
+    return query.scalar() or 0
 
 
 def _obtener_pagos_paginados(db: Session, page: int, per_page: int) -> list:
-    """Obtiene pagos paginados de la BD"""
+    """Obtiene pagos paginados de la tabla pagos"""
     offset = (page - 1) * per_page
-    pagos_raw = db.execute(
-        text(
-            """
-            SELECT id_stg, cedula_cliente, fecha_pago, monto_pagado, numero_documento, 
-                   COALESCE(conciliado, FALSE) as conciliado, fecha_conciliacion
-            FROM pagos_staging
-                WHERE cedula_cliente IS NOT NULL
-                  AND cedula_cliente != ''
-                  AND TRIM(cedula_cliente) != ''
-                  AND (
-                      UPPER(TRIM(cedula_cliente)) = 'Z999999999'
-                      OR (cedula_cliente ~ '^[VEJZvejz][0-9]{7,9}$' AND LENGTH(TRIM(cedula_cliente)) >= 8 AND LENGTH(TRIM(cedula_cliente)) <= 10)
-                      OR (cedula_cliente ~ '^[0-9]{7,10}$' AND LENGTH(TRIM(cedula_cliente)) >= 7 AND LENGTH(TRIM(cedula_cliente)) <= 10)
-                  )
-                  AND fecha_pago IS NOT NULL
-                  AND fecha_pago != ''
-                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                  AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
-                  AND TRIM(monto_pagado) != ''
-                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-                  AND monto_pagado::numeric >= 0
-            ORDER BY id_stg DESC
-            LIMIT :limit OFFSET :offset
-        """
-        ).bindparams(limit=per_page, offset=offset)
-    ).fetchall()
-
-    pagos = []
-    for row in pagos_raw:
-        pago = PagoStaging()
-        pago.id = row[0]  # type: ignore[assignment]
-        pago.cedula_cliente = row[1]  # type: ignore[assignment]
-        pago.fecha_pago = row[2]  # type: ignore[assignment]
-        pago.monto_pagado = row[3]  # type: ignore[assignment]
-        pago.numero_documento = row[4]  # type: ignore[assignment]
-        pago.conciliado = row[5] if len(row) > 5 else False  # type: ignore[assignment]
-        pago.fecha_conciliacion = row[6] if len(row) > 6 else None  # type: ignore[assignment]
-        pagos.append(pago)
+    pagos = (
+        db.query(Pago)
+        .filter(Pago.activo == True)
+        .order_by(Pago.id.desc())
+        .offset(offset)
+        .limit(per_page)
+        .all()
+    )
     return pagos
 
 
@@ -611,14 +531,60 @@ def listar_pagos(
         logger.info(f"📋 [listar_pagos] Iniciando consulta - página {page}, por página {per_page}")
 
         try:
-            test_query = db.query(func.count(PagoStaging.id)).scalar()
-            logger.info(f"✅ [listar_pagos] Conexión BD OK. Total pagos en pagos_staging: {test_query}")
+            # Verificar que la tabla existe antes de consultarla
+            from sqlalchemy import inspect
+            inspector = inspect(db.bind)
+            tablas_disponibles = inspector.get_table_names()
+            
+            if "pagos" not in tablas_disponibles:
+                # Obtener nombre de BD actual para diagnóstico
+                try:
+                    resultado = db.execute(text("SELECT current_database()"))
+                    bd_nombre = resultado.scalar()
+                except Exception:
+                    bd_nombre = "No se pudo determinar"
+                
+                logger.error(
+                    f"❌ [listar_pagos] Tabla 'pagos' NO EXISTE en BD '{bd_nombre}'. "
+                    f"Tablas disponibles: {', '.join(tablas_disponibles[:10])}"
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        f"Error: La tabla 'pagos' no existe en la base de datos '{bd_nombre}'. "
+                        f"Verifique que está conectado a la base de datos 'pagos' y que las migraciones se han ejecutado."
+                    ),
+                )
+            
+            test_query = db.query(func.count(Pago.id)).scalar()
+            logger.info(f"✅ [listar_pagos] Conexión BD OK. Total pagos en tabla pagos: {test_query}")
+        except HTTPException:
+            # Re-lanzar HTTPException sin modificar
+            raise
         except Exception as db_error:
             logger.error(f"❌ [listar_pagos] Error de conexión BD: {db_error}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error de conexión a la base de datos: {str(db_error)}",
-            )
+            
+            # Verificar si es un error de tabla no encontrada
+            error_str = str(db_error)
+            if "does not exist" in error_str or "UndefinedTable" in error_str:
+                try:
+                    resultado = db.execute(text("SELECT current_database()"))
+                    bd_nombre = resultado.scalar()
+                except Exception:
+                    bd_nombre = "No se pudo determinar"
+                
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        f"Error: La tabla 'pagos' no existe en la base de datos '{bd_nombre}'. "
+                        f"Verifique que está conectado a la base de datos 'pagos' y que las migraciones se han ejecutado."
+                    ),
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error de conexión a la base de datos: {str(db_error)}",
+                )
 
         total = _contar_total_pagos_validos(db, cedula)
         logger.info(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")
@@ -821,37 +787,35 @@ def listar_ultimos_pagos(
     """Devuelve el último pago por cédula y métricas agregadas del balance general."""
     try:
         # Subconsulta: última fecha_registro por cédula
-        # ⚠️ PagoStaging no tiene fecha_registro, usar id para obtener últimos pagos
-        # Obtener últimos pagos por cédula usando id (más reciente = id más alto)
+        # Obtener últimos pagos por cédula usando fecha_registro (más reciente)
         sub_ultimos = (
             db.query(
-                PagoStaging.cedula_cliente.label("cedula"),
-                func.max(PagoStaging.id).label("max_id"),
+                Pago.cedula.label("cedula"),
+                func.max(Pago.fecha_registro).label("max_fecha_registro"),
             )
-            .filter(PagoStaging.cedula_cliente.isnot(None))
-            .group_by(PagoStaging.cedula_cliente)
+            .filter(Pago.cedula.isnot(None), Pago.activo == True)
+            .group_by(Pago.cedula)
             .subquery()
         )
 
-        # Join para obtener el registro de pago completo de ese último id
-        pagos_ultimos_q = db.query(PagoStaging).join(
+        # Join para obtener el registro de pago completo de esa fecha más reciente
+        pagos_ultimos_q = db.query(Pago).join(
             sub_ultimos,
-            (PagoStaging.cedula_cliente == sub_ultimos.c.cedula) & (PagoStaging.id == sub_ultimos.c.max_id),
-        )
+            (Pago.cedula == sub_ultimos.c.cedula) & (Pago.fecha_registro == sub_ultimos.c.max_fecha_registro),
+        ).filter(Pago.activo == True)
 
         # Filtros
         if cedula:
-            pagos_ultimos_q = pagos_ultimos_q.filter(PagoStaging.cedula_cliente == cedula)
-        # ⚠️ PagoStaging no tiene columna estado
-        # if estado:
-        #     pagos_ultimos_q = pagos_ultimos_q.filter(PagoStaging.estado == estado)
+            pagos_ultimos_q = pagos_ultimos_q.filter(Pago.cedula == cedula)
+        if estado:
+            pagos_ultimos_q = pagos_ultimos_q.filter(Pago.estado == estado)
 
         # Total para paginación
         total = pagos_ultimos_q.count()
 
-        # Paginación (ordenar por id desc)
+        # Paginación (ordenar por fecha_registro desc)
         offset = (page - 1) * per_page
-        pagos_ultimos = pagos_ultimos_q.order_by(PagoStaging.id.desc()).offset(offset).limit(per_page).all()
+        pagos_ultimos = pagos_ultimos_q.order_by(Pago.fecha_registro.desc()).offset(offset).limit(per_page).all()
 
         # Para cada cédula, calcular agregados sobre amortización (todas sus deudas)
         items = []
@@ -862,8 +826,8 @@ def listar_ultimos_pagos(
         from app.models.prestamo import Prestamo
 
         for pago in pagos_ultimos:
-            # PagoStaging puede tener cedula_cliente o cedula
-            cedula_cliente = pago.cedula_cliente or pago.cedula
+            # Usar cedula de la tabla pagos
+            cedula_cliente = pago.cedula
             # ✅ Obtener TODOS los préstamos APROBADOS del cliente (no solo del último pago)
             prestamos_ids = [
                 p.id
@@ -978,45 +942,35 @@ def _calcular_proporcion_capital_interes(cuota, monto_aplicar: Decimal) -> tuple
 def _verificar_pagos_conciliados_cuota(db: Session, cuota_id: int, prestamo_id: int) -> bool:
     """
     Verifica si TODOS los pagos que afectan una cuota están conciliados.
-    Busca en pagos_staging por numero_documento vinculado al préstamo.
+    Busca en la tabla `pagos` por prestamo_id.
 
     ✅ ESTRATEGIA:
     - Obtener todos los pagos de la tabla `pagos` que tienen este prestamo_id
-    - Verificar si cada uno está conciliado en `pagos_staging` por numero_documento
+    - Verificar si cada uno está conciliado
     - Si TODOS están conciliados → True, sino → False
 
     Returns: True si todos los pagos están conciliados, False en caso contrario.
     """
-    from app.models.pago_staging import PagoStaging
-
     # Obtener todos los pagos del préstamo que podrían afectar esta cuota
     # Como los pagos se aplican desde la cuota más antigua, verificamos todos los pagos del préstamo
-    pagos_prestamo = db.execute(
-        text(
-            """
-            SELECT DISTINCT numero_documento, conciliado
-            FROM pagos
-            WHERE prestamo_id = :prestamo_id
-               AND numero_documento IS NOT NULL
-               AND numero_documento != ''
-        """
-        ),
-        {"prestamo_id": prestamo_id},
-    ).fetchall()
+    pagos_prestamo = (
+        db.query(Pago)
+        .filter(
+            Pago.prestamo_id == prestamo_id,
+            Pago.numero_documento.isnot(None),
+            Pago.numero_documento != ""
+        )
+        .all()
+    )
 
     if not pagos_prestamo:
         # No hay pagos para este préstamo, asumir que no está conciliado
         return False
 
-    # Verificar si todos los pagos están conciliados en pagos_staging
+    # Verificar si todos los pagos están conciliados
     for pago in pagos_prestamo:
-        numero_documento = pago.numero_documento
-        # Primero verificar en pagos (tabla principal)
         if not pago.conciliado:
-            # Si no está conciliado en pagos, verificar en pagos_staging
-            pago_staging = db.query(PagoStaging).filter(PagoStaging.numero_documento == numero_documento).first()
-            if not pago_staging or not pago_staging.conciliado:
-                return False
+            return False
 
     return True
 
@@ -1318,49 +1272,50 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
     fecha_inicio_dt = datetime.combine(fecha_inicio_mes, datetime.min.time())
     fecha_fin_dt = datetime.combine(fecha_fin_mes, datetime.min.time())
 
-    # OPTIMIZACIÓN 1: Combinar ambas queries de pagos_staging en una sola
-    # Esto reduce de 2 queries a 1 y aprovecha mejor los índices
+    # OPTIMIZACIÓN 1: Usar ORM para consultar tabla pagos
     start_pagos = time.time()
     monto_cobrado_mes = Decimal("0")
     monto_no_definido = Decimal("0")
 
     try:
-        pagos_query = db.execute(
-            text(
-                """
-                SELECT 
-                    COALESCE(SUM(monto_pagado::numeric), 0) AS monto_total,
-                    COALESCE(SUM(
-                        CASE 
-                            WHEN (
-                                conciliado IS FALSE
-                                OR conciliado IS NULL
-                                OR numero_documento IS NULL
-                                OR numero_documento = ''
-                                OR UPPER(TRIM(numero_documento)) = 'NO DEFINIDO'
-                            ) THEN monto_pagado::numeric
-                            ELSE 0
-                        END
-                    ), 0) AS monto_no_definido
-                FROM pagos_staging
-                WHERE fecha_pago IS NOT NULL
-                  AND fecha_pago != ''
-                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-                  AND fecha_pago::timestamp >= :fecha_inicio
-                  AND fecha_pago::timestamp < :fecha_fin
-                  AND monto_pagado IS NOT NULL
-                  AND monto_pagado != ''
-                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-                  AND monto_pagado::numeric >= 0
-            """
-            ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+        # Monto total cobrado en el mes
+        monto_total_query = (
+            db.query(func.sum(Pago.monto_pagado))
+            .filter(
+                Pago.activo == True,
+                Pago.fecha_pago >= fecha_inicio_dt,
+                Pago.fecha_pago < fecha_fin_dt,
+                Pago.monto_pagado.isnot(None)
+            )
         )
-        pagos_result = pagos_query.fetchone()
-        monto_cobrado_mes = Decimal(str(pagos_result[0] or 0))
-        monto_no_definido = Decimal(str(pagos_result[1] or 0))
+        monto_cobrado_mes = Decimal(str(monto_total_query.scalar() or 0))
+
+        # Monto no definido (sin conciliar o sin número de documento)
+        monto_no_definido_query = (
+            db.query(func.sum(Pago.monto_pagado))
+            .filter(
+                Pago.activo == True,
+                Pago.fecha_pago >= fecha_inicio_dt,
+                Pago.fecha_pago < fecha_fin_dt,
+                Pago.monto_pagado.isnot(None),
+                or_(
+                    Pago.conciliado == False,
+                    Pago.conciliado.is_(None),
+                    Pago.numero_documento.is_(None),
+                    Pago.numero_documento == "",
+                    func.upper(func.trim(Pago.numero_documento)) == "NO DEFINIDO"
+                )
+            )
+        )
+        monto_no_definido = Decimal(str(monto_no_definido_query.scalar() or 0))
     except Exception as e:
-        logger.warning(f"⚠️ [kpis_pagos] Error consultando pagos_staging: {e}, usando valores por defecto")
-        # Si la tabla no existe o hay error, usar valores por defecto (0)
+        logger.warning(f"⚠️ [kpis_pagos] Error consultando pagos: {e}, usando valores por defecto")
+        # Hacer rollback para limpiar la transacción abortada
+        try:
+            db.rollback()
+        except Exception:
+            pass  # Ignorar errores de rollback
+        # Si hay error, usar valores por defecto (0)
         monto_cobrado_mes = Decimal("0")
         monto_no_definido = Decimal("0")
 
@@ -1371,21 +1326,30 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
 
     # OPTIMIZACIÓN 2: Saldo por cobrar (query única optimizada)
     start_saldo = time.time()
-    saldo_por_cobrar_query = (
-        db.query(
-            func.sum(
-                func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
-                + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
-                + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
+    try:
+        saldo_por_cobrar_query = (
+            db.query(
+                func.sum(
+                    func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
+                    + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
+                    + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
+                )
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.estado != "PAGADO",
+                Prestamo.estado == "APROBADO",
             )
         )
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .filter(
-            Cuota.estado != "PAGADO",
-            Prestamo.estado == "APROBADO",
-        )
-    )
-    saldo_por_cobrar = saldo_por_cobrar_query.scalar() or Decimal("0.00")
+        saldo_por_cobrar = saldo_por_cobrar_query.scalar() or Decimal("0.00")
+    except Exception as e:
+        logger.warning(f"⚠️ [kpis_pagos] Error consultando saldo por cobrar: {e}, usando valor por defecto")
+        # Hacer rollback para limpiar la transacción abortada
+        try:
+            db.rollback()
+        except Exception:
+            pass  # Ignorar errores de rollback
+        saldo_por_cobrar = Decimal("0.00")
     tiempo_saldo = int((time.time() - start_saldo) * 1000)
     logger.info(f"💳 [kpis_pagos] Saldo por cobrar: ${saldo_por_cobrar:,.2f} ({tiempo_saldo}ms)")
 
@@ -1519,70 +1483,94 @@ def obtener_estadisticas_pagos(
     try:
         hoy = datetime.now().date()
 
-        # ✅ Base query para pagos - usar FiltrosDashboard (usa PagoStaging donde están los datos)
-        base_pago_query = db.query(PagoStaging)
-        # ⚠️ PagoStaging no tiene prestamo_id, no se puede hacer join con Prestamo
-        # Los filtros por analista/concesionario/modelo no se pueden aplicar sin prestamo_id
-        base_pago_query = FiltrosDashboard.aplicar_filtros_pago(
-            base_pago_query,
-            analista,
-            concesionario,
-            modelo,
-            fecha_inicio,
-            fecha_fin,
-        )
+        # ✅ Base query para pagos - usar tabla pagos
+        base_pago_query = db.query(Pago).filter(Pago.activo == True)
+        
+        # Aplicar filtros de fecha directamente
+        if fecha_inicio:
+            base_pago_query = base_pago_query.filter(Pago.fecha_pago >= datetime.combine(fecha_inicio, datetime.min.time()))
+        if fecha_fin:
+            base_pago_query = base_pago_query.filter(Pago.fecha_pago <= datetime.combine(fecha_fin, datetime.max.time()))
+
+        # Si hay filtros de analista/concesionario/modelo, necesitamos join con Prestamo
+        if analista or concesionario or modelo:
+            base_pago_query = base_pago_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            base_pago_query = FiltrosDashboard.aplicar_filtros_pago(
+                base_pago_query,
+                analista,
+                concesionario,
+                modelo,
+                fecha_inicio,
+                fecha_fin,
+            )
+        else:
+            # Aplicar filtros básicos sin join
+            base_pago_query = FiltrosDashboard.aplicar_filtros_pago(
+                base_pago_query,
+                analista,
+                concesionario,
+                modelo,
+                fecha_inicio,
+                fecha_fin,
+            )
 
         # Total de pagos
         total_pagos = base_pago_query.count()
 
-        # Pagos por estado (requiere subquery si hay filtros)
-        pagos_por_estado_query = base_pago_query.subquery()
-        if analista or concesionario or modelo:
-            pagos_por_estado = (
-                db.query(
-                    pagos_por_estado_query.c.estado,
-                    func.count(pagos_por_estado_query.c.id),
-                )
-                .group_by(pagos_por_estado_query.c.estado)
-                .all()
-            )
-        else:
-            # ⚠️ PagoStaging no tiene columna estado
-            pagos_por_estado = []
-
-        # Monto total pagado (convertir monto_pagado TEXT a NUMERIC)
-        # Usar SQL directo porque func.sum(text(...)) no incluye FROM automáticamente
-        # ⚠️ PagoStaging no tiene prestamo_id, así que filtros de analista/concesionario/modelo no se aplican
-        where_conditions = ["monto_pagado IS NOT NULL", "monto_pagado != ''"]
-        where_conditions.append("fecha_pago IS NOT NULL")
-        where_conditions.append("fecha_pago != ''")
-        where_conditions.append("fecha_pago ~ '^\\\\d{4}-\\\\d{2}-\\\\d{2}'")
-
-        params = {}
+        # Pagos por estado - necesitamos una query separada para agrupar
+        pagos_por_estado_query = db.query(Pago.estado, func.count(Pago.id)).filter(Pago.activo == True)
         if fecha_inicio:
-            where_conditions.append("fecha_pago::timestamp >= :fecha_inicio")
-            params["fecha_inicio"] = datetime.combine(fecha_inicio, datetime.min.time())
+            pagos_por_estado_query = pagos_por_estado_query.filter(Pago.fecha_pago >= datetime.combine(fecha_inicio, datetime.min.time()))
         if fecha_fin:
-            where_conditions.append("fecha_pago::timestamp <= :fecha_fin")
-            params["fecha_fin"] = datetime.combine(fecha_fin, datetime.max.time())
-
-        where_clause = " AND ".join(where_conditions)
-
-        total_pagado_query = db.execute(
-            text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_clause}").bindparams(
-                **params
+            pagos_por_estado_query = pagos_por_estado_query.filter(Pago.fecha_pago <= datetime.combine(fecha_fin, datetime.max.time()))
+        if analista or concesionario or modelo:
+            pagos_por_estado_query = pagos_por_estado_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            pagos_por_estado_query = FiltrosDashboard.aplicar_filtros_pago(
+                pagos_por_estado_query,
+                analista,
+                concesionario,
+                modelo,
+                fecha_inicio,
+                fecha_fin,
             )
+        pagos_por_estado = pagos_por_estado_query.group_by(Pago.estado).all()
+
+        # Monto total pagado usando ORM
+        total_pagado_query = (
+            db.query(func.sum(Pago.monto_pagado))
+            .filter(Pago.activo == True, Pago.monto_pagado.isnot(None))
         )
+        if fecha_inicio:
+            total_pagado_query = total_pagado_query.filter(Pago.fecha_pago >= datetime.combine(fecha_inicio, datetime.min.time()))
+        if fecha_fin:
+            total_pagado_query = total_pagado_query.filter(Pago.fecha_pago <= datetime.combine(fecha_fin, datetime.max.time()))
+        if analista or concesionario or modelo:
+            total_pagado_query = total_pagado_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            total_pagado_query = FiltrosDashboard.aplicar_filtros_pago(
+                total_pagado_query,
+                analista,
+                concesionario,
+                modelo,
+                fecha_inicio,
+                fecha_fin,
+            )
         total_pagado = Decimal(str(total_pagado_query.scalar() or 0))
 
-        # Pagos del día actual (convertir fecha_pago TEXT a timestamp)
-        where_hoy = where_clause + " AND DATE(fecha_pago::timestamp) = :hoy"
-        params_hoy = {**params, "hoy": hoy}
-        pagos_hoy_query = db.execute(
-            text(f"SELECT COALESCE(SUM(monto_pagado::numeric), 0) FROM pagos_staging WHERE {where_hoy}").bindparams(
-                **params_hoy
-            )
+        # Pagos del día actual
+        pagos_hoy_query = (
+            db.query(func.sum(Pago.monto_pagado))
+            .filter(Pago.activo == True, Pago.monto_pagado.isnot(None), func.date(Pago.fecha_pago) == hoy)
         )
+        if analista or concesionario or modelo:
+            pagos_hoy_query = pagos_hoy_query.join(Prestamo, Pago.prestamo_id == Prestamo.id)
+            pagos_hoy_query = FiltrosDashboard.aplicar_filtros_pago(
+                pagos_hoy_query,
+                analista,
+                concesionario,
+                modelo,
+                fecha_inicio,
+                fecha_fin,
+            )
         pagos_hoy = Decimal(str(pagos_hoy_query.scalar() or 0))
 
         # ✅ Cuotas pagadas vs pendientes - usar FiltrosDashboard
