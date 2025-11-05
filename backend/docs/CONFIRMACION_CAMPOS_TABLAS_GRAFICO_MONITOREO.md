@@ -65,13 +65,17 @@ query_nuevos = (
 
 ### 2. **Cuotas Programadas por Mes** (Línea Púrpura Punteada)
 
+**✅ CONFIRMADO: SUMA EN DÓLARES** (NO cuenta cuotas)
+
 **Tabla:** `cuotas`
 
-**Campo Principal:** `monto_cuota`
+**Campo Principal:** `monto_cuota` (SUMA de montos, no COUNT de cuotas)
 
 **Campo de Agrupación:** `fecha_vencimiento`
 
 **Tabla Relacionada:** `prestamos` (JOIN)
+
+**Operación:** `SUM(monto_cuota)` - Suma los montos en dólares de todas las cuotas que vencen en cada mes
 
 **Filtros:**
 - `prestamos.estado = 'APROBADO'`
@@ -83,7 +87,7 @@ query_nuevos = (
 SELECT 
     EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
     EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
-    SUM(c.monto_cuota) as total_cuotas_programadas
+    SUM(c.monto_cuota) as total_cuotas_programadas  -- ✅ SUM, no COUNT
 FROM cuotas c
 INNER JOIN prestamos p ON c.prestamo_id = p.id
 WHERE p.estado = 'APROBADO'
@@ -102,7 +106,7 @@ query_cuotas = (
     db.query(
         func.extract("year", Cuota.fecha_vencimiento).label("año"),
         func.extract("month", Cuota.fecha_vencimiento).label("mes"),
-        func.sum(Cuota.monto_cuota).label("total_cuotas_programadas"),
+        func.sum(Cuota.monto_cuota).label("total_cuotas_programadas"),  # ✅ SUM, no COUNT
     )
     .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
     .filter(
@@ -114,7 +118,9 @@ query_cuotas = (
 )
 ```
 
-**Campo Usado en Gráfico:** `total_cuotas_programadas` (suma de `monto_cuota`)
+**Campo Usado en Gráfico:** `total_cuotas_programadas` (suma en dólares de `monto_cuota`)
+
+**⚠️ IMPORTANTE:** Esta línea **SUMA** los montos en dólares de todas las cuotas programadas que vencen en cada mes, **NO cuenta** el número de cuotas. Es el total monetario de pagos programados para ese mes.
 
 ---
 
@@ -288,7 +294,7 @@ query_morosidad_sql = text(
 | Línea | Tabla Principal | Campo Monto | Campo Fecha | Filtros Principales |
 |-------|----------------|-------------|-------------|---------------------|
 | **Total Financiamiento** | `prestamos` | `total_financiamiento` | `fecha_aprobacion` | `estado = 'APROBADO'` |
-| **Cuotas Programadas** | `cuotas` | `monto_cuota` | `fecha_vencimiento` | `prestamos.estado = 'APROBADO'` |
+| **Cuotas Programadas** | `cuotas` | `monto_cuota` (SUM) | `fecha_vencimiento` | `prestamos.estado = 'APROBADO'` |
 | **Monto Pagado** | `pagos` | `monto_pagado` | `fecha_pago` | `activo = TRUE`, `monto_pagado > 0` |
 | **Morosidad** | `cuotas` | `monto_cuota` | `fecha_vencimiento <= ultimo_dia_mes` | `estado != 'PAGADO'`, `prestamos.estado = 'APROBADO'` |
 

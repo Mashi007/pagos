@@ -2965,23 +2965,51 @@ def obtener_evolucion_general_mensual(
             if ultimos_dias_lista:
                 fecha_ultima_morosidad = max(ultimos_dias_lista)
                 
-                # Query optimizada: calcular morosidad para cada mes usando CASE WHEN
-                # Agrupar cuotas vencidas por el mes en que estaban vencidas
+                # ✅ CORRECCIÓN: Query optimizada: calcular morosidad REAL restando pagos aplicados
+                # Morosidad = Cuotas vencidas - Pagos aplicados a cuotas vencidas
                 query_morosidad_optimizada = db.execute(
                     text(
                         """
+                        WITH cuotas_vencidas AS (
+                            SELECT 
+                                EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
+                                EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
+                                COALESCE(SUM(c.monto_cuota), 0) as total_cuotas_vencidas
+                            FROM cuotas c
+                            INNER JOIN prestamos p ON c.prestamo_id = p.id
+                            WHERE p.estado = 'APROBADO'
+                              AND c.fecha_vencimiento <= :fecha_limite
+                              AND c.estado != 'PAGADO'
+                            GROUP BY 
+                                EXTRACT(YEAR FROM c.fecha_vencimiento),
+                                EXTRACT(MONTH FROM c.fecha_vencimiento)
+                        ),
+                        pagos_aplicados AS (
+                            SELECT 
+                                EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
+                                EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
+                                COALESCE(SUM(pc.monto_aplicado), 0) as total_pagado
+                            FROM pago_cuotas pc
+                            INNER JOIN cuotas c ON pc.cuota_id = c.id
+                            INNER JOIN prestamos p ON c.prestamo_id = p.id
+                            INNER JOIN pagos pa ON pc.pago_id = pa.id
+                            WHERE c.fecha_vencimiento <= :fecha_limite
+                              AND c.estado != 'PAGADO'
+                              AND p.estado = 'APROBADO'
+                              AND pa.fecha_pago <= :fecha_limite
+                              AND pa.activo = TRUE
+                              AND pa.monto_pagado > 0
+                            GROUP BY 
+                                EXTRACT(YEAR FROM c.fecha_vencimiento),
+                                EXTRACT(MONTH FROM c.fecha_vencimiento)
+                        )
                         SELECT 
-                            EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
-                            EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
-                            COALESCE(SUM(c.monto_cuota), 0) as morosidad
-                        FROM cuotas c
-                        INNER JOIN prestamos p ON c.prestamo_id = p.id
-                        WHERE p.estado = 'APROBADO'
-                          AND c.fecha_vencimiento <= :fecha_limite
-                          AND c.estado != 'PAGADO'
-                        GROUP BY 
-                            EXTRACT(YEAR FROM c.fecha_vencimiento),
-                            EXTRACT(MONTH FROM c.fecha_vencimiento)
+                            cv.año,
+                            cv.mes,
+                            GREATEST(0, cv.total_cuotas_vencidas - COALESCE(pa.total_pagado, 0)) as morosidad
+                        FROM cuotas_vencidas cv
+                        LEFT JOIN pagos_aplicados pa ON cv.año = pa.año AND cv.mes = pa.mes
+                        ORDER BY cv.año, cv.mes
                         """
                     ).bindparams(fecha_limite=fecha_ultima_morosidad)
                 )
@@ -3587,8 +3615,9 @@ def obtener_financiamiento_tendencia_mensual(
 
         where_join = " AND " + " AND ".join(filtros_join) if filtros_join else ""
 
-        # Query SQL optimizada: calcular morosidad acumulada al final de cada mes
-        # La morosidad es la suma de todas las cuotas vencidas (fecha_vencimiento <= ultimo_dia_mes) no pagadas
+        # ✅ CORRECCIÓN: Query SQL optimizada: calcular morosidad REAL restando pagos aplicados
+        # La morosidad es: cuotas vencidas - pagos aplicados a cuotas vencidas hasta el final del mes
+        # Esto permite que la morosidad DISMINUYA cuando hay cobros
         query_morosidad_sql = text(
             f"""
             WITH meses AS (
@@ -3605,16 +3634,43 @@ def obtener_financiamiento_tendencia_mensual(
                     EXTRACT(MONTH FROM fecha_mes)::int as mes,
                     (fecha_mes + INTERVAL '1 month - 1 day')::date as ultimo_dia_mes
                 FROM meses
+            ),
+            cuotas_vencidas AS (
+                SELECT 
+                    m.año,
+                    m.mes,
+                    COALESCE(SUM(c.monto_cuota), 0) as total_cuotas_vencidas
+                FROM meses_completos m
+                LEFT JOIN cuotas c ON c.fecha_vencimiento <= m.ultimo_dia_mes AND c.estado != 'PAGADO'
+                LEFT JOIN prestamos p ON c.prestamo_id = p.id AND p.estado = 'APROBADO'{where_join}
+                GROUP BY m.año, m.mes
+            ),
+            pagos_aplicados AS (
+                SELECT 
+                    m.año,
+                    m.mes,
+                    COALESCE(SUM(pc.monto_aplicado), 0) as total_pagado
+                FROM meses_completos m
+                LEFT JOIN pago_cuotas pc ON pc.pago_id IN (
+                    SELECT id FROM pagos 
+                    WHERE fecha_pago <= m.ultimo_dia_mes 
+                      AND activo = TRUE 
+                      AND monto_pagado > 0
+                )
+                LEFT JOIN cuotas c_pago ON pc.cuota_id = c_pago.id
+                LEFT JOIN prestamos p_pago ON c_pago.prestamo_id = p_pago.id
+                WHERE c_pago.fecha_vencimiento <= m.ultimo_dia_mes
+                  AND c_pago.estado != 'PAGADO'
+                  AND p_pago.estado = 'APROBADO'
+                GROUP BY m.año, m.mes
             )
             SELECT 
-                m.año,
-                m.mes,
-                COALESCE(SUM(c.monto_cuota), 0) as morosidad
-            FROM meses_completos m
-            LEFT JOIN cuotas c ON c.fecha_vencimiento <= m.ultimo_dia_mes AND c.estado != 'PAGADO'
-            LEFT JOIN prestamos p ON c.prestamo_id = p.id AND p.estado = 'APROBADO'{where_join}
-            GROUP BY m.año, m.mes
-            ORDER BY m.año, m.mes
+                cv.año,
+                cv.mes,
+                GREATEST(0, cv.total_cuotas_vencidas - COALESCE(pa.total_pagado, 0)) as morosidad
+            FROM cuotas_vencidas cv
+            LEFT JOIN pagos_aplicados pa ON cv.año = pa.año AND cv.mes = pa.mes
+            ORDER BY cv.año, cv.mes
         """
         )
 
@@ -3642,7 +3698,9 @@ def obtener_financiamiento_tendencia_mensual(
                     fecha_mes_fin_temp = _obtener_fechas_mes_siguiente(mes_temp, año_temp)
                     ultimo_dia_mes_temp = fecha_mes_fin_temp - timedelta(days=1)
 
-                    query_morosidad = (
+                    # ✅ CORRECCIÓN: Calcular morosidad restando pagos aplicados
+                    # Cuotas vencidas
+                    query_cuotas_vencidas = (
                         db.query(func.sum(Cuota.monto_cuota))
                         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                         .filter(
@@ -3651,10 +3709,34 @@ def obtener_financiamiento_tendencia_mensual(
                             Cuota.estado != "PAGADO",
                         )
                     )
-                    query_morosidad = FiltrosDashboard.aplicar_filtros_cuota(
-                        query_morosidad, analista, concesionario, modelo, None, None
+                    query_cuotas_vencidas = FiltrosDashboard.aplicar_filtros_cuota(
+                        query_cuotas_vencidas, analista, concesionario, modelo, None, None
                     )
-                    morosidad_valor = float(query_morosidad.scalar() or Decimal("0"))
+                    total_cuotas_vencidas = float(query_cuotas_vencidas.scalar() or Decimal("0"))
+                    
+                    # Pagos aplicados a cuotas vencidas hasta el final del mes
+                    fecha_ultimo_dia_dt = datetime.combine(ultimo_dia_mes_temp, datetime.max.time())
+                    query_pagos_aplicados = db.execute(
+                        text(
+                            """
+                            SELECT COALESCE(SUM(pc.monto_aplicado), 0)
+                            FROM pago_cuotas pc
+                            INNER JOIN cuotas c ON pc.cuota_id = c.id
+                            INNER JOIN prestamos p ON c.prestamo_id = p.id
+                            INNER JOIN pagos pa ON pc.pago_id = pa.id
+                            WHERE c.fecha_vencimiento <= :fecha_limite
+                              AND c.estado != 'PAGADO'
+                              AND p.estado = 'APROBADO'
+                              AND pa.fecha_pago <= :fecha_limite
+                              AND pa.activo = TRUE
+                              AND pa.monto_pagado > 0
+                            """
+                        ).bindparams(fecha_limite=fecha_ultimo_dia_dt)
+                    )
+                    total_pagado = float(query_pagos_aplicados.scalar() or Decimal("0"))
+                    
+                    # Morosidad = Cuotas vencidas - Pagos aplicados
+                    morosidad_valor = max(0.0, total_cuotas_vencidas - total_pagado)
                     morosidad_por_mes[(año_temp, mes_temp)] = morosidad_valor
                     temp_date = fecha_mes_fin_temp
                 except Exception as fallback_error:
@@ -4060,74 +4142,6 @@ def obtener_evolucion_pagos(
         logger.error(f"Error obteniendo evolución de pagos: {e}", exc_info=True)
         try:
             db.rollback()  # ✅ Rollback para restaurar transacción después de error
-        except Exception:
-            pass
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
-
-
-@router.get("/porcentaje-prestamos-aprobados")
-def obtener_porcentaje_prestamos_aprobados(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Calcula el porcentaje de préstamos que tienen estado APROBADO.
-    
-    Returns:
-        - total_prestamos: Total de préstamos en el sistema
-        - prestamos_aprobados: Cantidad de préstamos con estado APROBADO
-        - prestamos_no_aprobados: Cantidad de préstamos con otros estados
-        - porcentaje_aprobados: Porcentaje de préstamos aprobados (0-100)
-        - porcentaje_no_aprobados: Porcentaje de préstamos no aprobados (0-100)
-        - distribucion_por_estado: Desglose de préstamos por cada estado
-    """
-    try:
-        # Calcular totales y porcentajes
-        total_prestamos = db.query(Prestamo).count()
-        prestamos_aprobados = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
-        prestamos_no_aprobados = total_prestamos - prestamos_aprobados
-        
-        # Calcular porcentajes
-        porcentaje_aprobados = (
-            round((prestamos_aprobados / total_prestamos * 100), 2) if total_prestamos > 0 else 0.0
-        )
-        porcentaje_no_aprobados = (
-            round((prestamos_no_aprobados / total_prestamos * 100), 2) if total_prestamos > 0 else 0.0
-        )
-        
-        # Obtener distribución por estado
-        distribucion_query = (
-            db.query(
-                Prestamo.estado,
-                func.count(Prestamo.id).label("cantidad")
-            )
-            .group_by(Prestamo.estado)
-            .order_by(func.count(Prestamo.id).desc())
-            .all()
-        )
-        
-        distribucion_por_estado = [
-            {
-                "estado": row.estado or "Sin Estado",
-                "cantidad": row.cantidad,
-                "porcentaje": round((row.cantidad / total_prestamos * 100), 2) if total_prestamos > 0 else 0.0
-            }
-            for row in distribucion_query
-        ]
-        
-        return {
-            "total_prestamos": total_prestamos,
-            "prestamos_aprobados": prestamos_aprobados,
-            "prestamos_no_aprobados": prestamos_no_aprobados,
-            "porcentaje_aprobados": porcentaje_aprobados,
-            "porcentaje_no_aprobados": porcentaje_no_aprobados,
-            "distribucion_por_estado": distribucion_por_estado
-        }
-        
-    except Exception as e:
-        logger.error(f"Error calculando porcentaje de préstamos aprobados: {e}", exc_info=True)
-        try:
-            db.rollback()
         except Exception:
             pass
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
