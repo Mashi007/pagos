@@ -1321,13 +1321,14 @@ export function DashboardMenu() {
                     ) : datosFinanciamientoRangos && datosFinanciamientoRangos.rangos.length > 0 ? (
                       (() => {
                         // Calcular máximo y mínimo de los datos para ajustar escala automáticamente
-                        const valores = datosFinanciamientoRangos.rangos.map(r => r.monto_total || 0)
+                        // ✅ Usar cantidad_prestamos en lugar de monto_total
+                        const valores = datosFinanciamientoRangos.rangos.map(r => r.cantidad_prestamos || 0)
                         const maxValor = Math.max(...valores)
                         const valoresNoCero = valores.filter(v => v > 0)
                         const minValor = valoresNoCero.length > 0 ? Math.min(...valoresNoCero) : 0
                         
-                        // Calcular dominio con padding inteligente (10% o mínimo 1000, lo que sea mayor)
-                        const padding = Math.max(maxValor * 0.1, 1000)
+                        // Calcular dominio con padding inteligente (10% o mínimo 1, lo que sea mayor)
+                        const padding = Math.max(maxValor * 0.1, 1)
                         const dominioMax = maxValor + padding
                         const dominioMin = 0 // Siempre empezar desde 0 para mejor visualización
                         
@@ -1361,10 +1362,11 @@ export function DashboardMenu() {
                                 type="number" 
                                 stroke="#6b7280"
                                 domain={[dominioMin, dominioMax]}
-                                tickFormatter={(value) => formatCurrency(value)}
+                                tickFormatter={(value) => value.toLocaleString('es-EC')}
                                 style={{ fontSize: '12px', fontWeight: 500 }}
                                 tick={{ fill: '#6b7280' }}
                                 allowDataOverflow={false}
+                                label={{ value: 'Cantidad de Créditos Aprobados', position: 'insideBottom', offset: -5, style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px', fontWeight: 600 } }}
                               />
                               <YAxis 
                                 type="category" 
@@ -1375,11 +1377,11 @@ export function DashboardMenu() {
                               />
                           <Tooltip
                             formatter={(value: number, name: string, props: any) => {
-                              if (name === 'monto_total') {
+                              if (name === 'cantidad_prestamos') {
                                 return [
-                                  formatCurrency(value),
-                                  `Porcentaje: ${props.payload.porcentaje_monto.toFixed(1)}%`,
-                                  `Cantidad: ${props.payload.cantidad_prestamos} préstamos`,
+                                  `${value.toLocaleString('es-EC')} créditos`,
+                                  `Monto Total: ${formatCurrency(props.payload.monto_total)}`,
+                                  `Porcentaje: ${props.payload.porcentaje_cantidad.toFixed(1)}%`,
                                 ]
                               }
                               return value
@@ -1389,13 +1391,17 @@ export function DashboardMenu() {
                               border: '1px solid #e5e7eb',
                               borderRadius: '8px',
                             }}
+                            labelStyle={{
+                              fontWeight: 600,
+                              marginBottom: '4px',
+                            }}
                           />
                               <Legend />
                               <Bar
-                                dataKey="monto_total"
+                                dataKey="cantidad_prestamos"
                                 fill="#f97316"
                                 radius={[0, 8, 8, 0]}
-                                name="Total Financiamiento"
+                                name="Créditos Aprobados"
                               >
                                 {rangosOrdenados.map((entry, index) => (
                                   <Cell
