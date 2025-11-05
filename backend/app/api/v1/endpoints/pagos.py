@@ -200,7 +200,7 @@ def _serializar_pago(pago, _hoy: date, cuotas_atrasadas_cache: Optional[dict[str
         if hasattr(pago, "monto_pagado") and pago.monto_pagado:
             monto_pagado_decimal = _convertir_monto_pagado(pago.monto_pagado, pago.id)
 
-        cedula_cliente = getattr(pago, "cedula_cliente", "")
+        cedula_cliente = getattr(pago, "cedula", "")  # Unificado: ahora usa 'cedula' en lugar de 'cedula_cliente'
         cuotas_atrasadas = _obtener_cuotas_atrasadas(cedula_cliente, cuotas_atrasadas_cache, pago.id)
 
         # Obtener valores de conciliación del pago (si existen)
@@ -211,7 +211,7 @@ def _serializar_pago(pago, _hoy: date, cuotas_atrasadas_cache: Optional[dict[str
 
         pago_dict = {
             "id": pago.id,
-            "cedula_cliente": cedula_cliente,
+            "cedula": cedula_cliente,  # Unificado: ahora usa 'cedula' en lugar de 'cedula_cliente'
             "prestamo_id": None,
             "fecha_pago": fecha_pago_dt,
             "monto_pagado": float(monto_pagado_decimal),
@@ -239,7 +239,7 @@ def _serializar_pago(pago, _hoy: date, cuotas_atrasadas_cache: Optional[dict[str
             f"❌ [listar_pagos] Error serializando pago ID {getattr(pago, 'id', 'N/A')}: {error_detail}",
             exc_info=True,
         )
-        cedula_cliente = getattr(pago, "cedula_cliente", None)
+        cedula_cliente = getattr(pago, "cedula", None)  # Unificado: ahora usa 'cedula'
         logger.error(f"   Datos del pago: cedula={cedula_cliente}")
         logger.error(f"   fecha_pago={getattr(pago, 'fecha_pago', 'N/A')} (tipo: {type(getattr(pago, 'fecha_pago', None))})")
         logger.error(
@@ -367,7 +367,7 @@ def _verificar_query_compleja(db: Session, diagnostico: dict):
             return
 
         primer_pago = pagos_test[0]
-        if not primer_pago.cedula_cliente:
+        if not primer_pago.cedula:  # Unificado: ahora usa 'cedula'
             diagnostico["verificaciones"]["query_compleja"] = {
                 "status": "ok",
                 "mensaje": f"Query compleja exitosa - {len(pagos_test)} pagos obtenidos, primer pago sin cédula",
@@ -378,7 +378,7 @@ def _verificar_query_compleja(db: Session, diagnostico: dict):
             p.id
             for p in db.query(Prestamo.id)
             .filter(
-                Prestamo.cedula == primer_pago.cedula_cliente,
+                Prestamo.cedula == primer_pago.cedula,  # Unificado: ahora usa 'cedula'
                 Prestamo.estado == "APROBADO",
             )
             .all()
@@ -408,7 +408,7 @@ def _verificar_query_compleja(db: Session, diagnostico: dict):
             "mensaje": f"Query compleja exitosa - {len(pagos_test)} pagos obtenidos, cálculo de cuotas atrasadas OK",
             "ejemplo": {
                 "pago_id": primer_pago.id,
-                "cedula": primer_pago.cedula_cliente,
+                "cedula": primer_pago.cedula,  # Unificado: ahora usa 'cedula'
                 "prestamos_encontrados": len(prestamos_ids),
                 "cuotas_atrasadas": cuotas_atrasadas,
             },
@@ -578,7 +578,7 @@ def _obtener_pagos_paginados(db: Session, page: int, per_page: int) -> list:
 
 def _serializar_pagos_con_cache(pagos: list, db: Session, hoy: date) -> list:
     """Serializa una lista de pagos usando cache de cuotas atrasadas"""
-    cedulas_unicas = list(set(p.cedula_cliente for p in pagos if p.cedula_cliente))
+    cedulas_unicas = list(set(p.cedula for p in pagos if p.cedula))  # Unificado: ahora usa 'cedula'
     cuotas_atrasadas_cache = _calcular_cuotas_atrasadas_batch(db, cedulas_unicas, hoy)
 
     pagos_serializados = []
@@ -656,7 +656,7 @@ def crear_pago(
     """
     try:
         # Verificar que el cliente existe
-        cliente = db.query(Cliente).filter(Cliente.cedula == pago_data.cedula_cliente).first()
+        cliente = db.query(Cliente).filter(Cliente.cedula == pago_data.cedula).first()  # Unificado: ahora usa 'cedula'
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
@@ -1157,9 +1157,9 @@ def _verificar_prestamo_y_cedula(pago: Pago, db: Session) -> tuple[bool, Optiona
         logger.error(f"❌ [aplicar_pago_a_cuotas] Préstamo {pago.prestamo_id} no encontrado")
         return False, None
 
-    if pago.cedula_cliente and prestamo.cedula and pago.cedula_cliente != prestamo.cedula:
+    if pago.cedula and prestamo.cedula and pago.cedula != prestamo.cedula:  # Unificado: ahora usa 'cedula'
         logger.error(
-            f"❌ [aplicar_pago_a_cuotas] Cédula del pago ({pago.cedula_cliente}) "
+            f"❌ [aplicar_pago_a_cuotas] Cédula del pago ({pago.cedula}) "
             f"no coincide con cédula del préstamo ({prestamo.cedula}). No se aplicará el pago a las cuotas."
         )
         return False, None
@@ -1229,7 +1229,7 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
 
     logger.info(
         f"🔄 [aplicar_pago_a_cuotas] Aplicando pago ID {pago.id} "
-        f"(monto: ${pago.monto_pagado}, prestamo_id: {pago.prestamo_id}, cedula: {pago.cedula_cliente})"
+        f"(monto: ${pago.monto_pagado}, prestamo_id: {pago.prestamo_id}, cedula: {pago.cedula})"  # Unificado: ahora usa 'cedula'
     )
 
     cuotas = _obtener_cuotas_pendientes(db, pago.prestamo_id)

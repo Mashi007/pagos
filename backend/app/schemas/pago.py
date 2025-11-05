@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, field_serializer, field_validator
 class PagoBase(BaseModel):
     """Schema base para pagos"""
 
-    cedula_cliente: str = Field(..., description="Cédula del cliente")
+    cedula: str = Field(..., description="Cédula del cliente")  # Unificado con clientes y prestamos
     prestamo_id: int | None = Field(None, description="ID del préstamo")
     fecha_pago: Union[date, datetime, str] = Field(..., description="Fecha de pago")
     monto_pagado: Decimal = Field(..., description="Monto pagado")

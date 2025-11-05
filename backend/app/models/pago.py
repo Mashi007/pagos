@@ -23,7 +23,7 @@ class Pago(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # DATOS DEL CLIENTE
-    cedula_cliente = Column(String(CEDULA_LENGTH), nullable=False, index=True)
+    cedula = Column(String(CEDULA_LENGTH), nullable=False, index=True)  # Unificado con clientes y prestamos
 
     # DATOS DEL PAGO
     prestamo_id = Column(Integer, nullable=True, index=True)  # ID del crédito
@@ -63,4 +63,4 @@ class Pago(Base):
     # cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True)
 
     def __repr__(self):
-        return f"<Pago(id={self.id}, cedula={self.cedula_cliente}, monto={self.monto_pagado}, conciliado={self.conciliado})>"
+        return f"<Pago(id={self.id}, cedula={self.cedula}, monto={self.monto_pagado}, conciliado={self.conciliado})>"
