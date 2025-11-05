@@ -1321,39 +1321,49 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
     # OPTIMIZACIÓN 1: Combinar ambas queries de pagos_staging en una sola
     # Esto reduce de 2 queries a 1 y aprovecha mejor los índices
     start_pagos = time.time()
-    pagos_query = db.execute(
-        text(
+    monto_cobrado_mes = Decimal("0")
+    monto_no_definido = Decimal("0")
+    
+    try:
+        pagos_query = db.execute(
+            text(
+                """
+                SELECT 
+                    COALESCE(SUM(monto_pagado::numeric), 0) AS monto_total,
+                    COALESCE(SUM(
+                        CASE 
+                            WHEN (
+                                conciliado IS FALSE
+                                OR conciliado IS NULL
+                                OR numero_documento IS NULL
+                                OR numero_documento = ''
+                                OR UPPER(TRIM(numero_documento)) = 'NO DEFINIDO'
+                            ) THEN monto_pagado::numeric
+                            ELSE 0
+                        END
+                    ), 0) AS monto_no_definido
+                FROM pagos_staging
+                WHERE fecha_pago IS NOT NULL
+                  AND fecha_pago != ''
+                  AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
+                  AND fecha_pago::timestamp >= :fecha_inicio
+                  AND fecha_pago::timestamp < :fecha_fin
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado != ''
+                  AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+                  AND monto_pagado::numeric >= 0
             """
-            SELECT 
-                COALESCE(SUM(monto_pagado::numeric), 0) AS monto_total,
-                COALESCE(SUM(
-                    CASE 
-                        WHEN (
-                            conciliado IS FALSE
-                            OR conciliado IS NULL
-                            OR numero_documento IS NULL
-                            OR numero_documento = ''
-                            OR UPPER(TRIM(numero_documento)) = 'NO DEFINIDO'
-                        ) THEN monto_pagado::numeric
-                        ELSE 0
-                    END
-                ), 0) AS monto_no_definido
-            FROM pagos_staging
-            WHERE fecha_pago IS NOT NULL
-              AND fecha_pago != ''
-              AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'
-              AND fecha_pago::timestamp >= :fecha_inicio
-              AND fecha_pago::timestamp < :fecha_fin
-              AND monto_pagado IS NOT NULL
-              AND monto_pagado != ''
-              AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
-              AND monto_pagado::numeric >= 0
-        """
-        ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
-    )
-    pagos_result = pagos_query.fetchone()
-    monto_cobrado_mes = Decimal(str(pagos_result[0] or 0))
-    monto_no_definido = Decimal(str(pagos_result[1] or 0))
+            ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+        )
+        pagos_result = pagos_query.fetchone()
+        monto_cobrado_mes = Decimal(str(pagos_result[0] or 0))
+        monto_no_definido = Decimal(str(pagos_result[1] or 0))
+    except Exception as e:
+        logger.warning(f"⚠️ [kpis_pagos] Error consultando pagos_staging: {e}, usando valores por defecto")
+        # Si la tabla no existe o hay error, usar valores por defecto (0)
+        monto_cobrado_mes = Decimal("0")
+        monto_no_definido = Decimal("0")
+    
     tiempo_pagos = int((time.time() - start_pagos) * 1000)
     logger.info(
         f"💰 [kpis_pagos] Monto cobrado: ${monto_cobrado_mes:,.2f}, NO DEFINIDO: ${monto_no_definido:,.2f} ({tiempo_pagos}ms)"
