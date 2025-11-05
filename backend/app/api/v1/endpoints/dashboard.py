@@ -2609,10 +2609,10 @@ def obtener_financiamiento_por_rangos(
             # Formatear etiqueta: $0 - $500, $500 - $1000, etc.
             categoria = f"${min_val:,.0f} - ${max_val:,.0f}".replace(",", "")
             rangos.append((min_val, max_val, categoria))
-        
+
         # Agregar rango final para montos mayores a $50,000 (al inicio para que quede primero)
         rangos.insert(0, (max_rango, None, f"${max_rango:,.0f}+".replace(",", "")))
-        
+
         # Invertir lista para que quede de mayor a menor (efecto pirámide)
         rangos.reverse()
 
@@ -3601,14 +3601,14 @@ def obtener_financiamiento_tendencia_mensual(
             # ✅ NUEVO CÁLCULO: Morosidad = diferencia entre Cuotas Programadas y Monto Pagado
             # Diferencia del mes = Cuotas Programadas - Monto Pagado
             diferencia_mes = Decimal(str(monto_cuotas_programadas)) - Decimal(str(monto_pagado_mes))
-            
+
             # ✅ Acumular morosidad: si hay saldo positivo, se suma; si hay excedente (negativo), se resta
             morosidad_acumulada += diferencia_mes
-            
+
             # ✅ La morosidad nunca puede ser negativa (mínimo 0)
             if morosidad_acumulada < 0:
                 morosidad_acumulada = Decimal("0")
-            
+
             morosidad_mes = float(morosidad_acumulada)
 
             # Calcular acumulado: sumar los nuevos financiamientos del mes
