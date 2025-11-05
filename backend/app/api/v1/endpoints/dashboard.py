@@ -1947,7 +1947,7 @@ def obtener_cobranzas_mensuales(
     import time
 
     start_time = time.time()
-    
+
     try:
         hoy = date.today()
         nombres_meses = [
@@ -2728,25 +2728,13 @@ def obtener_composicion_morosidad(
             total_cuotas += 1
 
         # Definir el orden deseado de las categorías
-        orden_categorias = [
-            "0-5 días",
-            "5-15 días",
-            "1-2 meses",
-            "2-3 meses",
-            "4-6 meses",
-            "6 meses - 1 año",
-            "Más de 1 año"
-        ]
+        orden_categorias = ["0-5 días", "5-15 días", "1-2 meses", "2-3 meses", "4-6 meses", "6 meses - 1 año", "Más de 1 año"]
 
         # Convertir a lista de puntos para el gráfico de barras, manteniendo el orden
         puntos = []
         for categoria in orden_categorias:
             datos = puntos_por_categoria.get(categoria, {"monto": Decimal("0"), "cantidad": 0})
-            puntos.append({
-                "categoria": categoria,
-                "monto": float(datos["monto"]),
-                "cantidad_cuotas": datos["cantidad"]
-            })
+            puntos.append({"categoria": categoria, "monto": float(datos["monto"]), "cantidad_cuotas": datos["cantidad"]})
 
         return {
             "puntos": puntos,  # Lista de {categoria, monto, cantidad_cuotas}
@@ -3601,7 +3589,7 @@ def obtener_financiamiento_tendencia_mensual(
         # Para cada mes, calcular la morosidad real: cuotas con fecha_vencimiento <= último_día_mes y estado != 'PAGADO'
         start_morosidad = time.time()
         morosidad_por_mes = {}
-        
+
         # Construir filtros base para morosidad
         filtros_morosidad_base = ["p.estado = 'APROBADO'", "c.estado != 'PAGADO'"]
         params_morosidad_base = {}
