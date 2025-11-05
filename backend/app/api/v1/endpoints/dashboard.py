@@ -931,12 +931,20 @@ def dashboard_administrador(
         # cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
 
         # 15. CÁLCULO DE PERÍODOS ANTERIORES
-        fecha_inicio_periodo, fecha_fin_periodo_anterior = _calcular_periodos(periodo, hoy)
+        try:
+            fecha_inicio_periodo, fecha_fin_periodo_anterior = _calcular_periodos(periodo, hoy)
 
-        # Cartera anterior - Calcular desde BD histórica
-        cartera_anterior_val = _calcular_cartera_anterior(
-            db, periodo, fecha_fin_periodo_anterior, analista, concesionario, modelo, cartera_total
-        )
+            # Cartera anterior - Calcular desde BD histórica
+            cartera_anterior_val = _calcular_cartera_anterior(
+                db, periodo, fecha_fin_periodo_anterior, analista, concesionario, modelo, cartera_total
+            )
+        except Exception as e:
+            logger.warning(f"Error calculando períodos anteriores: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            cartera_anterior_val = float(cartera_total)
 
         # 16. TOTAL COBRADO EN EL MES ACTUAL - SOLO PAGOS CONCILIADOS
         año_actual = hoy.year
@@ -944,25 +952,57 @@ def dashboard_administrador(
         primer_dia_mes = date(año_actual, mes_actual, 1)
         ultimo_dia_mes = date(año_actual, mes_actual, monthrange(año_actual, mes_actual)[1])
 
-        total_cobrado_periodo = _calcular_total_cobrado_mes(
-            db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo
-        )
+        try:
+            total_cobrado_periodo = _calcular_total_cobrado_mes(
+                db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo
+            )
+        except Exception as e:
+            logger.warning(f"Error calculando total cobrado período: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            total_cobrado_periodo = Decimal("0")
 
         # Total cobrado mes anterior
-        mes_anterior, año_anterior = _calcular_mes_anterior(mes_actual, año_actual)
-        primer_dia_mes_anterior, ultimo_dia_mes_anterior = _obtener_fechas_mes(mes_anterior, año_anterior)
+        try:
+            mes_anterior, año_anterior = _calcular_mes_anterior(mes_actual, año_actual)
+            primer_dia_mes_anterior, ultimo_dia_mes_anterior = _obtener_fechas_mes(mes_anterior, año_anterior)
 
-        total_cobrado_anterior = _calcular_total_cobrado_mes(
-            db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
-        )
+            total_cobrado_anterior = _calcular_total_cobrado_mes(
+                db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
+            )
+        except Exception as e:
+            logger.warning(f"Error calculando total cobrado anterior: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            total_cobrado_anterior = Decimal("0")
 
         # 17. TASA DE RECUPERACIÓN MENSUAL
-        tasa_recuperacion = _calcular_tasa_recuperacion(db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo)
+        try:
+            tasa_recuperacion = _calcular_tasa_recuperacion(db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo)
+        except Exception as e:
+            logger.warning(f"Error calculando tasa recuperación: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            tasa_recuperacion = 0.0
 
         # Tasa recuperación mes anterior
-        tasa_recuperacion_anterior = _calcular_tasa_recuperacion(
-            db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
-        )
+        try:
+            tasa_recuperacion_anterior = _calcular_tasa_recuperacion(
+                db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
+            )
+        except Exception as e:
+            logger.warning(f"Error calculando tasa recuperación anterior: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            tasa_recuperacion_anterior = 0.0
 
         # 18. PROMEDIO DÍAS DE MORA
         # Calcular desde cuotas vencidas en lugar de usar campo inexistente

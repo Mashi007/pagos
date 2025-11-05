@@ -57,9 +57,9 @@
   /* Sobrescribir preflight de Tailwind para eliminar propiedades problemáticas */
   html,
   :host {
-    /* Remover -webkit-text-size-adjust del preflight de Tailwind */
-    -webkit-text-size-adjust: unset;
-    text-size-adjust: unset;
+    /* Usar valor estándar 100% en lugar de unset para evitar errores de navegador */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   
   body {
