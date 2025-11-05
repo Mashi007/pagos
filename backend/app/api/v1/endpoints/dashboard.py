@@ -3381,26 +3381,27 @@ def obtener_financiamiento_tendencia_mensual(
             primera_fecha = None
             try:
                 # Buscar primera fecha de aprobación desde 2024
-                primera_aprobacion = db.query(func.min(Prestamo.fecha_aprobacion)).filter(
-                    Prestamo.estado == "APROBADO",
-                    func.extract("year", Prestamo.fecha_aprobacion) >= 2024
-                ).scalar()
-                
+                primera_aprobacion = (
+                    db.query(func.min(Prestamo.fecha_aprobacion))
+                    .filter(Prestamo.estado == "APROBADO", func.extract("year", Prestamo.fecha_aprobacion) >= 2024)
+                    .scalar()
+                )
+
                 # Buscar primera fecha de cuota desde 2024
-                primera_cuota = db.query(func.min(Cuota.fecha_vencimiento)).join(
-                    Prestamo, Cuota.prestamo_id == Prestamo.id
-                ).filter(
-                    Prestamo.estado == "APROBADO",
-                    func.extract("year", Cuota.fecha_vencimiento) >= 2024
-                ).scalar()
-                
+                primera_cuota = (
+                    db.query(func.min(Cuota.fecha_vencimiento))
+                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                    .filter(Prestamo.estado == "APROBADO", func.extract("year", Cuota.fecha_vencimiento) >= 2024)
+                    .scalar()
+                )
+
                 # Buscar primera fecha de pago desde 2024
-                primera_pago = db.query(func.min(Pago.fecha_pago)).filter(
-                    Pago.activo == True,
-                    Pago.monto_pagado > 0,
-                    func.extract("year", Pago.fecha_pago) >= 2024
-                ).scalar()
-                
+                primera_pago = (
+                    db.query(func.min(Pago.fecha_pago))
+                    .filter(Pago.activo == True, Pago.monto_pagado > 0, func.extract("year", Pago.fecha_pago) >= 2024)
+                    .scalar()
+                )
+
                 # Encontrar la fecha más antigua entre todas
                 fechas_disponibles = [f for f in [primera_aprobacion, primera_cuota, primera_pago] if f is not None]
                 if fechas_disponibles:
@@ -3413,7 +3414,7 @@ def obtener_financiamiento_tendencia_mensual(
             except Exception as e:
                 logger.warning(f"⚠️ [financiamiento-tendencia] Error buscando primera fecha: {e}, usando enero 2024")
                 fecha_inicio_query = date(2024, 1, 1)
-        
+
         # Calcular fecha fin (hoy)
         fecha_fin_query = hoy
 
