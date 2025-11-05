@@ -102,6 +102,9 @@ def puede_cambiar_estado(prestamo: Prestamo, nuevo_estado: str, current_user: Us
 
 def aplicar_cambios_prestamo(prestamo: Prestamo, prestamo_data: PrestamoUpdate):
     """Aplica los cambios del prestamo_data al prestamo"""
+    if prestamo_data.valor_activo is not None:
+        prestamo.valor_activo = prestamo_data.valor_activo
+
     if prestamo_data.total_financiamiento is not None:
         actualizar_monto_y_cuotas(prestamo, prestamo_data.total_financiamiento)
 
@@ -225,6 +228,7 @@ def serializar_prestamo(prestamo: Prestamo) -> dict:
         "cliente_id": prestamo.cliente_id,
         "cedula": prestamo.cedula,
         "nombres": prestamo.nombres,
+        "valor_activo": getattr(prestamo, "valor_activo", None),
         "total_financiamiento": prestamo.total_financiamiento,
         "fecha_requerimiento": prestamo.fecha_requerimiento,
         "modalidad_pago": prestamo.modalidad_pago,
@@ -412,6 +416,7 @@ def _serializar_prestamo(row) -> Optional[dict]:
             "cliente_id": row.cliente_id,
             "cedula": row.cedula,
             "nombres": row.nombres,
+            "valor_activo": getattr(row, "valor_activo", None),
             "total_financiamiento": row.total_financiamiento,
             "fecha_requerimiento": row.fecha_requerimiento,
             "modalidad_pago": row.modalidad_pago,
@@ -519,6 +524,7 @@ def crear_prestamo(
             )
 
         # 2. Validar modelo de vehículo si viene y debe tener precio configurado
+        valor_activo = None
         if getattr(prestamo_data, "modelo_vehiculo", None):
             existente = (
                 db.query(ModeloVehiculo)
@@ -534,6 +540,12 @@ def crear_prestamo(
                     status_code=400,
                     detail="El modelo seleccionado no existe, está inactivo o no tiene precio configurado",
                 )
+            # Obtener el valor activo del modelo de vehículo
+            valor_activo = existente.precio
+        
+        # Si viene valor_activo en el request, usarlo (permite override manual)
+        if hasattr(prestamo_data, "valor_activo") and prestamo_data.valor_activo is not None:
+            valor_activo = prestamo_data.valor_activo
 
         # 3. Determinar número de cuotas y cuota por período
         # Si el frontend envía numero_cuotas y cuota_periodo, usarlos
@@ -553,6 +565,7 @@ def crear_prestamo(
             cliente_id=cliente.id,
             cedula=cedula_norm,
             nombres=cliente.nombres,
+            valor_activo=Decimal(valor_activo) if valor_activo is not None else None,
             total_financiamiento=prestamo_data.total_financiamiento,
             fecha_requerimiento=prestamo_data.fecha_requerimiento,
             modalidad_pago=prestamo_data.modalidad_pago,

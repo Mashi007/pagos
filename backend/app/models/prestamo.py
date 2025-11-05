@@ -33,6 +33,7 @@ class Prestamo(Base):
     # ============================================
     # DATOS DEL PRÉSTAMO
     # ============================================
+    valor_activo = Column(Numeric(15, 2), nullable=True)  # Valor del activo (vehículo)
     total_financiamiento = Column(Numeric(15, 2), nullable=False)  # Monto total
     fecha_requerimiento = Column(Date, nullable=False)  # Fecha que necesita el préstamo
     modalidad_pago = Column(String(20), nullable=False)  # MENSUAL, QUINCENAL, SEMANAL

@@ -84,6 +84,7 @@ export interface Prestamo {
   cliente_id: number
   cedula: string
   nombres: string
+  valor_activo?: number
   total_financiamiento: number
   fecha_requerimiento: string
   modalidad_pago: 'MENSUAL' | 'QUINCENAL' | 'SEMANAL'
@@ -108,6 +109,7 @@ export interface Prestamo {
 
 export interface PrestamoForm {
   cedula: string
+  valor_activo?: number
   total_financiamiento: number
   modalidad_pago: 'MENSUAL' | 'QUINCENAL' | 'SEMANAL'
   fecha_requerimiento: string

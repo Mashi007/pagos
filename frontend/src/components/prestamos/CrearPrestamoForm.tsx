@@ -87,7 +87,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     console.warn('Error cargando modelos de vehículos:', errorModelos)
   }
 
-  const [valorActivo, setValorActivo] = useState<number>(0)
+  const [valorActivo, setValorActivo] = useState<number>(prestamo?.valor_activo || 0)
   
   // Estados para validación de préstamos existentes
   const [showModalValidacion, setShowModalValidacion] = useState(false)
@@ -278,6 +278,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       // Preparar datos con numero_cuotas y cuota_periodo
       const prestamoData = {
         ...formData,
+        valor_activo: valorActivo > 0 ? valorActivo : undefined,
         // Asegurar producto/producto_financiero desde selecciones si están vacíos
         producto: formData.producto && String(formData.producto).trim() !== ''
           ? formData.producto

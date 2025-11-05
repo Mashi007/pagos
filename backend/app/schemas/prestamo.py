@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, field_serializer, field_validator
 # ============================================
 class PrestamoBase(BaseModel):
     cedula: str = Field(..., max_length=20, description="Cédula del cliente")
+    valor_activo: Optional[Decimal] = Field(None, gt=0, description="Valor del activo (vehículo)")
     total_financiamiento: Decimal = Field(..., gt=0, description="Monto total del préstamo")
     modalidad_pago: str = Field(..., max_length=20, description="MENSUAL, QUINCENAL, SEMANAL")
 
@@ -54,6 +55,7 @@ class PrestamoCreate(PrestamoBase):
 class PrestamoUpdate(BaseModel):
     """Schema para actualizar un préstamo"""
 
+    valor_activo: Optional[Decimal] = None
     total_financiamiento: Optional[Decimal] = None
     modalidad_pago: Optional[str] = None
     fecha_requerimiento: Optional[date] = None
@@ -78,6 +80,7 @@ class PrestamoResponse(PrestamoBase):
     cliente_id: int
     nombres: str
     cedula: str
+    valor_activo: Optional[Decimal] = None
     total_financiamiento: Decimal
     fecha_requerimiento: date
     modalidad_pago: str
@@ -128,6 +131,10 @@ class PrestamoResponse(PrestamoBase):
         if value and isinstance(value, date):
             return value.isoformat()
         return value
+
+    @field_serializer("valor_activo")
+    def serialize_valor_activo(self, value: Optional[Decimal]) -> Optional[float]:
+        return float(value) if value is not None else None
 
     @field_serializer("total_financiamiento")
     def serialize_total_financiamiento(self, value: Decimal) -> float:
