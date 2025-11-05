@@ -154,7 +154,11 @@ export function DashboardMenu() {
       const response = await apiClient.get(
         `/api/v1/dashboard/prestamos-por-concesionario?${queryParams.toString()}`
       ) as { concesionarios: Array<{ concesionario: string; total_prestamos: number; porcentaje: number }> }
-      return response.concesionarios.slice(0, 10) // Top 10
+      // ✅ Ordenar de mayor a menor por total_prestamos
+      const concesionariosOrdenados = response.concesionarios
+        .sort((a, b) => b.total_prestamos - a.total_prestamos)
+        .slice(0, 10) // Top 10
+      return concesionariosOrdenados
     },
     staleTime: 5 * 60 * 1000,
     enabled: true,
@@ -379,7 +383,6 @@ export function DashboardMenu() {
     queryClient.invalidateQueries({ queryKey: ['pagos-conciliados'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['financiamiento-rangos'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['composicion-morosidad'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['evolucion-general-mensual'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['cobranzas-mensuales'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['morosidad-analista'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
@@ -913,12 +916,14 @@ export function DashboardMenu() {
                   ) : datosConcesionarios && datosConcesionarios.length > 0 ? (
                     <ResponsiveContainer width="100%" height={350}>
                       <BarChart
-                        data={datosConcesionarios.map((c) => ({
-                          concesionario: c.concesionario.length > 25 ? c.concesionario.substring(0, 25) + '...' : c.concesionario,
-                          total_prestamos: c.total_prestamos,
-                          porcentaje: c.porcentaje,
-                          fullName: c.concesionario,
-                        }))}
+                        data={[...datosConcesionarios]
+                          .sort((a, b) => b.total_prestamos - a.total_prestamos) // ✅ Ordenar de mayor a menor
+                          .map((c) => ({
+                            concesionario: c.concesionario.length > 25 ? c.concesionario.substring(0, 25) + '...' : c.concesionario,
+                            total_prestamos: c.total_prestamos,
+                            porcentaje: c.porcentaje,
+                            fullName: c.concesionario,
+                          }))}
                         margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
                         layout="vertical"
                       >

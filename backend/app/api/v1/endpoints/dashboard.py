@@ -2598,14 +2598,23 @@ def obtener_financiamiento_por_rangos(
         total_prestamos = totales_query.total_prestamos or 0
         total_monto = float(totales_query.total_monto or Decimal("0"))
 
-        # Rangos de financiamiento (de mayor a menor para efecto pirámide)
-        rangos = [
-            (50000, None, "$50,000+"),
-            (20000, 50000, "$20,000 - $50,000"),
-            (10000, 20000, "$10,000 - $20,000"),
-            (5000, 10000, "$5,000 - $10,000"),
-            (0, 5000, "$0 - $5,000"),
-        ]
+        # ✅ Rangos de financiamiento de $500 en $500 (de mayor a menor para efecto pirámide)
+        rangos = []
+        # Generar rangos de $500 desde $0 hasta $50,000
+        max_rango = 50000
+        paso = 500
+        # Generar rangos desde $0 hasta $50,000 en pasos de $500
+        for min_val in range(0, max_rango, paso):
+            max_val = min_val + paso
+            # Formatear etiqueta: $0 - $500, $500 - $1000, etc.
+            categoria = f"${min_val:,.0f} - ${max_val:,.0f}".replace(",", "")
+            rangos.append((min_val, max_val, categoria))
+        
+        # Agregar rango final para montos mayores a $50,000 (al inicio para que quede primero)
+        rangos.insert(0, (max_rango, None, f"${max_rango:,.0f}+".replace(",", "")))
+        
+        # Invertir lista para que quede de mayor a menor (efecto pirámide)
+        rangos.reverse()
 
         distribucion_data = _procesar_distribucion_rango_monto(query_base, rangos, total_prestamos, total_monto)
 
@@ -3592,118 +3601,10 @@ def obtener_financiamiento_tendencia_mensual(
         cuotas_pagos_time = int((time.time() - start_cuotas_pagos) * 1000)
         logger.info(f"📊 [financiamiento-tendencia] Query monto_cuota de pagos completada en {cuotas_pagos_time}ms")
 
-        # ✅ Query optimizada: calcular morosidad para todos los meses en una sola query SQL
-        start_morosidad = time.time()
-        morosidad_por_mes = {}
-
-        # Construir filtros WHERE adicionales para el JOIN
-        filtros_join = []
-        params_morosidad = {}
-
-        if analista:
-            filtros_join.append("(p.analista = :analista OR p.producto_financiero = :analista)")
-            params_morosidad["analista"] = analista
-        if concesionario:
-            filtros_join.append("p.concesionario = :concesionario")
-            params_morosidad["concesionario"] = concesionario
-        if modelo:
-            filtros_join.append("(p.producto = :modelo OR p.modelo_vehiculo = :modelo)")
-            params_morosidad["modelo"] = modelo
-
-        where_join = " AND " + " AND ".join(filtros_join) if filtros_join else ""
-
-        # ✅ CORRECCIÓN: Query SQL optimizada: calcular morosidad NO ACUMULADA por mes
-        # La morosidad es: cuotas que VENCIERON en ese mes específico - lo que se pagó de esas cuotas
-        # NO es acumulada: cada mes muestra solo la morosidad generada en ese mes específico
-        # Usa total_pagado de la tabla cuotas directamente (más simple y confiable)
-        query_morosidad_sql = text(
-            f"""
-            WITH meses AS (
-                SELECT 
-                    generate_series(
-                        DATE_TRUNC('month', :fecha_inicio::date),
-                        DATE_TRUNC('month', :fecha_fin::date),
-                        '1 month'::interval
-                    )::date as fecha_mes
-            ),
-            meses_completos AS (
-                SELECT 
-                    EXTRACT(YEAR FROM fecha_mes)::int as año,
-                    EXTRACT(MONTH FROM fecha_mes)::int as mes,
-                    fecha_mes as primer_dia_mes,
-                    (fecha_mes + INTERVAL '1 month - 1 day')::date as ultimo_dia_mes
-                FROM meses
-            )
-            SELECT 
-                m.año,
-                m.mes,
-                GREATEST(0, COALESCE(SUM(c.monto_cuota - c.total_pagado), 0)) as morosidad
-            FROM meses_completos m
-            LEFT JOIN cuotas c ON c.fecha_vencimiento >= m.primer_dia_mes 
-                              AND c.fecha_vencimiento <= m.ultimo_dia_mes
-                              AND c.estado != 'PAGADO'
-            LEFT JOIN prestamos p ON c.prestamo_id = p.id AND p.estado = 'APROBADO'{where_join}
-            GROUP BY m.año, m.mes
-            ORDER BY m.año, m.mes
-        """
-        )
-
-        params_morosidad["fecha_inicio"] = fecha_inicio_query
-        params_morosidad["fecha_fin"] = fecha_fin_query
-
-        try:
-            result_morosidad = db.execute(query_morosidad_sql.bindparams(**params_morosidad))
-            for row in result_morosidad:
-                año_morosidad = int(row.año)
-                mes_morosidad = int(row.mes)
-                morosidad_por_mes[(año_morosidad, mes_morosidad)] = float(row.morosidad or Decimal("0"))
-        except Exception as e:
-            logger.error(f"Error en query optimizada de morosidad: {e}, usando cálculo por mes", exc_info=True)
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-            # Fallback: calcular mes por mes (más lento pero funciona)
-            temp_date = fecha_inicio_query
-            while temp_date <= hoy:
-                try:
-                    año_temp = temp_date.year
-                    mes_temp = temp_date.month
-                    fecha_mes_fin_temp = _obtener_fechas_mes_siguiente(mes_temp, año_temp)
-                    ultimo_dia_mes_temp = fecha_mes_fin_temp - timedelta(days=1)
-
-                    # ✅ CORRECCIÓN: Calcular morosidad NO ACUMULADA del mes
-                    # Solo cuotas que vencieron en este mes específico
-                    primer_dia_mes_temp = date(año_temp, mes_temp, 1)
-                    query_morosidad_mes = (
-                        db.query(func.sum(Cuota.monto_cuota - Cuota.total_pagado))
-                        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                        .filter(
-                            Prestamo.estado == "APROBADO",
-                            Cuota.fecha_vencimiento >= primer_dia_mes_temp,
-                            Cuota.fecha_vencimiento <= ultimo_dia_mes_temp,
-                            Cuota.estado != "PAGADO",
-                        )
-                    )
-                    query_morosidad_mes = FiltrosDashboard.aplicar_filtros_cuota(
-                        query_morosidad_mes, analista, concesionario, modelo, None, None
-                    )
-                    morosidad_valor = max(0.0, float(query_morosidad_mes.scalar() or Decimal("0")))
-                    morosidad_por_mes[(año_temp, mes_temp)] = morosidad_valor
-                    temp_date = fecha_mes_fin_temp
-                except Exception as fallback_error:
-                    logger.warning(f"Error calculando morosidad para mes {temp_date}: {fallback_error}")
-                    try:
-                        db.rollback()  # ✅ Rollback para restaurar transacción después de error
-                    except Exception:
-                        pass
-                    morosidad_por_mes[(temp_date.year, temp_date.month)] = 0.0
-                    # Avanzar al siguiente mes para evitar loop infinito
-                    temp_date = _obtener_fechas_mes_siguiente(temp_date.month, temp_date.year)
-
-        morosidad_time = int((time.time() - start_morosidad) * 1000)
+        # ✅ NUEVO CÁLCULO: Morosidad = diferencia entre Cuotas Programadas y Monto Pagado, acumulativa
+        # No se necesita query SQL separada, se calcula en el procesamiento de datos
         logger.info(
-            f"📊 [financiamiento-tendencia] Query morosidad completada en {morosidad_time}ms, {len(morosidad_por_mes)} meses"
+            f"📊 [financiamiento-tendencia] Cálculo de morosidad será procesado en el loop de meses (diferencia acumulativa)"
         )
 
         # Generar datos mensuales (incluyendo meses sin datos) y calcular acumulados
@@ -3711,6 +3612,7 @@ def obtener_financiamiento_tendencia_mensual(
         meses_data = []
         current_date = fecha_inicio_query
         total_acumulado = Decimal("0")
+        morosidad_acumulada = Decimal("0")  # ✅ Morosidad acumulada mes a mes
 
         # ⚠️ TEMPORAL: Usar fecha_aprobacion en lugar de fecha_registro
         while current_date <= hoy:
@@ -3733,8 +3635,18 @@ def obtener_financiamiento_tendencia_mensual(
             # Obtener suma de monto_cuota de cuotas relacionadas con pagos del mes
             monto_cuota_pagos = cuotas_pagos_por_mes.get((año_mes, num_mes), 0.0)
 
-            # Obtener morosidad del mes (pre-calculada)
-            morosidad_mes = morosidad_por_mes.get((año_mes, num_mes), 0.0)
+            # ✅ NUEVO CÁLCULO: Morosidad = diferencia entre Cuotas Programadas y Monto Pagado
+            # Diferencia del mes = Cuotas Programadas - Monto Pagado
+            diferencia_mes = Decimal(str(monto_cuotas_programadas)) - Decimal(str(monto_pagado_mes))
+            
+            # ✅ Acumular morosidad: si hay saldo positivo, se suma; si hay excedente (negativo), se resta
+            morosidad_acumulada += diferencia_mes
+            
+            # ✅ La morosidad nunca puede ser negativa (mínimo 0)
+            if morosidad_acumulada < 0:
+                morosidad_acumulada = Decimal("0")
+            
+            morosidad_mes = float(morosidad_acumulada)
 
             # Calcular acumulado: sumar los nuevos financiamientos del mes
             total_acumulado += Decimal(str(monto_nuevos))
