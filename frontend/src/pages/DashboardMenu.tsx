@@ -287,12 +287,29 @@ export function DashboardMenu() {
       const response = await apiClient.get(
         `/api/v1/dashboard/cobranzas-mensuales?${queryParams.toString()}`,
         { timeout: 60000 }
-      ) as { meses: Array<{ nombre_mes: string; cobranzas_planificadas: number; pagos_reales: number; meta_mensual: number }> }
-      return response.meses.slice(-12) // Últimos 12 meses
+      )
+      return response.data as { meses: Array<{ mes: string; nombre_mes: string; cobranzas_planificadas: number; pagos_reales: number; meta_mensual: number }> }
     },
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-    enabled: true,
+    staleTime: 5 * 60 * 1000, // 5 minutos
+  })
+
+  // Cargar cobranzas semanales (lunes a viernes)
+  const { data: datosCobranzasSemanales, isLoading: loadingCobranzasSemanales } = useQuery({
+    queryKey: ['cobranzas-semanales', JSON.stringify(filtros)],
+    queryFn: async () => {
+      const params = construirFiltrosObject()
+      const queryParams = new URLSearchParams()
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString())
+      })
+      queryParams.append('semanas', '12') // Últimas 12 semanas
+      const response = await apiClient.get(
+        `/api/v1/dashboard/cobranzas-semanales?${queryParams.toString()}`,
+        { timeout: 60000 }
+      )
+      return response.data as { semanas: Array<{ semana_inicio: string; nombre_semana: string; cobranzas_planificadas: number; pagos_reales: number }> }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutos
   })
 
   // Cargar morosidad por analista
@@ -394,6 +411,7 @@ export function DashboardMenu() {
     queryClient.invalidateQueries({ queryKey: ['financiamiento-rangos'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['composicion-morosidad'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['cobranzas-mensuales'], exact: false })
+    queryClient.invalidateQueries({ queryKey: ['cobranzas-semanales'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['morosidad-analista'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['evolucion-pagos-menu'], exact: false })
@@ -413,6 +431,7 @@ export function DashboardMenu() {
       await queryClient.invalidateQueries({ queryKey: ['financiamiento-rangos'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['composicion-morosidad'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['cobranzas-mensuales'], exact: false })
+      await queryClient.invalidateQueries({ queryKey: ['cobranzas-semanales'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['morosidad-analista'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['evolucion-pagos-menu'], exact: false })
@@ -1083,6 +1102,52 @@ export function DashboardMenu() {
                           <Tooltip formatter={(value: number) => formatCurrency(value)} />
                           <Legend />
                           <Bar dataKey="total_morosidad" fill="#ef4444" radius={[0, 8, 8, 0]} name="Morosidad" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[350px] flex items-center justify-center text-gray-400">
+                        No hay datos disponibles
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              {/* Gráfico: Cobranzas Semanales (Lunes a Viernes) */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 }}
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
+                  <CardHeader className="bg-gradient-to-r from-teal-50 to-cyan-50 border-b-2 border-teal-200">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                      <BarChart3 className="h-6 w-6 text-teal-600" />
+                      <span>Cobranzas Semanales (Lunes a Viernes)</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {loadingCobranzasSemanales ? (
+                      <div className="h-[350px] flex items-center justify-center">
+                        <div className="animate-pulse text-gray-400">Cargando...</div>
+                      </div>
+                    ) : datosCobranzasSemanales && datosCobranzasSemanales.semanas && datosCobranzasSemanales.semanas.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={350}>
+                        <BarChart data={datosCobranzasSemanales.semanas} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis 
+                            dataKey="nombre_semana" 
+                            stroke="#6b7280" 
+                            angle={-45}
+                            textAnchor="end"
+                            height={80}
+                            tick={{ fontSize: 11 }}
+                          />
+                          <YAxis stroke="#6b7280" tickFormatter={(value) => formatCurrency(value)} />
+                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                          <Legend />
+                          <Bar dataKey="cobranzas_planificadas" fill="#10b981" radius={[8, 8, 0, 0]} name="Planificado" />
+                          <Bar dataKey="pagos_reales" fill="#3b82f6" radius={[8, 8, 0, 0]} name="Recaudado" />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (

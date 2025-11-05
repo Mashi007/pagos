@@ -123,7 +123,7 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
         # Buscar con comparación exacta (case-sensitive, sin espacios)
         pago_existente = (
             db.query(Pago)
-            .filter(func.trim(Pago.numero_documento) == numero_documento_normalizado, Pago.activo == True)
+            .filter(func.trim(Pago.numero_documento) == numero_documento_normalizado, Pago.activo.is_(True))
             .first()
         )
 

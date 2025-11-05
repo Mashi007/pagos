@@ -25,7 +25,7 @@ def sumar_monto_pagado_staging(
         FROM pagos_staging
         WHERE monto_pagado IS NOT NULL
           AND monto_pagado != ''
-          AND monto_pagado ~ r'^[0-9]+(\.[0-9]+)?$'
+          AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
     """
 
     params = {}

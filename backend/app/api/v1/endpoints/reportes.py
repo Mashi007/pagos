@@ -47,7 +47,7 @@ def healthcheck_reportes(
         logger.info("[reportes.health] Verificando conexión a BD y métricas básicas")
 
         total_prestamos = db.query(func.count(Prestamo.id)).scalar() or 0
-        total_pagos = db.query(func.count(Pago.id)).filter(Pago.activo == True).scalar() or 0
+        total_pagos = db.query(func.count(Pago.id)).filter(Pago.activo.is_(True)).scalar() or 0
 
         return {
             "status": "ok",
@@ -292,7 +292,7 @@ def reporte_pagos(
             .filter(
                 Pago.fecha_pago >= fecha_inicio_dt,
                 Pago.fecha_pago <= fecha_fin_dt,
-                Pago.activo == True,
+                Pago.activo.is_(True),
             )
             .count()
         )

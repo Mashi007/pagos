@@ -695,31 +695,8 @@ def obtener_opciones_filtros(
 ):
     """Obtener opciones disponibles para filtros del dashboard - Sin duplicados"""
     try:
-        # Optimizar: usar una sola query con UNION para obtener todos los valores únicos
-        # text ya está importado al inicio del archivo
-
-        # Query optimizada: obtener todos los valores únicos en una sola consulta
-        query_sql = text(
-            """
-            SELECT DISTINCT valor FROM (
-                SELECT DISTINCT analista::text as valor FROM prestamos WHERE analista IS NOT NULL AND analista != ''
-                UNION
-                SELECT DISTINCT producto_financiero::text as valor FROM prestamos WHERE producto_financiero IS NOT NULL AND producto_financiero != ''
-                UNION
-                SELECT DISTINCT concesionario::text as valor FROM prestamos WHERE concesionario IS NOT NULL AND concesionario != ''
-                UNION
-                SELECT DISTINCT producto::text as valor FROM prestamos WHERE producto IS NOT NULL AND producto != ''
-                UNION
-                SELECT DISTINCT modelo_vehiculo::text as valor FROM prestamos WHERE modelo_vehiculo IS NOT NULL AND modelo_vehiculo != ''
-            ) AS all_values
-            WHERE valor IS NOT NULL AND valor != ''
-            ORDER BY valor
-        """
-        )
-
-        # Separar en categorías (aproximado, ya que no podemos distinguir el origen)
-        # Nota: query_sql se ejecuta pero no se usa el resultado directamente
-        # Usar queries separadas optimizadas para categorías específicas
+        # Optimizar: usar queries separadas optimizadas para categorías específicas
+        # Separar en categorías para mejor organización
         analistas_set = _obtener_valores_distintos_de_columna(db, Prestamo.analista)
         productos_set = _obtener_valores_distintos_de_columna(db, Prestamo.producto_financiero)
         analistas_final = sorted(analistas_set | productos_set)
@@ -3483,7 +3460,7 @@ def obtener_financiamiento_tendencia_mensual(
                 # Buscar primera fecha de pago desde 2024
                 primera_pago = (
                     db.query(func.min(Pago.fecha_pago))
-                    .filter(Pago.activo == True, Pago.monto_pagado > 0, func.extract("year", Pago.fecha_pago) >= 2024)
+                    .filter(Pago.activo.is_(True), Pago.monto_pagado > 0, func.extract("year", Pago.fecha_pago) >= 2024)
                     .scalar()
                 )
 
@@ -3563,8 +3540,7 @@ def obtener_financiamiento_tendencia_mensual(
         cuotas_por_mes = {}
         try:
             # ✅ Usar SQL directo para coincidir exactamente con el script SQL
-            query_cuotas_sql = text(
-                """
+            query_cuotas_sql = text("""
                 SELECT 
                     EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
                     EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
@@ -3580,20 +3556,26 @@ def obtener_financiamiento_tendencia_mensual(
                     EXTRACT(YEAR FROM c.fecha_vencimiento),
                     EXTRACT(MONTH FROM c.fecha_vencimiento)
                 ORDER BY año, mes
-            """
-            )
-
+            """)
+            
             resultados_cuotas = db.execute(
-                query_cuotas_sql.bindparams(analista=analista, concesionario=concesionario, modelo=modelo)
+                query_cuotas_sql.bindparams(
+                    analista=analista,
+                    concesionario=concesionario,
+                    modelo=modelo
+                )
             ).fetchall()
-
+            
             for row in resultados_cuotas:
                 año_mes = int(row[0])
                 num_mes = int(row[1])
-                cuotas_por_mes[(año_mes, num_mes)] = float(row[2] or Decimal("0"))
+                monto = float(row[2] or Decimal("0"))
+                cuotas_por_mes[(año_mes, num_mes)] = monto
+                if monto > 0:
+                    logger.debug(f"📊 [financiamiento-tendencia] Cuotas {año_mes}-{num_mes:02d}: ${monto:,.2f}")
 
             cuotas_time = int((time.time() - start_cuotas) * 1000)
-            logger.info(f"📊 [financiamiento-tendencia] Query cuotas programadas completada en {cuotas_time}ms")
+            logger.info(f"📊 [financiamiento-tendencia] Query cuotas programadas completada en {cuotas_time}ms, {len(cuotas_por_mes)} meses con datos")
         except Exception as e:
             logger.error(f"⚠️ [financiamiento-tendencia] Error en query cuotas programadas: {e}", exc_info=True)
             try:
@@ -3687,7 +3669,13 @@ def obtener_financiamiento_tendencia_mensual(
             for row in resultados_pagos:
                 año_mes = int(row[0])  # Índice de tupla
                 num_mes = int(row[1])  # Índice de tupla
-                pagos_por_mes[(año_mes, num_mes)] = float(row[2] or Decimal("0"))
+                monto = float(row[2] or Decimal("0"))
+                pagos_por_mes[(año_mes, num_mes)] = monto
+                if monto > 0:
+                    logger.debug(f"📊 [financiamiento-tendencia] Pagos {año_mes}-{num_mes:02d}: ${monto:,.2f}")
+            
+            pagos_time = int((time.time() - start_pagos) * 1000)
+            logger.info(f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms, {len(pagos_por_mes)} meses con datos")
         except Exception as e:
             logger.error(f"⚠️ [financiamiento-tendencia] Error consultando pagos: {e}", exc_info=True)
             try:
@@ -3809,15 +3797,14 @@ def obtener_financiamiento_tendencia_mensual(
 
             # ✅ CÁLCULO CORREGIDO: Morosidad mensual = MAX(0, Programado - Pagado)
             morosidad_mensual = max(0.0, monto_cuotas_programadas - monto_pagado_mes)
-
-            # ✅ Logging para diagnóstico
-            if morosidad_mensual > 0 or monto_cuotas_programadas > 0:
-                logger.info(
-                    f"📊 [financiamiento-tendencia] {fecha_mes_inicio.strftime('%Y-%m')}: "
-                    f"Programado=${monto_cuotas_programadas:,.2f}, "
-                    f"Pagado=${monto_pagado_mes:,.2f}, "
-                    f"Morosidad=${morosidad_mensual:,.2f}"
-                )
+            
+            # ✅ Logging para diagnóstico (siempre mostrar para depuración)
+            logger.info(
+                f"📊 [financiamiento-tendencia] {fecha_mes_inicio.strftime('%Y-%m')} (año={año_mes}, mes={num_mes}): "
+                f"Programado=${monto_cuotas_programadas:,.2f}, "
+                f"Pagado=${monto_pagado_mes:,.2f}, "
+                f"Morosidad=${morosidad_mensual:,.2f}"
+            )
 
             # ✅ CÁLCULO CORREGIDO: Morosidad acumulada = Morosidad acumulada anterior + Morosidad mensual
             # NOTA: La morosidad acumulada solo aumenta, nunca disminuye (incluso si hay sobrepagos)
@@ -3852,11 +3839,218 @@ def obtener_financiamiento_tendencia_mensual(
             f"⏱️ [financiamiento-tendencia] Tiempo total: {total_time}ms (query: {query_time}ms, process: {process_time}ms)"
         )
         logger.info(f"📊 [financiamiento-tendencia] Generados {len(meses_data)} meses de datos")
+        
+        # ✅ Resumen de morosidad por mes para diagnóstico
+        meses_con_morosidad = [m for m in meses_data if m.get("morosidad_mensual", 0) > 0]
+        if meses_con_morosidad:
+            logger.info(f"📊 [financiamiento-tendencia] Meses con morosidad > 0: {len(meses_con_morosidad)}")
+            for m in meses_con_morosidad[-5:]:  # Mostrar últimos 5 meses con morosidad
+                logger.info(
+                    f"  - {m['mes']}: Programado=${m['monto_cuotas_programadas']:,.2f}, "
+                    f"Pagado=${m['monto_pagado']:,.2f}, "
+                    f"Morosidad=${m['morosidad_mensual']:,.2f}"
+                )
+        else:
+            logger.warning("⚠️ [financiamiento-tendencia] NO HAY MESES CON MOROSIDAD > 0. Verificar datos.")
 
         if len(meses_data) == 0:
             logger.warning("⚠️ [financiamiento-tendencia] No se generaron meses de datos. Verificar fecha_inicio_query y hoy")
 
         return {"meses": meses_data, "fecha_inicio": fecha_inicio_query.isoformat(), "fecha_fin": hoy.isoformat()}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo cobranzas mensuales: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/cobranzas-semanales")
+@cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos
+def obtener_cobranzas_semanales(
+    semanas: int = Query(12, description="Número de semanas a mostrar (últimas N semanas)"),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Cobranzas semanales (lunes a viernes) vs Pagos
+    Suma las cobranzas semanales (cuotas que vencen de lunes a viernes) y las grafica contra pagos realizados.
+    OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
+    """
+    import time
+
+    start_time = time.time()
+
+    try:
+        hoy = date.today()
+        
+        # Calcular fecha inicio (últimas N semanas desde el lunes más reciente)
+        # Retroceder al lunes más reciente
+        dias_desde_lunes = hoy.weekday()  # 0 = lunes, 6 = domingo
+        lunes_actual = hoy - timedelta(days=dias_desde_lunes)
+        
+        # Calcular fecha inicio (N semanas hacia atrás desde el lunes actual)
+        fecha_inicio_query = lunes_actual - timedelta(weeks=semanas - 1)
+        
+        # Aplicar filtros de fecha si se proporcionan
+        if fecha_inicio:
+            fecha_inicio_query = max(fecha_inicio_query, fecha_inicio)
+        if fecha_fin:
+            fecha_fin_query = min(hoy, fecha_fin)
+        else:
+            fecha_fin_query = hoy
+
+        # ✅ OPTIMIZACIÓN: Query única para cobranzas planificadas (solo lunes a viernes)
+        start_cobranzas = time.time()
+        filtros_cobranzas = [
+            "p.estado = 'APROBADO'",
+            "c.fecha_vencimiento >= :fecha_inicio",
+            "c.fecha_vencimiento <= :fecha_fin_total",
+            # Solo días laborables: lunes (1) a viernes (5)
+            # PostgreSQL DOW: 0=domingo, 1=lunes, ..., 6=sábado
+            "EXTRACT(DOW FROM c.fecha_vencimiento) BETWEEN 1 AND 5",
+        ]
+        params_cobranzas = {
+            "fecha_inicio": fecha_inicio_query,
+            "fecha_fin_total": fecha_fin_query,
+        }
+
+        if analista:
+            filtros_cobranzas.append("(p.analista = :analista OR p.producto_financiero = :analista)")
+            params_cobranzas["analista"] = analista
+        if concesionario:
+            filtros_cobranzas.append("p.concesionario = :concesionario")
+            params_cobranzas["concesionario"] = concesionario
+        if modelo:
+            filtros_cobranzas.append("(p.producto = :modelo OR p.modelo_vehiculo = :modelo)")
+            params_cobranzas["modelo"] = modelo
+
+        where_clause_cobranzas = " AND ".join(filtros_cobranzas)
+        try:
+            query_cobranzas_sql = text(
+                f"""
+                SELECT 
+                    (DATE_TRUNC('week', c.fecha_vencimiento) + INTERVAL '1 day')::date as semana_inicio,
+                    EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
+                    EXTRACT(WEEK FROM c.fecha_vencimiento)::int as semana_numero,
+                    COALESCE(SUM(c.monto_cuota), 0) as cobranzas
+                FROM cuotas c
+                INNER JOIN prestamos p ON c.prestamo_id = p.id
+                WHERE {where_clause_cobranzas}
+                GROUP BY (DATE_TRUNC('week', c.fecha_vencimiento) + INTERVAL '1 day')::date, 
+                         EXTRACT(YEAR FROM c.fecha_vencimiento), 
+                         EXTRACT(WEEK FROM c.fecha_vencimiento)
+                ORDER BY semana_inicio
+            """
+            ).bindparams(**params_cobranzas)
+
+            result_cobranzas = db.execute(query_cobranzas_sql)
+            cobranzas_por_semana = {}
+            for row in result_cobranzas:
+                semana_inicio = row[0]
+                cobranzas_por_semana[semana_inicio] = float(row[3] or Decimal("0"))
+            tiempo_cobranzas = int((time.time() - start_cobranzas) * 1000)
+            logger.info(
+                f"📊 [cobranzas-semanales] Query cobranzas completada en {tiempo_cobranzas}ms, {len(cobranzas_por_semana)} semanas"
+            )
+        except Exception as e:
+            logger.error(f"Error consultando cobranzas en cobranzas-semanales: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            cobranzas_por_semana = {}
+            tiempo_cobranzas = int((time.time() - start_cobranzas) * 1000)
+
+        # ✅ OPTIMIZACIÓN: Query única para pagos reales (solo lunes a viernes)
+        start_pagos = time.time()
+        fecha_inicio_dt = datetime.combine(fecha_inicio_query, datetime.min.time())
+        fecha_fin_dt = datetime.combine(fecha_fin_query, datetime.max.time())
+
+        try:
+            query_pagos_sql = text(
+                """
+                SELECT 
+                    (DATE_TRUNC('week', fecha_pago) + INTERVAL '1 day')::date as semana_inicio,
+                    COALESCE(SUM(monto_pagado), 0) as pagos
+                FROM pagos
+                WHERE fecha_pago >= :fecha_inicio
+                  AND fecha_pago <= :fecha_fin
+                  AND monto_pagado IS NOT NULL
+                  AND monto_pagado > 0
+                  AND activo = TRUE
+                  AND EXTRACT(DOW FROM fecha_pago) BETWEEN 1 AND 5
+                GROUP BY (DATE_TRUNC('week', fecha_pago) + INTERVAL '1 day')::date
+                ORDER BY semana_inicio
+            """
+            ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+
+            result_pagos = db.execute(query_pagos_sql)
+            pagos_por_semana = {}
+            for row in result_pagos:
+                semana_inicio = row[0]
+                pagos_por_semana[semana_inicio] = float(row[1] or Decimal("0"))
+            tiempo_pagos = int((time.time() - start_pagos) * 1000)
+            logger.info(f"📊 [cobranzas-semanales] Query pagos completada en {tiempo_pagos}ms, {len(pagos_por_semana)} semanas")
+        except Exception as e:
+            logger.error(f"Error consultando pagos en cobranzas-semanales: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            pagos_por_semana = {}
+            tiempo_pagos = int((time.time() - start_pagos) * 1000)
+
+        # Generar datos semanales (incluyendo semanas sin datos)
+        semanas_data = []
+        current_date = fecha_inicio_query
+        
+        # Asegurar que empezamos en lunes
+        while current_date.weekday() != 0:  # 0 = lunes
+            current_date -= timedelta(days=1)
+        
+        semanas_generadas = 0
+        while current_date <= fecha_fin_query and semanas_generadas < semanas:
+            # Calcular inicio de semana (lunes)
+            dias_desde_lunes = current_date.weekday()
+            semana_inicio = current_date - timedelta(days=dias_desde_lunes)
+            semana_fin = semana_inicio + timedelta(days=4)  # Viernes
+            
+            if semana_inicio > fecha_fin_query:
+                break
+                
+            cobranzas_planificadas = cobranzas_por_semana.get(semana_inicio, 0.0)
+            pagos_reales = pagos_por_semana.get(semana_inicio, 0.0)
+            
+            # Formatear nombre de semana: "Semana del DD/MM - DD/MM"
+            nombre_semana = f"Sem {semana_inicio.strftime('%d/%m')} - {semana_fin.strftime('%d/%m')}"
+            
+            semanas_data.append(
+                {
+                    "semana_inicio": semana_inicio.isoformat(),
+                    "nombre_semana": nombre_semana,
+                    "cobranzas_planificadas": cobranzas_planificadas,
+                    "pagos_reales": pagos_reales,
+                }
+            )
+            
+            # Avanzar a la siguiente semana (próximo lunes)
+            current_date = semana_inicio + timedelta(days=7)
+            semanas_generadas += 1
+
+        total_time = int((time.time() - start_time) * 1000)
+        logger.info(f"⏱️ [cobranzas-semanales] Tiempo total: {total_time}ms")
+
+        return {"semanas": semanas_data, "fecha_inicio": fecha_inicio_query.isoformat(), "fecha_fin": fecha_fin_query.isoformat()}
 
     except HTTPException:
         raise
