@@ -122,13 +122,13 @@ export function DashboardMenu() {
     enabled: true, // Asegurar que siempre esté habilitado
   })
 
-  // Cargar financiamiento aprobado por mes (últimos 6 meses)
+  // Cargar financiamiento aprobado por mes (últimos 12 meses - 1 año)
   const { data: datosTendencia, isLoading: loadingTendencia } = useQuery({
     queryKey: ['financiamiento-tendencia', JSON.stringify(filtros)],
     queryFn: async () => {
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
-      queryParams.append('meses', '6') // Últimos 6 meses
+      queryParams.append('meses', '12') // Últimos 12 meses (1 año)
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
@@ -693,51 +693,108 @@ export function DashboardMenu() {
 
           {/* COLUMNA DERECHA: 6 GRÁFICOS PRINCIPALES (2x3) */}
           <div className="lg:col-span-9 space-y-6">
-            {/* Fila 1: 2 Gráficos */}
+            {/* Fila 1: Gráfico de Financiamiento (Fila completa) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <Card className="shadow-lg border-2 border-gray-200">
+                <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b-2 border-cyan-200">
+                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <TrendingUp className="h-6 w-6 text-cyan-600" />
+                    <span>Financiamiento Aprobado por Mes (Último Año)</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  {loadingTendencia ? (
+                    <div className="h-[450px] flex items-center justify-center">
+                      <div className="animate-pulse text-gray-400">Cargando...</div>
+                    </div>
+                  ) : datosTendencia && datosTendencia.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={450}>
+                      <AreaChart data={datosTendencia} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorMontoGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.8} />
+                            <stop offset="50%" stopColor="#06b6d4" stopOpacity={0.4} />
+                            <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.1} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                        <XAxis 
+                          dataKey="mes" 
+                          stroke="#6b7280" 
+                          style={{ fontSize: '12px', fontWeight: 500 }}
+                          tick={{ fill: '#6b7280' }}
+                        />
+                        <YAxis 
+                          stroke="#6b7280"
+                          style={{ fontSize: '12px', fontWeight: 500 }}
+                          tick={{ fill: '#6b7280' }}
+                          tickFormatter={(value) => formatCurrency(value)}
+                        />
+                        <Tooltip 
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            padding: '12px',
+                          }}
+                          labelStyle={{
+                            color: '#1f2937',
+                            fontWeight: 600,
+                            marginBottom: '8px',
+                            fontSize: '14px',
+                          }}
+                          itemStyle={{
+                            color: '#374151',
+                            fontSize: '14px',
+                            fontWeight: 500,
+                          }}
+                          formatter={(value: number) => [
+                            formatCurrency(value),
+                            'Total Financiamiento'
+                          ]}
+                        />
+                        <Legend 
+                          wrapperStyle={{ paddingTop: '20px' }}
+                          iconType="line"
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="monto_nuevos" 
+                          stroke="#06b6d4" 
+                          strokeWidth={3}
+                          fillOpacity={1} 
+                          fill="url(#colorMontoGradient)" 
+                          name="Total Financiamiento por Mes"
+                          dot={{ fill: '#06b6d4', strokeWidth: 2, r: 4 }}
+                          activeDot={{ r: 6, stroke: '#06b6d4', strokeWidth: 2 }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="monto_nuevos" 
+                          stroke="#0891b2" 
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={{ r: 6 }}
+                          name="Línea de Tendencia"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[450px] flex items-center justify-center text-gray-400">
+                      No hay datos disponibles
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Fila 2: 2 Gráficos */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Gráfico 1: Financiamiento Aprobado por Mes */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <Card className="shadow-lg border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b-2 border-cyan-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <TrendingUp className="h-6 w-6 text-cyan-600" />
-                      <span>Financiamiento Aprobado por Mes</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    {loadingTendencia ? (
-                      <div className="h-[350px] flex items-center justify-center">
-                        <div className="animate-pulse text-gray-400">Cargando...</div>
-                      </div>
-                    ) : datosTendencia && datosTendencia.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={350}>
-                        <AreaChart data={datosTendencia}>
-                          <defs>
-                            <linearGradient id="colorMonto" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.8} />
-                              <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.1} />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis dataKey="mes" stroke="#6b7280" />
-                          <YAxis stroke="#6b7280" />
-                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                          <Legend />
-                          <Area type="monotone" dataKey="monto_nuevos" stroke="#06b6d4" fillOpacity={1} fill="url(#colorMonto)" name="Total Financiamiento por Mes" />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-[350px] flex items-center justify-center text-gray-400">
-                        No hay datos disponibles
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
 
               {/* Gráfico 2: Distribución por Concesionario */}
               <motion.div
