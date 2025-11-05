@@ -2709,11 +2709,7 @@ def obtener_composicion_morosidad(
         # Convertir a lista de puntos para el gráfico de dispersión
         puntos = []
         for dias, datos in sorted(puntos_por_dia.items()):
-            puntos.append({
-                "dias_atraso": dias,
-                "monto": float(datos["monto"]),
-                "cantidad_cuotas": datos["cantidad"]
-            })
+            puntos.append({"dias_atraso": dias, "monto": float(datos["monto"]), "cantidad_cuotas": datos["cantidad"]})
 
         return {
             "puntos": puntos,  # Lista de {dias_atraso, monto, cantidad_cuotas}
