@@ -3655,73 +3655,18 @@ def obtener_financiamiento_tendencia_mensual(
         cuotas_pagos_time = int((time.time() - start_cuotas_pagos) * 1000)
         logger.info(f"📊 [financiamiento-tendencia] Query monto_cuota de pagos completada en {cuotas_pagos_time}ms")
 
-        # ✅ CÁLCULO CORRECTO: Morosidad = Suma de todas las cuotas vencidas hasta el último día del mes que NO han sido pagadas
-        # Para cada mes, calcular la morosidad real: cuotas con fecha_vencimiento <= último_día_mes y estado != 'PAGADO'
-        start_morosidad = time.time()
-        morosidad_por_mes = {}
-
-        # Construir filtros base para morosidad
-        filtros_morosidad_base = ["p.estado = 'APROBADO'", "c.estado != 'PAGADO'"]
-        params_morosidad_base = {}
-
-        if analista:
-            filtros_morosidad_base.append("(p.analista = :analista OR p.producto_financiero = :analista)")
-            params_morosidad_base["analista"] = analista
-        if concesionario:
-            filtros_morosidad_base.append("p.concesionario = :concesionario")
-            params_morosidad_base["concesionario"] = concesionario
-        if modelo:
-            filtros_morosidad_base.append("(p.producto = :modelo OR p.modelo_vehiculo = :modelo)")
-            params_morosidad_base["modelo"] = modelo
-
-        where_morosidad_base = " AND ".join(filtros_morosidad_base)
-
-        # Calcular morosidad para cada mes (último día de cada mes)
-        temp_date = fecha_inicio_query
-        while temp_date <= hoy:
-            año_temp = temp_date.year
-            mes_temp = temp_date.month
-            fecha_mes_fin_temp = _obtener_fechas_mes_siguiente(mes_temp, año_temp)
-            ultimo_dia_mes_temp = fecha_mes_fin_temp - timedelta(days=1)
-
-            try:
-                params_morosidad = params_morosidad_base.copy()
-                params_morosidad["ultimo_dia_mes"] = ultimo_dia_mes_temp
-
-                query_morosidad_sql = text(
-                    f"""
-                    SELECT COALESCE(SUM(c.monto_cuota), 0) as morosidad
-                    FROM cuotas c
-                    INNER JOIN prestamos p ON c.prestamo_id = p.id
-                    WHERE {where_morosidad_base}
-                      AND c.fecha_vencimiento <= :ultimo_dia_mes
-                    """
-                ).bindparams(**params_morosidad)
-
-                resultado_morosidad = db.execute(query_morosidad_sql)
-                morosidad_valor = float(resultado_morosidad.scalar() or Decimal("0"))
-                morosidad_por_mes[(año_temp, mes_temp)] = morosidad_valor
-
-            except Exception as e:
-                logger.warning(f"Error calculando morosidad para mes {temp_date}: {e}")
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
-                morosidad_por_mes[(año_temp, mes_temp)] = 0.0
-
-            temp_date = fecha_mes_fin_temp
-
-        morosidad_time = int((time.time() - start_morosidad) * 1000)
-        logger.info(
-            f"📊 [financiamiento-tendencia] Query morosidad completada en {morosidad_time}ms, {len(morosidad_por_mes)} meses"
-        )
+        # ✅ CÁLCULO CORREGIDO: Morosidad según lógica del ejemplo
+        # Morosidad mensual = MAX(0, Monto programado del mes - Monto pagado del mes)
+        # Morosidad acumulada = Morosidad acumulada anterior + Morosidad mensual actual
+        # NOTA: La morosidad acumulada solo aumenta, nunca disminuye (incluso con sobrepagos)
+        logger.info("📊 [financiamiento-tendencia] Calculando morosidad con lógica acumulativa mensual")
 
         # Generar datos mensuales (incluyendo meses sin datos) y calcular acumulados
         start_process = time.time()
         meses_data = []
         current_date = fecha_inicio_query
         total_acumulado = Decimal("0")
+        morosidad_acumulada = Decimal("0")  # ✅ Morosidad acumulada inicial
 
         # ⚠️ TEMPORAL: Usar fecha_aprobacion en lugar de fecha_registro
         while current_date <= hoy:
@@ -3735,17 +3680,21 @@ def obtener_financiamiento_tendencia_mensual(
             cantidad_nuevos = datos_mes["cantidad"]
             monto_nuevos = datos_mes["monto"]
 
-            # Obtener suma de cuotas programadas del mes
+            # Obtener suma de cuotas programadas del mes (monto a pagar programado)
             monto_cuotas_programadas = cuotas_por_mes.get((año_mes, num_mes), 0.0)
 
-            # Obtener suma de monto_pagado de tabla pagos del mes
+            # Obtener suma de monto_pagado de tabla pagos del mes (monto pagado)
             monto_pagado_mes = pagos_por_mes.get((año_mes, num_mes), 0.0)
 
             # Obtener suma de monto_cuota de cuotas relacionadas con pagos del mes
             monto_cuota_pagos = cuotas_pagos_por_mes.get((año_mes, num_mes), 0.0)
 
-            # ✅ CÁLCULO CORRECTO: Morosidad = Suma de todas las cuotas vencidas hasta el último día del mes
-            morosidad_mes = morosidad_por_mes.get((año_mes, num_mes), 0.0)
+            # ✅ CÁLCULO CORREGIDO: Morosidad mensual = MAX(0, Programado - Pagado)
+            morosidad_mensual = max(0.0, monto_cuotas_programadas - monto_pagado_mes)
+            
+            # ✅ CÁLCULO CORREGIDO: Morosidad acumulada = Morosidad acumulada anterior + Morosidad mensual
+            # NOTA: La morosidad acumulada solo aumenta, nunca disminuye (incluso si hay sobrepagos)
+            morosidad_acumulada += Decimal(str(morosidad_mensual))
 
             # Calcular acumulado: sumar los nuevos financiamientos del mes
             total_acumulado += Decimal(str(monto_nuevos))
@@ -3761,7 +3710,8 @@ def obtener_financiamiento_tendencia_mensual(
                     "monto_cuotas_programadas": monto_cuotas_programadas,
                     "monto_pagado": monto_pagado_mes,
                     "monto_cuota": monto_cuota_pagos,
-                    "morosidad": morosidad_mes,
+                    "morosidad": float(morosidad_acumulada),  # ✅ Retornar morosidad acumulada
+                    "morosidad_mensual": morosidad_mensual,  # ✅ Agregar morosidad mensual para referencia
                     "fecha_mes": fecha_mes_inicio.isoformat(),
                 }
             )
