@@ -85,10 +85,9 @@ def _procesar_fila_conciliacion(
 
         # Comparación exacta usando func.trim() para normalizar espacios en BD
         pago = (
-            db.query(Pago).filter(
-                func.trim(Pago.numero_documento) == numero_documento_normalizado,
-                Pago.activo == True
-            ).first()
+            db.query(Pago)
+            .filter(func.trim(Pago.numero_documento) == numero_documento_normalizado, Pago.activo == True)
+            .first()
         )
 
         # ✅ Buscar solo en tabla pagos (tabla oficial)

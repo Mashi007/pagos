@@ -17,6 +17,7 @@ from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
+
 # ⚠️ PagoStaging eliminado - usar Pago
 from app.models.user import User
 
@@ -121,10 +122,9 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
         # ✅ VERIFICAR CONCILIACIÓN: Si el numero_documento ya existe EXACTAMENTE, marcar como conciliado
         # Buscar con comparación exacta (case-sensitive, sin espacios)
         pago_existente = (
-            db.query(Pago).filter(
-                func.trim(Pago.numero_documento) == numero_documento_normalizado,
-                Pago.activo == True
-            ).first()
+            db.query(Pago)
+            .filter(func.trim(Pago.numero_documento) == numero_documento_normalizado, Pago.activo == True)
+            .first()
         )
 
         conciliado = False
@@ -139,10 +139,7 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
             )
 
         # Buscar préstamo del cliente si es posible
-        prestamo = db.query(Prestamo).filter(
-            Prestamo.cedula == cedula,
-            Prestamo.estado == "APROBADO"
-        ).first()
+        prestamo = db.query(Prestamo).filter(Prestamo.cedula == cedula, Prestamo.estado == "APROBADO").first()
 
         nuevo_pago = Pago(
             cedula=cedula,
