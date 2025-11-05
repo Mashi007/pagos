@@ -43,6 +43,8 @@ import {
   Area,
   AreaChart,
   ComposedChart,
+  ScatterChart,
+  Scatter,
 } from 'recharts'
 
 // Submenús eliminados: financiamiento, cuotas, cobranza, analisis, pagos
@@ -249,11 +251,10 @@ export function DashboardMenu() {
       const response = await apiClient.get(
         `/api/v1/dashboard/composicion-morosidad?${queryParams.toString()}`
       ) as {
-        composicion: Array<{
-          categoria: string
+        puntos: Array<{
+          dias_atraso: number
           monto: number
-          cantidad: number
-          porcentaje: number
+          cantidad_cuotas: number
         }>
         total_morosidad: number
         total_cuotas: number
@@ -1388,7 +1389,7 @@ export function DashboardMenu() {
                 </Card>
               </motion.div>
 
-              {/* Gráfico de Pastel - Composición de Morosidad */}
+              {/* Gráfico de Dispersión - Morosidad: Días de Atraso vs Monto */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1397,8 +1398,8 @@ export function DashboardMenu() {
                 <Card className="shadow-lg border-2 border-gray-200">
                   <CardHeader className="bg-gradient-to-r from-red-50 to-pink-50 border-b-2 border-red-200">
                     <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <PieChart className="h-6 w-6 text-red-600" />
-                      <span>Composición de Morosidad por Días de Atraso</span>
+                      <LineChart className="h-6 w-6 text-red-600" />
+                      <span>Dispersión de Morosidad: Días de Atraso vs Monto</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">
@@ -1406,60 +1407,75 @@ export function DashboardMenu() {
                       <div className="h-[450px] flex items-center justify-center">
                         <div className="animate-pulse text-gray-400">Cargando...</div>
                       </div>
-                    ) : datosComposicionMorosidad && datosComposicionMorosidad.composicion.length > 0 ? (
-                      <div className="flex flex-col items-center">
+                    ) : datosComposicionMorosidad && datosComposicionMorosidad.puntos && datosComposicionMorosidad.puntos.length > 0 ? (
+                      <div className="flex flex-col">
                         <ResponsiveContainer width="100%" height={400}>
-                          <RechartsPieChart>
-                            <Pie
-                              data={datosComposicionMorosidad.composicion}
-                              cx="50%"
-                              cy="50%"
-                              labelLine={false}
-                              label={({ categoria, porcentaje }) => `${categoria}: ${porcentaje.toFixed(1)}%`}
-                              outerRadius={140}
-                              fill="#8884d8"
-                              dataKey="monto"
-                            >
-                              {datosComposicionMorosidad.composicion.map((entry, index) => {
-                                // Colores específicos para rangos de morosidad
-                                const colorsMorosidad = [
-                                  '#10b981', // Verde claro - 1 día
-                                  '#84cc16', // Verde amarillo - 3 días
-                                  '#f59e0b', // Amarillo - 15 días
-                                  '#f97316', // Naranja - 1 mes
-                                  '#ef4444', // Rojo claro - 2 meses
-                                  '#dc2626', // Rojo oscuro - 3+ meses
-                                ]
-                                return (
-                                  <Cell
-                                    key={`cell-morosidad-${index}`}
-                                    fill={colorsMorosidad[index % colorsMorosidad.length]}
-                                  />
-                                )
-                              })}
-                            </Pie>
+                          <ScatterChart
+                            data={datosComposicionMorosidad.puntos.map(p => ({
+                              x: p.dias_atraso,
+                              y: p.monto,
+                              dias_atraso: p.dias_atraso,
+                              monto: p.monto,
+                              cantidad_cuotas: p.cantidad_cuotas,
+                            }))}
+                            margin={{ top: 20, right: 30, left: 80, bottom: 60 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                            <XAxis 
+                              type="number"
+                              dataKey="x"
+                              name="Días de Atraso"
+                              label={{ value: 'Días de Atraso', position: 'insideBottom', offset: -5 }}
+                              stroke="#6b7280"
+                              style={{ fontSize: '12px', fontWeight: 500 }}
+                              tick={{ fill: '#6b7280' }}
+                            />
+                            <YAxis 
+                              type="number"
+                              dataKey="y"
+                              name="Monto"
+                              label={{ value: 'Monto de Morosidad', angle: -90, position: 'insideLeft' }}
+                              stroke="#6b7280"
+                              style={{ fontSize: '12px', fontWeight: 500 }}
+                              tick={{ fill: '#6b7280' }}
+                              tickFormatter={(value) => formatCurrency(value)}
+                            />
                             <Tooltip
-                              formatter={(value: number, name: string, props: any) => {
-                                return [
-                                  formatCurrency(value),
-                                  `Porcentaje: ${props.payload.porcentaje.toFixed(2)}%`,
-                                  `Cantidad: ${props.payload.cantidad} cuotas`,
-                                ]
-                              }}
-                              contentStyle={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '8px',
+                              cursor={{ strokeDasharray: '3 3' }}
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload
+                                  return (
+                                    <div style={{
+                                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                                      border: '1px solid #e5e7eb',
+                                      borderRadius: '8px',
+                                      padding: '12px',
+                                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                                    }}>
+                                      <p style={{ margin: 0, fontWeight: 600, marginBottom: '4px' }}>
+                                        {data.dias_atraso} días de atraso
+                                      </p>
+                                      <p style={{ margin: 0, color: '#6b7280' }}>
+                                        Monto: {formatCurrency(data.monto)}
+                                      </p>
+                                      <p style={{ margin: 0, color: '#6b7280', fontSize: '12px' }}>
+                                        Cuotas: {data.cantidad_cuotas}
+                                      </p>
+                                    </div>
+                                  )
+                                }
+                                return null
                               }}
                             />
-                            <Legend
-                              formatter={(value, entry) => {
-                                const data = datosComposicionMorosidad.composicion.find((d) => d.categoria === value)
-                                return `${value} (${data?.porcentaje.toFixed(1)}%)`
-                              }}
-                              wrapperStyle={{ paddingTop: '20px' }}
+                            <Legend />
+                            <Scatter
+                              name="Morosidad"
+                              dataKey="y"
+                              fill="#ef4444"
+                              shape="circle"
                             />
-                          </RechartsPieChart>
+                          </ScatterChart>
                         </ResponsiveContainer>
                         <div className="mt-4 text-center">
                           <div className="text-sm text-gray-600">

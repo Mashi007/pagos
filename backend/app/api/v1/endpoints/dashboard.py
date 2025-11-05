@@ -2652,14 +2652,13 @@ def obtener_composicion_morosidad(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Obtiene composición de morosidad por rangos de días de atraso para gráfico de pastel
-    Rangos: 1 día, 3 días, 15 días, 1 mes, 2 meses, 3 o más meses
+    Obtiene datos de morosidad para gráfico de dispersión: días de atraso vs monto
+    Retorna puntos agrupados por días de atraso con el monto total por día
     """
     try:
         hoy = date.today()
 
         # Query base para cuotas vencidas no pagadas
-        # ✅ CORRECCIÓN: Obtener cuotas primero, luego calcular días de atraso en Python
         query_base = (
             db.query(
                 Cuota.id,
@@ -2686,76 +2685,40 @@ def obtener_composicion_morosidad(
         if fecha_fin:
             query_base = query_base.filter(Prestamo.fecha_registro <= fecha_fin)
 
-        # Obtener todas las cuotas y calcular días de atraso en Python
+        # Obtener todas las cuotas y calcular días de atraso
         cuotas = query_base.all()
 
-        # Inicializar rangos
-        rangos = {
-            "1_dia": {"nombre": "1 Día Atrasado", "monto": Decimal("0"), "cantidad": 0, "min_dias": 1, "max_dias": 1},
-            "3_dias": {"nombre": "3 Días Atrasado", "monto": Decimal("0"), "cantidad": 0, "min_dias": 2, "max_dias": 3},
-            "15_dias": {"nombre": "15 Días Atrasado", "monto": Decimal("0"), "cantidad": 0, "min_dias": 4, "max_dias": 15},
-            "1_mes": {"nombre": "1 Mes Atrasado", "monto": Decimal("0"), "cantidad": 0, "min_dias": 16, "max_dias": 30},
-            "2_meses": {"nombre": "2 Meses Atrasado", "monto": Decimal("0"), "cantidad": 0, "min_dias": 31, "max_dias": 60},
-            "3_mas_meses": {
-                "nombre": "3 o Más Atrasado",
-                "monto": Decimal("0"),
-                "cantidad": 0,
-                "min_dias": 61,
-                "max_dias": None,
-            },
-        }
+        # ✅ Agrupar por días de atraso: {dias_atraso: {monto_total, cantidad}}
+        puntos_por_dia = {}  # {dias: {"monto": Decimal, "cantidad": int}}
+        total_morosidad = Decimal("0")
+        total_cuotas = 0
 
-        # Clasificar cuotas por rango
         for cuota in cuotas:
-            # Calcular días de atraso en Python
+            # Calcular días de atraso
             dias_atraso = (hoy - cuota.fecha_vencimiento).days if cuota.fecha_vencimiento else 0
             monto = Decimal(str(cuota.monto_cuota)) if cuota.monto_cuota else Decimal("0")
 
-            # Determinar rango
-            if dias_atraso == 1:
-                rangos["1_dia"]["monto"] += monto
-                rangos["1_dia"]["cantidad"] += 1
-            elif 2 <= dias_atraso <= 3:
-                rangos["3_dias"]["monto"] += monto
-                rangos["3_dias"]["cantidad"] += 1
-            elif 4 <= dias_atraso <= 15:
-                rangos["15_dias"]["monto"] += monto
-                rangos["15_dias"]["cantidad"] += 1
-            elif 16 <= dias_atraso <= 30:
-                rangos["1_mes"]["monto"] += monto
-                rangos["1_mes"]["cantidad"] += 1
-            elif 31 <= dias_atraso <= 60:
-                rangos["2_meses"]["monto"] += monto
-                rangos["2_meses"]["cantidad"] += 1
-            elif dias_atraso >= 61:
-                rangos["3_mas_meses"]["monto"] += monto
-                rangos["3_mas_meses"]["cantidad"] += 1
+            # Agrupar por día de atraso
+            if dias_atraso not in puntos_por_dia:
+                puntos_por_dia[dias_atraso] = {"monto": Decimal("0"), "cantidad": 0}
+            puntos_por_dia[dias_atraso]["monto"] += monto
+            puntos_por_dia[dias_atraso]["cantidad"] += 1
+            total_morosidad += monto
+            total_cuotas += 1
 
-        # Calcular total
-        total_morosidad = sum(float(r["monto"]) for r in rangos.values())
-
-        # Preparar respuesta con porcentajes (ordenado por días de atraso)
-        orden_claves = ["1_dia", "3_dias", "15_dias", "1_mes", "2_meses", "3_mas_meses"]
-        composicion = []
-
-        for key in orden_claves:
-            rango = rangos[key]
-            monto_float = float(rango["monto"])
-            porcentaje = (monto_float / total_morosidad * 100) if total_morosidad > 0 else 0
-
-            composicion.append(
-                {
-                    "categoria": rango["nombre"],
-                    "monto": monto_float,
-                    "cantidad": rango["cantidad"],
-                    "porcentaje": round(porcentaje, 2),
-                }
-            )
+        # Convertir a lista de puntos para el gráfico de dispersión
+        puntos = []
+        for dias, datos in sorted(puntos_por_dia.items()):
+            puntos.append({
+                "dias_atraso": dias,
+                "monto": float(datos["monto"]),
+                "cantidad_cuotas": datos["cantidad"]
+            })
 
         return {
-            "composicion": composicion,
-            "total_morosidad": total_morosidad,
-            "total_cuotas": sum(r["cantidad"] for r in rangos.values()),
+            "puntos": puntos,  # Lista de {dias_atraso, monto, cantidad_cuotas}
+            "total_morosidad": float(total_morosidad),
+            "total_cuotas": total_cuotas,
         }
 
     except HTTPException:
