@@ -134,7 +134,7 @@ export function DashboardMenu() {
       })
       const response = await apiClient.get(
         `/api/v1/dashboard/financiamiento-tendencia-mensual?${queryParams.toString()}`
-      ) as { meses: Array<{ mes: string; cantidad_nuevos: number; monto_nuevos: number; total_acumulado: number }> }
+      ) as { meses: Array<{ mes: string; cantidad_nuevos: number; monto_nuevos: number; total_acumulado: number; monto_cuotas_programadas: number }> }
       return response.meses
     },
     staleTime: 5 * 60 * 1000,
@@ -753,9 +753,9 @@ export function DashboardMenu() {
                             fontSize: '14px',
                             fontWeight: 500,
                           }}
-                          formatter={(value: number) => [
+                          formatter={(value: number, name: string) => [
                             formatCurrency(value),
-                            'Total Financiamiento'
+                            name
                           ]}
                         />
                         <Legend 
@@ -781,6 +781,16 @@ export function DashboardMenu() {
                           dot={false}
                           activeDot={{ r: 6 }}
                           name="Línea de Tendencia"
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="monto_cuotas_programadas" 
+                          stroke="#8b5cf6" 
+                          strokeWidth={3}
+                          dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 4 }}
+                          activeDot={{ r: 6, stroke: '#8b5cf6', strokeWidth: 2 }}
+                          name="Cuotas Programadas por Mes"
+                          strokeDasharray="5 5"
                         />
                       </AreaChart>
                     </ResponsiveContainer>

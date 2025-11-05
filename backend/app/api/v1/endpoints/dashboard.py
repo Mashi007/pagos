@@ -3017,6 +3017,52 @@ def obtener_financiamiento_tendencia_mensual(
                 "monto": float(row.monto_total or Decimal("0")),
             }
 
+        # ✅ Query para calcular suma de monto_cuota programado por mes (cuotas que vencen en cada mes)
+        start_cuotas = time.time()
+        query_cuotas = (
+            db.query(
+                func.extract("year", Cuota.fecha_vencimiento).label("año"),
+                func.extract("month", Cuota.fecha_vencimiento).label("mes"),
+                func.sum(Cuota.monto_cuota).label("total_cuotas_programadas"),
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_vencimiento >= fecha_inicio_query,
+                Cuota.fecha_vencimiento <= fecha_fin_query,
+            )
+            .group_by(
+                func.extract("year", Cuota.fecha_vencimiento),
+                func.extract("month", Cuota.fecha_vencimiento)
+            )
+            .order_by(
+                func.extract("year", Cuota.fecha_vencimiento),
+                func.extract("month", Cuota.fecha_vencimiento)
+            )
+        )
+
+        # Aplicar filtros de préstamo a las cuotas
+        if analista:
+            query_cuotas = query_cuotas.filter(
+                or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
+            )
+        if concesionario:
+            query_cuotas = query_cuotas.filter(Prestamo.concesionario == concesionario)
+        if modelo:
+            query_cuotas = query_cuotas.filter(
+                or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
+            )
+
+        resultados_cuotas = query_cuotas.all()
+        cuotas_por_mes = {}
+        for row in resultados_cuotas:
+            año_mes = int(row.año)
+            num_mes = int(row.mes)
+            cuotas_por_mes[(año_mes, num_mes)] = float(row.total_cuotas_programadas or Decimal("0"))
+
+        cuotas_time = int((time.time() - start_cuotas) * 1000)
+        logger.info(f"📊 [financiamiento-tendencia] Query cuotas programadas completada en {cuotas_time}ms")
+
         # Generar datos mensuales (incluyendo meses sin datos) y calcular acumulados
         start_process = time.time()
         meses_data = []
@@ -3035,6 +3081,9 @@ def obtener_financiamiento_tendencia_mensual(
             cantidad_nuevos = datos_mes["cantidad"]
             monto_nuevos = datos_mes["monto"]
 
+            # Obtener suma de cuotas programadas del mes
+            monto_cuotas_programadas = cuotas_por_mes.get((año_mes, num_mes), 0.0)
+
             # Calcular acumulado: sumar los nuevos financiamientos del mes
             total_acumulado += Decimal(str(monto_nuevos))
 
@@ -3046,6 +3095,7 @@ def obtener_financiamiento_tendencia_mensual(
                     "cantidad_nuevos": cantidad_nuevos,
                     "monto_nuevos": float(monto_nuevos),
                     "total_acumulado": float(total_acumulado),
+                    "monto_cuotas_programadas": monto_cuotas_programadas,
                     "fecha_mes": fecha_mes_inicio.isoformat(),
                 }
             )
