@@ -108,7 +108,7 @@ def _calcular_total_cobrado_mes(
           AND p.monto_pagado > 0
           AND p.activo = TRUE
           AND pr.estado = 'APROBADO'"""
-        
+
         if prestamo_conditions:
             where_clause += " AND " + " AND ".join(prestamo_conditions)
 
@@ -2765,7 +2765,7 @@ def obtener_evolucion_general_mensual(
         # 2. TOTAL PAGOS por mes (usar Pago.monto_pagado, no Pago.monto)
         # ✅ ACTUALIZADO: Usar LEFT JOIN para incluir pagos sin prestamo_id (articulación por cedula)
         start_pagos = time.time()
-        
+
         # Query con SQL directo para mejor control de LEFT JOIN y articulación por cedula
         prestamo_conditions_pagos = []
         bind_params_pagos = {"fecha_inicio": fecha_primera, "fecha_fin": fecha_ultima}
@@ -3335,9 +3335,7 @@ def obtener_financiamiento_tendencia_mensual(
                 num_mes = int(row.mes)
                 cuotas_pagos_por_mes[(año_mes, num_mes)] = float(row.total_monto_cuota or Decimal("0"))
         except Exception as e:
-            logger.warning(
-                f"⚠️ [financiamiento-tendencia] Error consultando cuotas de pagos: {e}, usando valores por defecto"
-            )
+            logger.warning(f"⚠️ [financiamiento-tendencia] Error consultando cuotas de pagos: {e}, usando valores por defecto")
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
             except Exception:
