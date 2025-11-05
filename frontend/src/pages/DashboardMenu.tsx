@@ -776,15 +776,6 @@ export function DashboardMenu() {
                         />
                         <Line 
                           type="monotone" 
-                          dataKey="monto_nuevos" 
-                          stroke="#0891b2" 
-                          strokeWidth={2}
-                          dot={false}
-                          activeDot={{ r: 6 }}
-                          name="Línea de Tendencia"
-                        />
-                        <Line 
-                          type="monotone" 
                           dataKey="monto_cuotas_programadas" 
                           stroke="#8b5cf6" 
                           strokeWidth={3}
@@ -801,16 +792,6 @@ export function DashboardMenu() {
                           dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
                           activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2 }}
                           name="Monto Pagado por Mes"
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="monto_cuota" 
-                          stroke="#f59e0b" 
-                          strokeWidth={3}
-                          dot={{ fill: '#f59e0b', strokeWidth: 2, r: 4 }}
-                          activeDot={{ r: 6, stroke: '#f59e0b', strokeWidth: 2 }}
-                          name="Monto Cuota de Pagos por Mes"
-                          strokeDasharray="3 3"
                         />
                       </ComposedChart>
                     </ResponsiveContainer>
