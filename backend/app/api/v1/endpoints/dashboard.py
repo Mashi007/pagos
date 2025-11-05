@@ -2042,6 +2042,7 @@ def obtener_cobranzas_mensuales(
     import time
 
     start_time = time.time()
+    logger.info(f"📊 [cobranzas-mensuales] Iniciando cálculo de cobranzas mensuales")
 
     try:
         hoy = date.today()
@@ -2223,6 +2224,7 @@ def obtener_cobranzas_mensuales(
         logger.info(
             f"⏱️ [cobranzas-mensuales] Tiempo total: {total_time}ms (cobranzas: {tiempo_cobranzas}ms, pagos: {tiempo_pagos}ms, meta: {tiempo_meta}ms)"
         )
+        logger.info(f"📊 [cobranzas-mensuales] Devolviendo {len(meses_data)} meses de datos, meta_actual=${meta_actual:,.2f}")
 
         return {
             "meses": meses_data,
@@ -3808,7 +3810,8 @@ def obtener_financiamiento_tendencia_mensual(
             monto_cuota_pagos = cuotas_pagos_por_mes.get((año_mes, num_mes), 0.0)
 
             # ✅ CÁLCULO CORREGIDO: Morosidad mensual = MAX(0, Programado - Pagado)
-            morosidad_mensual = max(0.0, monto_cuotas_programadas - monto_pagado_mes)
+            # Esta es la lógica exacta del script SQL: morosidad_mensual = MAX(0, monto_programado - monto_pagado)
+            morosidad_mensual = max(0.0, float(monto_cuotas_programadas) - float(monto_pagado_mes))
 
             # ✅ Logging para diagnóstico (siempre mostrar para depuración)
             logger.info(
@@ -3837,7 +3840,7 @@ def obtener_financiamiento_tendencia_mensual(
                     "monto_pagado": monto_pagado_mes,
                     "monto_cuota": monto_cuota_pagos,
                     "morosidad": float(morosidad_acumulada),  # ✅ Retornar morosidad acumulada
-                    "morosidad_mensual": morosidad_mensual,  # ✅ Agregar morosidad mensual para referencia
+                    "morosidad_mensual": float(morosidad_mensual),  # ✅ Agregar morosidad mensual (convertir a float explícitamente)
                     "fecha_mes": fecha_mes_inicio.isoformat(),
                 }
             )
@@ -3915,6 +3918,7 @@ def obtener_cobranzas_semanales(
     import time
 
     start_time = time.time()
+    logger.info(f"📊 [cobranzas-semanales] Iniciando cálculo de cobranzas semanales (semanas={semanas})")
 
     try:
         hoy = date.today()
@@ -4076,7 +4080,13 @@ def obtener_cobranzas_semanales(
             semanas_generadas += 1
 
         total_time = int((time.time() - start_time) * 1000)
-        logger.info(f"⏱️ [cobranzas-semanales] Tiempo total: {total_time}ms")
+        logger.info(f"⏱️ [cobranzas-semanales] Tiempo total: {total_time}ms, {len(semanas_data)} semanas generadas")
+        
+        if len(semanas_data) == 0:
+            logger.warning("⚠️ [cobranzas-semanales] No se generaron semanas. Verificar datos y fechas.")
+        else:
+            logger.info(f"📊 [cobranzas-semanales] Primera semana: {semanas_data[0]['nombre_semana']}, Última: {semanas_data[-1]['nombre_semana']}")
+            logger.info(f"📊 [cobranzas-semanales] Devolviendo {len(semanas_data)} semanas de datos")
 
         return {
             "semanas": semanas_data,

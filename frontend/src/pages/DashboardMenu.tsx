@@ -149,8 +149,9 @@ export function DashboardMenu() {
       ) as { meses: Array<{ mes: string; cantidad_nuevos: number; monto_nuevos: number; total_acumulado: number; monto_cuotas_programadas: number; monto_pagado: number; monto_cuota: number; morosidad: number; morosidad_mensual: number }> }
       return response.meses
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 1 * 60 * 1000, // ✅ Cache reducido a 1 minuto para debugging
     enabled: true,
+    refetchOnWindowFocus: true, // ✅ Recargar cuando se enfoca la ventana
   })
 
   // Cargar préstamos por concesionario
@@ -284,21 +285,21 @@ export function DashboardMenu() {
         if (value) queryParams.append(key, value.toString())
       })
       // Usar timeout extendido para endpoints lentos
-      const response = (await apiClient.get(
+      const response = await apiClient.get(
         `/api/v1/dashboard/cobranzas-mensuales?${queryParams.toString()}`,
         { timeout: 60000 }
-      )) as {
-        data: {
-          meses: Array<{
-            mes: string
-            nombre_mes: string
-            cobranzas_planificadas: number
-            pagos_reales: number
-            meta_mensual: number
-          }>
-        }
+      )
+      // ✅ CORRECCIÓN: Axios devuelve { data: {...} }, y el backend devuelve { meses: [...], meta_actual: ... }
+      return response.data as {
+        meses: Array<{
+          mes: string
+          nombre_mes: string
+          cobranzas_planificadas: number
+          pagos_reales: number
+          meta_mensual: number
+        }>
+        meta_actual: number
       }
-      return response.data
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
   })
@@ -313,20 +314,21 @@ export function DashboardMenu() {
         if (value) queryParams.append(key, value.toString())
       })
       queryParams.append('semanas', '12') // Últimas 12 semanas
-      const response = (await apiClient.get(
+      const response = await apiClient.get(
         `/api/v1/dashboard/cobranzas-semanales?${queryParams.toString()}`,
         { timeout: 60000 }
-      )) as {
-        data: {
-          semanas: Array<{
-            semana_inicio: string
-            nombre_semana: string
-            cobranzas_planificadas: number
-            pagos_reales: number
-          }>
-        }
+      )
+      // ✅ CORRECCIÓN: Axios devuelve { data: {...} }, y el backend devuelve { semanas: [...], fecha_inicio: ..., fecha_fin: ... }
+      return response.data as {
+        semanas: Array<{
+          semana_inicio: string
+          nombre_semana: string
+          cobranzas_planificadas: number
+          pagos_reales: number
+        }>
+        fecha_inicio: string
+        fecha_fin: string
       }
-      return response.data
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
   })
@@ -789,10 +791,21 @@ export function DashboardMenu() {
                           tick={{ fill: '#6b7280' }}
                         />
                         <YAxis 
+                          yAxisId="left"
                           stroke="#6b7280"
                           style={{ fontSize: '12px', fontWeight: 500 }}
                           tick={{ fill: '#6b7280' }}
                           tickFormatter={(value) => formatCurrency(value)}
+                        />
+                        <YAxis 
+                          yAxisId="right"
+                          orientation="right"
+                          stroke="#ef4444"
+                          style={{ fontSize: '12px', fontWeight: 500 }}
+                          tick={{ fill: '#ef4444' }}
+                          tickFormatter={(value) => formatCurrency(value)}
+                          domain={[0, 'dataMax']}
+                          allowDecimals={true}
                         />
                         <Tooltip 
                           contentStyle={{
@@ -823,6 +836,7 @@ export function DashboardMenu() {
                           iconType="line"
                         />
                         <Area 
+                          yAxisId="left"
                           type="monotone" 
                           dataKey="monto_nuevos" 
                           stroke="#06b6d4" 
@@ -834,6 +848,7 @@ export function DashboardMenu() {
                           activeDot={{ r: 6, stroke: '#06b6d4', strokeWidth: 2 }}
                         />
                         <Line 
+                          yAxisId="left"
                           type="monotone" 
                           dataKey="monto_cuotas_programadas" 
                           stroke="#8b5cf6" 
@@ -844,6 +859,7 @@ export function DashboardMenu() {
                           strokeDasharray="5 5"
                         />
                         <Line 
+                          yAxisId="left"
                           type="monotone" 
                           dataKey="monto_pagado" 
                           stroke="#10b981" 
@@ -853,6 +869,7 @@ export function DashboardMenu() {
                           name="Monto Pagado por Mes"
                         />
                         <Line 
+                          yAxisId="right"
                           type="monotone" 
                           dataKey="morosidad_mensual" 
                           stroke="#ef4444" 
@@ -860,6 +877,8 @@ export function DashboardMenu() {
                           dot={{ fill: '#ef4444', strokeWidth: 2, r: 4 }}
                           activeDot={{ r: 6, stroke: '#ef4444', strokeWidth: 2 }}
                           name="Morosidad Mensual"
+                          connectNulls={false}
+                          isAnimationActive={true}
                         />
                       </ComposedChart>
                     </ResponsiveContainer>
@@ -1070,9 +1089,9 @@ export function DashboardMenu() {
                       <div className="h-[350px] flex items-center justify-center">
                         <div className="animate-pulse text-gray-400">Cargando...</div>
                       </div>
-                    ) : datosCobranzas && datosCobranzas.length > 0 ? (
+                    ) : datosCobranzas && datosCobranzas.meses && datosCobranzas.meses.length > 0 ? (
                       <ResponsiveContainer width="100%" height={350}>
-                        <BarChart data={datosCobranzas}>
+                        <BarChart data={datosCobranzas.meses}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                           <XAxis dataKey="nombre_mes" stroke="#6b7280" />
                           <YAxis stroke="#6b7280" />
