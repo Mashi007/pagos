@@ -186,18 +186,18 @@ def _calcular_morosidad(
     Calcula morosidad acumulada usando la misma lógica que la tabla SQL:
     - Morosidad mensual = MAX(0, Monto Programado del mes - Monto Pagado del mes)
     - Morosidad acumulada = Suma de todas las morosidades mensuales desde 2024 hasta la fecha
-    
+
     ✅ CORRECCIÓN: Usa la misma lógica que obtener_financiamiento_tendencia_mensual
     """
     # Fecha de inicio: 2024-01-01 o fecha_inicio si es más reciente
     fecha_inicio_calculo = date(2024, 1, 1)
     if fecha_inicio and fecha_inicio > fecha_inicio_calculo:
         fecha_inicio_calculo = fecha_inicio
-    
+
     # Construir filtros para WHERE clause
     filtros_prestamo = []
     bind_params = {"fecha_limite": fecha, "fecha_inicio_calculo": fecha_inicio_calculo}
-    
+
     if analista:
         filtros_prestamo.append("(p.analista = :analista OR p.producto_financiero = :analista)")
         bind_params["analista"] = analista
@@ -213,16 +213,17 @@ def _calcular_morosidad(
     if fecha_fin:
         filtros_prestamo.append("p.fecha_aprobacion <= :fecha_fin")
         bind_params["fecha_fin"] = fecha_fin
-    
+
     where_prestamo = " AND " + " AND ".join(filtros_prestamo) if filtros_prestamo else ""
-    
+
     # ✅ Query que calcula morosidad acumulada mes por mes
     # Suma todas las morosidades mensuales desde 2024 hasta la fecha
     # Usa la misma lógica que obtener_financiamiento_tendencia_mensual
-    
+
     if filtros_prestamo:
         # Con filtros: filtrar pagos a través de préstamos
-        query_sql = text(f"""
+        query_sql = text(
+            f"""
             WITH meses AS (
                 SELECT 
                     EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
@@ -258,10 +259,12 @@ def _calcular_morosidad(
             SELECT COALESCE(SUM(GREATEST(0, m.monto_programado - COALESCE(p.monto_pagado, 0))), 0) as morosidad_acumulada
             FROM meses m
             LEFT JOIN pagos_por_mes p ON m.año = p.año AND m.mes = p.mes
-        """)
+        """
+        )
     else:
         # Sin filtros: query más simple (suma todos los pagos)
-        query_sql = text("""
+        query_sql = text(
+            """
             WITH meses AS (
                 SELECT 
                     EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
@@ -290,10 +293,11 @@ def _calcular_morosidad(
             SELECT COALESCE(SUM(GREATEST(0, m.monto_programado - COALESCE(p.monto_pagado, 0))), 0) as morosidad_acumulada
             FROM meses m
             LEFT JOIN pagos_por_mes p ON m.año = p.año AND m.mes = p.mes
-        """)
-    
+        """
+        )
+
     resultado = db.execute(query_sql.bindparams(**bind_params)).scalar()
-    
+
     return float(resultado or Decimal("0"))
 
 
@@ -1951,9 +1955,7 @@ def obtener_kpis_principales(
         # 4. TOTAL MOROSIDAD EN DOLARES
         # ✅ CORRECCIÓN: Morosidad = cuotas vencidas - pagos aplicados (morosidad neta)
         # Usar función helper que calcula correctamente restando pagos
-        morosidad_actual = _calcular_morosidad(
-            db, hoy, analista, concesionario, modelo, fecha_inicio, fecha_fin
-        )
+        morosidad_actual = _calcular_morosidad(db, hoy, analista, concesionario, modelo, fecha_inicio, fecha_fin)
 
         # ✅ CORRECCIÓN: Para mes anterior, calcular morosidad total hasta el último día del mes anterior
         # No solo cuotas que vencieron EN ese mes, sino todas las cuotas vencidas HASTA ese momento
