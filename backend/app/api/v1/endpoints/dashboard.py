@@ -2143,9 +2143,11 @@ def obtener_cobranzas_mensuales(
                 GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
                 ORDER BY año, mes
             """
-            ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+            )
 
-            result_pagos = db.execute(query_pagos_sql)
+            result_pagos = db.execute(
+                query_pagos_sql.bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
+            )
             pagos_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_pagos}
             tiempo_pagos = int((time.time() - start_pagos) * 1000)
             logger.info(f"📊 [cobranzas-mensuales] Query pagos completada en {tiempo_pagos}ms, {len(pagos_por_mes)} meses")
@@ -3412,7 +3414,7 @@ def obtener_cuentas_cobrar_tendencias(
 
 
 @router.get("/financiamiento-tendencia-mensual")
-@cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos
+@cache_result(ttl=60, key_prefix="dashboard")  # ✅ Cache reducido a 1 minuto para debugging
 def obtener_financiamiento_tendencia_mensual(
     meses: int = Query(12, description="Número de meses a mostrar (últimos N meses)"),
     analista: Optional[str] = Query(None),
@@ -3576,6 +3578,11 @@ def obtener_financiamiento_tendencia_mensual(
             logger.info(
                 f"📊 [financiamiento-tendencia] Query cuotas programadas completada en {cuotas_time}ms, {len(cuotas_por_mes)} meses con datos"
             )
+            # ✅ Logging adicional: mostrar algunos meses de ejemplo
+            if cuotas_por_mes:
+                ejemplos = list(cuotas_por_mes.items())[:3]
+                for (año, mes), monto in ejemplos:
+                    logger.info(f"  📊 Ejemplo: {año}-{mes:02d} = ${monto:,.2f}")
         except Exception as e:
             logger.error(f"⚠️ [financiamiento-tendencia] Error en query cuotas programadas: {e}", exc_info=True)
             try:
@@ -3678,6 +3685,11 @@ def obtener_financiamiento_tendencia_mensual(
             logger.info(
                 f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms, {len(pagos_por_mes)} meses con datos"
             )
+            # ✅ Logging adicional: mostrar algunos meses de ejemplo
+            if pagos_por_mes:
+                ejemplos = list(pagos_por_mes.items())[:3]
+                for (año, mes), monto in ejemplos:
+                    logger.info(f"  📊 Ejemplo: {año}-{mes:02d} = ${monto:,.2f}")
         except Exception as e:
             logger.error(f"⚠️ [financiamiento-tendencia] Error consultando pagos: {e}", exc_info=True)
             try:
@@ -3844,16 +3856,30 @@ def obtener_financiamiento_tendencia_mensual(
 
         # ✅ Resumen de morosidad por mes para diagnóstico
         meses_con_morosidad = [m for m in meses_data if m.get("morosidad_mensual", 0) > 0]
+        total_morosidad = sum(m.get("morosidad_mensual", 0) for m in meses_data)
+        logger.info(
+            f"📊 [financiamiento-tendencia] RESUMEN: {len(meses_con_morosidad)} meses con morosidad > 0, "
+            f"Total morosidad mensual=${total_morosidad:,.2f}"
+        )
         if meses_con_morosidad:
-            logger.info(f"📊 [financiamiento-tendencia] Meses con morosidad > 0: {len(meses_con_morosidad)}")
-            for m in meses_con_morosidad[-5:]:  # Mostrar últimos 5 meses con morosidad
+            logger.info(f"📊 [financiamiento-tendencia] Meses con morosidad > 0:")
+            for m in meses_con_morosidad[-10:]:  # Mostrar últimos 10 meses con morosidad
                 logger.info(
-                    f"  - {m['mes']}: Programado=${m['monto_cuotas_programadas']:,.2f}, "
+                    f"  ✅ {m['mes']}: Programado=${m['monto_cuotas_programadas']:,.2f}, "
                     f"Pagado=${m['monto_pagado']:,.2f}, "
                     f"Morosidad=${m['morosidad_mensual']:,.2f}"
                 )
         else:
-            logger.warning("⚠️ [financiamiento-tendencia] NO HAY MESES CON MOROSIDAD > 0. Verificar datos.")
+            logger.warning("⚠️ [financiamiento-tendencia] ⚠️ NO HAY MESES CON MOROSIDAD > 0")
+            # Mostrar últimos 3 meses para ver qué está pasando
+            if meses_data:
+                logger.warning("⚠️ [financiamiento-tendencia] Últimos 3 meses calculados:")
+                for m in meses_data[-3:]:
+                    logger.warning(
+                        f"  - {m['mes']}: Programado=${m['monto_cuotas_programadas']:,.2f}, "
+                        f"Pagado=${m['monto_pagado']:,.2f}, "
+                        f"Morosidad=${m.get('morosidad_mensual', 0):,.2f}"
+                    )
 
         if len(meses_data) == 0:
             logger.warning("⚠️ [financiamiento-tendencia] No se generaron meses de datos. Verificar fecha_inicio_query y hoy")
