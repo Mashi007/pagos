@@ -982,7 +982,9 @@ def dashboard_administrador(
 
         # 17. TASA DE RECUPERACIÓN MENSUAL
         try:
-            tasa_recuperacion = _calcular_tasa_recuperacion(db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo)
+            tasa_recuperacion = _calcular_tasa_recuperacion(
+                db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo
+            )
         except Exception as e:
             logger.warning(f"Error calculando tasa recuperación: {e}")
             try:
