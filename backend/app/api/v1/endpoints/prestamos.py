@@ -542,7 +542,7 @@ def crear_prestamo(
                 )
             # Obtener el valor activo del modelo de vehículo
             valor_activo = existente.precio
-        
+
         # Si viene valor_activo en el request, usarlo (permite override manual)
         if hasattr(prestamo_data, "valor_activo") and prestamo_data.valor_activo is not None:
             valor_activo = prestamo_data.valor_activo
