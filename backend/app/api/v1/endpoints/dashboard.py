@@ -3618,7 +3618,7 @@ def obtener_financiamiento_tendencia_mensual(
                     "p.monto_pagado > 0",
                     "p.activo = TRUE",
                     "pr.estado = 'APROBADO'",
-                    "EXTRACT(YEAR FROM p.fecha_pago) >= 2024"
+                    "EXTRACT(YEAR FROM p.fecha_pago) >= 2024",
                 ]
                 bind_params_pagos_filtrado = {}
 
@@ -3716,7 +3716,7 @@ def obtener_financiamiento_tendencia_mensual(
 
         pagos_time = int((time.time() - start_pagos) * 1000)
         logger.info(f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms")
-        
+
         # ✅ SIMPLIFICADO: Eliminada query innecesaria de cuotas_pagos_por_mes
         # No se necesita para el cálculo de morosidad: morosidad = MAX(0, programado - pagado)
 
