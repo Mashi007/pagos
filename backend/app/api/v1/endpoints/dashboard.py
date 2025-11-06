@@ -3560,7 +3560,7 @@ def obtener_financiamiento_tendencia_mensual(
                     db.rollback()
                 except Exception:
                     pass
-        
+
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
@@ -4527,7 +4527,7 @@ def obtener_evolucion_pagos(
                     db.rollback()
                 except Exception:
                     pass
-        
+
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 

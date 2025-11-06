@@ -109,7 +109,7 @@ def get_db() -> Generator:
             else:
                 # Si no es un error de transacción abortada, re-lanzar
                 raise test_error
-        
+
         yield db
     except Exception as e:
         # Verificar si es un error de autenticación HTTP
