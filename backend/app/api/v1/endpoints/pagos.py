@@ -962,11 +962,11 @@ def _actualizar_morosidad_cuota(cuota, fecha_hoy: date) -> None:
     ✅ ACTUALIZA AUTOMÁTICAMENTE las columnas de morosidad:
     - dias_morosidad: Días de atraso (desde fecha_vencimiento hasta hoy o fecha_pago)
     - monto_morosidad: Monto pendiente (monto_cuota - total_pagado)
-    
+
     Esta función se llama automáticamente cuando se actualiza una cuota.
     """
     from datetime import date as date_type
-    
+
     # 1. Calcular dias_morosidad
     if cuota.fecha_vencimiento:
         if cuota.fecha_pago:
@@ -985,11 +985,11 @@ def _actualizar_morosidad_cuota(cuota, fecha_hoy: date) -> None:
                 cuota.dias_morosidad = 0
     else:
         cuota.dias_morosidad = 0
-    
+
     # 2. Calcular monto_morosidad (monto_cuota - total_pagado)
     monto_pendiente = cuota.monto_cuota - (cuota.total_pagado or Decimal("0.00"))
     cuota.monto_morosidad = max(Decimal("0.00"), monto_pendiente)
-    
+
     logger.debug(
         f"📊 [actualizar_morosidad_cuota] Cuota #{cuota.numero_cuota} (Préstamo {cuota.prestamo_id}): "
         f"dias_morosidad={cuota.dias_morosidad}, monto_morosidad=${cuota.monto_morosidad}"
@@ -1117,7 +1117,7 @@ def _aplicar_monto_a_cuota(
                 cuota.dias_mora = 0
                 cuota.monto_mora = Decimal("0.00")
                 cuota.tasa_mora = Decimal("0.00")
-        
+
         # ✅ ACTUALIZAR AUTOMÁTICAMENTE columnas de morosidad después de aplicar pago
         _actualizar_morosidad_cuota(cuota, fecha_hoy)
 
