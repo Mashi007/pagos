@@ -3665,8 +3665,7 @@ def obtener_financiamiento_tendencia_mensual(
                     INNER JOIN prestamos pr ON c.prestamo_id = pr.id
                     WHERE pr.estado = 'APROBADO'
                       AND EXTRACT(YEAR FROM c.fecha_vencimiento) >= 2024
-                      AND c.total_pagado IS NOT NULL
-                      AND c.total_pagado > 0
+                      AND COALESCE(c.total_pagado, 0) >= 0
                     GROUP BY 
                         EXTRACT(YEAR FROM c.fecha_vencimiento),
                         EXTRACT(MONTH FROM c.fecha_vencimiento)
@@ -3752,9 +3751,7 @@ def obtener_financiamiento_tendencia_mensual(
                 f"Morosidad=${morosidad_mensual:,.2f}"
             )
 
-            # ✅ CÁLCULO CORREGIDO: Morosidad acumulada = Morosidad acumulada anterior + Morosidad mensual
-            # NOTA: La morosidad acumulada solo aumenta, nunca disminuye (incluso si hay sobrepagos)
-            morosidad_acumulada += Decimal(str(morosidad_mensual))
+            # ✅ Morosidad NO es acumulativa, solo mensual
 
             # Calcular acumulado: sumar los nuevos financiamientos del mes
             total_acumulado += Decimal(str(monto_nuevos))
@@ -3769,10 +3766,12 @@ def obtener_financiamiento_tendencia_mensual(
                     "total_acumulado": float(total_acumulado),
                     "monto_cuotas_programadas": monto_cuotas_programadas,
                     "monto_pagado": monto_pagado_mes,
-                    "morosidad": float(morosidad_acumulada),  # ✅ Retornar morosidad acumulada
+                    "morosidad": float(
+                        morosidad_mensual
+                    ),  # ✅ Morosidad mensual (NO acumulativa)
                     "morosidad_mensual": float(
                         morosidad_mensual
-                    ),  # ✅ Agregar morosidad mensual (convertir a float explícitamente)
+                    ),  # ✅ Morosidad mensual (para compatibilidad)
                     "fecha_mes": fecha_mes_inicio.isoformat(),
                 }
             )
