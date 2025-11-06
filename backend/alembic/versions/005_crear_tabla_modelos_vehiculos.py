@@ -17,29 +17,43 @@ depends_on = None
 
 
 def upgrade():
-    # Crear tabla modelos_vehiculos
-    op.create_table(
-        "modelos_vehiculos",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("marca", sa.String(50), nullable=False),
-        sa.Column("modelo", sa.String(100), nullable=False),
-        sa.Column("nombre_completo", sa.String(150), nullable=False),
-        sa.Column("categoria", sa.String(50), nullable=True),  # Sedán, SUV, Hatchback, etc.
-        sa.Column("precio_base", sa.Numeric(12, 2), nullable=True),
-        sa.Column("activo", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column("descripcion", sa.Text(), nullable=True),
-        sa.Column("especificaciones", sa.JSON(), nullable=True),  # Motor, transmisión, etc.
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
-        sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("nombre_completo"),
-    )
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    
+    # Verificar si la tabla ya existe
+    if "modelos_vehiculos" not in inspector.get_table_names():
+        # Crear tabla modelos_vehiculos
+        op.create_table(
+            "modelos_vehiculos",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("marca", sa.String(50), nullable=False),
+            sa.Column("modelo", sa.String(100), nullable=False),
+            sa.Column("nombre_completo", sa.String(150), nullable=False),
+            sa.Column("categoria", sa.String(50), nullable=True),  # Sedán, SUV, Hatchback, etc.
+            sa.Column("precio_base", sa.Numeric(12, 2), nullable=True),
+            sa.Column("activo", sa.Boolean(), nullable=False, server_default="true"),
+            sa.Column("descripcion", sa.Text(), nullable=True),
+            sa.Column("especificaciones", sa.JSON(), nullable=True),  # Motor, transmisión, etc.
+            sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
+            sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.text("now()")),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("nombre_completo"),
+        )
+    else:
+        print("Tabla 'modelos_vehiculos' ya existe")
 
-    # Crear índices
-    op.create_index("ix_modelos_vehiculos_marca", "modelos_vehiculos", ["marca"])
-    op.create_index("ix_modelos_vehiculos_modelo", "modelos_vehiculos", ["modelo"])
-    op.create_index("ix_modelos_vehiculos_nombre_completo", "modelos_vehiculos", ["nombre_completo"])
-    op.create_index("ix_modelos_vehiculos_activo", "modelos_vehiculos", ["activo"])
+    # Verificar índices existentes
+    indexes = [idx["name"] for idx in inspector.get_indexes("modelos_vehiculos")] if "modelos_vehiculos" in inspector.get_table_names() else []
+    
+    # Crear índices solo si no existen
+    if "ix_modelos_vehiculos_marca" not in indexes:
+        op.create_index("ix_modelos_vehiculos_marca", "modelos_vehiculos", ["marca"])
+    if "ix_modelos_vehiculos_modelo" not in indexes:
+        op.create_index("ix_modelos_vehiculos_modelo", "modelos_vehiculos", ["modelo"])
+    if "ix_modelos_vehiculos_nombre_completo" not in indexes:
+        op.create_index("ix_modelos_vehiculos_nombre_completo", "modelos_vehiculos", ["nombre_completo"])
+    if "ix_modelos_vehiculos_activo" not in indexes:
+        op.create_index("ix_modelos_vehiculos_activo", "modelos_vehiculos", ["activo"])
 
     # Nota: Los datos iniciales de modelos de vehículos pueden ser insertados
     # manualmente o a través de un script separado si es necesario.
