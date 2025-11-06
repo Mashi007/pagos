@@ -14,6 +14,12 @@ export interface DashboardFiltros {
 }
 
 /**
+ * Flag para habilitar logs de depuración (solo en desarrollo con flag explícito)
+ * Por defecto está deshabilitado para evitar logs en producción
+ */
+const DEBUG_LOGS = import.meta.env.MODE === 'development' && import.meta.env.VITE_DEBUG_FILTROS === 'true'
+
+/**
  * Hook para manejar filtros del dashboard de manera centralizada
  * Cualquier KPI nuevo debe usar este hook para aplicar filtros automáticamente
  */
@@ -50,7 +56,9 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
       if (filtros.consolidado) params.append('consolidado', 'true')
       
       const result = params.toString()
-      console.log('🔧 [useDashboardFiltros] Construyendo params:', { filtrosOriginales: filtros, periodo, paramsConstruidos: result })
+      if (DEBUG_LOGS) {
+        console.log('🔧 [useDashboardFiltros] Construyendo params:', { filtrosOriginales: filtros, periodo, paramsConstruidos: result })
+      }
       return result
     }
   }, [filtros])
@@ -73,7 +81,9 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
       if (filtros.modelo && filtros.modelo !== '__ALL__') obj.modelo = normalizarValor(filtros.modelo)
       if (filtros.fecha_inicio && filtros.fecha_inicio !== '') obj.fecha_inicio = filtros.fecha_inicio
       if (filtros.fecha_fin && filtros.fecha_fin !== '') obj.fecha_fin = filtros.fecha_fin
-      console.log('🔧 [useDashboardFiltros] Construyendo objeto de filtros:', { filtrosOriginales: filtros, objetoConstruido: obj })
+      if (DEBUG_LOGS) {
+        console.log('🔧 [useDashboardFiltros] Construyendo objeto de filtros:', { filtrosOriginales: filtros, objetoConstruido: obj })
+      }
       return obj
     }
   }, [filtros])

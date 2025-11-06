@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -75,14 +75,11 @@ export function DashboardMenu() {
     queryKey: ['kpis-principales-menu', JSON.stringify(filtros)],
     queryFn: async () => {
       const params = construirFiltrosObject()
-      console.log('🔍 [KPIs Principales] Filtros aplicados:', filtros)
-      console.log('🔍 [KPIs Principales] Parámetros construidos:', params)
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
       const queryString = queryParams.toString()
-      console.log('🔍 [KPIs Principales] Query string:', queryString)
       const response = await apiClient.get(
         `/api/v1/dashboard/kpis-principales${queryString ? '?' + queryString : ''}`
       ) as {
@@ -108,8 +105,6 @@ export function DashboardMenu() {
     queryFn: async () => {
       try {
         const params = construirParams(periodo)
-        console.log('🔍 [Dashboard Admin] Filtros aplicados:', filtros)
-        console.log('🔍 [Dashboard Admin] Parámetros construidos:', params)
         // Usar timeout extendido para endpoints lentos
         const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`, { timeout: 60000 }) as {
           financieros?: { 
@@ -148,15 +143,6 @@ export function DashboardMenu() {
         `/api/v1/dashboard/financiamiento-tendencia-mensual?${queryParams.toString()}`
       ) as { meses: Array<{ mes: string; cantidad_nuevos: number; monto_nuevos: number; total_acumulado: number; monto_cuotas_programadas: number; monto_pagado: number; morosidad: number; morosidad_mensual: number }> }
       const meses = response.meses
-      // ✅ Debug: Log primeros meses para verificar datos
-      if (meses && meses.length > 0) {
-        console.log('📊 [DashboardMenu] Datos tendencia recibidos:', meses.length, 'meses')
-        console.log('📊 [DashboardMenu] Primer mes:', meses[0])
-        console.log('📊 [DashboardMenu] Último mes:', meses[meses.length - 1])
-        // Verificar valores específicos
-        const ultimoMes = meses[meses.length - 1]
-        console.log('📊 [DashboardMenu] Último mes - Programado:', ultimoMes.monto_cuotas_programadas, 'Pagado:', ultimoMes.monto_pagado, 'Morosidad:', ultimoMes.morosidad_mensual)
-      }
       return meses
     },
     staleTime: 1 * 60 * 1000, // ✅ Cache reducido a 1 minuto para debugging
@@ -425,34 +411,14 @@ export function DashboardMenu() {
 
   const [isRefreshing, setIsRefreshing] = useState(false)
   
-  // Invalidar queries cuando cambian los filtros o el período
-  // React Query debería detectar automáticamente los cambios en queryKey,
-  // pero invalidamos explícitamente para asegurar que se refresquen inmediatamente
-  useEffect(() => {
-    const filtrosKey = JSON.stringify(filtros)
-    console.log('🔄 [DashboardMenu] Filtros o período cambiaron, invalidando queries...', { filtros, periodo, filtrosKey })
-    // Invalidar todas las queries relacionadas con el dashboard
-    // Usar exact: false para que invalide todas las variantes de las queries
-    queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['financiamiento-tendencia'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['prestamos-concesionario'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['prestamos-modelo'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['pagos-conciliados'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['financiamiento-rangos'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['composicion-morosidad'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['cobranzas-mensuales'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['cobranzas-semanales'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['morosidad-analista'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['evolucion-pagos-menu'], exact: false })
-  }, [filtros, periodo, queryClient])
+  // NOTA: No necesitamos invalidar queries manualmente aquí
+  // React Query detecta automáticamente los cambios en queryKey (que incluye JSON.stringify(filtros))
+  // y refetch automáticamente cuando cambian los filtros o el período
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      console.log('🔄 [DashboardMenu] Refrescando todas las queries del dashboard...')
-      // Invalidar todas las queries relacionadas
+      // Invalidar y refrescar todas las queries relacionadas con el dashboard
       await queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['financiamiento-tendencia'], exact: false })
@@ -484,12 +450,11 @@ export function DashboardMenu() {
       await queryClient.refetchQueries({ queryKey: ['resumen-financiamiento-pagado'], exact: false })
       
       // También refrescar la query de kpisPrincipales usando su refetch
-    await refetch()
-      console.log('✅ [DashboardMenu] Todas las queries refrescadas exitosamente')
+      await refetch()
     } catch (error) {
       console.error('❌ [DashboardMenu] Error al refrescar queries:', error)
     } finally {
-    setIsRefreshing(false)
+      setIsRefreshing(false)
     }
   }
 
@@ -783,8 +748,19 @@ export function DashboardMenu() {
                     <div className="h-[450px] flex items-center justify-center">
                         <div className="animate-pulse text-gray-400">Cargando...</div>
                       </div>
-                    ) : datosTendencia && datosTendencia.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={450}>
+                    ) : datosTendencia && datosTendencia.length > 0 ? (() => {
+                      // Calcular el dominio del eje Y basándose en todas las series
+                      const allValues = datosTendencia.flatMap(d => [
+                        d.monto_nuevos || 0,
+                        d.monto_cuotas_programadas || 0,
+                        d.monto_pagado || 0,
+                        d.morosidad_mensual || 0
+                      ])
+                      const maxValue = Math.max(...allValues, 0)
+                      const yAxisDomain = [0, maxValue * 1.1] // 10% de margen superior
+                      
+                      return (
+                      <ResponsiveContainer width="100%" height={450}>
                       <ComposedChart data={datosTendencia} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                           <defs>
                           <linearGradient id="colorMontoGradient" x1="0" y1="0" x2="0" y2="1">
@@ -806,6 +782,8 @@ export function DashboardMenu() {
                           style={{ fontSize: '12px', fontWeight: 500 }}
                           tick={{ fill: '#6b7280' }}
                           tickFormatter={(value) => formatCurrency(value)}
+                          domain={yAxisDomain}
+                          allowDataOverflow={false}
                         />
                         <Tooltip 
                           contentStyle={{
@@ -886,7 +864,8 @@ export function DashboardMenu() {
                         />
                       </ComposedChart>
                     </ResponsiveContainer>
-                  ) : (
+                      )
+                    })() : (
                     <div className="h-[450px] flex items-center justify-center text-gray-400">
                       No hay datos disponibles
                     </div>
