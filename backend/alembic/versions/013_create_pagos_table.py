@@ -55,17 +55,18 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
 
-    # Verificar índices existentes
+    # Verificar índices existentes y columnas de la tabla
     indexes = [idx["name"] for idx in inspector.get_indexes("pagos")]
+    columns = [col["name"] for col in inspector.get_columns("pagos")]
     
-    # Crear índices solo si no existen
-    if "ix_pagos_cedula_cliente" not in indexes:
+    # Crear índices solo si no existen Y las columnas existen
+    if "ix_pagos_cedula_cliente" not in indexes and "cedula_cliente" in columns:
         op.create_index("ix_pagos_cedula_cliente", "pagos", ["cedula_cliente"])
-    if "ix_pagos_fecha_pago" not in indexes:
+    if "ix_pagos_fecha_pago" not in indexes and "fecha_pago" in columns:
         op.create_index("ix_pagos_fecha_pago", "pagos", ["fecha_pago"])
-    if "ix_pagos_conciliado" not in indexes:
+    if "ix_pagos_conciliado" not in indexes and "conciliado" in columns:
         op.create_index("ix_pagos_conciliado", "pagos", ["conciliado"])
-    if "ix_pagos_activo" not in indexes:
+    if "ix_pagos_activo" not in indexes and "activo" in columns:
         op.create_index("ix_pagos_activo", "pagos", ["activo"])
 
 

@@ -37,9 +37,10 @@ def upgrade():
         if 'usuario_registro' not in columns:
             op.add_column('pagos', sa.Column('usuario_registro', sa.String(length=100), nullable=True))
         
-        # Verificar índices existentes
+        # Verificar índices existentes y que la columna exista
         indexes = [idx["name"] for idx in inspector.get_indexes("pagos")]
-        if 'ix_pagos_prestamo_id' not in indexes:
+        columns = [col["name"] for col in inspector.get_columns("pagos")]
+        if 'ix_pagos_prestamo_id' not in indexes and 'prestamo_id' in columns:
             op.create_index(op.f('ix_pagos_prestamo_id'), 'pagos', ['prestamo_id'], unique=False)
     
     # Actualizar tabla cuotas (si existe)

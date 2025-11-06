@@ -42,22 +42,24 @@ def upgrade():
     else:
         print("Tabla 'auditoria' ya existe")
 
-    # Verificar índices existentes
-    indexes = [idx["name"] for idx in inspector.get_indexes("auditoria")] if "auditoria" in inspector.get_table_names() else []
-    
-    # Crear índices para optimizar consultas solo si no existen
-    if "ix_auditoria_id" not in indexes:
-        op.create_index("ix_auditoria_id", "auditoria", ["id"], unique=False)
-    if "ix_auditoria_usuario_id" not in indexes:
-        op.create_index("ix_auditoria_usuario_id", "auditoria", ["usuario_id"], unique=False)
-    if "ix_auditoria_accion" not in indexes:
-        op.create_index("ix_auditoria_accion", "auditoria", ["accion"], unique=False)
-    if "ix_auditoria_entidad" not in indexes:
-        op.create_index("ix_auditoria_entidad", "auditoria", ["entidad"], unique=False)
-    if "ix_auditoria_entidad_id" not in indexes:
-        op.create_index("ix_auditoria_entidad_id", "auditoria", ["entidad_id"], unique=False)
-    if "ix_auditoria_fecha" not in indexes:
-        op.create_index("ix_auditoria_fecha", "auditoria", ["fecha"], unique=False)
+    # Verificar índices existentes y columnas de la tabla
+    if "auditoria" in inspector.get_table_names():
+        indexes = [idx["name"] for idx in inspector.get_indexes("auditoria")]
+        columns = [col["name"] for col in inspector.get_columns("auditoria")]
+        
+        # Crear índices solo si no existen Y las columnas existen
+        if "ix_auditoria_id" not in indexes and "id" in columns:
+            op.create_index("ix_auditoria_id", "auditoria", ["id"], unique=False)
+        if "ix_auditoria_usuario_id" not in indexes and "usuario_id" in columns:
+            op.create_index("ix_auditoria_usuario_id", "auditoria", ["usuario_id"], unique=False)
+        if "ix_auditoria_accion" not in indexes and "accion" in columns:
+            op.create_index("ix_auditoria_accion", "auditoria", ["accion"], unique=False)
+        if "ix_auditoria_entidad" not in indexes and "entidad" in columns:
+            op.create_index("ix_auditoria_entidad", "auditoria", ["entidad"], unique=False)
+        if "ix_auditoria_entidad_id" not in indexes and "entidad_id" in columns:
+            op.create_index("ix_auditoria_entidad_id", "auditoria", ["entidad_id"], unique=False)
+        if "ix_auditoria_fecha" not in indexes and "fecha" in columns:
+            op.create_index("ix_auditoria_fecha", "auditoria", ["fecha"], unique=False)
 
 
 def downgrade():
