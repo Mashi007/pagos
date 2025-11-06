@@ -2927,18 +2927,18 @@ def obtener_composicion_morosidad(
     try:
         hoy = date.today()
 
-        # Query base para cuotas vencidas no pagadas
+        # ✅ ACTUALIZADO: Query base usando columnas calculadas automáticamente
         query_base = (
             db.query(
                 Cuota.id,
-                Cuota.monto_cuota,
-                Cuota.fecha_vencimiento,
+                Cuota.dias_morosidad,  # ✅ Usar columna calculada automáticamente
+                Cuota.monto_morosidad,  # ✅ Usar columna calculada automáticamente
             )
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.dias_morosidad > 0,  # ✅ Solo cuotas con morosidad (optimizado con índice)
+                Cuota.monto_morosidad > 0,  # ✅ Solo cuotas con monto pendiente (optimizado con índice)
             )
         )
 
@@ -2954,18 +2954,19 @@ def obtener_composicion_morosidad(
         if fecha_fin:
             query_base = query_base.filter(Prestamo.fecha_registro <= fecha_fin)
 
-        # Obtener todas las cuotas y calcular días de atraso
+        # Obtener todas las cuotas (ya tienen dias_morosidad y monto_morosidad calculados)
         cuotas = query_base.all()
 
-        # ✅ Agrupar por categorías de días de atraso: {categoria: {monto_total, cantidad}}
+        # ✅ Agrupar por categorías de días de atraso usando dias_morosidad calculado
         puntos_por_categoria = {}  # {categoria: {"monto": Decimal, "cantidad": int}}
         total_morosidad = Decimal("0")
         total_cuotas = 0
 
         for cuota in cuotas:
-            # Calcular días de atraso
-            dias_atraso = (hoy - cuota.fecha_vencimiento).days if cuota.fecha_vencimiento else 0
-            monto = Decimal(str(cuota.monto_cuota)) if cuota.monto_cuota else Decimal("0")
+            # ✅ Usar dias_morosidad calculado automáticamente (no calcular en tiempo real)
+            dias_atraso = cuota.dias_morosidad or 0
+            # ✅ Usar monto_morosidad calculado automáticamente (monto_cuota - total_pagado)
+            monto = Decimal(str(cuota.monto_morosidad)) if cuota.monto_morosidad else Decimal("0")
 
             # Determinar categoría
             categoria = _get_morosidad_categoria(dias_atraso)

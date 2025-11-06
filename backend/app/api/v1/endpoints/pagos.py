@@ -957,6 +957,45 @@ def _verificar_pagos_conciliados_cuota(db: Session, cuota_id: int, prestamo_id: 
     return True
 
 
+def _actualizar_morosidad_cuota(cuota, fecha_hoy: date) -> None:
+    """
+    ✅ ACTUALIZA AUTOMÁTICAMENTE las columnas de morosidad:
+    - dias_morosidad: Días de atraso (desde fecha_vencimiento hasta hoy o fecha_pago)
+    - monto_morosidad: Monto pendiente (monto_cuota - total_pagado)
+    
+    Esta función se llama automáticamente cuando se actualiza una cuota.
+    """
+    from datetime import date as date_type
+    
+    # 1. Calcular dias_morosidad
+    if cuota.fecha_vencimiento:
+        if cuota.fecha_pago:
+            # Si está pagada: calcular días entre fecha_pago y fecha_vencimiento (si fecha_pago > fecha_vencimiento)
+            if cuota.fecha_pago > cuota.fecha_vencimiento:
+                cuota.dias_morosidad = (cuota.fecha_pago - cuota.fecha_vencimiento).days
+            else:
+                # Pagada a tiempo o adelantada: 0 días de morosidad
+                cuota.dias_morosidad = 0
+        else:
+            # Si no está pagada: calcular días desde fecha_vencimiento hasta hoy
+            if cuota.fecha_vencimiento < fecha_hoy:
+                cuota.dias_morosidad = (fecha_hoy - cuota.fecha_vencimiento).days
+            else:
+                # No vencida aún: 0 días de morosidad
+                cuota.dias_morosidad = 0
+    else:
+        cuota.dias_morosidad = 0
+    
+    # 2. Calcular monto_morosidad (monto_cuota - total_pagado)
+    monto_pendiente = cuota.monto_cuota - (cuota.total_pagado or Decimal("0.00"))
+    cuota.monto_morosidad = max(Decimal("0.00"), monto_pendiente)
+    
+    logger.debug(
+        f"📊 [actualizar_morosidad_cuota] Cuota #{cuota.numero_cuota} (Préstamo {cuota.prestamo_id}): "
+        f"dias_morosidad={cuota.dias_morosidad}, monto_morosidad=${cuota.monto_morosidad}"
+    )
+
+
 def _actualizar_estado_cuota(cuota, fecha_hoy: date, db: Session = None, es_exceso: bool = False) -> bool:
     """
     Actualiza el estado de una cuota según las reglas de negocio.
@@ -1006,6 +1045,9 @@ def _actualizar_estado_cuota(cuota, fecha_hoy: date, db: Session = None, es_exce
             cuota.estado = "ATRASADO"
         else:
             cuota.estado = "PENDIENTE"
+
+    # ✅ ACTUALIZAR AUTOMÁTICAMENTE columnas de morosidad
+    _actualizar_morosidad_cuota(cuota, fecha_hoy)
 
     return estado_completado
 
@@ -1074,6 +1116,9 @@ def _aplicar_monto_a_cuota(
                 cuota.dias_mora = 0
                 cuota.monto_mora = Decimal("0.00")
                 cuota.tasa_mora = Decimal("0.00")
+        
+        # ✅ ACTUALIZAR AUTOMÁTICAMENTE columnas de morosidad después de aplicar pago
+        _actualizar_morosidad_cuota(cuota, fecha_hoy)
 
     return _actualizar_estado_cuota(cuota, fecha_hoy, db, es_exceso)
 

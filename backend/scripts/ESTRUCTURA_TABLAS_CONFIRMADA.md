@@ -75,9 +75,11 @@ Verificado desde DBeaver y código backend
 | `total_pagado` | NUMERIC | YES | - | ✅ **Monto total pagado en esta cuota** | ✅ KPIs principales |
 | `capital_pendiente` | NUMERIC | NO | - | Capital pendiente | ✅ Cálculos |
 | `interes_pendiente` | NUMERIC | NO | - | Interés pendiente | ✅ Cálculos |
-| `dias_mora` | INTEGER | YES | - | Días de mora | ✅ KPIs de morosidad |
-| `monto_mora` | NUMERIC | YES | - | Monto de mora | ✅ KPIs de morosidad |
-| `tasa_mora` | NUMERIC | YES | - | Tasa de mora | ✅ Cálculos |
+| `dias_mora` | INTEGER | YES | - | Días de mora (calculado cuando hay pago tardío) | ✅ KPIs de mora |
+| `monto_mora` | NUMERIC | YES | - | Monto de mora (calculado cuando hay pago tardío) | ✅ KPIs de mora |
+| `tasa_mora` | NUMERIC | YES | - | Tasa de mora aplicada | ✅ Cálculos |
+| `dias_morosidad` | INTEGER | YES | `0` | ✅ **Días de morosidad calculados automáticamente** | ✅ KPIs de morosidad (optimizado) |
+| `monto_morosidad` | NUMERIC(12,2) | YES | `0.00` | ✅ **Monto pendiente: monto_cuota - total_pagado (calculado automáticamente)** | ✅ KPIs de morosidad (optimizado) |
 | `estado` | VARCHAR(20) | NO | - | ✅ **Estado (PENDIENTE, PAGADO, PARCIAL, ATRASADO, ADELANTADO)** | ✅ KPIs y filtros |
 | `observaciones` | VARCHAR(500) | YES | - | Observaciones | - |
 | `es_cuota_especial` | BOOLEAN | YES | - | Si es cuota especial | - |
@@ -95,7 +97,12 @@ Verificado desde DBeaver y código backend
 - ✅ `prestamo_id` (Foreign Key, indexado)
 - ✅ `fecha_vencimiento` (indexado)
 - ✅ `estado` (indexado)
+- ✅ `dias_morosidad` (indexado) - ✅ **NUEVO: Índice para queries de morosidad optimizadas**
+- ✅ `monto_morosidad` (indexado) - ✅ **NUEVO: Índice para queries de morosidad optimizadas**
 - ✅ Múltiples índices compuestos para optimización
+- ✅ `idx_cuotas_dias_morosidad` (WHERE dias_morosidad > 0) - ✅ **NUEVO: Índice parcial**
+- ✅ `idx_cuotas_monto_morosidad` (WHERE monto_morosidad > 0) - ✅ **NUEVO: Índice parcial**
+- ✅ `idx_cuotas_morosidad_completo` (dias_morosidad, monto_morosidad, estado) - ✅ **NUEVO: Índice compuesto**
 
 ---
 
@@ -239,11 +246,11 @@ prestamo.cuotas  # Lista de cuotas del préstamo (backref)
 |-----|-------|----------|-------------------|
 | Total Préstamos | `prestamos` | `COUNT(id)` | `estado = 'APROBADO'` |
 | Total Cartera | `prestamos` | `SUM(total_financiamiento)` | `estado = 'APROBADO'` |
-| Cartera Vencida | `cuotas` | `SUM(monto_cuota - total_pagado)` | `fecha_vencimiento < CURRENT_DATE`, `estado != 'PAGADO'` |
+| Cartera Vencida | `cuotas` | `SUM(monto_morosidad)` | ✅ **Usar columna calculada automáticamente** | `dias_morosidad > 0`, `monto_morosidad > 0` |
 | Total Pagado | `pagos` | `SUM(monto_pagado)` | `activo = true` |
 | Total Pagado (Cuotas) | `cuotas` | `SUM(total_pagado)` | - |
 | Clientes Activos | `prestamos` | `COUNT(DISTINCT cedula)` | `estado = 'APROBADO'` |
-| Clientes en Mora | `cuotas` + `prestamos` | `COUNT(DISTINCT prestamo.cedula)` | `fecha_vencimiento < CURRENT_DATE`, `estado != 'PAGADO'` |
+| Clientes en Mora | `cuotas` + `prestamos` | `COUNT(DISTINCT prestamo.cedula)` | ✅ **Usar columna calculada automáticamente** | `dias_morosidad > 0`, `monto_morosidad > 0` |
 
 ### Filtros Comunes
 
@@ -321,6 +328,7 @@ DATE(fecha_pago)  # Convertir TIMESTAMP a DATE
    - ✅ Validar normalización de fechas (TIMESTAMP vs DATE)
    - ✅ Usar `prestamos.fecha_aprobacion` para filtros de fecha
    - ✅ Usar `cuotas.fecha_vencimiento` para cálculos de morosidad
+   - ✅ **NUEVO: Usar `cuotas.dias_morosidad` y `cuotas.monto_morosidad` para KPIs optimizados** (en lugar de calcular en tiempo real)
    - ✅ Usar `pagos.fecha_pago` para cálculos de pagos
 
 2. **Módulo de Préstamos**
@@ -334,6 +342,7 @@ DATE(fecha_pago)  # Convertir TIMESTAMP a DATE
 4. **Módulo de Cobranzas**
    - ✅ Agregar filtro `cliente.estado != 'INACTIVO'`
    - ✅ Usar `cuotas.fecha_vencimiento` para morosidad
+   - ✅ **NUEVO: Usar `cuotas.dias_morosidad` y `cuotas.monto_morosidad` para queries optimizadas**
 
 5. **Módulo de Reportes**
    - ✅ Agregar filtro `cliente.estado != 'INACTIVO'`
@@ -356,12 +365,23 @@ DATE(fecha_pago)  # Convertir TIMESTAMP a DATE
 3. **`cuotas.fecha_vencimiento`** (DATE)
    - Usar para: KPIs de morosidad, cálculos de días de atraso
    - Comparar con `CURRENT_DATE`
+   - ✅ **Base para calcular `dias_morosidad` automáticamente**
 
-4. **`pagos.fecha_pago`** (TIMESTAMP)
+4. **`cuotas.dias_morosidad`** (INTEGER) - ✅ **NUEVO**
+   - Usar para: KPIs de morosidad (optimizado)
+   - Calculado automáticamente: `(fecha_pago - fecha_vencimiento).days` o `(CURRENT_DATE - fecha_vencimiento).days`
+   - Se actualiza automáticamente al registrar pagos o actualizar estado
+
+5. **`cuotas.monto_morosidad`** (NUMERIC(12,2)) - ✅ **NUEVO**
+   - Usar para: KPIs de morosidad (optimizado)
+   - Calculado automáticamente: `MAX(0, monto_cuota - total_pagado)`
+   - Se actualiza automáticamente al registrar pagos o actualizar estado
+
+6. **`pagos.fecha_pago`** (TIMESTAMP)
    - Usar para: KPIs de pagos, filtros de fecha
    - Normalizar a DATE para comparaciones
 
-5. **`clientes.estado`** (VARCHAR)
+7. **`clientes.estado`** (VARCHAR)
    - Usar para: Filtro crítico - excluir INACTIVOS
    - Valores: `'ACTIVO'`, `'INACTIVO'`, `'FINALIZADO'`
 
@@ -375,6 +395,8 @@ DATE(fecha_pago)  # Convertir TIMESTAMP a DATE
 - [ ] Validar normalización de fechas (TIMESTAMP → DATE)
 - [ ] Usar `prestamos.fecha_aprobacion` correctamente
 - [ ] Usar `cuotas.fecha_vencimiento` para morosidad
+- [x] ✅ **Usar `cuotas.dias_morosidad` y `cuotas.monto_morosidad` para KPIs optimizados** (IMPLEMENTADO en `/composicion-morosidad`)
+- [ ] Actualizar otros endpoints del dashboard para usar columnas calculadas
 - [ ] Usar `pagos.fecha_pago` correctamente
 - [ ] Validar `pago.activo = true` en todas las queries
 
@@ -386,5 +408,44 @@ DATE(fecha_pago)  # Convertir TIMESTAMP a DATE
 
 ---
 
-**Estado:** ✅ **ESTRUCTURA CONFIRMADA - LISTA PARA CONFIGURACIÓN**
+---
+
+## ✅ NUEVAS COLUMNAS: Morosidad Calculada Automáticamente
+
+### Fecha de Implementación
+2025-11-06
+
+### Columnas Agregadas en `cuotas`
+
+1. **`dias_morosidad`** (INTEGER, default: 0, indexado)
+   - **Descripción:** Días de morosidad calculados automáticamente
+   - **Lógica:**
+     - Si pagada tardíamente: `(fecha_pago - fecha_vencimiento).days`
+     - Si no pagada: `(CURRENT_DATE - fecha_vencimiento).days`
+     - Si pagada a tiempo: `0`
+   - **Actualización:** Automática al registrar pagos o actualizar estado
+   - **Uso:** KPIs de morosidad optimizados (mejor rendimiento)
+
+2. **`monto_morosidad`** (NUMERIC(12,2), default: 0.00, indexado)
+   - **Descripción:** Monto pendiente calculado automáticamente
+   - **Fórmula:** `MAX(0, monto_cuota - total_pagado)`
+   - **Actualización:** Automática al registrar pagos o actualizar estado
+   - **Uso:** KPIs de morosidad optimizados (mejor rendimiento)
+
+### Beneficios
+
+- ✅ **Rendimiento mejorado:** Queries más rápidas usando valores pre-calculados
+- ✅ **Índices optimizados:** Filtros más eficientes con índices parciales
+- ✅ **Actualización automática:** Se actualiza al registrar pagos
+- ✅ **Consistencia:** Valores siempre sincronizados
+
+### Migración
+
+**Script SQL:** `backend/scripts/migrations/AGREGAR_COLUMNAS_MOROSIDAD_CUOTAS.sql`
+
+**Documentación completa:** `backend/docs/COLUMNAS_MOROSIDAD_AUTOMATICA.md`
+
+---
+
+**Estado:** ✅ **ESTRUCTURA CONFIRMADA Y ACTUALIZADA - LISTA PARA CONFIGURACIÓN**
 
