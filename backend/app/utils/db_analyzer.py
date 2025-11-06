@@ -268,8 +268,8 @@ def get_database_info(db: Session) -> Dict:
         # Calcular total de tablas
         count_query = text(
             """
-            SELECTCOUNT(*) 
-            FROM information_schema.tables 
+            SELECT COUNT(*)
+            FROM information_schema.tables
             WHERE table_schema = 'public'
         """
         )
@@ -278,8 +278,8 @@ def get_database_info(db: Session) -> Dict:
         # Calcular total de índices
         index_count_query = text(
             """
-            SELECTCOUNT(*) 
-            FROM pg_indexes 
+            SELECT COUNT(*)
+            FROM pg_indexes
             WHERE schemaname = 'public'
         """
         )

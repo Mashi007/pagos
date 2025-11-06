@@ -4155,7 +4155,7 @@ def obtener_cobranzas_semanales(
                 FROM cuotas c
                 INNER JOIN prestamos p ON c.prestamo_id = p.id
                 WHERE {where_clause_cobranzas}
-                GROUP BY(DATE_TRUNC('week', c.fecha_vencimiento) + INTERVAL '1 day')::date, 
+                GROUP BY(DATE_TRUNC('week', c.fecha_vencimiento) + INTERVAL '1 day')::date,
                          EXTRACT(YEAR FROM c.fecha_vencimiento),
                          EXTRACT(WEEK FROM c.fecha_vencimiento)
                 ORDER BY semana_inicio
@@ -4401,7 +4401,7 @@ def obtener_evolucion_morosidad(
             text(
                 """
                 SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
+                    SELECT FROM information_schema.tables
                     WHERE table_schema = 'public'
                     AND table_name = 'dashboard_morosidad_mensual'
                 )
@@ -4448,7 +4448,7 @@ def obtener_evolucion_morosidad(
                     COALESCE(SUM(c.monto_cuota), 0) as morosidad
                 FROM cuotas c
                 INNER JOIN prestamos p ON c.prestamo_id = p.id
-                WHERE 
+                WHERE
                     p.estado = 'APROBADO'
                     AND c.fecha_vencimiento >= :fecha_inicio
                     AND c.fecha_vencimiento < :fecha_fin_total

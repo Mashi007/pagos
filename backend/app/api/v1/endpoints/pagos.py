@@ -1492,7 +1492,7 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
                   AND c.fecha_vencimiento < :hoy
                   AND c.total_pagado < c.monto_cuota
             )
-            SELECT 
+            SELECT
                 (SELECT COUNT(*) FROM clientes_prestamos) AS total_clientes,
                 (SELECT COUNT(*) FROM clientes_en_mora) AS clientes_mora
         """
@@ -1815,7 +1815,7 @@ def exportar_pagos_con_errores(
         # ✅ Consulta SQL para obtener pagos con errores de la tabla pagos
         query = text(
             """
-            SELECT 
+            SELECT
                 id,
                 cedula,
                 fecha_pago,
