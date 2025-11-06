@@ -3610,10 +3610,7 @@ def obtener_financiamiento_tendencia_mensual(
             if analista or concesionario or modelo:
                 # ✅ CORRECCIÓN CRÍTICA: Usar total_pagado de la tabla cuotas directamente
                 # Con filtros, aplicar las mismas condiciones de analista/concesionario/modelo
-                filtros_pagos = [
-                    "pr.estado = 'APROBADO'",
-                    "EXTRACT(YEAR FROM c.fecha_vencimiento) >= 2024"
-                ]
+                filtros_pagos = ["pr.estado = 'APROBADO'", "EXTRACT(YEAR FROM c.fecha_vencimiento) >= 2024"]
                 bind_params_pagos_filtrado = {}
 
                 if analista:
@@ -3763,12 +3760,8 @@ def obtener_financiamiento_tendencia_mensual(
                     "total_acumulado": float(total_acumulado),
                     "monto_cuotas_programadas": monto_cuotas_programadas,
                     "monto_pagado": monto_pagado_mes,
-                    "morosidad": float(
-                        morosidad_mensual
-                    ),  # ✅ Morosidad mensual (NO acumulativa)
-                    "morosidad_mensual": float(
-                        morosidad_mensual
-                    ),  # ✅ Morosidad mensual (para compatibilidad)
+                    "morosidad": float(morosidad_mensual),  # ✅ Morosidad mensual (NO acumulativa)
+                    "morosidad_mensual": float(morosidad_mensual),  # ✅ Morosidad mensual (para compatibilidad)
                     "fecha_mes": fecha_mes_inicio.isoformat(),
                 }
             )
