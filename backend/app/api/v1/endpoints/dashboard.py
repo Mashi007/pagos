@@ -3701,9 +3701,6 @@ def obtener_financiamiento_tendencia_mensual(
             # Si la tabla no existe o hay error, usar valores por defecto (0)
             pagos_por_mes = {}
 
-        pagos_time = int((time.time() - start_pagos) * 1000)
-        logger.info(f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms")
-
         # ✅ SIMPLIFICADO: Eliminada query innecesaria de cuotas_pagos_por_mes
         # No se necesita para el cálculo de morosidad: morosidad = MAX(0, programado - pagado)
 
