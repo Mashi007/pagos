@@ -1941,18 +1941,22 @@ def obtener_kpis_principales(
         base_query_clientes = FiltrosDashboard.aplicar_filtros_prestamo(
             base_query_clientes, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        
+
         # ✅ Query optimizada: calcular todos los estados en una sola query
         clientes_por_estado = db.query(
             func.count(func.distinct(case((Prestamo.estado == "APROBADO", Prestamo.cedula), else_=None))).label("activos"),
-            func.count(func.distinct(case((Prestamo.estado == "FINALIZADO", Prestamo.cedula), else_=None))).label("finalizados"),
-            func.count(func.distinct(case((Prestamo.estado.notin_(["APROBADO", "FINALIZADO"]), Prestamo.cedula), else_=None))).label("inactivos")
+            func.count(func.distinct(case((Prestamo.estado == "FINALIZADO", Prestamo.cedula), else_=None))).label(
+                "finalizados"
+            ),
+            func.count(
+                func.distinct(case((Prestamo.estado.notin_(["APROBADO", "FINALIZADO"]), Prestamo.cedula), else_=None))
+            ).label("inactivos"),
         )
         clientes_por_estado = FiltrosDashboard.aplicar_filtros_prestamo(
             clientes_por_estado, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         resultado_clientes = clientes_por_estado.first()
-        
+
         clientes_activos_actual = int(resultado_clientes.activos or 0)
         clientes_finalizados_actual = int(resultado_clientes.finalizados or 0)
         clientes_inactivos_actual = int(resultado_clientes.inactivos or 0)
@@ -1961,20 +1965,23 @@ def obtener_kpis_principales(
         # ✅ Query optimizada para mes anterior: calcular todos los estados en una sola query
         # Aplicar filtros de fecha primero
         query_base_anterior = db.query(Prestamo).filter(
-            Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
-            Prestamo.fecha_registro < fecha_fin_mes_anterior
+            Prestamo.fecha_registro >= fecha_inicio_mes_anterior, Prestamo.fecha_registro < fecha_fin_mes_anterior
         )
         query_base_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
             query_base_anterior, analista, concesionario, modelo, None, None
         )
-        
+
         clientes_por_estado_anterior = query_base_anterior.with_entities(
             func.count(func.distinct(case((Prestamo.estado == "APROBADO", Prestamo.cedula), else_=None))).label("activos"),
-            func.count(func.distinct(case((Prestamo.estado == "FINALIZADO", Prestamo.cedula), else_=None))).label("finalizados"),
-            func.count(func.distinct(case((Prestamo.estado.notin_(["APROBADO", "FINALIZADO"]), Prestamo.cedula), else_=None))).label("inactivos")
+            func.count(func.distinct(case((Prestamo.estado == "FINALIZADO", Prestamo.cedula), else_=None))).label(
+                "finalizados"
+            ),
+            func.count(
+                func.distinct(case((Prestamo.estado.notin_(["APROBADO", "FINALIZADO"]), Prestamo.cedula), else_=None))
+            ).label("inactivos"),
         )
         resultado_clientes_anterior = clientes_por_estado_anterior.first()
-        
+
         clientes_activos_anterior = int(resultado_clientes_anterior.activos or 0)
         clientes_finalizados_anterior = int(resultado_clientes_anterior.finalizados or 0)
         clientes_inactivos_anterior = int(resultado_clientes_anterior.inactivos or 0)
