@@ -1268,16 +1268,15 @@ def dashboard_administrador(
 
         # 18. PROMEDIO DÍAS DE MORA
         # Calcular desde cuotas vencidas en lugar de usar campo inexistente
-        # ✅ CORRECCIÓN: En PostgreSQL, date - date ya devuelve integer (días)
-        # Usar SQL directo con bindparams para seguridad
+        # ✅ CORRECCIÓN: Usar CAST para convertir el parámetro bind correctamente
         try:
             promedio_dias_mora_query = db.execute(
                 text(
                     """
-                    SELECT COALESCE(AVG((:hoy::date - fecha_vencimiento::date)), 0)
+                    SELECT COALESCE(AVG(CAST(:hoy AS date) - CAST(c.fecha_vencimiento AS date)), 0)
                     FROM cuotas c
                     INNER JOIN prestamos p ON c.prestamo_id = p.id
-                    WHERE c.fecha_vencimiento < :hoy
+                    WHERE c.fecha_vencimiento < CAST(:hoy AS date)
                       AND c.estado != 'PAGADO'
                       AND p.estado = 'APROBADO'
                 """
@@ -1286,6 +1285,10 @@ def dashboard_administrador(
             promedio_dias_mora = float(promedio_dias_mora_query.scalar() or 0.0)
         except Exception as e:
             logger.warning(f"Error calculando promedio días de mora: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
             promedio_dias_mora = 0.0
 
         # 19. PORCENTAJE CUMPLIMIENTO (clientes al día / total clientes)
@@ -1986,9 +1989,10 @@ def obtener_kpis_principales(
         total_clientes_actual = clientes_activos_actual + clientes_finalizados_actual + clientes_inactivos_actual
 
         # ✅ Query optimizada para mes anterior: calcular todos los estados en una sola query
+        # ⚠️ CORRECCIÓN: Usar fecha_aprobacion porque fecha_registro no migró correctamente
         # Aplicar filtros de fecha primero
         query_base_anterior = db.query(Prestamo).filter(
-            Prestamo.fecha_registro >= fecha_inicio_mes_anterior, Prestamo.fecha_registro < fecha_fin_mes_anterior
+            Prestamo.fecha_aprobacion >= fecha_inicio_mes_anterior, Prestamo.fecha_aprobacion < fecha_fin_mes_anterior
         )
         query_base_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
             query_base_anterior, analista, concesionario, modelo, None, None

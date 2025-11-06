@@ -51,10 +51,11 @@ class FiltrosDashboard:
             query = query.filter(Prestamo.concesionario == concesionario)
         if modelo:
             query = query.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
+        # ⚠️ CORRECCIÓN: Usar fecha_aprobacion porque fecha_registro no migró correctamente
         if fecha_inicio:
-            query = query.filter(Prestamo.fecha_registro >= fecha_inicio)
+            query = query.filter(Prestamo.fecha_aprobacion >= fecha_inicio)
         if fecha_fin:
-            query = query.filter(Prestamo.fecha_registro <= fecha_fin)
+            query = query.filter(Prestamo.fecha_aprobacion <= fecha_fin)
         return query
 
     @staticmethod
