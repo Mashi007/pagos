@@ -1,7 +1,7 @@
 """Agregar índices de performance para optimización de queries
 
 Revision ID: 20250127_performance_indexes
-Revises: 20251102_add_leida_notificaciones
+Revises: 20251102_add_leida_notificaciones, 20250115_valor_activo
 Create Date: 2025-01-27 12:00:00.000000
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = '20250127_performance_indexes'
-down_revision = '20251102_add_leida_notificaciones'
+down_revision = ('20251102_add_leida_notificaciones', '20250115_valor_activo')
 branch_labels = None
 depends_on = None
 

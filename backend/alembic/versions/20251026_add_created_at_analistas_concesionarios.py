@@ -1,7 +1,7 @@
 """Add created_at to analistas and concesionarios
 
 Revision ID: add_created_at_analistas_concesionarios
-Revises: 
+Revises: 017_add_is_admin_column
 Create Date: 2025-10-26 12:00:00.000000
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision = 'add_created_at_analistas_concesionarios'
-down_revision = None
+down_revision = '017_add_is_admin_column'
 branch_labels = None
 depends_on = None
 

@@ -1,7 +1,7 @@
 """add valor_activo to prestamos
 
 Revision ID: 20250115_valor_activo
-Revises: 20251104_group_by_indexes
+Revises: 20251104_group_by_indexes, agregar_cedula
 Create Date: 2025-01-15 10:00:00.000000
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = '20250115_valor_activo'
-down_revision = '20251104_group_by_indexes'
+down_revision = ('20251104_group_by_indexes', 'agregar_cedula')
 branch_labels = None
 depends_on = None
 

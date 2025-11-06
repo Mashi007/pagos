@@ -1,7 +1,7 @@
 """agregar cedula a evaluacion
 
 Revision ID: agregar_cedula
-Revises: add_referencias_individuales
+Revises: add_referencias_individuales, add_notificacion_plantillas
 Create Date: 2025-01-27
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'agregar_cedula'
-down_revision = 'add_referencias_individuales'
+down_revision = ('add_referencias_individuales', 'add_notificacion_plantillas')
 branch_labels = None
 depends_on = None
 
