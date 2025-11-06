@@ -3,6 +3,10 @@
   "private": true,
   "version": "1.0.1",
   "type": "module",
+  "engines": {
+    "node": ">=20.11.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "setup": "node setup.js",
     "dev": "vite",
@@ -58,7 +62,7 @@
     "@vitejs/plugin-react": "^4.1.1",
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.31",
-    "xlsx": "^0.20.2",
+    "xlsx": "^0.18.5",
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",
     "@heroicons/react": "^2.0.18"
