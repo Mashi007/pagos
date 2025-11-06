@@ -11,6 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
+revision = "013_create_pagos_table"
 down_revision = "012_add_concesionario_analista_clientes"
 branch_labels = None
 depends_on = None
@@ -21,9 +22,11 @@ def upgrade() -> None:
     inspector = inspect(conn)
 
     # Verificar si la tabla ya existe
+    if "pagos" in inspector.get_table_names():
         return
 
-    op.create_table
+    op.create_table(
+        "pagos",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("cedula_cliente", sa.String(length=20), nullable=False),
         sa.Column("fecha_pago", sa.DateTime(), nullable=False),
@@ -33,24 +36,38 @@ def upgrade() -> None:
         sa.Column("documento_tipo", sa.String(length=10), nullable=True),
         sa.Column("documento_tamaño", sa.Integer(), nullable=True),
         sa.Column("documento_ruta", sa.String(length=500), nullable=True),
-        sa.Column("conciliado", sa.Boolean(), nullable=False, default=False),
+        sa.Column("conciliado", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column("fecha_conciliacion", sa.DateTime(), nullable=True),
-        sa.Column("activo", sa.Boolean(), nullable=False, default=True),
+        sa.Column("activo", sa.Boolean(), nullable=False, server_default="true"),
         sa.Column("notas", sa.Text(), nullable=True),
-        sa.Column
+        sa.Column(
+            "created_at",
             sa.DateTime(),
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
-        sa.Column
+        ),
+        sa.Column(
+            "updated_at",
             sa.DateTime(),
             nullable=False,
             server_default=sa.text("CURRENT_TIMESTAMP"),
+        ),
         sa.PrimaryKeyConstraint("id"),
+    )
 
     # Crear índices
-
+    op.create_index("ix_pagos_cedula_cliente", "pagos", ["cedula_cliente"])
+    op.create_index("ix_pagos_fecha_pago", "pagos", ["fecha_pago"])
+    op.create_index("ix_pagos_conciliado", "pagos", ["conciliado"])
+    op.create_index("ix_pagos_activo", "pagos", ["activo"])
 
 
 def downgrade() -> None:
+    # Eliminar índices
+    op.drop_index("ix_pagos_activo", table_name="pagos")
+    op.drop_index("ix_pagos_conciliado", table_name="pagos")
+    op.drop_index("ix_pagos_fecha_pago", table_name="pagos")
+    op.drop_index("ix_pagos_cedula_cliente", table_name="pagos")
 
-"""
+    # Eliminar tabla
+    op.drop_table("pagos")

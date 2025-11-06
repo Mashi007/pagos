@@ -34,7 +34,7 @@ def upgrade():
         pass  # Index might not exist
 
     # Create a non-unique index for performance
-    op.create_index
+    op.create_index("ix_clientes_cedula_non_unique", "clientes", ["cedula"], unique=False)
 
 
 def downgrade():

@@ -23,23 +23,29 @@ def upgrade() -> None:
     # Verificar si la columna is_admin ya existe
     connection = op.get_bind()
     inspector = sa.inspect(connection)
+    columns = [col["name"] for col in inspector.get_columns("users")]
 
     if "is_admin" not in columns:
         # Agregar columna is_admin si no existe
-        op.add_column
+        op.add_column(
+            "users",
             sa.Column("is_admin", sa.Boolean(), nullable=False, server_default="false"),
+        )
 
         if "rol" in columns:
+            # Migrar datos de rol a is_admin si existe la columna rol
+            op.execute("UPDATE users SET is_admin = true WHERE rol = 'admin'")
         else:
             # Si no existe rol, asumir que el primer usuario es admin
+            op.execute("UPDATE users SET is_admin = true WHERE id = (SELECT MIN(id) FROM users)")
 
     # Verificar que is_admin esté configurado correctamente
-    result = connection.execute
+    result = connection.execute(sa.text("SELECT COUNT(*) FROM users WHERE is_admin = true"))
     admin_count = result.scalar()
 
     if admin_count == 0:
         # Si no hay admins, hacer el primer usuario admin
-        op.execute
+        op.execute("UPDATE users SET is_admin = true WHERE id = (SELECT MIN(id) FROM users)")
 
 
 def downgrade() -> None:

@@ -28,19 +28,24 @@ def upgrade() -> None:
         "admin@rapicredit.com",
         "admin@sistema.com",
         "daniel@rapicredit.com",
+    ]
 
     for email in admin_emails:
-        result = connection.execute
-            SET is_admin = TRUE, updated_at = NOW()
-            WHERE email = '{email}' AND is_active = TRUE
-        """
+        result = connection.execute(
+            sa.text(f"""
+                UPDATE users
+                SET is_admin = TRUE, updated_at = NOW()
+                WHERE email = '{email}' AND is_active = TRUE
+            """)
+        )
 
         if result.rowcount > 0:
             print(f"Usuario {email} marcado como administrador")
         else:
             print(f"Usuario {email} no encontrado o inactivo")
 
-    admin_count = connection.execute
+    admin_count = connection.execute(
+        sa.text("SELECT COUNT(*) FROM users WHERE is_admin = TRUE")
     ).scalar()
 
     if admin_count == 0:
@@ -48,22 +53,26 @@ def upgrade() -> None:
         print("Creando usuario administrador por defecto...")
 
         # Crear usuario administrador por defecto
-        connection.execute
-            ) VALUES 
-                NOW()
-            ON CONFLICT (email) DO UPDATE SET
-                is_admin = TRUE,
-                is_active = TRUE,
-                updated_at = NOW()
-        """
+        connection.execute(
+            sa.text("""
+                INSERT INTO users (email, nombre, apellido, password_hash, is_admin, is_active, created_at, updated_at)
+                VALUES ('admin@rapicredit.com', 'Administrador', 'Sistema', '$2b$12$default', TRUE, TRUE, NOW(), NOW())
+                ON CONFLICT (email) DO UPDATE SET
+                    is_admin = TRUE,
+                    is_active = TRUE,
+                    updated_at = NOW()
+            """)
+        )
         print("Usuario administrador por defecto creado/actualizado")
 
     # Verificación final
-    final_admin_count = connection.execute
+    final_admin_count = connection.execute(
+        sa.text("SELECT COUNT(*) FROM users WHERE is_admin = TRUE")
     ).scalar()
     print(f"Total de administradores en el sistema: {final_admin_count}")
 
-    admins = connection.execute
+    admins = connection.execute(
+        sa.text("SELECT email, nombre, apellido, is_active FROM users WHERE is_admin = TRUE")
     ).fetchall()
 
     print("Lista de administradores:")
@@ -83,12 +92,16 @@ def downgrade() -> None:
         "admin@rapicredit.com",
         "admin@sistema.com",
         "daniel@rapicredit.com",
+    ]
 
     for email in admin_emails:
-        connection.execute
-            SET is_admin = FALSE, updated_at = NOW()
-            WHERE email = '{email}'
-        """
+        connection.execute(
+            sa.text(f"""
+                UPDATE users
+                SET is_admin = FALSE, updated_at = NOW()
+                WHERE email = '{email}'
+            """)
+        )
 
     # ### end Alembic commands ###
 
