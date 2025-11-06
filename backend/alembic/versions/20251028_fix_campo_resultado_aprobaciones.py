@@ -1,7 +1,7 @@
 """fix_campo_resultado_aprobaciones
 
 Revision ID: fix_campo_resultado
-Revises: 20251027_update_evaluacion_7_criterios
+Revises: update_evaluacion_7_criterios
 Create Date: 2025-10-28
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'fix_campo_resultado'
-down_revision = '20251027_update_evaluacion_7_criterios'
+down_revision = 'update_evaluacion_7_criterios'
 branch_labels = None
 depends_on = None
 
