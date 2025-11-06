@@ -2042,7 +2042,7 @@ def obtener_cobranzas_mensuales(
     import time
 
     start_time = time.time()
-    logger.info(f"📊 [cobranzas-mensuales] Iniciando cálculo de cobranzas mensuales")
+    logger.info("📊 [cobranzas-mensuales] Iniciando cálculo de cobranzas mensuales")
 
     try:
         hoy = date.today()
@@ -3607,9 +3607,6 @@ def obtener_financiamiento_tendencia_mensual(
         try:
             # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
             # Aplicar filtros de analista/concesionario/modelo mediante JOIN con prestamos
-            prestamo_conditions_pagos = []
-            bind_params_pagos = {"fecha_inicio": fecha_inicio_query_dt, "fecha_fin": fecha_fin_query_dt}
-
             if analista or concesionario or modelo:
                 # ✅ CORRECCIÓN CRÍTICA: Los pagos se cuentan por fecha_pago (fecha de registro)
                 # Con filtros, aplicar las mismas condiciones de analista/concesionario/modelo
@@ -3716,7 +3713,7 @@ def obtener_financiamiento_tendencia_mensual(
 
         pagos_time = int((time.time() - start_pagos) * 1000)
         logger.info(f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms")
-        
+
         # ✅ SIMPLIFICADO: Eliminada query innecesaria de cuotas_pagos_por_mes
         # No se necesita para el cálculo de morosidad: morosidad = MAX(0, programado - pagado)
 
@@ -3808,7 +3805,7 @@ def obtener_financiamiento_tendencia_mensual(
             f"Total morosidad mensual=${total_morosidad:,.2f}"
         )
         if meses_con_morosidad:
-            logger.info(f"📊 [financiamiento-tendencia] Meses con morosidad > 0:")
+            logger.info("📊 [financiamiento-tendencia] Meses con morosidad > 0:")
             for m in meses_con_morosidad[-10:]:  # Mostrar últimos 10 meses con morosidad
                 logger.info(
                     f"  ✅ {m['mes']}: Programado=${m['monto_cuotas_programadas']:,.2f}, "
