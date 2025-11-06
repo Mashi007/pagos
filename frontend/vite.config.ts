@@ -38,7 +38,10 @@ export default defineConfig({
           warning.message.includes('moz-text-size-adjust') ||
           warning.message.includes('text-size-adjust') ||
           warning.message.includes('mal selector') ||
-          warning.message.includes('bad selector')
+          warning.message.includes('bad selector') ||
+          warning.message.includes('Juego de reglas ignoradas') ||
+          warning.message.includes('ignored due to bad selector') ||
+          warning.message.includes('ignored due to malformed selector')
         )) {
           return;
         }
