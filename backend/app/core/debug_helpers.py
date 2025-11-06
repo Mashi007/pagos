@@ -132,9 +132,14 @@ def debug_sql_errors(func: Callable) -> Callable:
 # ============================================
 
 
-def validate_graph_data(data: list, required_fields: list) -> tuple[bool, Optional[str]]:
+def validate_graph_data(data: list, required_fields: list, non_numeric_fields: Optional[list] = None) -> tuple[bool, Optional[str]]:
     """
     Valida que los datos del gráfico tengan los campos requeridos
+
+    Args:
+        data: Lista de diccionarios con los datos
+        required_fields: Lista de campos requeridos
+        non_numeric_fields: Lista de campos que NO deben validarse como numéricos (ej: 'mes', 'fecha', 'label')
 
     Returns:
         (is_valid, error_message)
@@ -144,6 +149,14 @@ def validate_graph_data(data: list, required_fields: list) -> tuple[bool, Option
 
     if not isinstance(data, list):
         return False, f"❌ Tipo incorrecto: Se esperaba lista, se recibió {type(data).__name__}"
+
+    # Campos que por defecto no son numéricos
+    default_non_numeric = ["mes", "fecha", "label", "periodo", "nombre", "descripcion"]
+    if non_numeric_fields is None:
+        non_numeric_fields = default_non_numeric
+    else:
+        # Combinar con los campos por defecto
+        non_numeric_fields = list(set(non_numeric_fields + default_non_numeric))
 
     # Validar que todos los elementos tengan los campos requeridos
     missing_fields = []
@@ -158,9 +171,13 @@ def validate_graph_data(data: list, required_fields: list) -> tuple[bool, Option
     if missing_fields:
         return False, f"❌ Campos faltantes: {', '.join(set(missing_fields))}"
 
-    # Validar que los valores numéricos sean válidos
+    # Validar que los valores numéricos sean válidos (excluyendo campos no numéricos)
     for i, item in enumerate(data[:5]):
         for field in required_fields:
+            # Saltar validación numérica para campos que no deben ser numéricos
+            if field in non_numeric_fields:
+                continue
+                
             value = item.get(field)
             if value is not None and not isinstance(value, (int, float)):
                 try:

@@ -31,9 +31,45 @@ from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.utils.filtros_dashboard import FiltrosDashboard
 from app.utils.query_monitor import query_monitor
+from app.utils.pagos_cuotas_helper import calcular_monto_pagado_mes
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+# ============================================================================
+# HELPERS DE NORMALIZACIÓN Y UTILIDADES
+# ============================================================================
+
+def normalize_to_date(fecha: Any) -> Optional[date]:
+    """
+    Normaliza cualquier tipo de fecha a date.
+    Maneja datetime, date, string, y None.
+    
+    Args:
+        fecha: Puede ser datetime, date, string ISO, o None
+        
+    Returns:
+        date o None si no se puede convertir
+    """
+    if fecha is None:
+        return None
+    if isinstance(fecha, date):
+        return fecha
+    if isinstance(fecha, datetime):
+        return fecha.date()
+    if isinstance(fecha, str):
+        try:
+            # Intentar parsear como ISO format
+            if 'T' in fecha or ' ' in fecha:
+                return datetime.fromisoformat(fecha.replace('Z', '+00:00')).date()
+            else:
+                return datetime.strptime(fecha, '%Y-%m-%d').date()
+        except (ValueError, AttributeError):
+            logger.warning(f"No se pudo convertir fecha a date: {fecha}")
+            return None
+    logger.warning(f"Tipo de fecha no soportado: {type(fecha)}")
+    return None
 
 
 def _calcular_periodos(periodo: str, hoy: date) -> tuple[date, date]:
@@ -3555,7 +3591,17 @@ def obtener_financiamiento_tendencia_mensual(
                     )
 
                     # Encontrar la fecha más antigua entre todas
-                    fechas_disponibles = [f for f in [primera_aprobacion, primera_cuota, primera_pago] if f is not None]
+                    # ✅ CORRECCIÓN: Normalizar todas las fechas a date antes de comparar
+                    # fecha_aprobacion y fecha_pago pueden ser datetime.datetime, fecha_vencimiento es date
+                    fechas_disponibles = []
+                    for f in [primera_aprobacion, primera_cuota, primera_pago]:
+                        if f is not None:
+                            # Convertir datetime a date si es necesario
+                            if isinstance(f, datetime):
+                                fechas_disponibles.append(f.date())
+                            else:
+                                fechas_disponibles.append(f)
+                    
                     if fechas_disponibles:
                         primera_fecha = min(fechas_disponibles)
                         # Redondear al primer día del mes
@@ -3761,9 +3807,9 @@ def obtener_financiamiento_tendencia_mensual(
 
         pagos_por_mes = {}
         try:
-            # ✅ OPTIMIZACIÓN: Usar ORM en lugar de SQL directo para aprovechar índices
-            # Usar total_pagado de la tabla cuotas directamente
-            # Esto es más confiable porque total_pagado se actualiza automáticamente cuando se aplican pagos
+            # ✅ SOLUCIÓN INTEGRAL: Usar helper que busca pagos de múltiples formas
+            # Primero intentar usar total_pagado de cuotas (si está actualizado)
+            # Si está en 0, usar helper para buscar pagos por múltiples estrategias
             query_pagos = (
                 db.query(
                     func.extract("year", Cuota.fecha_vencimiento).label("año"),
@@ -3792,8 +3838,21 @@ def obtener_financiamiento_tendencia_mensual(
             for row in resultados_pagos:
                 año_mes = int(row.año)
                 num_mes = int(row.mes)
-                monto = float(row.total_pagado or Decimal("0"))
-                pagos_por_mes[(año_mes, num_mes)] = monto
+                monto_total_pagado = float(row.total_pagado or Decimal("0"))
+                
+                # ✅ Si total_pagado está en 0, usar helper para buscar pagos
+                if monto_total_pagado == 0:
+                    # Calcular monto pagado usando helper (busca de múltiples formas)
+                    fecha_mes = date(año_mes, num_mes, 1)
+                    monto_helper = calcular_monto_pagado_mes(
+                        db=db,
+                        mes=fecha_mes,
+                        prestamo_id=None,  # Sin filtro de préstamo específico
+                        cedula=None  # Sin filtro de cédula específico
+                    )
+                    monto_total_pagado = float(monto_helper)
+                
+                pagos_por_mes[(año_mes, num_mes)] = monto_total_pagado
 
             pagos_time = int((time.time() - start_pagos) * 1000)
 
@@ -3945,7 +4004,12 @@ def obtener_financiamiento_tendencia_mensual(
 
         # 🔍 DEBUG: Validar datos del gráfico y loggear información de debugging
         required_fields = ["mes", "monto_nuevos", "monto_cuotas_programadas", "monto_pagado", "morosidad_mensual"]
-        is_valid, error_msg = validate_graph_data(meses_data, required_fields)
+        # ✅ CORRECCIÓN: Especificar que 'mes' no es numérico
+        is_valid, error_msg = validate_graph_data(
+            meses_data, 
+            required_fields,
+            non_numeric_fields=["mes"]  # 'mes' es string como "Ene 2024"
+        )
         if not is_valid:
             DebugAlert.log_missing_data(
                 endpoint="/financiamiento-tendencia-mensual",
