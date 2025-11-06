@@ -19,21 +19,54 @@ depends_on = None
 
 def upgrade():
     """Update asesor model to make apellido and email nullable"""
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    
+    if "asesores" not in inspector.get_table_names():
+        print("⚠️ Tabla 'asesores' no existe, saltando migración")
+        return
+    
+    columns = [col["name"] for col in inspector.get_columns("asesores")]
+    
     # Make apellido nullable
-    op.alter_column(
-        "asesores", "apellido", existing_type=sa.VARCHAR(255), nullable=True
-    )
+    if "apellido" in columns:
+        try:
+            op.alter_column(
+                "asesores", "apellido", existing_type=sa.VARCHAR(255), nullable=True
+            )
+        except Exception as e:
+            print(f"⚠️ No se pudo modificar columna 'apellido': {e}")
 
     # Make email nullable
-    op.alter_column("asesores", "email", existing_type=sa.VARCHAR(255), nullable=True)
+    if "email" in columns:
+        try:
+            op.alter_column("asesores", "email", existing_type=sa.VARCHAR(255), nullable=True)
+        except Exception as e:
+            print(f"⚠️ No se pudo modificar columna 'email': {e}")
 
 
 def downgrade():
     """Revert asesor model changes"""
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    
+    if "asesores" not in inspector.get_table_names():
+        return
+    
+    columns = [col["name"] for col in inspector.get_columns("asesores")]
+    
     # Make apellido not nullable
-    op.alter_column(
-        "asesores", "apellido", existing_type=sa.VARCHAR(255), nullable=False
-    )
+    if "apellido" in columns:
+        try:
+            op.alter_column(
+                "asesores", "apellido", existing_type=sa.VARCHAR(255), nullable=False
+            )
+        except Exception as e:
+            print(f"⚠️ No se pudo modificar columna 'apellido': {e}")
 
     # Make email not nullable
-    op.alter_column("asesores", "email", existing_type=sa.VARCHAR(255), nullable=False)
+    if "email" in columns:
+        try:
+            op.alter_column("asesores", "email", existing_type=sa.VARCHAR(255), nullable=False)
+        except Exception as e:
+            print(f"⚠️ No se pudo modificar columna 'email': {e}")

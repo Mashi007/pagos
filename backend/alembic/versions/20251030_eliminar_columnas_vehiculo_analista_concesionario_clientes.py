@@ -103,22 +103,26 @@ def downgrade():
         return
     
     columns = [col['name'] for col in inspector.get_columns('clientes')]
+    indexes = [idx['name'] for idx in inspector.get_indexes('clientes')]
     
     # Restaurar columna modelo_vehiculo si no existe
     if 'modelo_vehiculo' not in columns:
         op.add_column('clientes', sa.Column('modelo_vehiculo', sa.String(length=100), nullable=True))
-        op.create_index('idx_clientes_modelo_vehiculo', 'clientes', ['modelo_vehiculo'])
+        if 'idx_clientes_modelo_vehiculo' not in indexes:
+            op.create_index('idx_clientes_modelo_vehiculo', 'clientes', ['modelo_vehiculo'])
         print("✅ Columna 'modelo_vehiculo' restaurada en tabla clientes")
     
     # Restaurar columna concesionario si no existe
     if 'concesionario' not in columns:
         op.add_column('clientes', sa.Column('concesionario', sa.String(length=100), nullable=True))
-        op.create_index('idx_clientes_concesionario', 'clientes', ['concesionario'])
+        if 'idx_clientes_concesionario' not in indexes:
+            op.create_index('idx_clientes_concesionario', 'clientes', ['concesionario'])
         print("✅ Columna 'concesionario' restaurada en tabla clientes")
     
     # Restaurar columna analista si no existe
     if 'analista' not in columns:
         op.add_column('clientes', sa.Column('analista', sa.String(length=100), nullable=True))
-        op.create_index('idx_clientes_analista', 'clientes', ['analista'])
+        if 'idx_clientes_analista' not in indexes:
+            op.create_index('idx_clientes_analista', 'clientes', ['analista'])
         print("✅ Columna 'analista' restaurada en tabla clientes")
 

@@ -20,6 +20,11 @@ def upgrade():
     # Verificar si las columnas ya existen antes de agregarlas
     connection = op.get_bind()
     inspector = inspect(connection)
+    
+    if 'prestamos' not in inspector.get_table_names():
+        print("⚠️ Tabla 'prestamos' no existe, saltando migración")
+        return
+    
     columns = [col['name'] for col in inspector.get_columns('prestamos')]
     
     # Agregar columna concesionario si no existe
@@ -42,6 +47,10 @@ def downgrade():
     # Eliminar las columnas si existen
     connection = op.get_bind()
     inspector = inspect(connection)
+    
+    if 'prestamos' not in inspector.get_table_names():
+        return
+    
     columns = [col['name'] for col in inspector.get_columns('prestamos')]
     
     if 'modelo_vehiculo' in columns:

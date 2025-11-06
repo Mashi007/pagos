@@ -18,6 +18,19 @@ depends_on = None
 
 def upgrade():
     """Remove ALL unique constraints from cedula column in clientes table"""
+    import sqlalchemy as sa
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    
+    if "clientes" not in inspector.get_table_names():
+        print("⚠️ Tabla 'clientes' no existe, saltando migración")
+        return
+    
+    columns = [col["name"] for col in inspector.get_columns("clientes")]
+    if "cedula" not in columns:
+        print("⚠️ Columna 'cedula' no existe en tabla 'clientes', saltando migración")
+        return
+    
     try:
         op.drop_constraint("clientes_cedula_key", "clientes", type_="unique")
     except Exception:
@@ -34,11 +47,24 @@ def upgrade():
         pass  # Index might not exist
 
     # Create a non-unique index for performance
-    op.create_index("ix_clientes_cedula_non_unique", "clientes", ["cedula"], unique=False)
+    indexes = [idx["name"] for idx in inspector.get_indexes("clientes")]
+    if "ix_clientes_cedula_non_unique" not in indexes:
+        op.create_index("ix_clientes_cedula_non_unique", "clientes", ["cedula"], unique=False)
 
 
 def downgrade():
     """Restore unique constraint on cedula column in clientes table"""
+    import sqlalchemy as sa
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    
+    if "clientes" not in inspector.get_table_names():
+        return
+    
+    columns = [col["name"] for col in inspector.get_columns("clientes")]
+    if "cedula" not in columns:
+        return
+    
     # Drop the non-unique index
     try:
         op.drop_index("ix_clientes_cedula_non_unique", "clientes")
@@ -46,4 +72,7 @@ def downgrade():
         pass
 
     # Restore the unique constraint
-    op.create_unique_constraint("clientes_cedula_key", "clientes", ["cedula"])
+    try:
+        op.create_unique_constraint("clientes_cedula_key", "clientes", ["cedula"])
+    except Exception as e:
+        print(f"⚠️ No se pudo crear constraint único: {e}")

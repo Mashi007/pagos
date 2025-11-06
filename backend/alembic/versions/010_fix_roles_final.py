@@ -19,10 +19,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-
     # Verificar si la columna is_admin ya existe
     connection = op.get_bind()
     inspector = sa.inspect(connection)
+    
+    if "users" not in inspector.get_table_names():
+        print("⚠️ Tabla 'users' no existe, saltando migración")
+        return
+    
     columns = [col["name"] for col in inspector.get_columns("users")]
 
     if "is_admin" not in columns:
@@ -32,20 +36,26 @@ def upgrade() -> None:
             sa.Column("is_admin", sa.Boolean(), nullable=False, server_default="false"),
         )
 
-        if "rol" in columns:
-            # Migrar datos de rol a is_admin si existe la columna rol
-            op.execute("UPDATE users SET is_admin = true WHERE rol = 'admin'")
-        else:
-            # Si no existe rol, asumir que el primer usuario es admin
-            op.execute("UPDATE users SET is_admin = true WHERE id = (SELECT MIN(id) FROM users)")
+        try:
+            if "rol" in columns:
+                # Migrar datos de rol a is_admin si existe la columna rol
+                op.execute(sa.text("UPDATE users SET is_admin = true WHERE rol = 'admin'"))
+            else:
+                # Si no existe rol, asumir que el primer usuario es admin
+                op.execute(sa.text("UPDATE users SET is_admin = true WHERE id = (SELECT MIN(id) FROM users)"))
+        except Exception as e:
+            print(f"⚠️ No se pudo migrar datos de rol: {e}")
 
     # Verificar que is_admin esté configurado correctamente
-    result = connection.execute(sa.text("SELECT COUNT(*) FROM users WHERE is_admin = true"))
-    admin_count = result.scalar()
+    try:
+        result = connection.execute(sa.text("SELECT COUNT(*) FROM users WHERE is_admin = true"))
+        admin_count = result.scalar()
 
-    if admin_count == 0:
-        # Si no hay admins, hacer el primer usuario admin
-        op.execute("UPDATE users SET is_admin = true WHERE id = (SELECT MIN(id) FROM users)")
+        if admin_count == 0:
+            # Si no hay admins, hacer el primer usuario admin
+            op.execute(sa.text("UPDATE users SET is_admin = true WHERE id = (SELECT MIN(id) FROM users)"))
+    except Exception as e:
+        print(f"⚠️ No se pudo verificar/configurar admins: {e}")
 
 
 def downgrade() -> None:

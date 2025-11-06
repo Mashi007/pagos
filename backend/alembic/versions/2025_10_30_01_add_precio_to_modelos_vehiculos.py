@@ -21,6 +21,11 @@ def upgrade() -> None:
         # Agregar columnas si no existen
         conn = op.get_bind()
         inspector = sa.inspect(conn)
+        
+        if 'modelos_vehiculos' not in inspector.get_table_names():
+            print("⚠️ Tabla 'modelos_vehiculos' no existe, saltando migración")
+            return
+        
         cols = {c['name'] for c in inspector.get_columns('modelos_vehiculos')}
 
         if 'precio' not in cols:
@@ -29,8 +34,9 @@ def upgrade() -> None:
             op.add_column('modelos_vehiculos', sa.Column('fecha_actualizacion', sa.DateTime(timezone=True), nullable=True))
         if 'actualizado_por' not in cols:
             op.add_column('modelos_vehiculos', sa.Column('actualizado_por', sa.String(length=100), nullable=True))
-    except Exception:
+    except Exception as e:
         # Tabla podría no existir aún en algunos entornos; ignorar de forma segura
+        print(f"⚠️ Error en migración: {e}")
         pass
 
 
@@ -38,6 +44,10 @@ def downgrade() -> None:
     try:
         conn = op.get_bind()
         inspector = sa.inspect(conn)
+        
+        if 'modelos_vehiculos' not in inspector.get_table_names():
+            return
+        
         cols = {c['name'] for c in inspector.get_columns('modelos_vehiculos')}
 
         if 'actualizado_por' in cols:
@@ -46,7 +56,8 @@ def downgrade() -> None:
             op.drop_column('modelos_vehiculos', 'fecha_actualizacion')
         if 'precio' in cols:
             op.drop_column('modelos_vehiculos', 'precio')
-    except Exception:
+    except Exception as e:
+        print(f"⚠️ Error en downgrade: {e}")
         pass
 
 

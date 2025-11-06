@@ -45,9 +45,9 @@ def upgrade():
                 ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             """))
         
-        # Crear índices si no existen
+        # Crear índices si no existen Y las columnas existen
         indexes = [idx['name'] for idx in inspector.get_indexes('concesionarios')]
-        if 'ix_concesionarios_nombre' not in indexes:
+        if 'ix_concesionarios_nombre' not in indexes and 'nombre' in columns:
             try:
                 op.create_index('ix_concesionarios_nombre', 'concesionarios', ['nombre'])
             except Exception:
@@ -93,9 +93,9 @@ def upgrade():
                 ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             """))
         
-        # Crear índices si no existen
+        # Crear índices si no existen Y las columnas existen
         indexes = [idx['name'] for idx in inspector.get_indexes('analistas')]
-        if 'ix_analistas_nombre' not in indexes:
+        if 'ix_analistas_nombre' not in indexes and 'nombre' in columns:
             try:
                 op.create_index('ix_analistas_nombre', 'analistas', ['nombre'])
             except Exception:
@@ -141,28 +141,29 @@ def upgrade():
                 ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             """))
         
-        # Crear índices si no existen
+        # Crear índices si no existen Y las columnas existen
         indexes = [idx['name'] for idx in inspector.get_indexes('modelos_vehiculos')]
-        if 'ix_modelos_vehiculos_modelo' not in indexes:
+        if 'ix_modelos_vehiculos_modelo' not in indexes and 'modelo' in columns:
             try:
                 op.create_index('ix_modelos_vehiculos_modelo', 'modelos_vehiculos', ['modelo'])
             except Exception:
                 pass
         
-        if 'ix_modelos_vehiculos_activo' not in indexes:
+        if 'ix_modelos_vehiculos_activo' not in indexes and 'activo' in columns:
             try:
                 op.create_index('ix_modelos_vehiculos_activo', 'modelos_vehiculos', ['activo'])
             except Exception:
                 pass
         
         # Verificar constraint único en modelo
-        try:
-            constraints = [c['name'] for c in inspector.get_unique_constraints('modelos_vehiculos')]
-            constraint_names = [c for c in constraints if 'modelo' in c.lower()]
-            if not constraint_names:
-                op.create_unique_constraint('uq_modelos_vehiculos_modelo', 'modelos_vehiculos', ['modelo'])
-        except Exception as e:
-            print(f"⚠️ No se pudo crear constraint único en modelo: {e}")
+        if 'modelo' in columns:
+            try:
+                constraints = [c['name'] for c in inspector.get_unique_constraints('modelos_vehiculos')]
+                constraint_names = [c for c in constraints if 'modelo' in c.lower()]
+                if not constraint_names:
+                    op.create_unique_constraint('uq_modelos_vehiculos_modelo', 'modelos_vehiculos', ['modelo'])
+            except Exception as e:
+                print(f"⚠️ No se pudo crear constraint único en modelo: {e}")
         
         print("✅ Tabla modelos_vehiculos actualizada")
     else:

@@ -18,9 +18,13 @@ depends_on = None
 
 
 def upgrade():
-
     # Verificar si las columnas ya existen
     inspector = inspect(op.get_bind())
+    
+    if "clientes" not in inspector.get_table_names():
+        print("⚠️ Tabla 'clientes' no existe, saltando migración")
+        return
+    
     columns = [col["name"] for col in inspector.get_columns("clientes")]
 
     # Agregar concesionario si no existe
@@ -41,9 +45,12 @@ def upgrade():
 
 
 def downgrade():
-
     # Verificar si las columnas existen antes de eliminarlas
     inspector = inspect(op.get_bind())
+    
+    if "clientes" not in inspector.get_table_names():
+        return
+    
     columns = [col["name"] for col in inspector.get_columns("clientes")]
 
     # Eliminar analista si existe

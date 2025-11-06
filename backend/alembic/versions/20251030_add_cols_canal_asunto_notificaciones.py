@@ -39,9 +39,9 @@ def upgrade():
             sa.Column("asunto", sa.String(length=255), nullable=True),
         )
 
-    # Crear índices si ayudan a consultas por canal
+    # Crear índices si ayudan a consultas por canal Y la columna existe
     existing_indexes = {idx["name"] for idx in inspector.get_indexes("notificaciones")}
-    if "ix_notificaciones_canal" not in existing_indexes:
+    if "ix_notificaciones_canal" not in existing_indexes and "canal" in columns:
         op.create_index("ix_notificaciones_canal", "notificaciones", ["canal"])
 
 

@@ -16,11 +16,32 @@ depends_on = None
 
 
 def upgrade():
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    
+    if 'pagos' not in inspector.get_table_names():
+        print("⚠️ Tabla 'pagos' no existe, saltando migración")
+        return
+    
+    columns = [col['name'] for col in inspector.get_columns('pagos')]
+    
     # Eliminar columna referencia_pago de la tabla pagos
-    op.drop_column('pagos', 'referencia_pago')
+    if 'referencia_pago' in columns:
+        op.drop_column('pagos', 'referencia_pago')
+    else:
+        print("⚠️ Columna 'referencia_pago' no existe en tabla 'pagos'")
 
 
 def downgrade():
-    # Revertir: agregar columna referencia_pago
-    op.add_column('pagos', sa.Column('referencia_pago', sa.String(length=100), nullable=False, server_default=''))
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    
+    if 'pagos' not in inspector.get_table_names():
+        return
+    
+    columns = [col['name'] for col in inspector.get_columns('pagos')]
+    
+    # Revertir: agregar columna referencia_pago si no existe
+    if 'referencia_pago' not in columns:
+        op.add_column('pagos', sa.Column('referencia_pago', sa.String(length=100), nullable=False, server_default=''))
 

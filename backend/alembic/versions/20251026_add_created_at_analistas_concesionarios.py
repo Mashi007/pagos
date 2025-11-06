@@ -17,40 +17,67 @@ depends_on = None
 
 
 def upgrade():
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    
     # Agregar created_at a analistas
-    op.execute(text("""
-        ALTER TABLE analistas 
-        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT '2025-10-01 00:00:00+00'::timestamptz
-    """))
-    
-    op.execute(text("""
-        ALTER TABLE analistas 
-        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    """))
-    
-    # Actualizar registros existentes sin created_at
-    op.execute(text("""
-        UPDATE analistas 
-        SET created_at = '2025-10-01 00:00:00+00'::timestamptz 
-        WHERE created_at IS NULL
-    """))
+    if 'analistas' in inspector.get_table_names():
+        op.execute(text("""
+            ALTER TABLE analistas 
+            ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT '2025-10-01 00:00:00+00'::timestamptz
+        """))
+        
+        op.execute(text("""
+            ALTER TABLE analistas 
+            ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        """))
+        
+        # Actualizar registros existentes sin created_at
+        try:
+            op.execute(text("""
+                UPDATE analistas 
+                SET created_at = '2025-10-01 00:00:00+00'::timestamptz 
+                WHERE created_at IS NULL
+            """))
+        except Exception as e:
+            print(f"⚠️ No se pudo actualizar created_at en analistas: {e}")
+    else:
+        print("⚠️ Tabla 'analistas' no existe, omitiendo...")
     
     # Agregar created_at a concesionarios
-    op.execute(text("""
-        ALTER TABLE concesionarios 
-        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT '2025-10-01 00:00:00+00'::timestamptz
-    """))
-    
-    # Actualizar registros existentes sin created_at
-    op.execute(text("""
-        UPDATE concesionarios 
-        SET created_at = '2025-10-01 00:00:00+00'::timestamptz 
-        WHERE created_at IS NULL
-    """))
+    if 'concesionarios' in inspector.get_table_names():
+        op.execute(text("""
+            ALTER TABLE concesionarios 
+            ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT '2025-10-01 00:00:00+00'::timestamptz
+        """))
+        
+        # Actualizar registros existentes sin created_at
+        try:
+            op.execute(text("""
+                UPDATE concesionarios 
+                SET created_at = '2025-10-01 00:00:00+00'::timestamptz 
+                WHERE created_at IS NULL
+            """))
+        except Exception as e:
+            print(f"⚠️ No se pudo actualizar created_at en concesionarios: {e}")
+    else:
+        print("⚠️ Tabla 'concesionarios' no existe, omitiendo...")
 
 
 def downgrade():
-    op.execute(text("ALTER TABLE analistas DROP COLUMN IF EXISTS created_at"))
-    op.execute(text("ALTER TABLE analistas DROP COLUMN IF EXISTS updated_at"))
-    op.execute(text("ALTER TABLE concesionarios DROP COLUMN IF EXISTS created_at"))
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    
+    if 'analistas' in inspector.get_table_names():
+        try:
+            op.execute(text("ALTER TABLE analistas DROP COLUMN IF EXISTS created_at"))
+            op.execute(text("ALTER TABLE analistas DROP COLUMN IF EXISTS updated_at"))
+        except Exception as e:
+            print(f"⚠️ No se pudo eliminar columnas de analistas: {e}")
+    
+    if 'concesionarios' in inspector.get_table_names():
+        try:
+            op.execute(text("ALTER TABLE concesionarios DROP COLUMN IF EXISTS created_at"))
+        except Exception as e:
+            print(f"⚠️ No se pudo eliminar columna de concesionarios: {e}")
 

@@ -22,6 +22,10 @@ def upgrade() -> None:
     connection = op.get_bind()
     inspector = sa.inspect(connection)
     
+    if "clientes" not in inspector.get_table_names():
+        print("⚠️ Tabla 'clientes' no existe, saltando migración")
+        return
+    
     # Verificar columnas existentes
     columns = [col["name"] for col in inspector.get_columns("clientes")]
     

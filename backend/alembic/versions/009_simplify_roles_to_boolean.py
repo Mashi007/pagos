@@ -19,12 +19,23 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-
-    # Paso 1: Agregar columna is_admin
-    op.add_column(
-        "users",
-        sa.Column("is_admin", sa.Boolean(), nullable=False, server_default="false"),
-    )
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    
+    if "users" not in inspector.get_table_names():
+        print("⚠️ Tabla 'users' no existe, saltando migración")
+        return
+    
+    columns = [col["name"] for col in inspector.get_columns("users")]
+    
+    # Paso 1: Agregar columna is_admin si no existe
+    if "is_admin" not in columns:
+        op.add_column(
+            "users",
+            sa.Column("is_admin", sa.Boolean(), nullable=False, server_default="false"),
+        )
+    else:
+        print("⚠️ Columna 'is_admin' ya existe en tabla 'users'")
 
 
     # Paso 3: Eliminar columna rol (opcional, comentado por seguridad)
@@ -34,5 +45,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Revertir: eliminar columna is_admin
-    op.drop_column("users", "is_admin")
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    
+    if "users" not in inspector.get_table_names():
+        return
+    
+    columns = [col["name"] for col in inspector.get_columns("users")]
+    
+    # Revertir: eliminar columna is_admin si existe
+    if "is_admin" in columns:
+        op.drop_column("users", "is_admin")
