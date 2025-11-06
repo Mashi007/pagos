@@ -73,7 +73,7 @@ export function DashboardMenu() {
   })
 
   // Cargar KPIs principales
-  const { data: kpisPrincipales, isLoading: loadingKPIs, refetch } = useQuery({
+  const { data: kpisPrincipales, isLoading: loadingKPIs, isError: errorKPIs, refetch } = useQuery({
     queryKey: ['kpis-principales-menu', JSON.stringify(filtros)],
     queryFn: async () => {
       const params = construirFiltrosObject()
@@ -100,6 +100,7 @@ export function DashboardMenu() {
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: true, // Asegurar que siempre esté habilitado
+    retry: false, // No reintentar automáticamente en caso de error 401
   })
 
   // Cargar datos para gráficos (con timeout extendido)
@@ -574,24 +575,41 @@ export function DashboardMenu() {
                   </Card>
                 ))}
               </div>
-            ) : kpisPrincipales ? (
+            ) : errorKPIs ? (
+              <Card>
+                <CardContent className="p-6">
+                  <div className="text-center text-gray-500">
+                    <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-500" />
+                    <p className="text-sm">Error al cargar los datos. Por favor, intenta nuevamente.</p>
+                    <Button 
+                      onClick={() => refetch()} 
+                      variant="outline" 
+                      className="mt-4"
+                      size="sm"
+                    >
+                      Reintentar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : kpisPrincipales && kpisPrincipales.total_prestamos && kpisPrincipales.creditos_nuevos_mes ? (
               <div className="space-y-4 sticky top-4">
                 <KpiCardLarge
                   title="Total Financiamiento de Préstamos Concedidos en el Mes en Curso"
-                  value={kpisPrincipales.total_prestamos.valor_actual}
+                  value={kpisPrincipales.total_prestamos?.valor_actual ?? 0}
                   icon={FileText}
                   color="text-cyan-600"
                   bgColor="bg-cyan-100"
                   borderColor="border-cyan-500"
                   format="currency"
                   variation={{
-                    percent: kpisPrincipales.total_prestamos.variacion_porcentual,
+                    percent: kpisPrincipales.total_prestamos?.variacion_porcentual ?? 0,
                     label: 'vs mes anterior',
                   }}
                 />
                 <KpiCardLarge
                   title="Créditos Aprobados"
-                  value={kpisPrincipales.creditos_nuevos_mes.valor_actual}
+                  value={kpisPrincipales.creditos_nuevos_mes?.valor_actual ?? 0}
                   icon={TrendingUp}
                   color="text-green-600"
                   bgColor="bg-green-100"
@@ -707,19 +725,21 @@ export function DashboardMenu() {
                     <div className="absolute bottom-0 right-0 w-20 h-20 bg-blue-100 opacity-5 rounded-tl-full -mr-10 -mb-10"></div>
                   </div>
                 </motion.div>
-                <KpiCardLarge
-                  title="Morosidad Total"
-                  value={kpisPrincipales.total_morosidad_usd.valor_actual}
-                  icon={AlertTriangle}
-                  color="text-red-600"
-                  bgColor="bg-red-100"
-                  borderColor="border-red-500"
-                  format="currency"
-                  variation={{
-                    percent: kpisPrincipales.total_morosidad_usd.variacion_porcentual,
-                    label: 'vs mes anterior',
-                  }}
-                />
+                {kpisPrincipales.total_morosidad_usd && (
+                  <KpiCardLarge
+                    title="Morosidad Total"
+                    value={kpisPrincipales.total_morosidad_usd?.valor_actual ?? 0}
+                    icon={AlertTriangle}
+                    color="text-red-600"
+                    bgColor="bg-red-100"
+                    borderColor="border-red-500"
+                    format="currency"
+                    variation={{
+                      percent: kpisPrincipales.total_morosidad_usd?.variacion_porcentual ?? 0,
+                      label: 'vs mes anterior',
+                    }}
+                  />
+                )}
                 <KpiCardLarge
                   title="Cartera Total"
                   value={datosDashboard?.financieros?.ingresosCapital || 0}

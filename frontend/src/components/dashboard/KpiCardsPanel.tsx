@@ -69,7 +69,7 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
     )
   }
 
-  if (!kpisData) {
+  if (!kpisData || !kpisData.total_prestamos || !kpisData.creditos_nuevos_mes || !kpisData.total_clientes || !kpisData.total_morosidad_usd) {
     return (
       <div className="text-center text-gray-500 py-8">
         No hay datos disponibles
@@ -81,33 +81,33 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
     <div className="space-y-4">
       <KpiCard
         title="Total Préstamos"
-        value={kpisData.total_prestamos.valor_actual}
-        variationPercent={kpisData.total_prestamos.variacion_porcentual}
-        variationAbs={kpisData.total_prestamos.variacion_absoluta}
+        value={kpisData.total_prestamos?.valor_actual ?? 0}
+        variationPercent={kpisData.total_prestamos?.variacion_porcentual ?? 0}
+        variationAbs={kpisData.total_prestamos?.variacion_absoluta ?? 0}
         color="blue"
         icon={DollarSign}
       />
       <KpiCard
         title="Créditos Nuevos en el Mes"
-        value={kpisData.creditos_nuevos_mes.valor_actual}
-        variationPercent={kpisData.creditos_nuevos_mes.variacion_porcentual}
-        variationAbs={kpisData.creditos_nuevos_mes.variacion_absoluta}
+        value={kpisData.creditos_nuevos_mes?.valor_actual ?? 0}
+        variationPercent={kpisData.creditos_nuevos_mes?.variacion_porcentual ?? 0}
+        variationAbs={kpisData.creditos_nuevos_mes?.variacion_absoluta ?? 0}
         color="green"
         icon={TrendingUp}
       />
       <KpiCard
         title="Total Clientes"
-        value={kpisData.total_clientes.valor_actual}
-        variationPercent={kpisData.total_clientes.variacion_porcentual}
-        variationAbs={kpisData.total_clientes.variacion_absoluta}
+        value={kpisData.total_clientes?.valor_actual ?? 0}
+        variationPercent={kpisData.total_clientes?.variacion_porcentual ?? 0}
+        variationAbs={kpisData.total_clientes?.variacion_absoluta ?? 0}
         color="purple"
         icon={Users}
       />
       <KpiCard
         title="Total Morosidad en Dólares"
-        value={kpisData.total_morosidad_usd.valor_actual}
-        variationPercent={kpisData.total_morosidad_usd.variacion_porcentual}
-        variationAbs={kpisData.total_morosidad_usd.variacion_absoluta}
+        value={kpisData.total_morosidad_usd?.valor_actual ?? 0}
+        variationPercent={kpisData.total_morosidad_usd?.variacion_porcentual ?? 0}
+        variationAbs={kpisData.total_morosidad_usd?.variacion_absoluta ?? 0}
         color="red"
         icon={AlertTriangle}
         formatValue={(v) => formatCurrency(Number(v))}
