@@ -30,6 +30,7 @@ from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.utils.filtros_dashboard import FiltrosDashboard
 from app.core.debug_helpers import DebugAlert, debug_timing, validate_graph_data, log_graph_debug_info, run_debug_checklist
+from app.utils.query_monitor import query_monitor
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -1804,8 +1805,6 @@ def obtener_kpis_principales(
     """
     start_time = time.time()
     try:
-        from app.utils.query_monitor import query_monitor
-
         hoy = date.today()
         mes_actual = hoy.month
         año_actual = hoy.year
