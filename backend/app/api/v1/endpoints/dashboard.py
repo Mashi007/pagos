@@ -1830,9 +1830,11 @@ def _normalizar_valor_filtro(valor: Optional[str]) -> Optional[str]:
         return None
     valor_str = str(valor).strip()
     # Casos: ('ABC',) o ("ABC",)
-    if (valor_str.startswith("('") and valor_str.endswith("',)")) or (valor_str.startswith('("') and valor_str.endswith('",)')):
+    if (valor_str.startswith("('") and valor_str.endswith("',)")) or (
+        valor_str.startswith('("') and valor_str.endswith('",)')
+    ):
         valor_str = valor_str[2:-2]
-    elif valor_str.startswith('(') and valor_str.endswith(',)'):
+    elif valor_str.startswith("(") and valor_str.endswith(",)"):
         valor_str = valor_str[1:-2]
     # Remover comillas sobrantes en extremos
     valor_str = valor_str.strip().strip("'\"").strip()
@@ -2146,16 +2148,13 @@ def obtener_kpis_principales(
             f"Error obteniendo KPIs principales: {e} | "
             f"Filtros: analista={analista}, concesionario={concesionario}, modelo={modelo}, "
             f"fecha_inicio={fecha_inicio}, fecha_fin={fecha_fin}",
-            exc_info=True
+            exc_info=True,
         )
         try:
             db.rollback()
         except Exception:
             pass
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error interno al obtener KPIs principales: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno al obtener KPIs principales: {str(e)}")
 
 
 @router.get("/cobranzas-mensuales")
