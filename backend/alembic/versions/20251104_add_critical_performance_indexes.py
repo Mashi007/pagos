@@ -1,7 +1,7 @@
 """Agregar índices críticos de performance para resolver timeouts
 
 Revision ID: 20251104_critical_indexes
-Revises: 20251102_add_leida_notificaciones
+Revises: 20251102_add_leida
 Create Date: 2025-11-04 12:00:00.000000
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy import inspect, text
 
 # revision identifiers, used by Alembic.
 revision = '20251104_critical_indexes'
-down_revision = '20251102_add_leida_notificaciones'
+down_revision = '20251102_add_leida'
 branch_labels = None
 depends_on = None
 

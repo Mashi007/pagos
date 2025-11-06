@@ -1,6 +1,6 @@
 """agregar columna leida a notificaciones
 
-Revision ID: 20251102_add_leida_notificaciones
+Revision ID: 20251102_add_leida
 Revises: 20251030_add_cols_notificaciones
 Create Date: 2025-11-02 00:00:00
 """
@@ -11,7 +11,7 @@ from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
-revision = "20251102_add_leida_notificaciones"
+revision = "20251102_add_leida"
 down_revision = "20251030_add_cols_notificaciones"
 branch_labels = None
 depends_on = None
