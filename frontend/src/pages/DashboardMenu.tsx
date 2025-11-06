@@ -464,7 +464,7 @@ export function DashboardMenu() {
   // Calcular el dominio del eje Y para el gráfico de tendencia
   const yAxisDomainTendencia = useMemo(() => {
     if (!datosTendencia || datosTendencia.length === 0) {
-      return [0, 'auto'] as const
+      return [0, 'auto'] as [number, 'auto']
     }
     const allValues = datosTendencia.flatMap(d => [
       d.monto_nuevos || 0,
@@ -473,7 +473,7 @@ export function DashboardMenu() {
       d.morosidad_mensual || 0
     ])
     const maxValue = allValues.length > 0 ? Math.max(...allValues, 0) : 0
-    return maxValue > 0 ? [0, maxValue * 1.1] as const : [0, 'auto'] as const
+    return maxValue > 0 ? [0, maxValue * 1.1] as [number, number] : [0, 'auto'] as [number, 'auto']
   }, [datosTendencia])
 
   return (
