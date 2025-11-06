@@ -285,6 +285,7 @@ export function DashboardMenu() {
         if (value) queryParams.append(key, value.toString())
       })
       // Usar timeout extendido para endpoints lentos
+      // ✅ apiClient.get() ya extrae response.data internamente, devuelve directamente el objeto tipado
       const response = await apiClient.get<{
         meses: Array<{
           mes: string
@@ -298,8 +299,7 @@ export function DashboardMenu() {
         `/api/v1/dashboard/cobranzas-mensuales?${queryParams.toString()}`,
         { timeout: 60000 }
       )
-      // ✅ CORRECCIÓN: Axios devuelve { data: {...} }, y el backend devuelve { meses: [...], meta_actual: ... }
-      return response.data
+      return response
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
   })
@@ -314,6 +314,7 @@ export function DashboardMenu() {
         if (value) queryParams.append(key, value.toString())
       })
       queryParams.append('semanas', '12') // Últimas 12 semanas
+      // ✅ apiClient.get() ya extrae response.data internamente, devuelve directamente el objeto tipado
       const response = await apiClient.get<{
         semanas: Array<{
           semana_inicio: string
@@ -327,8 +328,7 @@ export function DashboardMenu() {
         `/api/v1/dashboard/cobranzas-semanales?${queryParams.toString()}`,
         { timeout: 60000 }
       )
-      // ✅ CORRECCIÓN: Axios devuelve { data: {...} }, y el backend devuelve { semanas: [...], fecha_inicio: ..., fecha_fin: ... }
-      return response.data
+      return response
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
   })
