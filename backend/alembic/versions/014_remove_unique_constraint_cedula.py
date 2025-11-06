@@ -18,36 +18,47 @@ depends_on = None
 
 def upgrade():
     """Remove unique constraint from cedula column in clientes table"""
-    import sqlalchemy as sa
     from sqlalchemy import text
     connection = op.get_bind()
-    inspector = sa.inspect(connection)
     
-    if "clientes" not in inspector.get_table_names():
-        print("⚠️ Tabla 'clientes' no existe, saltando migración")
-        return
-    
-    columns = [col["name"] for col in inspector.get_columns("clientes")]
-    if "cedula" not in columns:
-        print("⚠️ Columna 'cedula' no existe en tabla 'clientes', saltando migración")
-        return
-    
-    # Verificar si el constraint existe antes de eliminarlo
+    # Verificar existencia usando SQL directo para evitar problemas de transacción
     try:
-        constraints = [c["name"] for c in inspector.get_unique_constraints("clientes")]
-        if "clientes_cedula_key" in constraints:
-            # Usar SQL directo con IF EXISTS para evitar abortar la transacción
-            op.execute(text("ALTER TABLE clientes DROP CONSTRAINT IF EXISTS clientes_cedula_key"))
-            print("✅ Constraint único 'clientes_cedula_key' eliminado")
-        else:
-            print("⚠️ Constraint único 'clientes_cedula_key' no existe, omitiendo...")
+        result = connection.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'clientes'
+            )
+        """))
+        table_exists = result.scalar()
+        
+        if not table_exists:
+            print("⚠️ Tabla 'clientes' no existe, saltando migración")
+            return
+        
+        result = connection.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.columns 
+                WHERE table_schema = 'public' 
+                AND table_name = 'clientes' 
+                AND column_name = 'cedula'
+            )
+        """))
+        column_exists = result.scalar()
+        
+        if not column_exists:
+            print("⚠️ Columna 'cedula' no existe en tabla 'clientes', saltando migración")
+            return
     except Exception as e:
-        # Si falla la verificación, intentar con SQL directo de todas formas
-        try:
-            op.execute(text("ALTER TABLE clientes DROP CONSTRAINT IF EXISTS clientes_cedula_key"))
-            print("✅ Constraint único 'clientes_cedula_key' eliminado (usando SQL directo)")
-        except Exception as e2:
-            print(f"⚠️ No se pudo eliminar constraint único: {e2}")
+        print(f"⚠️ Error verificando tabla/columna: {e}")
+        # Continuar de todas formas, usar SQL directo con IF EXISTS
+    
+    # Usar SQL directo con IF EXISTS para evitar abortar la transacción
+    try:
+        connection.execute(text("ALTER TABLE clientes DROP CONSTRAINT IF EXISTS clientes_cedula_key"))
+        print("✅ Constraint único 'clientes_cedula_key' eliminado (si existía)")
+    except Exception as e:
+        print(f"⚠️ No se pudo eliminar constraint único: {e}")
 
     # Keep the index for performance
     # op.create_index('ix_clientes_cedula', 'clientes', ['cedula'])
