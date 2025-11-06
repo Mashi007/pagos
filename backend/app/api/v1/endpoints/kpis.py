@@ -234,12 +234,15 @@ def _calcular_kpis_mes_actual(
     cuotas_conciliadas_query = (
         db.query(func.count(func.distinct(Cuota.id)))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .join(Pago, and_(
-            Pago.prestamo_id == Cuota.prestamo_id,
-            Pago.numero_cuota == Cuota.numero_cuota,
-            Pago.conciliado.is_(True),
-            Pago.activo.is_(True)
-        ))
+        .join(
+            Pago,
+            and_(
+                Pago.prestamo_id == Cuota.prestamo_id,
+                Pago.numero_cuota == Cuota.numero_cuota,
+                Pago.conciliado.is_(True),
+                Pago.activo.is_(True),
+            ),
+        )
         .filter(
             func.date(Cuota.fecha_vencimiento) >= primer_dia_mes,
             func.date(Cuota.fecha_vencimiento) <= ultimo_dia_mes,
@@ -269,13 +272,15 @@ def _calcular_kpis_mes_actual(
         )
         .filter(
             ~Cuota.id.in_(
-                db.query(Cuota.id)
-                .join(Pago, and_(
-                    Pago.prestamo_id == Cuota.prestamo_id,
-                    Pago.numero_cuota == Cuota.numero_cuota,
-                    Pago.conciliado.is_(True),
-                    Pago.activo.is_(True)
-                ))
+                db.query(Cuota.id).join(
+                    Pago,
+                    and_(
+                        Pago.prestamo_id == Cuota.prestamo_id,
+                        Pago.numero_cuota == Cuota.numero_cuota,
+                        Pago.conciliado.is_(True),
+                        Pago.activo.is_(True),
+                    ),
+                )
             )
         )
     )

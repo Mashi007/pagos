@@ -612,10 +612,7 @@ def crear_pago(
         # Es obligatorio que el pago esté relacionado con un préstamo
         prestamo_id = pago_data.prestamo_id
         if not prestamo_id:
-            prestamo = db.query(Prestamo).filter(
-                Prestamo.cedula == pago_data.cedula,
-                Prestamo.estado == "APROBADO"
-            ).first()
+            prestamo = db.query(Prestamo).filter(Prestamo.cedula == pago_data.cedula, Prestamo.estado == "APROBADO").first()
             if prestamo:
                 prestamo_id = prestamo.id
                 logger.info(
@@ -1285,9 +1282,7 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
             )
             return 0
 
-    logger.info(
-        f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id} está conciliado. Procediendo a aplicar a cuotas."
-    )
+    logger.info(f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id} está conciliado. Procediendo a aplicar a cuotas.")
 
     validacion_ok, _ = _verificar_prestamo_y_cedula(pago, db)
     if not validacion_ok:
