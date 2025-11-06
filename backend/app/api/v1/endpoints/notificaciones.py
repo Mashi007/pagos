@@ -231,7 +231,7 @@ def listar_notificaciones(
             logger.warning("Columna 'canal' no existe en BD. Se requiere migración de Alembic.")
             raise HTTPException(
                 status_code=500,
-                detail="La columna 'canal' no existe en la tabla 'notificaciones'. Ejecute las migraciones de Alembic."
+                detail="La columna 'canal' no existe en la tabla 'notificaciones'. Ejecute las migraciones de Alembic.",
             )
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
