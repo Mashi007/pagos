@@ -57,7 +57,7 @@ def obtener_pagos_cuota(
                 and_(
                     Pago.prestamo_id == prestamo_id,
                     Pago.numero_cuota == numero_cuota,
-                    Pago.activo == True,
+                    Pago.activo.is_(True),
                     Pago.monto_pagado > 0,
                 )
             )
@@ -84,7 +84,7 @@ def obtener_pagos_cuota(
                 and_(
                     Pago.cedula == cedula,
                     func.date(Pago.fecha_pago) == fecha_vencimiento,
-                    Pago.activo == True,
+                    Pago.activo.is_(True),
                     Pago.monto_pagado > 0,
                 )
             )
@@ -117,7 +117,7 @@ def obtener_pagos_cuota(
                     Pago.cedula == cedula,
                     func.date(Pago.fecha_pago) >= fecha_inicio,
                     func.date(Pago.fecha_pago) <= fecha_fin,
-                    Pago.activo == True,
+                    Pago.activo.is_(True),
                     Pago.monto_pagado > 0,
                 )
             )
@@ -152,7 +152,7 @@ def obtener_pagos_cuota(
                     Pago.cedula == cedula,
                     Pago.monto_pagado >= monto_min,
                     Pago.monto_pagado <= monto_max,
-                    Pago.activo == True,
+                    Pago.activo.is_(True),
                     func.date(Pago.fecha_pago) >= fecha_vencimiento - timedelta(days=60),
                     func.date(Pago.fecha_pago) <= fecha_vencimiento + timedelta(days=60),
                 )

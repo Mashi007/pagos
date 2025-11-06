@@ -27,12 +27,12 @@ ANALYZE pagos;
 ```sql
 SELECT 
     schemaname,
-    tablename,
+    relname AS tablename,
     last_analyze,
     last_autoanalyze
 FROM pg_stat_user_tables
-WHERE tablename IN ('prestamos', 'cuotas', 'pagos')
-ORDER BY tablename;
+WHERE relname IN ('prestamos', 'cuotas', 'pagos')
+ORDER BY relname;
 ```
 
 ---
@@ -104,12 +104,12 @@ GROUP BY EXTRACT(YEAR FROM fecha_aprobacion), EXTRACT(MONTH FROM fecha_aprobacio
 ```sql
 SELECT 
     tablename,
-    pg_size_pretty(pg_total_relation_size('public.'||tablename)) AS tamaño_total,
-    pg_size_pretty(pg_relation_size('public.'||tablename)) AS tamaño_tabla
+    pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS tamaño_total,
+    pg_size_pretty(pg_relation_size(schemaname||'.'||tablename)) AS tamaño_tabla
 FROM pg_tables
 WHERE schemaname = 'public'
   AND tablename IN ('prestamos', 'cuotas', 'pagos')
-ORDER BY pg_total_relation_size('public.'||tablename) DESC;
+ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 ```
 
 ---
@@ -118,14 +118,14 @@ ORDER BY pg_total_relation_size('public.'||tablename) DESC;
 
 ```sql
 SELECT 
-    tablename,
+    relname AS tablename,
     indexrelname AS index_name,
     idx_scan AS veces_usado
 FROM pg_stat_user_indexes
 WHERE schemaname = 'public'
-  AND tablename IN ('prestamos', 'cuotas', 'pagos')
+  AND relname IN ('prestamos', 'cuotas', 'pagos')
   AND indexrelname LIKE 'idx_%'
-ORDER BY tablename, idx_scan DESC;
+ORDER BY relname, idx_scan DESC;
 ```
 
 ---
