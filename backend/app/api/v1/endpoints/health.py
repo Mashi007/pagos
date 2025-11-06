@@ -482,7 +482,6 @@ async def cache_status():
 @router.get("/database/indexes")
 async def verify_database_indexes(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     """
     Verificar que los índices críticos de performance estén creados correctamente
