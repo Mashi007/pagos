@@ -3445,7 +3445,7 @@ def obtener_financiamiento_tendencia_mensual(
         if not fecha_inicio_query:
             cache_key_primera_fecha = "dashboard:primera_fecha_desde_2024"
             primera_fecha_cached = cache_backend.get(cache_key_primera_fecha)
-            
+
             if primera_fecha_cached:
                 fecha_inicio_query = date.fromisoformat(primera_fecha_cached)
             else:
@@ -3483,7 +3483,7 @@ def obtener_financiamiento_tendencia_mensual(
                     else:
                         # Si no hay datos, usar enero 2024
                         fecha_inicio_query = date(2024, 1, 1)
-                    
+
                     # Cachear resultado por 1 hora (cambia muy raramente)
                     cache_backend.set(cache_key_primera_fecha, fecha_inicio_query.isoformat(), ttl=3600)
                 except Exception as e:
