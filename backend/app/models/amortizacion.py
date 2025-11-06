@@ -59,6 +59,10 @@ class Cuota(Base):
     monto_mora = Column(Numeric(12, 2), default=Decimal("0.00"))
     tasa_mora = Column(Numeric(5, 2), default=Decimal("0.00"))  # Tasa de mora aplicada (%)
 
+    # ✅ NUEVAS COLUMNAS: Morosidad Calculada Automáticamente
+    dias_morosidad = Column(Integer, default=0, index=True)  # ✅ Días de atraso (actualización automática)
+    monto_morosidad = Column(Numeric(12, 2), default=Decimal("0.00"), index=True)  # ✅ Monto pendiente: monto_cuota - total_pagado (actualización automática)
+
     # Estado
     estado = Column(
         String(20), nullable=False, default="PENDIENTE", index=True
