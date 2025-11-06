@@ -5,7 +5,8 @@ import removeTextSizeAdjust from './postcss-remove-text-size-adjust.js';
 export default {
   plugins: [
     tailwindcss,
-    // Plugin personalizado para eliminar propiedades text-size-adjust problemáticas
+    // Plugin personalizado DEBE ir después de Tailwind pero antes de Autoprefixer
+    // para procesar el CSS generado por Tailwind
     removeTextSizeAdjust(),
     autoprefixer({
       // Configuración para evitar propiedades problemáticas
