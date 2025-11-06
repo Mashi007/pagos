@@ -3432,6 +3432,7 @@ def obtener_financiamiento_tendencia_mensual(
     ✅ OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
     """
     import time
+
     from app.core.cache import cache_backend
 
     start_time = time.time()
