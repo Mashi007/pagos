@@ -209,24 +209,93 @@ def crear_indices():
         # ÍNDICES: PAGOS_STAGING (si existe)
         # ============================================
         if _table_exists(inspector, 'pagos_staging'):
-            idx_name = 'idx_pagos_staging_fecha_monto'
+            # Índice funcional para fecha_pago::timestamp
+            idx_name = 'idx_pagos_staging_fecha_timestamp'
             if not _index_exists(inspector, 'pagos_staging', idx_name):
-                if (_column_exists(inspector, 'pagos_staging', 'fecha_pago') and 
-                    _column_exists(inspector, 'pagos_staging', 'monto_pagado')):
+                if _column_exists(inspector, 'pagos_staging', 'fecha_pago'):
                     try:
                         connection.execute(text(
                             f"CREATE INDEX IF NOT EXISTS {idx_name} "
-                            f"ON pagos_staging (fecha_pago, monto_pagado) "
-                            f"WHERE monto_pagado IS NOT NULL AND monto_pagado > 0"
+                            f"ON pagos_staging USING btree ((fecha_pago::timestamp)) "
+                            f"WHERE fecha_pago IS NOT NULL AND fecha_pago != ''"
                         ))
                         connection.commit()
-                        print(f"✅ Índice parcial '{idx_name}' creado en tabla 'pagos_staging'")
+                        print(f"✅ Índice funcional '{idx_name}' creado en tabla 'pagos_staging'")
                         indices_creados += 1
                     except Exception as e:
                         print(f"⚠️ Error creando índice '{idx_name}': {e}")
                         errores.append(f"{idx_name}: {e}")
                 else:
-                    print(f"ℹ️ Columnas no existen para '{idx_name}', omitiendo...")
+                    print(f"ℹ️ Columna no existe para '{idx_name}', omitiendo...")
+            else:
+                print(f"ℹ️ Índice '{idx_name}' ya existe, omitiendo...")
+                indices_omitidos += 1
+            
+            # Índice funcional para monto_pagado::numeric
+            idx_name = 'idx_pagos_staging_monto_numeric'
+            if not _index_exists(inspector, 'pagos_staging', idx_name):
+                if _column_exists(inspector, 'pagos_staging', 'monto_pagado'):
+                    try:
+                        connection.execute(text(
+                            f"CREATE INDEX IF NOT EXISTS {idx_name} "
+                            f"ON pagos_staging USING btree ((monto_pagado::numeric)) "
+                            f"WHERE monto_pagado IS NOT NULL AND monto_pagado != ''"
+                        ))
+                        connection.commit()
+                        print(f"✅ Índice funcional '{idx_name}' creado en tabla 'pagos_staging'")
+                        indices_creados += 1
+                    except Exception as e:
+                        print(f"⚠️ Error creando índice '{idx_name}': {e}")
+                        errores.append(f"{idx_name}: {e}")
+                else:
+                    print(f"ℹ️ Columna no existe para '{idx_name}', omitiendo...")
+            else:
+                print(f"ℹ️ Índice '{idx_name}' ya existe, omitiendo...")
+                indices_omitidos += 1
+            
+            # Índice funcional para EXTRACT(YEAR FROM fecha_pago::timestamp)
+            idx_name = 'idx_pagos_staging_extract_year'
+            if not _index_exists(inspector, 'pagos_staging', idx_name):
+                if _column_exists(inspector, 'pagos_staging', 'fecha_pago'):
+                    try:
+                        connection.execute(text(
+                            f"CREATE INDEX IF NOT EXISTS {idx_name} "
+                            f"ON pagos_staging USING btree (EXTRACT(YEAR FROM fecha_pago::timestamp)) "
+                            f"WHERE fecha_pago IS NOT NULL AND fecha_pago != '' AND fecha_pago ~ '^\\d{{4}}-\\d{{2}}-\\d{{2}}'"
+                        ))
+                        connection.commit()
+                        print(f"✅ Índice funcional '{idx_name}' creado para GROUP BY YEAR")
+                        indices_creados += 1
+                    except Exception as e:
+                        print(f"⚠️ Error creando índice '{idx_name}': {e}")
+                        errores.append(f"{idx_name}: {e}")
+                else:
+                    print(f"ℹ️ Columna no existe para '{idx_name}', omitiendo...")
+            else:
+                print(f"ℹ️ Índice '{idx_name}' ya existe, omitiendo...")
+                indices_omitidos += 1
+            
+            # Índice compuesto funcional para EXTRACT(YEAR, MONTH FROM fecha_pago::timestamp)
+            idx_name = 'idx_pagos_staging_extract_year_month'
+            if not _index_exists(inspector, 'pagos_staging', idx_name):
+                if _column_exists(inspector, 'pagos_staging', 'fecha_pago'):
+                    try:
+                        connection.execute(text(
+                            f"CREATE INDEX IF NOT EXISTS {idx_name} "
+                            f"ON pagos_staging USING btree ("
+                            f"  EXTRACT(YEAR FROM fecha_pago::timestamp), "
+                            f"  EXTRACT(MONTH FROM fecha_pago::timestamp)"
+                            f") "
+                            f"WHERE fecha_pago IS NOT NULL AND fecha_pago != '' AND fecha_pago ~ '^\\d{{4}}-\\d{{2}}-\\d{{2}}'"
+                        ))
+                        connection.commit()
+                        print(f"✅ Índice compuesto funcional '{idx_name}' creado para GROUP BY YEAR, MONTH")
+                        indices_creados += 1
+                    except Exception as e:
+                        print(f"⚠️ Error creando índice '{idx_name}': {e}")
+                        errores.append(f"{idx_name}: {e}")
+                else:
+                    print(f"ℹ️ Columna no existe para '{idx_name}', omitiendo...")
             else:
                 print(f"ℹ️ Índice '{idx_name}' ya existe, omitiendo...")
                 indices_omitidos += 1

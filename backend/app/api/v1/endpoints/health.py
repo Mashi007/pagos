@@ -686,7 +686,36 @@ async def create_database_indexes(
             # Pagos
             ("pagos", "ix_pagos_fecha_registro", "fecha_registro", None),
         ]
+        
+        # Índices funcionales de pagos_staging (requieren SQL especial)
+        pagos_staging_indices = [
+            (
+                "pagos_staging",
+                "idx_pagos_staging_fecha_timestamp",
+                "USING btree ((fecha_pago::timestamp))",
+                "WHERE fecha_pago IS NOT NULL AND fecha_pago != ''",
+            ),
+            (
+                "pagos_staging",
+                "idx_pagos_staging_monto_numeric",
+                "USING btree ((monto_pagado::numeric))",
+                "WHERE monto_pagado IS NOT NULL AND monto_pagado != ''",
+            ),
+            (
+                "pagos_staging",
+                "idx_pagos_staging_extract_year",
+                "USING btree (EXTRACT(YEAR FROM fecha_pago::timestamp))",
+                "WHERE fecha_pago IS NOT NULL AND fecha_pago != '' AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'",
+            ),
+            (
+                "pagos_staging",
+                "idx_pagos_staging_extract_year_month",
+                "USING btree (EXTRACT(YEAR FROM fecha_pago::timestamp), EXTRACT(MONTH FROM fecha_pago::timestamp))",
+                "WHERE fecha_pago IS NOT NULL AND fecha_pago != '' AND fecha_pago ~ '^\\d{4}-\\d{2}-\\d{2}'",
+            ),
+        ]
 
+        # Crear índices normales
         for table_name, idx_name, columns, where_clause in indices_to_create:
             if not _table_exists(table_name):
                 results["skipped"].append(f"{table_name}.{idx_name} (tabla no existe)")
@@ -721,10 +750,39 @@ async def create_database_indexes(
                     db.rollback()
                 except Exception:
                     pass
+        
+        # Crear índices funcionales de pagos_staging
+        for table_name, idx_name, index_definition, where_clause in pagos_staging_indices:
+            if not _table_exists(table_name):
+                results["skipped"].append(f"{table_name}.{idx_name} (tabla no existe)")
+                continue
+
+            if _index_exists(table_name, idx_name):
+                results["skipped"].append(f"{table_name}.{idx_name} (ya existe)")
+                continue
+
+            try:
+                if where_clause:
+                    sql = f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name} {index_definition} {where_clause}"
+                else:
+                    sql = f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name} {index_definition}"
+
+                db.execute(text(sql))
+                db.commit()
+                results["created"].append(f"{table_name}.{idx_name}")
+                logger.info(f"✅ Índice funcional '{idx_name}' creado en tabla '{table_name}'")
+            except Exception as e:
+                error_msg = str(e)
+                results["errors"].append(f"{table_name}.{idx_name}: {error_msg}")
+                logger.error(f"⚠️ Error creando índice funcional '{idx_name}': {e}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
 
         # Ejecutar ANALYZE para actualizar estadísticas
         try:
-            tables_to_analyze = ["notificaciones", "cuotas", "prestamos", "pagos"]
+            tables_to_analyze = ["notificaciones", "cuotas", "prestamos", "pagos", "pagos_staging"]
             for table in tables_to_analyze:
                 if _table_exists(table):
                     try:
@@ -750,6 +808,157 @@ async def create_database_indexes(
 
     except Exception as e:
         logger.error(f"Error creando índices: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return {
+            "status": "error",
+            "message": str(e),
+            "timestamp": time.time(),
+        }
+
+
+@router.get("/database/indexes/performance")
+async def monitor_indexes_performance(
+    db: Session = Depends(get_db),
+):
+    """
+    Monitorear el rendimiento de los endpoints del dashboard después de crear índices
+    
+    Ejecuta queries de prueba para medir tiempos de respuesta y comparar
+    con los tiempos esperados después de crear los índices.
+    """
+    from sqlalchemy import inspect
+    
+    try:
+        inspector = inspect(db.bind)
+        results = {
+            "status": "success",
+            "timestamp": time.time(),
+            "endpoints": {},
+            "summary": {
+                "total_tested": 0,
+                "fast_endpoints": 0,
+                "slow_endpoints": 0,
+                "improvement_detected": False,
+            },
+        }
+        
+        # Endpoints críticos del dashboard a monitorear
+        dashboard_endpoints = {
+            "financiamiento_tendencia_mensual": {
+                "query": """
+                    SELECT 
+                        EXTRACT(YEAR FROM fecha_aprobacion) as año,
+                        EXTRACT(MONTH FROM fecha_aprobacion) as mes,
+                        COUNT(*) as total,
+                        SUM(monto_financiado) as monto_total
+                    FROM prestamos
+                    WHERE estado = 'APROBADO'
+                      AND fecha_aprobacion >= CURRENT_DATE - INTERVAL '12 months'
+                    GROUP BY EXTRACT(YEAR FROM fecha_aprobacion), EXTRACT(MONTH FROM fecha_aprobacion)
+                    ORDER BY año, mes
+                """,
+                "expected_max_ms": 2000,  # 2 segundos máximo
+                "description": "Tendencia mensual de financiamientos",
+            },
+            "evolucion_pagos": {
+                "query": """
+                    SELECT 
+                        EXTRACT(YEAR FROM fecha_pago) as año,
+                        EXTRACT(MONTH FROM fecha_pago) as mes,
+                        SUM(monto_pagado) as total_pagado
+                    FROM pagos
+                    WHERE activo = TRUE
+                      AND fecha_pago >= CURRENT_DATE - INTERVAL '6 months'
+                    GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
+                    ORDER BY año, mes
+                """,
+                "expected_max_ms": 1500,  # 1.5 segundos máximo
+                "description": "Evolución de pagos mensuales",
+            },
+            "cobranzas_mensuales": {
+                "query": """
+                    SELECT 
+                        EXTRACT(YEAR FROM fecha_vencimiento) as año,
+                        EXTRACT(MONTH FROM fecha_vencimiento) as mes,
+                        COUNT(*) as total_cuotas,
+                        SUM(CASE WHEN estado != 'PAGADO' THEN 1 ELSE 0 END) as cuotas_pendientes
+                    FROM cuotas
+                    WHERE fecha_vencimiento >= CURRENT_DATE - INTERVAL '6 months'
+                    GROUP BY EXTRACT(YEAR FROM fecha_vencimiento), EXTRACT(MONTH FROM fecha_vencimiento)
+                    ORDER BY año, mes
+                """,
+                "expected_max_ms": 1500,  # 1.5 segundos máximo
+                "description": "Cobranzas mensuales",
+            },
+            "notificaciones_estadisticas": {
+                "query": """
+                    SELECT 
+                        estado,
+                        COUNT(*) as total
+                    FROM notificaciones
+                    GROUP BY estado
+                """,
+                "expected_max_ms": 500,  # 500ms máximo
+                "description": "Estadísticas de notificaciones",
+            },
+        }
+        
+        # Ejecutar queries de prueba y medir tiempos
+        for endpoint_name, endpoint_config in dashboard_endpoints.items():
+            start_time = time.time()
+            try:
+                result = db.execute(text(endpoint_config["query"]))
+                rows = result.fetchall()
+                elapsed_ms = (time.time() - start_time) * 1000
+                
+                is_fast = elapsed_ms <= endpoint_config["expected_max_ms"]
+                
+                results["endpoints"][endpoint_name] = {
+                    "description": endpoint_config["description"],
+                    "response_time_ms": round(elapsed_ms, 2),
+                    "expected_max_ms": endpoint_config["expected_max_ms"],
+                    "status": "fast" if is_fast else "slow",
+                    "rows_returned": len(rows),
+                    "improvement": "✅ Mejora detectada" if is_fast else "⚠️ Aún lento",
+                }
+                
+                results["summary"]["total_tested"] += 1
+                if is_fast:
+                    results["summary"]["fast_endpoints"] += 1
+                else:
+                    results["summary"]["slow_endpoints"] += 1
+                    
+            except Exception as e:
+                elapsed_ms = (time.time() - start_time) * 1000
+                results["endpoints"][endpoint_name] = {
+                    "description": endpoint_config["description"],
+                    "response_time_ms": round(elapsed_ms, 2),
+                    "expected_max_ms": endpoint_config["expected_max_ms"],
+                    "status": "error",
+                    "error": str(e),
+                }
+                results["summary"]["total_tested"] += 1
+                logger.error(f"Error en query de prueba para {endpoint_name}: {e}")
+        
+        # Determinar si hay mejoras
+        if results["summary"]["fast_endpoints"] > 0:
+            results["summary"]["improvement_detected"] = True
+        
+        # Mensaje de resumen
+        if results["summary"]["slow_endpoints"] == 0:
+            results["message"] = "✅ Todos los endpoints están dentro de los tiempos esperados"
+        elif results["summary"]["fast_endpoints"] > 0:
+            results["message"] = f"⚠️ {results['summary']['slow_endpoints']} endpoints aún están lentos, pero hay mejoras"
+        else:
+            results["message"] = "❌ Los endpoints aún están lentos, verificar índices"
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error monitoreando rendimiento de índices: {e}", exc_info=True)
         try:
             db.rollback()
         except Exception:
