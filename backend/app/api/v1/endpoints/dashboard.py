@@ -3612,9 +3612,7 @@ def obtener_financiamiento_tendencia_mensual(
                 # Con filtros, aplicar las mismas condiciones de analista/concesionario/modelo
                 filtros_pagos = [
                     "pr.estado = 'APROBADO'",
-                    "EXTRACT(YEAR FROM c.fecha_vencimiento) >= 2024",
-                    "c.total_pagado IS NOT NULL",
-                    "c.total_pagado > 0"
+                    "EXTRACT(YEAR FROM c.fecha_vencimiento) >= 2024"
                 ]
                 bind_params_pagos_filtrado = {}
 
@@ -3665,7 +3663,6 @@ def obtener_financiamiento_tendencia_mensual(
                     INNER JOIN prestamos pr ON c.prestamo_id = pr.id
                     WHERE pr.estado = 'APROBADO'
                       AND EXTRACT(YEAR FROM c.fecha_vencimiento) >= 2024
-                      AND COALESCE(c.total_pagado, 0) >= 0
                     GROUP BY 
                         EXTRACT(YEAR FROM c.fecha_vencimiento),
                         EXTRACT(MONTH FROM c.fecha_vencimiento)
