@@ -54,22 +54,9 @@
     @apply border-border;
   }
   
-  /* Sobrescribir preflight de Tailwind para eliminar propiedades problemáticas */
-  /* Eliminadas todas las propiedades text-size-adjust para evitar warnings del navegador */
-  html,
-  :host {
-    /* Anular propiedades text-size-adjust que Tailwind puede inyectar desde preflight */
-    -webkit-text-size-adjust: unset !important;
-    -moz-text-size-adjust: unset !important;
-    text-size-adjust: unset !important;
-    /* Nota: Las propiedades text-size-adjust fueron removidas porque causan warnings
-       en navegadores que no las soportan (especialmente Firefox) */
-  }
-  
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
-    /* Nota: text-size-adjust removido - propiedad no estándar que causa errores en navegadores */
   }
 }
 

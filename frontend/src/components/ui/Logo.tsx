@@ -56,6 +56,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
   const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(logoCache.logoUrl)
   const [hasChecked, setHasChecked] = useState(logoCache.hasChecked)
   const [logoVersion, setLogoVersion] = useState(logoCache.version)
+  const [imageLoaded, setImageLoaded] = useState(false) // ✅ Estado para controlar cuando la imagen está completamente cargada
 
   useEffect(() => {
     // ✅ PRIORIDAD 1: Si ya verificamos y el logo NO existe, no hacer nada más
@@ -133,6 +134,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                   logoCache.version += 1
                   setCustomLogoUrl(logoUrl)
                   setHasChecked(true)
+                  setImageLoaded(false) // ✅ Resetear estado de carga cuando cambia el URL
                   setLogoVersion(logoCache.version)
                   clearTimeout(timeoutId)
                   logoCache.isChecking = false
@@ -211,6 +213,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
       console.log('🔄 Actualizando logo desde caché compartido, versión:', version)
       setCustomLogoUrl(url)
       setHasChecked(true)
+      setImageLoaded(false) // ✅ Resetear estado de carga cuando se actualiza desde caché
       setLogoVersion(version)
     }
 
@@ -408,25 +411,83 @@ export function Logo({ className, size = 'md' }: LogoProps) {
   // Si hay logo personalizado Y NO está marcado como no encontrado, mostrar imagen
   if (customLogoUrl && !logoCache.logoNotFound) {
     return (
-      <img
-        key={`logo-${logoVersion}-${customLogoUrl}`}
-        src={customLogoUrl}
-        alt="Logo de la empresa"
-        className={cn(sizeMap[size], className, 'object-contain')}
-        role="img"
-        onError={(e) => {
-          // ✅ Si falla la carga (404), marcar como no encontrado y evitar más intentos
-          console.warn('⚠️ Error cargando logo (GET falló), marcando como no encontrado:', customLogoUrl)
-          logoCache.logoNotFound = true
-          logoCache.logoUrl = null
-          logoCache.version += 1
-          setCustomLogoUrl(null)
-          setHasChecked(true)
-          setLogoVersion(logoCache.version)
-          notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
-          // No intentar recargar - el logo no existe
-        }}
-      />
+      <div className={cn(sizeMap[size], className, 'relative')}>
+        {/* Mostrar SVG por defecto mientras la imagen se carga */}
+        {!imageLoaded && (
+          <svg 
+            className={cn(sizeMap[size], 'absolute inset-0')}
+            viewBox="0 0 48 48" 
+            xmlns="http://www.w3.org/2000/svg"
+            role="img"
+            aria-label="RAPICREDIT Logo"
+          >
+            <defs>
+              <filter id={`shadowR-${uniqueId}`} x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="#000000" floodOpacity="0.25"/>
+              </filter>
+              <filter id={`shadowDot-${uniqueId}`} x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#000000" floodOpacity="0.3"/>
+              </filter>
+              <filter id={`glowDot-${uniqueId}`}>
+                <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
+                <feMerge>
+                  <feMergeNode in="coloredBlur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+            </defs>
+            <g filter={`url(#shadowR-${uniqueId})`}>
+              <rect x="7" y="5" width="9" height="28" rx="1.5" className="fill-slate-900"/>
+              <rect x="7" y="5" width="9" height="28" rx="1.5" fill="none" stroke="#E0E7FF" strokeWidth="0.5" opacity="0.6"/>
+              <path d="M 16 5 L 16 14 Q 16 9 21 9 Q 26 9 27.5 11.5 L 27.5 17 Q 27.5 14.5 25 14.5 L 22 14.5 Q 20 14.5 18.5 15.5 L 16 18 Z" 
+                    className="fill-slate-900"/>
+              <path d="M 16 5 L 16 14 Q 16 9 21 9 Q 26 9 27.5 11.5 L 27.5 17 Q 27.5 14.5 25 14.5 L 22 14.5 Q 20 14.5 18.5 15.5 L 16 18 Z" 
+                    fill="none" stroke="#E0E7FF" strokeWidth="0.5" opacity="0.6"/>
+              <path d="M 16 19 L 24 11 L 30 11 L 21 19 L 21 21 L 28 27 L 34 27 L 25 21 L 23 21 Z" 
+                    className="fill-slate-900"/>
+              <path d="M 16 19 L 24 11 L 30 11 L 21 19 L 21 21 L 28 27 L 34 27 L 25 21 L 23 21 Z" 
+                    fill="none" stroke="#E0E7FF" strokeWidth="0.5" opacity="0.6"/>
+              <path d="M 28 27 L 34 27 L 32 24 L 30 24 Z" 
+                    className="fill-slate-900"/>
+            </g>
+            <g filter={`url(#shadowDot-${uniqueId})`}>
+              <circle cx="11" cy="41" r="6" className="fill-orange-600" filter={`url(#glowDot-${uniqueId})`}/>
+              <circle cx="11" cy="41" r="4.5" className="fill-orange-500"/>
+              <circle cx="10" cy="40" r="1.5" className="fill-orange-400" opacity="0.8"/>
+            </g>
+          </svg>
+        )}
+        {/* Imagen del logo personalizado - se muestra cuando está completamente cargada */}
+        <img
+          key={`logo-${logoVersion}-${customLogoUrl}`}
+          src={customLogoUrl}
+          alt="Logo de la empresa"
+          className={cn(
+            sizeMap[size], 
+            'object-contain transition-opacity duration-300',
+            imageLoaded ? 'opacity-100' : 'opacity-0'
+          )}
+          role="img"
+          loading="eager"
+          onLoad={() => {
+            // ✅ Cuando la imagen se carga completamente, marcarla como cargada
+            setImageLoaded(true)
+          }}
+          onError={(e) => {
+            // ✅ Si falla la carga (404), marcar como no encontrado y evitar más intentos
+            console.warn('⚠️ Error cargando logo (GET falló), marcando como no encontrado:', customLogoUrl)
+            logoCache.logoNotFound = true
+            logoCache.logoUrl = null
+            logoCache.version += 1
+            setCustomLogoUrl(null)
+            setHasChecked(true)
+            setImageLoaded(false)
+            setLogoVersion(logoCache.version)
+            notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
+            // No intentar recargar - el logo no existe
+          }}
+        />
+      </div>
     )
   }
 
