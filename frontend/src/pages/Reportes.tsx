@@ -101,10 +101,12 @@ export function Reportes() {
   const queryClient = useQueryClient()
 
   // Obtener resumen del dashboard para KPIs
-  const { data: resumenData, isLoading: loadingResumen } = useQuery({
+  const { data: resumenData, isLoading: loadingResumen, isError: errorResumen } = useQuery({
     queryKey: ['reportes-resumen'],
     queryFn: () => reporteService.getResumenDashboard(),
     staleTime: 5 * 60 * 1000, // 5 minutos
+    retry: 1, // Solo un reintento para evitar múltiples peticiones fallidas
+    refetchOnWindowFocus: false, // No recargar automáticamente
   })
 
   // Funciones para generar reportes

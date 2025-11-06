@@ -10,7 +10,7 @@ from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision = "014_remove_unique_constraint_cedula"
+revision = "014_remove_unique_cedula"
 down_revision = "013_create_pagos_table"
 branch_labels = None
 depends_on = None

@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '017_add_is_admin_column'
-down_revision = '016_emergency_remove_unique_index_cedula'
+down_revision = '016_emergency_rm_unique_idx'
 branch_labels = None
 depends_on = None
 

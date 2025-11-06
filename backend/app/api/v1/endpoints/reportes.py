@@ -754,69 +754,135 @@ def resumen_dashboard(
 ):
     """Obtiene resumen para dashboard."""
     try:
+        # ✅ ROLLBACK PREVENTIVO: Restaurar transacción si está abortada
+        try:
+            db.execute(text("SELECT 1"))
+        except Exception as test_error:
+            error_str = str(test_error)
+            if "aborted" in error_str.lower() or "InFailedSqlTransaction" in error_str:
+                logger.warning("⚠️ [reportes.resumen] Transacción abortada detectada, haciendo rollback preventivo")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+        
         hoy = date.today()
 
         # Estadísticas básicas - Solo préstamos aprobados
-        total_clientes = db.query(Cliente).filter(Cliente.activo).count()
-        total_prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
-        total_pagos = db.query(Pago).count()
+        try:
+            total_clientes = db.query(Cliente).filter(Cliente.activo).count()
+        except Exception as e:
+            logger.error(f"❌ [reportes.resumen] Error obteniendo total_clientes: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            total_clientes = 0
+
+        try:
+            total_prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
+        except Exception as e:
+            logger.error(f"❌ [reportes.resumen] Error obteniendo total_prestamos: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            total_prestamos = 0
+
+        try:
+            total_pagos = db.query(Pago).count()
+        except Exception as e:
+            logger.error(f"❌ [reportes.resumen] Error obteniendo total_pagos: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            total_pagos = 0
 
         # Cartera activa: calcular desde cuotas pendientes
         # Suma de capital_pendiente + interes_pendiente + monto_mora
         # Solo para préstamos aprobados y cuotas no pagadas
-        cartera_activa_query = (
-            db.query(
-                func.sum(
-                    func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
-                    + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
-                    + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
+        try:
+            cartera_activa_query = (
+                db.query(
+                    func.sum(
+                        func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
+                        + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
+                        + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
+                    )
+                )
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.estado != "PAGADO",
                 )
             )
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Cuota.estado != "PAGADO",
-            )
-        )
-        cartera_activa = float(cartera_activa_query.scalar() or Decimal("0"))
-
-        logger.info(f"[reportes.resumen] Cartera activa: {cartera_activa}")
+            cartera_activa = float(cartera_activa_query.scalar() or Decimal("0"))
+            logger.info(f"[reportes.resumen] Cartera activa: {cartera_activa}")
+        except Exception as e:
+            logger.error(f"❌ [reportes.resumen] Error obteniendo cartera_activa: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            cartera_activa = 0.0
 
         # Mora: préstamos con cuotas vencidas no pagadas
-        prestamos_mora = (
-            db.query(func.count(func.distinct(Prestamo.id)))
-            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
-            )
-            .scalar()
-        ) or 0
-
-        logger.info(f"[reportes.resumen] Préstamos en mora: {prestamos_mora}")
+        try:
+            prestamos_mora = (
+                db.query(func.count(func.distinct(Prestamo.id)))
+                .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+                .filter(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento < hoy,
+                    Cuota.estado != "PAGADO",
+                )
+                .scalar()
+            ) or 0
+            logger.info(f"[reportes.resumen] Préstamos en mora: {prestamos_mora}")
+        except Exception as e:
+            logger.error(f"❌ [reportes.resumen] Error obteniendo prestamos_mora: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            prestamos_mora = 0
 
         # Pagos del mes: usar tabla pagos (tipos nativos)
         fecha_inicio_mes = hoy.replace(day=1)
         fecha_inicio_mes_dt = datetime.combine(fecha_inicio_mes, datetime.min.time())
         fecha_fin_mes_dt = datetime.combine(hoy, datetime.max.time())
 
-        pagos_mes_query = db.execute(
-            text(
+        try:
+            pagos_mes_query = db.execute(
+                text(
+                    """
+                    SELECT COALESCE(SUM(monto_pagado), 0)
+                    FROM pagos
+                    WHERE fecha_pago >= :fecha_inicio
+                      AND fecha_pago <= :fecha_fin
+                      AND monto_pagado IS NOT NULL
+                      AND monto_pagado > 0
+                      AND activo = TRUE
                 """
-                SELECT COALESCE(SUM(monto_pagado), 0)
-                FROM pagos
-                WHERE fecha_pago >= :fecha_inicio
-                  AND fecha_pago <= :fecha_fin
-                  AND monto_pagado IS NOT NULL
-                  AND monto_pagado > 0
-                  AND activo = TRUE
-            """
-            ).bindparams(fecha_inicio=fecha_inicio_mes_dt, fecha_fin=fecha_fin_mes_dt)
-        )
-        pagos_mes = float(str(pagos_mes_query.scalar() or Decimal("0")))
-
-        logger.info(f"[reportes.resumen] Pagos del mes: {pagos_mes} (desde {fecha_inicio_mes} hasta {hoy})")
+                ).bindparams(fecha_inicio=fecha_inicio_mes_dt, fecha_fin=fecha_fin_mes_dt)
+            )
+            resultado_pagos = pagos_mes_query.scalar()
+            # Manejar diferentes tipos de retorno (Decimal, float, int, None)
+            if resultado_pagos is None:
+                pagos_mes = 0.0
+            elif isinstance(resultado_pagos, Decimal):
+                pagos_mes = float(resultado_pagos)
+            else:
+                pagos_mes = float(resultado_pagos) if resultado_pagos else 0.0
+            logger.info(f"[reportes.resumen] Pagos del mes: {pagos_mes} (desde {fecha_inicio_mes} hasta {hoy})")
+        except Exception as e:
+            logger.error(f"❌ [reportes.resumen] Error obteniendo pagos_mes: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            pagos_mes = 0.0
 
         return {
             "total_clientes": total_clientes,
@@ -829,7 +895,11 @@ def resumen_dashboard(
         }
 
     except Exception as e:
-        logger.error(f"Error obteniendo resumen: {e}", exc_info=True)
+        logger.error(f"❌ [reportes.resumen] Error obteniendo resumen: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 

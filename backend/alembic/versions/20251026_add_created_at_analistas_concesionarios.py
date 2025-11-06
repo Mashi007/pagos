@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
-revision = 'add_created_at_analistas_concesionarios'
+revision = 'add_created_at_anal_conces'
 down_revision = '017_add_is_admin_column'
 branch_labels = None
 depends_on = None

@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
-revision = '20251030_eliminar_columnas_clientes'
+revision = '20251030_del_cols_clientes'
 down_revision = '20251030_columnas_prestamos'
 branch_labels = None
 depends_on = None

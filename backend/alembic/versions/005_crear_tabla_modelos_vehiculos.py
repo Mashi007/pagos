@@ -1,7 +1,7 @@
 """crear tabla modelos vehiculos
 
 Revision ID: 005
-Revises: 004_agregar_total_financiamiento_cliente
+Revises: 004_add_total_financiamiento
 Create Date: 2025-10-15 01:55:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "005"
-down_revision = "004_agregar_total_financiamiento_cliente"
+down_revision = "004_add_total_financiamiento"
 branch_labels = None
 depends_on = None
 

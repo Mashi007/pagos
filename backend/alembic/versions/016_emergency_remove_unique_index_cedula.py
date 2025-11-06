@@ -10,8 +10,8 @@ from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision = "016_emergency_remove_unique_index_cedula"
-down_revision = "015_remove_unique_constraint_cedula_fixed"
+revision = "016_emergency_rm_unique_idx"
+down_revision = "015_remove_unique_cedula_fix"
 branch_labels = None
 depends_on = None
 

@@ -1,6 +1,6 @@
 """agregar_total_financiamiento_cliente
 
-Revision ID: 004_agregar_total_financiamiento_cliente
+Revision ID: 004_add_total_financiamiento
 Revises: 003_update_asesor_model
 Create Date: 2025-10-13 16:40:00.000000
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "004_agregar_total_financiamiento_cliente"
+revision = "004_add_total_financiamiento"
 down_revision = "003_update_asesor_model"
 branch_labels = None
 depends_on = None

@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
-revision = "012_add_concesionario_analista_clientes"
+revision = "012_add_conces_anal_clientes"
 down_revision = "011_fix_admin_users_final"
 branch_labels = None
 depends_on = None
