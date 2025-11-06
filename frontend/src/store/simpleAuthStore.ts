@@ -27,15 +27,34 @@ interface SimpleAuthState {
   refreshUser: () => Promise<void>
 }
 
+// Función para verificar si hay datos de autenticación en almacenamiento
+const hasAuthData = (): boolean => {
+  try {
+    const rememberMe = safeGetItem('remember_me', false)
+    const user = rememberMe 
+      ? safeGetItem('user', null) 
+      : safeGetSessionItem('user', null)
+    const token = rememberMe 
+      ? safeGetItem('access_token', null)
+      : safeGetSessionItem('access_token', null)
+    return !!(user && token)
+  } catch {
+    return false
+  }
+}
+
 export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
-  // Estado inicial
+  // Estado inicial - si hay datos de auth, empezar como loading para evitar redirecciones
   user: null,
   isAuthenticated: false,
-  isLoading: false,
+  isLoading: hasAuthData(), // ✅ Si hay datos de auth, empezar como loading
   error: null,
 
   // Inicializar autenticación desde almacenamiento seguro CON VERIFICACIÓN AUTOMÁTICA
   initializeAuth: async () => {
+    // ✅ CRÍTICO: Marcar como loading al inicio para evitar redirecciones durante la verificación
+    set({ isLoading: true })
+    
     try {
       const rememberMe = safeGetItem('remember_me', false)
       const user = rememberMe 
