@@ -1,4 +1,6 @@
+"""create pagos table
 
+Revision ID: 013_create_pagos_table
 Revises: 012_add_concesionario_analista_clientes
 Create Date: 2025-10-19 10:30:00.000000
 

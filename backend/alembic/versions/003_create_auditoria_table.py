@@ -1,3 +1,4 @@
+"""create auditoria table
 
 Revision ID: 003_create_auditoria_table
 Revises: 002_add_cliente_foreignkeys
@@ -16,58 +17,41 @@ depends_on = None
 
 
 def upgrade():
-    # Crear tabla de auditoría
-    op.create_table
+    # Crear tabla de auditoría (singular, como en el modelo)
+    op.create_table(
+        "auditoria",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("usuario_id", sa.Integer(), nullable=True),
-        sa.Column("usuario_email", sa.String(length=255), nullable=True),
+        sa.Column("usuario_id", sa.Integer(), nullable=False),
         sa.Column("accion", sa.String(length=50), nullable=False),
-        sa.Column("modulo", sa.String(length=50), nullable=False),
-        sa.Column("tabla", sa.String(length=50), nullable=False),
-        sa.Column("registro_id", sa.Integer(), nullable=True),
-        sa.Column("descripcion", sa.Text(), nullable=True),
-        sa.Column
-        sa.Column
+        sa.Column("entidad", sa.String(length=50), nullable=False),
+        sa.Column("entidad_id", sa.Integer(), nullable=True),
+        sa.Column("detalles", sa.Text(), nullable=True),
         sa.Column("ip_address", sa.String(length=45), nullable=True),
-        sa.Column("user_agent", sa.String(length=255), nullable=True),
-        sa.Column("resultado", sa.String(length=20), nullable=False),
+        sa.Column("user_agent", sa.Text(), nullable=True),
+        sa.Column("exito", sa.Boolean(), nullable=False, server_default="true"),
         sa.Column("mensaje_error", sa.Text(), nullable=True),
-        sa.Column
-            server_default=sa.text("now()"),
-            nullable=False,
+        sa.Column("fecha", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["usuario_id"], ["users.id"]),
+    )
 
     # Crear índices para optimizar consultas
-    op.create_index(op.f("ix_auditorias_id"), "auditorias", ["id"], unique=False)
-    op.create_index
-        op.f("ix_auditorias_usuario_id"), "auditorias", ["usuario_id"], unique=False
-    op.create_index
-        op.f("ix_auditorias_usuario_email"),
-        "auditorias",
-        ["usuario_email"],
-        unique=False,
-    op.create_index
-        op.f("ix_auditorias_accion"), "auditorias", ["accion"], unique=False
-    op.create_index
-        op.f("ix_auditorias_modulo"), "auditorias", ["modulo"], unique=False
-    op.create_index(op.f("ix_auditorias_tabla"), "auditorias", ["tabla"], unique=False)
-    op.create_index
-        op.f("ix_auditorias_registro_id"), "auditorias", ["registro_id"], unique=False
-    op.create_index(op.f("ix_auditorias_fecha"), "auditorias", ["fecha"], unique=False)
+    op.create_index("ix_auditoria_id", "auditoria", ["id"], unique=False)
+    op.create_index("ix_auditoria_usuario_id", "auditoria", ["usuario_id"], unique=False)
+    op.create_index("ix_auditoria_accion", "auditoria", ["accion"], unique=False)
+    op.create_index("ix_auditoria_entidad", "auditoria", ["entidad"], unique=False)
+    op.create_index("ix_auditoria_entidad_id", "auditoria", ["entidad_id"], unique=False)
+    op.create_index("ix_auditoria_fecha", "auditoria", ["fecha"], unique=False)
 
 
 def downgrade():
     # Eliminar índices
-    op.drop_index(op.f("ix_auditorias_fecha"), table_name="auditorias")
-    op.drop_index(op.f("ix_auditorias_registro_id"), table_name="auditorias")
-    op.drop_index(op.f("ix_auditorias_tabla"), table_name="auditorias")
-    op.drop_index(op.f("ix_auditorias_modulo"), table_name="auditorias")
-    op.drop_index(op.f("ix_auditorias_accion"), table_name="auditorias")
-    op.drop_index(op.f("ix_auditorias_usuario_email"), table_name="auditorias")
-    op.drop_index(op.f("ix_auditorias_usuario_id"), table_name="auditorias")
-    op.drop_index(op.f("ix_auditorias_id"), table_name="auditorias")
+    op.drop_index("ix_auditoria_fecha", table_name="auditoria")
+    op.drop_index("ix_auditoria_entidad_id", table_name="auditoria")
+    op.drop_index("ix_auditoria_entidad", table_name="auditoria")
+    op.drop_index("ix_auditoria_accion", table_name="auditoria")
+    op.drop_index("ix_auditoria_usuario_id", table_name="auditoria")
+    op.drop_index("ix_auditoria_id", table_name="auditoria")
 
     # Eliminar tabla
-    op.drop_table("auditorias")
-
-"""
+    op.drop_table("auditoria")

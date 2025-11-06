@@ -1,10 +1,11 @@
+"""add cargo column to users
 
-from datetime import date
 Revision ID: 007_add_cargo_column_users
 Revises: 006_update_user_roles_system
 Create Date: 2025-10-17 20:20:00.000000
 
 """
+from datetime import date
 
 from alembic import op
 import sqlalchemy as sa

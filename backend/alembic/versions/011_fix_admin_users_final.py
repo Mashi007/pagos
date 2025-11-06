@@ -1,5 +1,3 @@
-from datetime import date
-# backend/alembic/versions/011_fix_admin_users_final.py
 """fix admin users final
 
 Revision ID: 011_fix_admin_users_final

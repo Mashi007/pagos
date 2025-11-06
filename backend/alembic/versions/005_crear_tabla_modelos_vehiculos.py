@@ -1,10 +1,11 @@
+"""crear tabla modelos vehiculos
 
-from datetime import date
 Revision ID: 005
 Revises: 004
 Create Date: 2025-10-15 01:55:00.000000
 
 """
+from datetime import date
 
 from alembic import op
 import sqlalchemy as sa
