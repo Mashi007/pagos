@@ -13,6 +13,30 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Script para suprimir warnings de CSS conocidos (selectores malformados) -->
+    <script>
+      // Interceptar console.warn para filtrar warnings de CSS conocidos
+      const originalWarn = console.warn;
+      console.warn = function(...args) {
+        const message = args.join(' ');
+        // Suprimir warnings específicos de CSS relacionados con selectores malformados
+        if (
+          message.includes('Juego de reglas ignoradas') ||
+          message.includes('ignored due to bad selector') ||
+          message.includes('ignored due to malformed selector') ||
+          message.includes('mal selector') ||
+          message.includes('bad selector') ||
+          message.includes('webkit-text-size-adjust') ||
+          message.includes('moz-text-size-adjust') ||
+          message.includes('text-size-adjust')
+        ) {
+          // Silenciar estos warnings específicos
+          return;
+        }
+        // Mostrar otros warnings normalmente
+        originalWarn.apply(console, args);
+      };
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

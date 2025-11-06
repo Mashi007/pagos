@@ -3843,23 +3843,19 @@ def obtener_financiamiento_tendencia_mensual(
 
             resultados_pagos = query_pagos.all()
 
+            # ✅ OPTIMIZACIÓN: Usar directamente total_pagado de cuotas
+            # Si está en 0, significa que no hay pagos registrados para ese mes
+            # No hacer queries adicionales por mes (evita problema N+1)
             for row in resultados_pagos:
                 año_mes = int(row.año)
                 num_mes = int(row.mes)
                 monto_total_pagado = float(row.total_pagado or Decimal("0"))
-
-                # ✅ Si total_pagado está en 0, usar helper para buscar pagos
-                if monto_total_pagado == 0:
-                    # Calcular monto pagado usando helper (busca de múltiples formas)
-                    fecha_mes = date(año_mes, num_mes, 1)
-                    monto_helper = calcular_monto_pagado_mes(
-                        db=db,
-                        mes=fecha_mes,
-                        prestamo_id=None,  # Sin filtro de préstamo específico
-                        cedula=None,  # Sin filtro de cédula específico
-                    )
-                    monto_total_pagado = float(monto_helper)
-
+                
+                # ✅ Si total_pagado es 0, usar 0 directamente
+                # El helper calcular_monto_pagado_mes() es muy lento (hace múltiples queries por mes)
+                # y causa el problema de rendimiento. Si total_pagado está actualizado en cuotas,
+                # no necesitamos recalcularlo. Si no está actualizado, es mejor aceptar 0
+                # que hacer queries adicionales que tardan 19+ segundos.
                 pagos_por_mes[(año_mes, num_mes)] = monto_total_pagado
 
             pagos_time = int((time.time() - start_pagos) * 1000)

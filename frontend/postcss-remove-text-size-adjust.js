@@ -34,9 +34,28 @@ export default function removeTextSizeAdjust() {
             return;
           }
           
+          // 0. Detectar selectores con caracteres de control o no imprimibles
+          if (/[\x00-\x1F\x7F-\x9F]/.test(correctedSelector)) {
+            correctedSelector = correctedSelector.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+            if (correctedSelector.length === 0) {
+              rule.remove();
+              return;
+            }
+          }
+          
           // 1. Selectores con doble punto consecutivo (excepto en números como 1.5 o en clases como ..before)
           if (correctedSelector.match(/\.\.(?!\d|before|after|first-line|first-letter|selection|placeholder|backdrop|marker)/)) {
             correctedSelector = correctedSelector.replace(/\.\.(?!\d|before|after|first-line|first-letter|selection|placeholder|backdrop|marker)/g, '.');
+          }
+          
+          // 1.1. Selectores con múltiples puntos consecutivos (más de 2)
+          if (correctedSelector.match(/\.{3,}/)) {
+            correctedSelector = correctedSelector.replace(/\.{3,}/g, '.');
+          }
+          
+          // 1.2. Selectores que terminan con punto (inválido)
+          if (correctedSelector.endsWith('.') && !correctedSelector.endsWith('::')) {
+            correctedSelector = correctedSelector.slice(0, -1);
           }
           
           // 2. Selectores con pseudo-elementos inválidos (:: seguido de algo inválido)
@@ -51,23 +70,88 @@ export default function removeTextSizeAdjust() {
                             pseudoElement.startsWith('webkit-') ||
                             pseudoElement.startsWith('moz-');
               if (!isValid) {
-                // Pseudo-elemento inválido detectado
-                shouldRemove = true;
-                break;
+                // Pseudo-elemento inválido detectado - intentar corregir o eliminar
+                // Si es un pseudo-elemento común mal escrito, intentar corregirlo
+                if (pseudoElement.toLowerCase() === 'webkit-scrollbar') {
+                  // Ya está en la lista, no debería llegar aquí
+                } else {
+                  shouldRemove = true;
+                  break;
+                }
               }
             }
           }
           
-          // 3. Selectores que empiezan con caracteres inválidos (excepto los válidos)
-          // Permitir: letras, números, _, ., #, [, :, *, -
-          if (correctedSelector.match(/^[^a-zA-Z0-9_.#\[:*-]/)) {
+          // 2.1. Detectar pseudo-clases/pseudo-elementos con sintaxis incorrecta
+          // Ejemplo: :::before (triple dos puntos) o :: :before (espacio)
+          if (correctedSelector.match(/:::\w+/) || correctedSelector.match(/::\s+:/)) {
             shouldRemove = true;
+          }
+          
+          // 3. Selectores que empiezan con caracteres inválidos (excepto los válidos)
+          // Permitir: letras, números, _, ., #, [, :, *, -, @ (para @keyframes, etc.)
+          if (correctedSelector.match(/^[^a-zA-Z0-9_.#\[:@*-]/)) {
+            shouldRemove = true;
+          }
+          
+          // 3.1. Selectores con espacios múltiples consecutivos (excepto dentro de strings)
+          let inString = false;
+          let stringChar = null;
+          let hasMultipleSpaces = false;
+          for (let i = 0; i < correctedSelector.length - 1; i++) {
+            const char = correctedSelector[i];
+            const nextChar = correctedSelector[i + 1];
+            if ((char === '"' || char === "'") && (i === 0 || correctedSelector[i-1] !== '\\')) {
+              if (!inString) {
+                inString = true;
+                stringChar = char;
+              } else if (char === stringChar) {
+                inString = false;
+                stringChar = null;
+              }
+            } else if (!inString && char === ' ' && nextChar === ' ') {
+              hasMultipleSpaces = true;
+              break;
+            }
+          }
+          if (hasMultipleSpaces) {
+            // Normalizar espacios múltiples a uno solo (excepto dentro de strings)
+            inString = false;
+            stringChar = null;
+            let normalized = '';
+            let lastWasSpace = false;
+            for (let i = 0; i < correctedSelector.length; i++) {
+              const char = correctedSelector[i];
+              if ((char === '"' || char === "'") && (i === 0 || correctedSelector[i-1] !== '\\')) {
+                if (!inString) {
+                  inString = true;
+                  stringChar = char;
+                } else if (char === stringChar) {
+                  inString = false;
+                  stringChar = null;
+                }
+                normalized += char;
+                lastWasSpace = false;
+              } else if (inString) {
+                normalized += char;
+                lastWasSpace = false;
+              } else if (char === ' ') {
+                if (!lastWasSpace) {
+                  normalized += char;
+                  lastWasSpace = true;
+                }
+              } else {
+                normalized += char;
+                lastWasSpace = false;
+              }
+            }
+            correctedSelector = normalized.trim();
           }
           
           // 4. Selectores con corchetes no balanceados (para atributos)
           let bracketDepth = 0;
-          let inString = false;
-          let stringChar = null;
+          inString = false;
+          stringChar = null;
           for (let i = 0; i < correctedSelector.length; i++) {
             const char = correctedSelector[i];
             if ((char === '"' || char === "'") && (i === 0 || correctedSelector[i-1] !== '\\')) {
@@ -115,6 +199,50 @@ export default function removeTextSizeAdjust() {
             }
           }
           if (parenDepth !== 0) {
+            shouldRemove = true;
+          }
+          
+          // 6. Detectar selectores con llaves no balanceadas (no deberían estar en selectores, pero por si acaso)
+          let braceDepth = 0;
+          inString = false;
+          stringChar = null;
+          for (let i = 0; i < correctedSelector.length; i++) {
+            const char = correctedSelector[i];
+            if ((char === '"' || char === "'") && (i === 0 || correctedSelector[i-1] !== '\\')) {
+              if (!inString) {
+                inString = true;
+                stringChar = char;
+              } else if (char === stringChar) {
+                inString = false;
+                stringChar = null;
+              }
+            } else if (!inString) {
+              if (char === '{') braceDepth++;
+              if (char === '}') braceDepth--;
+              if (braceDepth < 0) {
+                shouldRemove = true;
+                break;
+              }
+            }
+          }
+          if (braceDepth !== 0) {
+            shouldRemove = true;
+          }
+          
+          // 7. Validar que el selector no tenga comillas sin cerrar
+          let quoteCount = 0;
+          let lastQuote = null;
+          for (let i = 0; i < correctedSelector.length; i++) {
+            const char = correctedSelector[i];
+            if ((char === '"' || char === "'") && (i === 0 || correctedSelector[i-1] !== '\\')) {
+              if (lastQuote === null || lastQuote === char) {
+                quoteCount++;
+                lastQuote = char;
+              }
+            }
+          }
+          if (quoteCount % 2 !== 0) {
+            // Comillas no balanceadas
             shouldRemove = true;
           }
           
