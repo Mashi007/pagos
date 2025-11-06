@@ -34,7 +34,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-
     # Revertir: eliminar columna is_admin
-
-    # Si es necesario, se debe hacer manualmente
+    op.drop_column("users", "is_admin")

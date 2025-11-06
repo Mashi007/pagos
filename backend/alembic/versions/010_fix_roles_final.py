@@ -49,5 +49,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-
     # Revertir: eliminar columna is_admin
+    # Nota: Esta migración no revierte automáticamente los cambios
+    # ya que puede haber dependencias. Se recomienda hacerlo manualmente si es necesario.
+    pass
