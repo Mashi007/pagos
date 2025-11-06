@@ -88,7 +88,7 @@ try:
     import redis
 
     from app.core.config import settings
-    
+
     # Log para verificar que se está intentando conectar
     logger.info(f"🔍 REDIS_URL configurada: {bool(settings.REDIS_URL)}")
     if settings.REDIS_URL:
@@ -180,7 +180,7 @@ except ImportError:
 except Exception as e:
     logger.error(f"⚠️ ERROR al conectar a Redis: {type(e).__name__}: {str(e)}")
     logger.error(f"   REDIS_URL configurada: {bool(settings.REDIS_URL) if 'settings' in locals() else 'N/A'}")
-    if 'settings' in locals() and settings.REDIS_URL:
+    if "settings" in locals() and settings.REDIS_URL:
         logger.error(f"   REDIS_URL valor: {settings.REDIS_URL[:80]}...")
     logger.error("   Usando MemoryCache como fallback")
 
