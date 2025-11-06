@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db, get_optional_current_user
 from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.auditoria import Auditoria
@@ -290,37 +290,40 @@ async def options_handler(request: Request, response: Response):
 async def logout(
     request: Request,
     response: Response,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
 ):
     """
     🚪 Logout del usuario actual: registra evento de auditoría
+    ✅ Tolerante: funciona incluso si el token expiró (para limpiar sesión del frontend)
     """
     try:
         add_cors_headers(request, response)
 
-        ip = request.client.host if request and request.client else None
-        ua = request.headers.get("user-agent") if request else None
+        # Si hay usuario autenticado, registrar auditoría
+        if current_user:
+            ip = request.client.host if request and request.client else None
+            ua = request.headers.get("user-agent") if request else None
 
-        audit = Auditoria(
-            usuario_id=current_user.id,
-            accion="LOGOUT",
-            entidad="USUARIOS",
-            entidad_id=current_user.id,
-            detalles="Cierre de sesión",
-            ip_address=ip,
-            user_agent=ua,
-            exito=True,
-        )
-        db.add(audit)
-        try:
-            db.commit()
-        except Exception as e:
+            audit = Auditoria(
+                usuario_id=current_user.id,
+                accion="LOGOUT",
+                entidad="USUARIOS",
+                entidad_id=current_user.id,
+                detalles="Cierre de sesión",
+                ip_address=ip,
+                user_agent=ua,
+                exito=True,
+            )
+            db.add(audit)
             try:
-                db.rollback()
-            except Exception:
-                pass
-            logging.getLogger(__name__).warning(f"No se pudo registrar auditoría LOGOUT: {e}")
+                db.commit()
+            except Exception as e:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                logging.getLogger(__name__).warning(f"No se pudo registrar auditoría LOGOUT: {e}")
 
         return {"message": "Sesión cerrada"}
     except Exception as e:

@@ -55,11 +55,15 @@
   }
   
   /* Sobrescribir preflight de Tailwind para eliminar propiedades problemáticas */
+  /* Eliminadas todas las propiedades text-size-adjust para evitar warnings del navegador */
   html,
   :host {
-    /* Usar valor estándar 100% en lugar de unset para evitar errores de navegador */
-    -webkit-text-size-adjust: 100%;
-    text-size-adjust: 100%;
+    /* Anular propiedades text-size-adjust que Tailwind puede inyectar desde preflight */
+    -webkit-text-size-adjust: unset !important;
+    -moz-text-size-adjust: unset !important;
+    text-size-adjust: unset !important;
+    /* Nota: Las propiedades text-size-adjust fueron removidas porque causan warnings
+       en navegadores que no las soportan (especialmente Firefox) */
   }
   
   body {
