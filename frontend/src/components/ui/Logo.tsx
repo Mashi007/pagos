@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { cn } from '@/utils'
 import { getErrorMessage, isAxiosError } from '@/types/errors'
+import { safeGetItem, safeSetItem } from '@/utils/storage'
 
 interface LogoProps {
   className?: string
@@ -21,22 +22,58 @@ const uniqueId = `logo-${Math.random().toString(36).substr(2, 9)}`
 const LOGO_EXTENSIONS = ['.svg', '.png', '.jpg', '.jpeg']
 
 // Cache compartido en memoria para evitar múltiples peticiones
-// NOTA: Este caché se resetea al recargar la página, pero eso está bien
-// porque consultamos la BD al iniciar
+// ✅ MEJORADO: Ahora persiste metadatos en localStorage para evitar placeholder al recargar
 interface LogoCache {
   logoUrl: string | null
   isChecking: boolean
   hasChecked: boolean
   version: number // Contador de versión para forzar actualizaciones
   logoNotFound: boolean // ✅ Flag para recordar que el logo no existe (evitar requests repetidos)
+  logoFilename: string | null // ✅ Nombre del archivo del logo para persistencia
 }
 
+// Función para cargar metadatos del logo desde localStorage
+const loadLogoMetadata = (): Partial<LogoCache> => {
+  try {
+    const cached = safeGetItem('logo_metadata', null)
+    if (cached && cached.logoFilename) {
+      // Construir URL del logo desde el nombre del archivo cacheado
+      const logoPath = `/api/v1/configuracion/logo/${cached.logoFilename}`
+      return {
+        logoUrl: `${logoPath}?t=${Date.now()}`,
+        logoFilename: cached.logoFilename,
+        hasChecked: true,
+        logoNotFound: false,
+      }
+    }
+  } catch (error) {
+    console.warn('Error cargando metadatos del logo:', error)
+  }
+  return {}
+}
+
+// Función para guardar metadatos del logo en localStorage
+const saveLogoMetadata = (filename: string | null) => {
+  try {
+    if (filename) {
+      safeSetItem('logo_metadata', { logoFilename: filename, timestamp: Date.now() })
+    } else {
+      safeSetItem('logo_metadata', null)
+    }
+  } catch (error) {
+    console.warn('Error guardando metadatos del logo:', error)
+  }
+}
+
+// Inicializar caché con metadatos guardados
+const initialMetadata = loadLogoMetadata()
 const logoCache: LogoCache = {
-  logoUrl: null,
+  logoUrl: initialMetadata.logoUrl || null,
   isChecking: false,
-  hasChecked: false,
+  hasChecked: initialMetadata.hasChecked || false,
   version: 0,
-  logoNotFound: false, // ✅ Inicializar flag
+  logoNotFound: initialMetadata.logoNotFound || false,
+  logoFilename: initialMetadata.logoFilename || null,
 }
 
 // Listeners para notificar a todos los componentes cuando cambia el logo
@@ -70,6 +107,13 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     if (logoCache.logoUrl && logoCache.hasChecked) {
       setCustomLogoUrl(logoCache.logoUrl)
       setHasChecked(true)
+      // ✅ Si el logo está cacheado desde localStorage, intentar precargarlo
+      if (logoCache.logoFilename && !logoCache.logoNotFound) {
+        const img = new Image()
+        img.onload = () => setImageLoaded(true)
+        img.onerror = () => setImageLoaded(false)
+        img.src = logoCache.logoUrl
+      }
       return
     }
 
@@ -129,9 +173,12 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                   // Logo existe, usar URL con timestamp
                   const logoUrl = `${logoPath}?t=${Date.now()}`
                   logoCache.logoUrl = logoUrl
+                  logoCache.logoFilename = config.logo_filename // ✅ Guardar nombre del archivo
                   logoCache.logoNotFound = false // ✅ Resetear flag
                   logoCache.hasChecked = true
                   logoCache.version += 1
+                  // ✅ Guardar metadatos en localStorage para persistencia
+                  saveLogoMetadata(config.logo_filename)
                   setCustomLogoUrl(logoUrl)
                   setHasChecked(true)
                   setImageLoaded(false) // ✅ Resetear estado de carga cuando cambia el URL
@@ -146,8 +193,11 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                   console.warn('⚠️ Logo no encontrado en servidor (HEAD 404):', config.logo_filename)
                   logoCache.logoNotFound = true
                   logoCache.logoUrl = null
+                  logoCache.logoFilename = null // ✅ Limpiar nombre del archivo
                   logoCache.hasChecked = true
                   logoCache.isChecking = false
+                  // ✅ Limpiar metadatos guardados
+                  saveLogoMetadata(null)
                   setCustomLogoUrl(null)
                   setHasChecked(true)
                   clearTimeout(timeoutId)
@@ -262,8 +312,10 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                   console.warn('⚠️ Logo no encontrado al recargar desde configuración:', config.logo_filename)
                   logoCache.logoNotFound = true
                   logoCache.logoUrl = null
+                  logoCache.logoFilename = null // ✅ Limpiar nombre del archivo
                   logoCache.hasChecked = true
                   logoCache.version += 1
+                  saveLogoMetadata(null) // ✅ Limpiar metadatos guardados
                   notifyLogoListeners(null, logoCache.version)
                   return
                 }
@@ -289,8 +341,10 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                   console.warn('⚠️ Logo no encontrado en fallback:', filename)
                   logoCache.logoNotFound = true
                   logoCache.logoUrl = null
+                  logoCache.logoFilename = null // ✅ Limpiar nombre del archivo
                   logoCache.hasChecked = true
                   logoCache.version += 1
+                  saveLogoMetadata(null) // ✅ Limpiar metadatos guardados
                   notifyLogoListeners(null, logoCache.version)
                   return
                 }
@@ -307,10 +361,16 @@ export function Logo({ className, size = 'md' }: LogoProps) {
             
             if (newLogoUrl) {
               // Actualizar caché y notificar a todos los listeners
+              const logoFilename = config?.logo_filename || filename || null
               logoCache.logoUrl = newLogoUrl
+              logoCache.logoFilename = logoFilename // ✅ Guardar nombre del archivo
               logoCache.logoNotFound = false // ✅ Resetear flag cuando se actualiza el logo
               logoCache.hasChecked = true
               logoCache.version += 1
+              // ✅ Guardar metadatos en localStorage
+              if (logoFilename) {
+                saveLogoMetadata(logoFilename)
+              }
               notifyLogoListeners(newLogoUrl, logoCache.version)
             }
           })
@@ -391,10 +451,16 @@ export function Logo({ className, size = 'md' }: LogoProps) {
       if (newLogoUrl) {
         // Actualizar cache y notificar a todos los listeners
         console.log('🔄 Actualizando logo (preview):', newLogoUrl)
+        const logoFilename = filename || null
         logoCache.logoUrl = newLogoUrl
+        logoCache.logoFilename = logoFilename // ✅ Guardar nombre del archivo
         logoCache.logoNotFound = false // ✅ Resetear flag cuando se actualiza el logo
         logoCache.hasChecked = true
         logoCache.version += 1
+        // ✅ Guardar metadatos en localStorage si tenemos filename
+        if (logoFilename) {
+          saveLogoMetadata(logoFilename)
+        }
         notifyLogoListeners(newLogoUrl, logoCache.version)
       }
     }

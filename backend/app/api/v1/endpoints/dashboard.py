@@ -3700,11 +3700,10 @@ def obtener_financiamiento_tendencia_mensual(
         # ✅ SIMPLIFICADO: Eliminada query innecesaria de cuotas_pagos_por_mes
         # No se necesita para el cálculo de morosidad: morosidad = MAX(0, programado - pagado)
 
-        # ✅ CÁLCULO CORREGIDO: Morosidad según lógica del ejemplo
+        # ✅ CÁLCULO CORREGIDO: Morosidad mensual (NO acumulativa)
         # Morosidad mensual = MAX(0, Monto programado del mes - Monto pagado del mes)
-        # Morosidad acumulada = Morosidad acumulada anterior + Morosidad mensual actual
-        # NOTA: La morosidad acumulada solo aumenta, nunca disminuye (incluso con sobrepagos)
-        logger.info("📊 [financiamiento-tendencia] Calculando morosidad con lógica acumulativa mensual")
+        # Cada mes tiene su propia morosidad independiente
+            logger.info("📊 [financiamiento-tendencia] Calculando morosidad mensual (NO acumulativa)")
 
         # Generar datos mensuales (incluyendo meses sin datos) y calcular acumulados
         start_process = time.time()
@@ -3758,8 +3757,8 @@ def obtener_financiamiento_tendencia_mensual(
                     "cantidad_nuevos": cantidad_nuevos,
                     "monto_nuevos": float(monto_nuevos),
                     "total_acumulado": float(total_acumulado),
-                    "monto_cuotas_programadas": monto_cuotas_programadas,
-                    "monto_pagado": monto_pagado_mes,
+                    "monto_cuotas_programadas": float(monto_cuotas_programadas),
+                    "monto_pagado": float(monto_pagado_mes),
                     "morosidad": float(morosidad_mensual),  # ✅ Morosidad mensual (NO acumulativa)
                     "morosidad_mensual": float(morosidad_mensual),  # ✅ Morosidad mensual (para compatibilidad)
                     "fecha_mes": fecha_mes_inicio.isoformat(),

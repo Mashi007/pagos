@@ -147,7 +147,17 @@ export function DashboardMenu() {
       const response = await apiClient.get(
         `/api/v1/dashboard/financiamiento-tendencia-mensual?${queryParams.toString()}`
       ) as { meses: Array<{ mes: string; cantidad_nuevos: number; monto_nuevos: number; total_acumulado: number; monto_cuotas_programadas: number; monto_pagado: number; morosidad: number; morosidad_mensual: number }> }
-      return response.meses
+      const meses = response.meses
+      // ✅ Debug: Log primeros meses para verificar datos
+      if (meses && meses.length > 0) {
+        console.log('📊 [DashboardMenu] Datos tendencia recibidos:', meses.length, 'meses')
+        console.log('📊 [DashboardMenu] Primer mes:', meses[0])
+        console.log('📊 [DashboardMenu] Último mes:', meses[meses.length - 1])
+        // Verificar valores específicos
+        const ultimoMes = meses[meses.length - 1]
+        console.log('📊 [DashboardMenu] Último mes - Programado:', ultimoMes.monto_cuotas_programadas, 'Pagado:', ultimoMes.monto_pagado, 'Morosidad:', ultimoMes.morosidad_mensual)
+      }
+      return meses
     },
     staleTime: 1 * 60 * 1000, // ✅ Cache reducido a 1 minuto para debugging
     enabled: true,
@@ -847,6 +857,8 @@ export function DashboardMenu() {
                           activeDot={{ r: 6, stroke: '#8b5cf6', strokeWidth: 2 }}
                           name="Cuotas Programadas por Mes"
                           strokeDasharray="5 5"
+                          connectNulls={true}
+                          isAnimationActive={true}
                         />
                         <Line 
                           yAxisId="left"
@@ -857,6 +869,8 @@ export function DashboardMenu() {
                           dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
                           activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2 }}
                           name="Monto Pagado por Mes"
+                          connectNulls={true}
+                          isAnimationActive={true}
                         />
                         <Line 
                           yAxisId="left"
@@ -867,7 +881,7 @@ export function DashboardMenu() {
                           dot={{ fill: '#ef4444', strokeWidth: 2, r: 4 }}
                           activeDot={{ r: 6, stroke: '#ef4444', strokeWidth: 2 }}
                           name="Morosidad Mensual"
-                          connectNulls={false}
+                          connectNulls={true}
                           isAnimationActive={true}
                         />
                       </ComposedChart>
