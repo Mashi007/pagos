@@ -3611,27 +3611,34 @@ def obtener_financiamiento_tendencia_mensual(
             bind_params_pagos = {"fecha_inicio": fecha_inicio_query_dt, "fecha_fin": fecha_fin_query_dt}
 
             if analista or concesionario or modelo:
-                # Si hay filtros, necesitamos JOIN con prestamos
+                # ✅ CORRECCIÓN CRÍTICA: Los pagos se cuentan por fecha_pago (fecha de registro)
+                # Con filtros, aplicar las mismas condiciones de analista/concesionario/modelo
+                filtros_pagos = [
+                    "p.monto_pagado IS NOT NULL",
+                    "p.monto_pagado > 0",
+                    "p.activo = TRUE",
+                    "pr.estado = 'APROBADO'",
+                    "EXTRACT(YEAR FROM p.fecha_pago) >= 2024"
+                ]
+                bind_params_pagos_filtrado = {}
+
                 if analista:
-                    prestamo_conditions_pagos.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
-                    bind_params_pagos["analista"] = analista
+                    filtros_pagos.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+                    bind_params_pagos_filtrado["analista"] = analista
                 if concesionario:
-                    prestamo_conditions_pagos.append("pr.concesionario = :concesionario")
-                    bind_params_pagos["concesionario"] = concesionario
+                    filtros_pagos.append("pr.concesionario = :concesionario")
+                    bind_params_pagos_filtrado["concesionario"] = concesionario
                 if modelo:
-                    prestamo_conditions_pagos.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
-                    bind_params_pagos["modelo"] = modelo
+                    filtros_pagos.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
+                    bind_params_pagos_filtrado["modelo"] = modelo
+                if fecha_inicio_query:
+                    filtros_pagos.append("p.fecha_pago >= :fecha_inicio")
+                    bind_params_pagos_filtrado["fecha_inicio"] = fecha_inicio_query_dt
+                if fecha_fin_query:
+                    filtros_pagos.append("p.fecha_pago <= :fecha_fin")
+                    bind_params_pagos_filtrado["fecha_fin"] = fecha_fin_query_dt
 
-                # Construir WHERE completo
-                where_clause = """p.fecha_pago >= :fecha_inicio
-                      AND p.fecha_pago <= :fecha_fin
-                      AND p.monto_pagado IS NOT NULL
-                      AND p.monto_pagado > 0
-                      AND p.activo = TRUE
-                      AND pr.estado = 'APROBADO'"""
-
-                if prestamo_conditions_pagos:
-                    where_clause += " AND " + " AND ".join(prestamo_conditions_pagos)
+                where_clause_pagos = " AND ".join(filtros_pagos)
 
                 query_pagos_sql = text(
                     f"""
@@ -3644,30 +3651,38 @@ def obtener_financiamiento_tendencia_mensual(
                         (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
                         OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
                     )
-                    WHERE {where_clause}
+                    WHERE {where_clause_pagos}
                     GROUP BY 
                         EXTRACT(YEAR FROM p.fecha_pago),
                         EXTRACT(MONTH FROM p.fecha_pago)
                     ORDER BY año, mes
                     """
-                ).bindparams(**bind_params_pagos)
+                ).bindparams(**bind_params_pagos_filtrado)
             else:
-                # ✅ Sin filtros, query más simple - Usar exactamente la misma lógica que el script SQL
-                # ✅ CORRECCIÓN: Sumar TODOS los pagos desde 2024, sin límite de fecha fin
+                # ✅ CORRECCIÓN CRÍTICA: Los pagos se cuentan por fecha_pago (fecha de registro del pago)
+                # NO por fecha_vencimiento de la cuota. Esto significa:
+                # - Si un pago se registra en marzo, cuenta para marzo
+                # - La morosidad de febrero se eleva (no se pagó en febrero)
+                # - La morosidad de marzo disminuye (se pagó en marzo)
                 query_pagos_sql = text(
                     """
                     SELECT 
-                        EXTRACT(YEAR FROM fecha_pago)::integer as año,
-                        EXTRACT(MONTH FROM fecha_pago)::integer as mes,
-                        COALESCE(SUM(monto_pagado), 0) as total_pagado
-                    FROM pagos
-                    WHERE monto_pagado IS NOT NULL
-                      AND monto_pagado > 0
-                      AND activo = TRUE
-                      AND EXTRACT(YEAR FROM fecha_pago) >= 2024
+                        EXTRACT(YEAR FROM p.fecha_pago)::integer as año,
+                        EXTRACT(MONTH FROM p.fecha_pago)::integer as mes,
+                        COALESCE(SUM(p.monto_pagado), 0) as total_pagado
+                    FROM pagos p
+                    LEFT JOIN prestamos pr ON (
+                        (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
+                        OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
+                    )
+                    WHERE p.monto_pagado IS NOT NULL
+                      AND p.monto_pagado > 0
+                      AND p.activo = TRUE
+                      AND pr.estado = 'APROBADO'
+                      AND EXTRACT(YEAR FROM p.fecha_pago) >= 2024
                     GROUP BY 
-                        EXTRACT(YEAR FROM fecha_pago),
-                        EXTRACT(MONTH FROM fecha_pago)
+                        EXTRACT(YEAR FROM p.fecha_pago),
+                        EXTRACT(MONTH FROM p.fecha_pago)
                     ORDER BY año, mes
                     """
                 )
@@ -3683,13 +3698,13 @@ def obtener_financiamiento_tendencia_mensual(
 
             pagos_time = int((time.time() - start_pagos) * 1000)
             logger.info(
-                f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms, {len(pagos_por_mes)} meses con datos"
+                f"📊 [financiamiento-tendencia] Query pagos (por fecha_pago) completada en {pagos_time}ms, {len(pagos_por_mes)} meses con datos"
             )
             # ✅ Logging adicional: mostrar algunos meses de ejemplo
             if pagos_por_mes:
                 ejemplos = list(pagos_por_mes.items())[:3]
                 for (año, mes), monto in ejemplos:
-                    logger.info(f"  📊 Ejemplo: {año}-{mes:02d} = ${monto:,.2f}")
+                    logger.info(f"  📊 Ejemplo pagos registrados en {año}-{mes:02d} = ${monto:,.2f}")
         except Exception as e:
             logger.error(f"⚠️ [financiamiento-tendencia] Error consultando pagos: {e}", exc_info=True)
             try:
@@ -3701,77 +3716,9 @@ def obtener_financiamiento_tendencia_mensual(
 
         pagos_time = int((time.time() - start_pagos) * 1000)
         logger.info(f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms")
-
-        # ✅ Query para calcular suma de monto_cuota de cuotas relacionadas con pagos del mes
-        # OPTIMIZACIÓN SIMPLIFICADA: Obtener préstamos únicos con pagos, luego sumar cuotas agrupadas por mes de vencimiento
-        start_cuotas_pagos = time.time()
-        # ✅ ACTUALIZADO: Usar tabla pagos con prestamo_id y cedula (articulación)
-        # Estrategia simplificada: Obtener préstamos que tienen pagos en el período, luego sumar todas sus cuotas por mes
-
-        cuotas_pagos_por_mes = {}
-        try:
-            # Construir condiciones WHERE base para filtros de préstamos
-            prestamo_conditions = ["pr.estado = 'APROBADO'"]
-            bind_params = {"fecha_inicio": fecha_inicio_query_dt, "fecha_fin": fecha_fin_query_dt}
-
-            if analista:
-                prestamo_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
-                bind_params["analista"] = analista
-            if concesionario:
-                prestamo_conditions.append("pr.concesionario = :concesionario")
-                bind_params["concesionario"] = concesionario
-            if modelo:
-                prestamo_conditions.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
-                bind_params["modelo"] = modelo
-
-            # Query simplificada: Una sola CTE para préstamos únicos, luego JOIN directo con cuotas
-            query_cuotas_pagos_sql = text(
-                f"""
-                WITH prestamos_con_pagos AS (
-                    SELECT DISTINCT pr.id as prestamo_id
-                    FROM pagos p
-                    LEFT JOIN prestamos pr ON (
-                        (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
-                        OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
-                    )
-                    WHERE p.fecha_pago >= :fecha_inicio
-                      AND p.fecha_pago <= :fecha_fin
-                      AND p.monto_pagado IS NOT NULL
-                      AND p.monto_pagado > 0
-                      AND p.activo = TRUE
-                      AND {' AND '.join(prestamo_conditions)}
-                )
-                SELECT 
-                    EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
-                    EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
-                    SUM(c.monto_cuota) as total_monto_cuota
-                FROM cuotas c
-                INNER JOIN prestamos_con_pagos pcp ON c.prestamo_id = pcp.prestamo_id
-                WHERE c.fecha_vencimiento >= :fecha_inicio
-                  AND c.fecha_vencimiento <= :fecha_fin
-                GROUP BY 
-                    EXTRACT(YEAR FROM c.fecha_vencimiento),
-                    EXTRACT(MONTH FROM c.fecha_vencimiento)
-                ORDER BY año, mes
-                """
-            ).bindparams(**bind_params)
-
-            resultados_cuotas_pagos = db.execute(query_cuotas_pagos_sql).fetchall()
-            for row in resultados_cuotas_pagos:
-                año_mes = int(row.año)
-                num_mes = int(row.mes)
-                cuotas_pagos_por_mes[(año_mes, num_mes)] = float(row.total_monto_cuota or Decimal("0"))
-        except Exception as e:
-            logger.warning(f"⚠️ [financiamiento-tendencia] Error consultando cuotas de pagos: {e}, usando valores por defecto")
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-            # Si la tabla no existe o hay error, usar valores por defecto (0)
-            cuotas_pagos_por_mes = {}
-
-        cuotas_pagos_time = int((time.time() - start_cuotas_pagos) * 1000)
-        logger.info(f"📊 [financiamiento-tendencia] Query monto_cuota de pagos completada en {cuotas_pagos_time}ms")
+        
+        # ✅ SIMPLIFICADO: Eliminada query innecesaria de cuotas_pagos_por_mes
+        # No se necesita para el cálculo de morosidad: morosidad = MAX(0, programado - pagado)
 
         # ✅ CÁLCULO CORREGIDO: Morosidad según lógica del ejemplo
         # Morosidad mensual = MAX(0, Monto programado del mes - Monto pagado del mes)
@@ -3806,10 +3753,7 @@ def obtener_financiamiento_tendencia_mensual(
             # Obtener suma de monto_pagado de tabla pagos del mes (monto pagado)
             monto_pagado_mes = pagos_por_mes.get((año_mes, num_mes), 0.0)
 
-            # Obtener suma de monto_cuota de cuotas relacionadas con pagos del mes
-            monto_cuota_pagos = cuotas_pagos_por_mes.get((año_mes, num_mes), 0.0)
-
-            # ✅ CÁLCULO CORREGIDO: Morosidad mensual = MAX(0, Programado - Pagado)
+            # ✅ CÁLCULO SIMPLIFICADO: Morosidad mensual = MAX(0, Programado - Pagado)
             # Esta es la lógica exacta del script SQL: morosidad_mensual = MAX(0, monto_programado - monto_pagado)
             morosidad_mensual = max(0.0, float(monto_cuotas_programadas) - float(monto_pagado_mes))
 
@@ -3838,7 +3782,6 @@ def obtener_financiamiento_tendencia_mensual(
                     "total_acumulado": float(total_acumulado),
                     "monto_cuotas_programadas": monto_cuotas_programadas,
                     "monto_pagado": monto_pagado_mes,
-                    "monto_cuota": monto_cuota_pagos,
                     "morosidad": float(morosidad_acumulada),  # ✅ Retornar morosidad acumulada
                     "morosidad_mensual": float(
                         morosidad_mensual
