@@ -30,17 +30,17 @@ logger = logging.getLogger(__name__)
 def get_slow_queries(
     threshold_ms: float = Query(1000, description="Umbral mínimo en ms"),
     limit: int = Query(20, description="Número máximo de resultados"),
-    db = Depends(get_db),
+    db=Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Obtener queries lentas ordenadas por tiempo promedio
-    
+
     Útil para identificar queries que necesitan optimización
     """
     try:
         slow_queries = query_monitor.get_slow_queries(threshold_ms=threshold_ms, limit=limit)
-        
+
         return {
             "status": "success",
             "threshold_ms": threshold_ms,
@@ -60,7 +60,7 @@ def get_slow_queries(
 @router.get("/queries/stats/{query_name}")
 def get_query_stats(
     query_name: str,
-    db = Depends(get_db),
+    db=Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -68,14 +68,14 @@ def get_query_stats(
     """
     try:
         stats = query_monitor.get_query_stats(query_name)
-        
+
         if not stats:
             return {
                 "status": "not_found",
                 "message": f"Query '{query_name}' no encontrada",
                 "timestamp": time.time(),
             }
-        
+
         return {
             "status": "success",
             "query_name": query_name,
@@ -93,7 +93,7 @@ def get_query_stats(
 
 @router.get("/queries/summary")
 def get_queries_summary(
-    db = Depends(get_db),
+    db=Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -101,7 +101,7 @@ def get_queries_summary(
     """
     try:
         summary = query_monitor.get_summary()
-        
+
         return {
             "status": "success",
             "summary": summary,
@@ -120,21 +120,21 @@ def get_queries_summary(
 def get_recent_alerts(
     limit: int = Query(50, description="Número máximo de alertas"),
     severity: Optional[str] = Query(None, description="Filtrar por severidad: CRITICAL, HIGH, MEDIUM"),
-    db = Depends(get_db),
+    db=Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Obtener alertas recientes de queries
-    
+
     Útil para identificar problemas en tiempo real
     """
     try:
         alerts = query_monitor.get_recent_alerts(limit=limit)
-        
+
         # Filtrar por severidad si se especifica
         if severity:
             alerts = [a for a in alerts if a.get("severity") == severity.upper()]
-        
+
         return {
             "status": "success",
             "count": len(alerts),
@@ -152,31 +152,31 @@ def get_recent_alerts(
 
 @router.get("/dashboard/performance")
 def get_dashboard_performance(
-    db = Depends(get_db),
+    db=Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Métricas de rendimiento del dashboard
-    
+
     Combina métricas de endpoints, queries e información de BD
     """
     try:
         # Obtener métricas de endpoints
         endpoint_summary = performance_monitor.get_summary()
         slow_endpoints = performance_monitor.get_slow_endpoints(threshold_ms=2000, limit=10)
-        
+
         # Obtener métricas de queries
         query_summary = query_monitor.get_summary()
         slow_queries = query_monitor.get_slow_queries(threshold_ms=1000, limit=10)
-        
+
         # Obtener alertas recientes
         recent_alerts = query_monitor.get_recent_alerts(limit=20)
         critical_alerts = [a for a in recent_alerts if a.get("severity") == "CRITICAL"]
         high_alerts = [a for a in recent_alerts if a.get("severity") == "HIGH"]
-        
+
         # Obtener información de BD
         db_info = get_database_info(db)
-        
+
         return {
             "status": "success",
             "endpoints": {
@@ -207,17 +207,17 @@ def get_dashboard_performance(
 
 @router.get("/database/info")
 def get_database_information(
-    db = Depends(get_db),
+    db=Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Información completa de la base de datos
-    
+
     Incluye tamaño, tablas, índices y columnas
     """
     try:
         db_info = get_database_info(db)
-        
+
         return {
             "status": "success",
             "database": db_info,
@@ -235,7 +235,7 @@ def get_database_information(
 @router.get("/database/tables/{table_name}/columns")
 def get_table_columns_info(
     table_name: str,
-    db = Depends(get_db),
+    db=Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -243,7 +243,7 @@ def get_table_columns_info(
     """
     try:
         columns = get_table_columns(db, table_name)
-        
+
         return {
             "status": "success",
             "table_name": table_name,
@@ -263,7 +263,7 @@ def get_table_columns_info(
 @router.get("/database/tables/{table_name}/indexes")
 def get_table_indexes_info(
     table_name: str,
-    db = Depends(get_db),
+    db=Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -271,7 +271,7 @@ def get_table_indexes_info(
     """
     try:
         indexes = get_indexes_for_table(db, table_name)
-        
+
         return {
             "status": "success",
             "table_name": table_name,
@@ -286,4 +286,3 @@ def get_table_indexes_info(
             "message": str(e),
             "timestamp": time.time(),
         }
-

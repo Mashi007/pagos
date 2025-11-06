@@ -1307,7 +1307,7 @@ def dashboard_administrador(
                     fecha_primera = datetime.combine(fecha_primera, datetime.min.time())
                 if isinstance(fecha_ultima, date) and not isinstance(fecha_ultima, datetime):
                     fecha_ultima = datetime.combine(fecha_ultima, datetime.max.time())
-                
+
                 pagos_evolucion_query = db.execute(
                     text(
                         """
@@ -1825,56 +1825,63 @@ def obtener_kpis_principales(
         # ✅ OPTIMIZACIÓN: Combinar queries de mes actual y anterior en una sola query
         # 1. TOTAL PRESTAMOS Y CREDITOS NUEVOS (mes actual y anterior en una query)
         # ⚠️ TEMPORAL: Usar fecha_aprobacion porque fecha_registro no migró correctamente
-        kpis_prestamos = (
-            db.query(
-                # Total financiamiento mes actual
-                func.sum(
-                    case(
-                        (and_(
+        kpis_prestamos = db.query(
+            # Total financiamiento mes actual
+            func.sum(
+                case(
+                    (
+                        and_(
                             Prestamo.fecha_aprobacion >= fecha_inicio_mes_actual,
-                            Prestamo.fecha_aprobacion < fecha_fin_mes_actual
-                        ), Prestamo.total_financiamiento),
-                        else_=0
-                    )
-                ).label('total_actual'),
-                # Total financiamiento mes anterior
-                func.sum(
-                    case(
-                        (and_(
+                            Prestamo.fecha_aprobacion < fecha_fin_mes_actual,
+                        ),
+                        Prestamo.total_financiamiento,
+                    ),
+                    else_=0,
+                )
+            ).label("total_actual"),
+            # Total financiamiento mes anterior
+            func.sum(
+                case(
+                    (
+                        and_(
                             Prestamo.fecha_aprobacion >= fecha_inicio_mes_anterior,
-                            Prestamo.fecha_aprobacion < fecha_fin_mes_anterior
-                        ), Prestamo.total_financiamiento),
-                        else_=0
-                    )
-                ).label('total_anterior'),
-                # Créditos nuevos mes actual
-                func.count(
-                    case(
-                        (and_(
+                            Prestamo.fecha_aprobacion < fecha_fin_mes_anterior,
+                        ),
+                        Prestamo.total_financiamiento,
+                    ),
+                    else_=0,
+                )
+            ).label("total_anterior"),
+            # Créditos nuevos mes actual
+            func.count(
+                case(
+                    (
+                        and_(
                             Prestamo.fecha_aprobacion >= fecha_inicio_mes_actual,
-                            Prestamo.fecha_aprobacion < fecha_fin_mes_actual
-                        ), 1),
-                        else_=None
-                    )
-                ).label('creditos_actual'),
-                # Créditos nuevos mes anterior
-                func.count(
-                    case(
-                        (and_(
+                            Prestamo.fecha_aprobacion < fecha_fin_mes_actual,
+                        ),
+                        1,
+                    ),
+                    else_=None,
+                )
+            ).label("creditos_actual"),
+            # Créditos nuevos mes anterior
+            func.count(
+                case(
+                    (
+                        and_(
                             Prestamo.fecha_aprobacion >= fecha_inicio_mes_anterior,
-                            Prestamo.fecha_aprobacion < fecha_fin_mes_anterior
-                        ), 1),
-                        else_=None
-                    )
-                ).label('creditos_anterior')
-            )
-            .filter(Prestamo.estado == "APROBADO")
-        )
+                            Prestamo.fecha_aprobacion < fecha_fin_mes_anterior,
+                        ),
+                        1,
+                    ),
+                    else_=None,
+                )
+            ).label("creditos_anterior"),
+        ).filter(Prestamo.estado == "APROBADO")
 
         # Aplicar filtros
-        kpis_prestamos = FiltrosDashboard.aplicar_filtros_prestamo(
-            kpis_prestamos, analista, concesionario, modelo, None, None
-        )
+        kpis_prestamos = FiltrosDashboard.aplicar_filtros_prestamo(kpis_prestamos, analista, concesionario, modelo, None, None)
 
         resultado_kpis = kpis_prestamos.first()
         total_prestamos_actual = float(resultado_kpis.total_actual or Decimal("0"))
@@ -1987,31 +1994,36 @@ def obtener_kpis_principales(
 
         total_time = int((time.time() - start_time) * 1000)
         query_time = int((time.time() - query_start) * 1000)
-        
+
         # ✅ MONITOREO: Registrar métrica de query con información de BD y campos
         from app.utils.db_analyzer import get_database_size, analyze_query_tables_columns
-        
+
         # Obtener información de BD
         db_info = get_database_size(db)
-        
+
         # Analizar tablas y columnas usadas
         query_analysis = analyze_query_tables_columns(None)  # No tenemos SQL directo, pero sabemos las tablas
         query_analysis["tables"] = ["prestamos", "cuotas", "clientes"]  # Tablas usadas en KPIs
         query_analysis["columns"] = [
-            "fecha_aprobacion", "total_financiamiento", "estado", 
-            "fecha_vencimiento", "capital_pendiente", "interes_pendiente", "monto_mora"
+            "fecha_aprobacion",
+            "total_financiamiento",
+            "estado",
+            "fecha_vencimiento",
+            "capital_pendiente",
+            "interes_pendiente",
+            "monto_mora",
         ]
-        
+
         query_monitor.record_query(
             query_name="obtener_kpis_principales",
             execution_time_ms=query_time,
             query_type="SELECT",
             tables=query_analysis["tables"],
-            columns=query_analysis["columns"]
+            columns=query_analysis["columns"],
         )
-        
+
         logger.info(f"📊 [kpis-principales] Completado en {total_time}ms (query: {query_time}ms)")
-        
+
         # ✅ ALERTA: Si la query es muy lenta (con info de BD y campos)
         if query_time >= 5000:
             db_size_info = f"BD: {db_info.get('size_pretty', 'N/A')}" if db_info else "BD: N/A"
@@ -3594,26 +3606,33 @@ def obtener_financiamiento_tendencia_mensual(
 
             resultados_nuevos = query_nuevos.all()
             query_time = int((time.time() - start_query) * 1000)
-            
+
             # ✅ MONITOREO: Registrar query individual con info de BD y campos
             from app.utils.db_analyzer import get_database_size
-            
+
             db_info = get_database_size(db)
             query_analysis = {
                 "tables": ["prestamos"],
-                "columns": ["fecha_aprobacion", "total_financiamiento", "estado", "analista", "concesionario", "modelo_vehiculo"]
+                "columns": [
+                    "fecha_aprobacion",
+                    "total_financiamiento",
+                    "estado",
+                    "analista",
+                    "concesionario",
+                    "modelo_vehiculo",
+                ],
             }
-            
+
             query_monitor.record_query(
                 query_name="financiamiento_tendencia_nuevos",
                 execution_time_ms=query_time,
                 query_type="SELECT",
                 tables=query_analysis["tables"],
-                columns=query_analysis["columns"]
+                columns=query_analysis["columns"],
             )
-            
+
             logger.info(f"📊 [financiamiento-tendencia] Query completada en {query_time}ms, {len(resultados_nuevos)} meses")
-            
+
             # ✅ ALERTA: Si la query es lenta (con info de BD y campos)
             if query_time >= 5000:
                 db_size_info = f"BD: {db_info.get('size_pretty', 'N/A')}" if db_info else "BD: N/A"
@@ -3626,8 +3645,7 @@ def obtener_financiamiento_tendencia_mensual(
                 db_size_info = f"BD: {db_info.get('size_pretty', 'N/A')}" if db_info else "BD: N/A"
                 tables_info = f"Tablas: {', '.join(query_analysis['tables'])}"
                 logger.warning(
-                    f"⚠️ [ALERTA] Query nuevos financiamientos lenta: {query_time}ms - "
-                    f"{db_size_info} - {tables_info}"
+                    f"⚠️ [ALERTA] Query nuevos financiamientos lenta: {query_time}ms - " f"{db_size_info} - {tables_info}"
                 )
         except Exception as e:
             logger.error(f"⚠️ [financiamiento-tendencia] Error en query nuevos financiamientos: {e}", exc_info=True)
@@ -3659,17 +3677,11 @@ def obtener_financiamiento_tendencia_mensual(
                 db.query(
                     func.extract("year", Cuota.fecha_vencimiento).label("año"),
                     func.extract("month", Cuota.fecha_vencimiento).label("mes"),
-                    func.sum(Cuota.monto_cuota).label("total_cuotas_programadas")
+                    func.sum(Cuota.monto_cuota).label("total_cuotas_programadas"),
                 )
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Prestamo.estado == "APROBADO",
-                    func.extract("year", Cuota.fecha_vencimiento) >= 2024
-                )
-                .group_by(
-                    func.extract("year", Cuota.fecha_vencimiento),
-                    func.extract("month", Cuota.fecha_vencimiento)
-                )
+                .filter(Prestamo.estado == "APROBADO", func.extract("year", Cuota.fecha_vencimiento) >= 2024)
+                .group_by(func.extract("year", Cuota.fecha_vencimiento), func.extract("month", Cuota.fecha_vencimiento))
                 .order_by("año", "mes")
             )
 
@@ -3687,26 +3699,26 @@ def obtener_financiamiento_tendencia_mensual(
                 cuotas_por_mes[(año_mes, num_mes)] = monto
 
             cuotas_time = int((time.time() - start_cuotas) * 1000)
-            
+
             # ✅ MONITOREO: Registrar query individual con info de BD y campos
             db_info = get_database_size(db)
             query_analysis_cuotas = {
                 "tables": ["cuotas", "prestamos"],
-                "columns": ["fecha_vencimiento", "monto_cuota", "estado", "prestamo_id"]
+                "columns": ["fecha_vencimiento", "monto_cuota", "estado", "prestamo_id"],
             }
-            
+
             query_monitor.record_query(
                 query_name="financiamiento_tendencia_cuotas",
                 execution_time_ms=cuotas_time,
                 query_type="SELECT",
                 tables=query_analysis_cuotas["tables"],
-                columns=query_analysis_cuotas["columns"]
+                columns=query_analysis_cuotas["columns"],
             )
-            
+
             logger.info(
                 f"📊 [financiamiento-tendencia] Query cuotas programadas completada en {cuotas_time}ms, {len(cuotas_por_mes)} meses con datos"
             )
-            
+
             # ✅ ALERTA: Si la query es lenta (con info de BD y campos)
             if cuotas_time >= 5000:
                 db_size_info = f"BD: {db_info.get('size_pretty', 'N/A')}" if db_info else "BD: N/A"
@@ -3719,10 +3731,9 @@ def obtener_financiamiento_tendencia_mensual(
                 db_size_info = f"BD: {db_info.get('size_pretty', 'N/A')}" if db_info else "BD: N/A"
                 tables_info = f"Tablas: {', '.join(query_analysis_cuotas['tables'])}"
                 logger.warning(
-                    f"⚠️ [ALERTA] Query cuotas programadas lenta: {cuotas_time}ms - "
-                    f"{db_size_info} - {tables_info}"
+                    f"⚠️ [ALERTA] Query cuotas programadas lenta: {cuotas_time}ms - " f"{db_size_info} - {tables_info}"
                 )
-            
+
             # ✅ Logging adicional: mostrar algunos meses de ejemplo
             if cuotas_por_mes:
                 ejemplos = list(cuotas_por_mes.items())[:3]
@@ -3757,17 +3768,11 @@ def obtener_financiamiento_tendencia_mensual(
                 db.query(
                     func.extract("year", Cuota.fecha_vencimiento).label("año"),
                     func.extract("month", Cuota.fecha_vencimiento).label("mes"),
-                    func.sum(Cuota.total_pagado).label("total_pagado")
+                    func.sum(Cuota.total_pagado).label("total_pagado"),
                 )
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Prestamo.estado == "APROBADO",
-                    func.extract("year", Cuota.fecha_vencimiento) >= 2024
-                )
-                .group_by(
-                    func.extract("year", Cuota.fecha_vencimiento),
-                    func.extract("month", Cuota.fecha_vencimiento)
-                )
+                .filter(Prestamo.estado == "APROBADO", func.extract("year", Cuota.fecha_vencimiento) >= 2024)
+                .group_by(func.extract("year", Cuota.fecha_vencimiento), func.extract("month", Cuota.fecha_vencimiento))
                 .order_by("año", "mes")
             )
 
@@ -3791,41 +3796,35 @@ def obtener_financiamiento_tendencia_mensual(
                 pagos_por_mes[(año_mes, num_mes)] = monto
 
             pagos_time = int((time.time() - start_pagos) * 1000)
-            
+
             # ✅ MONITOREO: Registrar query individual con info de BD y campos
             db_info = get_database_size(db)
             query_analysis_pagos = {
                 "tables": ["cuotas", "prestamos"],
-                "columns": ["fecha_vencimiento", "total_pagado", "estado", "prestamo_id"]
+                "columns": ["fecha_vencimiento", "total_pagado", "estado", "prestamo_id"],
             }
-            
+
             query_monitor.record_query(
                 query_name="financiamiento_tendencia_pagos",
                 execution_time_ms=pagos_time,
                 query_type="SELECT",
                 tables=query_analysis_pagos["tables"],
-                columns=query_analysis_pagos["columns"]
+                columns=query_analysis_pagos["columns"],
             )
-            
+
             logger.info(
                 f"📊 [financiamiento-tendencia] Query pagos (total_pagado de cuotas por fecha_vencimiento) completada en {pagos_time}ms, {len(pagos_por_mes)} meses con datos"
             )
-            
+
             # ✅ ALERTA: Si la query es lenta (con info de BD y campos)
             if pagos_time >= 5000:
                 db_size_info = f"BD: {db_info.get('size_pretty', 'N/A')}" if db_info else "BD: N/A"
                 tables_info = f"Tablas: {', '.join(query_analysis_pagos['tables'])}"
-                logger.error(
-                    f"🚨 [ALERTA CRÍTICA] Query pagos muy lenta: {pagos_time}ms - "
-                    f"{db_size_info} - {tables_info}"
-                )
+                logger.error(f"🚨 [ALERTA CRÍTICA] Query pagos muy lenta: {pagos_time}ms - " f"{db_size_info} - {tables_info}")
             elif pagos_time >= 2000:
                 db_size_info = f"BD: {db_info.get('size_pretty', 'N/A')}" if db_info else "BD: N/A"
                 tables_info = f"Tablas: {', '.join(query_analysis_pagos['tables'])}"
-                logger.warning(
-                    f"⚠️ [ALERTA] Query pagos lenta: {pagos_time}ms - "
-                    f"{db_size_info} - {tables_info}"
-                )
+                logger.warning(f"⚠️ [ALERTA] Query pagos lenta: {pagos_time}ms - " f"{db_size_info} - {tables_info}")
             # ✅ Logging adicional: mostrar algunos meses de ejemplo
             if pagos_por_mes:
                 ejemplos = list(pagos_por_mes.items())[:3]
@@ -3917,52 +3916,52 @@ def obtener_financiamiento_tendencia_mensual(
 
         process_time = int((time.time() - start_process) * 1000)
         total_time = int((time.time() - start_time) * 1000)
-        
+
         # ✅ MONITOREO: Registrar métricas de queries individuales
         query_monitor.record_query(
-            query_name="financiamiento_tendencia_nuevos",
-            execution_time_ms=query_time,
-            query_type="SELECT"
+            query_name="financiamiento_tendencia_nuevos", execution_time_ms=query_time, query_type="SELECT"
         )
         query_monitor.record_query(
             query_name="financiamiento_tendencia_cuotas",
-            execution_time_ms=cuotas_time if 'cuotas_time' in locals() else 0,
-            query_type="SELECT"
+            execution_time_ms=cuotas_time if "cuotas_time" in locals() else 0,
+            query_type="SELECT",
         )
         query_monitor.record_query(
             query_name="financiamiento_tendencia_pagos",
-            execution_time_ms=pagos_time if 'pagos_time' in locals() else 0,
-            query_type="SELECT"
+            execution_time_ms=pagos_time if "pagos_time" in locals() else 0,
+            query_type="SELECT",
         )
-        
+
         logger.info(
             f"⏱️ [financiamiento-tendencia] Tiempo total: {total_time}ms (query: {query_time}ms, process: {process_time}ms)"
         )
         logger.info(f"📊 [financiamiento-tendencia] Generados {len(meses_data)} meses de datos")
-        
+
         # ✅ ALERTA: Si la query es muy lenta
         if total_time >= 10000:
             logger.error(f"🚨 [ALERTA CRÍTICA] Financiamiento tendencia muy lento: {total_time}ms - URGENTE: Revisar índices")
         elif total_time >= 5000:
             logger.warning(f"⚠️ [ALERTA] Financiamiento tendencia lento: {total_time}ms - Revisar optimizaciones")
-        
+
         # 🔍 DEBUG: Validar datos del gráfico y loggear información de debugging
-        required_fields = ['mes', 'monto_nuevos', 'monto_cuotas_programadas', 'monto_pagado', 'morosidad_mensual']
+        required_fields = ["mes", "monto_nuevos", "monto_cuotas_programadas", "monto_pagado", "morosidad_mensual"]
         is_valid, error_msg = validate_graph_data(meses_data, required_fields)
         if not is_valid:
             DebugAlert.log_missing_data(
                 endpoint="/financiamiento-tendencia-mensual",
                 expected_field=error_msg or "campos requeridos",
-                data=meses_data[:3] if meses_data else None
+                data=meses_data[:3] if meses_data else None,
             )
         else:
             # Calcular dominio del eje Y para debugging
-            all_values = [d.get('monto_nuevos', 0) or 0 for d in meses_data] + \
-                        [d.get('monto_cuotas_programadas', 0) or 0 for d in meses_data] + \
-                        [d.get('monto_pagado', 0) or 0 for d in meses_data] + \
-                        [d.get('morosidad_mensual', 0) or 0 for d in meses_data]
+            all_values = (
+                [d.get("monto_nuevos", 0) or 0 for d in meses_data]
+                + [d.get("monto_cuotas_programadas", 0) or 0 for d in meses_data]
+                + [d.get("monto_pagado", 0) or 0 for d in meses_data]
+                + [d.get("morosidad_mensual", 0) or 0 for d in meses_data]
+            )
             max_value = max(all_values, default=0)
-            y_axis_domain = [0, max_value * 1.1] if max_value > 0 else [0, 'auto']
+            y_axis_domain = [0, max_value * 1.1] if max_value > 0 else [0, "auto"]
             log_graph_debug_info("/financiamiento-tendencia-mensual", meses_data, y_axis_domain)
 
         # ✅ Resumen de morosidad por mes para diagnóstico

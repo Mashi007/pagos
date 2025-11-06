@@ -645,7 +645,7 @@ def obtener_resumen_prestamos_cliente(
 ):
     """
     Obtener resumen de préstamos del cliente: saldo, cuotas en mora, etc.
-    
+
     ✅ OPTIMIZADO: Eliminado N+1 queries - Una sola query agregada para todas las cuotas
     """
     from app.models.amortizacion import Cuota
@@ -661,22 +661,17 @@ def obtener_resumen_prestamos_cliente(
 
     # ✅ MONITOREO: Registrar inicio de query
     from app.utils.query_monitor import query_monitor
+
     query_start = time.time()
 
     # Query agregada con GROUP BY - elimina N+1 queries
     cuotas_agregadas = (
         db.query(
             Cuota.prestamo_id,
-            func.sum(Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora).label('saldo_pendiente'),
-            func.sum(
-                case(
-                    (and_(
-                        Cuota.fecha_vencimiento < hoy,
-                        Cuota.estado != "PAGADO"
-                    ), 1),
-                    else_=0
-                )
-            ).label('cuotas_en_mora')
+            func.sum(Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora).label("saldo_pendiente"),
+            func.sum(case((and_(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO"), 1), else_=0)).label(
+                "cuotas_en_mora"
+            ),
         )
         .filter(Cuota.prestamo_id.in_(prestamos_ids))
         .group_by(Cuota.prestamo_id)
@@ -686,15 +681,13 @@ def obtener_resumen_prestamos_cliente(
     # ✅ MONITOREO: Registrar tiempo de query
     query_time = int((time.time() - query_start) * 1000)
     query_monitor.record_query(
-        query_name="obtener_resumen_prestamos_cliente_cuotas",
-        execution_time_ms=query_time,
-        query_type="SELECT"
+        query_name="obtener_resumen_prestamos_cliente_cuotas", execution_time_ms=query_time, query_type="SELECT"
     )
-    
+
     # ✅ ALERTA: Si la query es lenta
     if query_time >= 2000:
         logger.warning(f"⚠️ [ALERTA] Query cuotas agregadas lenta: {query_time}ms para {len(prestamos_ids)} préstamos")
-    
+
     # Crear diccionario para lookup rápido
     cuotas_por_prestamo = {row.prestamo_id: row for row in cuotas_agregadas}
 

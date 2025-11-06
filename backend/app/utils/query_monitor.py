@@ -21,6 +21,7 @@ VERY_SLOW_QUERY_THRESHOLD_MS = 10000  # 10 segundos
 @dataclass
 class QueryMetric:
     """Métrica de una query individual"""
+
     query_name: str
     query_type: str  # 'SELECT', 'INSERT', 'UPDATE', etc.
     count: int = 0
@@ -58,6 +59,7 @@ class QueryMonitor:
     """
     Monitor de queries SQL para detectar problemas de rendimiento
     """
+
     def __init__(self):
         self.metrics: Dict[str, QueryMetric] = {}
         self.query_history: List[Dict] = []
@@ -74,11 +76,11 @@ class QueryMonitor:
         query_sql: Optional[str] = None,
         params: Optional[Dict] = None,
         tables: Optional[List[str]] = None,
-        columns: Optional[List[str]] = None
+        columns: Optional[List[str]] = None,
     ):
         """
         Registrar una ejecución de query
-        
+
         Args:
             query_name: Nombre identificador de la query (ej: "obtener_kpis_principales")
             execution_time_ms: Tiempo de ejecución en milisegundos
@@ -90,10 +92,7 @@ class QueryMonitor:
         try:
             # Obtener o crear métrica
             if query_name not in self.metrics:
-                self.metrics[query_name] = QueryMetric(
-                    query_name=query_name,
-                    query_type=query_type
-                )
+                self.metrics[query_name] = QueryMetric(query_name=query_name, query_type=query_type)
 
             metric = self.metrics[query_name]
             metric.update(execution_time_ms, error)
@@ -128,7 +127,7 @@ class QueryMonitor:
         error: Optional[Exception],
         query_sql: Optional[str],
         tables: Optional[List[str]] = None,
-        columns: Optional[List[str]] = None
+        columns: Optional[List[str]] = None,
     ):
         """Verificar y generar alertas si es necesario"""
         alert = None
@@ -148,8 +147,7 @@ class QueryMonitor:
                 "columns_used": columns or [],
             }
             logger.error(
-                f"🚨 [QUERY CRÍTICA] {query_name}: {execution_time_ms:.0f}ms "
-                f"(umbral: {VERY_SLOW_QUERY_THRESHOLD_MS}ms)"
+                f"🚨 [QUERY CRÍTICA] {query_name}: {execution_time_ms:.0f}ms " f"(umbral: {VERY_SLOW_QUERY_THRESHOLD_MS}ms)"
             )
 
         # Alerta por query crítica
@@ -167,8 +165,7 @@ class QueryMonitor:
                 "columns_used": columns or [],
             }
             logger.warning(
-                f"⚠️ [QUERY LENTA] {query_name}: {execution_time_ms:.0f}ms "
-                f"(umbral: {CRITICAL_QUERY_THRESHOLD_MS}ms)"
+                f"⚠️ [QUERY LENTA] {query_name}: {execution_time_ms:.0f}ms " f"(umbral: {CRITICAL_QUERY_THRESHOLD_MS}ms)"
             )
 
         # Alerta por query lenta
@@ -182,10 +179,7 @@ class QueryMonitor:
                 "message": f"Query {query_name} tomó {execution_time_ms:.0f}ms (umbral: {SLOW_QUERY_THRESHOLD_MS}ms)",
                 "timestamp": datetime.now().isoformat(),
             }
-            logger.info(
-                f"⏱️ [QUERY LENTA] {query_name}: {execution_time_ms:.0f}ms "
-                f"(umbral: {SLOW_QUERY_THRESHOLD_MS}ms)"
-            )
+            logger.info(f"⏱️ [QUERY LENTA] {query_name}: {execution_time_ms:.0f}ms " f"(umbral: {SLOW_QUERY_THRESHOLD_MS}ms)")
 
         # Alerta por error
         if error:
@@ -213,7 +207,7 @@ class QueryMonitor:
     def monitor_query(self, query_name: str, query_type: str = "SELECT", query_sql: Optional[str] = None):
         """
         Context manager para monitorear una query automáticamente
-        
+
         Uso:
             with query_monitor.monitor_query("obtener_kpis_principales"):
                 # código de la query
@@ -235,19 +229,21 @@ class QueryMonitor:
         slow_queries = []
         for metric in self.metrics.values():
             if metric.avg_time_ms >= threshold_ms and metric.count > 0:
-                slow_queries.append({
-                    "query_name": metric.query_name,
-                    "query_type": metric.query_type,
-                    "count": metric.count,
-                    "avg_time_ms": round(metric.avg_time_ms, 2),
-                    "min_time_ms": round(metric.min_time_ms, 2),
-                    "max_time_ms": round(metric.max_time_ms, 2),
-                    "slow_query_count": metric.slow_query_count,
-                    "critical_query_count": metric.critical_query_count,
-                    "error_count": metric.error_count,
-                    "error_rate": round((metric.error_count / metric.count) * 100, 2) if metric.count > 0 else 0,
-                    "last_execution": metric.last_execution.isoformat() if metric.last_execution else None,
-                })
+                slow_queries.append(
+                    {
+                        "query_name": metric.query_name,
+                        "query_type": metric.query_type,
+                        "count": metric.count,
+                        "avg_time_ms": round(metric.avg_time_ms, 2),
+                        "min_time_ms": round(metric.min_time_ms, 2),
+                        "max_time_ms": round(metric.max_time_ms, 2),
+                        "slow_query_count": metric.slow_query_count,
+                        "critical_query_count": metric.critical_query_count,
+                        "error_count": metric.error_count,
+                        "error_rate": round((metric.error_count / metric.count) * 100, 2) if metric.count > 0 else 0,
+                        "last_execution": metric.last_execution.isoformat() if metric.last_execution else None,
+                    }
+                )
         slow_queries.sort(key=lambda x: x["avg_time_ms"], reverse=True)
         return slow_queries[:limit]
 
@@ -314,4 +310,3 @@ class QueryMonitor:
 
 # Instancia global del monitor
 query_monitor = QueryMonitor()
-
