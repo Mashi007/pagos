@@ -262,7 +262,7 @@ def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
                     cacheable_kwargs = {}
                     for key, value in kwargs.items():
                         # Excluir dependencias de FastAPI y objetos de sesión
-                        if key not in ['db', 'current_user'] and value is not None:
+                        if key not in ["db", "current_user"] and value is not None:
                             # Intentar serializar para verificar si es cacheable
                             try:
                                 json.dumps(value, default=str)
@@ -270,12 +270,12 @@ def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
                             except (TypeError, ValueError):
                                 # Si no se puede serializar, usar su representación string
                                 cacheable_kwargs[key] = str(value)
-                    
+
                     # Filtrar args también (normalmente db y current_user están en kwargs, pero por si acaso)
                     cacheable_args = []
                     for arg in args:
                         # Excluir objetos de sesión y usuarios
-                        if not hasattr(arg, 'execute') and not hasattr(arg, 'email'):
+                        if not hasattr(arg, "execute") and not hasattr(arg, "email"):
                             try:
                                 json.dumps(arg, default=str)
                                 cacheable_args.append(arg)
@@ -285,12 +285,17 @@ def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
                     # Crear hash solo con argumentos cacheables
                     if cacheable_args or cacheable_kwargs:
                         import hashlib
+
                         try:
-                            key_data = json.dumps({"args": cacheable_args, "kwargs": cacheable_kwargs}, sort_keys=True, default=str)
+                            key_data = json.dumps(
+                                {"args": cacheable_args, "kwargs": cacheable_kwargs}, sort_keys=True, default=str
+                            )
                             key_hash = hashlib.md5(key_data.encode()).hexdigest()[:8]
                             cache_key = f"{cache_key}:{key_hash}"
                         except Exception as e:
-                            logger.warning(f"⚠️  Error construyendo clave de cache para {func.__name__}: {e}, usando clave sin hash")
+                            logger.warning(
+                                f"⚠️  Error construyendo clave de cache para {func.__name__}: {e}, usando clave sin hash"
+                            )
                             # Continuar sin hash si hay error
 
                     # Intentar obtener del cache

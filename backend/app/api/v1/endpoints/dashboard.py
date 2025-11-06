@@ -3850,7 +3850,7 @@ def obtener_financiamiento_tendencia_mensual(
                 año_mes = int(row.año)
                 num_mes = int(row.mes)
                 monto_total_pagado = float(row.total_pagado or Decimal("0"))
-                
+
                 # ✅ Si total_pagado es 0, usar 0 directamente
                 # El helper calcular_monto_pagado_mes() es muy lento (hace múltiples queries por mes)
                 # y causa el problema de rendimiento. Si total_pagado está actualizado en cuotas,
