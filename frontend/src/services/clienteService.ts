@@ -57,8 +57,9 @@ class ClienteService {
   }
 
   // Buscar clientes por término (usando filtros en endpoint principal)
+  // IMPORTANTE: Solo retorna clientes con estado = 'ACTIVO' para permitir crear préstamos
   async searchClientes(query: string): Promise<Cliente[]> {
-    const filters: ClienteFilters = { search: query }
+    const filters: ClienteFilters = { search: query, estado: 'ACTIVO' }
     const response = await this.getClientes(filters, 1, 100)
     return response.data
   }

@@ -155,19 +155,26 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   useEffect(() => {
     if (clienteInfo && clienteInfo.length > 0) {
       const cliente = clienteInfo[0]
-      setClienteData(cliente)
-      // Auto-llenar campos basados en cliente
-      setFormData(prev => ({
-        ...prev,
-        producto: cliente.modelo_vehiculo || '',
-        producto_financiero: cliente.analista || '',
-        // También llenar nuevos campos si están disponibles en el cliente
-        modelo_vehiculo: cliente.modelo_vehiculo || prev.modelo_vehiculo || '',
-        analista: cliente.analista || prev.analista || '',
-        concesionario: cliente.concesionario || prev.concesionario || '',
-      }))
+      // Solo establecer clienteData si el cliente está ACTIVO
+      if (cliente.estado === 'ACTIVO') {
+        setClienteData(cliente)
+        // Auto-llenar campos basados en cliente
+        setFormData(prev => ({
+          ...prev,
+          producto: cliente.modelo_vehiculo || '',
+          producto_financiero: cliente.analista || '',
+          // También llenar nuevos campos si están disponibles en el cliente
+          modelo_vehiculo: cliente.modelo_vehiculo || prev.modelo_vehiculo || '',
+          analista: cliente.analista || prev.analista || '',
+          concesionario: cliente.concesionario || prev.concesionario || '',
+        }))
+      } else {
+        // Cliente encontrado pero no está ACTIVO
+        setClienteData(null)
+        toast.error(`El cliente con cédula ${cliente.cedula} tiene estado "${cliente.estado}". Solo se pueden crear préstamos para clientes ACTIVOS.`)
+      }
     } else if (formData.cedula && formData.cedula.length >= 2 && clienteInfo && clienteInfo.length === 0) {
-      // Cliente no encontrado
+      // Cliente no encontrado o no está ACTIVO
       setClienteData(null)
     }
   }, [clienteInfo, formData.cedula])
@@ -183,9 +190,14 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       errors.push('La cédula es requerida')
     }
     
-    // Validar que el cliente exista (solo para nuevos préstamos)
+    // Validar que el cliente exista y esté ACTIVO (solo para nuevos préstamos)
     if (!prestamo && !clienteData) {
       errors.push('Debe buscar y seleccionar un cliente válido')
+    }
+    
+    // Validar que el cliente esté ACTIVO para permitir crear préstamo
+    if (!prestamo && clienteData && clienteData.estado !== 'ACTIVO') {
+      errors.push(`No se puede crear un préstamo para un cliente con estado: ${clienteData.estado}. El cliente debe estar ACTIVO.`)
     }
     
     // Validar Valor Activo

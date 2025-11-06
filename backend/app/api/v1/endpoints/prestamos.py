@@ -79,11 +79,15 @@ def calcular_cuotas(total: Decimal, modalidad: str, plazo_maximo_meses: Optional
 
 
 def obtener_datos_cliente(cedula: str, db: Session) -> Optional[Cliente]:
-    """Obtiene los datos del cliente por cédula (normalizando mayúsculas/espacios)"""
+    """Obtiene los datos del cliente por cédula (normalizando mayúsculas/espacios)
+    IMPORTANTE: Solo retorna clientes con estado = 'ACTIVO' para permitir crear préstamos"""
     if not cedula:
         return None
     ced_norm = str(cedula).strip().upper()
-    return db.query(Cliente).filter(Cliente.cedula == ced_norm).first()
+    return db.query(Cliente).filter(
+        Cliente.cedula == ced_norm,
+        Cliente.estado == "ACTIVO"
+    ).first()
 
 
 def verificar_permisos_edicion(prestamo: Prestamo, current_user: User):
@@ -514,11 +518,18 @@ def crear_prestamo(
     try:
         logger.info(f"Crear préstamo - Usuario: {current_user.email}")
 
-        # 1. Verificar que el cliente existe
+        # 1. Verificar que el cliente existe y está ACTIVO
         # Normalizar cédula (mayúsculas/sin espacios) para buscar y guardar
         cedula_norm = (prestamo_data.cedula or "").strip().upper()
         cliente = obtener_datos_cliente(cedula_norm, db)
         if not cliente:
+            # Verificar si el cliente existe pero no está ACTIVO
+            cliente_existente = db.query(Cliente).filter(Cliente.cedula == cedula_norm).first()
+            if cliente_existente:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"El cliente con cédula {prestamo_data.cedula} tiene estado '{cliente_existente.estado}'. Solo se pueden crear préstamos para clientes con estado ACTIVO.",
+                )
             raise HTTPException(
                 status_code=404,
                 detail=f"Cliente con cédula {prestamo_data.cedula} no encontrado",
