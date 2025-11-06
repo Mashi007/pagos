@@ -55,11 +55,18 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
 
-    # Crear índices
-    op.create_index("ix_pagos_cedula_cliente", "pagos", ["cedula_cliente"])
-    op.create_index("ix_pagos_fecha_pago", "pagos", ["fecha_pago"])
-    op.create_index("ix_pagos_conciliado", "pagos", ["conciliado"])
-    op.create_index("ix_pagos_activo", "pagos", ["activo"])
+    # Verificar índices existentes
+    indexes = [idx["name"] for idx in inspector.get_indexes("pagos")]
+    
+    # Crear índices solo si no existen
+    if "ix_pagos_cedula_cliente" not in indexes:
+        op.create_index("ix_pagos_cedula_cliente", "pagos", ["cedula_cliente"])
+    if "ix_pagos_fecha_pago" not in indexes:
+        op.create_index("ix_pagos_fecha_pago", "pagos", ["fecha_pago"])
+    if "ix_pagos_conciliado" not in indexes:
+        op.create_index("ix_pagos_conciliado", "pagos", ["conciliado"])
+    if "ix_pagos_activo" not in indexes:
+        op.create_index("ix_pagos_activo", "pagos", ["activo"])
 
 
 def downgrade() -> None:

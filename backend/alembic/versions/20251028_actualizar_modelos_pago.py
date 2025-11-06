@@ -17,38 +17,66 @@ depends_on = None
 
 
 def upgrade():
-    # Actualizar tabla pagos
-    op.add_column('pagos', sa.Column('prestamo_id', sa.Integer(), nullable=True))
-    op.add_column('pagos', sa.Column('fecha_registro', sa.DateTime(), nullable=True))
-    op.add_column('pagos', sa.Column('institucion_bancaria', sa.String(length=100), nullable=True))
-    op.add_column('pagos', sa.Column('referencia_pago', sa.String(length=100), nullable=False, server_default=''))
-    op.add_column('pagos', sa.Column('estado', sa.String(length=20), nullable=False, server_default='PAGADO'))
-    op.add_column('pagos', sa.Column('usuario_registro', sa.String(length=100), nullable=True))
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
     
-    # Crear índice para prestamo_id
-    op.create_index(op.f('ix_pagos_prestamo_id'), 'pagos', ['prestamo_id'], unique=False)
+    # Verificar columnas existentes en pagos
+    if 'pagos' in inspector.get_table_names():
+        columns = [col["name"] for col in inspector.get_columns("pagos")]
+        
+        if 'prestamo_id' not in columns:
+            op.add_column('pagos', sa.Column('prestamo_id', sa.Integer(), nullable=True))
+        if 'fecha_registro' not in columns:
+            op.add_column('pagos', sa.Column('fecha_registro', sa.DateTime(), nullable=True))
+        if 'institucion_bancaria' not in columns:
+            op.add_column('pagos', sa.Column('institucion_bancaria', sa.String(length=100), nullable=True))
+        if 'referencia_pago' not in columns:
+            op.add_column('pagos', sa.Column('referencia_pago', sa.String(length=100), nullable=False, server_default=''))
+        if 'estado' not in columns:
+            op.add_column('pagos', sa.Column('estado', sa.String(length=20), nullable=False, server_default='PAGADO'))
+        if 'usuario_registro' not in columns:
+            op.add_column('pagos', sa.Column('usuario_registro', sa.String(length=100), nullable=True))
+        
+        # Verificar índices existentes
+        indexes = [idx["name"] for idx in inspector.get_indexes("pagos")]
+        if 'ix_pagos_prestamo_id' not in indexes:
+            op.create_index(op.f('ix_pagos_prestamo_id'), 'pagos', ['prestamo_id'], unique=False)
     
-    # Actualizar tabla cuotas
-    op.alter_column('cuotas', 'estado',
-                    existing_type=sa.String(length=20),
-                    comment='PENDIENTE, PAGADO, ATRASADO, PARCIAL, ADELANTADO')
+    # Actualizar tabla cuotas (si existe)
+    if 'cuotas' in inspector.get_table_names():
+        try:
+            op.alter_column('cuotas', 'estado',
+                            existing_type=sa.String(length=20),
+                            comment='PENDIENTE, PAGADO, ATRASADO, PARCIAL, ADELANTADO')
+        except Exception as e:
+            print(f"⚠️ No se pudo actualizar columna cuotas.estado: {e}")
     
     # Crear tabla pagos_auditoria
-    op.create_table(
-        'pagos_auditoria',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('pago_id', sa.Integer(), nullable=False),
-        sa.Column('usuario', sa.String(length=100), nullable=False),
-        sa.Column('campo_modificado', sa.String(length=100), nullable=False),
-        sa.Column('valor_anterior', sa.String(length=500), nullable=True),
-        sa.Column('valor_nuevo', sa.String(length=500), nullable=False),
-        sa.Column('accion', sa.String(length=50), nullable=False),
-        sa.Column('observaciones', sa.Text(), nullable=True),
-        sa.Column('fecha_cambio', sa.DateTime(), nullable=False),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_pagos_auditoria_pago_id'), 'pagos_auditoria', ['pago_id'], unique=False)
-    op.create_index(op.f('ix_pagos_auditoria_fecha_cambio'), 'pagos_auditoria', ['fecha_cambio'], unique=False)
+    tables = inspector.get_table_names()
+    if 'pagos_auditoria' not in tables:
+        op.create_table(
+            'pagos_auditoria',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('pago_id', sa.Integer(), nullable=False),
+            sa.Column('usuario', sa.String(length=100), nullable=False),
+            sa.Column('campo_modificado', sa.String(length=100), nullable=False),
+            sa.Column('valor_anterior', sa.String(length=500), nullable=True),
+            sa.Column('valor_nuevo', sa.String(length=500), nullable=False),
+            sa.Column('accion', sa.String(length=50), nullable=False),
+            sa.Column('observaciones', sa.Text(), nullable=True),
+            sa.Column('fecha_cambio', sa.DateTime(), nullable=False),
+            sa.PrimaryKeyConstraint('id')
+        )
+    else:
+        print("Tabla 'pagos_auditoria' ya existe")
+    
+    # Verificar índices de pagos_auditoria
+    if 'pagos_auditoria' in tables:
+        indexes = [idx["name"] for idx in inspector.get_indexes("pagos_auditoria")]
+        if 'ix_pagos_auditoria_pago_id' not in indexes:
+            op.create_index(op.f('ix_pagos_auditoria_pago_id'), 'pagos_auditoria', ['pago_id'], unique=False)
+        if 'ix_pagos_auditoria_fecha_cambio' not in indexes:
+            op.create_index(op.f('ix_pagos_auditoria_fecha_cambio'), 'pagos_auditoria', ['fecha_cambio'], unique=False)
 
 
 def downgrade():

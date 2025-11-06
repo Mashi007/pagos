@@ -17,8 +17,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Agregar columna is_admin a la tabla users
-    op.add_column('users', sa.Column('is_admin', sa.Boolean(), nullable=False, server_default='false'))
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    
+    # Verificar si la columna ya existe
+    if 'users' in inspector.get_table_names():
+        columns = [col["name"] for col in inspector.get_columns("users")]
+        if 'is_admin' not in columns:
+            op.add_column('users', sa.Column('is_admin', sa.Boolean(), nullable=False, server_default='false'))
+        else:
+            print("Columna 'is_admin' ya existe en la tabla 'users'")
 
 
 def downgrade() -> None:
