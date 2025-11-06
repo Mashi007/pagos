@@ -84,10 +84,7 @@ def obtener_datos_cliente(cedula: str, db: Session) -> Optional[Cliente]:
     if not cedula:
         return None
     ced_norm = str(cedula).strip().upper()
-    return db.query(Cliente).filter(
-        Cliente.cedula == ced_norm,
-        Cliente.estado == "ACTIVO"
-    ).first()
+    return db.query(Cliente).filter(Cliente.cedula == ced_norm, Cliente.estado == "ACTIVO").first()
 
 
 def verificar_permisos_edicion(prestamo: Prestamo, current_user: User):
