@@ -273,7 +273,7 @@ def reporte_pagos(
         total_pagos_query = db.execute(
             text(
                 """
-                SELECTCOALESCE(SUM(monto_pagado), 0)
+                SELECT COALESCE(SUM(monto_pagado), 0)
                 FROM pagos
                 WHERE fecha_pago >= :fecha_inicio
                   AND fecha_pago <= :fecha_fin
@@ -804,7 +804,7 @@ def resumen_dashboard(
         pagos_mes_query = db.execute(
             text(
                 """
-                SELECTCOALESCE(SUM(monto_pagado), 0)
+                SELECT COALESCE(SUM(monto_pagado), 0)
                 FROM pagos
                 WHERE fecha_pago >= :fecha_inicio
                   AND fecha_pago <= :fecha_fin

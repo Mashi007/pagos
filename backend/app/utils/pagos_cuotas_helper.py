@@ -195,9 +195,14 @@ def calcular_total_pagado_cuota(
     Returns:
         Total pagado (Decimal)
     """
-    # Obtener préstamo para tener cédula
-    prestamo = db.query(Prestamo).filter(Prestamo.id == cuota.prestamo_id).first()
-    if not prestamo:
+    # Obtener cédula del préstamo (solo necesitamos cedula, no todo el objeto)
+    # ✅ CORRECCIÓN: Usar query directo de cedula para evitar error si valor_activo no existe en BD
+    prestamo_cedula = (
+        db.query(Prestamo.cedula)
+        .filter(Prestamo.id == cuota.prestamo_id)
+        .scalar()
+    )
+    if not prestamo_cedula:
         return Decimal("0")
 
     # Obtener pagos usando helper
@@ -205,7 +210,7 @@ def calcular_total_pagado_cuota(
         db=db,
         prestamo_id=cuota.prestamo_id,
         numero_cuota=cuota.numero_cuota,
-        cedula=prestamo.cedula,
+        cedula=prestamo_cedula,
         fecha_vencimiento=cuota.fecha_vencimiento,
         monto_cuota=cuota.monto_cuota,
     )
@@ -257,13 +262,19 @@ def calcular_monto_pagado_mes(
     # Calcular total pagado sumando pagos de cada cuota
     total_pagado = Decimal("0")
     for cuota in cuotas:
-        prestamo = db.query(Prestamo).filter(Prestamo.id == cuota.prestamo_id).first()
-        if prestamo:
+        # ✅ CORRECCIÓN: Usar with_entities para evitar error si valor_activo no existe en BD
+        # Solo necesitamos cedula, así que especificamos solo esa columna
+        prestamo_cedula = (
+            db.query(Prestamo.cedula)
+            .filter(Prestamo.id == cuota.prestamo_id)
+            .scalar()
+        )
+        if prestamo_cedula:
             pagos = obtener_pagos_cuota(
                 db=db,
                 prestamo_id=cuota.prestamo_id,
                 numero_cuota=cuota.numero_cuota,
-                cedula=prestamo.cedula,
+                cedula=prestamo_cedula,
                 fecha_vencimiento=cuota.fecha_vencimiento,
                 monto_cuota=cuota.monto_cuota,
             )
@@ -297,16 +308,21 @@ def reconciliar_pago_cuota(
     if pago.cedula and pago.fecha_pago:
         fecha_pago_date = pago.fecha_pago.date()
 
-        # Buscar préstamos por cédula
-        prestamos = db.query(Prestamo).filter(Prestamo.cedula == pago.cedula, Prestamo.estado == "APROBADO").all()
+        # Buscar préstamos por cédula (solo necesitamos id, no todo el objeto)
+        # ✅ CORRECCIÓN: Usar query directo de id para evitar error si valor_activo no existe en BD
+        prestamo_ids = [
+            row[0] for row in db.query(Prestamo.id)
+            .filter(Prestamo.cedula == pago.cedula, Prestamo.estado == "APROBADO")
+            .all()
+        ]
 
-        for prestamo in prestamos:
+        for prestamo_id in prestamo_ids:
             # Buscar cuota que coincida con fecha de pago
             cuota = (
                 db.query(Cuota)
                 .filter(
                     and_(
-                        Cuota.prestamo_id == prestamo.id,
+                        Cuota.prestamo_id == prestamo_id,
                         Cuota.fecha_vencimiento <= fecha_pago_date + timedelta(days=30),
                         Cuota.fecha_vencimiento >= fecha_pago_date - timedelta(days=30),
                         Cuota.estado != "PAGADO",
@@ -318,7 +334,7 @@ def reconciliar_pago_cuota(
 
             if cuota:
                 # Vincular pago a cuota
-                pago.prestamo_id = prestamo.id
+                pago.prestamo_id = prestamo_id
                 pago.numero_cuota = cuota.numero_cuota
                 return cuota
 

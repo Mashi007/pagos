@@ -274,7 +274,7 @@ def _calcular_morosidad(
                   AND c.fecha_vencimiento >= :fecha_inicio_calculo
                   AND c.fecha_vencimiento <= :fecha_limite
                   {where_prestamo}
-                GROUP BYEXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+                GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
             ),
             pagos_por_mes AS (
                 SELECT
@@ -293,7 +293,7 @@ def _calcular_morosidad(
                   AND pa.activo = TRUE
                   AND pr.estado = 'APROBADO'
                   {where_prestamo}
-                GROUP BYEXTRACT(YEAR FROM pa.fecha_pago), EXTRACT(MONTH FROM pa.fecha_pago)
+                GROUP BY EXTRACT(YEAR FROM pa.fecha_pago), EXTRACT(MONTH FROM pa.fecha_pago)
             )
             SELECT COALESCE(SUM(GREATEST(0, m.monto_programado - COALESCE(p.monto_pagado, 0))), 0) as morosidad_acumulada
             FROM meses m
@@ -314,7 +314,7 @@ def _calcular_morosidad(
                 WHERE p.estado = 'APROBADO'
                   AND c.fecha_vencimiento >= :fecha_inicio_calculo
                   AND c.fecha_vencimiento <= :fecha_limite
-                GROUP BYEXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+                GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
             ),
             pagos_por_mes AS (
                 SELECT
@@ -327,7 +327,7 @@ def _calcular_morosidad(
                   AND pa.monto_pagado IS NOT NULL
                   AND pa.monto_pagado > 0
                   AND pa.activo = TRUE
-                GROUP BYEXTRACT(YEAR FROM pa.fecha_pago), EXTRACT(MONTH FROM pa.fecha_pago)
+                GROUP BY EXTRACT(YEAR FROM pa.fecha_pago), EXTRACT(MONTH FROM pa.fecha_pago)
             )
             SELECT COALESCE(SUM(GREATEST(0, m.monto_programado - COALESCE(p.monto_pagado, 0))), 0) as morosidad_acumulada
             FROM meses m
@@ -835,7 +835,7 @@ def _calcular_total_cobrado(
 
             query_sql = text(
                 f"""
-                SELECTCOALESCE(SUM(p.monto_pagado), 0)
+                SELECT COALESCE(SUM(p.monto_pagado), 0)
                 FROM pagos p
                 INNER JOIN prestamos pr ON (
                     (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
@@ -847,7 +847,7 @@ def _calcular_total_cobrado(
         else:
             query_sql = text(
                 """
-                SELECTCOALESCE(SUM(monto_pagado), 0)
+                SELECT COALESCE(SUM(monto_pagado), 0)
                 FROM pagos
                 WHERE fecha_pago >= :fecha_inicio
                   AND fecha_pago <= :fecha_fin
@@ -1274,7 +1274,7 @@ def dashboard_administrador(
             promedio_dias_mora_query = db.execute(
                 text(
                     """
-                    SELECTCOALESCE(AVG((:hoy::date - fecha_vencimiento::date)), 0)
+                    SELECT COALESCE(AVG((:hoy::date - fecha_vencimiento::date)), 0)
                     FROM cuotas c
                     INNER JOIN prestamos p ON c.prestamo_id = p.id
                     WHERE c.fecha_vencimiento < :hoy
@@ -1358,7 +1358,7 @@ def dashboard_administrador(
                           AND monto_pagado IS NOT NULL
                           AND monto_pagado > 0
                           AND activo = TRUE
-                GROUP BYEXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
+                GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
                         ORDER BY año, mes
                     """
                     ).bindparams(fecha_inicio=fecha_primera, fecha_fin=fecha_ultima)
@@ -1387,7 +1387,7 @@ def dashboard_administrador(
                           AND c.estado != 'PAGADO'
                           AND c.fecha_vencimiento >= :fecha_inicio
                           AND c.fecha_vencimiento <= :fecha_fin
-                GROUP BYEXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+                GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
                         ORDER BY año, mes
                     """
                     ).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
@@ -1417,7 +1417,7 @@ def dashboard_administrador(
                       AND c.fecha_pago IS NOT NULL
                       AND DATE(c.fecha_pago) >= :fecha_inicio
                       AND DATE(c.fecha_pago) <= :fecha_fin
-                GROUP BYEXTRACT(YEAR FROM DATE(c.fecha_pago)), EXTRACT(MONTH FROM DATE(c.fecha_pago))
+                GROUP BY EXTRACT(YEAR FROM DATE(c.fecha_pago)), EXTRACT(MONTH FROM DATE(c.fecha_pago))
                     ORDER BY año, mes
                 """
                     ).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
@@ -1444,7 +1444,7 @@ def dashboard_administrador(
                     FROM prestamos
                     WHERE estado = 'APROBADO'
                       AND fecha_registro <= :fecha_fin
-                GROUP BYEXTRACT(YEAR FROM fecha_registro), EXTRACT(MONTH FROM fecha_registro)
+                GROUP BY EXTRACT(YEAR FROM fecha_registro), EXTRACT(MONTH FROM fecha_registro)
                     ORDER BY año, mes
                 """
                 ).bindparams(fecha_fin=fecha_ultima)
@@ -2218,7 +2218,7 @@ def obtener_cobranzas_mensuales(
                 FROM cuotas c
                 INNER JOIN prestamos p ON c.prestamo_id = p.id
                 WHERE {where_clause_cobranzas}
-                GROUP BYEXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+                GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
                 ORDER BY año, mes
             """
             ).bindparams(**params_cobranzas)
@@ -2257,7 +2257,7 @@ def obtener_cobranzas_mensuales(
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado > 0
                   AND activo = TRUE
-                GROUP BYEXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
+                GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
                 ORDER BY año, mes
             """
             )
@@ -2440,7 +2440,7 @@ def obtener_metricas_acumuladas(
         query_acumulado_mensual = db.execute(
             text(
                 """
-                SELECTCOALESCE(SUM(monto_pagado), 0)
+                SELECT COALESCE(SUM(monto_pagado), 0)
                 FROM pagos
                 WHERE fecha_pago >= :fecha_inicio_mes
                   AND monto_pagado IS NOT NULL
@@ -2457,7 +2457,7 @@ def obtener_metricas_acumuladas(
         query_acumulado_anual = db.execute(
             text(
                 """
-                SELECTCOALESCE(SUM(monto_pagado), 0)
+                SELECT COALESCE(SUM(monto_pagado), 0)
                 FROM pagos
                 WHERE fecha_pago >= :fecha_inicio_anio
                   AND monto_pagado IS NOT NULL
@@ -3158,7 +3158,7 @@ def obtener_evolucion_general_mensual(
                     OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
                 )
                 WHERE {where_clause}
-                GROUP BYEXTRACT(YEAR FROM p.fecha_pago), EXTRACT(MONTH FROM p.fecha_pago)
+                GROUP BY EXTRACT(YEAR FROM p.fecha_pago), EXTRACT(MONTH FROM p.fecha_pago)
                 ORDER BY año, mes
                 """
             ).bindparams(**bind_params_pagos)
@@ -3176,7 +3176,7 @@ def obtener_evolucion_general_mensual(
                   AND monto_pagado IS NOT NULL
                   AND monto_pagado > 0
                   AND activo = TRUE
-                GROUP BYEXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
+                GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
                 ORDER BY año, mes
                 """
             ).bindparams(fecha_inicio=fecha_primera, fecha_fin=fecha_ultima)
@@ -4388,8 +4388,8 @@ def obtener_evolucion_morosidad(
         table_exists = db.execute(
             text(
                 """
-                SELECTEXISTS (
-                    SELECTFROM information_schema.tables 
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
                     WHERE table_schema = 'public'
                     AND table_name = 'dashboard_morosidad_mensual'
                 )
@@ -4441,7 +4441,7 @@ def obtener_evolucion_morosidad(
                     AND c.fecha_vencimiento >= :fecha_inicio
                     AND c.fecha_vencimiento < :fecha_fin_total
                     AND c.estado != 'PAGADO'
-                GROUP BYEXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+                GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
                 ORDER BY año, mes
             """
             ).bindparams(fecha_inicio=fecha_inicio_query, fecha_fin_total=hoy)
@@ -4673,7 +4673,7 @@ def obtener_resumen_financiamiento_pagado(
 
             query_pagado_sql = text(
                 f"""
-                SELECTCOALESCE(SUM(p.monto_pagado), 0) as total_pagado
+                SELECT COALESCE(SUM(p.monto_pagado), 0) as total_pagado
                 FROM pagos p
                 INNER JOIN prestamos pr ON (
                     (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
@@ -4697,7 +4697,7 @@ def obtener_resumen_financiamiento_pagado(
 
             query_pagado_sql = text(
                 f"""
-                SELECTCOALESCE(SUM(monto_pagado), 0) as total_pagado
+                SELECT COALESCE(SUM(monto_pagado), 0) as total_pagado
                 FROM pagos
                 WHERE {where_clause}
                 """
