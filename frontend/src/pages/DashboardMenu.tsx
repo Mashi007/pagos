@@ -797,16 +797,6 @@ export function DashboardMenu() {
                           tick={{ fill: '#6b7280' }}
                           tickFormatter={(value) => formatCurrency(value)}
                         />
-                        <YAxis 
-                          yAxisId="right"
-                          orientation="right"
-                          stroke="#ef4444"
-                          style={{ fontSize: '12px', fontWeight: 500 }}
-                          tick={{ fill: '#ef4444' }}
-                          tickFormatter={(value) => formatCurrency(value)}
-                          domain={[0, 'dataMax']}
-                          allowDecimals={true}
-                        />
                         <Tooltip 
                           contentStyle={{
                             backgroundColor: 'rgba(255, 255, 255, 0.98)',
@@ -869,7 +859,7 @@ export function DashboardMenu() {
                           name="Monto Pagado por Mes"
                         />
                         <Line 
-                          yAxisId="right"
+                          yAxisId="left"
                           type="monotone" 
                           dataKey="morosidad_mensual" 
                           stroke="#ef4444" 
