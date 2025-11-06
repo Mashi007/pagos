@@ -36,7 +36,7 @@ services:
     startCommand: npm run render-start
     envVars:
       - key: NODE_VERSION
-        value: 18.17.0
+        value: 20.11.0
       - key: VITE_API_URL
         value: https://pagos-f2qf.onrender.com
       - key: API_BASE_URL

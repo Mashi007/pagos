@@ -127,7 +127,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     }
   }
 
-  const exportarPDF = () => {
+  const exportarPDF = async () => {
     if (!cuotas) {
       toast.error('No hay datos para exportar')
       return
@@ -144,9 +144,10 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     }
     
     try {
-      exportarAPDF(cuotas, prestamoInfo)
-      toast.success('Exportando a PDF...')
+      await exportarAPDF(cuotas, prestamoInfo)
+      toast.success('PDF exportado exitosamente')
     } catch (error) {
+      console.error('Error al exportar a PDF:', error)
       toast.error('Error al exportar a PDF')
     }
   }

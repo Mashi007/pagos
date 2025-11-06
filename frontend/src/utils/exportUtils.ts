@@ -75,11 +75,18 @@ export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) =>
 /**
  * Exporta tabla de amortización a PDF (formato empresarial)
  */
-export const exportarAPDF = (cuotas: Cuota[], prestamo: PrestamoInfo) => {
-  // Importar dinámicamente jsPDF y jspdf-autotable
-  Promise.all([import('jspdf'), import('jspdf-autotable')]).then((modules) => {
-    const jsPDF = modules[0].default
-    const autoTable = modules[1].default
+export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
+  try {
+    // Importar dinámicamente jsPDF y jspdf-autotable
+    const [jsPDFModule, autoTableModule] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable')
+    ])
+    
+    // jspdf 3.x usa named export
+    const { jsPDF } = jsPDFModule
+    // jspdf-autotable 5.x usa default export
+    const autoTable = autoTableModule.default
 
     // Crear nuevo documento PDF
     const doc = new jsPDF()
@@ -223,9 +230,9 @@ export const exportarAPDF = (cuotas: Cuota[], prestamo: PrestamoInfo) => {
 
     // Descargar
     doc.save(nombreArchivo)
-  }).catch(error => {
-    console.error('Error al importar jsPDF:', error)
-    alert('Error: Debes instalar las librerías. Ejecuta: npm install jspdf jspdf-autotable')
-  })
+  } catch (error) {
+    console.error('Error al exportar a PDF:', error)
+    alert('Error al exportar a PDF. Asegúrate de que las librerías estén instaladas.')
+  }
 }
 

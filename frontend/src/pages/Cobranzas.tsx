@@ -347,7 +347,7 @@ export function Cobranzas() {
             </CardContent>
           </Card>
         </div>
-      )}
+      ) : null}
 
       {/* Tabs de análisis */}
       <Tabs value={tabActiva} onValueChange={setTabActiva}>
