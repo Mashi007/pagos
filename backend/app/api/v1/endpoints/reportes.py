@@ -765,7 +765,7 @@ def resumen_dashboard(
                     db.rollback()
                 except Exception:
                     pass
-        
+
         hoy = date.today()
 
         # Estadísticas básicas - Solo préstamos aprobados
