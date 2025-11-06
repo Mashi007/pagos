@@ -1,7 +1,7 @@
 """agregar columna usuario_autoriza a prestamos
 
 Revision ID: 20251030_usuario_autoriza
-Revises: 20251030_actualizar_catalogos
+Revises: 20251030_actualizar_catalogos, 20250127_performance_indexes
 Create Date: 2025-10-30 15:00:00.000000
 
 """

@@ -1,7 +1,7 @@
 """eliminar columnas modelo_vehiculo concesionario analista de clientes
 
 Revision ID: 20251030_eliminar_columnas_clientes
-Revises: 20251030_columnas_prestamos
+Revises: 20251030_columnas_prestamos, 20250127_performance_indexes
 Create Date: 2025-10-30 12:00:00.000000
 
 """

@@ -1,7 +1,7 @@
 """add precio and audit fields to modelos_vehiculos
 
 Revision ID: 20251030_modelos_vehiculos_precio
-Revises: 20251030_actualizar_catalogos
+Revises: 20251030_actualizar_catalogos, 20250127_performance_indexes
 Create Date: 2025-10-30
 """
 
