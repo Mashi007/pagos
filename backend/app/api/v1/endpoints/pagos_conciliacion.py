@@ -3,7 +3,7 @@ Endpoint para conciliación masiva de pagos desde Excel
 """
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 import pandas as pd  # type: ignore[import-untyped]
@@ -12,6 +12,7 @@ from sqlalchemy import func  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
+from app.models.amortizacion import Cuota
 from app.models.pago import Pago  # Tabla oficial de pagos
 from app.models.user import User
 
@@ -45,7 +46,14 @@ def _validar_numero_documento(numero_documento: str) -> bool:
 
 
 def _conciliar_pago(pago: Pago, db: Session, numero_documento: str) -> bool:
-    """Concilia un pago en tabla pagos si no está ya conciliado. Returns: True si se concilió, False si ya estaba conciliado"""
+    """
+    Concilia un pago en tabla pagos si no está ya conciliado.
+    
+    ✅ ACTUALIZADO: Después de conciliar, actualiza automáticamente el estado de las cuotas
+    relacionadas si todos los pagos están conciliados.
+    
+    Returns: True si se concilió, False si ya estaba conciliado
+    """
     if pago.conciliado:
         logger.info(f"ℹ️ [conciliacion] Pago ID {pago.id} ya estaba conciliado (documento: {numero_documento})")
         return False
@@ -56,9 +64,89 @@ def _conciliar_pago(pago: Pago, db: Session, numero_documento: str) -> bool:
     if hasattr(pago, "verificado_concordancia"):
         pago.verificado_concordancia = "SI"
 
+    # ✅ Commit del pago conciliado PRIMERO (antes de actualizar cuotas)
     db.commit()
     db.refresh(pago)
     logger.info(f"✅ [conciliacion] Pago ID {pago.id} conciliado (documento: {numero_documento})")
+    
+    # ✅ APLICAR PAGO A CUOTAS AUTOMÁTICAMENTE cuando se concilia
+    # Solo cuando el pago está conciliado (conciliado=True o verificado_concordancia='SI') se aplica a cuotas
+    if pago.prestamo_id:
+        try:
+            from app.api.v1.endpoints.pagos import aplicar_pago_a_cuotas
+            from app.models.user import User
+            
+            # Obtener usuario actual (usar un usuario del sistema si no hay uno disponible)
+            # En este contexto, usamos el usuario del sistema para la aplicación automática
+            usuario_sistema = db.query(User).first()
+            if usuario_sistema:
+                cuotas_completadas = aplicar_pago_a_cuotas(pago, db, usuario_sistema)
+                logger.info(
+                    f"✅ [conciliacion] Pago ID {pago.id}: {cuotas_completadas} cuota(s) completada(s) "
+                    f"después de conciliación"
+                )
+            else:
+                logger.warning(
+                    f"⚠️ [conciliacion] No se encontró usuario para aplicar pago a cuotas. "
+                    f"Pago ID {pago.id} conciliado pero no aplicado a cuotas."
+                )
+        except Exception as e:
+            logger.error(
+                f"⚠️ [conciliacion] Error aplicando pago a cuotas después de conciliar pago ID {pago.id}: {str(e)}",
+                exc_info=True
+            )
+            # NO hacer rollback - el pago ya está conciliado y guardado
+            # Solo loguear el error, pero el pago permanece conciliado
+    
+    # ✅ ACTUALIZAR AUTOMÁTICAMENTE estado de cuotas si el pago tiene prestamo_id
+    if pago.prestamo_id:
+        try:
+            from app.api.v1.endpoints.pagos import _actualizar_estado_cuota, _verificar_pagos_conciliados_cuota
+            from decimal import Decimal
+            
+            # Obtener todas las cuotas del préstamo que tienen pagos aplicados
+            cuotas = (
+                db.query(Cuota)
+                .filter(
+                    Cuota.prestamo_id == pago.prestamo_id,
+                    Cuota.total_pagado > Decimal("0.00")  # Solo cuotas con pagos aplicados
+                )
+                .all()
+            )
+            
+            fecha_hoy = date.today()
+            cuotas_actualizadas = 0
+            
+            for cuota in cuotas:
+                # Verificar si todos los pagos están conciliados antes de actualizar
+                todos_conciliados = _verificar_pagos_conciliados_cuota(db, cuota.id, cuota.prestamo_id)
+                
+                if todos_conciliados:
+                    # Actualizar estado de la cuota
+                    estado_anterior = cuota.estado
+                    _actualizar_estado_cuota(cuota, fecha_hoy, db)
+                    
+                    if cuota.estado != estado_anterior:
+                        cuotas_actualizadas += 1
+                        logger.info(
+                            f"🔄 [conciliacion] Cuota #{cuota.numero_cuota} (Préstamo {cuota.prestamo_id}): "
+                            f"Estado actualizado de '{estado_anterior}' a '{cuota.estado}'"
+                        )
+            
+            if cuotas_actualizadas > 0:
+                db.commit()
+                logger.info(
+                    f"✅ [conciliacion] Pago ID {pago.id}: {cuotas_actualizadas} cuota(s) actualizada(s) "
+                    f"después de conciliación"
+                )
+        except Exception as e:
+            logger.error(
+                f"⚠️ [conciliacion] Error actualizando cuotas después de conciliar pago ID {pago.id}: {str(e)}",
+                exc_info=True
+            )
+            # ✅ NO hacer rollback - el pago ya está conciliado y guardado
+            # Solo loguear el error, pero el pago permanece conciliado
+    
     return True
 
 

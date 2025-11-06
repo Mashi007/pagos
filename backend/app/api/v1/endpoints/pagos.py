@@ -608,10 +608,33 @@ def crear_pago(
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
+        # ✅ BUSCAR PRÉSTAMO AUTOMÁTICAMENTE si no viene en el request
+        # Es obligatorio que el pago esté relacionado con un préstamo
+        prestamo_id = pago_data.prestamo_id
+        if not prestamo_id:
+            prestamo = db.query(Prestamo).filter(
+                Prestamo.cedula == pago_data.cedula,
+                Prestamo.estado == "APROBADO"
+            ).first()
+            if prestamo:
+                prestamo_id = prestamo.id
+                logger.info(
+                    f"✅ [crear_pago] Préstamo encontrado automáticamente para cédula {pago_data.cedula}: "
+                    f"prestamo_id={prestamo_id}"
+                )
+            else:
+                logger.warning(
+                    f"⚠️ [crear_pago] No se encontró préstamo APROBADO para cédula {pago_data.cedula}. "
+                    f"El pago se registrará sin prestamo_id y NO se aplicará a cuotas."
+                )
+
         # Crear el pago
         pago_dict = pago_data.model_dump()
         pago_dict["usuario_registro"] = current_user.email
         pago_dict["fecha_registro"] = datetime.now()
+        # ✅ Asignar prestamo_id (del request o encontrado automáticamente)
+        if prestamo_id:
+            pago_dict["prestamo_id"] = prestamo_id
 
         # Eliminar cualquier campo que no exista en el modelo
         # (por ejemplo, referencia_pago si la migración no se ha ejecutado)
@@ -634,28 +657,17 @@ def crear_pago(
             db=db,
         )
 
-        # Aplicar pago a cuotas
-        try:
-            cuotas_completadas = aplicar_pago_a_cuotas(nuevo_pago, db, current_user)
-            logger.info(f"✅ [crear_pago] Pago ID {nuevo_pago.id}: " f"{cuotas_completadas} cuota(s) completada(s)")
-        except Exception as e:
-            logger.error(
-                f"❌ [crear_pago] Error aplicando pago a cuotas: {str(e)}",
-                exc_info=True,
-            )
-            # No fallar el registro del pago si falla la aplicación a cuotas
-            # El pago se registra pero las cuotas no se actualizan
-            cuotas_completadas = 0
+        # ⚠️ NO APLICAR PAGO A CUOTAS AQUÍ
+        # Los pagos solo se aplican a cuotas cuando están conciliados (conciliado = True o verificado_concordancia = 'SI')
+        # La aplicación a cuotas se hará automáticamente cuando el pago se concilie
+        logger.info(
+            f"ℹ️ [crear_pago] Pago ID {nuevo_pago.id} registrado. "
+            f"Se aplicará a cuotas cuando esté conciliado (conciliado=True o verificado_concordancia='SI')"
+        )
 
-        # Actualizar estado del pago según regla de negocio:
-        # - Si el pago no tiene préstamo asociado, mantener estado por defecto "PAGADO"
-        # - Si tiene préstamo pero no completó ninguna cuota completamente → estado "PARCIAL" (abono parcial)
-        # - Si completó al menos una cuota completamente → estado "PAGADO"
-        if nuevo_pago.prestamo_id and cuotas_completadas == 0:
-            nuevo_pago.estado = "PARCIAL"
-        elif nuevo_pago.prestamo_id and cuotas_completadas > 0:
-            nuevo_pago.estado = "PAGADO"
-        # Si no tiene prestamo_id, mantener el estado por defecto "PAGADO"
+        # ⚠️ NO ACTUALIZAR ESTADO DEL PAGO AQUÍ
+        # El estado del pago (PARCIAL/PAGADO) solo se actualiza DESPUÉS de conciliar y aplicar a cuotas
+        # Mantener el estado por defecto "REGISTRADO" o "PAGADO" según el modelo
 
         db.commit()
         db.refresh(nuevo_pago)
@@ -677,6 +689,7 @@ def aplicar_pago_manualmente(
 ):
     """
     Reaplicar un pago a las cuotas del préstamo asociado.
+    ⚠️ IMPORTANTE: Solo se puede aplicar si el pago está conciliado (conciliado=True o verificado_concordancia='SI').
     Útil cuando un pago fue registrado pero no se aplicó correctamente a las cuotas.
     """
     try:
@@ -690,9 +703,23 @@ def aplicar_pago_manualmente(
                 detail="El pago no tiene un préstamo asociado (prestamo_id es NULL)",
             )
 
+        # ✅ VERIFICAR QUE EL PAGO ESTÉ CONCILIADO
+        if not pago.conciliado:
+            verificado_ok = getattr(pago, "verificado_concordancia", None) == "SI"
+            if not verificado_ok:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"El pago ID {pago_id} NO está conciliado "
+                        f"(conciliado={pago.conciliado}, verificado_concordancia={getattr(pago, 'verificado_concordancia', 'N/A')}). "
+                        f"El pago debe estar conciliado primero (conciliado=True o verificado_concordancia='SI') "
+                        f"antes de poder aplicarse a cuotas."
+                    ),
+                )
+
         logger.info(f"🔄 [aplicar_pago_manualmente] Reaplicando pago ID {pago_id} " f"al préstamo {pago.prestamo_id}")
 
-        # Reaplicar el pago a las cuotas
+        # Reaplicar el pago a las cuotas (solo si está conciliado)
         cuotas_completadas = aplicar_pago_a_cuotas(pago, db, current_user)
 
         return {
@@ -1232,16 +1259,35 @@ def _aplicar_pago_a_cuotas_iterativas(
 def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
     """
     Aplica un pago a las cuotas correspondientes según la regla de negocio:
+    - ✅ VERIFICA que el pago esté conciliado (conciliado = True o verificado_concordancia = 'SI')
     - VERIFICA que la cédula del pago coincida con la cédula del préstamo
     - Los pagos se aplican a las cuotas más antiguas primero (por fecha_vencimiento)
     - Una cuota está "ATRASADO" hasta que esté completamente pagada (monto_cuota)
     - Solo cuando total_pagado >= monto_cuota, se marca como "PAGADO"
     - Si un pago cubre completamente una cuota y sobra, el exceso se aplica a la siguiente
 
+    ⚠️ IMPORTANTE: Solo se aplica si el pago está conciliado.
+
     Returns:
         int: Número de cuotas que se completaron completamente con este pago
     """
     from datetime import date
+
+    # ✅ VERIFICAR QUE EL PAGO ESTÉ CONCILIADO
+    if not pago.conciliado:
+        # Verificar también verificado_concordancia como alternativa
+        verificado_ok = getattr(pago, "verificado_concordancia", None) == "SI"
+        if not verificado_ok:
+            logger.warning(
+                f"⚠️ [aplicar_pago_a_cuotas] Pago ID {pago.id} NO está conciliado "
+                f"(conciliado={pago.conciliado}, verificado_concordancia={getattr(pago, 'verificado_concordancia', 'N/A')}). "
+                f"No se aplicará a cuotas. El pago debe estar conciliado primero."
+            )
+            return 0
+
+    logger.info(
+        f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id} está conciliado. Procediendo a aplicar a cuotas."
+    )
 
     validacion_ok, _ = _verificar_prestamo_y_cedula(pago, db)
     if not validacion_ok:
@@ -1275,6 +1321,24 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
         )
 
     try:
+        # ✅ ACTUALIZAR ESTADO DEL PAGO después de aplicar a cuotas
+        # El estado solo se actualiza DESPUÉS de conciliar y aplicar a cuotas
+        if cuotas_completadas > 0:
+            # Si completó al menos una cuota completamente → estado "PAGADO"
+            pago.estado = "PAGADO"
+            logger.info(
+                f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id}: Estado actualizado a 'PAGADO' "
+                f"(completó {cuotas_completadas} cuota(s))"
+            )
+        elif pago.prestamo_id:
+            # Si tiene préstamo pero no completó ninguna cuota completamente → estado "PARCIAL"
+            pago.estado = "PARCIAL"
+            logger.info(
+                f"ℹ️ [aplicar_pago_a_cuotas] Pago ID {pago.id}: Estado actualizado a 'PARCIAL' "
+                f"(no completó ninguna cuota completamente)"
+            )
+        # Si no tiene prestamo_id, mantener el estado por defecto
+
         db.commit()
         logger.info(
             f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id} aplicado exitosamente. " f"Cuotas completadas: {cuotas_completadas}"

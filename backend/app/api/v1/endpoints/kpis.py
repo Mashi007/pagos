@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.core.cache import cache_result
-from app.models.amortizacion import Cuota, pago_cuotas
+from app.models.amortizacion import Cuota
 from app.models.analista import Analista
 from app.models.cliente import Cliente
 from app.models.pago import Pago  # Tabla oficial de pagos
@@ -229,14 +229,21 @@ def _calcular_kpis_mes_actual(
     cuotas_mes_query = FiltrosDashboard.aplicar_filtros_cuota(cuotas_mes_query, analista, concesionario, modelo, None, None)
     total_cuotas_mes = cuotas_mes_query.scalar() or 0
 
-    # Cuotas conciliadas (usa tabla pagos)
+    # Cuotas conciliadas (usa tabla pagos directamente)
+    # Una cuota está conciliada si tiene pagos conciliados que la cubren
     cuotas_conciliadas_query = (
         db.query(func.count(func.distinct(Cuota.id)))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .join(pago_cuotas, pago_cuotas.c.cuota_id == Cuota.id)
-        # ✅ Usar tabla pagos con campo conciliado
-        # .join(Pago, pago_cuotas.c.pago_id == Pago.id)
-        # .filter(Pago.conciliado.is_(True))
+        .join(Pago, and_(
+            Pago.prestamo_id == Cuota.prestamo_id,
+            Pago.numero_cuota == Cuota.numero_cuota,
+            Pago.conciliado.is_(True),
+            Pago.activo.is_(True)
+        ))
+        .filter(
+            func.date(Cuota.fecha_vencimiento) >= primer_dia_mes,
+            func.date(Cuota.fecha_vencimiento) <= ultimo_dia_mes,
+        )
     )
     if analista or concesionario or modelo:
         if analista:
@@ -262,10 +269,13 @@ def _calcular_kpis_mes_actual(
         )
         .filter(
             ~Cuota.id.in_(
-                db.query(pago_cuotas.c.cuota_id)
-                # ✅ Usar tabla pagos con campo conciliado
-                # .join(Pago, pago_cuotas.c.pago_id == Pago.id)
-                # .filter(Pago.conciliado.is_(True))
+                db.query(Cuota.id)
+                .join(Pago, and_(
+                    Pago.prestamo_id == Cuota.prestamo_id,
+                    Pago.numero_cuota == Cuota.numero_cuota,
+                    Pago.conciliado.is_(True),
+                    Pago.activo.is_(True)
+                ))
             )
         )
     )

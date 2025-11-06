@@ -129,13 +129,15 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
 
         conciliado = False
         fecha_conciliacion = None
+        verificado_concordancia = "NO"
         if pago_existente:
             # Si ya existe un pago con este número de documento EXACTAMENTE, marcarlo como conciliado
             conciliado = True
             fecha_conciliacion = datetime.now()
+            verificado_concordancia = "SI"  # ✅ Marcar como verificado cuando se concilia automáticamente
             logger.info(
                 f"✅ [carga_masiva] Número de documento '{numero_documento_normalizado}' "
-                f"coincide EXACTAMENTE - marcando como conciliado"
+                f"coincide EXACTAMENTE - marcando como conciliado y verificado_concordancia='SI'"
             )
 
         # Buscar préstamo del cliente si es posible
@@ -153,6 +155,7 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
             usuario_registro=current_user.email,
             conciliado=conciliado,  # ✅ Marcar como conciliado si el documento ya existe
             fecha_conciliacion=fecha_conciliacion,  # ✅ Fecha de conciliación si está conciliado
+            verificado_concordancia=verificado_concordancia,  # ✅ 'SI' si está conciliado, 'NO' si no
             activo=True,
         )
 

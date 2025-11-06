@@ -3226,17 +3226,13 @@ def obtener_evolucion_general_mensual(
                             SELECT 
                                 EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
                                 EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
-                                COALESCE(SUM(pc.monto_aplicado), 0) as total_pagado
-                            FROM pago_cuotas pc
-                            INNER JOIN cuotas c ON pc.cuota_id = c.id
+                                COALESCE(SUM(c.total_pagado), 0) as total_pagado
+                            FROM cuotas c
                             INNER JOIN prestamos p ON c.prestamo_id = p.id
-                            INNER JOIN pagos pa ON pc.pago_id = pa.id
                             WHERE c.fecha_vencimiento <= :fecha_limite
                               AND c.estado != 'PAGADO'
                               AND p.estado = 'APROBADO'
-                              AND pa.fecha_pago <= :fecha_limite
-                              AND pa.activo = TRUE
-                              AND pa.monto_pagado > 0
+                              AND c.total_pagado > 0
                             GROUP BY 
                                 EXTRACT(YEAR FROM c.fecha_vencimiento),
                                 EXTRACT(MONTH FROM c.fecha_vencimiento)

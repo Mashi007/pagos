@@ -112,16 +112,3 @@ class Cuota(Base):
 
             return mora_calculada
         return Decimal("0.00")
-
-
-# Tabla de asociación para pagos y cuotas
-pago_cuotas = Table(
-    "pago_cuotas",
-    Base.metadata,
-    Column("pago_id", ForeignKey("pagos.id", ondelete="CASCADE"), primary_key=True),
-    Column("cuota_id", ForeignKey("cuotas.id", ondelete="CASCADE"), primary_key=True),
-    Column("monto_aplicado", Numeric(12, 2), nullable=False),
-    Column("aplicado_a_capital", Numeric(12, 2), default=Decimal("0.00")),
-    Column("aplicado_a_interes", Numeric(12, 2), default=Decimal("0.00")),
-    Column("aplicado_a_mora", Numeric(12, 2), default=Decimal("0.00")),
-)
