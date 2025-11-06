@@ -32,6 +32,7 @@ const safeClearSession = () => {
 
 // Constantes de configuración
 const DEFAULT_TIMEOUT_MS = 30000
+const SLOW_ENDPOINT_TIMEOUT_MS = 60000 // Para endpoints que pueden tardar más
 
 // Configuración base de Axios
 const API_BASE_URL = env.API_URL
@@ -46,6 +47,9 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      // Optimizaciones de rendimiento
+      maxRedirects: 5,
+      validateStatus: (status) => status < 500, // No lanzar error para 4xx
     })
 
     this.setupInterceptors()
@@ -235,7 +239,16 @@ class ApiClient {
 
   // Métodos HTTP
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.get(url, config)
+    // Detectar endpoints lentos y usar timeout extendido
+    const isSlowEndpoint = url.includes('/dashboard/') || 
+                          url.includes('/admin') ||
+                          url.includes('/evolucion') ||
+                          url.includes('/tendencia')
+    
+    const timeout = isSlowEndpoint ? SLOW_ENDPOINT_TIMEOUT_MS : DEFAULT_TIMEOUT_MS
+    const finalConfig = { ...config, timeout: config?.timeout || timeout }
+    
+    const response: AxiosResponse<T> = await this.client.get(url, finalConfig)
     return response.data
   }
 

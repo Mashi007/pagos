@@ -61,13 +61,15 @@ export function DashboardMenu() {
   const { construirParams, construirFiltrosObject } = useDashboardFiltros(filtros)
 
 
-  // Cargar opciones de filtros
+  // Cargar opciones de filtros (alta prioridad, cambian poco)
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
     queryFn: async () => {
       const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
       return response as { analistas: string[]; concesionarios: string[]; modelos: string[] }
     },
+    staleTime: 30 * 60 * 1000, // 30 minutos - cambian muy poco
+    refetchOnWindowFocus: false, // No recargar automáticamente
   })
 
   // Cargar KPIs principales
@@ -96,6 +98,7 @@ export function DashboardMenu() {
       return response
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: true, // Asegurar que siempre esté habilitado
   })
 
@@ -126,6 +129,7 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     retry: 1, // Solo un retry para evitar múltiples intentos
+    refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: true, // Asegurar que siempre esté habilitado
   })
 
@@ -145,9 +149,9 @@ export function DashboardMenu() {
       const meses = response.meses
       return meses
     },
-    staleTime: 1 * 60 * 1000, // ✅ Cache reducido a 1 minuto para debugging
+    staleTime: 5 * 60 * 1000, // 5 minutos - balance entre frescura y rendimiento
     enabled: true,
-    refetchOnWindowFocus: true, // ✅ Recargar cuando se enfoca la ventana
+    refetchOnWindowFocus: false, // Reducir peticiones automáticas
   })
 
   // Cargar préstamos por concesionario
@@ -169,6 +173,7 @@ export function DashboardMenu() {
       return concesionariosOrdenados
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: true,
   })
 
@@ -187,6 +192,7 @@ export function DashboardMenu() {
       return response.modelos.slice(0, 10) // Top 10
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: true,
   })
 
@@ -214,6 +220,7 @@ export function DashboardMenu() {
       return response
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: true,
   })
 
@@ -242,6 +249,7 @@ export function DashboardMenu() {
       return response
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: true,
   })
 
@@ -268,6 +276,7 @@ export function DashboardMenu() {
       return response
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: true,
   })
 
@@ -344,6 +353,7 @@ export function DashboardMenu() {
       return response.analistas.slice(0, 10) // Top 10
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: true,
   })
 
@@ -363,6 +373,7 @@ export function DashboardMenu() {
       return response.meses
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: true,
   })
 
@@ -384,6 +395,7 @@ export function DashboardMenu() {
       return response
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: true,
   })
 

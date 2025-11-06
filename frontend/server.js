@@ -64,13 +64,23 @@ app.use((req, res, next) => {
 // ============================================
 // LOGGING MIDDLEWARE - Para debug de peticiones
 // ============================================
+// Reducir logging en producción para mejorar rendimiento
+// En Render, PORT siempre está configurado, así que si PORT existe y NODE_ENV no es 'development', es producción
+const isDevelopment = process.env.NODE_ENV === 'development';
+const isProduction = process.env.NODE_ENV === 'production' || 
+                     (process.env.PORT && process.env.NODE_ENV !== 'development');
+
+// Log de diagnóstico solo al inicio
+if (!isDevelopment) {
+  console.log(`🔇 Logging reducido en producción (NODE_ENV=${process.env.NODE_ENV || 'undefined'}, PORT=${process.env.PORT || 'undefined'})`);
+}
+
 app.use((req, res, next) => {
-  // Loggear todas las peticiones a /api (POST, GET, etc.)
-  if (req.path.startsWith('/api')) {
+  // Solo loggear en desarrollo - en producción no loggear nada para mejorar rendimiento
+  if (isDevelopment && req.path.startsWith('/api')) {
     console.log(`📥 [${req.method}] Petición API recibida: ${req.path}`);
-    console.log(`   originalUrl: ${req.originalUrl || req.url}`);
-    console.log(`   headers.host: ${req.headers.host}`);
   }
+  // En producción, no loggear nada aquí para reducir overhead
   next();
 });
 
@@ -86,7 +96,7 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
     target: API_URL,
     changeOrigin: true,
     xfwd: true,
-    logLevel: 'info', // Reducir verbosidad
+    logLevel: isDevelopment ? 'info' : 'warn', // Reducir verbosidad en producción
     // IMPORTANTE: Cuando usamos app.use('/api', ...), Express elimina el /api del req.path
     // Ejemplo: /api/v1/clientes -> req.path = /v1/clientes
     // Necesitamos reconstruirlo: /v1/clientes -> /api/v1/clientes
@@ -97,7 +107,10 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
       // IMPORTANTE: El query string se preserva automáticamente por http-proxy-middleware
       // NO debemos agregarlo manualmente aquí
       const rewritten = `/api${path}`;
-      console.log(`🔄 Path rewrite: "${path}" -> "${rewritten}"`);
+      // Solo loggear en desarrollo
+      if (isDevelopment) {
+        console.log(`🔄 Path rewrite: "${path}" -> "${rewritten}"`);
+      }
       return rewritten;
     },
     // Seguir redirects del backend (3xx)
@@ -121,42 +134,40 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
       // Este callback se ejecuta DESPUÉS del pathRewrite
       // El proxyReq ya tiene el path reescrito y el query string se preserva automáticamente
       // IMPORTANTE: NO debemos modificar el query string manualmente - http-proxy-middleware lo maneja
-      // El query string ya está en proxyReq.path si existe
-      const queryString = proxyReq.path.includes('?') ? proxyReq.path.split('?')[1] : '';
       
-      console.log(`➡️  [${req.method}] Proxying hacia backend`);
-      console.log(`   Request original: ${req.originalUrl || req.url}`);
-      console.log(`   req.path: ${req.path}`);
-      console.log(`   proxyReq.path (reescrito con query): ${proxyReq.path}`);
-      console.log(`   Target URL: ${API_URL}${proxyReq.path}`);
-      console.log(`   Query string: ${queryString || '(vacío)'}`);
-      console.log(`   Host del proxyReq: ${proxyReq.getHeader('host')}`);
-      console.log(`   Target host: ${new URL(API_URL).host}`);
-      
-      // Log detallado de headers
-      const authHeader = req.headers.authorization || req.headers.Authorization;
-      console.log(`   Authorization header: ${authHeader ? 'PRESENTE (' + authHeader.substring(0, 20) + '...)' : 'AUSENTE'}`);
+      // Solo loggear detalles en desarrollo
+      if (isDevelopment) {
+        const queryString = proxyReq.path.includes('?') ? proxyReq.path.split('?')[1] : '';
+        console.log(`➡️  [${req.method}] Proxying: ${req.path}`);
+        console.log(`   Target: ${API_URL}${proxyReq.path}`);
+      }
       
       // Asegurar que los headers se copien correctamente
+      const authHeader = req.headers.authorization || req.headers.Authorization;
       if (authHeader) {
         proxyReq.setHeader('Authorization', authHeader);
-        console.log(`   ✅ Header Authorization copiado al proxy`);
-      } else {
-        console.warn(`   ⚠️  NO hay header Authorization - el backend devolverá 401/404`);
       }
       
       // Copiar otros headers importantes
       if (req.headers.cookie) {
         proxyReq.setHeader('Cookie', req.headers.cookie);
       }
+      
+      // Configurar timeout para evitar peticiones colgadas
+      proxyReq.setTimeout(60000); // 60 segundos
     },
     onProxyRes: (proxyRes, req, res) => {
       const status = proxyRes.statusCode;
-      const emoji = status >= 200 && status < 300 ? '✅' : status >= 400 ? '❌' : '⚠️';
-      console.log(`${emoji} [${req.method}] Proxy response: ${status} para ${req.originalUrl || req.url}`);
-      if (status === 404) {
-        console.error(`   ❌ ERROR 404 - El backend no encontró la ruta: ${API_URL}${proxyRes.req?.path || req.path}`);
-        console.error(`   Verifica que el endpoint existe en el backend y que la ruta sea correcta`);
+      // Solo loggear errores en producción, todo en desarrollo
+      if (!isDevelopment && status >= 400) {
+        const emoji = status >= 400 ? '❌' : '⚠️';
+        console.log(`${emoji} [${req.method}] ${status} ${req.path}`);
+        if (status === 404) {
+          console.error(`   ❌ ERROR 404 - El backend no encontró la ruta: ${API_URL}${proxyRes.req?.path || req.path}`);
+        }
+      } else if (isDevelopment) {
+        const emoji = status >= 200 && status < 300 ? '✅' : status >= 400 ? '❌' : '⚠️';
+        console.log(`${emoji} [${req.method}] Proxy response: ${status} para ${req.originalUrl || req.url}`);
       }
     },
     onProxyError: (err, req, res) => {
