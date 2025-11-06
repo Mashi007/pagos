@@ -1,7 +1,7 @@
 """Update asesor model - make apellido and email nullable
 
 Revision ID: 003_update_asesor_model
-Revises: 002_add_cliente_foreignkeys
+Revises: 003_create_auditoria_table
 Create Date: 2025-10-15 15:00:00.000000
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "003_update_asesor_model"
-down_revision = "002_add_cliente_foreignkeys"
+down_revision = "003_create_auditoria_table"
 branch_labels = None
 depends_on = None
 

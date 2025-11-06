@@ -1,7 +1,7 @@
 """add cargo column to users
 
 Revision ID: 007_add_cargo_column_users
-Revises: 006_update_user_roles_system
+Revises: 005
 Create Date: 2025-10-17 20:20:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "007_add_cargo_column_users"
-down_revision = "006_update_user_roles_system"
+down_revision = "005"
 branch_labels = None
 depends_on = None
 

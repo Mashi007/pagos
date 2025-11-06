@@ -1,7 +1,7 @@
 """create auditoria table
 
 Revision ID: 003_create_auditoria_table
-Revises: 002_add_cliente_foreignkeys
+Revises: 001_cliente_vehicular
 Create Date: 2025-01-15 10:00:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "003_create_auditoria_table"
-down_revision = "002_add_cliente_foreignkeys"
+down_revision = "001_cliente_vehicular"
 branch_labels = None
 depends_on = None
 
