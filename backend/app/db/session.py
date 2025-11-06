@@ -23,13 +23,14 @@ if database_url_raw:
         # Intentar decodificar si es bytes
         if isinstance(database_url_raw, bytes):
             try:
-                database_url_raw = database_url_raw.decode('utf-8')
+                database_url_raw = database_url_raw.decode("utf-8")
             except UnicodeDecodeError:
-                database_url_raw = database_url_raw.decode('latin-1', errors='ignore')
-        
+                database_url_raw = database_url_raw.decode("latin-1", errors="ignore")
+
         # Parsear y reconstruir la URL con encoding correcto para la contraseña
         from urllib.parse import quote_plus, urlparse, urlunparse
-        if '@' in database_url_raw and '://' in database_url_raw:
+
+        if "@" in database_url_raw and "://" in database_url_raw:
             parsed = urlparse(database_url_raw)
             if parsed.password:
                 # Reconstruir la URL con la contraseña codificada
