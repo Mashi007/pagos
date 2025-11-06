@@ -1935,65 +1935,49 @@ def obtener_kpis_principales(
         )
 
         # 3. CLIENTES POR ESTADO (ACTIVOS, INACTIVOS, FINALIZADOS)
-        # ACTIVOS: clientes con préstamos APROBADO
-        query_clientes_activos = db.query(func.count(func.distinct(Prestamo.cedula))).filter(Prestamo.estado == "APROBADO")
-        query_clientes_activos = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_clientes_activos, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        # ✅ OPTIMIZACIÓN PRIORIDAD 1: Combinar 6 queries en 1 query usando CASE WHEN
+        # Query base con filtros aplicados
+        base_query_clientes = db.query(Prestamo).filter(Prestamo.estado.in_(["APROBADO", "FINALIZADO"]))
+        base_query_clientes = FiltrosDashboard.aplicar_filtros_prestamo(
+            base_query_clientes, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        clientes_activos_actual = query_clientes_activos.scalar() or 0
-
-        # FINALIZADOS: clientes con préstamos FINALIZADO
-        query_clientes_finalizados = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
-            Prestamo.estado == "FINALIZADO"
+        
+        # ✅ Query optimizada: calcular todos los estados en una sola query
+        clientes_por_estado = db.query(
+            func.count(func.distinct(case((Prestamo.estado == "APROBADO", Prestamo.cedula), else_=None))).label("activos"),
+            func.count(func.distinct(case((Prestamo.estado == "FINALIZADO", Prestamo.cedula), else_=None))).label("finalizados"),
+            func.count(func.distinct(case((Prestamo.estado.notin_(["APROBADO", "FINALIZADO"]), Prestamo.cedula), else_=None))).label("inactivos")
         )
-        query_clientes_finalizados = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_clientes_finalizados, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        clientes_por_estado = FiltrosDashboard.aplicar_filtros_prestamo(
+            clientes_por_estado, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        clientes_finalizados_actual = query_clientes_finalizados.scalar() or 0
-
-        # INACTIVOS: clientes con préstamos en otros estados (DRAFT, EN_REVISION, RECHAZADO, etc.)
-        query_clientes_inactivos = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
-            Prestamo.estado.notin_(["APROBADO", "FINALIZADO"])
-        )
-        query_clientes_inactivos = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_clientes_inactivos, analista, concesionario, modelo, fecha_inicio, fecha_fin
-        )
-        clientes_inactivos_actual = query_clientes_inactivos.scalar() or 0
-
-        # TOTAL CLIENTES (suma de todos)
+        resultado_clientes = clientes_por_estado.first()
+        
+        clientes_activos_actual = int(resultado_clientes.activos or 0)
+        clientes_finalizados_actual = int(resultado_clientes.finalizados or 0)
+        clientes_inactivos_actual = int(resultado_clientes.inactivos or 0)
         total_clientes_actual = clientes_activos_actual + clientes_finalizados_actual + clientes_inactivos_actual
 
-        # Calcular valores del mes anterior para comparación
-        query_clientes_activos_anterior = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
-            Prestamo.estado == "APROBADO",
+        # ✅ Query optimizada para mes anterior: calcular todos los estados en una sola query
+        # Aplicar filtros de fecha primero
+        query_base_anterior = db.query(Prestamo).filter(
             Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
-            Prestamo.fecha_registro < fecha_fin_mes_anterior,
+            Prestamo.fecha_registro < fecha_fin_mes_anterior
         )
-        query_clientes_activos_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_clientes_activos_anterior, analista, concesionario, modelo, None, None
+        query_base_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_base_anterior, analista, concesionario, modelo, None, None
         )
-        clientes_activos_anterior = query_clientes_activos_anterior.scalar() or 0
-
-        query_clientes_finalizados_anterior = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
-            Prestamo.estado == "FINALIZADO",
-            Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
-            Prestamo.fecha_registro < fecha_fin_mes_anterior,
+        
+        clientes_por_estado_anterior = query_base_anterior.with_entities(
+            func.count(func.distinct(case((Prestamo.estado == "APROBADO", Prestamo.cedula), else_=None))).label("activos"),
+            func.count(func.distinct(case((Prestamo.estado == "FINALIZADO", Prestamo.cedula), else_=None))).label("finalizados"),
+            func.count(func.distinct(case((Prestamo.estado.notin_(["APROBADO", "FINALIZADO"]), Prestamo.cedula), else_=None))).label("inactivos")
         )
-        query_clientes_finalizados_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_clientes_finalizados_anterior, analista, concesionario, modelo, None, None
-        )
-        clientes_finalizados_anterior = query_clientes_finalizados_anterior.scalar() or 0
-
-        query_clientes_inactivos_anterior = db.query(func.count(func.distinct(Prestamo.cedula))).filter(
-            Prestamo.estado.notin_(["APROBADO", "FINALIZADO"]),
-            Prestamo.fecha_registro >= fecha_inicio_mes_anterior,
-            Prestamo.fecha_registro < fecha_fin_mes_anterior,
-        )
-        query_clientes_inactivos_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_clientes_inactivos_anterior, analista, concesionario, modelo, None, None
-        )
-        clientes_inactivos_anterior = query_clientes_inactivos_anterior.scalar() or 0
-
+        resultado_clientes_anterior = clientes_por_estado_anterior.first()
+        
+        clientes_activos_anterior = int(resultado_clientes_anterior.activos or 0)
+        clientes_finalizados_anterior = int(resultado_clientes_anterior.finalizados or 0)
+        clientes_inactivos_anterior = int(resultado_clientes_anterior.inactivos or 0)
         total_clientes_anterior = clientes_activos_anterior + clientes_finalizados_anterior + clientes_inactivos_anterior
 
         variacion_clientes, variacion_clientes_abs = _calcular_variacion(

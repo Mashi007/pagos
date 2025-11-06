@@ -60,8 +60,8 @@ export function DashboardMenu() {
   const [periodo, setPeriodo] = useState('mes')
   const { construirParams, construirFiltrosObject } = useDashboardFiltros(filtros)
 
-
-  // Cargar opciones de filtros (alta prioridad, cambian poco)
+  // ✅ OPTIMIZACIÓN PRIORIDAD 1: Carga por batches con priorización
+  // Batch 1: CRÍTICO - Opciones de filtros y KPIs principales (carga inmediata)
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
     queryFn: async () => {
@@ -70,9 +70,10 @@ export function DashboardMenu() {
     },
     staleTime: 30 * 60 * 1000, // 30 minutos - cambian muy poco
     refetchOnWindowFocus: false, // No recargar automáticamente
+    // ✅ Prioridad máxima - carga inmediatamente
   })
 
-  // Cargar KPIs principales
+  // Batch 1: CRÍTICO - KPIs principales (visible primero para el usuario)
   const { data: kpisPrincipales, isLoading: loadingKPIs, isError: errorKPIs, refetch } = useQuery({
     queryKey: ['kpis-principales-menu', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -99,11 +100,11 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: true, // Asegurar que siempre esté habilitado
+    enabled: true, // ✅ Prioridad máxima - carga inmediatamente
     retry: false, // No reintentar automáticamente en caso de error 401
   })
 
-  // Cargar datos para gráficos (con timeout extendido)
+  // Batch 2: IMPORTANTE - Dashboard admin (gráfico principal, carga después de KPIs)
   const { data: datosDashboard, isLoading: loadingDashboard } = useQuery({
     queryKey: ['dashboard-menu', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
@@ -131,10 +132,11 @@ export function DashboardMenu() {
     staleTime: 5 * 60 * 1000,
     retry: 1, // Solo un retry para evitar múltiples intentos
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: true, // Asegurar que siempre esté habilitado
+    enabled: true, // ✅ Carga después de Batch 1
   })
 
-  // Cargar financiamiento aprobado por mes (últimos 12 meses - 1 año)
+  // Batch 3: MEDIA - Gráficos secundarios rápidos (cargar después de Batch 2, en paralelo limitado)
+  // ✅ Lazy loading: Solo cargar cuando KPIs estén listos para reducir carga inicial
   const { data: datosTendencia, isLoading: loadingTendencia } = useQuery({
     queryKey: ['financiamiento-tendencia', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -151,11 +153,11 @@ export function DashboardMenu() {
       return meses
     },
     staleTime: 5 * 60 * 1000, // 5 minutos - balance entre frescura y rendimiento
-    enabled: true,
+    enabled: !!kpisPrincipales, // ✅ Solo carga después de KPIs (lazy loading)
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
   })
 
-  // Cargar préstamos por concesionario
+  // Batch 3: Gráficos secundarios rápidos
   const { data: datosConcesionarios, isLoading: loadingConcesionarios } = useQuery({
     queryKey: ['prestamos-concesionario', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -175,10 +177,9 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: true,
+    enabled: !!kpisPrincipales, // ✅ Lazy loading - carga después de KPIs
   })
 
-  // Cargar préstamos por modelo
   const { data: datosModelos, isLoading: loadingModelos } = useQuery({
     queryKey: ['prestamos-modelo', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -194,10 +195,9 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: true,
+    enabled: !!kpisPrincipales, // ✅ Lazy loading - carga después de KPIs
   })
 
-  // Cargar datos de pagos conciliados
   const { data: datosPagosConciliados, isLoading: loadingPagosConciliados } = useQuery({
     queryKey: ['pagos-conciliados', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -222,10 +222,10 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: true,
+    enabled: !!kpisPrincipales, // ✅ Lazy loading - carga después de KPIs
   })
 
-  // Cargar financiamiento por rangos para gráfico de pirámide
+  // Batch 4: BAJA - Gráficos menos críticos (cargar después de Batch 3, lazy loading)
   const { data: datosFinanciamientoRangos, isLoading: loadingFinanciamientoRangos } = useQuery({
     queryKey: ['financiamiento-rangos', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -251,10 +251,9 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: true,
+    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
-  // Cargar composición de morosidad por rangos de días
   const { data: datosComposicionMorosidad, isLoading: loadingComposicionMorosidad } = useQuery({
     queryKey: ['composicion-morosidad', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -278,10 +277,9 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: true,
+    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
-  // Cargar cobranzas mensuales (con timeout extendido)
   const { data: datosCobranzas, isLoading: loadingCobranzas } = useQuery({
     queryKey: ['cobranzas-mensuales', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -291,7 +289,6 @@ export function DashboardMenu() {
         if (value) queryParams.append(key, value.toString())
       })
       // Usar timeout extendido para endpoints lentos
-      // ✅ apiClient.get() ya extrae response.data internamente, devuelve directamente el objeto tipado
       const response = await apiClient.get<{
         meses: Array<{
           mes: string
@@ -308,9 +305,9 @@ export function DashboardMenu() {
       return response
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
+    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
-  // Cargar cobranzas semanales (lunes a viernes)
   const { data: datosCobranzasSemanales, isLoading: loadingCobranzasSemanales } = useQuery({
     queryKey: ['cobranzas-semanales', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -320,7 +317,6 @@ export function DashboardMenu() {
         if (value) queryParams.append(key, value.toString())
       })
       queryParams.append('semanas', '12') // Últimas 12 semanas
-      // ✅ apiClient.get() ya extrae response.data internamente, devuelve directamente el objeto tipado
       const response = await apiClient.get<{
         semanas: Array<{
           semana_inicio: string
@@ -337,9 +333,9 @@ export function DashboardMenu() {
       return response
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
+    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
-  // Cargar morosidad por analista
   const { data: datosMorosidadAnalista, isLoading: loadingMorosidadAnalista } = useQuery({
     queryKey: ['morosidad-analista', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -355,10 +351,9 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: true,
+    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
-  // Cargar evolución de morosidad
   const { data: datosEvolucionMorosidad, isLoading: loadingEvolucionMorosidad } = useQuery({
     queryKey: ['evolucion-morosidad-menu', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -375,10 +370,9 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: true,
+    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
-  // Cargar resumen financiamiento vs pagado para gráfico de barras
   const { data: datosResumenFinanciamiento, isLoading: loadingResumenFinanciamiento } = useQuery({
     queryKey: ['resumen-financiamiento-pagado', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -397,10 +391,9 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: true,
+    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
-  // Cargar evolución de pagos (con timeout extendido)
   const { data: datosEvolucionPagos, isLoading: loadingEvolucionPagos } = useQuery({
     queryKey: ['evolucion-pagos-menu', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -419,7 +412,7 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
-    enabled: true,
+    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
   const [isRefreshing, setIsRefreshing] = useState(false)

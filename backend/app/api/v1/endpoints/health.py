@@ -621,3 +621,138 @@ async def verify_database_indexes(
             "message": str(e),
             "timestamp": time.time(),
         }
+
+
+@router.post("/database/indexes/create")
+async def create_database_indexes(
+    db: Session = Depends(get_db),
+):
+    """
+    Crear índices críticos de performance manualmente
+    
+    Útil si las migraciones de Alembic no se ejecutaron correctamente.
+    Ejecuta la creación de índices usando SQL directo.
+    """
+    from sqlalchemy import inspect
+    
+    try:
+        inspector = inspect(db.bind)
+        results = {
+            "status": "success",
+            "timestamp": time.time(),
+            "created": [],
+            "skipped": [],
+            "errors": [],
+        }
+        
+        def _index_exists(table_name: str, index_name: str) -> bool:
+            try:
+                indexes = inspector.get_indexes(table_name)
+                return any(idx['name'] == index_name for idx in indexes)
+            except Exception:
+                return False
+        
+        def _table_exists(table_name: str) -> bool:
+            try:
+                return table_name in inspector.get_table_names()
+            except Exception:
+                return False
+        
+        def _column_exists(table_name: str, column_name: str) -> bool:
+            try:
+                columns = inspector.get_columns(table_name)
+                return any(col['name'] == column_name for col in columns)
+            except Exception:
+                return False
+        
+        # Crear índices críticos manualmente usando SQL directo
+        indices_to_create = [
+            # Notificaciones
+            ("notificaciones", "idx_notificaciones_estado", "estado", None),
+            ("notificaciones", "idx_notificaciones_tipo", "tipo", None),
+            ("notificaciones", "idx_notificaciones_fecha_creacion", "fecha_creacion", None),
+            # Cuotas
+            ("cuotas", "idx_cuotas_vencimiento_estado", "fecha_vencimiento, estado", "WHERE estado != 'PAGADO'"),
+            ("cuotas", "idx_cuotas_prestamo_id", "prestamo_id", None),
+            ("cuotas", "idx_cuotas_extract_year_month", 
+             "EXTRACT(YEAR FROM fecha_vencimiento), EXTRACT(MONTH FROM fecha_vencimiento)", 
+             "WHERE fecha_vencimiento IS NOT NULL"),
+            # Prestamos
+            ("prestamos", "idx_prestamos_estado", "estado", None),
+            ("prestamos", "idx_prestamos_cedula", "cedula", None),
+            # Pagos
+            ("pagos", "ix_pagos_fecha_registro", "fecha_registro", None),
+        ]
+        
+        for table_name, idx_name, columns, where_clause in indices_to_create:
+            if not _table_exists(table_name):
+                results["skipped"].append(f"{table_name}.{idx_name} (tabla no existe)")
+                continue
+            
+            if _index_exists(table_name, idx_name):
+                results["skipped"].append(f"{table_name}.{idx_name} (ya existe)")
+                continue
+            
+            # Verificar que las columnas existen (para índices simples)
+            if not columns.startswith("EXTRACT"):
+                column_list = [c.strip() for c in columns.split(",")]
+                if not all(_column_exists(table_name, col.strip()) for col in column_list):
+                    results["skipped"].append(f"{table_name}.{idx_name} (columnas no existen)")
+                    continue
+            
+            try:
+                if where_clause:
+                    sql = f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name} ({columns}) {where_clause}"
+                else:
+                    sql = f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name} ({columns})"
+                
+                db.execute(text(sql))
+                db.commit()
+                results["created"].append(f"{table_name}.{idx_name}")
+                logger.info(f"✅ Índice '{idx_name}' creado en tabla '{table_name}'")
+            except Exception as e:
+                error_msg = str(e)
+                results["errors"].append(f"{table_name}.{idx_name}: {error_msg}")
+                logger.error(f"⚠️ Error creando índice '{idx_name}': {e}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+        
+        # Ejecutar ANALYZE para actualizar estadísticas
+        try:
+            tables_to_analyze = ['notificaciones', 'cuotas', 'prestamos', 'pagos']
+            for table in tables_to_analyze:
+                if _table_exists(table):
+                    try:
+                        db.execute(text(f"ANALYZE {table}"))
+                        db.commit()
+                        logger.info(f"✅ ANALYZE ejecutado en '{table}'")
+                    except Exception as e:
+                        logger.warning(f"⚠️ No se pudo ejecutar ANALYZE en '{table}': {e}")
+        except Exception as e:
+            logger.warning(f"⚠️ Advertencia al ejecutar ANALYZE: {e}")
+        
+        # Determinar estado
+        if results["errors"]:
+            results["status"] = "partial" if results["created"] else "error"
+        elif not results["created"]:
+            results["status"] = "info"
+            results["message"] = "Todos los índices ya existen o no se pudieron crear"
+        else:
+            results["status"] = "success"
+            results["message"] = f"✅ {len(results['created'])} índices creados exitosamente"
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error creando índices: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return {
+            "status": "error",
+            "message": str(e),
+            "timestamp": time.time(),
+        }
