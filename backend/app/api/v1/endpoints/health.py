@@ -11,6 +11,7 @@ from typing import Any, Dict
 import psutil
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.cache import cache_backend
@@ -18,7 +19,6 @@ from app.core.config import settings
 from app.core.performance_monitor import performance_monitor
 from app.db.session import engine
 from app.models.user import User
-from sqlalchemy.orm import Session
 
 # Constantes de configuración
 CACHE_DURATION_SECONDS = 30
