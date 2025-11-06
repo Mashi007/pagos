@@ -2023,7 +2023,7 @@ def obtener_kpis_principales(
 
 
 @router.get("/cobranzas-mensuales")
-@cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos
+@cache_result(ttl=600, key_prefix="dashboard")  # Cache por 10 minutos (datos históricos)
 def obtener_cobranzas_mensuales(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
@@ -2559,6 +2559,7 @@ def obtener_prestamos_por_concesionario(
 
 
 @router.get("/prestamos-por-modelo")
+@cache_result(ttl=600, key_prefix="dashboard")  # Cache por 10 minutos
 def obtener_prestamos_por_modelo(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
@@ -3414,7 +3415,7 @@ def obtener_cuentas_cobrar_tendencias(
 
 
 @router.get("/financiamiento-tendencia-mensual")
-@cache_result(ttl=60, key_prefix="dashboard")  # ✅ Cache reducido a 1 minuto para debugging
+@cache_result(ttl=600, key_prefix="dashboard")  # Cache por 10 minutos (datos históricos)
 def obtener_financiamiento_tendencia_mensual(
     meses: int = Query(12, description="Número de meses a mostrar (últimos N meses)"),
     analista: Optional[str] = Query(None),
@@ -3431,6 +3432,7 @@ def obtener_financiamiento_tendencia_mensual(
     ✅ OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
     """
     import time
+    from app.core.cache import cache_backend
 
     start_time = time.time()
 
@@ -3438,46 +3440,55 @@ def obtener_financiamiento_tendencia_mensual(
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
-        # ✅ Calcular fecha inicio: desde la primera fecha disponible desde 2024
+        # ✅ OPTIMIZACIÓN: Cachear primera fecha para evitar 3 queries MIN() en cada request
         fecha_inicio_query = fecha_inicio
         if not fecha_inicio_query:
-            # Buscar la primera fecha con datos desde 2024
-            primera_fecha = None
-            try:
-                # Buscar primera fecha de aprobación desde 2024
-                primera_aprobacion = (
-                    db.query(func.min(Prestamo.fecha_aprobacion))
-                    .filter(Prestamo.estado == "APROBADO", func.extract("year", Prestamo.fecha_aprobacion) >= 2024)
-                    .scalar()
-                )
+            cache_key_primera_fecha = "dashboard:primera_fecha_desde_2024"
+            primera_fecha_cached = cache_backend.get(cache_key_primera_fecha)
+            
+            if primera_fecha_cached:
+                fecha_inicio_query = date.fromisoformat(primera_fecha_cached)
+            else:
+                # Buscar la primera fecha con datos desde 2024 (solo si no está en cache)
+                primera_fecha = None
+                try:
+                    # Buscar primera fecha de aprobación desde 2024
+                    primera_aprobacion = (
+                        db.query(func.min(Prestamo.fecha_aprobacion))
+                        .filter(Prestamo.estado == "APROBADO", func.extract("year", Prestamo.fecha_aprobacion) >= 2024)
+                        .scalar()
+                    )
 
-                # Buscar primera fecha de cuota desde 2024
-                primera_cuota = (
-                    db.query(func.min(Cuota.fecha_vencimiento))
-                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                    .filter(Prestamo.estado == "APROBADO", func.extract("year", Cuota.fecha_vencimiento) >= 2024)
-                    .scalar()
-                )
+                    # Buscar primera fecha de cuota desde 2024
+                    primera_cuota = (
+                        db.query(func.min(Cuota.fecha_vencimiento))
+                        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                        .filter(Prestamo.estado == "APROBADO", func.extract("year", Cuota.fecha_vencimiento) >= 2024)
+                        .scalar()
+                    )
 
-                # Buscar primera fecha de pago desde 2024
-                primera_pago = (
-                    db.query(func.min(Pago.fecha_pago))
-                    .filter(Pago.activo.is_(True), Pago.monto_pagado > 0, func.extract("year", Pago.fecha_pago) >= 2024)
-                    .scalar()
-                )
+                    # Buscar primera fecha de pago desde 2024
+                    primera_pago = (
+                        db.query(func.min(Pago.fecha_pago))
+                        .filter(Pago.activo.is_(True), Pago.monto_pagado > 0, func.extract("year", Pago.fecha_pago) >= 2024)
+                        .scalar()
+                    )
 
-                # Encontrar la fecha más antigua entre todas
-                fechas_disponibles = [f for f in [primera_aprobacion, primera_cuota, primera_pago] if f is not None]
-                if fechas_disponibles:
-                    primera_fecha = min(fechas_disponibles)
-                    # Redondear al primer día del mes
-                    fecha_inicio_query = date(primera_fecha.year, primera_fecha.month, 1)
-                else:
-                    # Si no hay datos, usar enero 2024
+                    # Encontrar la fecha más antigua entre todas
+                    fechas_disponibles = [f for f in [primera_aprobacion, primera_cuota, primera_pago] if f is not None]
+                    if fechas_disponibles:
+                        primera_fecha = min(fechas_disponibles)
+                        # Redondear al primer día del mes
+                        fecha_inicio_query = date(primera_fecha.year, primera_fecha.month, 1)
+                    else:
+                        # Si no hay datos, usar enero 2024
+                        fecha_inicio_query = date(2024, 1, 1)
+                    
+                    # Cachear resultado por 1 hora (cambia muy raramente)
+                    cache_backend.set(cache_key_primera_fecha, fecha_inicio_query.isoformat(), ttl=3600)
+                except Exception as e:
+                    logger.warning(f"⚠️ [financiamiento-tendencia] Error buscando primera fecha: {e}, usando enero 2024")
                     fecha_inicio_query = date(2024, 1, 1)
-            except Exception as e:
-                logger.warning(f"⚠️ [financiamiento-tendencia] Error buscando primera fecha: {e}, usando enero 2024")
-                fecha_inicio_query = date(2024, 1, 1)
 
         # Calcular fecha fin (hoy)
         fecha_fin_query = hoy
@@ -3571,8 +3582,6 @@ def obtener_financiamiento_tendencia_mensual(
                 num_mes = int(row[1])
                 monto = float(row[2] or Decimal("0"))
                 cuotas_por_mes[(año_mes, num_mes)] = monto
-                if monto > 0:
-                    logger.debug(f"📊 [financiamiento-tendencia] Cuotas {año_mes}-{num_mes:02d}: ${monto:,.2f}")
 
             cuotas_time = int((time.time() - start_cuotas) * 1000)
             logger.info(
@@ -3673,8 +3682,6 @@ def obtener_financiamiento_tendencia_mensual(
                 num_mes = int(row[1])  # Índice de tupla
                 monto = float(row[2] or Decimal("0"))
                 pagos_por_mes[(año_mes, num_mes)] = monto
-                if monto > 0:
-                    logger.debug(f"📊 [financiamiento-tendencia] Pagos {año_mes}-{num_mes:02d}: ${monto:,.2f}")
 
             pagos_time = int((time.time() - start_pagos) * 1000)
             logger.info(
@@ -3703,7 +3710,7 @@ def obtener_financiamiento_tendencia_mensual(
         # ✅ CÁLCULO CORREGIDO: Morosidad mensual (NO acumulativa)
         # Morosidad mensual = MAX(0, Monto programado del mes - Monto pagado del mes)
         # Cada mes tiene su propia morosidad independiente
-            logger.info("📊 [financiamiento-tendencia] Calculando morosidad mensual (NO acumulativa)")
+        logger.info("📊 [financiamiento-tendencia] Calculando morosidad mensual (NO acumulativa)")
 
         # Generar datos mensuales (incluyendo meses sin datos) y calcular acumulados
         start_process = time.time()
@@ -3736,8 +3743,8 @@ def obtener_financiamiento_tendencia_mensual(
             # Esta es la lógica exacta del script SQL: morosidad_mensual = MAX(0, monto_programado - monto_pagado)
             morosidad_mensual = max(0.0, float(monto_cuotas_programadas) - float(monto_pagado_mes))
 
-            # ✅ Logging para diagnóstico (siempre mostrar para depuración)
-            logger.info(
+            # ✅ Logging reducido a debug para mejorar performance (solo mostrar en modo debug)
+            logger.debug(
                 f"📊 [financiamiento-tendencia] {fecha_mes_inicio.strftime('%Y-%m')} (año={año_mes}, mes={num_mes}): "
                 f"Programado=${monto_cuotas_programadas:,.2f}, "
                 f"Pagado=${monto_pagado_mes:,.2f}, "
@@ -3819,7 +3826,7 @@ def obtener_financiamiento_tendencia_mensual(
 
 
 @router.get("/cobranzas-semanales")
-@cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos
+@cache_result(ttl=600, key_prefix="dashboard")  # Cache por 10 minutos (datos históricos)
 def obtener_cobranzas_semanales(
     semanas: int = Query(12, description="Número de semanas a mostrar (últimas N semanas)"),
     analista: Optional[str] = Query(None),
@@ -4102,7 +4109,7 @@ def obtener_cobros_por_analista(
 
 
 @router.get("/evolucion-morosidad")
-@cache_result(ttl=300, key_prefix="dashboard")
+@cache_result(ttl=600, key_prefix="dashboard")  # Cache por 10 minutos (datos históricos)
 def obtener_evolucion_morosidad(
     meses: int = Query(6, description="Número de meses a mostrar (últimos N meses)"),
     analista: Optional[str] = Query(None),
@@ -4236,7 +4243,7 @@ def obtener_evolucion_morosidad(
 
 
 @router.get("/evolucion-pagos")
-@cache_result(ttl=300, key_prefix="dashboard")
+@cache_result(ttl=600, key_prefix="dashboard")  # Cache por 10 minutos (datos históricos)
 def obtener_evolucion_pagos(
     meses: int = Query(6, description="Número de meses a mostrar (últimos N meses)"),
     analista: Optional[str] = Query(None),
