@@ -197,11 +197,7 @@ def calcular_total_pagado_cuota(
     """
     # Obtener cédula del préstamo (solo necesitamos cedula, no todo el objeto)
     # ✅ CORRECCIÓN: Usar query directo de cedula para evitar error si valor_activo no existe en BD
-    prestamo_cedula = (
-        db.query(Prestamo.cedula)
-        .filter(Prestamo.id == cuota.prestamo_id)
-        .scalar()
-    )
+    prestamo_cedula = db.query(Prestamo.cedula).filter(Prestamo.id == cuota.prestamo_id).scalar()
     if not prestamo_cedula:
         return Decimal("0")
 
@@ -264,11 +260,7 @@ def calcular_monto_pagado_mes(
     for cuota in cuotas:
         # ✅ CORRECCIÓN: Usar with_entities para evitar error si valor_activo no existe en BD
         # Solo necesitamos cedula, así que especificamos solo esa columna
-        prestamo_cedula = (
-            db.query(Prestamo.cedula)
-            .filter(Prestamo.id == cuota.prestamo_id)
-            .scalar()
-        )
+        prestamo_cedula = db.query(Prestamo.cedula).filter(Prestamo.id == cuota.prestamo_id).scalar()
         if prestamo_cedula:
             pagos = obtener_pagos_cuota(
                 db=db,
@@ -311,9 +303,7 @@ def reconciliar_pago_cuota(
         # Buscar préstamos por cédula (solo necesitamos id, no todo el objeto)
         # ✅ CORRECCIÓN: Usar query directo de id para evitar error si valor_activo no existe en BD
         prestamo_ids = [
-            row[0] for row in db.query(Prestamo.id)
-            .filter(Prestamo.cedula == pago.cedula, Prestamo.estado == "APROBADO")
-            .all()
+            row[0] for row in db.query(Prestamo.id).filter(Prestamo.cedula == pago.cedula, Prestamo.estado == "APROBADO").all()
         ]
 
         for prestamo_id in prestamo_ids:
