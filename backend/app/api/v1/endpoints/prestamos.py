@@ -972,8 +972,8 @@ def obtener_cuotas_prestamo(
             "dias_mora": c.dias_mora,
             "monto_mora": float(c.monto_mora),
             # ✅ NUEVAS COLUMNAS: Morosidad calculada automáticamente
-            "dias_morosidad": c.dias_morosidad if hasattr(c, 'dias_morosidad') else 0,
-            "monto_morosidad": float(c.monto_morosidad) if hasattr(c, 'monto_morosidad') and c.monto_morosidad else 0.0,
+            "dias_morosidad": c.dias_morosidad if hasattr(c, "dias_morosidad") else 0,
+            "monto_morosidad": float(c.monto_morosidad) if hasattr(c, "monto_morosidad") and c.monto_morosidad else 0.0,
         }
         resultado.append(cuota_dict)
         estados_encontrados.append(f"{c.numero_cuota}:{estado_real}(BD:{c.estado})")
