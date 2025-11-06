@@ -3615,7 +3615,7 @@ def obtener_financiamiento_tendencia_mensual(
                     "p.monto_pagado > 0",
                     "p.activo = TRUE",
                     "pr.estado = 'APROBADO'",
-                    "EXTRACT(YEAR FROM p.fecha_pago) >= 2024"
+                    "EXTRACT(YEAR FROM p.fecha_pago) >= 2024",
                 ]
                 bind_params_pagos_filtrado = {}
 
