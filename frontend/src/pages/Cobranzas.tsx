@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -27,28 +27,109 @@ export function Cobranzas() {
   const [procesandoNotificaciones, setProcesandoNotificaciones] = useState(false)
 
   // Query para resumen
-  const { data: resumen, isLoading: cargandoResumen } = useQuery({
+  const { 
+    data: resumen, 
+    isLoading: cargandoResumen, 
+    isError: errorResumen,
+    error: errorResumenDetalle,
+    refetch: refetchResumen
+  } = useQuery({
     queryKey: ['cobranzas-resumen'],
     queryFn: () => cobranzasService.getResumen(),
+    retry: 2,
+    retryDelay: 1000,
   })
 
   // Query para clientes atrasados
-  const { data: clientesAtrasados, isLoading: cargandoClientes } = useQuery({
+  const { 
+    data: clientesAtrasados, 
+    isLoading: cargandoClientes,
+    isError: errorClientes,
+    error: errorClientesDetalle,
+    refetch: refetchClientes
+  } = useQuery({
     queryKey: ['cobranzas-clientes', filtroDiasRetraso],
     queryFn: () => cobranzasService.getClientesAtrasados(filtroDiasRetraso),
+    retry: 2,
+    retryDelay: 1000,
   })
 
   // Query para por analista
-  const { data: porAnalista, isLoading: cargandoAnalistas } = useQuery({
+  const { 
+    data: porAnalista, 
+    isLoading: cargandoAnalistas,
+    isError: errorAnalistas,
+    error: errorAnalistasDetalle,
+    refetch: refetchAnalistas
+  } = useQuery({
     queryKey: ['cobranzas-por-analista'],
     queryFn: () => cobranzasService.getCobranzasPorAnalista(),
+    retry: 2,
+    retryDelay: 1000,
   })
 
   // Query para montos por mes
-  const { data: montosPorMes, isLoading: cargandoMontos } = useQuery({
+  const { 
+    data: montosPorMes, 
+    isLoading: cargandoMontos,
+    isError: errorMontos,
+    error: errorMontosDetalle,
+    refetch: refetchMontos
+  } = useQuery({
     queryKey: ['cobranzas-montos-mes'],
     queryFn: () => cobranzasService.getMontosPorMes(),
+    retry: 2,
+    retryDelay: 1000,
   })
+
+  // Efecto para mostrar errores automáticamente
+  useEffect(() => {
+    if (errorResumen) {
+      console.error('Error cargando resumen de cobranzas:', errorResumenDetalle)
+      toast.error('Error al cargar resumen de cobranzas', {
+        description: errorResumenDetalle instanceof Error 
+          ? errorResumenDetalle.message 
+          : 'No se pudieron cargar los datos del resumen',
+        duration: 5000,
+      })
+    }
+  }, [errorResumen, errorResumenDetalle])
+
+  useEffect(() => {
+    if (errorClientes) {
+      console.error('Error cargando clientes atrasados:', errorClientesDetalle)
+      toast.error('Error al cargar clientes atrasados', {
+        description: errorClientesDetalle instanceof Error 
+          ? errorClientesDetalle.message 
+          : 'No se pudieron cargar los clientes atrasados',
+        duration: 5000,
+      })
+    }
+  }, [errorClientes, errorClientesDetalle])
+
+  useEffect(() => {
+    if (errorAnalistas) {
+      console.error('Error cargando datos por analista:', errorAnalistasDetalle)
+      toast.error('Error al cargar datos por analista', {
+        description: errorAnalistasDetalle instanceof Error 
+          ? errorAnalistasDetalle.message 
+          : 'No se pudieron cargar los datos por analista',
+        duration: 5000,
+      })
+    }
+  }, [errorAnalistas, errorAnalistasDetalle])
+
+  useEffect(() => {
+    if (errorMontos) {
+      console.error('Error cargando montos por mes:', errorMontosDetalle)
+      toast.error('Error al cargar montos por mes', {
+        description: errorMontosDetalle instanceof Error 
+          ? errorMontosDetalle.message 
+          : 'No se pudieron cargar los montos por mes',
+        duration: 5000,
+      })
+    }
+  }, [errorMontos, errorMontosDetalle])
 
   // Función para exportar clientes de un analista
   const exportarClientesAnalista = async (nombreAnalista: string) => {
@@ -191,8 +272,45 @@ export function Cobranzas() {
         </div>
       </div>
 
+      {/* Mensajes de error globales */}
+      {errorResumen && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-red-800">
+              <AlertTriangle className="h-5 w-5" />
+              <div className="flex-1">
+                <p className="font-semibold">Error al cargar resumen de cobranzas</p>
+                <p className="text-sm text-red-600">
+                  {errorResumenDetalle instanceof Error 
+                    ? errorResumenDetalle.message 
+                    : 'No se pudieron cargar los datos del resumen. Por favor, intenta nuevamente.'}
+                </p>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => refetchResumen()}>
+                Reintentar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* KPIs Resumen */}
-      {resumen && (
+      {cargandoResumen ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Cargando...</CardTitle>
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">-</div>
+                <p className="text-xs text-muted-foreground">Cargando datos...</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : resumen ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -268,7 +386,32 @@ export function Cobranzas() {
             </CardHeader>
             <CardContent>
               {cargandoClientes ? (
-                <div className="text-center py-8">Cargando...</div>
+                <div className="text-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Cargando clientes atrasados...</p>
+                </div>
+              ) : errorClientes ? (
+                <div className="text-center py-8">
+                  <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-500" />
+                  <p className="text-sm font-semibold text-red-800 mb-2">Error al cargar clientes atrasados</p>
+                  <p className="text-xs text-red-600 mb-4">
+                    {errorClientesDetalle instanceof Error 
+                      ? errorClientesDetalle.message 
+                      : 'No se pudieron cargar los datos. Por favor, intenta nuevamente.'}
+                  </p>
+                  <Button size="sm" variant="outline" onClick={() => refetchClientes()}>
+                    Reintentar
+                  </Button>
+                </div>
+              ) : !clientesAtrasados || clientesAtrasados.length === 0 ? (
+                <div className="text-center py-8">
+                  <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    {filtroDiasRetraso 
+                      ? `No hay clientes atrasados con ${filtroDiasRetraso} días de retraso`
+                      : 'No hay clientes atrasados en este momento'}
+                  </p>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -283,7 +426,7 @@ export function Cobranzas() {
                       </tr>
                     </thead>
                     <tbody>
-                      {clientesAtrasados?.map((cliente, index) => (
+                      {clientesAtrasados.map((cliente, index) => (
                         <tr key={index} className="border-b hover:bg-gray-50">
                           <td className="p-2 font-mono">{cliente.cedula}</td>
                           <td className="p-2">{cliente.nombres}</td>
@@ -389,10 +532,31 @@ export function Cobranzas() {
             </CardHeader>
             <CardContent>
               {cargandoAnalistas ? (
-                <div className="text-center py-8">Cargando...</div>
+                <div className="text-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Cargando datos por analista...</p>
+                </div>
+              ) : errorAnalistas ? (
+                <div className="text-center py-8">
+                  <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-500" />
+                  <p className="text-sm font-semibold text-red-800 mb-2">Error al cargar datos por analista</p>
+                  <p className="text-xs text-red-600 mb-4">
+                    {errorAnalistasDetalle instanceof Error 
+                      ? errorAnalistasDetalle.message 
+                      : 'No se pudieron cargar los datos. Por favor, intenta nuevamente.'}
+                  </p>
+                  <Button size="sm" variant="outline" onClick={() => refetchAnalistas()}>
+                    Reintentar
+                  </Button>
+                </div>
+              ) : !porAnalista || porAnalista.length === 0 ? (
+                <div className="text-center py-8">
+                  <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">No hay datos de analistas disponibles</p>
+                </div>
               ) : (
                 <div className="space-y-4">
-                  {porAnalista?.map((analista, index) => (
+                  {porAnalista.map((analista, index) => (
                     <div key={index} className="border rounded-lg p-4">
                       <div className="flex items-center justify-between">
                         <div>
@@ -434,7 +598,23 @@ export function Cobranzas() {
             </CardHeader>
             <CardContent>
               {cargandoMontos ? (
-                <div className="text-center py-8">Cargando...</div>
+                <div className="text-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Cargando montos por mes...</p>
+                </div>
+              ) : errorMontos ? (
+                <div className="text-center py-8">
+                  <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-500" />
+                  <p className="text-sm font-semibold text-red-800 mb-2">Error al cargar montos por mes</p>
+                  <p className="text-xs text-red-600 mb-4">
+                    {errorMontosDetalle instanceof Error 
+                      ? errorMontosDetalle.message 
+                      : 'No se pudieron cargar los datos. Por favor, intenta nuevamente.'}
+                  </p>
+                  <Button size="sm" variant="outline" onClick={() => refetchMontos()}>
+                    Reintentar
+                  </Button>
+                </div>
               ) : (
                 <div className="space-y-4">
                   {/* Gráfico de barras mejorado */}

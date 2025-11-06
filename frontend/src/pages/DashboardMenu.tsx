@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -461,6 +461,21 @@ export function DashboardMenu() {
   const evolucionMensual = datosDashboard?.evolucion_mensual || []
   const COLORS_CONCESIONARIOS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1']
 
+  // Calcular el dominio del eje Y para el gráfico de tendencia
+  const yAxisDomainTendencia = useMemo(() => {
+    if (!datosTendencia || datosTendencia.length === 0) {
+      return [0, 'auto'] as const
+    }
+    const allValues = datosTendencia.flatMap(d => [
+      d.monto_nuevos || 0,
+      d.monto_cuotas_programadas || 0,
+      d.monto_pagado || 0,
+      d.morosidad_mensual || 0
+    ])
+    const maxValue = allValues.length > 0 ? Math.max(...allValues, 0) : 0
+    return maxValue > 0 ? [0, maxValue * 1.1] as const : [0, 'auto'] as const
+  }, [datosTendencia])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="container mx-auto px-4 py-8 space-y-8">
@@ -745,21 +760,10 @@ export function DashboardMenu() {
                   </CardHeader>
                   <CardContent className="p-6">
                     {loadingTendencia ? (
-                    <div className="h-[450px] flex items-center justify-center">
+                      <div className="h-[450px] flex items-center justify-center">
                         <div className="animate-pulse text-gray-400">Cargando...</div>
                       </div>
-                    ) : datosTendencia && datosTendencia.length > 0 ? (() => {
-                      // Calcular el dominio del eje Y basándose en todas las series
-                      const allValues = datosTendencia.flatMap(d => [
-                        d.monto_nuevos || 0,
-                        d.monto_cuotas_programadas || 0,
-                        d.monto_pagado || 0,
-                        d.morosidad_mensual || 0
-                      ])
-                      const maxValue = Math.max(...allValues, 0)
-                      const yAxisDomain = [0, maxValue * 1.1] // 10% de margen superior
-                      
-                      return (
+                    ) : datosTendencia && datosTendencia.length > 0 ? (
                       <ResponsiveContainer width="100%" height={450}>
                       <ComposedChart data={datosTendencia} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                           <defs>
@@ -782,7 +786,7 @@ export function DashboardMenu() {
                           style={{ fontSize: '12px', fontWeight: 500 }}
                           tick={{ fill: '#6b7280' }}
                           tickFormatter={(value) => formatCurrency(value)}
-                          domain={yAxisDomain}
+                          domain={yAxisDomainTendencia}
                           allowDataOverflow={false}
                         />
                         <Tooltip 
@@ -864,11 +868,10 @@ export function DashboardMenu() {
                         />
                       </ComposedChart>
                     </ResponsiveContainer>
-                      )
-                    })() : (
-                    <div className="h-[450px] flex items-center justify-center text-gray-400">
-                      No hay datos disponibles
-                    </div>
+                    ) : (
+                      <div className="h-[450px] flex items-center justify-center text-gray-400">
+                        No hay datos disponibles
+                      </div>
                     )}
                   </CardContent>
                 </Card>

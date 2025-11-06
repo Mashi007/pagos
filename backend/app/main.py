@@ -30,6 +30,7 @@ from app.api.v1.endpoints import (
     health,
     kpis,
     modelos_vehiculos,
+    monitoring,
     notificaciones,
     pagos,
     pagos_conciliacion,
@@ -293,6 +294,7 @@ app.include_router(analistas.router, prefix="/api/v1/analistas", tags=["analista
 app.include_router(concesionarios.router, prefix="/api/v1/concesionarios", tags=["concesionarios"])
 app.include_router(validadores.router, prefix="/api/v1/validadores", tags=["validadores"])
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
+app.include_router(monitoring.router, prefix="/api/v1/monitoring", tags=["monitoring"])
 
 # Log detallado de rutas registradas
 logger.info("✅ Todos los routers registrados correctamente")

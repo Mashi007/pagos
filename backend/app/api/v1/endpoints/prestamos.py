@@ -3,6 +3,7 @@ Endpoints para el módulo de Préstamos
 """
 
 import logging
+import time
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
@@ -10,7 +11,7 @@ from typing import Optional
 from dateutil.parser import parse as date_parse  # type: ignore[import-untyped]
 from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
 from fastapi import APIRouter, Depends, HTTPException, Path, Query  # type: ignore[import-untyped]
-from sqlalchemy import func, or_  # type: ignore[import-untyped]
+from sqlalchemy import and_, case, func, or_  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
@@ -642,7 +643,11 @@ def obtener_resumen_prestamos_cliente(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Obtener resumen de préstamos del cliente: saldo, cuotas en mora, etc."""
+    """
+    Obtener resumen de préstamos del cliente: saldo, cuotas en mora, etc.
+    
+    ✅ OPTIMIZADO: Eliminado N+1 queries - Una sola query agregada para todas las cuotas
+    """
     from app.models.amortizacion import Cuota
 
     prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
@@ -650,39 +655,73 @@ def obtener_resumen_prestamos_cliente(
     if not prestamos:
         return {"tiene_prestamos": False, "total_prestamos": 0, "prestamos": []}
 
+    # ✅ OPTIMIZACIÓN: Una sola query para todas las cuotas de todos los préstamos
+    prestamos_ids = [p.id for p in prestamos]
+    hoy = date.today()
+
+    # ✅ MONITOREO: Registrar inicio de query
+    from app.utils.query_monitor import query_monitor
+    query_start = time.time()
+
+    # Query agregada con GROUP BY - elimina N+1 queries
+    cuotas_agregadas = (
+        db.query(
+            Cuota.prestamo_id,
+            func.sum(Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora).label('saldo_pendiente'),
+            func.sum(
+                case(
+                    (and_(
+                        Cuota.fecha_vencimiento < hoy,
+                        Cuota.estado != "PAGADO"
+                    ), 1),
+                    else_=0
+                )
+            ).label('cuotas_en_mora')
+        )
+        .filter(Cuota.prestamo_id.in_(prestamos_ids))
+        .group_by(Cuota.prestamo_id)
+        .all()
+    )
+
+    # ✅ MONITOREO: Registrar tiempo de query
+    query_time = int((time.time() - query_start) * 1000)
+    query_monitor.record_query(
+        query_name="obtener_resumen_prestamos_cliente_cuotas",
+        execution_time_ms=query_time,
+        query_type="SELECT"
+    )
+    
+    # ✅ ALERTA: Si la query es lenta
+    if query_time >= 2000:
+        logger.warning(f"⚠️ [ALERTA] Query cuotas agregadas lenta: {query_time}ms para {len(prestamos_ids)} préstamos")
+    
+    # Crear diccionario para lookup rápido
+    cuotas_por_prestamo = {row.prestamo_id: row for row in cuotas_agregadas}
+
+    # Procesar resultados
     resumen_prestamos = []
     total_saldo = Decimal("0.00")
     total_cuotas_mora = 0
 
-    for row in prestamos:
-        # Obtener cuotas del préstamo
-        cuotas = db.query(Cuota).filter(Cuota.prestamo_id == row.id).all()
-
-        # Calcular saldo pendiente (suma de capital_pendiente + interes_pendiente + monto_mora)
-        saldo_pendiente = Decimal("0.00")
-        cuotas_en_mora = 0
-
-        for cuota in cuotas:
-            saldo_pendiente += cuota.capital_pendiente + cuota.interes_pendiente + cuota.monto_mora
-
-            # Contar cuotas en mora (vencidas y no pagadas)
-            if cuota.fecha_vencimiento < date.today() and cuota.estado != "PAGADO":
-                cuotas_en_mora += 1
+    for prestamo in prestamos:
+        datos = cuotas_por_prestamo.get(prestamo.id)
+        saldo_pendiente = Decimal(str(datos.saldo_pendiente)) if datos else Decimal("0.00")
+        cuotas_en_mora = int(datos.cuotas_en_mora) if datos else 0
 
         total_saldo += saldo_pendiente
         total_cuotas_mora += cuotas_en_mora
 
         resumen_prestamos.append(
             {
-                "id": row.id,
+                "id": prestamo.id,
                 # Usar producto como respaldo. Evitamos consultar modelo_vehiculo
                 # ya que puede no existir físicamente en la tabla todavía.
-                "modelo_vehiculo": row.producto,
-                "total_financiamiento": float(row.total_financiamiento),
+                "modelo_vehiculo": prestamo.producto,
+                "total_financiamiento": float(prestamo.total_financiamiento),
                 "saldo_pendiente": float(saldo_pendiente),
                 "cuotas_en_mora": cuotas_en_mora,
-                "estado": row.estado,
-                "fecha_registro": (row.fecha_registro.isoformat() if row.fecha_registro else None),
+                "estado": prestamo.estado,
+                "fecha_registro": (prestamo.fecha_registro.isoformat() if prestamo.fecha_registro else None),
             }
         )
 

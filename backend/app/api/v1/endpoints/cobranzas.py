@@ -51,12 +51,24 @@ def healthcheck_cobranzas(
         total_cuotas = db.query(func.count(Cuota.id)).scalar() or 0
 
         # Métricas clave de cobranzas para dashboard
+        # ✅ CRITERIO CORRECTO: fecha_vencimiento < hoy AND total_pagado < monto_cuota
         cuotas_vencidas = (
-            db.query(func.count(Cuota.id)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar() or 0
+            db.query(func.count(Cuota.id))
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+            )
+            .scalar()
+            or 0
         )
 
         monto_vencido = (
-            db.query(func.sum(Cuota.monto_cuota)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar()
+            db.query(func.sum(Cuota.monto_cuota))
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+            )
+            .scalar()
             or 0.0
         )
 
@@ -94,15 +106,17 @@ def obtener_clientes_atrasados(
         # Calcular fecha límite según días de retraso
         hoy = date.today()
 
-        # Cuotas vencidas (fecha_vencimiento < hoy y estado != PAGADO)
+        # Cuotas vencidas (fecha_vencimiento < hoy y total_pagado < monto_cuota)
         # Excluir admin del listado
         from app.core.config import settings
 
         # Optimización: Usar subquery para filtrar cuotas vencidas primero
         # Esto reduce el tamaño del dataset antes de hacer los JOINs
+        # ✅ CRITERIO CORRECTO: Cuota vencida = fecha_vencimiento < hoy AND total_pagado < monto_cuota
+        # Esto asegura consistencia con el módulo de pagos y otros módulos
         cuotas_filtros = [
             Cuota.fecha_vencimiento < hoy,
-            Cuota.estado != "PAGADO",
+            Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto (incluye total_pagado = 0)
         ]
 
         # Si se especifica días de retraso, agregar filtro adicional
@@ -200,7 +214,10 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
             )
             .join(Prestamo, Prestamo.cedula == Cliente.cedula)
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+            )
             .group_by(
                 Cliente.cedula,
                 Cliente.nombres,
@@ -259,7 +276,7 @@ def obtener_cobranzas_por_analista(
             .filter(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
                 Prestamo.usuario_proponente.isnot(None),
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
                 or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
@@ -315,7 +332,7 @@ def obtener_clientes_por_analista(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
                 Prestamo.usuario_proponente == analista,
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
             )
             .group_by(Cliente.cedula, Cliente.nombres, Cliente.telefono, Prestamo.id)
         )
@@ -361,7 +378,10 @@ def obtener_montos_vencidos_por_mes(
                 func.count(Cuota.id).label("cantidad_cuotas"),
                 func.sum(Cuota.monto_cuota).label("monto_total"),
             )
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+            )
             .group_by(func.date_trunc("month", Cuota.fecha_vencimiento))
             .order_by(func.date_trunc("month", Cuota.fecha_vencimiento))
         )
@@ -405,7 +425,7 @@ def obtener_resumen_cobranzas(
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
             )
             .group_by(Prestamo.estado)
             .all()
@@ -413,8 +433,15 @@ def obtener_resumen_cobranzas(
         logger.info(f"🔍 [resumen_cobranzas] Estados de préstamos con cuotas vencidas: {dict(estados_prestamos)}")
 
         # Total de cuotas vencidas SIN filtro de estado (para diagnóstico)
+        # ✅ Usar criterio correcto: total_pagado < monto_cuota
         total_cuotas_sin_filtro = (
-            db.query(func.count(Cuota.id)).filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO").scalar() or 0
+            db.query(func.count(Cuota.id))
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+            )
+            .scalar()
+            or 0
         )
         logger.info(f"🔍 [resumen_cobranzas] Total cuotas vencidas SIN filtro estado: {total_cuotas_sin_filtro}")
 
@@ -428,7 +455,7 @@ def obtener_resumen_cobranzas(
             .filter(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
                 or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
             )
@@ -445,7 +472,7 @@ def obtener_resumen_cobranzas(
             .filter(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
                 or_(User.is_admin.is_(False), User.is_admin.is_(None)),
             )
@@ -460,7 +487,7 @@ def obtener_resumen_cobranzas(
             .filter(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
                 or_(User.is_admin.is_(False), User.is_admin.is_(None)),
             )
@@ -555,7 +582,7 @@ def _construir_query_clientes_atrasados(db: Session, hoy: date, analista: Option
         .filter(
             Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
             Cuota.fecha_vencimiento < hoy,
-            Cuota.estado != "PAGADO",
+            Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
             Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
             or_(User.is_admin.is_(False), User.is_admin.is_(None)),
         )
@@ -693,7 +720,7 @@ def informe_rendimiento_analista(
             .filter(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
                 Prestamo.usuario_proponente.isnot(None),
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
                 or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
@@ -761,7 +788,10 @@ def informe_montos_vencidos_periodo(
             )
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .join(Cliente, Prestamo.cedula == Cliente.cedula)
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+            )
         )
 
         if fecha_inicio:
@@ -853,7 +883,7 @@ def _obtener_cuotas_categoria_dias(db: Session, analista: Optional[str], hoy: da
         .join(Cliente, Prestamo.cedula == Cliente.cedula)
         .outerjoin(User, User.email == Prestamo.usuario_proponente)
         .filter(
-            Cuota.estado != "PAGADO",
+            Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto (incluye cuotas no vencidas para categorización)
             Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
             or_(User.is_admin.is_(False), User.is_admin.is_(None)),
             Cuota.fecha_vencimiento >= fecha_limite_inicio,
@@ -1112,7 +1142,10 @@ def informe_antiguedad_saldos(
             )
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .join(Cliente, Prestamo.cedula == Cliente.cedula)
-            .filter(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO")
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+            )
             .group_by("rango_antiguedad")
         )
 
@@ -1182,7 +1215,7 @@ def informe_resumen_ejecutivo(
             .filter(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
             )
             .scalar()
             or 0
@@ -1194,7 +1227,7 @@ def informe_resumen_ejecutivo(
             .filter(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
             )
             .scalar()
             or 0.0
@@ -1206,7 +1239,7 @@ def informe_resumen_ejecutivo(
             .filter(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
             )
             .scalar()
             or 0
@@ -1225,7 +1258,7 @@ def informe_resumen_ejecutivo(
             .filter(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
                 Prestamo.usuario_proponente.isnot(None),
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
                 or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
@@ -1249,7 +1282,7 @@ def informe_resumen_ejecutivo(
             .filter(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
                 Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
+                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
             )
             .group_by(Cliente.cedula, Cliente.nombres)
             .order_by(func.sum(Cuota.monto_cuota).desc())
