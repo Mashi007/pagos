@@ -101,8 +101,9 @@ def _conciliar_pago(pago: Pago, db: Session, numero_documento: str) -> bool:
     # ✅ ACTUALIZAR AUTOMÁTICAMENTE estado de cuotas si el pago tiene prestamo_id
     if pago.prestamo_id:
         try:
-            from app.api.v1.endpoints.pagos import _actualizar_estado_cuota, _verificar_pagos_conciliados_cuota
             from decimal import Decimal
+
+            from app.api.v1.endpoints.pagos import _actualizar_estado_cuota, _verificar_pagos_conciliados_cuota
 
             # Obtener todas las cuotas del préstamo que tienen pagos aplicados
             cuotas = (
