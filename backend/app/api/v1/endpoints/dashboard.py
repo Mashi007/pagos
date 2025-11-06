@@ -3608,14 +3608,13 @@ def obtener_financiamiento_tendencia_mensual(
             # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
             # Aplicar filtros de analista/concesionario/modelo mediante JOIN con prestamos
             if analista or concesionario or modelo:
-                # ✅ CORRECCIÓN CRÍTICA: Los pagos se cuentan por fecha_pago (fecha de registro)
+                # ✅ CORRECCIÓN CRÍTICA: Usar tabla pago_cuotas para vincular pagos a cuotas específicas
                 # Con filtros, aplicar las mismas condiciones de analista/concesionario/modelo
                 filtros_pagos = [
-                    "p.monto_pagado IS NOT NULL",
-                    "p.monto_pagado > 0",
-                    "p.activo = TRUE",
                     "pr.estado = 'APROBADO'",
-                    "EXTRACT(YEAR FROM p.fecha_pago) >= 2024",
+                    "EXTRACT(YEAR FROM c.fecha_vencimiento) >= 2024",
+                    "pc.monto_aplicado IS NOT NULL",
+                    "pc.monto_aplicado > 0"
                 ]
                 bind_params_pagos_filtrado = {}
 
@@ -3629,10 +3628,10 @@ def obtener_financiamiento_tendencia_mensual(
                     filtros_pagos.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
                     bind_params_pagos_filtrado["modelo"] = modelo
                 if fecha_inicio_query:
-                    filtros_pagos.append("p.fecha_pago >= :fecha_inicio")
+                    filtros_pagos.append("c.fecha_vencimiento >= :fecha_inicio")
                     bind_params_pagos_filtrado["fecha_inicio"] = fecha_inicio_query_dt
                 if fecha_fin_query:
-                    filtros_pagos.append("p.fecha_pago <= :fecha_fin")
+                    filtros_pagos.append("c.fecha_vencimiento <= :fecha_fin")
                     bind_params_pagos_filtrado["fecha_fin"] = fecha_fin_query_dt
 
                 where_clause_pagos = " AND ".join(filtros_pagos)
@@ -3640,46 +3639,39 @@ def obtener_financiamiento_tendencia_mensual(
                 query_pagos_sql = text(
                     f"""
                     SELECT 
-                        EXTRACT(YEAR FROM p.fecha_pago)::integer as año,
-                        EXTRACT(MONTH FROM p.fecha_pago)::integer as mes,
-                        COALESCE(SUM(p.monto_pagado), 0) as total_pagado
-                    FROM pagos p
-                    LEFT JOIN prestamos pr ON (
-                        (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
-                        OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
-                    )
+                        EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
+                        EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
+                        COALESCE(SUM(pc.monto_aplicado), 0) as total_pagado
+                    FROM pago_cuotas pc
+                    INNER JOIN cuotas c ON pc.cuota_id = c.id
+                    INNER JOIN prestamos pr ON c.prestamo_id = pr.id
                     WHERE {where_clause_pagos}
                     GROUP BY 
-                        EXTRACT(YEAR FROM p.fecha_pago),
-                        EXTRACT(MONTH FROM p.fecha_pago)
+                        EXTRACT(YEAR FROM c.fecha_vencimiento),
+                        EXTRACT(MONTH FROM c.fecha_vencimiento)
                     ORDER BY año, mes
                     """
                 ).bindparams(**bind_params_pagos_filtrado)
             else:
-                # ✅ CORRECCIÓN CRÍTICA: Los pagos se cuentan por fecha_pago (fecha de registro del pago)
-                # NO por fecha_vencimiento de la cuota. Esto significa:
-                # - Si un pago se registra en marzo, cuenta para marzo
-                # - La morosidad de febrero se eleva (no se pagó en febrero)
-                # - La morosidad de marzo disminuye (se pagó en marzo)
+                # ✅ CORRECCIÓN CRÍTICA: Usar tabla pago_cuotas para vincular pagos a cuotas específicas
+                # Sumar monto_aplicado de pagos que se aplicaron a cuotas que vencen en cada mes
+                # Esto asegura que comparamos: cuotas que vencen en febrero vs pagos aplicados a cuotas que vencen en febrero
                 query_pagos_sql = text(
                     """
                     SELECT 
-                        EXTRACT(YEAR FROM p.fecha_pago)::integer as año,
-                        EXTRACT(MONTH FROM p.fecha_pago)::integer as mes,
-                        COALESCE(SUM(p.monto_pagado), 0) as total_pagado
-                    FROM pagos p
-                    LEFT JOIN prestamos pr ON (
-                        (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
-                        OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
-                    )
-                    WHERE p.monto_pagado IS NOT NULL
-                      AND p.monto_pagado > 0
-                      AND p.activo = TRUE
-                      AND pr.estado = 'APROBADO'
-                      AND EXTRACT(YEAR FROM p.fecha_pago) >= 2024
+                        EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
+                        EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
+                        COALESCE(SUM(pc.monto_aplicado), 0) as total_pagado
+                    FROM pago_cuotas pc
+                    INNER JOIN cuotas c ON pc.cuota_id = c.id
+                    INNER JOIN prestamos pr ON c.prestamo_id = pr.id
+                    WHERE pr.estado = 'APROBADO'
+                      AND EXTRACT(YEAR FROM c.fecha_vencimiento) >= 2024
+                      AND pc.monto_aplicado IS NOT NULL
+                      AND pc.monto_aplicado > 0
                     GROUP BY 
-                        EXTRACT(YEAR FROM p.fecha_pago),
-                        EXTRACT(MONTH FROM p.fecha_pago)
+                        EXTRACT(YEAR FROM c.fecha_vencimiento),
+                        EXTRACT(MONTH FROM c.fecha_vencimiento)
                     ORDER BY año, mes
                     """
                 )
@@ -3695,13 +3687,13 @@ def obtener_financiamiento_tendencia_mensual(
 
             pagos_time = int((time.time() - start_pagos) * 1000)
             logger.info(
-                f"📊 [financiamiento-tendencia] Query pagos (por fecha_pago) completada en {pagos_time}ms, {len(pagos_por_mes)} meses con datos"
+                f"📊 [financiamiento-tendencia] Query pagos (pago_cuotas por fecha_vencimiento) completada en {pagos_time}ms, {len(pagos_por_mes)} meses con datos"
             )
             # ✅ Logging adicional: mostrar algunos meses de ejemplo
             if pagos_por_mes:
                 ejemplos = list(pagos_por_mes.items())[:3]
                 for (año, mes), monto in ejemplos:
-                    logger.info(f"  📊 Ejemplo pagos registrados en {año}-{mes:02d} = ${monto:,.2f}")
+                    logger.info(f"  📊 Ejemplo pagos aplicados a cuotas que vencen en {año}-{mes:02d} = ${monto:,.2f}")
         except Exception as e:
             logger.error(f"⚠️ [financiamiento-tendencia] Error consultando pagos: {e}", exc_info=True)
             try:
