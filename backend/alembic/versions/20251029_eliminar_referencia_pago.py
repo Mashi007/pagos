@@ -1,7 +1,7 @@
 """Eliminar columna referencia_pago de pagos
 
 Revision ID: 20251029_referencia_pago
-Revises: fix_campo_resultado
+Revises: 20251028_pagos
 Create Date: 2025-10-29
 
 """
