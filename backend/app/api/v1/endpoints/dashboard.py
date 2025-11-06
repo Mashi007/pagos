@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.core.cache import cache_result
+from app.core.debug_helpers import DebugAlert, debug_timing, log_graph_debug_info, run_debug_checklist, validate_graph_data
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.dashboard_oficial import (
@@ -29,7 +30,6 @@ from app.models.pago import Pago  # Mantener para operaciones que necesiten tabl
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.utils.filtros_dashboard import FiltrosDashboard
-from app.core.debug_helpers import DebugAlert, debug_timing, validate_graph_data, log_graph_debug_info, run_debug_checklist
 from app.utils.query_monitor import query_monitor
 
 logger = logging.getLogger(__name__)
@@ -1996,7 +1996,7 @@ def obtener_kpis_principales(
         query_time = int((time.time() - query_start) * 1000)
 
         # ✅ MONITOREO: Registrar métrica de query con información de BD y campos
-        from app.utils.db_analyzer import get_database_size, analyze_query_tables_columns
+        from app.utils.db_analyzer import analyze_query_tables_columns, get_database_size
 
         # Obtener información de BD
         db_info = get_database_size(db)
