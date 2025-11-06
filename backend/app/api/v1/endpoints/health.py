@@ -686,7 +686,7 @@ async def create_database_indexes(
             # Pagos
             ("pagos", "ix_pagos_fecha_registro", "fecha_registro", None),
         ]
-        
+
         # Índices funcionales de pagos_staging (requieren SQL especial)
         pagos_staging_indices = [
             (
@@ -750,7 +750,7 @@ async def create_database_indexes(
                     db.rollback()
                 except Exception:
                     pass
-        
+
         # Crear índices funcionales de pagos_staging
         for table_name, idx_name, index_definition, where_clause in pagos_staging_indices:
             if not _table_exists(table_name):
@@ -825,12 +825,12 @@ async def monitor_indexes_performance(
 ):
     """
     Monitorear el rendimiento de los endpoints del dashboard después de crear índices
-    
+
     Ejecuta queries de prueba para medir tiempos de respuesta y comparar
     con los tiempos esperados después de crear los índices.
     """
     from sqlalchemy import inspect
-    
+
     try:
         inspector = inspect(db.bind)
         results = {
@@ -844,7 +844,7 @@ async def monitor_indexes_performance(
                 "improvement_detected": False,
             },
         }
-        
+
         # Endpoints críticos del dashboard a monitorear
         dashboard_endpoints = {
             "financiamiento_tendencia_mensual": {
@@ -905,7 +905,7 @@ async def monitor_indexes_performance(
                 "description": "Estadísticas de notificaciones",
             },
         }
-        
+
         # Ejecutar queries de prueba y medir tiempos
         for endpoint_name, endpoint_config in dashboard_endpoints.items():
             start_time = time.time()
@@ -913,9 +913,9 @@ async def monitor_indexes_performance(
                 result = db.execute(text(endpoint_config["query"]))
                 rows = result.fetchall()
                 elapsed_ms = (time.time() - start_time) * 1000
-                
+
                 is_fast = elapsed_ms <= endpoint_config["expected_max_ms"]
-                
+
                 results["endpoints"][endpoint_name] = {
                     "description": endpoint_config["description"],
                     "response_time_ms": round(elapsed_ms, 2),
@@ -924,13 +924,13 @@ async def monitor_indexes_performance(
                     "rows_returned": len(rows),
                     "improvement": "✅ Mejora detectada" if is_fast else "⚠️ Aún lento",
                 }
-                
+
                 results["summary"]["total_tested"] += 1
                 if is_fast:
                     results["summary"]["fast_endpoints"] += 1
                 else:
                     results["summary"]["slow_endpoints"] += 1
-                    
+
             except Exception as e:
                 elapsed_ms = (time.time() - start_time) * 1000
                 results["endpoints"][endpoint_name] = {
@@ -942,11 +942,11 @@ async def monitor_indexes_performance(
                 }
                 results["summary"]["total_tested"] += 1
                 logger.error(f"Error en query de prueba para {endpoint_name}: {e}")
-        
+
         # Determinar si hay mejoras
         if results["summary"]["fast_endpoints"] > 0:
             results["summary"]["improvement_detected"] = True
-        
+
         # Mensaje de resumen
         if results["summary"]["slow_endpoints"] == 0:
             results["message"] = "✅ Todos los endpoints están dentro de los tiempos esperados"
@@ -954,9 +954,9 @@ async def monitor_indexes_performance(
             results["message"] = f"⚠️ {results['summary']['slow_endpoints']} endpoints aún están lentos, pero hay mejoras"
         else:
             results["message"] = "❌ Los endpoints aún están lentos, verificar índices"
-        
+
         return results
-        
+
     except Exception as e:
         logger.error(f"Error monitoreando rendimiento de índices: {e}", exc_info=True)
         try:
