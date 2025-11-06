@@ -132,7 +132,9 @@ def debug_sql_errors(func: Callable) -> Callable:
 # ============================================
 
 
-def validate_graph_data(data: list, required_fields: list, non_numeric_fields: Optional[list] = None) -> tuple[bool, Optional[str]]:
+def validate_graph_data(
+    data: list, required_fields: list, non_numeric_fields: Optional[list] = None
+) -> tuple[bool, Optional[str]]:
     """
     Valida que los datos del gráfico tengan los campos requeridos
 
@@ -177,7 +179,7 @@ def validate_graph_data(data: list, required_fields: list, non_numeric_fields: O
             # Saltar validación numérica para campos que no deben ser numéricos
             if field in non_numeric_fields:
                 continue
-                
+
             value = item.get(field)
             if value is not None and not isinstance(value, (int, float)):
                 try:

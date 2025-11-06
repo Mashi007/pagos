@@ -30,8 +30,8 @@ from app.models.pago import Pago  # Mantener para operaciones que necesiten tabl
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.utils.filtros_dashboard import FiltrosDashboard
-from app.utils.query_monitor import query_monitor
 from app.utils.pagos_cuotas_helper import calcular_monto_pagado_mes
+from app.utils.query_monitor import query_monitor
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -41,14 +41,15 @@ router = APIRouter()
 # HELPERS DE NORMALIZACIÓN Y UTILIDADES
 # ============================================================================
 
+
 def normalize_to_date(fecha: Any) -> Optional[date]:
     """
     Normaliza cualquier tipo de fecha a date.
     Maneja datetime, date, string, y None.
-    
+
     Args:
         fecha: Puede ser datetime, date, string ISO, o None
-        
+
     Returns:
         date o None si no se puede convertir
     """
@@ -61,10 +62,10 @@ def normalize_to_date(fecha: Any) -> Optional[date]:
     if isinstance(fecha, str):
         try:
             # Intentar parsear como ISO format
-            if 'T' in fecha or ' ' in fecha:
-                return datetime.fromisoformat(fecha.replace('Z', '+00:00')).date()
+            if "T" in fecha or " " in fecha:
+                return datetime.fromisoformat(fecha.replace("Z", "+00:00")).date()
             else:
-                return datetime.strptime(fecha, '%Y-%m-%d').date()
+                return datetime.strptime(fecha, "%Y-%m-%d").date()
         except (ValueError, AttributeError):
             logger.warning(f"No se pudo convertir fecha a date: {fecha}")
             return None
@@ -3601,7 +3602,7 @@ def obtener_financiamiento_tendencia_mensual(
                                 fechas_disponibles.append(f.date())
                             else:
                                 fechas_disponibles.append(f)
-                    
+
                     if fechas_disponibles:
                         primera_fecha = min(fechas_disponibles)
                         # Redondear al primer día del mes
@@ -3839,7 +3840,7 @@ def obtener_financiamiento_tendencia_mensual(
                 año_mes = int(row.año)
                 num_mes = int(row.mes)
                 monto_total_pagado = float(row.total_pagado or Decimal("0"))
-                
+
                 # ✅ Si total_pagado está en 0, usar helper para buscar pagos
                 if monto_total_pagado == 0:
                     # Calcular monto pagado usando helper (busca de múltiples formas)
@@ -3848,10 +3849,10 @@ def obtener_financiamiento_tendencia_mensual(
                         db=db,
                         mes=fecha_mes,
                         prestamo_id=None,  # Sin filtro de préstamo específico
-                        cedula=None  # Sin filtro de cédula específico
+                        cedula=None,  # Sin filtro de cédula específico
                     )
                     monto_total_pagado = float(monto_helper)
-                
+
                 pagos_por_mes[(año_mes, num_mes)] = monto_total_pagado
 
             pagos_time = int((time.time() - start_pagos) * 1000)
@@ -4006,9 +4007,7 @@ def obtener_financiamiento_tendencia_mensual(
         required_fields = ["mes", "monto_nuevos", "monto_cuotas_programadas", "monto_pagado", "morosidad_mensual"]
         # ✅ CORRECCIÓN: Especificar que 'mes' no es numérico
         is_valid, error_msg = validate_graph_data(
-            meses_data, 
-            required_fields,
-            non_numeric_fields=["mes"]  # 'mes' es string como "Ene 2024"
+            meses_data, required_fields, non_numeric_fields=["mes"]  # 'mes' es string como "Ene 2024"
         )
         if not is_valid:
             DebugAlert.log_missing_data(
