@@ -3764,8 +3764,12 @@ def obtener_financiamiento_tendencia_mensual(
                     "total_acumulado": float(total_acumulado),
                     "monto_cuotas_programadas": float(monto_cuotas_programadas),
                     "monto_pagado": float(monto_pagado_mes),
-                    "morosidad": float(morosidad_mensual),  # ⚠️ DEPRECATED: Usar morosidad_mensual. Este campo es mensual (NO acumulativo)
-                    "morosidad_mensual": float(morosidad_mensual),  # ✅ Morosidad MENSUAL (NO acumulativa): MAX(0, Programado del mes - Pagado del mes)
+                    "morosidad": float(
+                        morosidad_mensual
+                    ),  # ⚠️ DEPRECATED: Usar morosidad_mensual. Este campo es mensual (NO acumulativo)
+                    "morosidad_mensual": float(
+                        morosidad_mensual
+                    ),  # ✅ Morosidad MENSUAL (NO acumulativa): MAX(0, Programado del mes - Pagado del mes)
                     "fecha_mes": fecha_mes_inicio.isoformat(),
                 }
             )
