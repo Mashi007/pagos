@@ -273,7 +273,7 @@ def reporte_pagos(
         total_pagos_query = db.execute(
             text(
                 """
-                SELECT COALESCE(SUM(monto_pagado), 0)
+                SELECTCOALESCE(SUM(monto_pagado), 0)
                 FROM pagos
                 WHERE fecha_pago >= :fecha_inicio
                   AND fecha_pago <= :fecha_fin
@@ -301,7 +301,7 @@ def reporte_pagos(
         pagos_por_metodo_raw = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     COALESCE(institucion_bancaria, 'Sin especificar') AS metodo,
                     COUNT(*) AS cantidad,
                     COALESCE(SUM(monto_pagado), 0) AS monto
@@ -326,7 +326,7 @@ def reporte_pagos(
         pagos_por_dia_raw = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     DATE(fecha_pago) AS fecha,
                     COUNT(*) AS cantidad,
                     COALESCE(SUM(monto_pagado), 0) AS monto
@@ -804,7 +804,7 @@ def resumen_dashboard(
         pagos_mes_query = db.execute(
             text(
                 """
-                SELECT COALESCE(SUM(monto_pagado), 0)
+                SELECTCOALESCE(SUM(monto_pagado), 0)
                 FROM pagos
                 WHERE fecha_pago >= :fecha_inicio
                   AND fecha_pago <= :fecha_fin

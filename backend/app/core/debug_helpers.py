@@ -30,8 +30,8 @@ class DebugAlert:
         logger.error(f"❌ Error: {type(error).__name__}: {str(error)}")
         logger.error(f"📝 Query: {query[:500]}...")  # Primeros 500 caracteres
         if params:
-            logger.error(f"📋 Parámetros: {params}")
-        logger.error(f"📍 Stack trace:")
+            logger.error("📋 Parámetros: %s", params)
+        logger.error("📍 Stack trace:")
         logger.error(traceback.format_exc())
         logger.error("=" * 80)
 
@@ -68,8 +68,8 @@ class DebugAlert:
         logger.error(f"📍 Endpoint: {endpoint}")
         logger.error(f"❌ Error: {type(error).__name__}: {str(error)}")
         if data_sample:
-            logger.error(f"📊 Muestra de datos: {str(data_sample)[:300]}...")
-        logger.error(f"📍 Stack trace:")
+            logger.error("📊 Muestra de datos: %s...", str(data_sample)[:300])
+        logger.error("📍 Stack trace:")
         logger.error(traceback.format_exc())
         logger.error("=" * 80)
 

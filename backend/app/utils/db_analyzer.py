@@ -22,7 +22,7 @@ def get_database_size(db: Session) -> Dict:
     try:
         query = text(
             """
-            SELECT 
+            SELECT
                 pg_database.datname,
                 pg_size_pretty(pg_database_size(pg_database.datname)) AS size_pretty,
                 pg_database_size(pg_database.datname) AS size_bytes
@@ -60,7 +60,7 @@ def get_table_sizes(db: Session, limit: int = 20) -> List[Dict]:
     try:
         query = text(
             """
-            SELECT 
+            SELECT
                 schemaname,
                 tablename,
                 pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size_pretty,
@@ -109,14 +109,14 @@ def get_table_columns(db: Session, table_name: str) -> List[Dict]:
     try:
         query = text(
             """
-            SELECT 
+            SELECT
                 column_name,
                 data_type,
                 character_maximum_length,
                 is_nullable,
                 column_default
             FROM information_schema.columns
-            WHERE table_schema = 'public' 
+            WHERE table_schema = 'public'
               AND table_name = :table_name
             ORDER BY ordinal_position
         """
@@ -155,13 +155,13 @@ def get_indexes_for_table(db: Session, table_name: str) -> List[Dict]:
     try:
         query = text(
             """
-            SELECT 
+            SELECT
                 indexname,
                 indexdef,
                 pg_size_pretty(pg_relation_size(indexname::regclass)) AS size_pretty,
                 pg_relation_size(indexname::regclass) AS size_bytes
             FROM pg_indexes
-            WHERE schemaname = 'public' 
+            WHERE schemaname = 'public'
               AND tablename = :table_name
             ORDER BY pg_relation_size(indexname::regclass) DESC NULLS LAST
         """
@@ -268,7 +268,7 @@ def get_database_info(db: Session) -> Dict:
         # Calcular total de tablas
         count_query = text(
             """
-            SELECT COUNT(*) 
+            SELECTCOUNT(*) 
             FROM information_schema.tables 
             WHERE table_schema = 'public'
         """
@@ -278,7 +278,7 @@ def get_database_info(db: Session) -> Dict:
         # Calcular total de índices
         index_count_query = text(
             """
-            SELECT COUNT(*) 
+            SELECTCOUNT(*) 
             FROM pg_indexes 
             WHERE schemaname = 'public'
         """
