@@ -235,8 +235,8 @@ const staticOptions = {
     if (filePath.endsWith('.js')) {
       res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
     }
-    // Log cuando se sirve un archivo estático (solo para debugging)
-    if (filePath.includes('/assets/')) {
+    // Log cuando se sirve un archivo estático (solo en desarrollo)
+    if (isDevelopment && filePath.includes('/assets/')) {
       console.log(`📦 Sirviendo archivo estático: ${filePath}`);
     }
   },
@@ -261,8 +261,8 @@ if (existsSync(assetsPath)) {
 
 // Middleware para loggear peticiones de archivos estáticos
 app.use((req, res, next) => {
-  // Solo loggear archivos estáticos (assets, favicon, etc.)
-  if (req.path.startsWith('/assets/') || req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.svg')) {
+  // Solo loggear en desarrollo - en producción estos logs son ruido
+  if (isDevelopment && (req.path.startsWith('/assets/') || req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.svg'))) {
     console.log(`📦 Frontend: Petición de archivo estático recibida: ${req.method} ${req.path}`);
   }
   next();
@@ -302,8 +302,13 @@ app.get('*', (req, res) => {
   // ✅ CRÍTICO: Si es una ruta de assets y no se encontró el archivo, devolver 404
   // NO servir index.html para archivos de assets que no existen
   // IMPORTANTE: No devolver JSON para archivos estáticos, solo 404 simple
+  // NOTA: Es normal que algunos archivos no se encuentren después de un nuevo build
+  // (el navegador puede tener cache del index.html anterior con hashes antiguos)
   if (req.path.startsWith('/assets/')) {
-    console.error(`❌ Archivo estático no encontrado: ${req.path}`);
+    // Solo loggear en desarrollo - en producción es ruido normal
+    if (isDevelopment) {
+      console.error(`❌ Archivo estático no encontrado: ${req.path}`);
+    }
     // Determinar el tipo MIME apropiado basado en la extensión
     if (req.path.endsWith('.js')) {
       res.type('application/javascript');
@@ -317,7 +322,10 @@ app.get('*', (req, res) => {
   const staticFileExtensions = ['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.eot'];
   const isStaticFile = staticFileExtensions.some(ext => req.path.endsWith(ext));
   if (isStaticFile) {
-    console.error(`❌ Archivo estático no encontrado: ${req.path}`);
+    // Solo loggear en desarrollo - en producción es ruido normal
+    if (isDevelopment) {
+      console.error(`❌ Archivo estático no encontrado: ${req.path}`);
+    }
     // Establecer tipo MIME apropiado según la extensión
     if (req.path.endsWith('.js')) {
       res.type('application/javascript');
@@ -332,7 +340,10 @@ app.get('*', (req, res) => {
   // Si llegamos aquí, NO es un archivo estático
   // Es una ruta de la SPA (como /clientes, /dashboard) → servir index.html
   // React Router manejará la ruta en el cliente
-  console.log(`📄 Frontend (SPA): Sirviendo index.html para ruta: ${req.method} ${req.path}`);
+  // Solo loggear en desarrollo
+  if (isDevelopment) {
+    console.log(`📄 Frontend (SPA): Sirviendo index.html para ruta: ${req.method} ${req.path}`);
+  }
   res.sendFile(indexPath, (err) => {
     if (err) {
       console.error(`❌ Error sirviendo index.html para ${req.method} ${req.path}:`, err);

@@ -46,6 +46,9 @@ from app.core.exceptions import global_exception_handler
 from app.core.performance_monitor import performance_monitor
 from app.db.init_db import init_db_shutdown, init_db_startup
 
+# Forzar inicialización de cache al inicio para que los logs aparezcan
+from app.core import cache  # noqa: F401
+
 # Configurar logging básico pero efectivo
 # Evitar duplicación: limpiar handlers existentes antes de configurar
 root_logger = logging.getLogger()

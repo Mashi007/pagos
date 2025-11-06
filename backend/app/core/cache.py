@@ -81,10 +81,18 @@ class MemoryCache(CacheBackend):
 # Intentar inicializar Redis, usar MemoryCache como fallback
 cache_backend: CacheBackend = MemoryCache()
 
+# Log inicial para diagnóstico
+logger.info("🔍 Iniciando inicialización de cache...")
+
 try:
     import redis
 
     from app.core.config import settings
+    
+    # Log para verificar que se está intentando conectar
+    logger.info(f"🔍 REDIS_URL configurada: {bool(settings.REDIS_URL)}")
+    if settings.REDIS_URL:
+        logger.info(f"🔍 REDIS_URL valor: {settings.REDIS_URL[:50]}...")  # Primeros 50 caracteres
 
     # ✅ CONFIGURACIÓN DESDE VARIABLES DE ENTORNO
     # Prioridad: REDIS_URL > REDIS_HOST/REDIS_PORT/REDIS_DB
@@ -167,9 +175,14 @@ try:
     logger.info("✅ Redis cache inicializado correctamente")
 
 except ImportError:
-    logger.info("⚠️ Redis no disponible, usando MemoryCache")
+    logger.error("⚠️ Redis no disponible (paquete no instalado), usando MemoryCache")
+    logger.error("   Instala redis: pip install redis==5.0.1")
 except Exception as e:
-    logger.warning(f"⚠️ No se pudo conectar a Redis: {e}, usando MemoryCache")
+    logger.error(f"⚠️ ERROR al conectar a Redis: {type(e).__name__}: {str(e)}")
+    logger.error(f"   REDIS_URL configurada: {bool(settings.REDIS_URL) if 'settings' in locals() else 'N/A'}")
+    if 'settings' in locals() and settings.REDIS_URL:
+        logger.error(f"   REDIS_URL valor: {settings.REDIS_URL[:80]}...")
+    logger.error("   Usando MemoryCache como fallback")
 
 
 def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
