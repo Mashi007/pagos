@@ -5,7 +5,6 @@ Revises: 006_update_user_roles_system
 Create Date: 2025-10-17 20:20:00.000000
 
 """
-from datetime import date
 
 from alembic import op
 import sqlalchemy as sa

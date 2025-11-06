@@ -57,5 +57,3 @@ def downgrade():
         op.drop_index("idx_clientes_concesionario", "clientes")
         op.drop_column("clientes", "concesionario")
         print("Columna 'concesionario' eliminada de la tabla 'clientes'")
-
-"""
