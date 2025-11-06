@@ -64,11 +64,63 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
   }, [filtros])
 
   /**
+   * Calcula fecha_inicio y fecha_fin basado en el período
+   */
+  const calcularFechasPorPeriodo = (periodo: string): { fecha_inicio: string; fecha_fin: string } => {
+    const hoy = new Date()
+    let fecha_inicio: Date
+    let fecha_fin: Date = new Date(hoy)
+
+    switch (periodo) {
+      case 'dia':
+        fecha_inicio = new Date(hoy)
+        fecha_inicio.setHours(0, 0, 0, 0)
+        fecha_fin.setHours(23, 59, 59, 999)
+        break
+      case 'semana':
+        // Lunes de esta semana
+        fecha_inicio = new Date(hoy)
+        const diaSemana = fecha_inicio.getDay()
+        const diff = fecha_inicio.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1) // Ajustar para que lunes = 1
+        fecha_inicio.setDate(diff)
+        fecha_inicio.setHours(0, 0, 0, 0)
+        // Viernes de esta semana
+        fecha_fin = new Date(fecha_inicio)
+        fecha_fin.setDate(fecha_inicio.getDate() + 4) // Viernes
+        fecha_fin.setHours(23, 59, 59, 999)
+        break
+      case 'mes':
+        fecha_inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+        fecha_inicio.setHours(0, 0, 0, 0)
+        fecha_fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0)
+        fecha_fin.setHours(23, 59, 59, 999)
+        break
+      case 'año':
+        fecha_inicio = new Date(hoy.getFullYear(), 0, 1)
+        fecha_inicio.setHours(0, 0, 0, 0)
+        fecha_fin = new Date(hoy.getFullYear(), 11, 31)
+        fecha_fin.setHours(23, 59, 59, 999)
+        break
+      default:
+        fecha_inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+        fecha_inicio.setHours(0, 0, 0, 0)
+        fecha_fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0)
+        fecha_fin.setHours(23, 59, 59, 999)
+    }
+
+    return {
+      fecha_inicio: fecha_inicio.toISOString().split('T')[0],
+      fecha_fin: fecha_fin.toISOString().split('T')[0],
+    }
+  }
+
+  /**
    * Construye objeto de filtros para servicios que aceptan objetos
-   * Uso: servicio.getStats(construirFiltrosObject())
+   * Uso: servicio.getStats(construirFiltrosObject(periodo))
+   * ✅ ACTUALIZADO: Ahora incluye fecha_inicio/fecha_fin basado en período si no están definidos
    */
   const construirFiltrosObject = useMemo(() => {
-    return (): {
+    return (periodo?: string): {
       analista?: string
       concesionario?: string
       modelo?: string
@@ -79,10 +131,24 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
       if (filtros.analista && filtros.analista !== '__ALL__') obj.analista = normalizarValor(filtros.analista)
       if (filtros.concesionario && filtros.concesionario !== '__ALL__') obj.concesionario = normalizarValor(filtros.concesionario)
       if (filtros.modelo && filtros.modelo !== '__ALL__') obj.modelo = normalizarValor(filtros.modelo)
-      if (filtros.fecha_inicio && filtros.fecha_inicio !== '') obj.fecha_inicio = filtros.fecha_inicio
-      if (filtros.fecha_fin && filtros.fecha_fin !== '') obj.fecha_fin = filtros.fecha_fin
+      
+      // ✅ Si hay fecha_inicio/fecha_fin explícitos, usarlos; si no, calcular del período
+      if (filtros.fecha_inicio && filtros.fecha_inicio !== '') {
+        obj.fecha_inicio = filtros.fecha_inicio
+      } else if (periodo) {
+        const fechas = calcularFechasPorPeriodo(periodo)
+        obj.fecha_inicio = fechas.fecha_inicio
+      }
+      
+      if (filtros.fecha_fin && filtros.fecha_fin !== '') {
+        obj.fecha_fin = filtros.fecha_fin
+      } else if (periodo) {
+        const fechas = calcularFechasPorPeriodo(periodo)
+        obj.fecha_fin = fechas.fecha_fin
+      }
+      
       if (DEBUG_LOGS) {
-        console.log('🔧 [useDashboardFiltros] Construyendo objeto de filtros:', { filtrosOriginales: filtros, objetoConstruido: obj })
+        console.log('🔧 [useDashboardFiltros] Construyendo objeto de filtros:', { filtrosOriginales: filtros, periodo, objetoConstruido: obj })
       }
       return obj
     }

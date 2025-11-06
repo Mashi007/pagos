@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Filter, X, Calendar, RefreshCw } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Filter, X, Calendar, RefreshCw, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -35,11 +35,30 @@ export function DashboardFiltrosPanel({
   errorOpcionesFiltros = false,
 }: DashboardFiltrosPanelProps) {
   const [showFiltros, setShowFiltros] = useState(false)
+  // ✅ Estado temporal para filtros antes de aplicar
+  const [filtrosTemporales, setFiltrosTemporales] = useState<DashboardFiltros>(filtros)
   const { tieneFiltrosActivos, cantidadFiltrosActivos } = useDashboardFiltros(filtros)
+
+  // ✅ Sincronizar filtros temporales cuando cambian los filtros reales (desde fuera) y se abre el popover
+  useEffect(() => {
+    if (showFiltros) {
+      setFiltrosTemporales(filtros)
+    }
+  }, [filtros, showFiltros])
 
   const handleLimpiarFiltros = () => {
     console.log('🧹 Limpiando filtros...')
-    setFiltros({})
+    const filtrosVacios: DashboardFiltros = {}
+    setFiltrosTemporales(filtrosVacios)
+    setFiltros(filtrosVacios)
+    setShowFiltros(false) // Cerrar popover después de limpiar
+  }
+
+  // ✅ Función para aplicar filtros
+  const handleAplicarFiltros = () => {
+    console.log('✅ Aplicando filtros:', filtrosTemporales)
+    setFiltros(filtrosTemporales)
+    setShowFiltros(false) // Cerrar popover después de aplicar
   }
 
   return (
@@ -66,7 +85,16 @@ export function DashboardFiltrosPanel({
       )}
 
       {/* Popover de Filtros */}
-      <Popover open={showFiltros} onOpenChange={setShowFiltros}>
+      <Popover 
+        open={showFiltros} 
+        onOpenChange={(open) => {
+          setShowFiltros(open)
+          // ✅ Cuando se abre el popover, sincronizar filtros temporales con los actuales
+          if (open) {
+            setFiltrosTemporales(filtros)
+          }
+        }}
+      >
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm">
             <Filter className="mr-2 h-4 w-4" />
@@ -98,14 +126,14 @@ export function DashboardFiltrosPanel({
             <div className="space-y-2">
               <label className="text-sm font-medium">Analista</label>
               <Select
-                value={filtros.analista ?? '__ALL__'}
+                value={filtrosTemporales.analista ?? '__ALL__'}
                 onValueChange={(value) => {
                   const nuevoFiltro = {
-                    ...filtros,
+                    ...filtrosTemporales,
                     analista: value === '__ALL__' ? undefined : value,
                   }
-                  console.log('🔍 [Filtro Analista] Cambiando filtro:', { anterior: filtros.analista, nuevo: nuevoFiltro.analista, todosLosFiltros: nuevoFiltro })
-                  setFiltros(nuevoFiltro)
+                  console.log('🔍 [Filtro Analista] Cambiando filtro temporal:', { anterior: filtrosTemporales.analista, nuevo: nuevoFiltro.analista, todosLosFiltros: nuevoFiltro })
+                  setFiltrosTemporales(nuevoFiltro)
                 }}
                 disabled={loadingOpcionesFiltros}
               >
@@ -146,14 +174,14 @@ export function DashboardFiltrosPanel({
             <div className="space-y-2">
               <label className="text-sm font-medium">Concesionario</label>
               <Select
-                value={filtros.concesionario ?? '__ALL__'}
+                value={filtrosTemporales.concesionario ?? '__ALL__'}
                 onValueChange={(value) => {
                   const nuevoFiltro = {
-                    ...filtros,
+                    ...filtrosTemporales,
                     concesionario: value === '__ALL__' ? undefined : value,
                   }
-                  console.log('🔍 [Filtro Concesionario] Cambiando filtro:', { anterior: filtros.concesionario, nuevo: nuevoFiltro.concesionario, todosLosFiltros: nuevoFiltro })
-                  setFiltros(nuevoFiltro)
+                  console.log('🔍 [Filtro Concesionario] Cambiando filtro temporal:', { anterior: filtrosTemporales.concesionario, nuevo: nuevoFiltro.concesionario, todosLosFiltros: nuevoFiltro })
+                  setFiltrosTemporales(nuevoFiltro)
                 }}
                 disabled={loadingOpcionesFiltros}
               >
@@ -194,14 +222,14 @@ export function DashboardFiltrosPanel({
             <div className="space-y-2">
               <label className="text-sm font-medium">Modelo</label>
               <Select
-                value={filtros.modelo ?? '__ALL__'}
+                value={filtrosTemporales.modelo ?? '__ALL__'}
                 onValueChange={(value) => {
                   const nuevoFiltro = {
-                    ...filtros,
+                    ...filtrosTemporales,
                     modelo: value === '__ALL__' ? undefined : value,
                   }
-                  console.log('🔍 [Filtro Modelo] Cambiando filtro:', { anterior: filtros.modelo, nuevo: nuevoFiltro.modelo, todosLosFiltros: nuevoFiltro })
-                  setFiltros(nuevoFiltro)
+                  console.log('🔍 [Filtro Modelo] Cambiando filtro temporal:', { anterior: filtrosTemporales.modelo, nuevo: nuevoFiltro.modelo, todosLosFiltros: nuevoFiltro })
+                  setFiltrosTemporales(nuevoFiltro)
                 }}
                 disabled={loadingOpcionesFiltros}
               >
@@ -244,14 +272,14 @@ export function DashboardFiltrosPanel({
                 <label className="text-sm font-medium">Fecha Desde</label>
                 <Input
                   type="date"
-                  value={filtros.fecha_inicio || ''}
+                  value={filtrosTemporales.fecha_inicio || ''}
                   onChange={(e) => {
                     const nuevoFiltro = {
-                      ...filtros,
+                      ...filtrosTemporales,
                       fecha_inicio: e.target.value || undefined,
                     }
-                    console.log('🔍 [Filtro Fecha Inicio] Cambiando filtro:', { anterior: filtros.fecha_inicio, nuevo: nuevoFiltro.fecha_inicio, todosLosFiltros: nuevoFiltro })
-                    setFiltros(nuevoFiltro)
+                    console.log('🔍 [Filtro Fecha Inicio] Cambiando filtro temporal:', { anterior: filtrosTemporales.fecha_inicio, nuevo: nuevoFiltro.fecha_inicio, todosLosFiltros: nuevoFiltro })
+                    setFiltrosTemporales(nuevoFiltro)
                   }}
                 />
               </div>
@@ -259,17 +287,40 @@ export function DashboardFiltrosPanel({
                 <label className="text-sm font-medium">Fecha Hasta</label>
                 <Input
                   type="date"
-                  value={filtros.fecha_fin || ''}
+                  value={filtrosTemporales.fecha_fin || ''}
                   onChange={(e) => {
                     const nuevoFiltro = {
-                      ...filtros,
+                      ...filtrosTemporales,
                       fecha_fin: e.target.value || undefined,
                     }
-                    console.log('🔍 [Filtro Fecha Fin] Cambiando filtro:', { anterior: filtros.fecha_fin, nuevo: nuevoFiltro.fecha_fin, todosLosFiltros: nuevoFiltro })
-                    setFiltros(nuevoFiltro)
+                    console.log('🔍 [Filtro Fecha Fin] Cambiando filtro temporal:', { anterior: filtrosTemporales.fecha_fin, nuevo: nuevoFiltro.fecha_fin, todosLosFiltros: nuevoFiltro })
+                    setFiltrosTemporales(nuevoFiltro)
                   }}
                 />
               </div>
+            </div>
+
+            {/* ✅ Botón para Aplicar Filtros */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setFiltrosTemporales(filtros) // Resetear a filtros actuales
+                  setShowFiltros(false) // Cerrar popover
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleAplicarFiltros}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Check className="mr-2 h-4 w-4" />
+                Aplicar Filtros
+              </Button>
             </div>
           </div>
         </PopoverContent>

@@ -74,10 +74,11 @@ export function DashboardMenu() {
   })
 
   // Batch 1: CRÍTICO - KPIs principales (visible primero para el usuario)
+  // ✅ ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
   const { data: kpisPrincipales, isLoading: loadingKPIs, isError: errorKPIs, refetch } = useQuery({
-    queryKey: ['kpis-principales-menu', JSON.stringify(filtros)],
+    queryKey: ['kpis-principales-menu', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject()
+      const params = construirFiltrosObject(periodo) // ✅ Pasar período para calcular fechas
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -137,10 +138,11 @@ export function DashboardMenu() {
 
   // Batch 3: MEDIA - Gráficos secundarios rápidos (cargar después de Batch 2, en paralelo limitado)
   // ✅ Lazy loading: Solo cargar cuando KPIs estén listos para reducir carga inicial
+  // ✅ ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
   const { data: datosTendencia, isLoading: loadingTendencia } = useQuery({
-    queryKey: ['financiamiento-tendencia', JSON.stringify(filtros)],
+    queryKey: ['financiamiento-tendencia', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject()
+      const params = construirFiltrosObject(periodo) // ✅ Pasar período para calcular fechas
       const queryParams = new URLSearchParams()
       queryParams.append('meses', '12') // Últimos 12 meses (1 año)
       Object.entries(params).forEach(([key, value]) => {
@@ -158,10 +160,11 @@ export function DashboardMenu() {
   })
 
   // Batch 3: Gráficos secundarios rápidos
+  // ✅ ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
   const { data: datosConcesionarios, isLoading: loadingConcesionarios } = useQuery({
-    queryKey: ['prestamos-concesionario', JSON.stringify(filtros)],
+    queryKey: ['prestamos-concesionario', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject()
+      const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -181,9 +184,9 @@ export function DashboardMenu() {
   })
 
   const { data: datosModelos, isLoading: loadingModelos } = useQuery({
-    queryKey: ['prestamos-modelo', JSON.stringify(filtros)],
+    queryKey: ['prestamos-modelo', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject()
+      const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -199,9 +202,9 @@ export function DashboardMenu() {
   })
 
   const { data: datosPagosConciliados, isLoading: loadingPagosConciliados } = useQuery({
-    queryKey: ['pagos-conciliados', JSON.stringify(filtros)],
+    queryKey: ['pagos-conciliados', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject()
+      const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -226,10 +229,11 @@ export function DashboardMenu() {
   })
 
   // Batch 4: BAJA - Gráficos menos críticos (cargar después de Batch 3, lazy loading)
+  // ✅ ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
   const { data: datosFinanciamientoRangos, isLoading: loadingFinanciamientoRangos } = useQuery({
-    queryKey: ['financiamiento-rangos', JSON.stringify(filtros)],
+    queryKey: ['financiamiento-rangos', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject()
+      const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -255,9 +259,9 @@ export function DashboardMenu() {
   })
 
   const { data: datosComposicionMorosidad, isLoading: loadingComposicionMorosidad } = useQuery({
-    queryKey: ['composicion-morosidad', JSON.stringify(filtros)],
+    queryKey: ['composicion-morosidad', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject()
+      const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -281,9 +285,9 @@ export function DashboardMenu() {
   })
 
   const { data: datosCobranzas, isLoading: loadingCobranzas } = useQuery({
-    queryKey: ['cobranzas-mensuales', JSON.stringify(filtros)],
+    queryKey: ['cobranzas-mensuales', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject()
+      const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -309,9 +313,9 @@ export function DashboardMenu() {
   })
 
   const { data: datosCobranzasSemanales, isLoading: loadingCobranzasSemanales } = useQuery({
-    queryKey: ['cobranzas-semanales', JSON.stringify(filtros)],
+    queryKey: ['cobranzas-semanales', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject()
+      const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -337,9 +341,9 @@ export function DashboardMenu() {
   })
 
   const { data: datosMorosidadAnalista, isLoading: loadingMorosidadAnalista } = useQuery({
-    queryKey: ['morosidad-analista', JSON.stringify(filtros)],
+    queryKey: ['morosidad-analista', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject()
+      const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -355,9 +359,9 @@ export function DashboardMenu() {
   })
 
   const { data: datosEvolucionMorosidad, isLoading: loadingEvolucionMorosidad } = useQuery({
-    queryKey: ['evolucion-morosidad-menu', JSON.stringify(filtros)],
+    queryKey: ['evolucion-morosidad-menu', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject()
+      const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
       queryParams.append('meses', '6')
       Object.entries(params).forEach(([key, value]) => {
@@ -374,9 +378,9 @@ export function DashboardMenu() {
   })
 
   const { data: datosResumenFinanciamiento, isLoading: loadingResumenFinanciamiento } = useQuery({
-    queryKey: ['resumen-financiamiento-pagado', JSON.stringify(filtros)],
+    queryKey: ['resumen-financiamiento-pagado', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject()
+      const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -395,9 +399,9 @@ export function DashboardMenu() {
   })
 
   const { data: datosEvolucionPagos, isLoading: loadingEvolucionPagos } = useQuery({
-    queryKey: ['evolucion-pagos-menu', JSON.stringify(filtros)],
+    queryKey: ['evolucion-pagos-menu', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject()
+      const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
       queryParams.append('meses', '6')
       Object.entries(params).forEach(([key, value]) => {

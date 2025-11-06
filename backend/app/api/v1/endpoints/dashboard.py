@@ -1822,6 +1822,23 @@ def resumen_general(
 # ============================================================================
 
 
+def _normalizar_valor_filtro(valor: Optional[str]) -> Optional[str]:
+    """
+    Normaliza valores de filtros que pueden venir con formato de tupla: ('VALOR',) o ("VALOR",)
+    """
+    if not valor:
+        return None
+    valor_str = str(valor).strip()
+    # Casos: ('ABC',) o ("ABC",)
+    if (valor_str.startswith("('") and valor_str.endswith("',)")) or (valor_str.startswith('("') and valor_str.endswith('",)')):
+        valor_str = valor_str[2:-2]
+    elif valor_str.startswith('(') and valor_str.endswith(',)'):
+        valor_str = valor_str[1:-2]
+    # Remover comillas sobrantes en extremos
+    valor_str = valor_str.strip().strip("'\"").strip()
+    return valor_str if valor_str else None
+
+
 @router.get("/kpis-principales")
 @cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos
 def obtener_kpis_principales(
@@ -1842,6 +1859,10 @@ def obtener_kpis_principales(
     """
     start_time = time.time()
     try:
+        # ✅ Normalizar valores de filtros que puedan venir con formato de tupla
+        analista = _normalizar_valor_filtro(analista)
+        concesionario = _normalizar_valor_filtro(concesionario)
+        modelo = _normalizar_valor_filtro(modelo)
         hoy = date.today()
         mes_actual = hoy.month
         año_actual = hoy.year
@@ -2114,12 +2135,20 @@ def obtener_kpis_principales(
         }
 
     except Exception as e:
-        logger.error(f"Error obteniendo KPIs principales: {e}", exc_info=True)
+        logger.error(
+            f"Error obteniendo KPIs principales: {e} | "
+            f"Filtros: analista={analista}, concesionario={concesionario}, modelo={modelo}, "
+            f"fecha_inicio={fecha_inicio}, fecha_fin={fecha_fin}",
+            exc_info=True
+        )
         try:
             db.rollback()
         except Exception:
             pass
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno al obtener KPIs principales: {str(e)}"
+        )
 
 
 @router.get("/cobranzas-mensuales")
