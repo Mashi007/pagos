@@ -34,9 +34,12 @@ services:
     rootDir: frontend
     buildCommand: npm install && npm run build
     startCommand: npm run render-start
+    healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
         value: 20.11.0
+      - key: NODE_ENV
+        value: production
       - key: VITE_API_URL
         value: https://pagos-f2qf.onrender.com
       - key: API_BASE_URL
