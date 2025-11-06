@@ -285,12 +285,7 @@ export function DashboardMenu() {
         if (value) queryParams.append(key, value.toString())
       })
       // Usar timeout extendido para endpoints lentos
-      const response = await apiClient.get(
-        `/api/v1/dashboard/cobranzas-mensuales?${queryParams.toString()}`,
-        { timeout: 60000 }
-      )
-      // ✅ CORRECCIÓN: Axios devuelve { data: {...} }, y el backend devuelve { meses: [...], meta_actual: ... }
-      return response.data as {
+      const response = await apiClient.get<{
         meses: Array<{
           mes: string
           nombre_mes: string
@@ -299,7 +294,12 @@ export function DashboardMenu() {
           meta_mensual: number
         }>
         meta_actual: number
-      }
+      }>(
+        `/api/v1/dashboard/cobranzas-mensuales?${queryParams.toString()}`,
+        { timeout: 60000 }
+      )
+      // ✅ CORRECCIÓN: Axios devuelve { data: {...} }, y el backend devuelve { meses: [...], meta_actual: ... }
+      return response.data
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
   })
@@ -314,12 +314,7 @@ export function DashboardMenu() {
         if (value) queryParams.append(key, value.toString())
       })
       queryParams.append('semanas', '12') // Últimas 12 semanas
-      const response = await apiClient.get(
-        `/api/v1/dashboard/cobranzas-semanales?${queryParams.toString()}`,
-        { timeout: 60000 }
-      )
-      // ✅ CORRECCIÓN: Axios devuelve { data: {...} }, y el backend devuelve { semanas: [...], fecha_inicio: ..., fecha_fin: ... }
-      return response.data as {
+      const response = await apiClient.get<{
         semanas: Array<{
           semana_inicio: string
           nombre_semana: string
@@ -328,7 +323,12 @@ export function DashboardMenu() {
         }>
         fecha_inicio: string
         fecha_fin: string
-      }
+      }>(
+        `/api/v1/dashboard/cobranzas-semanales?${queryParams.toString()}`,
+        { timeout: 60000 }
+      )
+      // ✅ CORRECCIÓN: Axios devuelve { data: {...} }, y el backend devuelve { semanas: [...], fecha_inicio: ..., fecha_fin: ... }
+      return response.data
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
   })
