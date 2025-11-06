@@ -226,28 +226,13 @@ def listar_notificaciones(
 
     except Exception as e:
         logger.error(f"Error listando notificaciones: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
-
-
-@router.get("/{notificacion_id}", response_model=NotificacionResponse)
-def obtener_notificacion(
-    notificacion_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Obtener notificación específica."""
-    try:
-        notificacion = db.query(Notificacion).filter(Notificacion.id == notificacion_id).first()
-
-        if not notificacion:
-            raise HTTPException(status_code=404, detail="Notificación no encontrada")
-
-        return notificacion
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error obteniendo notificación: {e}")
+        # Manejar error de columna 'canal' faltante
+        if "canal" in str(e).lower() and "does not exist" in str(e).lower():
+            logger.warning("Columna 'canal' no existe en BD. Se requiere migración de Alembic.")
+            raise HTTPException(
+                status_code=500,
+                detail="La columna 'canal' no existe en la tabla 'notificaciones'. Ejecute las migraciones de Alembic."
+            )
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
