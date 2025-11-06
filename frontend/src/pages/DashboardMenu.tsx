@@ -139,15 +139,34 @@ export function DashboardMenu() {
   // Batch 3: MEDIA - Gráficos secundarios rápidos (cargar después de Batch 2, en paralelo limitado)
   // ✅ Lazy loading: Solo cargar cuando KPIs estén listos para reducir carga inicial
   // ✅ ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
+  // ✅ ACTUALIZADO: Muestra datos desde septiembre 2024
   const { data: datosTendencia, isLoading: loadingTendencia } = useQuery({
     queryKey: ['financiamiento-tendencia', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
       const params = construirFiltrosObject(periodo) // ✅ Pasar período para calcular fechas
       const queryParams = new URLSearchParams()
-      queryParams.append('meses', '12') // Últimos 12 meses (1 año)
+      
+      // ✅ Si no hay fecha_inicio en filtros, usar septiembre 2024 como fecha de inicio
+      if (!params.fecha_inicio) {
+        queryParams.append('fecha_inicio', '2024-09-01') // Desde septiembre 2024
+      } else {
+        // Si hay fecha_inicio en filtros, usarla (pero asegurar que no sea anterior a sept 2024)
+        const fechaInicioFiltro = new Date(params.fecha_inicio)
+        const fechaMinima = new Date('2024-09-01')
+        if (fechaInicioFiltro < fechaMinima) {
+          queryParams.append('fecha_inicio', '2024-09-01')
+        } else {
+          queryParams.append('fecha_inicio', params.fecha_inicio)
+        }
+      }
+      
       Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
+        // No agregar fecha_inicio dos veces
+        if (key !== 'fecha_inicio' && value) {
+          queryParams.append(key, value.toString())
+        }
       })
+      
       const response = await apiClient.get(
         `/api/v1/dashboard/financiamiento-tendencia-mensual?${queryParams.toString()}`
       ) as { meses: Array<{ mes: string; cantidad_nuevos: number; monto_nuevos: number; total_acumulado: number; monto_cuotas_programadas: number; monto_pagado: number; morosidad: number; morosidad_mensual: number }> }
