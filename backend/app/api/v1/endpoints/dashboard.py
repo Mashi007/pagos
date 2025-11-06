@@ -30,8 +30,8 @@ from app.models.pago import Pago  # Mantener para operaciones que necesiten tabl
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.utils.filtros_dashboard import FiltrosDashboard
-from app.utils.query_monitor import query_monitor
 from app.utils.pagos_cuotas_helper import calcular_monto_pagado_mes
+from app.utils.query_monitor import query_monitor
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
