@@ -15,7 +15,34 @@ from sqlalchemy.orm import sessionmaker  # type: ignore[import-untyped]
 logger = logging.getLogger(__name__)
 
 # Configuración de la base de datos
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/pagos_db")
+# ✅ CORRECCIÓN: Manejar encoding de DATABASE_URL correctamente
+database_url_raw = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/pagos_db")
+if database_url_raw:
+    # Si la URL tiene caracteres especiales, codificarlos correctamente
+    try:
+        # Intentar decodificar si es bytes
+        if isinstance(database_url_raw, bytes):
+            try:
+                database_url_raw = database_url_raw.decode('utf-8')
+            except UnicodeDecodeError:
+                database_url_raw = database_url_raw.decode('latin-1', errors='ignore')
+        
+        # Parsear y reconstruir la URL con encoding correcto para la contraseña
+        from urllib.parse import quote_plus, urlparse, urlunparse
+        if '@' in database_url_raw and '://' in database_url_raw:
+            parsed = urlparse(database_url_raw)
+            if parsed.password:
+                # Reconstruir la URL con la contraseña codificada
+                netloc = f"{parsed.username}:{quote_plus(parsed.password, safe='')}@{parsed.hostname}"
+                if parsed.port:
+                    netloc += f":{parsed.port}"
+                parsed = parsed._replace(netloc=netloc)
+                database_url_raw = urlunparse(parsed)
+    except Exception:
+        # Si falla, usar la URL original
+        pass
+
+DATABASE_URL = database_url_raw
 
 # Crear engine con configuración de encoding UTF-8
 # Agregar parámetros de conexión para asegurar UTF-8

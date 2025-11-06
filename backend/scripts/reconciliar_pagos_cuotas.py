@@ -4,12 +4,50 @@ Soluciona el problema crítico de pagos no vinculados a cuotas
 """
 
 import logging
+import os
 import sys
 from decimal import Decimal
 from pathlib import Path
+from urllib.parse import quote_plus
 
 # Agregar el directorio raíz al path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# ✅ CORRECCIÓN: Manejar encoding de DATABASE_URL antes de importar SessionLocal
+# Si DATABASE_URL tiene caracteres especiales, codificarlos correctamente
+database_url = os.getenv("DATABASE_URL")
+if database_url:
+    try:
+        # Intentar decodificar como UTF-8 (si es bytes, convertir a string)
+        if isinstance(database_url, bytes):
+            # Si es bytes, intentar decodificar con diferentes encodings
+            try:
+                database_url = database_url.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    database_url = database_url.decode('latin-1')
+                except UnicodeDecodeError:
+                    database_url = database_url.decode('cp1252', errors='ignore')
+        
+        # Verificar si la URL tiene caracteres que necesitan encoding
+        # Parsear y reconstruir la URL con encoding correcto
+        if '@' in database_url and '://' in database_url:
+            # Separar protocolo, credenciales y resto
+            protocol_part = database_url.split('://')[0]
+            rest_part = database_url.split('://')[1]
+            
+            if '@' in rest_part:
+                auth_part, host_part = rest_part.split('@', 1)
+                if ':' in auth_part:
+                    user, password = auth_part.split(':', 1)
+                    # Codificar contraseña usando quote_plus
+                    password_encoded = quote_plus(password, safe='')
+                    database_url = f"{protocol_part}://{user}:{password_encoded}@{host_part}"
+                    os.environ["DATABASE_URL"] = database_url
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.warning(f"⚠️ No se pudo procesar DATABASE_URL para encoding: {e}")
+        # Continuar con la URL original
 
 from app.db.session import SessionLocal
 from app.models.amortizacion import Cuota
