@@ -3549,6 +3549,18 @@ def obtener_financiamiento_tendencia_mensual(
     start_time = time.time()
 
     try:
+        # ✅ ROLLBACK PREVENTIVO: Restaurar transacción si está abortada
+        try:
+            db.execute(text("SELECT 1"))
+        except Exception as test_error:
+            error_str = str(test_error)
+            if "aborted" in error_str.lower() or "InFailedSqlTransaction" in error_str:
+                logger.warning("⚠️ [financiamiento-tendencia] Transacción abortada detectada, haciendo rollback preventivo")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+        
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
@@ -4504,6 +4516,18 @@ def obtener_evolucion_pagos(
     start_time = time.time()
 
     try:
+        # ✅ ROLLBACK PREVENTIVO: Restaurar transacción si está abortada
+        try:
+            db.execute(text("SELECT 1"))
+        except Exception as test_error:
+            error_str = str(test_error)
+            if "aborted" in error_str.lower() or "InFailedSqlTransaction" in error_str:
+                logger.warning("⚠️ [evolucion-pagos] Transacción abortada detectada, haciendo rollback preventivo")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+        
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
@@ -4547,11 +4571,15 @@ def obtener_evolucion_pagos(
             query_time = int((time.time() - start_query) * 1000)
             logger.info(f"📊 [evolucion-pagos] Query completada en {query_time}ms, {len(resultados)} registros")
         except Exception as e:
-            logger.error(f"Error consultando pagos en evolucion-pagos: {e}", exc_info=True)
+            error_str = str(e)
+            logger.error(f"❌ [evolucion-pagos] Error consultando pagos: {e}", exc_info=True)
+            # Si es un error de transacción abortada, hacer rollback
+            if "aborted" in error_str.lower() or "InFailedSqlTransaction" in error_str:
+                logger.warning("⚠️ [evolucion-pagos] Transacción abortada detectada en query, haciendo rollback")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as rollback_error:
+                logger.error(f"❌ [evolucion-pagos] Error al hacer rollback: {rollback_error}")
             resultados = []
             query_time = int((time.time() - start_query) * 1000)
 

@@ -80,12 +80,36 @@ def get_db() -> Generator:
     Dependency para obtener sesión de base de datos.
     Se cierra automáticamente después de cada request.
     Si hay problemas de conexión, levanta HTTPException apropiada.
+    ✅ MEJORADO: Rollback preventivo para restaurar transacciones abortadas.
     """
     db = None
     try:
         db = SessionLocal()
         # Test básico de conexión
-        db.execute(text("SELECT 1"))
+        try:
+            db.execute(text("SELECT 1"))
+        except Exception as test_error:
+            # Si el test falla, puede ser porque la transacción está abortada
+            error_str = str(test_error)
+            if "aborted" in error_str.lower() or "InFailedSqlTransaction" in error_str:
+                # Intentar rollback para restaurar la transacción
+                try:
+                    db.rollback()
+                    # Reintentar el test después del rollback
+                    db.execute(text("SELECT 1"))
+                except Exception as rollback_error:
+                    logger.warning(f"⚠️ Error al hacer rollback preventivo: {rollback_error}")
+                    # Si el rollback también falla, cerrar y crear nueva sesión
+                    try:
+                        db.close()
+                    except Exception:
+                        pass
+                    db = SessionLocal()
+                    db.execute(text("SELECT 1"))
+            else:
+                # Si no es un error de transacción abortada, re-lanzar
+                raise test_error
+        
         yield db
     except Exception as e:
         # Verificar si es un error de autenticación HTTP
@@ -109,6 +133,15 @@ def get_db() -> Generator:
     finally:
         if db:
             try:
+                # Intentar commit antes de cerrar (si la transacción está activa)
+                # Si hay un error, hacer rollback y cerrar
+                try:
+                    db.commit()
+                except Exception:
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
                 db.close()
             except Exception:
                 pass  # Ignorar errores al cerrar
