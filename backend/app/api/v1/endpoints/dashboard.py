@@ -3614,7 +3614,7 @@ def obtener_financiamiento_tendencia_mensual(
                     "pr.estado = 'APROBADO'",
                     "EXTRACT(YEAR FROM c.fecha_vencimiento) >= 2024",
                     "pc.monto_aplicado IS NOT NULL",
-                    "pc.monto_aplicado > 0"
+                    "pc.monto_aplicado > 0",
                 ]
                 bind_params_pagos_filtrado = {}
 
