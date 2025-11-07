@@ -1127,11 +1127,7 @@ export function DashboardMenu() {
                             <Legend />
                             <Bar 
                               dataKey="monto" 
-                              fill={(entry: any) => {
-                                if (entry.categoria === 'Total Pagos') return '#3b82f6'
-                                if (entry.categoria === 'Total Conciliado') return '#10b981'
-                                return '#ef4444'
-                              }}
+                              fill="#3b82f6"
                               radius={[8, 8, 0, 0]}
                               name="Monto"
                             >
@@ -1424,12 +1420,13 @@ export function DashboardMenu() {
                               const parseMes = (mesStr: string) => {
                                 const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
                                 const partes = mesStr.split(' ')
-                                const mesNombre = partes[0]
-                                const año = parseInt(partes[1] || '2025')
+                                const mesNombre = partes[0] || ''
+                                const añoStr = partes[1] || '2025'
+                                const año = parseInt(añoStr, 10)
                                 const mesIndex = meses.indexOf(mesNombre)
                                 return año * 12 + mesIndex
                               }
-                              return parseMes(a) - parseMes(b)
+                              return parseMes(String(a)) - parseMes(String(b))
                             })
                             
                             return mesesOrdenados.map(mes => ({
