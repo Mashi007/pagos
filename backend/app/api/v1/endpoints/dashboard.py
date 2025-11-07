@@ -2158,6 +2158,7 @@ def obtener_kpis_principales(
 
     except Exception as e:
         import traceback
+
         error_traceback = traceback.format_exc()
         logger.error(
             f"❌ Error obteniendo KPIs principales: {e} | "
@@ -2174,10 +2175,7 @@ def obtener_kpis_principales(
         error_detail = str(e)
         if "fecha_registro" in error_detail.lower():
             error_detail += " (Error: fecha_registro no existe, usar fecha_aprobacion)"
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error interno al obtener KPIs principales: {error_detail}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno al obtener KPIs principales: {error_detail}")
 
 
 @router.get("/cobranzas-mensuales")
