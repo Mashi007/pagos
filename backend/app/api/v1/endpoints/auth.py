@@ -268,7 +268,7 @@ async def change_password(
         # el frontend debe cerrar la sesión y pedir que el usuario se vuelva a autenticar
         return {
             "message": "Contraseña cambiada exitosamente",
-            "requires_reauth": True  # Señal para que el frontend cierre la sesión
+            "requires_reauth": True,  # Señal para que el frontend cierre la sesión
         }
 
     except HTTPException:
