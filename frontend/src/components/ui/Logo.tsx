@@ -144,10 +144,15 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     // ✅ Marcar que estamos verificando ANTES de hacer cualquier request
     logoCache.isChecking = true
 
+    // ✅ Flag para verificar si el componente sigue montado (fuera de la función para acceso en cleanup)
+    let isMounted = true
+    let controller: AbortController | null = null
+    let timeoutId: NodeJS.Timeout | null = null
+
     // Intentar cargar el logo personalizado desde el API
     const checkCustomLogo = async () => {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5000) // Timeout de 5 segundos
+      controller = new AbortController()
+      timeoutId = setTimeout(() => controller?.abort(), 5000) // Timeout de 5 segundos
 
       try {
         // PRIMERO: Intentar obtener el nombre del logo desde la configuración general
@@ -155,6 +160,12 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           const configResponse = await fetch('/api/v1/configuracion/general', {
             signal: controller.signal,
           })
+          
+          // ✅ Verificar si el componente sigue montado antes de continuar
+          if (!isMounted) {
+            clearTimeout(timeoutId)
+            return
+          }
           
           if (configResponse.ok) {
             const config = await configResponse.json()
@@ -168,6 +179,12 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                   method: 'HEAD',
                   signal: controller.signal,
                 })
+                
+                // ✅ Verificar si el componente sigue montado antes de continuar
+                if (!isMounted) {
+                  clearTimeout(timeoutId)
+                  return
+                }
                 
                 if (headResponse.ok) {
                   // Logo existe, usar URL con timestamp
@@ -468,6 +485,15 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     window.addEventListener('logoUpdated', handleLogoUpdate as EventListener)
 
     return () => {
+      // ✅ Marcar como desmontado para evitar actualizaciones de estado
+      isMounted = false
+      // ✅ Cancelar peticiones en curso si el componente se desmonta
+      if (controller) {
+        controller.abort()
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
       window.removeEventListener('logoUpdated', handleLogoUpdate as EventListener)
       logoListeners.delete(handleCacheUpdate)
     }
