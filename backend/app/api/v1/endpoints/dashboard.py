@@ -234,33 +234,42 @@ def _calcular_morosidad(
         fecha_inicio_calculo = fecha_inicio
 
     # Construir filtros para WHERE clause
-    filtros_prestamo = []
+    # ✅ Crear dos versiones: una para CTE 'meses' (usa alias 'p') y otra para CTE 'pagos_por_mes' (usa alias 'pr')
+    filtros_prestamo_p = []  # Para CTE meses (alias p)
+    filtros_prestamo_pr = []  # Para CTE pagos_por_mes (alias pr)
     bind_params = {"fecha_limite": fecha, "fecha_inicio_calculo": fecha_inicio_calculo}
 
     if analista:
-        filtros_prestamo.append("(p.analista = :analista OR p.producto_financiero = :analista)")
+        filtros_prestamo_p.append("(p.analista = :analista OR p.producto_financiero = :analista)")
+        filtros_prestamo_pr.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
         bind_params["analista"] = analista
     if concesionario:
-        filtros_prestamo.append("p.concesionario = :concesionario")
+        filtros_prestamo_p.append("p.concesionario = :concesionario")
+        filtros_prestamo_pr.append("pr.concesionario = :concesionario")
         bind_params["concesionario"] = concesionario
     if modelo:
-        filtros_prestamo.append("(p.producto = :modelo OR p.modelo_vehiculo = :modelo)")
+        filtros_prestamo_p.append("(p.producto = :modelo OR p.modelo_vehiculo = :modelo)")
+        filtros_prestamo_pr.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
         bind_params["modelo"] = modelo
     if fecha_inicio:
-        filtros_prestamo.append("p.fecha_aprobacion >= :fecha_inicio")
+        filtros_prestamo_p.append("p.fecha_aprobacion >= :fecha_inicio")
+        filtros_prestamo_pr.append("pr.fecha_aprobacion >= :fecha_inicio")
         bind_params["fecha_inicio"] = fecha_inicio
     if fecha_fin:
-        filtros_prestamo.append("p.fecha_aprobacion <= :fecha_fin")
+        filtros_prestamo_p.append("p.fecha_aprobacion <= :fecha_fin")
+        filtros_prestamo_pr.append("pr.fecha_aprobacion <= :fecha_fin")
         bind_params["fecha_fin"] = fecha_fin
 
-    where_prestamo = " AND " + " AND ".join(filtros_prestamo) if filtros_prestamo else ""
+    where_prestamo_p = " AND " + " AND ".join(filtros_prestamo_p) if filtros_prestamo_p else ""
+    where_prestamo_pr = " AND " + " AND ".join(filtros_prestamo_pr) if filtros_prestamo_pr else ""
 
     # ✅ Query que calcula morosidad acumulada mes por mes
     # Suma todas las morosidades mensuales desde 2024 hasta la fecha
     # Usa la misma lógica que obtener_financiamiento_tendencia_mensual
 
-    if filtros_prestamo:
+    if filtros_prestamo_p:
         # Con filtros: filtrar pagos a través de préstamos
+        # ✅ CORRECCIÓN: Usar where_prestamo_p para CTE meses (alias p) y where_prestamo_pr para CTE pagos_por_mes (alias pr)
         query_sql = text(
             f"""
             WITH meses AS (
@@ -273,7 +282,7 @@ def _calcular_morosidad(
                 WHERE p.estado = 'APROBADO'
                   AND c.fecha_vencimiento >= :fecha_inicio_calculo
                   AND c.fecha_vencimiento <= :fecha_limite
-                  {where_prestamo}
+                  {where_prestamo_p}
                 GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
             ),
             pagos_por_mes AS (
@@ -291,8 +300,8 @@ def _calcular_morosidad(
                   AND pa.monto_pagado IS NOT NULL
                   AND pa.monto_pagado > 0
                   AND pa.activo = TRUE
-                  AND pr.estado = 'APROBADO'
-                  {where_prestamo}
+                  AND (pr.estado = 'APROBADO' OR pr.estado IS NULL)
+                  {where_prestamo_pr}
                 GROUP BY EXTRACT(YEAR FROM pa.fecha_pago), EXTRACT(MONTH FROM pa.fecha_pago)
             )
             SELECT COALESCE(SUM(GREATEST(0, m.monto_programado - COALESCE(p.monto_pagado, 0))), 0) as morosidad_acumulada
@@ -2148,17 +2157,27 @@ def obtener_kpis_principales(
         }
 
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
         logger.error(
-            f"Error obteniendo KPIs principales: {e} | "
+            f"❌ Error obteniendo KPIs principales: {e} | "
             f"Filtros: analista={analista}, concesionario={concesionario}, modelo={modelo}, "
-            f"fecha_inicio={fecha_inicio}, fecha_fin={fecha_fin}",
+            f"fecha_inicio={fecha_inicio}, fecha_fin={fecha_fin} | "
+            f"Traceback completo: {error_traceback}",
             exc_info=True,
         )
         try:
             db.rollback()
         except Exception:
             pass
-        raise HTTPException(status_code=500, detail=f"Error interno al obtener KPIs principales: {str(e)}")
+        # ✅ Mejorar mensaje de error para debugging
+        error_detail = str(e)
+        if "fecha_registro" in error_detail.lower():
+            error_detail += " (Error: fecha_registro no existe, usar fecha_aprobacion)"
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno al obtener KPIs principales: {error_detail}"
+        )
 
 
 @router.get("/cobranzas-mensuales")
