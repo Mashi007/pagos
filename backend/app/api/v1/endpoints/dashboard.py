@@ -4309,15 +4309,15 @@ def obtener_cobranzas_semanales(
         # ✅ IMPORTANTE: Usar el mismo cálculo que DATE_TRUNC('week', ...) en PostgreSQL
         # DATE_TRUNC('week', fecha) devuelve el lunes de la semana ISO
         semanas_data = []
-        
+
         # Calcular el lunes de la semana de fecha_inicio_query
         # Python weekday(): 0=lunes, 1=martes, ..., 6=domingo
         dias_desde_lunes = fecha_inicio_query.weekday()
         semana_inicio_base = fecha_inicio_query - timedelta(days=dias_desde_lunes)
-        
+
         current_date = semana_inicio_base
         semanas_generadas = 0
-        
+
         while current_date <= fecha_fin_query and semanas_generadas < semanas:
             semana_inicio = current_date  # Ya es lunes
             semana_fin = semana_inicio + timedelta(days=4)  # Viernes
@@ -4328,7 +4328,7 @@ def obtener_cobranzas_semanales(
             # ✅ Buscar en diccionarios usando la fecha exacta
             cobranzas_planificadas = cobranzas_por_semana.get(semana_inicio, 0.0)
             pagos_reales = pagos_por_semana.get(semana_inicio, 0.0)
-            
+
             # ✅ Logging para diagnóstico
             if cobranzas_planificadas > 0 or pagos_reales > 0:
                 logger.debug(
