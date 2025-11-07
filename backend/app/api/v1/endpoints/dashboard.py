@@ -2931,15 +2931,15 @@ def obtener_financiamiento_por_rangos(
         total_prestamos = totales_query.total_prestamos or 0
         total_monto = float(totales_query.total_monto or Decimal("0"))
 
-        # ✅ Rangos de financiamiento de $500 en $500 (de mayor a menor para efecto pirámide)
+        # ✅ Rangos de financiamiento de $300 en $300 (de mayor a menor para efecto pirámide)
         rangos = []
-        # Generar rangos de $500 desde $0 hasta $50,000
+        # Generar rangos de $300 desde $0 hasta $50,000
         max_rango = 50000
-        paso = 500
-        # Generar rangos desde $0 hasta $50,000 en pasos de $500
+        paso = 300
+        # Generar rangos desde $0 hasta $50,000 en pasos de $300
         for min_val in range(0, max_rango, paso):
             max_val = min_val + paso
-            # Formatear etiqueta: $0 - $500, $500 - $1000, etc.
+            # Formatear etiqueta: $0 - $300, $300 - $600, etc.
             categoria = f"${min_val:,.0f} - ${max_val:,.0f}".replace(",", "")
             rangos.append((min_val, max_val, categoria))
 
