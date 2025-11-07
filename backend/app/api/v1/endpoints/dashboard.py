@@ -1324,13 +1324,11 @@ def dashboard_administrador(
                 query_modelos, analista, concesionario, None, fecha_inicio, fecha_fin
             )
             resultados_modelos = query_modelos.all()
-            
+
             if resultados_modelos:
                 # Ordenar por total_prestamos
                 modelos_ordenados = sorted(
-                    resultados_modelos,
-                    key=lambda x: float(x.total_prestamos or Decimal("0")),
-                    reverse=True
+                    resultados_modelos, key=lambda x: float(x.total_prestamos or Decimal("0")), reverse=True
                 )
                 modelo_mas_vendido = modelos_ordenados[0].modelo or "N/A"
                 ventas_modelo_mas_vendido = int(modelos_ordenados[0].cantidad_prestamos or 0)
