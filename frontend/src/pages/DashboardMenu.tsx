@@ -57,7 +57,7 @@ export function DashboardMenu() {
   const queryClient = useQueryClient()
 
   const [filtros, setFiltros] = useState<DashboardFiltros>({})
-  const [periodo, setPeriodo] = useState('mes')
+  const [periodo, setPeriodo] = useState('año') // ✅ Por defecto: "Este año"
   const { construirParams, construirFiltrosObject } = useDashboardFiltros(filtros)
 
   // ✅ OPTIMIZACIÓN PRIORIDAD 1: Carga por batches con priorización

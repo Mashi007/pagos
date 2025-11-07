@@ -26,7 +26,7 @@ interface DashboardFiltrosPanelProps {
 export function DashboardFiltrosPanel({
   filtros,
   setFiltros,
-  periodo = 'mes',
+  periodo = 'año', // ✅ Por defecto: "Este año"
   setPeriodo,
   onRefresh,
   isRefreshing = false,
