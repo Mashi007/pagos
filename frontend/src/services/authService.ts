@@ -141,8 +141,21 @@ export class AuthService {
   }
 
   // Cambiar contraseña
-  async changePassword(data: ChangePasswordRequest): Promise<void> {
-    await apiClient.post('/api/v1/auth/change-password', data)
+  async changePassword(data: ChangePasswordRequest): Promise<{ requires_reauth: boolean }> {
+    const response = await apiClient.post<{ message: string; requires_reauth?: boolean }>('/api/v1/auth/change-password', data)
+    
+    // ✅ Si el backend indica que se requiere reautenticación, cerrar sesión y redirigir
+    if (response.requires_reauth) {
+      // Limpiar almacenamiento de autenticación
+      clearAuthStorage()
+      
+      // Redirigir al login después de un pequeño delay para asegurar que el storage se limpie
+      setTimeout(() => {
+        window.location.href = '/login'
+      }, 100)
+    }
+    
+    return { requires_reauth: response.requires_reauth || false }
   }
 
   // Verificar si el usuario está autenticado

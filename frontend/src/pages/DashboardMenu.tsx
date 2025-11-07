@@ -220,33 +220,6 @@ export function DashboardMenu() {
     enabled: !!kpisPrincipales, // ✅ Lazy loading - carga después de KPIs
   })
 
-  const { data: datosPagosConciliados, isLoading: loadingPagosConciliados } = useQuery({
-    queryKey: ['pagos-conciliados', periodo, JSON.stringify(filtros)],
-    queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // ✅ Pasar período
-      const queryParams = new URLSearchParams()
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-      const response = await apiClient.get(
-        `/api/v1/dashboard/pagos-conciliados?${queryParams.toString()}`
-      ) as {
-        total_pagos: number
-        total_pagos_conciliados: number
-        total_pagos_no_conciliados: number
-        monto_total: number
-        monto_conciliado: number
-        monto_no_conciliado: number
-        porcentaje_conciliacion: number
-        porcentaje_monto_conciliado: number
-      }
-      return response
-    },
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: !!kpisPrincipales, // ✅ Lazy loading - carga después de KPIs
-  })
-
   // Batch 4: BAJA - Gráficos menos críticos (cargar después de Batch 3, lazy loading)
   // ✅ ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
   const { data: datosFinanciamientoRangos, isLoading: loadingFinanciamientoRangos, isError: errorFinanciamientoRangos, refetch: refetchFinanciamientoRangos } = useQuery({
@@ -408,27 +381,6 @@ export function DashboardMenu() {
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
-  const { data: datosResumenFinanciamiento, isLoading: loadingResumenFinanciamiento } = useQuery({
-    queryKey: ['resumen-financiamiento-pagado', periodo, JSON.stringify(filtros)],
-    queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // ✅ Pasar período
-      const queryParams = new URLSearchParams()
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-      const response = await apiClient.get(
-        `/api/v1/dashboard/resumen-financiamiento-pagado?${queryParams.toString()}`
-      ) as {
-        total_financiamiento: number
-        total_pagado: number
-      }
-      return response
-    },
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
-  })
-
   const { data: datosEvolucionPagos, isLoading: loadingEvolucionPagos } = useQuery({
     queryKey: ['evolucion-pagos-menu', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
@@ -465,7 +417,6 @@ export function DashboardMenu() {
       await queryClient.invalidateQueries({ queryKey: ['financiamiento-tendencia'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['prestamos-concesionario'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['prestamos-modelo'], exact: false })
-      await queryClient.invalidateQueries({ queryKey: ['pagos-conciliados'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['financiamiento-rangos'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['composicion-morosidad'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['cobranzas-mensuales'], exact: false })
@@ -473,7 +424,6 @@ export function DashboardMenu() {
       await queryClient.invalidateQueries({ queryKey: ['morosidad-analista'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['evolucion-pagos-menu'], exact: false })
-      await queryClient.invalidateQueries({ queryKey: ['resumen-financiamiento-pagado'], exact: false })
       
       // Refrescar todas las queries activas
       await queryClient.refetchQueries({ queryKey: ['kpis-principales-menu'], exact: false })
@@ -481,14 +431,12 @@ export function DashboardMenu() {
       await queryClient.refetchQueries({ queryKey: ['financiamiento-tendencia'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['prestamos-concesionario'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['prestamos-modelo'], exact: false })
-      await queryClient.refetchQueries({ queryKey: ['pagos-conciliados'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['financiamiento-rangos'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['composicion-morosidad'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['cobranzas-mensuales'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['morosidad-analista'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['evolucion-pagos-menu'], exact: false })
-      await queryClient.refetchQueries({ queryKey: ['resumen-financiamiento-pagado'], exact: false })
       
       // También refrescar la query de kpisPrincipales usando su refetch
       await refetch()
@@ -956,214 +904,13 @@ export function DashboardMenu() {
                 </Card>
               </motion.div>
 
-            {/* Fila: RESUMEN: FINANCIAMIENTO VS PAGADO y Total Pagos y Conciliados */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Gráfico de Barras: Financiamiento vs Pagado */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.35 }}
-              >
-                <Card className="shadow-lg border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <BarChart3 className="h-6 w-6 text-blue-600" />
-                      <span>RESUMEN: FINANCIAMIENTO VS PAGADO</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    {loadingResumenFinanciamiento ? (
-                      <div className="h-[350px] flex items-center justify-center">
-                        <div className="animate-pulse text-gray-400">Cargando...</div>
-                      </div>
-                    ) : datosResumenFinanciamiento ? (
-                      <ResponsiveContainer width="100%" height={350}>
-                        <BarChart
-                          data={[
-                            {
-                              nombre: 'Financiamiento',
-                              valor: datosResumenFinanciamiento.total_financiamiento,
-                            },
-                            {
-                              nombre: 'Pagado',
-                              valor: datosResumenFinanciamiento.total_pagado,
-                            },
-                          ]}
-                          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
-                          <XAxis 
-                            dataKey="nombre" 
-                            stroke="#6b7280"
-                            style={{ fontSize: '14px', fontWeight: 600 }}
-                            tick={{ fill: '#6b7280' }}
-                          />
-                          <YAxis 
-                            stroke="#6b7280"
-                            style={{ fontSize: '12px', fontWeight: 500 }}
-                            tick={{ fill: '#6b7280' }}
-                            tickFormatter={(value) => formatCurrency(value)}
-                          />
-                          <Tooltip 
-                            contentStyle={{
-                              backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                              border: '1px solid #e5e7eb',
-                              borderRadius: '8px',
-                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                              padding: '12px',
-                            }}
-                            formatter={(value: number) => formatCurrency(value)}
-                          />
-                            <Legend />
-                          <Bar 
-                            dataKey="valor" 
-                            name="Monto"
-                            radius={[8, 8, 0, 0]}
-                          >
-                            {[
-                              { nombre: 'Financiamiento', valor: datosResumenFinanciamiento.total_financiamiento },
-                              { nombre: 'Pagado', valor: datosResumenFinanciamiento.total_pagado },
-                            ].map((entry, index) => (
-                              <Cell 
-                                key={`cell-${index}`} 
-                                fill={entry.nombre === 'Financiamiento' ? '#3b82f6' : '#10b981'} 
-                              />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="h-[350px] flex items-center justify-center text-gray-400">
-                          No hay datos disponibles
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </motion.div>
-
-                {/* Gráfico: Total Pagos y Conciliados */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                >
-                  <Card className="shadow-lg border-2 border-gray-200">
-                    <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
-                      <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                        <BarChart3 className="h-6 w-6 text-blue-600" />
-                        <span>Total Pagos y Conciliados</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-6">
-                      {loadingPagosConciliados ? (
-                        <div className="h-[350px] flex items-center justify-center">
-                          <div className="animate-pulse text-gray-400">Cargando...</div>
-                        </div>
-                      ) : datosPagosConciliados ? (
-                        <ResponsiveContainer width="100%" height={350}>
-                          <BarChart
-                            data={[
-                              {
-                                categoria: 'Total Pagos',
-                                monto: datosPagosConciliados.monto_total || 0,
-                                cantidad: datosPagosConciliados.total_pagos || 0,
-                              },
-                              {
-                                categoria: 'Total Conciliado',
-                                monto: datosPagosConciliados.monto_conciliado || 0,
-                                cantidad: datosPagosConciliados.total_pagos_conciliados || 0,
-                              },
-                              {
-                                categoria: 'No Conciliado',
-                                monto: datosPagosConciliados.monto_no_conciliado || 0,
-                                cantidad: datosPagosConciliados.total_pagos_no_conciliados || 0,
-                              },
-                            ]}
-                            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                            <XAxis 
-                              dataKey="categoria" 
-                              stroke="#6b7280"
-                              tick={{ fontSize: 12 }}
-                              angle={-15}
-                              textAnchor="end"
-                              height={60}
-                            />
-                            <YAxis 
-                              stroke="#6b7280" 
-                              tickFormatter={(value) => formatCurrency(value)}
-                              label={{ 
-                                value: 'Monto ($)', 
-                                angle: -90, 
-                                position: 'insideLeft',
-                                style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px', fontWeight: 600 }
-                              }}
-                            />
-                            <Tooltip 
-                              formatter={(value: number, name: string, props: any) => {
-                                const categoria = props.payload.categoria
-                                let porcentaje = '100.0'
-                                if (categoria === 'Total Conciliado') {
-                                  porcentaje = datosPagosConciliados.porcentaje_monto_conciliado.toFixed(1)
-                                } else if (categoria === 'No Conciliado') {
-                                  porcentaje = (100 - datosPagosConciliados.porcentaje_monto_conciliado).toFixed(1)
-                                }
-                                return [
-                                  formatCurrency(value),
-                                  `Cantidad: ${props.payload.cantidad.toLocaleString('es-EC')} pagos`,
-                                  `Porcentaje: ${porcentaje}%`
-                                ]
-                              }}
-                              labelFormatter={(label) => label}
-                              contentStyle={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '8px',
-                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                                padding: '12px',
-                              }}
-                            />
-                            <Legend />
-                            <Bar 
-                              dataKey="monto" 
-                              fill="#3b82f6"
-                              radius={[8, 8, 0, 0]}
-                              name="Monto"
-                            >
-                              {[
-                                { categoria: 'Total Pagos', monto: datosPagosConciliados.monto_total || 0 },
-                                { categoria: 'Total Conciliado', monto: datosPagosConciliados.monto_conciliado || 0 },
-                                { categoria: 'No Conciliado', monto: datosPagosConciliados.monto_no_conciliado || 0 },
-                              ].map((entry, index) => (
-                                <Cell 
-                                  key={`cell-${index}`} 
-                                  fill={
-                                    entry.categoria === 'Total Pagos' ? '#3b82f6' :
-                                    entry.categoria === 'Total Conciliado' ? '#10b981' : '#ef4444'
-                                  } 
-                                />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="h-[350px] flex items-center justify-center text-gray-400">
-                          No hay datos disponibles
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </motion.div>
-            </div>
-
             {/* Fila: Cobranzas Mensuales y Cobranzas Semanales */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Gráfico: Cobranzas Mensuales */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
+                transition={{ delay: 0.35 }}
               >
                 <Card className="shadow-lg border-2 border-gray-200">
                   <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
@@ -1182,7 +929,7 @@ export function DashboardMenu() {
                         <BarChart data={datosCobranzas.meses}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                           <XAxis dataKey="nombre_mes" stroke="#6b7280" />
-                          <YAxis stroke="#6b7280" />
+                          <YAxis stroke="#6b7280" tickFormatter={(value) => formatCurrency(value)} />
                           <Tooltip formatter={(value: number) => formatCurrency(value)} />
                           <Legend />
                           <Bar dataKey="cobranzas_planificadas" fill="#10b981" radius={[8, 8, 0, 0]} name="Planificado" />
@@ -1202,7 +949,7 @@ export function DashboardMenu() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.45 }}
+                transition={{ delay: 0.4 }}
               >
                 <Card className="shadow-lg border-2 border-gray-200">
                   <CardHeader className="bg-gradient-to-r from-teal-50 to-cyan-50 border-b-2 border-teal-200">
@@ -1364,14 +1111,26 @@ export function DashboardMenu() {
                       <ResponsiveContainer width="100%" height={350}>
                         <BarChart 
                           data={[...datosMorosidadAnalista].sort((a, b) => b.total_morosidad - a.total_morosidad)} 
-                          layout="vertical"
+                          margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis type="number" stroke="#6b7280" />
-                          <YAxis dataKey="analista" type="category" stroke="#6b7280" width={120} />
+                          <XAxis 
+                            dataKey="analista" 
+                            type="category" 
+                            stroke="#6b7280" 
+                            angle={-45}
+                            textAnchor="end"
+                            height={80}
+                            tick={{ fontSize: 11 }}
+                          />
+                          <YAxis 
+                            type="number" 
+                            stroke="#6b7280" 
+                            tickFormatter={(value) => formatCurrency(value)}
+                          />
                           <Tooltip formatter={(value: number) => formatCurrency(value)} />
                           <Legend />
-                          <Bar dataKey="total_morosidad" fill="#ef4444" radius={[0, 8, 8, 0]} name="Morosidad" />
+                          <Bar dataKey="total_morosidad" fill="#ef4444" radius={[8, 8, 0, 0]} name="Morosidad" />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
@@ -1513,102 +1272,102 @@ export function DashboardMenu() {
                   </CardContent>
                 </Card>
               </motion.div>
-
-              {/* Gráfico 6: Préstamos por Modelo */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.8 }}
-              >
-                <Card className="shadow-lg border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-violet-50 to-indigo-50 border-b-2 border-violet-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <BarChart3 className="h-6 w-6 text-violet-600" />
-                      <span>Préstamos por Modelo</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    {loadingModelos ? (
-                      <div className="h-[350px] flex items-center justify-center">
-                        <div className="animate-pulse text-gray-400">Cargando...</div>
-                      </div>
-                    ) : datosModelos && datosModelos.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={350}>
-                        <BarChart
-                          data={[...datosModelos]
-                            .sort((a, b) => b.porcentaje - a.porcentaje) // ✅ Ordenar de mayor a menor por porcentaje
-                            .map((m) => ({
-                              modelo: m.modelo.length > 30 ? m.modelo.substring(0, 30) + '...' : m.modelo,
-                              porcentaje: m.porcentaje,
-                              total_prestamos: m.total_prestamos,
-                              fullName: m.modelo,
-                            }))}
-                          margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
-                          <XAxis 
-                            dataKey="modelo"
-                            stroke="#6b7280"
-                            style={{ fontSize: '11px', fontWeight: 500 }}
-                            tick={{ fill: '#6b7280' }}
-                            angle={-45}
-                            textAnchor="end"
-                            height={80}
-                          />
-                          <YAxis 
-                            stroke="#6b7280"
-                            style={{ fontSize: '12px', fontWeight: 500 }}
-                            tick={{ fill: '#6b7280' }}
-                            label={{ value: 'Porcentaje (%)', angle: -90, position: 'insideLeft' }}
-                            tickFormatter={(value) => `${value}%`}
-                          />
-                          <Tooltip 
-                            contentStyle={{
-                              backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                              border: '1px solid #e5e7eb',
-                              borderRadius: '8px',
-                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                              padding: '12px',
-                            }}
-                            formatter={(value: number, name: string, props: any) => {
-                              return [
-                                `${value.toFixed(1)}% (${formatCurrency(props.payload.total_prestamos)})`,
-                                'Porcentaje'
-                              ]
-                            }}
-                            labelFormatter={(label) => {
-                              const data = datosModelos?.find(m => 
-                                (m.modelo.length > 30 ? m.modelo.substring(0, 30) + '...' : m.modelo) === label
-                              )
-                              return data?.modelo || label
-                            }}
-                          />
-                          <Legend />
-                          <Bar 
-                            dataKey="porcentaje" 
-                            name="Porcentaje"
-                            radius={[8, 8, 0, 0]}
-                          >
-                            {[...datosModelos]
-                              .sort((a, b) => b.porcentaje - a.porcentaje)
-                              .map((entry, index) => (
-                                <Cell 
-                                  key={`cell-${index}`} 
-                                  fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} 
-                                />
-                              ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-[350px] flex items-center justify-center text-gray-400">
-                        No hay datos disponibles
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
             </div>
+
+            {/* Fila 4: Préstamos por Modelo (Fila completa) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8 }}
+            >
+              <Card className="shadow-lg border-2 border-gray-200">
+                <CardHeader className="bg-gradient-to-r from-violet-50 to-indigo-50 border-b-2 border-violet-200">
+                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <BarChart3 className="h-6 w-6 text-violet-600" />
+                    <span>Préstamos por Modelo</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  {loadingModelos ? (
+                    <div className="h-[350px] flex items-center justify-center">
+                      <div className="animate-pulse text-gray-400">Cargando...</div>
+                    </div>
+                  ) : datosModelos && datosModelos.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={350}>
+                      <BarChart
+                        data={[...datosModelos]
+                          .sort((a, b) => b.porcentaje - a.porcentaje) // ✅ Ordenar de mayor a menor por porcentaje
+                          .map((m) => ({
+                            modelo: m.modelo.length > 30 ? m.modelo.substring(0, 30) + '...' : m.modelo,
+                            porcentaje: m.porcentaje,
+                            total_prestamos: m.total_prestamos,
+                            fullName: m.modelo,
+                          }))}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                        <XAxis 
+                          dataKey="modelo"
+                          stroke="#6b7280"
+                          style={{ fontSize: '11px', fontWeight: 500 }}
+                          tick={{ fill: '#6b7280' }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                        />
+                        <YAxis 
+                          stroke="#6b7280"
+                          style={{ fontSize: '12px', fontWeight: 500 }}
+                          tick={{ fill: '#6b7280' }}
+                          label={{ value: 'Porcentaje (%)', angle: -90, position: 'insideLeft' }}
+                          tickFormatter={(value) => `${value}%`}
+                        />
+                        <Tooltip 
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            padding: '12px',
+                          }}
+                          formatter={(value: number, name: string, props: any) => {
+                            return [
+                              `${value.toFixed(1)}% (${formatCurrency(props.payload.total_prestamos)})`,
+                              'Porcentaje'
+                            ]
+                          }}
+                          labelFormatter={(label) => {
+                            const data = datosModelos?.find(m => 
+                              (m.modelo.length > 30 ? m.modelo.substring(0, 30) + '...' : m.modelo) === label
+                            )
+                            return data?.modelo || label
+                          }}
+                        />
+                        <Legend />
+                        <Bar 
+                          dataKey="porcentaje" 
+                          name="Porcentaje"
+                          radius={[8, 8, 0, 0]}
+                        >
+                          {[...datosModelos]
+                            .sort((a, b) => b.porcentaje - a.porcentaje)
+                            .map((entry, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} 
+                              />
+                            ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[350px] flex items-center justify-center text-gray-400">
+                      No hay datos disponibles
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
 
             {/* Fila 5: Gráfico de Pirámide y Gráfico de Pastel de Morosidad */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
