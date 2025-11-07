@@ -1308,6 +1308,50 @@ def dashboard_administrador(
         # 20. TICKET PROMEDIO (promedio de préstamos)
         ticket_promedio = float(cartera_total / clientes_activos) if clientes_activos > 0 else 0
 
+        # 20.1. MODELOS MÁS Y MENOS VENDIDOS (conectado a datos reales)
+        try:
+            query_modelos = (
+                db.query(
+                    func.coalesce(func.coalesce(Prestamo.modelo_vehiculo, Prestamo.producto), "Sin Modelo").label("modelo"),
+                    func.sum(Prestamo.total_financiamiento).label("total_prestamos"),
+                    func.count(Prestamo.id).label("cantidad_prestamos"),
+                )
+                .filter(Prestamo.estado == "APROBADO")
+                .group_by("modelo")
+            )
+            # Aplicar filtros
+            query_modelos = FiltrosDashboard.aplicar_filtros_prestamo(
+                query_modelos, analista, concesionario, None, fecha_inicio, fecha_fin
+            )
+            resultados_modelos = query_modelos.all()
+            
+            if resultados_modelos:
+                # Ordenar por total_prestamos
+                modelos_ordenados = sorted(
+                    resultados_modelos,
+                    key=lambda x: float(x.total_prestamos or Decimal("0")),
+                    reverse=True
+                )
+                modelo_mas_vendido = modelos_ordenados[0].modelo or "N/A"
+                ventas_modelo_mas_vendido = int(modelos_ordenados[0].cantidad_prestamos or 0)
+                modelo_menos_vendido = modelos_ordenados[-1].modelo or "N/A"
+                total_modelos = len(modelos_ordenados)
+            else:
+                modelo_mas_vendido = "N/A"
+                ventas_modelo_mas_vendido = 0
+                modelo_menos_vendido = "N/A"
+                total_modelos = 0
+        except Exception as e:
+            logger.warning(f"Error calculando modelos más/menos vendidos: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            modelo_mas_vendido = "N/A"
+            ventas_modelo_mas_vendido = 0
+            modelo_menos_vendido = "N/A"
+            total_modelos = 0
+
         # 21. EVOLUCIÓN MENSUAL (últimos 6 meses)
         # ✅ OPTIMIZACIÓN: Combinar múltiples queries en una sola consulta con GROUP BY
         start_evolucion = time.time()
@@ -1636,12 +1680,12 @@ def dashboard_administrador(
                 "tasaConversionAnterior": 0,
             },
             "productos": {
-                "modeloMasVendido": "N/A",
-                "ventasModeloMasVendido": 0,
+                "modeloMasVendido": modelo_mas_vendido,
+                "ventasModeloMasVendido": ventas_modelo_mas_vendido,
                 "ticketPromedio": round(ticket_promedio, 2),
                 "ticketPromedioAnterior": round(ticket_promedio * 0.95, 2),
-                "totalModelos": 0,
-                "modeloMenosVendido": "N/A",
+                "totalModelos": total_modelos,
+                "modeloMenosVendido": modelo_menos_vendido,
             },
             "evolucion_mensual": evolucion_mensual,
             "fecha_consulta": hoy.isoformat(),

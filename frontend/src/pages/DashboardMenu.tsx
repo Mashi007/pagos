@@ -249,7 +249,7 @@ export function DashboardMenu() {
 
   // Batch 4: BAJA - Gráficos menos críticos (cargar después de Batch 3, lazy loading)
   // ✅ ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
-  const { data: datosFinanciamientoRangos, isLoading: loadingFinanciamientoRangos } = useQuery({
+  const { data: datosFinanciamientoRangos, isLoading: loadingFinanciamientoRangos, isError: errorFinanciamientoRangos, refetch: refetchFinanciamientoRangos } = useQuery({
     queryKey: ['financiamiento-rangos', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
       const params = construirFiltrosObject(periodo) // ✅ Pasar período
@@ -275,6 +275,7 @@ export function DashboardMenu() {
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
+    retry: false, // No reintentar automáticamente en caso de error 401
   })
 
   const { data: datosComposicionMorosidad, isLoading: loadingComposicionMorosidad } = useQuery({
@@ -1455,7 +1456,20 @@ export function DashboardMenu() {
                       <div className="h-[450px] flex items-center justify-center">
                         <div className="animate-pulse text-gray-400">Cargando...</div>
           </div>
-                    ) : datosFinanciamientoRangos && datosFinanciamientoRangos.rangos.length > 0 ? (
+                    ) : errorFinanciamientoRangos ? (
+                      <div className="h-[450px] flex flex-col items-center justify-center text-gray-500">
+                        <AlertTriangle className="h-8 w-8 mb-2 text-red-500" />
+                        <p className="text-sm">Error al cargar los datos. Por favor, intenta nuevamente.</p>
+                        <Button 
+                          onClick={() => refetchFinanciamientoRangos()} 
+                          variant="outline" 
+                          className="mt-4"
+                          size="sm"
+                        >
+                          Reintentar
+                        </Button>
+                      </div>
+                    ) : datosFinanciamientoRangos && datosFinanciamientoRangos.rangos && Array.isArray(datosFinanciamientoRangos.rangos) && datosFinanciamientoRangos.rangos.length > 0 ? (
                       (() => {
                         // Calcular máximo y mínimo de los datos para ajustar escala automáticamente
                         // ✅ Usar cantidad_prestamos en lugar de monto_total
