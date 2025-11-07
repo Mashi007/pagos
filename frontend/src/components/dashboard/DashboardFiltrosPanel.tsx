@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Filter, X, Calendar, RefreshCw, Check } from 'lucide-react'
+import { Filter, X, RefreshCw, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -63,27 +63,6 @@ export function DashboardFiltrosPanel({
 
   return (
     <div className="flex items-center space-x-3">
-      {setPeriodo && (
-        <Select 
-          value={periodo} 
-          onValueChange={(value) => {
-            console.log('🔄 [DashboardFiltrosPanel] Cambiando período:', { anterior: periodo, nuevo: value })
-            setPeriodo(value)
-          }}
-        >
-          <SelectTrigger className="w-[140px]">
-            <Calendar className="mr-2 h-4 w-4" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="dia">Hoy</SelectItem>
-            <SelectItem value="semana">Esta semana</SelectItem>
-            <SelectItem value="mes">Este mes</SelectItem>
-            <SelectItem value="año">Este año</SelectItem>
-          </SelectContent>
-        </Select>
-      )}
-
       {/* Popover de Filtros */}
       <Popover 
         open={showFiltros} 

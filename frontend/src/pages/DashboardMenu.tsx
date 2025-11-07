@@ -354,6 +354,17 @@ export function DashboardMenu() {
         `/api/v1/dashboard/cobranzas-semanales?${queryParams.toString()}`,
         { timeout: 60000 }
       )
+      // ✅ Logging para diagnóstico
+      if (response && response.semanas) {
+        const semanasConDatos = response.semanas.filter(
+          s => s.cobranzas_planificadas > 0 || s.pagos_reales > 0
+        )
+        console.log(
+          `📊 [CobranzasSemanales] Total semanas: ${response.semanas.length}, ` +
+          `Semanas con datos: ${semanasConDatos.length}`,
+          semanasConDatos.length > 0 ? semanasConDatos : 'Sin datos'
+        )
+      }
       return response
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
@@ -814,7 +825,7 @@ export function DashboardMenu() {
                       </div>
                     ) : datosTendencia && datosTendencia.length > 0 ? (
                       <ResponsiveContainer width="100%" height={450}>
-                      <ComposedChart data={datosTendencia} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                      <ComposedChart data={datosTendencia} margin={{ top: 20, right: 30, left: 80, bottom: 20 }}>
                           <defs>
                           <linearGradient id="colorMontoGradient" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.8} />
@@ -828,15 +839,34 @@ export function DashboardMenu() {
                           stroke="#6b7280" 
                           style={{ fontSize: '12px', fontWeight: 500 }}
                           tick={{ fill: '#6b7280' }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={60}
                         />
                         <YAxis 
                           yAxisId="left"
                           stroke="#6b7280"
+                          width={90}
                           style={{ fontSize: '12px', fontWeight: 500 }}
-                          tick={{ fill: '#6b7280' }}
-                          tickFormatter={(value) => formatCurrency(value)}
+                          tick={{ fill: '#6b7280', fontSize: 11 }}
+                          tickFormatter={(value) => {
+                            // Formato compacto para números grandes en el eje Y
+                            if (value >= 1000000) {
+                              return `$${(value / 1000000).toFixed(1)}M`
+                            } else if (value >= 1000) {
+                              return `$${(value / 1000).toFixed(0)}K`
+                            }
+                            return formatCurrency(value)
+                          }}
                           domain={yAxisDomainTendencia}
                           allowDataOverflow={false}
+                          allowDecimals={false}
+                          label={{ 
+                            value: 'Monto ($)', 
+                            angle: -90, 
+                            position: 'insideLeft',
+                            style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px', fontWeight: 600 }
+                          }}
                         />
                         <Tooltip 
                           contentStyle={{
@@ -926,79 +956,242 @@ export function DashboardMenu() {
                 </Card>
               </motion.div>
 
-            {/* Gráfico de Barras: Financiamiento vs Pagado */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35 }}
-            >
-              <Card className="shadow-lg border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <BarChart3 className="h-6 w-6 text-blue-600" />
-                    <span>RESUMEN: FINANCIAMIENTO VS PAGADO</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  {loadingResumenFinanciamiento ? (
-                    <div className="h-[350px] flex items-center justify-center">
-                      <div className="animate-pulse text-gray-400">Cargando...</div>
-                    </div>
-                  ) : datosResumenFinanciamiento ? (
-                    <ResponsiveContainer width="100%" height={350}>
-                      <BarChart
-                        data={[
-                          {
-                            nombre: 'Financiamiento',
-                            valor: datosResumenFinanciamiento.total_financiamiento,
-                          },
-                          {
-                            nombre: 'Pagado',
-                            valor: datosResumenFinanciamiento.total_pagado,
-                          },
-                        ]}
-                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
-                        <XAxis 
-                          dataKey="nombre" 
-                          stroke="#6b7280"
-                          style={{ fontSize: '14px', fontWeight: 600 }}
-                          tick={{ fill: '#6b7280' }}
-                        />
-                        <YAxis 
-                          stroke="#6b7280"
-                          style={{ fontSize: '12px', fontWeight: 500 }}
-                          tick={{ fill: '#6b7280' }}
-                          tickFormatter={(value) => formatCurrency(value)}
-                        />
-                        <Tooltip 
-                          contentStyle={{
-                            backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                            padding: '12px',
-                          }}
-                          formatter={(value: number) => formatCurrency(value)}
-                        />
-                          <Legend />
-                        <Bar 
-                          dataKey="valor" 
-                          name="Monto"
-                          radius={[8, 8, 0, 0]}
+            {/* Fila: RESUMEN: FINANCIAMIENTO VS PAGADO y Total Pagos y Conciliados */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Gráfico de Barras: Financiamiento vs Pagado */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 }}
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
+                  <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                      <BarChart3 className="h-6 w-6 text-blue-600" />
+                      <span>RESUMEN: FINANCIAMIENTO VS PAGADO</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {loadingResumenFinanciamiento ? (
+                      <div className="h-[350px] flex items-center justify-center">
+                        <div className="animate-pulse text-gray-400">Cargando...</div>
+                      </div>
+                    ) : datosResumenFinanciamiento ? (
+                      <ResponsiveContainer width="100%" height={350}>
+                        <BarChart
+                          data={[
+                            {
+                              nombre: 'Financiamiento',
+                              valor: datosResumenFinanciamiento.total_financiamiento,
+                            },
+                            {
+                              nombre: 'Pagado',
+                              valor: datosResumenFinanciamiento.total_pagado,
+                            },
+                          ]}
+                          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                         >
-                          {[
-                            { nombre: 'Financiamiento', valor: datosResumenFinanciamiento.total_financiamiento },
-                            { nombre: 'Pagado', valor: datosResumenFinanciamiento.total_pagado },
-                          ].map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={entry.nombre === 'Financiamiento' ? '#3b82f6' : '#10b981'} 
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                          <XAxis 
+                            dataKey="nombre" 
+                            stroke="#6b7280"
+                            style={{ fontSize: '14px', fontWeight: 600 }}
+                            tick={{ fill: '#6b7280' }}
+                          />
+                          <YAxis 
+                            stroke="#6b7280"
+                            style={{ fontSize: '12px', fontWeight: 500 }}
+                            tick={{ fill: '#6b7280' }}
+                            tickFormatter={(value) => formatCurrency(value)}
+                          />
+                          <Tooltip 
+                            contentStyle={{
+                              backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                              padding: '12px',
+                            }}
+                            formatter={(value: number) => formatCurrency(value)}
+                          />
+                            <Legend />
+                          <Bar 
+                            dataKey="valor" 
+                            name="Monto"
+                            radius={[8, 8, 0, 0]}
+                          >
+                            {[
+                              { nombre: 'Financiamiento', valor: datosResumenFinanciamiento.total_financiamiento },
+                              { nombre: 'Pagado', valor: datosResumenFinanciamiento.total_pagado },
+                            ].map((entry, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={entry.nombre === 'Financiamiento' ? '#3b82f6' : '#10b981'} 
+                              />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-[350px] flex items-center justify-center text-gray-400">
+                          No hay datos disponibles
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                {/* Gráfico: Total Pagos y Conciliados */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  <Card className="shadow-lg border-2 border-gray-200">
+                    <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+                      <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                        <BarChart3 className="h-6 w-6 text-blue-600" />
+                        <span>Total Pagos y Conciliados</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6">
+                      {loadingPagosConciliados ? (
+                        <div className="h-[350px] flex items-center justify-center">
+                          <div className="animate-pulse text-gray-400">Cargando...</div>
+                        </div>
+                      ) : datosPagosConciliados ? (
+                        <ResponsiveContainer width="100%" height={350}>
+                          <BarChart
+                            data={[
+                              {
+                                categoria: 'Total Pagos',
+                                monto: datosPagosConciliados.monto_total || 0,
+                                cantidad: datosPagosConciliados.total_pagos || 0,
+                              },
+                              {
+                                categoria: 'Total Conciliado',
+                                monto: datosPagosConciliados.monto_conciliado || 0,
+                                cantidad: datosPagosConciliados.total_pagos_conciliados || 0,
+                              },
+                              {
+                                categoria: 'No Conciliado',
+                                monto: datosPagosConciliados.monto_no_conciliado || 0,
+                                cantidad: datosPagosConciliados.total_pagos_no_conciliados || 0,
+                              },
+                            ]}
+                            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                            <XAxis 
+                              dataKey="categoria" 
+                              stroke="#6b7280"
+                              tick={{ fontSize: 12 }}
+                              angle={-15}
+                              textAnchor="end"
+                              height={60}
                             />
-                          ))}
-                        </Bar>
-                      </BarChart>
+                            <YAxis 
+                              stroke="#6b7280" 
+                              tickFormatter={(value) => formatCurrency(value)}
+                              label={{ 
+                                value: 'Monto ($)', 
+                                angle: -90, 
+                                position: 'insideLeft',
+                                style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px', fontWeight: 600 }
+                              }}
+                            />
+                            <Tooltip 
+                              formatter={(value: number, name: string, props: any) => {
+                                const categoria = props.payload.categoria
+                                let porcentaje = '100.0'
+                                if (categoria === 'Total Conciliado') {
+                                  porcentaje = datosPagosConciliados.porcentaje_monto_conciliado.toFixed(1)
+                                } else if (categoria === 'No Conciliado') {
+                                  porcentaje = (100 - datosPagosConciliados.porcentaje_monto_conciliado).toFixed(1)
+                                }
+                                return [
+                                  formatCurrency(value),
+                                  `Cantidad: ${props.payload.cantidad.toLocaleString('es-EC')} pagos`,
+                                  `Porcentaje: ${porcentaje}%`
+                                ]
+                              }}
+                              labelFormatter={(label) => label}
+                              contentStyle={{
+                                backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '8px',
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                                padding: '12px',
+                              }}
+                            />
+                            <Legend />
+                            <Bar 
+                              dataKey="monto" 
+                              fill={(entry: any) => {
+                                if (entry.categoria === 'Total Pagos') return '#3b82f6'
+                                if (entry.categoria === 'Total Conciliado') return '#10b981'
+                                return '#ef4444'
+                              }}
+                              radius={[8, 8, 0, 0]}
+                              name="Monto"
+                            >
+                              {[
+                                { categoria: 'Total Pagos', monto: datosPagosConciliados.monto_total || 0 },
+                                { categoria: 'Total Conciliado', monto: datosPagosConciliados.monto_conciliado || 0 },
+                                { categoria: 'No Conciliado', monto: datosPagosConciliados.monto_no_conciliado || 0 },
+                              ].map((entry, index) => (
+                                <Cell 
+                                  key={`cell-${index}`} 
+                                  fill={
+                                    entry.categoria === 'Total Pagos' ? '#3b82f6' :
+                                    entry.categoria === 'Total Conciliado' ? '#10b981' : '#ef4444'
+                                  } 
+                                />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-[350px] flex items-center justify-center text-gray-400">
+                          No hay datos disponibles
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+            </div>
+
+            {/* Fila: Cobranzas Mensuales y Cobranzas Semanales */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Gráfico: Cobranzas Mensuales */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
+                  <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                      <BarChart3 className="h-6 w-6 text-emerald-600" />
+                      <span>Cobranzas Mensuales</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {loadingCobranzas ? (
+                      <div className="h-[350px] flex items-center justify-center">
+                        <div className="animate-pulse text-gray-400">Cargando...</div>
+                      </div>
+                    ) : datosCobranzas && datosCobranzas.meses && datosCobranzas.meses.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={350}>
+                        <BarChart data={datosCobranzas.meses}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="nombre_mes" stroke="#6b7280" />
+                          <YAxis stroke="#6b7280" />
+                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                          <Legend />
+                          <Bar dataKey="cobranzas_planificadas" fill="#10b981" radius={[8, 8, 0, 0]} name="Planificado" />
+                          <Bar dataKey="pagos_reales" fill="#3b82f6" radius={[8, 8, 0, 0]} name="Recaudado" />
+                        </BarChart>
                       </ResponsiveContainer>
                     ) : (
                       <div className="h-[350px] flex items-center justify-center text-gray-400">
@@ -1009,11 +1202,58 @@ export function DashboardMenu() {
                 </Card>
               </motion.div>
 
+              {/* Gráfico: Cobranzas Semanales (Lunes a Viernes) */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.45 }}
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
+                  <CardHeader className="bg-gradient-to-r from-teal-50 to-cyan-50 border-b-2 border-teal-200">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                      <BarChart3 className="h-6 w-6 text-teal-600" />
+                      <span>Cobranzas Semanales (Lunes a Viernes)</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {loadingCobranzasSemanales ? (
+                      <div className="h-[350px] flex items-center justify-center">
+                        <div className="animate-pulse text-gray-400">Cargando...</div>
+                      </div>
+                    ) : datosCobranzasSemanales && datosCobranzasSemanales.semanas && datosCobranzasSemanales.semanas.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={350}>
+                        <BarChart data={datosCobranzasSemanales.semanas} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis 
+                            dataKey="nombre_semana" 
+                            stroke="#6b7280" 
+                            angle={-45}
+                            textAnchor="end"
+                            height={80}
+                            tick={{ fontSize: 11 }}
+                          />
+                          <YAxis stroke="#6b7280" tickFormatter={(value) => formatCurrency(value)} />
+                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                          <Legend />
+                          <Bar dataKey="cobranzas_planificadas" fill="#10b981" radius={[8, 8, 0, 0]} name="Planificado" />
+                          <Bar dataKey="pagos_reales" fill="#3b82f6" radius={[8, 8, 0, 0]} name="Recaudado" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[350px] flex items-center justify-center text-gray-400">
+                        No hay datos disponibles
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </div>
+
             {/* Gráfico de Barras: Préstamos por Concesionario (Fila completa) */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
+                transition={{ delay: 0.5 }}
               >
                 <Card className="shadow-lg border-2 border-gray-200">
                   <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
@@ -1104,52 +1344,13 @@ export function DashboardMenu() {
                 </Card>
               </motion.div>
 
-            {/* Fila 2: 2 Gráficos */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Gráfico 3: Cobranzas Mensuales */}
+            {/* Fila 2: Morosidad por Analista */}
+            <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
+              {/* Gráfico: Morosidad por Analista */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
-              >
-                <Card className="shadow-lg border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <BarChart3 className="h-6 w-6 text-emerald-600" />
-                      <span>Cobranzas Mensuales</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    {loadingCobranzas ? (
-                      <div className="h-[350px] flex items-center justify-center">
-                        <div className="animate-pulse text-gray-400">Cargando...</div>
-                      </div>
-                    ) : datosCobranzas && datosCobranzas.meses && datosCobranzas.meses.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={350}>
-                        <BarChart data={datosCobranzas.meses}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis dataKey="nombre_mes" stroke="#6b7280" />
-                          <YAxis stroke="#6b7280" />
-                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                          <Legend />
-                          <Bar dataKey="cobranzas_planificadas" fill="#10b981" radius={[8, 8, 0, 0]} name="Planificado" />
-                          <Bar dataKey="pagos_reales" fill="#3b82f6" radius={[8, 8, 0, 0]} name="Recaudado" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-[350px] flex items-center justify-center text-gray-400">
-                        No hay datos disponibles
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              {/* Gráfico 4: Morosidad por Analista */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
               >
                 <Card className="shadow-lg border-2 border-gray-200">
                   <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 border-b-2 border-red-200">
@@ -1175,52 +1376,6 @@ export function DashboardMenu() {
                           <Tooltip formatter={(value: number) => formatCurrency(value)} />
                           <Legend />
                           <Bar dataKey="total_morosidad" fill="#ef4444" radius={[0, 8, 8, 0]} name="Morosidad" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-[350px] flex items-center justify-center text-gray-400">
-                        No hay datos disponibles
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              {/* Gráfico: Cobranzas Semanales (Lunes a Viernes) */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.7 }}
-              >
-                <Card className="shadow-lg border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-teal-50 to-cyan-50 border-b-2 border-teal-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <BarChart3 className="h-6 w-6 text-teal-600" />
-                      <span>Cobranzas Semanales (Lunes a Viernes)</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    {loadingCobranzasSemanales ? (
-                      <div className="h-[350px] flex items-center justify-center">
-                        <div className="animate-pulse text-gray-400">Cargando...</div>
-                      </div>
-                    ) : datosCobranzasSemanales && datosCobranzasSemanales.semanas && datosCobranzasSemanales.semanas.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={350}>
-                        <BarChart data={datosCobranzasSemanales.semanas} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis 
-                            dataKey="nombre_semana" 
-                            stroke="#6b7280" 
-                            angle={-45}
-                            textAnchor="end"
-                            height={80}
-                            tick={{ fontSize: 11 }}
-                          />
-                          <YAxis stroke="#6b7280" tickFormatter={(value) => formatCurrency(value)} />
-                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                          <Legend />
-                          <Bar dataKey="cobranzas_planificadas" fill="#10b981" radius={[8, 8, 0, 0]} name="Planificado" />
-                          <Bar dataKey="pagos_reales" fill="#3b82f6" radius={[8, 8, 0, 0]} name="Recaudado" />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
@@ -1257,25 +1412,100 @@ export function DashboardMenu() {
                       <ResponsiveContainer width="100%" height={350}>
                         <RechartsLineChart
                           data={(() => {
-                            // Combinar datos de ambos gráficos por mes
+                            // ✅ Combinar datos de ambos gráficos por mes y ordenar correctamente por fecha
                             const morosidadMap = new Map(datosEvolucionMorosidad?.map(item => [item.mes, item.morosidad]) || [])
                             const pagosMap = new Map(datosEvolucionPagos?.map(item => [item.mes, item.monto]) || [])
-                            const allMonths = Array.from(new Set([...morosidadMap.keys(), ...pagosMap.keys()])).sort()
-                            return allMonths.map(mes => ({
+                            
+                            // Obtener todos los meses únicos
+                            const allMonths = Array.from(new Set([...morosidadMap.keys(), ...pagosMap.keys()]))
+                            
+                            // ✅ Ordenar meses por fecha (parsear formato "Ene 2025", "Feb 2025", etc.)
+                            const mesesOrdenados = allMonths.sort((a, b) => {
+                              const parseMes = (mesStr: string) => {
+                                const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+                                const partes = mesStr.split(' ')
+                                const mesNombre = partes[0]
+                                const año = parseInt(partes[1] || '2025')
+                                const mesIndex = meses.indexOf(mesNombre)
+                                return año * 12 + mesIndex
+                              }
+                              return parseMes(a) - parseMes(b)
+                            })
+                            
+                            return mesesOrdenados.map(mes => ({
                               mes,
                               morosidad: morosidadMap.get(mes) || 0,
                               pagos: pagosMap.get(mes) || 0,
                             }))
                           })()}
+                          margin={{ top: 10, right: 30, left: 20, bottom: 5 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis dataKey="mes" stroke="#6b7280" />
-                          <YAxis yAxisId="left" stroke="#6b7280" />
-                          <YAxis yAxisId="right" orientation="right" stroke="#6b7280" />
-                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                          <XAxis 
+                            dataKey="mes" 
+                            stroke="#6b7280"
+                            tick={{ fontSize: 11 }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={60}
+                          />
+                          <YAxis 
+                            yAxisId="left" 
+                            stroke="#6b7280"
+                            tickFormatter={(value) => formatCurrency(value)}
+                            label={{ 
+                              value: 'Morosidad ($)', 
+                              angle: -90, 
+                              position: 'insideLeft',
+                              style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px', fontWeight: 600 }
+                            }}
+                          />
+                          <YAxis 
+                            yAxisId="right" 
+                            orientation="right" 
+                            stroke="#6b7280"
+                            tickFormatter={(value) => formatCurrency(value)}
+                            label={{ 
+                              value: 'Pagos ($)', 
+                              angle: 90, 
+                              position: 'insideRight',
+                              style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px', fontWeight: 600 }
+                            }}
+                          />
+                          <Tooltip 
+                            formatter={(value: number, name: string) => [
+                              formatCurrency(value),
+                              name === 'morosidad' ? 'Morosidad' : 'Pagos'
+                            ]}
+                            contentStyle={{
+                              backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                              padding: '12px',
+                            }}
+                          />
                           <Legend />
-                          <Line yAxisId="left" type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={3} name="Morosidad" dot={{ r: 4 }} />
-                          <Line yAxisId="right" type="monotone" dataKey="pagos" stroke="#8b5cf6" strokeWidth={3} name="Pagos" dot={{ r: 4 }} />
+                          <Line 
+                            yAxisId="left" 
+                            type="monotone" 
+                            dataKey="morosidad" 
+                            stroke="#ef4444" 
+                            strokeWidth={3} 
+                            name="Morosidad" 
+                            dot={{ r: 5, fill: '#ef4444' }}
+                            activeDot={{ r: 7 }}
+                          />
+                          <Line 
+                            yAxisId="right" 
+                            type="monotone" 
+                            dataKey="pagos" 
+                            stroke="#8b5cf6" 
+                            strokeWidth={3} 
+                            name="Pagos" 
+                            dot={{ r: 5, fill: '#8b5cf6' }}
+                            activeDot={{ r: 7 }}
+                          />
                         </RechartsLineChart>
                       </ResponsiveContainer>
                     ) : (
@@ -1383,59 +1613,6 @@ export function DashboardMenu() {
               </motion.div>
             </div>
 
-            {/* Fila 4: Gráficos adicionales */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Gráfico 7: Total Pagos vs Total Conciliado */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.9 }}
-              >
-                <Card className="shadow-lg border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <BarChart3 className="h-6 w-6 text-blue-600" />
-                      <span>Total Pagos y Conciliados</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    {loadingPagosConciliados ? (
-                      <div className="h-[400px] flex items-center justify-center">
-                        <div className="animate-pulse text-gray-400">Cargando...</div>
-                      </div>
-                    ) : datosPagosConciliados ? (
-                      <ResponsiveContainer width="100%" height={400}>
-                        <BarChart
-                          data={[
-                            {
-                              categoria: 'Pagos',
-                              total: datosPagosConciliados.monto_total,
-                              conciliado: datosPagosConciliados.monto_conciliado,
-                              noConciliado: datosPagosConciliados.monto_no_conciliado,
-                            },
-                          ]}
-                          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis dataKey="categoria" stroke="#6b7280" />
-                          <YAxis stroke="#6b7280" />
-                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                          <Legend />
-                          <Bar dataKey="total" fill="#3b82f6" radius={[8, 8, 0, 0]} name="Total Pagos" />
-                          <Bar dataKey="conciliado" fill="#10b981" radius={[8, 8, 0, 0]} name="Total Conciliado" />
-                          <Bar dataKey="noConciliado" fill="#ef4444" radius={[8, 8, 0, 0]} name="No Conciliado" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-[400px] flex items-center justify-center text-gray-400">
-                        No hay datos disponibles
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </div>
-
             {/* Fila 5: Gráfico de Pirámide y Gráfico de Pastel de Morosidad */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Gráfico de Pirámide */}
@@ -1471,9 +1648,20 @@ export function DashboardMenu() {
                       </div>
                     ) : datosFinanciamientoRangos && datosFinanciamientoRangos.rangos && Array.isArray(datosFinanciamientoRangos.rangos) && datosFinanciamientoRangos.rangos.length > 0 ? (
                       (() => {
+                        // ✅ Filtrar solo rangos con datos (cantidad_prestamos > 0)
+                        const rangosConDatos = datosFinanciamientoRangos.rangos.filter(r => (r.cantidad_prestamos || 0) > 0)
+                        
+                        if (rangosConDatos.length === 0) {
+                          return (
+                            <div className="h-[450px] flex items-center justify-center text-gray-400">
+                              No hay datos disponibles
+                            </div>
+                          )
+                        }
+                        
                         // Calcular máximo y mínimo de los datos para ajustar escala automáticamente
                         // ✅ Usar cantidad_prestamos en lugar de monto_total
-                        const valores = datosFinanciamientoRangos.rangos.map(r => r.cantidad_prestamos || 0)
+                        const valores = rangosConDatos.map(r => r.cantidad_prestamos || 0)
                         const maxValor = Math.max(...valores)
                         const valoresNoCero = valores.filter(v => v > 0)
                         const minValor = valoresNoCero.length > 0 ? Math.min(...valoresNoCero) : 0
@@ -1484,7 +1672,7 @@ export function DashboardMenu() {
                         const dominioMin = 0 // Siempre empezar desde 0 para mejor visualización
                         
                         // Ordenar rangos por valor numérico del rango (de menor a mayor - invertido)
-                        const rangosOrdenados = [...datosFinanciamientoRangos.rangos].sort((a, b) => {
+                        const rangosOrdenados = [...rangosConDatos].sort((a, b) => {
                           // Extraer el valor mínimo del rango para ordenar
                           const getMinValue = (categoria: string) => {
                             // Limpiar formato: remover puntos y comas

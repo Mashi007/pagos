@@ -4226,14 +4226,14 @@ def obtener_cobranzas_semanales(
             query_cobranzas_sql = text(
                 f"""
                 SELECT
-                    (DATE_TRUNC('week', c.fecha_vencimiento) + INTERVAL '1 day')::date as semana_inicio,
+                    DATE_TRUNC('week', c.fecha_vencimiento)::date as semana_inicio,
                     EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
                     EXTRACT(WEEK FROM c.fecha_vencimiento)::int as semana_numero,
                     COALESCE(SUM(c.monto_cuota), 0) as cobranzas
                 FROM cuotas c
                 INNER JOIN prestamos p ON c.prestamo_id = p.id
                 WHERE {where_clause_cobranzas}
-                GROUP BY(DATE_TRUNC('week', c.fecha_vencimiento) + INTERVAL '1 day')::date,
+                GROUP BY DATE_TRUNC('week', c.fecha_vencimiento)::date,
                          EXTRACT(YEAR FROM c.fecha_vencimiento),
                          EXTRACT(WEEK FROM c.fecha_vencimiento)
                 ORDER BY semana_inicio
@@ -4244,10 +4244,13 @@ def obtener_cobranzas_semanales(
             cobranzas_por_semana = {}
             for row in result_cobranzas:
                 semana_inicio = row[0]
-                cobranzas_por_semana[semana_inicio] = float(row[3] or Decimal("0"))
+                cobranzas = float(row[3] or Decimal("0"))
+                cobranzas_por_semana[semana_inicio] = cobranzas
+                if cobranzas > 0:
+                    logger.debug(f"📊 [cobranzas-semanales] Semana {semana_inicio}: ${cobranzas:,.2f}")
             tiempo_cobranzas = int((time.time() - start_cobranzas) * 1000)
             logger.info(
-                f"📊 [cobranzas-semanales] Query cobranzas completada en {tiempo_cobranzas}ms, {len(cobranzas_por_semana)} semanas"
+                f"📊 [cobranzas-semanales] Query cobranzas completada en {tiempo_cobranzas}ms, {len(cobranzas_por_semana)} semanas con datos"
             )
         except Exception as e:
             logger.error(f"Error consultando cobranzas en cobranzas-semanales: {e}", exc_info=True)
@@ -4267,7 +4270,7 @@ def obtener_cobranzas_semanales(
             query_pagos_sql = text(
                 """
                 SELECT
-                    (DATE_TRUNC('week', fecha_pago) + INTERVAL '1 day')::date as semana_inicio,
+                    DATE_TRUNC('week', fecha_pago)::date as semana_inicio,
                     COALESCE(SUM(monto_pagado), 0) as pagos
                 FROM pagos
                 WHERE fecha_pago >= :fecha_inicio
@@ -4276,7 +4279,7 @@ def obtener_cobranzas_semanales(
                   AND monto_pagado > 0
                   AND activo = TRUE
                   AND EXTRACT(DOW FROM fecha_pago) BETWEEN 1 AND 5
-                GROUP BY(DATE_TRUNC('week', fecha_pago) + INTERVAL '1 day')::date
+                GROUP BY DATE_TRUNC('week', fecha_pago)::date
                 ORDER BY semana_inicio
             """
             ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
@@ -4285,10 +4288,13 @@ def obtener_cobranzas_semanales(
             pagos_por_semana = {}
             for row in result_pagos:
                 semana_inicio = row[0]
-                pagos_por_semana[semana_inicio] = float(row[1] or Decimal("0"))
+                pagos = float(row[1] or Decimal("0"))
+                pagos_por_semana[semana_inicio] = pagos
+                if pagos > 0:
+                    logger.debug(f"📊 [cobranzas-semanales] Semana {semana_inicio}: ${pagos:,.2f} en pagos")
             tiempo_pagos = int((time.time() - start_pagos) * 1000)
             logger.info(
-                f"📊 [cobranzas-semanales] Query pagos completada en {tiempo_pagos}ms, {len(pagos_por_semana)} semanas"
+                f"📊 [cobranzas-semanales] Query pagos completada en {tiempo_pagos}ms, {len(pagos_por_semana)} semanas con datos"
             )
         except Exception as e:
             logger.error(f"Error consultando pagos en cobranzas-semanales: {e}", exc_info=True)
@@ -4300,25 +4306,35 @@ def obtener_cobranzas_semanales(
             tiempo_pagos = int((time.time() - start_pagos) * 1000)
 
         # Generar datos semanales (incluyendo semanas sin datos)
+        # ✅ IMPORTANTE: Usar el mismo cálculo que DATE_TRUNC('week', ...) en PostgreSQL
+        # DATE_TRUNC('week', fecha) devuelve el lunes de la semana ISO
         semanas_data = []
-        current_date = fecha_inicio_query
-
-        # Asegurar que empezamos en lunes
-        while current_date.weekday() != 0:  # 0 = lunes
-            current_date -= timedelta(days=1)
-
+        
+        # Calcular el lunes de la semana de fecha_inicio_query
+        # Python weekday(): 0=lunes, 1=martes, ..., 6=domingo
+        dias_desde_lunes = fecha_inicio_query.weekday()
+        semana_inicio_base = fecha_inicio_query - timedelta(days=dias_desde_lunes)
+        
+        current_date = semana_inicio_base
         semanas_generadas = 0
+        
         while current_date <= fecha_fin_query and semanas_generadas < semanas:
-            # Calcular inicio de semana (lunes)
-            dias_desde_lunes = current_date.weekday()
-            semana_inicio = current_date - timedelta(days=dias_desde_lunes)
+            semana_inicio = current_date  # Ya es lunes
             semana_fin = semana_inicio + timedelta(days=4)  # Viernes
 
             if semana_inicio > fecha_fin_query:
                 break
 
+            # ✅ Buscar en diccionarios usando la fecha exacta
             cobranzas_planificadas = cobranzas_por_semana.get(semana_inicio, 0.0)
             pagos_reales = pagos_por_semana.get(semana_inicio, 0.0)
+            
+            # ✅ Logging para diagnóstico
+            if cobranzas_planificadas > 0 or pagos_reales > 0:
+                logger.debug(
+                    f"📊 [cobranzas-semanales] Semana {semana_inicio}: "
+                    f"Planificado=${cobranzas_planificadas:,.2f}, Recaudado=${pagos_reales:,.2f}"
+                )
 
             # Formatear nombre de semana: "Semana del DD/MM - DD/MM"
             nombre_semana = f"Sem {semana_inicio.strftime('%d/%m')} - {semana_fin.strftime('%d/%m')}"
