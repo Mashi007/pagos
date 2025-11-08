@@ -1415,17 +1415,9 @@ export function DashboardMenu() {
                           )
                         }
                         
-                        // Calcular máximo y mínimo de los datos para ajustar escala automáticamente
-                        // ✅ Usar cantidad_prestamos en lugar de monto_total
-                        const valores = rangosConDatos.map(r => r.cantidad_prestamos || 0)
-                        const maxValor = Math.max(...valores)
-                        const valoresNoCero = valores.filter(v => v > 0)
-                        const minValor = valoresNoCero.length > 0 ? Math.min(...valoresNoCero) : 0
-                        
-                        // Calcular dominio con padding inteligente (10% o mínimo 1, lo que sea mayor)
-                        const padding = Math.max(maxValor * 0.1, 1)
-                        const dominioMax = maxValor + padding
-                        const dominioMin = 0 // Siempre empezar desde 0 para mejor visualización
+                        // ✅ Escala fija del eje X: 0 a 2200
+                        const dominioMin = 0
+                        const dominioMax = 2200
                         
                         // Ordenar rangos por valor numérico del rango (de menor a mayor - invertido)
                         const rangosOrdenados = [...rangosConDatos].sort((a, b) => {
