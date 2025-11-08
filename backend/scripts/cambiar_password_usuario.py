@@ -24,10 +24,10 @@ def cambiar_password_usuario(email: str, nueva_password: str):
         usuario = db.query(User).filter(User.email == email.lower().strip()).first()
         
         if not usuario:
-            print(f"❌ ERROR - Usuario no encontrado: {email}")
+            print(f"ERROR - Usuario no encontrado: {email}")
             return False
         
-        print(f"✅ Usuario encontrado: {usuario.email}")
+        print(f"OK - Usuario encontrado: {usuario.email}")
         print(f"   Nombre: {usuario.nombre} {usuario.apellido}")
         print(f"   Rol: {usuario.rol}")
         print(f"   Admin: {usuario.is_admin}")
@@ -36,7 +36,7 @@ def cambiar_password_usuario(email: str, nueva_password: str):
         # Validar nueva contraseña
         is_valid, message = validate_password_strength(nueva_password)
         if not is_valid:
-            print(f"❌ ERROR - La contraseña no cumple con los requisitos: {message}")
+            print(f"ERROR - La contraseña no cumple con los requisitos: {message}")
             return False
         
         # Actualizar contraseña
@@ -49,12 +49,12 @@ def cambiar_password_usuario(email: str, nueva_password: str):
         db.commit()
         db.refresh(usuario)
         
-        print(f"✅ Contraseña actualizada exitosamente para: {email}")
+        print(f"OK - Contraseña actualizada exitosamente para: {email}")
         print(f"   Nueva contraseña: {nueva_password}")
         return True
         
     except Exception as e:
-        print(f"❌ ERROR - Error al actualizar contraseña: {e}")
+        print(f"ERROR - Error al actualizar contraseña: {e}")
         db.rollback()
         return False
     finally:
@@ -70,16 +70,16 @@ if __name__ == "__main__":
     email = sys.argv[1]
     nueva_password = sys.argv[2]
     
-    print(f"🔄 Cambiando contraseña para: {email}")
+    print(f"Cambiando contraseña para: {email}")
     print(f"   Nueva contraseña: {nueva_password}")
     print()
     
     success = cambiar_password_usuario(email, nueva_password)
     
     if success:
-        print("\n✅ Proceso completado exitosamente")
+        print("\nProceso completado exitosamente")
         sys.exit(0)
     else:
-        print("\n❌ Proceso falló")
+        print("\nProceso falló")
         sys.exit(1)
 
