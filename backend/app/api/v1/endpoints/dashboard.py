@@ -2970,14 +2970,9 @@ def obtener_financiamiento_por_rangos(
                 f"⚠️ Se encontraron {prestamos_invalidos} préstamos aprobados con total_financiamiento NULL o <= 0. "
                 f"Estos no se incluirán en la distribución por rangos."
             )
-        
+
         # ✅ Aplicar filtro para excluir NULL y <= 0 antes de calcular totales y procesar rangos
-        query_base = query_base.filter(
-            and_(
-                Prestamo.total_financiamiento.isnot(None),
-                Prestamo.total_financiamiento > 0
-            )
-        )
+        query_base = query_base.filter(and_(Prestamo.total_financiamiento.isnot(None), Prestamo.total_financiamiento > 0))
 
         # ✅ OPTIMIZACIÓN: Calcular totales en una sola query (después de filtrar NULL)
         try:
@@ -3011,7 +3006,7 @@ def obtener_financiamiento_por_rangos(
 
         try:
             distribucion_data = _procesar_distribucion_rango_monto(query_base, rangos, total_prestamos, total_monto)
-            
+
             # Ordenar de mayor a menor monto para efecto pirámide (solo si hay datos)
             if distribucion_data:
                 distribucion_data.sort(key=lambda x: x["monto_total"], reverse=True)
