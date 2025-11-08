@@ -503,15 +503,21 @@ def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos
             )
 
     # Query única con GROUP BY por rango
-    distribucion_query = (
-        query_base.with_entities(
-            case(*case_conditions, else_="Otro").label("rango"),
-            func.count(Prestamo.id).label("cantidad"),
-            func.sum(Prestamo.total_financiamiento).label("monto_total"),
+    try:
+        distribucion_query = (
+            query_base.with_entities(
+                case(*case_conditions, else_="Otro").label("rango"),
+                func.count(Prestamo.id).label("cantidad"),
+                func.sum(Prestamo.total_financiamiento).label("monto_total"),
+            )
+            .group_by("rango")
+            .all()
         )
-        .group_by("rango")
-        .all()
-    )
+    except Exception as e:
+        logger.error(f"Error ejecutando query de distribución por rangos: {e}", exc_info=True)
+        # Si falla la query con CASE WHEN, retornar lista vacía en lugar de fallar completamente
+        logger.warning("Retornando distribución vacía debido a error en query")
+        return []
 
     # Crear diccionario de resultados
     distribucion_dict = {
@@ -2955,14 +2961,7 @@ def obtener_financiamiento_por_rangos(
             query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
 
-        # ✅ OPTIMIZACIÓN: Calcular totales en una sola query
-        totales_query = query_base.with_entities(
-            func.count(Prestamo.id).label("total_prestamos"), func.sum(Prestamo.total_financiamiento).label("total_monto")
-        ).first()
-        total_prestamos = totales_query.total_prestamos or 0
-        total_monto = float(totales_query.total_monto or Decimal("0"))
-
-        # ✅ Verificar préstamos con total_financiamiento NULL o <= 0
+        # ✅ Verificar préstamos con total_financiamiento NULL o <= 0 (antes de filtrar)
         prestamos_invalidos = query_base.filter(
             or_(Prestamo.total_financiamiento.is_(None), Prestamo.total_financiamiento <= 0)
         ).count()
@@ -2971,6 +2970,26 @@ def obtener_financiamiento_por_rangos(
                 f"⚠️ Se encontraron {prestamos_invalidos} préstamos aprobados con total_financiamiento NULL o <= 0. "
                 f"Estos no se incluirán en la distribución por rangos."
             )
+        
+        # ✅ Aplicar filtro para excluir NULL y <= 0 antes de calcular totales y procesar rangos
+        query_base = query_base.filter(
+            and_(
+                Prestamo.total_financiamiento.isnot(None),
+                Prestamo.total_financiamiento > 0
+            )
+        )
+
+        # ✅ OPTIMIZACIÓN: Calcular totales en una sola query (después de filtrar NULL)
+        try:
+            totales_query = query_base.with_entities(
+                func.count(Prestamo.id).label("total_prestamos"), func.sum(Prestamo.total_financiamiento).label("total_monto")
+            ).first()
+            total_prestamos = totales_query.total_prestamos or 0 if totales_query else 0
+            total_monto = float(totales_query.total_monto or Decimal("0")) if totales_query else 0.0
+        except Exception as e:
+            logger.error(f"Error calculando totales en financiamiento-por-rangos: {e}", exc_info=True)
+            total_prestamos = 0
+            total_monto = 0.0
 
         # ✅ Rangos de financiamiento de $300 en $300 (de mayor a menor para efecto pirámide)
         rangos = []
@@ -2990,10 +3009,15 @@ def obtener_financiamiento_por_rangos(
         # Invertir lista para que quede de mayor a menor (efecto pirámide)
         rangos.reverse()
 
-        distribucion_data = _procesar_distribucion_rango_monto(query_base, rangos, total_prestamos, total_monto)
-
-        # Ordenar de mayor a menor monto para efecto pirámide
-        distribucion_data.sort(key=lambda x: x["monto_total"], reverse=True)
+        try:
+            distribucion_data = _procesar_distribucion_rango_monto(query_base, rangos, total_prestamos, total_monto)
+            
+            # Ordenar de mayor a menor monto para efecto pirámide (solo si hay datos)
+            if distribucion_data:
+                distribucion_data.sort(key=lambda x: x["monto_total"], reverse=True)
+        except Exception as e:
+            logger.error(f"Error procesando distribución por rangos: {e}", exc_info=True)
+            distribucion_data = []
 
         total_time = int((time.time() - start_time) * 1000)
         logger.info(f"⏱️ [financiamiento-por-rangos] Tiempo total: {total_time}ms")
