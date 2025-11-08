@@ -2963,15 +2963,9 @@ def obtener_financiamiento_por_rangos(
         total_monto = float(totales_query.total_monto or Decimal("0"))
 
         # ✅ Verificar préstamos con total_financiamiento NULL o <= 0
-        prestamos_invalidos = (
-            query_base.filter(
-                or_(
-                    Prestamo.total_financiamiento.is_(None),
-                    Prestamo.total_financiamiento <= 0
-                )
-            )
-            .count()
-        )
+        prestamos_invalidos = query_base.filter(
+            or_(Prestamo.total_financiamiento.is_(None), Prestamo.total_financiamiento <= 0)
+        ).count()
         if prestamos_invalidos > 0:
             logger.warning(
                 f"⚠️ Se encontraron {prestamos_invalidos} préstamos aprobados con total_financiamiento NULL o <= 0. "
