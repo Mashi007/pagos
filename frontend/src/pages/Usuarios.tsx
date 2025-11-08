@@ -114,7 +114,7 @@ export function Usuarios() {
       apellido: usuario.apellido,
       is_admin: usuario.is_admin,  // Cambio clave: rol → is_admin
       password: '',
-      cargo: usuario.cargo || 'Usuario', // Valor por defecto si no existe
+      cargo: usuario.cargo || '', // Si es null, usar string vacío (no 'Usuario')
       is_active: usuario.is_active
     })
     setShowCreateForm(true)
@@ -138,9 +138,13 @@ export function Usuarios() {
           is_active: formData.is_active,
         }
         
-        // Incluir cargo solo si el usuario original tenía cargo (no el default)
-        if (editingUsuario.cargo && editingUsuario.cargo !== 'Usuario') {
-          updateData.cargo = editingUsuario.cargo
+        // Incluir cargo del formulario (valor que el usuario está editando)
+        // Si el cargo está vacío o solo tiene espacios, enviar null para limpiar el campo
+        if (formData.cargo && formData.cargo.trim() !== '') {
+          updateData.cargo = formData.cargo.trim()
+        } else {
+          // Si está vacío, enviar null para que se limpie en la BD
+          updateData.cargo = null
         }
         
         // Incluir password solo si se proporcionó uno nuevo (no vacío)
@@ -153,7 +157,22 @@ export function Usuarios() {
         toast.success('Usuario actualizado exitosamente')
       } else {
         // Crear nuevo usuario
-        await userService.crearUsuario(formData)
+        const createData: any = {
+          email: formData.email,
+          nombre: formData.nombre,
+          apellido: formData.apellido,
+          is_admin: formData.is_admin,
+          is_active: formData.is_active,
+          password: formData.password,
+        }
+        
+        // Incluir cargo solo si tiene valor (no vacío)
+        if (formData.cargo && formData.cargo.trim() !== '') {
+          createData.cargo = formData.cargo.trim()
+        }
+        // Si está vacío, no incluirlo (será null en la BD)
+        
+        await userService.crearUsuario(createData)
         toast.success('Usuario creado exitosamente')
       }
       
@@ -517,6 +536,18 @@ export function Usuarios() {
                     <SelectItem value="ADMIN">Administrador</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <label htmlFor="cargo" className="block text-sm font-medium text-gray-700">Cargo</label>
+                <Input
+                  id="cargo"
+                  value={formData.cargo || ''}
+                  onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
+                  placeholder="Ej: Gerente, Analista, Supervisor..."
+                  className="mt-1"
+                />
+                <p className="text-xs text-gray-500 mt-1">Dejar vacío para "Sin especificar"</p>
               </div>
 
               <div>
