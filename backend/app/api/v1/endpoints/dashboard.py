@@ -513,7 +513,7 @@ def _procesar_distribucion_rango_monto(
         if not case_conditions:
             logger.warning("No hay condiciones CASE para procesar, retornando lista vacía")
             return []
-            
+
         # ✅ Construir expresión CASE y usarla tanto en SELECT como en GROUP BY
         case_expression = case(*case_conditions, else_="Otro")
         distribucion_query = (
@@ -3075,7 +3075,7 @@ def obtener_financiamiento_por_rangos(
 
             # Invertir lista para que quede de mayor a menor (efecto pirámide)
             rangos.reverse()
-            
+
             logger.info(f"📊 [financiamiento-por-rangos] Generados {len(rangos)} rangos")
         except Exception as e:
             logger.error(f"Error generando rangos: {e}", exc_info=True)
