@@ -279,9 +279,10 @@ async def change_password(
 
         # Actualizar solo el campo hashed_password
         user.hashed_password = get_password_hash(password_data.new_password)
-        
+
         # ✅ Actualizar updated_at
         from datetime import datetime
+
         user.updated_at = datetime.utcnow()
 
         # Asegurar que el cargo se mantiene explícitamente
