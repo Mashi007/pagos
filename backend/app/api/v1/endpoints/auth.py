@@ -289,11 +289,11 @@ async def change_password(
         logger.info(f"Contraseña cambiada para usuario: {current_user.email}")
 
         # ✅ IMPORTANTE: Indicar que se requiere reautenticación
-        # Los tokens actuales siguen siendo válidos técnicamente, pero por seguridad
-        # el frontend debe cerrar la sesión y pedir que el usuario se vuelva a autenticar
+        # Por seguridad, después de cambiar la contraseña el usuario debe volver a iniciar sesión
+        # El frontend cerrará la sesión automáticamente y redirigirá al login
         return {
-            "message": "Contraseña cambiada exitosamente",
-            "requires_reauth": True,  # Señal para que el frontend cierre la sesión
+            "message": "Contraseña cambiada exitosamente. Debes volver a iniciar sesión.",
+            "requires_reauth": True,  # Señal para que el frontend cierre la sesión y redirija al login
         }
 
     except HTTPException:
