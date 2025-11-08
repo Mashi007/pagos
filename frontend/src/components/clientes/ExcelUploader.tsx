@@ -803,13 +803,50 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     try {
       console.log('📊 Procesando archivo Excel:', file.name)
       
+      // ✅ VALIDACIÓN DE SEGURIDAD: Validar archivo antes de procesar
+      const { validateExcelFile, validateWorkbookStructure, validateExcelData, sanitizeFileName } = await import('@/utils/excelValidation')
+      
+      const fileValidation = validateExcelFile(file)
+      if (!fileValidation.isValid) {
+        alert(`Error de validación: ${fileValidation.error}`)
+        setIsProcessing(false)
+        return
+      }
+      
+      if (fileValidation.warnings && fileValidation.warnings.length > 0) {
+        console.warn('Advertencias de validación:', fileValidation.warnings)
+      }
+      
+      // Sanitizar nombre del archivo
+      const sanitizedFileName = sanitizeFileName(file.name)
+      if (sanitizedFileName !== file.name) {
+        console.warn('Nombre de archivo sanitizado:', sanitizedFileName)
+      }
+      
       const data = await file.arrayBuffer()
       const workbook = XLSX.read(data, { type: 'array' })
+      
+      // ✅ VALIDACIÓN DE SEGURIDAD: Validar estructura del workbook
+      const structureValidation = validateWorkbookStructure(workbook)
+      if (!structureValidation.isValid) {
+        alert(`Error en estructura del archivo: ${structureValidation.error}`)
+        setIsProcessing(false)
+        return
+      }
+      
       const sheetName = workbook.SheetNames[0]
       const worksheet = workbook.Sheets[sheetName]
       
       // Convertir a JSON
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+      
+      // ✅ VALIDACIÓN DE SEGURIDAD: Validar datos extraídos
+      const dataValidation = validateExcelData(jsonData)
+      if (!dataValidation.isValid) {
+        alert(`Error en datos del archivo: ${dataValidation.error}`)
+        setIsProcessing(false)
+        return
+      }
       
       if (jsonData.length < 2) {
         throw new Error('El archivo debe tener al menos una fila de datos')

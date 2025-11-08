@@ -16,13 +16,22 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [results, setResults] = useState<any>(null)
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
-      if (!selectedFile.name.endsWith('.xlsx') && !selectedFile.name.endsWith('.xls')) {
-        toast.error('Solo se permiten archivos Excel (.xlsx o .xls)')
+      // ✅ VALIDACIÓN DE SEGURIDAD: Validar archivo antes de aceptarlo
+      const { validateExcelFile } = await import('@/utils/excelValidation')
+      const validation = validateExcelFile(selectedFile)
+      
+      if (!validation.isValid) {
+        toast.error(validation.error || 'Archivo inválido')
         return
       }
+      
+      if (validation.warnings && validation.warnings.length > 0) {
+        validation.warnings.forEach(warning => toast.warning(warning))
+      }
+      
       setFile(selectedFile)
     }
   }
