@@ -2972,8 +2972,10 @@ def obtener_financiamiento_por_rangos(
     try:
         # ✅ DIAGNÓSTICO: Contar préstamos aprobados sin filtros
         total_prestamos_aprobados_sin_filtros = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
-        logger.info(f"📊 [financiamiento-por-rangos] Total préstamos APROBADOS (sin filtros): {total_prestamos_aprobados_sin_filtros}")
-        
+        logger.info(
+            f"📊 [financiamiento-por-rangos] Total préstamos APROBADOS (sin filtros): {total_prestamos_aprobados_sin_filtros}"
+        )
+
         # ✅ DIAGNÓSTICO: Log de filtros aplicados
         filtros_aplicados = {
             "analista": analista,
@@ -2983,7 +2985,7 @@ def obtener_financiamiento_por_rangos(
             "fecha_fin": fecha_fin.isoformat() if fecha_fin else None,
         }
         logger.info(f"🔍 [financiamiento-por-rangos] Filtros aplicados: {filtros_aplicados}")
-        
+
         query_base = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
         query_base = FiltrosDashboard.aplicar_filtros_prestamo(
             query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
@@ -2992,7 +2994,9 @@ def obtener_financiamiento_por_rangos(
         # ✅ DIAGNÓSTICO: Contar préstamos después de aplicar filtros (antes de filtrar NULL)
         try:
             total_prestamos_despues_filtros = query_base.count()
-            logger.info(f"📊 [financiamiento-por-rangos] Total préstamos después de filtros: {total_prestamos_despues_filtros}")
+            logger.info(
+                f"📊 [financiamiento-por-rangos] Total préstamos después de filtros: {total_prestamos_despues_filtros}"
+            )
         except Exception as e:
             logger.error(f"Error contando préstamos después de filtros: {e}", exc_info=True)
 
@@ -3016,7 +3020,9 @@ def obtener_financiamiento_por_rangos(
         # ✅ DIAGNÓSTICO: Contar préstamos válidos (con total_financiamiento > 0)
         try:
             total_prestamos_validos = query_base.count()
-            logger.info(f"📊 [financiamiento-por-rangos] Total préstamos válidos (con total_financiamiento > 0): {total_prestamos_validos}")
+            logger.info(
+                f"📊 [financiamiento-por-rangos] Total préstamos válidos (con total_financiamiento > 0): {total_prestamos_validos}"
+            )
         except Exception as e:
             logger.error(f"Error contando préstamos válidos: {e}", exc_info=True)
 
@@ -4625,7 +4631,10 @@ def obtener_evolucion_morosidad(
                 db.query(DashboardMorosidadMensual)
                 .filter(
                     or_(
-                        and_(DashboardMorosidadMensual.año == año_inicio_query, DashboardMorosidadMensual.mes >= mes_inicio_query),
+                        and_(
+                            DashboardMorosidadMensual.año == año_inicio_query,
+                            DashboardMorosidadMensual.mes >= mes_inicio_query,
+                        ),
                         and_(DashboardMorosidadMensual.año > año_inicio_query, DashboardMorosidadMensual.año < hoy.year),
                         and_(DashboardMorosidadMensual.año == hoy.year, DashboardMorosidadMensual.mes <= hoy.month),
                     )
