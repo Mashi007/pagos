@@ -203,9 +203,10 @@ def listar_notificaciones(
     """
     Listar notificaciones con filtros y paginación
     """
-    from app.utils.pagination import calculate_pagination_params, create_paginated_response
     from sqlalchemy import text
     from sqlalchemy.exc import ProgrammingError
+
+    from app.utils.pagination import calculate_pagination_params, create_paginated_response
 
     try:
         # Calcular paginación
