@@ -8,11 +8,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PasswordField } from '@/components/ui/PasswordField'
 import { userService, User, UserCreate } from '@/services/userService'
+import { useSimpleAuth } from '@/store/simpleAuthStore'
+import { clearAuthStorage } from '@/utils/storage'
 import { toast } from 'sonner'
 import { getErrorMessage, getErrorDetail } from '@/types/errors'
 import { logger } from '@/utils/logger'
 
 export function Usuarios() {
+  const { user: currentUser } = useSimpleAuth()
   const [usuarios, setUsuarios] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -170,12 +173,24 @@ export function Usuarios() {
         
         // Incluir password solo si se proporcionó uno nuevo (no vacío)
         // Si está vacío, NO lo incluimos para que el backend no intente actualizarlo
-        if (formData.password && formData.password.trim() !== '') {
+        const passwordChanged = formData.password && formData.password.trim() !== ''
+        if (passwordChanged) {
           updateData.password = formData.password.trim()
         }
         
         await userService.actualizarUsuario(editingUsuario.id, updateData)
-        toast.success('Usuario actualizado exitosamente')
+        
+        // ✅ Si se cambió la contraseña del usuario actual, forzar logout y redirigir al login
+        if (passwordChanged && currentUser && editingUsuario.id === currentUser.id) {
+          toast.success('Contraseña cambiada exitosamente. Debes volver a iniciar sesión.')
+          // Limpiar sesión y redirigir al login
+          clearAuthStorage()
+          setTimeout(() => {
+            window.location.href = '/login'
+          }, 1000)
+        } else {
+          toast.success('Usuario actualizado exitosamente')
+        }
       } else {
         // Crear nuevo usuario
         const createData: any = {
