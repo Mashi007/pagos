@@ -367,7 +367,8 @@ export function DashboardMenu() {
     queryFn: async () => {
       const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
-      queryParams.append('meses', '6')
+      // ✅ Pasar fecha_inicio desde enero 2025 en lugar de meses
+      queryParams.append('fecha_inicio', '2025-01-01')
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
@@ -386,7 +387,8 @@ export function DashboardMenu() {
     queryFn: async () => {
       const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
-      queryParams.append('meses', '6')
+      // ✅ Pasar fecha_inicio desde enero 2025 en lugar de meses
+      queryParams.append('fecha_inicio', '2025-01-01')
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
@@ -570,19 +572,75 @@ export function DashboardMenu() {
               </Card>
             ) : kpisPrincipales && kpisPrincipales.total_prestamos && kpisPrincipales.creditos_nuevos_mes ? (
               <div className="space-y-4 sticky top-4">
-                <KpiCardLarge
-                  title="Total Financiamiento de Préstamos Concedidos en el Mes en Curso"
-                  value={kpisPrincipales.total_prestamos?.valor_actual ?? 0}
-                  icon={FileText}
-                  color="text-cyan-600"
-                  bgColor="bg-cyan-100"
-                  borderColor="border-cyan-500"
-                  format="currency"
-                  variation={{
-                    percent: kpisPrincipales.total_prestamos?.variacion_porcentual ?? 0,
-                    label: 'vs mes anterior',
-                  }}
-                />
+                {/* Tarjeta de Financiamiento con múltiples métricas */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  whileHover={{ scale: 1.02, y: -4 }}
+                  transition={{ duration: 0.2 }}
+                  className="relative min-h-[280px] bg-white rounded-xl border-2 border-cyan-500 shadow-[0_4px_20px_rgba(0,0,0,0.12)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.18)] transition-all duration-300 overflow-hidden group"
+                >
+                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-cyan-100 opacity-90"></div>
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-300 bg-gradient-to-br bg-cyan-100 to-transparent"></div>
+                  
+                  <div className="relative z-10 p-5 md:p-6 h-full flex flex-col">
+                    {/* Header */}
+                    <div className="flex items-center space-x-3 mb-4">
+                      <div className="p-2.5 md:p-3 rounded-xl bg-cyan-100 border-2 border-white/50 shadow-lg flex-shrink-0">
+                        <FileText className="h-6 w-6 md:h-7 md:w-7 text-cyan-600" />
+                      </div>
+                      <h3 className="text-sm md:text-base font-bold text-gray-700 uppercase tracking-tight leading-tight">
+                        FINANCIAMIENTO
+                      </h3>
+                    </div>
+
+                    {/* Métricas */}
+                    <div className="flex-1 flex flex-col justify-center space-y-4">
+                      {/* 1. Monto de Financiamiento */}
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Monto de Financiamiento</p>
+                        <p className="text-2xl md:text-3xl font-black text-cyan-600 leading-tight">
+                          {formatCurrency(datosDashboard?.financieros?.ingresosCapital || 0)}
+                        </p>
+                      </div>
+
+                      {/* 2. Cartera Recobrada */}
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Cartera Recobrada</p>
+                        <p className="text-2xl md:text-3xl font-black text-green-600 leading-tight">
+                          {(() => {
+                            const carteraTotal = datosDashboard?.financieros?.ingresosCapital || 0
+                            const totalCobrado = datosDashboard?.financieros?.totalCobrado || 0
+                            const porcentaje = carteraTotal > 0 ? (totalCobrado / carteraTotal) * 100 : 0
+                            return `${porcentaje.toFixed(1)}%`
+                          })()}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {formatCurrency(datosDashboard?.financieros?.totalCobrado || 0)} cobrado
+                        </p>
+                      </div>
+
+                      {/* 3. Morosidad */}
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Morosidad</p>
+                        <p className="text-2xl md:text-3xl font-black text-red-600 leading-tight">
+                          {(() => {
+                            const carteraTotal = datosDashboard?.financieros?.ingresosCapital || 0
+                            const morosidadTotal = kpisPrincipales.total_morosidad_usd?.valor_actual || 0
+                            const porcentaje = carteraTotal > 0 ? (morosidadTotal / carteraTotal) * 100 : 0
+                            return `${porcentaje.toFixed(1)}%`
+                          })()}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {formatCurrency(kpisPrincipales.total_morosidad_usd?.valor_actual || 0)} en mora
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Decoración sutil */}
+                    <div className="absolute bottom-0 right-0 w-20 h-20 bg-cyan-100 opacity-5 rounded-tl-full -mr-10 -mb-10"></div>
+                  </div>
+                </motion.div>
                 <KpiCardLarge
                   title="Créditos Aprobados"
                   value={kpisPrincipales.creditos_nuevos_mes?.valor_actual ?? 0}
@@ -1143,14 +1201,12 @@ export function DashboardMenu() {
               </motion.div>
             </div>
 
-            {/* Fila 3: 2 Gráficos */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Gráfico 5: Evolución Combinada de Morosidad y Pagos */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.7 }}
-              >
+            {/* Fila 3: Gráfico de Evolución de Morosidad y Pagos (Toda la fila) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+            >
                 <Card className="shadow-lg border-2 border-gray-200">
                   <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
                     <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
@@ -1160,11 +1216,11 @@ export function DashboardMenu() {
                   </CardHeader>
                   <CardContent className="p-6">
                     {(loadingEvolucionMorosidad || loadingEvolucionPagos) ? (
-                      <div className="h-[350px] flex items-center justify-center">
+                      <div className="h-[450px] flex items-center justify-center">
                         <div className="animate-pulse text-gray-400">Cargando...</div>
                       </div>
                     ) : (datosEvolucionMorosidad && datosEvolucionMorosidad.length > 0) || (datosEvolucionPagos && datosEvolucionPagos.length > 0) ? (
-                      <ResponsiveContainer width="100%" height={350}>
+                      <ResponsiveContainer width="100%" height={450}>
                         <RechartsLineChart
                           data={(() => {
                             // ✅ Combinar datos de ambos gráficos por mes y ordenar correctamente por fecha
@@ -1278,14 +1334,13 @@ export function DashboardMenu() {
                         </RechartsLineChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="h-[350px] flex items-center justify-center text-gray-400">
+                      <div className="h-[450px] flex items-center justify-center text-gray-400">
                         No hay datos disponibles
                       </div>
                     )}
                   </CardContent>
                 </Card>
-              </motion.div>
-            </div>
+            </motion.div>
 
             {/* Fila 4: Préstamos por Modelo (Fila completa) */}
             <motion.div
@@ -1405,7 +1460,8 @@ export function DashboardMenu() {
                     ) : errorFinanciamientoRangos ? (
                       <div className="h-[450px] flex flex-col items-center justify-center text-gray-500">
                         <AlertTriangle className="h-8 w-8 mb-2 text-red-500" />
-                        <p className="text-sm">Error al cargar los datos. Por favor, intenta nuevamente.</p>
+                        <p className="text-sm font-semibold mb-1">Error al cargar los datos</p>
+                        <p className="text-xs text-gray-400 mb-4">Por favor, verifica la conexión con el servidor</p>
                         <Button 
                           onClick={() => refetchFinanciamientoRangos()} 
                           variant="outline" 
@@ -1427,8 +1483,13 @@ export function DashboardMenu() {
                         
                         if (rangosConDatos.length === 0) {
                           return (
-                            <div className="h-[450px] flex items-center justify-center text-gray-400">
-                              No hay datos disponibles
+                            <div className="h-[450px] flex flex-col items-center justify-center text-gray-400">
+                              <p className="text-sm mb-2">No hay datos disponibles en los rangos</p>
+                              {totalBackend > 0 && (
+                                <p className="text-xs text-gray-500 mt-2">
+                                  Total de préstamos: {totalBackend.toLocaleString('es-EC')}, pero no hay datos en los rangos configurados
+                                </p>
+                              )}
                             </div>
                           )
                         }
@@ -1524,9 +1585,14 @@ export function DashboardMenu() {
                         )
                       })()
                     ) : (
-                      <div className="h-[450px] flex items-center justify-center text-gray-400">
-                        No hay datos disponibles
-        </div>
+                      <div className="h-[450px] flex flex-col items-center justify-center text-gray-400">
+                        <p className="text-sm mb-2">No hay datos disponibles</p>
+                        {datosFinanciamientoRangos && datosFinanciamientoRangos.total_prestamos === 0 && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            No se encontraron préstamos aprobados con los filtros aplicados
+                          </p>
+                        )}
+                      </div>
                     )}
                     {/* ✅ Mostrar resumen de totales si hay datos */}
                     {datosFinanciamientoRangos && datosFinanciamientoRangos.rangos && (

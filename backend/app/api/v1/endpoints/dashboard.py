@@ -2970,10 +2970,31 @@ def obtener_financiamiento_por_rangos(
     start_time = time.time()
 
     try:
+        # ✅ DIAGNÓSTICO: Contar préstamos aprobados sin filtros
+        total_prestamos_aprobados_sin_filtros = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
+        logger.info(f"📊 [financiamiento-por-rangos] Total préstamos APROBADOS (sin filtros): {total_prestamos_aprobados_sin_filtros}")
+        
+        # ✅ DIAGNÓSTICO: Log de filtros aplicados
+        filtros_aplicados = {
+            "analista": analista,
+            "concesionario": concesionario,
+            "modelo": modelo,
+            "fecha_inicio": fecha_inicio.isoformat() if fecha_inicio else None,
+            "fecha_fin": fecha_fin.isoformat() if fecha_fin else None,
+        }
+        logger.info(f"🔍 [financiamiento-por-rangos] Filtros aplicados: {filtros_aplicados}")
+        
         query_base = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
         query_base = FiltrosDashboard.aplicar_filtros_prestamo(
             query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
+
+        # ✅ DIAGNÓSTICO: Contar préstamos después de aplicar filtros (antes de filtrar NULL)
+        try:
+            total_prestamos_despues_filtros = query_base.count()
+            logger.info(f"📊 [financiamiento-por-rangos] Total préstamos después de filtros: {total_prestamos_despues_filtros}")
+        except Exception as e:
+            logger.error(f"Error contando préstamos después de filtros: {e}", exc_info=True)
 
         # ✅ Verificar préstamos con total_financiamiento NULL o <= 0 (antes de filtrar)
         try:
@@ -2992,6 +3013,13 @@ def obtener_financiamiento_por_rangos(
         # ✅ Aplicar filtro para excluir NULL y <= 0 antes de calcular totales y procesar rangos
         query_base = query_base.filter(and_(Prestamo.total_financiamiento.isnot(None), Prestamo.total_financiamiento > 0))
 
+        # ✅ DIAGNÓSTICO: Contar préstamos válidos (con total_financiamiento > 0)
+        try:
+            total_prestamos_validos = query_base.count()
+            logger.info(f"📊 [financiamiento-por-rangos] Total préstamos válidos (con total_financiamiento > 0): {total_prestamos_validos}")
+        except Exception as e:
+            logger.error(f"Error contando préstamos válidos: {e}", exc_info=True)
+
         # ✅ OPTIMIZACIÓN: Calcular totales en una sola query (después de filtrar NULL)
         try:
             totales_query = query_base.with_entities(
@@ -2999,6 +3027,7 @@ def obtener_financiamiento_por_rangos(
             ).first()
             total_prestamos = totales_query.total_prestamos or 0 if totales_query else 0
             total_monto = float(totales_query.total_monto or Decimal("0")) if totales_query else 0.0
+            logger.info(f"📊 [financiamiento-por-rangos] Total préstamos final: {total_prestamos}, Total monto: {total_monto}")
         except Exception as e:
             logger.error(f"Error calculando totales en financiamiento-por-rangos: {e}", exc_info=True)
             total_prestamos = 0
@@ -4555,13 +4584,19 @@ def obtener_evolucion_morosidad(
     hoy = date.today()
     nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
-    # Calcular fecha inicio (hace N meses) - FUERA del try para que esté disponible en el fallback
-    año_inicio = hoy.year
-    mes_inicio = hoy.month - meses + 1
-    if mes_inicio <= 0:
-        año_inicio -= 1
-        mes_inicio += 12
-    fecha_inicio_query = date(año_inicio, mes_inicio, 1)
+    # ✅ Calcular fecha inicio: usar fecha_inicio si está presente, sino calcular desde hace N meses
+    if fecha_inicio:
+        fecha_inicio_query = fecha_inicio
+        # Asegurar que sea el primer día del mes
+        fecha_inicio_query = date(fecha_inicio_query.year, fecha_inicio_query.month, 1)
+    else:
+        # Calcular fecha inicio (hace N meses) - FUERA del try para que esté disponible en el fallback
+        año_inicio = hoy.year
+        mes_inicio = hoy.month - meses + 1
+        if mes_inicio <= 0:
+            año_inicio -= 1
+            mes_inicio += 12
+        fecha_inicio_query = date(año_inicio, mes_inicio, 1)
 
     # Intentar usar tabla oficial si existe, sino usar fallback directamente
     morosidad_por_mes = {}
@@ -4583,12 +4618,15 @@ def obtener_evolucion_morosidad(
 
         if table_exists:
             # ✅ OPTIMIZACIÓN: Usar filtros separados en año y mes para aprovechar el índice idx_dashboard_morosidad_año_mes
+            # Usar fecha_inicio_query calculada anteriormente (puede ser desde fecha_inicio o desde hace N meses)
+            año_inicio_query = fecha_inicio_query.year
+            mes_inicio_query = fecha_inicio_query.month
             query = (
                 db.query(DashboardMorosidadMensual)
                 .filter(
                     or_(
-                        and_(DashboardMorosidadMensual.año == año_inicio, DashboardMorosidadMensual.mes >= mes_inicio),
-                        and_(DashboardMorosidadMensual.año > año_inicio, DashboardMorosidadMensual.año < hoy.year),
+                        and_(DashboardMorosidadMensual.año == año_inicio_query, DashboardMorosidadMensual.mes >= mes_inicio_query),
+                        and_(DashboardMorosidadMensual.año > año_inicio_query, DashboardMorosidadMensual.año < hoy.year),
                         and_(DashboardMorosidadMensual.año == hoy.year, DashboardMorosidadMensual.mes <= hoy.month),
                     )
                 )
@@ -4703,13 +4741,19 @@ def obtener_evolucion_pagos(
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
-        # Calcular fecha inicio (hace N meses)
-        año_inicio = hoy.year
-        mes_inicio = hoy.month - meses + 1
-        if mes_inicio <= 0:
-            año_inicio -= 1
-            mes_inicio += 12
-        fecha_inicio_query = date(año_inicio, mes_inicio, 1)
+        # ✅ Calcular fecha inicio: usar fecha_inicio si está presente, sino calcular desde hace N meses
+        if fecha_inicio:
+            fecha_inicio_query = fecha_inicio
+            # Asegurar que sea el primer día del mes
+            fecha_inicio_query = date(fecha_inicio_query.year, fecha_inicio_query.month, 1)
+        else:
+            # Calcular fecha inicio (hace N meses)
+            año_inicio = hoy.year
+            mes_inicio = hoy.month - meses + 1
+            if mes_inicio <= 0:
+                año_inicio -= 1
+                mes_inicio += 12
+            fecha_inicio_query = date(año_inicio, mes_inicio, 1)
 
         # ✅ OPTIMIZACIÓN: Una sola query con GROUP BY en lugar de múltiples queries en loop
         start_query = time.time()
