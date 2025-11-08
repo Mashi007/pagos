@@ -483,65 +483,122 @@ def _procesar_distribucion_rango_monto(
 ) -> list:
     """
     Procesa distribución por rango de monto
-    ✅ OPTIMIZADO: Una sola query con CASE WHEN en lugar de múltiples queries en loop
+    ✅ OPTIMIZADO: Usa procesamiento en Python para evitar expresión CASE demasiado compleja
     """
-    # Construir expresión CASE WHEN para clasificar por rango
-    case_conditions = []
-    try:
-        for min_val, max_val, categoria in rangos:
-            if max_val is None:
-                # Rango sin límite superior (ej: $50,000+)
-                case_conditions.append((Prestamo.total_financiamiento >= Decimal(str(min_val)), categoria))
-            else:
-                # Rango con límites (ej: $20,000 - $50,000)
-                case_conditions.append(
-                    (
-                        and_(
-                            Prestamo.total_financiamiento >= Decimal(str(min_val)),
-                            Prestamo.total_financiamiento < Decimal(str(max_val)),
-                        ),
-                        categoria,
-                    )
-                )
-    except Exception as e:
-        logger.error(f"Error construyendo condiciones CASE: {e}", exc_info=True)
+    if not rangos:
+        logger.warning("No hay rangos para procesar, retornando lista vacía")
         return []
 
-    # Query única con GROUP BY por rango
     try:
-        # ✅ FIX: Guardar expresión CASE para usar en GROUP BY
-        if not case_conditions:
-            logger.warning("No hay condiciones CASE para procesar, retornando lista vacía")
-            return []
+        # ✅ SOLUCIÓN ALTERNATIVA: Obtener todos los préstamos y procesar en Python
+        # Esto evita el problema de CASE WHEN con demasiadas condiciones (167 rangos)
+        # Usar query directa para evitar que SQLAlchemy intente cargar columnas que no existen en BD
+        if db is not None:
+            # Construir query SQL directa usando los mismos filtros de query_base
+            # Obtener el statement SQL de query_base y modificarlo para solo seleccionar columnas necesarias
+            from sqlalchemy import text
             
-        # ✅ Construir expresión CASE y usarla tanto en SELECT como en GROUP BY
-        case_expression = case(*case_conditions, else_="Otro")
-        distribucion_query = (
-            query_base.with_entities(
-                case_expression.label("rango"),
-                func.count(Prestamo.id).label("cantidad"),
-                func.sum(Prestamo.total_financiamiento).label("monto_total"),
-            )
-            .group_by(case_expression)  # ✅ Usar expresión completa en GROUP BY (más compatible)
-            .all()
-        )
+            # Obtener solo los IDs primero (esto no carga el modelo completo)
+            prestamo_ids_query = query_base.with_entities(Prestamo.id)
+            prestamo_ids = [row[0] for row in prestamo_ids_query.all()]
+            
+            if not prestamo_ids:
+                # Si no hay préstamos, retornar lista vacía
+                return []
+            
+            # Query SQL directa solo con las columnas que existen en la BD
+            # Usar ANY con lista para PostgreSQL (más eficiente que IN con muchos valores)
+            query_sql = text("""
+                SELECT id, total_financiamiento 
+                FROM prestamos 
+                WHERE id = ANY(:ids)
+            """)
+            result = db.execute(query_sql, {"ids": prestamo_ids})
+            prestamos_data = [(row.id, row.total_financiamiento) for row in result]
+        else:
+            # Fallback: intentar con query_base (puede fallar si hay columnas faltantes)
+            try:
+                prestamos_data = query_base.with_entities(
+                    Prestamo.id,
+                    Prestamo.total_financiamiento
+                ).all()
+            except Exception as e:
+                logger.error(f"Error obteniendo préstamos con query_base: {e}", exc_info=True)
+                return []
+        
+        # ✅ Optimización: Crear diccionario de índice para búsqueda O(1)
+        # Mapear cada rango a su índice para acceso rápido
+        rango_index_map = {}
+        max_rango_val = None
+        paso_rango = None
+        
+        for idx, (min_val, max_val, categoria) in enumerate(rangos):
+            if max_val is None:
+                # Rango sin límite superior (ej: $50,000+)
+                max_rango_val = min_val
+                rango_index_map[idx] = (min_val, None, categoria)
+            else:
+                if paso_rango is None:
+                    # Detectar el paso del rango (asumiendo rangos uniformes)
+                    paso_rango = max_val - min_val
+                rango_index_map[idx] = (min_val, max_val, categoria)
+        
+        # Crear diccionario para mapear montos a categorías
+        distribucion_dict = {}
+        for prestamo_id, monto in prestamos_data:
+            if monto is None or monto <= 0:
+                continue
+                
+            monto_decimal = Decimal(str(monto)) if not isinstance(monto, Decimal) else monto
+            monto_float = float(monto_decimal)
+            
+            # ✅ Optimización: Calcular índice del rango directamente usando división
+            categoria = "Otro"
+            
+            # Primero verificar si está en el rango sin límite superior
+            if max_rango_val is not None and monto_float >= max_rango_val:
+                # Buscar el rango sin límite superior
+                for idx, (min_v, max_v, cat) in rango_index_map.items():
+                    if max_v is None and monto_float >= min_v:
+                        categoria = cat
+                        break
+            else:
+                # Calcular índice del rango usando división entera (rangos uniformes de $300)
+                if paso_rango and paso_rango > 0:
+                    indice_rango = int(monto_float // paso_rango)
+                    if indice_rango < len(rangos):
+                        min_v, max_v, cat = rango_index_map.get(indice_rango, (None, None, "Otro"))
+                        if min_v is not None and max_v is not None:
+                            if min_v <= monto_float < max_v:
+                                categoria = cat
+                
+                # Si no encontró con cálculo directo, buscar manualmente
+                if categoria == "Otro":
+                    for idx, (min_v, max_v, cat) in rango_index_map.items():
+                        if max_v is not None and min_v <= monto_float < max_v:
+                            categoria = cat
+                            break
+            
+            # Acumular en el diccionario
+            if categoria not in distribucion_dict:
+                distribucion_dict[categoria] = {"cantidad": 0, "monto_total": Decimal("0")}
+            distribucion_dict[categoria]["cantidad"] += 1
+            distribucion_dict[categoria]["monto_total"] += monto_decimal
+        
+        # Convertir Decimal a float para el resultado
+        for cat in distribucion_dict:
+            distribucion_dict[cat]["monto_total"] = float(distribucion_dict[cat]["monto_total"])
+            
     except Exception as e:
-        logger.error(f"Error ejecutando query de distribución por rangos: {e}", exc_info=True)
+        logger.error(f"Error procesando distribución por rangos: {e}", exc_info=True)
         # ✅ Rollback si hay sesión disponible
         if db is not None:
             try:
                 db.rollback()
             except Exception:
                 pass
-        # Si falla la query con CASE WHEN, retornar lista vacía en lugar de fallar completamente
-        logger.warning("Retornando distribución vacía debido a error en query")
+        logger.warning("Retornando distribución vacía debido a error en procesamiento")
         return []
-
-    # Crear diccionario de resultados
-    distribucion_dict = {
-        row.rango: {"cantidad": row.cantidad, "monto_total": float(row.monto_total or Decimal("0"))}
-        for row in distribucion_query
-    }
 
     # ✅ Verificar si hay préstamos clasificados como "Otro" (no deberían existir, pero los incluimos)
     try:
