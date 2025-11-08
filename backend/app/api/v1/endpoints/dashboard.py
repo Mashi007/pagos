@@ -478,7 +478,9 @@ def _procesar_distribucion_rango_monto_plazo(
     return distribucion_data
 
 
-def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos: int, total_monto: float, db: Optional[Session] = None) -> list:
+def _procesar_distribucion_rango_monto(
+    query_base, rangos: list, total_prestamos: int, total_monto: float, db: Optional[Session] = None
+) -> list:
     """
     Procesa distribución por rango de monto
     ✅ OPTIMIZADO: Una sola query con CASE WHEN en lugar de múltiples queries en loop
