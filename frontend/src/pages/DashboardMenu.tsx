@@ -3,7 +3,6 @@ import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  DollarSign,
   BarChart3,
   ChevronRight,
   Filter,
@@ -13,7 +12,6 @@ import {
   Target,
   AlertTriangle,
   Shield,
-  CheckCircle,
   Clock,
   FileText,
   PieChart,
@@ -774,37 +772,6 @@ export function DashboardMenu() {
                     }}
                   />
                 )}
-                <KpiCardLarge
-                  title="Cartera Total"
-                  value={datosDashboard?.financieros?.ingresosCapital || 0}
-                  icon={DollarSign}
-                  color="text-purple-600"
-                  bgColor="bg-purple-100"
-                  borderColor="border-purple-500"
-                  format="currency"
-                />
-                <KpiCardLarge
-                  title="Total Cobrado"
-                  value={datosDashboard?.financieros?.totalCobrado || 0}
-                  icon={CheckCircle}
-                  color="text-emerald-600"
-                  bgColor="bg-emerald-100"
-                  borderColor="border-emerald-500"
-                  format="currency"
-                  variation={
-                    datosDashboard?.meta_mensual !== undefined &&
-                    datosDashboard?.meta_mensual !== null &&
-                    datosDashboard?.meta_mensual > 0
-                      ? {
-                          percent:
-                            ((datosDashboard.financieros?.totalCobrado || 0) /
-                              datosDashboard.meta_mensual) *
-                            100,
-                          label: 'avance del mes',
-                        }
-                      : undefined
-                  }
-                />
               </div>
             ) : null}
           </motion.div>
@@ -961,6 +928,132 @@ export function DashboardMenu() {
                   </CardContent>
                 </Card>
               </motion.div>
+
+            {/* Fila: Gráfico de Evolución de Morosidad y Pagos (Toda la fila) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+                <Card className="shadow-lg border-2 border-gray-200">
+                  <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                      <LineChart className="h-6 w-6 text-blue-600" />
+                      <span>Evolución de Morosidad y Pagos</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {(loadingEvolucionMorosidad || loadingEvolucionPagos) ? (
+                      <div className="h-[450px] flex items-center justify-center">
+                        <div className="animate-pulse text-gray-400">Cargando...</div>
+                      </div>
+                    ) : (datosEvolucionMorosidad && datosEvolucionMorosidad.length > 0) || (datosEvolucionPagos && datosEvolucionPagos.length > 0) ? (
+                      <ResponsiveContainer width="100%" height={450}>
+                        <RechartsLineChart
+                          data={(() => {
+                            // ✅ Combinar datos de ambos gráficos por mes y ordenar correctamente por fecha
+                            const morosidadMap = new Map(datosEvolucionMorosidad?.map(item => [item.mes, item.morosidad]) || [])
+                            const pagosMap = new Map(datosEvolucionPagos?.map(item => [item.mes, item.monto]) || [])
+                            
+                            // Obtener todos los meses únicos
+                            const allMonths = Array.from(new Set([...morosidadMap.keys(), ...pagosMap.keys()]))
+                            
+                            // ✅ Ordenar meses por fecha (parsear formato "Ene 2025", "Feb 2025", etc.)
+                            const mesesOrdenados = allMonths.sort((a, b) => {
+                              const parseMes = (mesStr: string) => {
+                                const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+                                const partes = mesStr.split(' ')
+                                const mesNombre = partes[0] || ''
+                                const añoStr = partes[1] || '2025'
+                                const año = parseInt(añoStr, 10)
+                                const mesIndex = meses.indexOf(mesNombre)
+                                return año * 12 + mesIndex
+                              }
+                              return parseMes(String(a)) - parseMes(String(b))
+                            })
+                            
+                            // ✅ Calcular valores acumulados por mes
+                            let morosidadAcumulada = 0
+                            let pagosAcumulados = 0
+                            
+                            return mesesOrdenados.map(mes => {
+                              const morosidadMensual: number = (morosidadMap.get(mes) as number) || 0
+                              const pagosMensuales: number = (pagosMap.get(mes) as number) || 0
+                              
+                              // Acumular valores
+                              morosidadAcumulada += morosidadMensual
+                              pagosAcumulados += pagosMensuales
+                              
+                              return {
+                                mes,
+                                morosidad: morosidadAcumulada,
+                                pagos: pagosAcumulados,
+                              }
+                            })
+                          })()}
+                          margin={{ top: 10, right: 30, left: 20, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis 
+                            dataKey="mes" 
+                            stroke="#6b7280"
+                            tick={{ fontSize: 11 }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={60}
+                          />
+                          <YAxis 
+                            stroke="#6b7280"
+                            tickFormatter={(value) => formatCurrency(value)}
+                            label={{ 
+                              value: 'Monto ($)', 
+                              angle: -90, 
+                              position: 'insideLeft',
+                              style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px', fontWeight: 600 }
+                            }}
+                          />
+                          <Tooltip 
+                            formatter={(value: number, name: string) => [
+                              formatCurrency(value),
+                              name === 'morosidad' ? 'Morosidad (Acumulado)' : 'Pagos (Acumulado)'
+                            ]}
+                            contentStyle={{
+                              backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                              padding: '12px',
+                            }}
+                          />
+                          <Legend />
+                          <Line 
+                            type="monotone" 
+                            dataKey="morosidad" 
+                            stroke="#ef4444" 
+                            strokeWidth={3} 
+                            name="Morosidad" 
+                            dot={{ r: 5, fill: '#ef4444' }}
+                            activeDot={{ r: 7 }}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="pagos" 
+                            stroke="#8b5cf6" 
+                            strokeWidth={3} 
+                            name="Pagos" 
+                            dot={{ r: 5, fill: '#8b5cf6' }}
+                            activeDot={{ r: 7 }}
+                          />
+                        </RechartsLineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[450px] flex items-center justify-center text-gray-400">
+                        No hay datos disponibles
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+            </motion.div>
 
             {/* Fila: Cobranzas Mensuales y Cobranzas Semanales */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1200,132 +1293,6 @@ export function DashboardMenu() {
                 </Card>
               </motion.div>
             </div>
-
-            {/* Fila 3: Gráfico de Evolución de Morosidad y Pagos (Toda la fila) */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7 }}
-            >
-                <Card className="shadow-lg border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <LineChart className="h-6 w-6 text-blue-600" />
-                      <span>Evolución de Morosidad y Pagos</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    {(loadingEvolucionMorosidad || loadingEvolucionPagos) ? (
-                      <div className="h-[450px] flex items-center justify-center">
-                        <div className="animate-pulse text-gray-400">Cargando...</div>
-                      </div>
-                    ) : (datosEvolucionMorosidad && datosEvolucionMorosidad.length > 0) || (datosEvolucionPagos && datosEvolucionPagos.length > 0) ? (
-                      <ResponsiveContainer width="100%" height={450}>
-                        <RechartsLineChart
-                          data={(() => {
-                            // ✅ Combinar datos de ambos gráficos por mes y ordenar correctamente por fecha
-                            const morosidadMap = new Map(datosEvolucionMorosidad?.map(item => [item.mes, item.morosidad]) || [])
-                            const pagosMap = new Map(datosEvolucionPagos?.map(item => [item.mes, item.monto]) || [])
-                            
-                            // Obtener todos los meses únicos
-                            const allMonths = Array.from(new Set([...morosidadMap.keys(), ...pagosMap.keys()]))
-                            
-                            // ✅ Ordenar meses por fecha (parsear formato "Ene 2025", "Feb 2025", etc.)
-                            const mesesOrdenados = allMonths.sort((a, b) => {
-                              const parseMes = (mesStr: string) => {
-                                const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-                                const partes = mesStr.split(' ')
-                                const mesNombre = partes[0] || ''
-                                const añoStr = partes[1] || '2025'
-                                const año = parseInt(añoStr, 10)
-                                const mesIndex = meses.indexOf(mesNombre)
-                                return año * 12 + mesIndex
-                              }
-                              return parseMes(String(a)) - parseMes(String(b))
-                            })
-                            
-                            // ✅ Calcular valores acumulados por mes
-                            let morosidadAcumulada = 0
-                            let pagosAcumulados = 0
-                            
-                            return mesesOrdenados.map(mes => {
-                              const morosidadMensual: number = (morosidadMap.get(mes) as number) || 0
-                              const pagosMensuales: number = (pagosMap.get(mes) as number) || 0
-                              
-                              // Acumular valores
-                              morosidadAcumulada += morosidadMensual
-                              pagosAcumulados += pagosMensuales
-                              
-                              return {
-                                mes,
-                                morosidad: morosidadAcumulada,
-                                pagos: pagosAcumulados,
-                              }
-                            })
-                          })()}
-                          margin={{ top: 10, right: 30, left: 20, bottom: 5 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis 
-                            dataKey="mes" 
-                            stroke="#6b7280"
-                            tick={{ fontSize: 11 }}
-                            angle={-45}
-                            textAnchor="end"
-                            height={60}
-                          />
-                          <YAxis 
-                            stroke="#6b7280"
-                            tickFormatter={(value) => formatCurrency(value)}
-                            label={{ 
-                              value: 'Monto ($)', 
-                              angle: -90, 
-                              position: 'insideLeft',
-                              style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px', fontWeight: 600 }
-                            }}
-                          />
-                          <Tooltip 
-                            formatter={(value: number, name: string) => [
-                              formatCurrency(value),
-                              name === 'morosidad' ? 'Morosidad (Acumulado)' : 'Pagos (Acumulado)'
-                            ]}
-                            contentStyle={{
-                              backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                              border: '1px solid #e5e7eb',
-                              borderRadius: '8px',
-                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                              padding: '12px',
-                            }}
-                          />
-                          <Legend />
-                          <Line 
-                            type="monotone" 
-                            dataKey="morosidad" 
-                            stroke="#ef4444" 
-                            strokeWidth={3} 
-                            name="Morosidad" 
-                            dot={{ r: 5, fill: '#ef4444' }}
-                            activeDot={{ r: 7 }}
-                          />
-                          <Line 
-                            type="monotone" 
-                            dataKey="pagos" 
-                            stroke="#8b5cf6" 
-                            strokeWidth={3} 
-                            name="Pagos" 
-                            dot={{ r: 5, fill: '#8b5cf6' }}
-                            activeDot={{ r: 7 }}
-                          />
-                        </RechartsLineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-[450px] flex items-center justify-center text-gray-400">
-                        No hay datos disponibles
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-            </motion.div>
 
             {/* Fila 4: Préstamos por Modelo (Fila completa) */}
             <motion.div

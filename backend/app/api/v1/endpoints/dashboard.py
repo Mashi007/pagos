@@ -1024,6 +1024,70 @@ def _calcular_total_cobrado(
         return 0.0
 
 
+def _calcular_total_cobrado_acumulativo(
+    db: Session, analista: Optional[str], concesionario: Optional[str], modelo: Optional[str]
+) -> Decimal:
+    """Calcula el total cobrado acumulativo (todos los pagos históricos)"""
+    try:
+        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
+        # Sin filtro de fecha - suma TODOS los pagos históricos
+
+        # Construir query con filtros opcionales
+        if analista or concesionario or modelo:
+            prestamo_conditions = []
+            bind_params = {}
+
+            if analista:
+                prestamo_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+                bind_params["analista"] = analista
+            if concesionario:
+                prestamo_conditions.append("pr.concesionario = :concesionario")
+                bind_params["concesionario"] = concesionario
+            if modelo:
+                prestamo_conditions.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
+                bind_params["modelo"] = modelo
+
+            where_clause = """p.monto_pagado IS NOT NULL
+              AND p.monto_pagado > 0
+              AND p.activo = TRUE
+              AND pr.estado = 'APROBADO'"""
+
+            if prestamo_conditions:
+                where_clause += " AND " + " AND ".join(prestamo_conditions)
+
+            query_sql = text(
+                f"""
+                SELECT COALESCE(SUM(p.monto_pagado), 0)
+                FROM pagos p
+                INNER JOIN prestamos pr ON (
+                    (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
+                    OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
+                )
+                WHERE {where_clause}
+                """
+            ).bindparams(**bind_params)
+        else:
+            query_sql = text(
+                """
+                SELECT COALESCE(SUM(monto_pagado), 0)
+                FROM pagos
+                WHERE monto_pagado IS NOT NULL
+                  AND monto_pagado > 0
+                  AND activo = TRUE
+                """
+            )
+
+        result = db.execute(query_sql)
+        return Decimal(str(result.scalar() or 0))
+    except Exception as e:
+        logger.error(
+            "Error en query total_cobrado_acumulativo",
+            extra={"analista": analista, "concesionario": concesionario, "modelo": modelo},
+            exc_info=True,
+        )
+        return Decimal("0")
+
+
 def _generar_lista_fechas(fecha_inicio: date, fecha_fin: date) -> List[date]:
     """Genera lista de fechas entre inicio y fin"""
     fechas = []
@@ -1362,7 +1426,21 @@ def dashboard_administrador(
                 pass
             cartera_anterior_val = float(cartera_total)
 
-        # 16. TOTAL COBRADO EN EL MES ACTUAL - SOLO PAGOS CONCILIADOS
+        # 16. TOTAL COBRADO ACUMULATIVO (TODOS LOS PAGOS HISTÓRICOS)
+        # ✅ CAMBIO: Ahora calcula el total acumulativo, no solo del mes actual
+        try:
+            total_cobrado_acumulativo = _calcular_total_cobrado_acumulativo(
+                db, analista, concesionario, modelo
+            )
+        except Exception as e:
+            logger.warning(f"Error calculando total cobrado acumulativo: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            total_cobrado_acumulativo = Decimal("0")
+
+        # Total cobrado mes actual (para comparación y tasa de recuperación)
         año_actual = hoy.year
         mes_actual = hoy.month
         primer_dia_mes = date(año_actual, mes_actual, 1)
@@ -1800,7 +1878,7 @@ def dashboard_administrador(
             "meta_mensual": round(meta_mensual_final, 2),
             "avance_meta": float(total_cobrado_periodo),  # Pagos conciliados del mes
             "financieros": {
-                "totalCobrado": float(total_cobrado_periodo),
+                "totalCobrado": float(total_cobrado_acumulativo),  # ✅ CAMBIO: Total acumulativo (todos los pagos históricos)
                 "totalCobradoAnterior": float(total_cobrado_anterior),
                 "ingresosCapital": round(ingresos_capital, 2),
                 "ingresosInteres": round(ingresos_interes, 2),
@@ -2159,25 +2237,29 @@ def obtener_kpis_principales(
         )
 
         # 3. CLIENTES POR ESTADO (ACTIVOS, INACTIVOS, FINALIZADOS)
-        # ✅ OPTIMIZACIÓN PRIORIDAD 1: Combinar 6 queries en 1 query usando CASE WHEN
-        # Query base con filtros aplicados
-        base_query_clientes = db.query(Prestamo).filter(Prestamo.estado.in_(["APROBADO", "FINALIZADO"]))
-        base_query_clientes = FiltrosDashboard.aplicar_filtros_prestamo(
-            base_query_clientes, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        # ✅ CORRECCIÓN: Usar Cliente.estado en lugar de Prestamo.estado
+        # Los estados de clientes son: ACTIVO, INACTIVO, FINALIZADO
+        # Siempre contar solo clientes que tienen préstamos aprobados
+        
+        query_base_clientes = db.query(Cliente).join(Prestamo, Cliente.cedula == Prestamo.cedula).filter(
+            Prestamo.estado == "APROBADO"  # Solo clientes con préstamos aprobados
         )
+        
+        # Aplicar filtros de préstamos si existen
+        if analista or concesionario or modelo or fecha_inicio or fecha_fin:
+            query_base_clientes = FiltrosDashboard.aplicar_filtros_prestamo(
+                query_base_clientes, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            )
 
-        # ✅ Query optimizada: calcular todos los estados en una sola query
-        clientes_por_estado = db.query(
-            func.count(func.distinct(case((Prestamo.estado == "APROBADO", Prestamo.cedula), else_=None))).label("activos"),
-            func.count(func.distinct(case((Prestamo.estado == "FINALIZADO", Prestamo.cedula), else_=None))).label(
+        # ✅ Query optimizada: calcular todos los estados en una sola query usando Cliente.estado
+        clientes_por_estado = query_base_clientes.with_entities(
+            func.count(func.distinct(case((Cliente.estado == "ACTIVO", Cliente.id), else_=None))).label("activos"),
+            func.count(func.distinct(case((Cliente.estado == "FINALIZADO", Cliente.id), else_=None))).label(
                 "finalizados"
             ),
             func.count(
-                func.distinct(case((Prestamo.estado.notin_(["APROBADO", "FINALIZADO"]), Prestamo.cedula), else_=None))
+                func.distinct(case((Cliente.estado == "INACTIVO", Cliente.id), else_=None))
             ).label("inactivos"),
-        )
-        clientes_por_estado = FiltrosDashboard.aplicar_filtros_prestamo(
-            clientes_por_estado, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         resultado_clientes = clientes_por_estado.first()
 
@@ -2187,22 +2269,35 @@ def obtener_kpis_principales(
         total_clientes_actual = clientes_activos_actual + clientes_finalizados_actual + clientes_inactivos_actual
 
         # ✅ Query optimizada para mes anterior: calcular todos los estados en una sola query
-        # ⚠️ CORRECCIÓN: Usar fecha_aprobacion porque fecha_registro no migró correctamente
-        # Aplicar filtros de fecha primero
-        query_base_anterior = db.query(Prestamo).filter(
-            Prestamo.fecha_aprobacion >= fecha_inicio_mes_anterior, Prestamo.fecha_aprobacion < fecha_fin_mes_anterior
-        )
-        query_base_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_base_anterior, analista, concesionario, modelo, None, None
-        )
+        # Para mes anterior, usar clientes que tenían préstamos aprobados en ese mes
+        if analista or concesionario or modelo:
+            query_base_anterior = db.query(Cliente).join(Prestamo, Cliente.cedula == Prestamo.cedula).filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    Prestamo.fecha_aprobacion >= fecha_inicio_mes_anterior,
+                    Prestamo.fecha_aprobacion < fecha_fin_mes_anterior
+                )
+            )
+            query_base_anterior = FiltrosDashboard.aplicar_filtros_prestamo(
+                query_base_anterior, analista, concesionario, modelo, None, None
+            )
+        else:
+            # Sin filtros: usar clientes con préstamos aprobados en el mes anterior
+            query_base_anterior = db.query(Cliente).join(Prestamo, Cliente.cedula == Prestamo.cedula).filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    Prestamo.fecha_aprobacion >= fecha_inicio_mes_anterior,
+                    Prestamo.fecha_aprobacion < fecha_fin_mes_anterior
+                )
+            )
 
         clientes_por_estado_anterior = query_base_anterior.with_entities(
-            func.count(func.distinct(case((Prestamo.estado == "APROBADO", Prestamo.cedula), else_=None))).label("activos"),
-            func.count(func.distinct(case((Prestamo.estado == "FINALIZADO", Prestamo.cedula), else_=None))).label(
+            func.count(func.distinct(case((Cliente.estado == "ACTIVO", Cliente.id), else_=None))).label("activos"),
+            func.count(func.distinct(case((Cliente.estado == "FINALIZADO", Cliente.id), else_=None))).label(
                 "finalizados"
             ),
             func.count(
-                func.distinct(case((Prestamo.estado.notin_(["APROBADO", "FINALIZADO"]), Prestamo.cedula), else_=None))
+                func.distinct(case((Cliente.estado == "INACTIVO", Cliente.id), else_=None))
             ).label("inactivos"),
         )
         resultado_clientes_anterior = clientes_por_estado_anterior.first()
@@ -3082,17 +3177,54 @@ def obtener_financiamiento_por_rangos(
         }
         logger.info(f"🔍 [financiamiento-por-rangos] Filtros aplicados: {filtros_aplicados}")
 
+        # ✅ CORRECCIÓN: Si hay filtros de fecha muy restrictivos y no hay datos, 
+        # intentar sin filtros de fecha primero para diagnosticar
         query_base = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
-        query_base = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
-        )
+        
+        # Aplicar filtros NO relacionados con fechas primero
+        if analista:
+            query_base = query_base.filter(
+                or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
+            )
+        if concesionario:
+            query_base = query_base.filter(Prestamo.concesionario == concesionario)
+        if modelo:
+            query_base = query_base.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
+        
+        # ✅ DIAGNÓSTICO: Contar préstamos ANTES de aplicar filtros de fecha
+        total_antes_fecha = 0
+        try:
+            total_antes_fecha = query_base.count()
+            logger.info(f"📊 [financiamiento-por-rangos] Total préstamos ANTES de filtros de fecha: {total_antes_fecha}")
+        except Exception as e:
+            logger.error(f"Error contando préstamos antes de filtros de fecha: {e}", exc_info=True)
+            total_antes_fecha = 0
+        
+        # Aplicar filtros de fecha SOLO si se proporcionan
+        # ✅ CORRECCIÓN: Usar solo fecha_aprobacion para filtros de fecha (más confiable que fecha_registro)
+        if fecha_inicio or fecha_fin:
+            condiciones_fecha = []
+            if fecha_inicio:
+                condiciones_fecha.append(Prestamo.fecha_aprobacion >= fecha_inicio)
+            if fecha_fin:
+                condiciones_fecha.append(Prestamo.fecha_aprobacion <= fecha_fin)
+            if condiciones_fecha:
+                query_base = query_base.filter(and_(*condiciones_fecha))
+                logger.info(f"📅 [financiamiento-por-rangos] Aplicando filtros de fecha: {filtros_aplicados['fecha_inicio']} a {filtros_aplicados['fecha_fin']}")
+        else:
+            logger.info("📅 [financiamiento-por-rangos] No se aplicaron filtros de fecha (ninguno proporcionado)")
 
-        # ✅ DIAGNÓSTICO: Contar préstamos después de aplicar filtros (antes de filtrar NULL)
+        # ✅ DIAGNÓSTICO: Contar préstamos después de aplicar TODOS los filtros (antes de filtrar NULL)
         try:
             total_prestamos_despues_filtros = query_base.count()
             logger.info(
-                f"📊 [financiamiento-por-rangos] Total préstamos después de filtros: {total_prestamos_despues_filtros}"
+                f"📊 [financiamiento-por-rangos] Total préstamos DESPUÉS de todos los filtros: {total_prestamos_despues_filtros}"
             )
+            if total_prestamos_despues_filtros == 0 and total_antes_fecha > 0:
+                logger.warning(
+                    f"⚠️ [financiamiento-por-rangos] Los filtros de fecha eliminaron todos los préstamos. "
+                    f"Total antes de fecha: {total_antes_fecha}, Total después: {total_prestamos_despues_filtros}"
+                )
         except Exception as e:
             logger.error(f"Error contando préstamos después de filtros: {e}", exc_info=True)
 
@@ -3129,7 +3261,16 @@ def obtener_financiamiento_por_rangos(
             ).first()
             total_prestamos = totales_query.total_prestamos or 0 if totales_query else 0
             total_monto = float(totales_query.total_monto or Decimal("0")) if totales_query else 0.0
-            logger.info(f"📊 [financiamiento-por-rangos] Total préstamos final: {total_prestamos}, Total monto: {total_monto}")
+            logger.info(f"📊 [financiamiento-por-rangos] Total préstamos final (con total_financiamiento > 0): {total_prestamos}, Total monto: {total_monto}")
+            
+            # ✅ DIAGNÓSTICO: Si no hay préstamos, verificar por qué
+            if total_prestamos == 0:
+                logger.warning(
+                    f"⚠️ [financiamiento-por-rangos] No se encontraron préstamos válidos. "
+                    f"Diagnóstico: Total aprobados sin filtros={total_prestamos_aprobados_sin_filtros}, "
+                    f"Total después de filtros={total_prestamos_despues_filtros}, "
+                    f"Total válidos (con monto > 0)={total_prestamos}"
+                )
         except Exception as e:
             logger.error(f"Error calculando totales en financiamiento-por-rangos: {e}", exc_info=True)
             total_prestamos = 0
