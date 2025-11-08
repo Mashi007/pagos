@@ -1193,8 +1193,8 @@ export function DashboardMenu() {
                             let pagosAcumulados = 0
                             
                             return mesesOrdenados.map(mes => {
-                              const morosidadMensual = morosidadMap.get(mes) || 0
-                              const pagosMensuales = pagosMap.get(mes) || 0
+                              const morosidadMensual: number = (morosidadMap.get(mes) as number) || 0
+                              const pagosMensuales: number = (pagosMap.get(mes) as number) || 0
                               
                               // Acumular valores
                               morosidadAcumulada += morosidadMensual
