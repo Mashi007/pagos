@@ -499,12 +499,36 @@ def _procesar_distribucion_rango_monto(
             from sqlalchemy import text
             
             # Obtener solo los IDs primero (esto no carga el modelo completo)
-            prestamo_ids_query = query_base.with_entities(Prestamo.id)
-            prestamo_ids = [row[0] for row in prestamo_ids_query.all()]
+            try:
+                prestamo_ids_query = query_base.with_entities(Prestamo.id)
+                prestamo_ids_result = prestamo_ids_query.all()
+                prestamo_ids = [row[0] for row in prestamo_ids_result]
+                logger.info(f"📊 [financiamiento-por-rangos] IDs obtenidos: {len(prestamo_ids)} préstamos")
+            except Exception as e:
+                logger.error(f"Error obteniendo IDs de préstamos: {e}", exc_info=True)
+                if db is not None:
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+                return []
             
             if not prestamo_ids:
-                # Si no hay préstamos, retornar lista vacía
-                return []
+                # Si no hay préstamos, construir respuesta con todos los rangos en 0
+                logger.warning("⚠️ [financiamiento-por-rangos] No se encontraron préstamos con los filtros aplicados")
+                # Construir respuesta con todos los rangos en 0
+                distribucion_data = []
+                for min_val, max_val, categoria in rangos:
+                    distribucion_data.append(
+                        {
+                            "categoria": categoria,
+                            "cantidad_prestamos": 0,
+                            "monto_total": 0.0,
+                            "porcentaje_cantidad": 0.0,
+                            "porcentaje_monto": 0.0,
+                        }
+                    )
+                return distribucion_data
             
             # Query SQL directa solo con las columnas que existen en la BD
             # Usar ANY con lista para PostgreSQL (más eficiente que IN con muchos valores)

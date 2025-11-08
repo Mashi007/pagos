@@ -51,11 +51,45 @@ class FiltrosDashboard:
             query = query.filter(Prestamo.concesionario == concesionario)
         if modelo:
             query = query.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
-        # ⚠️ CORRECCIÓN: Usar fecha_aprobacion porque fecha_registro no migró correctamente
-        if fecha_inicio:
-            query = query.filter(Prestamo.fecha_aprobacion >= fecha_inicio)
-        if fecha_fin:
-            query = query.filter(Prestamo.fecha_aprobacion <= fecha_fin)
+        # ✅ FIX: Usar OR entre fecha_registro, fecha_aprobacion y fecha_base_calculo
+        # Un préstamo se incluye si AL MENOS UNA de sus fechas está dentro del rango
+        # Esto coincide con la lógica de la consulta SQL de verificación
+        if fecha_inicio and fecha_fin:
+            # Rango completo: verificar que al menos una fecha esté en el rango [fecha_inicio, fecha_fin]
+            query = query.filter(
+                or_(
+                    and_(
+                        Prestamo.fecha_registro >= fecha_inicio,
+                        Prestamo.fecha_registro <= fecha_fin
+                    ),
+                    and_(
+                        Prestamo.fecha_aprobacion >= fecha_inicio,
+                        Prestamo.fecha_aprobacion <= fecha_fin
+                    ),
+                    and_(
+                        Prestamo.fecha_base_calculo >= fecha_inicio,
+                        Prestamo.fecha_base_calculo <= fecha_fin
+                    ),
+                )
+            )
+        elif fecha_inicio:
+            # Solo fecha inicio: verificar que al menos una fecha >= fecha_inicio
+            query = query.filter(
+                or_(
+                    Prestamo.fecha_registro >= fecha_inicio,
+                    Prestamo.fecha_aprobacion >= fecha_inicio,
+                    Prestamo.fecha_base_calculo >= fecha_inicio,
+                )
+            )
+        elif fecha_fin:
+            # Solo fecha fin: verificar que al menos una fecha <= fecha_fin
+            query = query.filter(
+                or_(
+                    Prestamo.fecha_registro <= fecha_fin,
+                    Prestamo.fecha_aprobacion <= fecha_fin,
+                    Prestamo.fecha_base_calculo <= fecha_fin,
+                )
+            )
         return query
 
     @staticmethod
