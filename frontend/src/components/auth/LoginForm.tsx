@@ -103,14 +103,16 @@ export function LoginForm() {
         }
       } else if (error.response?.status === 401) {
         // Extraer mensaje del backend (puede estar en detail)
-        const errorDetail = error.response?.data?.detail || error.response?.data?.message
+        const responseData = error.response?.data as { detail?: string; message?: string } | undefined
+        const errorDetail = responseData?.detail || responseData?.message
         const errorMessage = errorDetail || 'Credenciales incorrectas. Verifica tu email y contraseña.'
         setError('root', { 
           message: errorMessage
         })
       } else {
         // Extraer mensaje del backend para otros errores
-        const errorDetail = error.response?.data?.detail || error.response?.data?.message
+        const responseData = error.response?.data as { detail?: string; message?: string } | undefined
+        const errorDetail = responseData?.detail || responseData?.message
         const errorMessage = errorDetail || `Error del servidor: ${error.response?.status || 'Desconocido'}`
         setError('root', { 
           message: errorMessage
