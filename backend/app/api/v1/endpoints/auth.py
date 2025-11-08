@@ -125,6 +125,7 @@ async def login(
 
         # ✅ Actualizar último acceso del usuario
         from datetime import datetime
+
         user.last_login = datetime.utcnow()
         db.commit()
         db.refresh(user)
