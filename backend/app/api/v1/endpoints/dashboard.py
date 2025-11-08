@@ -512,6 +512,7 @@ def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos
             logger.warning("No hay condiciones CASE para procesar, retornando lista vacía")
             return []
             
+        # ✅ Construir expresión CASE y usarla tanto en SELECT como en GROUP BY
         case_expression = case(*case_conditions, else_="Otro")
         distribucion_query = (
             query_base.with_entities(
@@ -519,7 +520,7 @@ def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos
                 func.count(Prestamo.id).label("cantidad"),
                 func.sum(Prestamo.total_financiamiento).label("monto_total"),
             )
-            .group_by(case_expression)  # ✅ Usar expresión completa en lugar de string
+            .group_by(case_expression)  # ✅ Usar expresión completa en GROUP BY (más compatible)
             .all()
         )
     except Exception as e:
@@ -3060,17 +3061,23 @@ def obtener_financiamiento_por_rangos(
         max_rango = 50000
         paso = 300
         # Generar rangos desde $0 hasta $50,000 en pasos de $300
-        for min_val in range(0, max_rango, paso):
-            max_val = min_val + paso
-            # Formatear etiqueta: $0 - $300, $300 - $600, etc.
-            categoria = f"${min_val:,.0f} - ${max_val:,.0f}".replace(",", "")
-            rangos.append((min_val, max_val, categoria))
+        try:
+            for min_val in range(0, max_rango, paso):
+                max_val = min_val + paso
+                # Formatear etiqueta: $0 - $300, $300 - $600, etc.
+                categoria = f"${min_val:,.0f} - ${max_val:,.0f}".replace(",", "")
+                rangos.append((min_val, max_val, categoria))
 
-        # Agregar rango final para montos mayores a $50,000 (al inicio para que quede primero)
-        rangos.insert(0, (max_rango, None, f"${max_rango:,.0f}+".replace(",", "")))
+            # Agregar rango final para montos mayores a $50,000 (al inicio para que quede primero)
+            rangos.insert(0, (max_rango, None, f"${max_rango:,.0f}+".replace(",", "")))
 
-        # Invertir lista para que quede de mayor a menor (efecto pirámide)
-        rangos.reverse()
+            # Invertir lista para que quede de mayor a menor (efecto pirámide)
+            rangos.reverse()
+            
+            logger.info(f"📊 [financiamiento-por-rangos] Generados {len(rangos)} rangos")
+        except Exception as e:
+            logger.error(f"Error generando rangos: {e}", exc_info=True)
+            rangos = [(0, None, "$0+")]  # Rango por defecto si falla
 
         try:
             distribucion_data = _procesar_distribucion_rango_monto(query_base, rangos, total_prestamos, total_monto, db)
@@ -3098,12 +3105,20 @@ def obtener_financiamiento_por_rangos(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error obteniendo financiamiento por rangos: {e}", exc_info=True)
+        error_msg = str(e)
+        logger.error(f"❌ [financiamiento-por-rangos] Error obteniendo financiamiento por rangos: {error_msg}", exc_info=True)
+        logger.error(f"❌ [financiamiento-por-rangos] Tipo de error: {type(e).__name__}")
         try:
             db.rollback()  # ✅ Rollback para restaurar transacción después de error
-        except Exception:
-            pass
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        except Exception as rollback_error:
+            logger.error(f"❌ [financiamiento-por-rangos] Error en rollback: {rollback_error}")
+        # Retornar respuesta vacía en lugar de lanzar error 500 para evitar romper el dashboard
+        logger.warning("⚠️ [financiamiento-por-rangos] Retornando respuesta vacía debido a error")
+        return {
+            "rangos": [],
+            "total_prestamos": 0,
+            "total_monto": 0.0,
+        }
 
 
 def _get_morosidad_categoria(dias_atraso: int) -> str:

@@ -1275,25 +1275,12 @@ export function DashboardMenu() {
                             height={60}
                           />
                           <YAxis 
-                            yAxisId="left" 
                             stroke="#6b7280"
                             tickFormatter={(value) => formatCurrency(value)}
                             label={{ 
-                              value: 'Morosidad ($)', 
+                              value: 'Monto ($)', 
                               angle: -90, 
                               position: 'insideLeft',
-                              style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px', fontWeight: 600 }
-                            }}
-                          />
-                          <YAxis 
-                            yAxisId="right" 
-                            orientation="right" 
-                            stroke="#6b7280"
-                            tickFormatter={(value) => formatCurrency(value)}
-                            label={{ 
-                              value: 'Pagos ($)', 
-                              angle: 90, 
-                              position: 'insideRight',
                               style: { textAnchor: 'middle', fill: '#6b7280', fontSize: '12px', fontWeight: 600 }
                             }}
                           />
@@ -1312,7 +1299,6 @@ export function DashboardMenu() {
                           />
                           <Legend />
                           <Line 
-                            yAxisId="left" 
                             type="monotone" 
                             dataKey="morosidad" 
                             stroke="#ef4444" 
@@ -1322,7 +1308,6 @@ export function DashboardMenu() {
                             activeDot={{ r: 7 }}
                           />
                           <Line 
-                            yAxisId="right" 
                             type="monotone" 
                             dataKey="pagos" 
                             stroke="#8b5cf6" 
