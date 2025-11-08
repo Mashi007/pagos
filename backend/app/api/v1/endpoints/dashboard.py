@@ -560,7 +560,9 @@ def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos
     # ✅ Agregar rango "Otro" si existe (al final de la lista)
     try:
         if otros_prestamos.get("cantidad", 0) > 0:
-            porcentaje_cantidad_otros = (otros_prestamos.get("cantidad", 0) / total_prestamos * 100) if total_prestamos > 0 else 0
+            porcentaje_cantidad_otros = (
+                (otros_prestamos.get("cantidad", 0) / total_prestamos * 100) if total_prestamos > 0 else 0
+            )
             porcentaje_monto_otros = (otros_prestamos.get("monto_total", 0.0) / total_monto * 100) if total_monto > 0 else 0
             distribucion_data.append(
                 {
