@@ -290,12 +290,38 @@ def update_user(
             _validar_email_unico(db, update_data["email"], user_id)
 
         logger.info(f"Actualizando usuario {user_id} con campos: {list(update_data.keys())}")
+        
+        # Guardar valores anteriores para logging
+        valores_anteriores = {
+            'email': user.email,
+            'nombre': user.nombre,
+            'apellido': user.apellido,
+            'is_admin': user.is_admin,
+            'is_active': user.is_active,
+        }
+        
         _aplicar_actualizaciones(user, update_data)
 
         try:
+            # Flush para asegurar que los cambios se apliquen antes del commit
+            db.flush()
             db.commit()
             db.refresh(user)
-            logger.info(f"Usuario {user_id} actualizado exitosamente - Campos actualizados: {list(update_data.keys())}")
+            
+            # Verificar que los cambios se aplicaron
+            cambios_aplicados = []
+            for campo in update_data.keys():
+                if campo in valores_anteriores:
+                    valor_anterior = valores_anteriores.get(campo)
+                    valor_nuevo = getattr(user, campo, None)
+                    if valor_anterior != valor_nuevo:
+                        cambios_aplicados.append(f"{campo}: {valor_anterior} -> {valor_nuevo}")
+            
+            logger.info(
+                f"Usuario {user_id} actualizado exitosamente - "
+                f"Campos enviados: {list(update_data.keys())}, "
+                f"Cambios aplicados: {cambios_aplicados if cambios_aplicados else 'ninguno (valores iguales)'}"
+            )
         except Exception as commit_error:
             db.rollback()
             logger.error(
