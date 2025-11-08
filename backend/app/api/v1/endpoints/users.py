@@ -278,28 +278,25 @@ def update_user(
         _validar_permisos_actualizacion(current_user, user_id)
 
         update_data = user_data.model_dump(exclude_unset=True)
-        
+
         # Verificar que hay datos para actualizar
         if not update_data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se proporcionaron datos para actualizar"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No se proporcionaron datos para actualizar")
 
         if "email" in update_data and update_data["email"] != user.email:
             _validar_email_unico(db, update_data["email"], user_id)
 
         logger.info(f"Actualizando usuario {user_id} con campos: {list(update_data.keys())}")
-        
+
         # Guardar valores anteriores para logging
         valores_anteriores = {
-            'email': user.email,
-            'nombre': user.nombre,
-            'apellido': user.apellido,
-            'is_admin': user.is_admin,
-            'is_active': user.is_active,
+            "email": user.email,
+            "nombre": user.nombre,
+            "apellido": user.apellido,
+            "is_admin": user.is_admin,
+            "is_active": user.is_active,
         }
-        
+
         _aplicar_actualizaciones(user, update_data)
 
         try:
@@ -307,7 +304,7 @@ def update_user(
             db.flush()
             db.commit()
             db.refresh(user)
-            
+
             # Verificar que los cambios se aplicaron
             cambios_aplicados = []
             for campo in update_data.keys():
@@ -316,7 +313,7 @@ def update_user(
                     valor_nuevo = getattr(user, campo, None)
                     if valor_anterior != valor_nuevo:
                         cambios_aplicados.append(f"{campo}: {valor_anterior} -> {valor_nuevo}")
-            
+
             logger.info(
                 f"Usuario {user_id} actualizado exitosamente - "
                 f"Campos enviados: {list(update_data.keys())}, "
