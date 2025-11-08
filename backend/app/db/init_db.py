@@ -61,7 +61,7 @@ def create_admin_user() -> None:
             # Create admin user
             admin_user = User(
                 email="itmaster@rapicreditca.com",
-                hashed_password=get_password_hash("R@pi_2025**"),
+                hashed_password=get_password_hash("Casa1803+"),
                 rol="ADMIN",
                 is_admin=True,
                 is_active=True,
