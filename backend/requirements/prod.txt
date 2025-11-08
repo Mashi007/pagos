@@ -16,5 +16,5 @@ gunicorn==21.2.0
 # ============================================
 # CACHING (Recomendado para producción)
 # ============================================
-redis==5.0.1
+redis>=5.0.0,<6.0.0
 # aioredis==2.0.1  # No necesario para cache síncrono

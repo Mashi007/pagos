@@ -6,7 +6,7 @@ services:
     plan: free
     branch: main
     autoDeploy: true
-    buildCommand: cd backend && pip install -r requirements.txt
+    buildCommand: cd backend && pip install -r requirements.txt && pip show redis || echo "⚠️ Redis no instalado"
     releaseCommand: cd backend && alembic upgrade heads
     startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 120 --timeout-graceful-shutdown 30
     healthCheckPath: /api/v1/health/render

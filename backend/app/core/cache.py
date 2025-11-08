@@ -176,7 +176,8 @@ try:
 
 except ImportError:
     logger.error("⚠️ Redis no disponible (paquete no instalado), usando MemoryCache")
-    logger.error("   Instala redis: pip install redis==5.0.1")
+    logger.error("   Instala redis: pip install 'redis>=5.0.0,<6.0.0'")
+    logger.error("   O específicamente: pip install redis==5.0.1")
 except Exception as e:
     logger.error(f"⚠️ ERROR al conectar a Redis: {type(e).__name__}: {str(e)}")
     logger.error(f"   REDIS_URL configurada: {bool(settings.REDIS_URL) if 'settings' in locals() else 'N/A'}")
