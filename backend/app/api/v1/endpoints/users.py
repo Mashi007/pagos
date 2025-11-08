@@ -298,9 +298,10 @@ def update_user(
         }
 
         _aplicar_actualizaciones(user, update_data)
-        
+
         # ✅ Actualizar updated_at manualmente si no se actualiza automáticamente
         from datetime import datetime
+
         user.updated_at = datetime.utcnow()
 
         try:
