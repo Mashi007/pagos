@@ -128,6 +128,8 @@ export function Usuarios() {
       
       if (editingUsuario) {
         // Actualizar usuario existente - construir UserUpdate correctamente
+        // IMPORTANTE: Incluir todos los campos que queremos actualizar, incluso si no cambiaron
+        // El backend usa exclude_unset=True, así que necesitamos enviar valores explícitos
         const updateData: any = {
           email: formData.email,
           nombre: formData.nombre,
@@ -137,14 +139,14 @@ export function Usuarios() {
         }
         
         // Incluir cargo solo si el usuario original tenía cargo (no el default)
-        // Como no hay campo para editar cargo, mantenemos el valor original si existe
         if (editingUsuario.cargo && editingUsuario.cargo !== 'Usuario') {
           updateData.cargo = editingUsuario.cargo
         }
         
         // Incluir password solo si se proporcionó uno nuevo (no vacío)
+        // Si está vacío, NO lo incluimos para que el backend no intente actualizarlo
         if (formData.password && formData.password.trim() !== '') {
-          updateData.password = formData.password
+          updateData.password = formData.password.trim()
         }
         
         await userService.actualizarUsuario(editingUsuario.id, updateData)

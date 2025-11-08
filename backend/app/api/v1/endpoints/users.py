@@ -278,17 +278,24 @@ def update_user(
         _validar_permisos_actualizacion(current_user, user_id)
 
         update_data = user_data.model_dump(exclude_unset=True)
+        
+        # Verificar que hay datos para actualizar
+        if not update_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se proporcionaron datos para actualizar"
+            )
 
         if "email" in update_data and update_data["email"] != user.email:
             _validar_email_unico(db, update_data["email"], user_id)
 
-        logger.debug(f"Actualizando usuario {user_id} con campos: {list(update_data.keys())}")
+        logger.info(f"Actualizando usuario {user_id} con campos: {list(update_data.keys())}")
         _aplicar_actualizaciones(user, update_data)
 
         try:
             db.commit()
             db.refresh(user)
-            logger.debug(f"Usuario {user_id} actualizado exitosamente")
+            logger.info(f"Usuario {user_id} actualizado exitosamente - Campos actualizados: {list(update_data.keys())}")
         except Exception as commit_error:
             db.rollback()
             logger.error(
