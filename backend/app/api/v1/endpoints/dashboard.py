@@ -478,43 +478,58 @@ def _procesar_distribucion_rango_monto_plazo(
     return distribucion_data
 
 
-def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos: int, total_monto: float) -> list:
+def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos: int, total_monto: float, db: Optional[Session] = None) -> list:
     """
     Procesa distribución por rango de monto
     ✅ OPTIMIZADO: Una sola query con CASE WHEN en lugar de múltiples queries en loop
     """
-
     # Construir expresión CASE WHEN para clasificar por rango
     case_conditions = []
-    for min_val, max_val, categoria in rangos:
-        if max_val is None:
-            # Rango sin límite superior (ej: $50,000+)
-            case_conditions.append((Prestamo.total_financiamiento >= Decimal(str(min_val)), categoria))
-        else:
-            # Rango con límites (ej: $20,000 - $50,000)
-            case_conditions.append(
-                (
-                    and_(
-                        Prestamo.total_financiamiento >= Decimal(str(min_val)),
-                        Prestamo.total_financiamiento < Decimal(str(max_val)),
-                    ),
-                    categoria,
+    try:
+        for min_val, max_val, categoria in rangos:
+            if max_val is None:
+                # Rango sin límite superior (ej: $50,000+)
+                case_conditions.append((Prestamo.total_financiamiento >= Decimal(str(min_val)), categoria))
+            else:
+                # Rango con límites (ej: $20,000 - $50,000)
+                case_conditions.append(
+                    (
+                        and_(
+                            Prestamo.total_financiamiento >= Decimal(str(min_val)),
+                            Prestamo.total_financiamiento < Decimal(str(max_val)),
+                        ),
+                        categoria,
+                    )
                 )
-            )
+    except Exception as e:
+        logger.error(f"Error construyendo condiciones CASE: {e}", exc_info=True)
+        return []
 
     # Query única con GROUP BY por rango
     try:
+        # ✅ FIX: Guardar expresión CASE para usar en GROUP BY
+        if not case_conditions:
+            logger.warning("No hay condiciones CASE para procesar, retornando lista vacía")
+            return []
+            
+        case_expression = case(*case_conditions, else_="Otro")
         distribucion_query = (
             query_base.with_entities(
-                case(*case_conditions, else_="Otro").label("rango"),
+                case_expression.label("rango"),
                 func.count(Prestamo.id).label("cantidad"),
                 func.sum(Prestamo.total_financiamiento).label("monto_total"),
             )
-            .group_by("rango")
+            .group_by(case_expression)  # ✅ Usar expresión completa en lugar de string
             .all()
         )
     except Exception as e:
         logger.error(f"Error ejecutando query de distribución por rangos: {e}", exc_info=True)
+        # ✅ Rollback si hay sesión disponible
+        if db is not None:
+            try:
+                db.rollback()
+            except Exception:
+                pass
         # Si falla la query con CASE WHEN, retornar lista vacía en lugar de fallar completamente
         logger.warning("Retornando distribución vacía debido a error en query")
         return []
@@ -3058,13 +3073,17 @@ def obtener_financiamiento_por_rangos(
         rangos.reverse()
 
         try:
-            distribucion_data = _procesar_distribucion_rango_monto(query_base, rangos, total_prestamos, total_monto)
+            distribucion_data = _procesar_distribucion_rango_monto(query_base, rangos, total_prestamos, total_monto, db)
 
             # Ordenar de mayor a menor monto para efecto pirámide (solo si hay datos)
             if distribucion_data:
                 distribucion_data.sort(key=lambda x: x["monto_total"], reverse=True)
         except Exception as e:
             logger.error(f"Error procesando distribución por rangos: {e}", exc_info=True)
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción
+            except Exception:
+                pass
             distribucion_data = []
 
         total_time = int((time.time() - start_time) * 1000)
@@ -3583,7 +3602,7 @@ def obtener_distribucion_prestamos(
                 (20000, 50000, "$20,000 - $50,000"),
                 (50000, None, "$50,000+"),
             ]
-            distribucion_data = _procesar_distribucion_rango_monto(query_base, rangos, total_prestamos, total_monto)
+            distribucion_data = _procesar_distribucion_rango_monto(query_base, rangos, total_prestamos, total_monto, db)
 
         elif tipo == "plazo":
             distribucion_data = _procesar_distribucion_por_plazo(query_base, total_prestamos, total_monto)
