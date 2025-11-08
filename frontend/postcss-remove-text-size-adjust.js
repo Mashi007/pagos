@@ -149,9 +149,23 @@ export default function removeTextSizeAdjust() {
           }
           
           // 4. Selectores con corchetes no balanceados (para atributos)
+          // También detectar selectores con corchetes escapados problemáticos como .after\:left-\[2px\]:after
           let bracketDepth = 0;
           inString = false;
           stringChar = null;
+          let hasProblematicEscapedBrackets = false;
+          
+          // Detectar patrones problemáticos: corchetes escapados dentro de selectores escapados
+          // Ejemplo: .after\:left-\[2px\]:after o .placeholder\:text-muted-foreground
+          // Estos son válidos en Tailwind pero pueden causar warnings en algunos parsers
+          const problematicPattern = /\\\[[^\]]*\\\]/;
+          if (problematicPattern.test(correctedSelector)) {
+            // Este es un selector válido de Tailwind con valores arbitrarios escapados
+            // No es realmente un error, solo un warning del navegador
+            // No lo eliminamos, solo lo marcamos para logging opcional
+            hasProblematicEscapedBrackets = true;
+          }
+          
           for (let i = 0; i < correctedSelector.length; i++) {
             const char = correctedSelector[i];
             if ((char === '"' || char === "'") && (i === 0 || correctedSelector[i-1] !== '\\')) {
@@ -163,15 +177,21 @@ export default function removeTextSizeAdjust() {
                 stringChar = null;
               }
             } else if (!inString) {
-              if (char === '[') bracketDepth++;
-              if (char === ']') bracketDepth--;
+              // Solo contar corchetes no escapados
+              if (char === '[' && (i === 0 || correctedSelector[i-1] !== '\\')) {
+                bracketDepth++;
+              }
+              if (char === ']' && (i === 0 || correctedSelector[i-1] !== '\\')) {
+                bracketDepth--;
+              }
               if (bracketDepth < 0) {
                 shouldRemove = true;
                 break;
               }
             }
           }
-          if (bracketDepth !== 0) {
+          if (bracketDepth !== 0 && !hasProblematicEscapedBrackets) {
+            // Solo marcar como problemático si NO es un patrón válido de Tailwind
             shouldRemove = true;
           }
           

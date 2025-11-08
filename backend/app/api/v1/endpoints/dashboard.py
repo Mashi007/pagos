@@ -526,13 +526,17 @@ def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos
     }
 
     # ✅ Verificar si hay préstamos clasificados como "Otro" (no deberían existir, pero los incluimos)
-    otros_prestamos = distribucion_dict.get("Otro", {"cantidad": 0, "monto_total": 0.0})
-    if otros_prestamos["cantidad"] > 0:
-        logger.warning(
-            f"⚠️ Se encontraron {otros_prestamos['cantidad']} préstamos clasificados como 'Otro' "
-            f"(monto total: {otros_prestamos['monto_total']}). "
-            f"Esto puede indicar valores fuera del rango esperado o NULL."
-        )
+    try:
+        otros_prestamos = distribucion_dict.get("Otro", {"cantidad": 0, "monto_total": 0.0})
+        if otros_prestamos.get("cantidad", 0) > 0:
+            logger.warning(
+                f"⚠️ Se encontraron {otros_prestamos.get('cantidad', 0)} préstamos clasificados como 'Otro' "
+                f"(monto total: {otros_prestamos.get('monto_total', 0.0)}). "
+                f"Esto puede indicar valores fuera del rango esperado o NULL."
+            )
+    except Exception as e:
+        logger.error(f"Error verificando préstamos 'Otro': {e}", exc_info=True)
+        otros_prestamos = {"cantidad": 0, "monto_total": 0.0}
 
     # Construir respuesta manteniendo el orden de los rangos originales
     distribucion_data = []
@@ -554,26 +558,34 @@ def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos
         )
 
     # ✅ Agregar rango "Otro" si existe (al final de la lista)
-    if otros_prestamos["cantidad"] > 0:
-        porcentaje_cantidad_otros = (otros_prestamos["cantidad"] / total_prestamos * 100) if total_prestamos > 0 else 0
-        porcentaje_monto_otros = (otros_prestamos["monto_total"] / total_monto * 100) if total_monto > 0 else 0
-        distribucion_data.append(
-            {
-                "categoria": "Otro",
-                "cantidad_prestamos": otros_prestamos["cantidad"],
-                "monto_total": otros_prestamos["monto_total"],
-                "porcentaje_cantidad": round(porcentaje_cantidad_otros, 2),
-                "porcentaje_monto": round(porcentaje_monto_otros, 2),
-            }
-        )
+    try:
+        if otros_prestamos.get("cantidad", 0) > 0:
+            porcentaje_cantidad_otros = (otros_prestamos.get("cantidad", 0) / total_prestamos * 100) if total_prestamos > 0 else 0
+            porcentaje_monto_otros = (otros_prestamos.get("monto_total", 0.0) / total_monto * 100) if total_monto > 0 else 0
+            distribucion_data.append(
+                {
+                    "categoria": "Otro",
+                    "cantidad_prestamos": otros_prestamos.get("cantidad", 0),
+                    "monto_total": otros_prestamos.get("monto_total", 0.0),
+                    "porcentaje_cantidad": round(porcentaje_cantidad_otros, 2),
+                    "porcentaje_monto": round(porcentaje_monto_otros, 2),
+                }
+            )
+    except Exception as e:
+        logger.error(f"Error agregando rango 'Otro': {e}", exc_info=True)
+        # Continuar sin bloquear si hay error
 
     # ✅ Verificar que la suma de todos los rangos coincida con el total
-    suma_cantidad = sum(r["cantidad_prestamos"] for r in distribucion_data)
-    if suma_cantidad != total_prestamos:
-        logger.warning(
-            f"⚠️ DISCREPANCIA: Suma de rangos ({suma_cantidad}) no coincide con total_prestamos ({total_prestamos}). "
-            f"Diferencia: {abs(suma_cantidad - total_prestamos)} préstamos."
-        )
+    try:
+        suma_cantidad = sum(r.get("cantidad_prestamos", 0) for r in distribucion_data)
+        if suma_cantidad != total_prestamos and total_prestamos > 0:
+            logger.warning(
+                f"⚠️ DISCREPANCIA: Suma de rangos ({suma_cantidad}) no coincide con total_prestamos ({total_prestamos}). "
+                f"Diferencia: {abs(suma_cantidad - total_prestamos)} préstamos."
+            )
+    except Exception as e:
+        logger.error(f"Error verificando suma de rangos: {e}", exc_info=True)
+        # No fallar si hay error en la verificación, solo loguear
 
     return distribucion_data
 
@@ -2962,14 +2974,18 @@ def obtener_financiamiento_por_rangos(
         )
 
         # ✅ Verificar préstamos con total_financiamiento NULL o <= 0 (antes de filtrar)
-        prestamos_invalidos = query_base.filter(
-            or_(Prestamo.total_financiamiento.is_(None), Prestamo.total_financiamiento <= 0)
-        ).count()
-        if prestamos_invalidos > 0:
-            logger.warning(
-                f"⚠️ Se encontraron {prestamos_invalidos} préstamos aprobados con total_financiamiento NULL o <= 0. "
-                f"Estos no se incluirán en la distribución por rangos."
-            )
+        try:
+            prestamos_invalidos = query_base.filter(
+                or_(Prestamo.total_financiamiento.is_(None), Prestamo.total_financiamiento <= 0)
+            ).count()
+            if prestamos_invalidos > 0:
+                logger.warning(
+                    f"⚠️ Se encontraron {prestamos_invalidos} préstamos aprobados con total_financiamiento NULL o <= 0. "
+                    f"Estos no se incluirán en la distribución por rangos."
+                )
+        except Exception as e:
+            logger.error(f"Error verificando préstamos inválidos: {e}", exc_info=True)
+            # Continuar sin bloquear si hay error en la verificación
 
         # ✅ Aplicar filtro para excluir NULL y <= 0 antes de calcular totales y procesar rangos
         query_base = query_base.filter(and_(Prestamo.total_financiamiento.isnot(None), Prestamo.total_financiamiento > 0))

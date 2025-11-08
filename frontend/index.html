@@ -18,19 +18,28 @@
       // Interceptar console.warn para filtrar warnings de CSS conocidos
       const originalWarn = console.warn;
       console.warn = function(...args) {
-        const message = args.join(' ');
+        const message = args.join(' ').toLowerCase();
         // Suprimir warnings específicos de CSS relacionados con selectores malformados
+        // Incluye variaciones en español e inglés
         if (
-          message.includes('Juego de reglas ignoradas') ||
+          message.includes('juego de reglas ignoradas') ||
+          message.includes('reglas ignoradas') ||
           message.includes('ignored due to bad selector') ||
           message.includes('ignored due to malformed selector') ||
           message.includes('mal selector') ||
           message.includes('bad selector') ||
+          message.includes('malformed selector') ||
           message.includes('webkit-text-size-adjust') ||
           message.includes('moz-text-size-adjust') ||
-          message.includes('text-size-adjust')
+          message.includes('text-size-adjust') ||
+          message.includes('css parsing error') ||
+          message.includes('error de análisis css') ||
+          // Patrones específicos de Tailwind con corchetes escapados
+          message.includes('after\\:left-\\[') ||
+          message.includes('after\\:top-\\[') ||
+          message.includes('placeholder\\:text-')
         ) {
-          // Silenciar estos warnings específicos
+          // Silenciar estos warnings específicos (son cosméticos y no afectan funcionalidad)
           return;
         }
         // Mostrar otros warnings normalmente
