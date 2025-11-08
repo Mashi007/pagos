@@ -1778,18 +1778,21 @@ def dashboard_administrador(
             evolucion_mensual = []
 
         # 22. ANÁLISIS DE MOROSIDAD - Cálculo real desde BD
-        # Total Financiamiento: Suma de todos los préstamos aprobados
+        # Total Financiamiento: Suma de todos los préstamos aprobados (ACUMULATIVO - sin filtros de fecha)
+        # ✅ CORRECCIÓN: Hacer acumulativo para consistencia con Cartera Recobrada y Morosidad
         try:
             total_financiamiento_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
                 Prestamo.estado == "APROBADO"
             )
+            # ✅ Aplicar solo filtros de analista, concesionario y modelo (NO filtros de fecha)
+            # Esto hace que sea acumulativo, consistente con totalCobrado y morosidad
             total_financiamiento_query = FiltrosDashboard.aplicar_filtros_prestamo(
                 total_financiamiento_query,
                 analista,
                 concesionario,
                 modelo,
-                fecha_inicio,
-                fecha_fin,
+                None,  # ✅ NO aplicar fecha_inicio
+                None,  # ✅ NO aplicar fecha_fin
             )
             total_financiamiento_operaciones = float(total_financiamiento_query.scalar() or Decimal("0"))
         except Exception as e:

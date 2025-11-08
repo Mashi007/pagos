@@ -220,33 +220,50 @@ export function DashboardMenu() {
 
   // Batch 4: BAJA - Gráficos menos críticos (cargar después de Batch 3, lazy loading)
   // ✅ ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
-  const { data: datosFinanciamientoRangos, isLoading: loadingFinanciamientoRangos, isError: errorFinanciamientoRangos, refetch: refetchFinanciamientoRangos } = useQuery({
+  const { data: datosFinanciamientoRangos, isLoading: loadingFinanciamientoRangos, isError: errorFinanciamientoRangos, error: errorFinanciamientoRangosDetail, refetch: refetchFinanciamientoRangos } = useQuery({
     queryKey: ['financiamiento-rangos', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // ✅ Pasar período
-      const queryParams = new URLSearchParams()
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-      const response = await apiClient.get(
-        `/api/v1/dashboard/financiamiento-por-rangos?${queryParams.toString()}`
-      ) as {
-        rangos: Array<{
-          categoria: string
-          cantidad_prestamos: number
-          monto_total: number
-          porcentaje_cantidad: number
-          porcentaje_monto: number
-        }>
-        total_prestamos: number
-        total_monto: number
+      try {
+        const params = construirFiltrosObject(periodo) // ✅ Pasar período
+        const queryParams = new URLSearchParams()
+        Object.entries(params).forEach(([key, value]) => {
+          if (value) queryParams.append(key, value.toString())
+        })
+        const response = await apiClient.get(
+          `/api/v1/dashboard/financiamiento-por-rangos?${queryParams.toString()}`,
+          { timeout: 60000 } // ✅ Timeout extendido para queries pesadas
+        ) as {
+          rangos: Array<{
+            categoria: string
+            cantidad_prestamos: number
+            monto_total: number
+            porcentaje_cantidad: number
+            porcentaje_monto: number
+          }>
+          total_prestamos: number
+          total_monto: number
+        }
+        return response
+      } catch (error: any) {
+        console.error('❌ [DashboardMenu] Error cargando financiamiento por rangos:', error)
+        // Si el error es 500 o de red, lanzar el error para que React Query lo maneje
+        // Si es otro error, retornar respuesta vacía para no romper el dashboard
+        if (error?.response?.status >= 500 || error?.code === 'ERR_NETWORK' || error?.code === 'ECONNABORTED') {
+          throw error // Lanzar para que React Query muestre el error
+        }
+        // Para otros errores, retornar respuesta vacía
+        return {
+          rangos: [],
+          total_prestamos: 0,
+          total_monto: 0.0,
+        }
       }
-      return response
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
-    retry: false, // No reintentar automáticamente en caso de error 401
+    retry: 1, // ✅ Permitir 1 reintento para errores de red
+    retryDelay: 2000, // Esperar 2 segundos antes de reintentar
   })
 
   const { data: datosComposicionMorosidad, isLoading: loadingComposicionMorosidad } = useQuery({
@@ -1413,7 +1430,21 @@ export function DashboardMenu() {
                       <div className="h-[450px] flex flex-col items-center justify-center text-gray-500">
                         <AlertTriangle className="h-8 w-8 mb-2 text-red-500" />
                         <p className="text-sm font-semibold mb-1">Error al cargar los datos</p>
-                        <p className="text-xs text-gray-400 mb-4">Por favor, verifica la conexión con el servidor</p>
+                        <p className="text-xs text-gray-400 mb-2 text-center px-4">
+                          {(() => {
+                            const error: any = errorFinanciamientoRangosDetail
+                            if (error?.code === 'ERR_NETWORK' || error?.message?.includes('Network')) {
+                              return 'Error de conexión. Verifica tu conexión a internet.'
+                            }
+                            if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+                              return 'La solicitud tardó demasiado. El servidor puede estar sobrecargado.'
+                            }
+                            if (error?.response?.status >= 500) {
+                              return 'Error del servidor. Por favor, contacta al administrador.'
+                            }
+                            return error?.response?.data?.detail || error?.message || 'Por favor, verifica la conexión con el servidor'
+                          })()}
+                        </p>
                         <Button 
                           onClick={() => refetchFinanciamientoRangos()} 
                           variant="outline" 
