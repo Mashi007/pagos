@@ -15,6 +15,26 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+# IMPORTANTE: Configurar logging ANTES de importar otros módulos que usan logging
+# Esto asegura que los logs de inicialización (como cache) se muestren correctamente
+from app.core.config import settings
+
+# Configurar logging básico pero efectivo
+# Evitar duplicación: limpiar handlers existentes antes de configurar
+root_logger = logging.getLogger()
+root_logger.handlers.clear()
+
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL),
+    handlers=[
+        logging.StreamHandler(sys.stdout),  # Asegurar que vaya a stdout
+    ],
+    force=True,  # Forzar reconfiguración
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
+logger = logging.getLogger(__name__)
+
 # Routers
 from app.api.v1.endpoints import (
     amortizacion,
@@ -42,28 +62,12 @@ from app.api.v1.endpoints import (
     validadores,
 )
 
-# Forzar inicialización de cache al inicio para que los logs aparezcan
+# Forzar inicialización de cache DESPUÉS de configurar logging
+# Ahora los logs de inicialización del cache se mostrarán correctamente
 from app.core import cache  # noqa: F401
-from app.core.config import settings
 from app.core.exceptions import global_exception_handler
 from app.core.performance_monitor import performance_monitor
 from app.db.init_db import init_db_shutdown, init_db_startup
-
-# Configurar logging básico pero efectivo
-# Evitar duplicación: limpiar handlers existentes antes de configurar
-root_logger = logging.getLogger()
-root_logger.handlers.clear()
-
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL),
-    handlers=[
-        logging.StreamHandler(sys.stdout),  # Asegurar que vaya a stdout
-    ],
-    force=True,  # Forzar reconfiguración
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-
-logger = logging.getLogger(__name__)
 
 # No crear otro logger duplicado - usar el root logger o el logger del módulo
 # app_logger removido para evitar duplicación
