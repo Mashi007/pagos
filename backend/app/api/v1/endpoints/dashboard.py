@@ -588,7 +588,6 @@ def _procesar_distribucion_rango_monto(
         # Convertir Decimal a float para el resultado
         for cat in distribucion_dict:
             distribucion_dict[cat]["monto_total"] = float(distribucion_dict[cat]["monto_total"])
-            
     except Exception as e:
         logger.error(f"Error procesando distribución por rangos: {e}", exc_info=True)
         # ✅ Rollback si hay sesión disponible
@@ -3132,7 +3131,7 @@ def obtener_financiamiento_por_rangos(
 
             # Invertir lista para que quede de mayor a menor (efecto pirámide)
             rangos.reverse()
-            
+
             logger.info(f"📊 [financiamiento-por-rangos] Generados {len(rangos)} rangos")
         except Exception as e:
             logger.error(f"Error generando rangos: {e}", exc_info=True)
