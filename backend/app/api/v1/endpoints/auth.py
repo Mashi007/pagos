@@ -258,27 +258,27 @@ async def change_password(
 
         # Preservar el cargo antes de actualizar (por si acaso)
         cargo_original = current_user.cargo
-        
+
         # Actualizar contraseña - usar merge para evitar problemas con el refresh
         user_id = current_user.id
         user = db.query(User).filter(User.id == user_id).first()
-        
+
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Usuario no encontrado",
             )
-        
+
         # Actualizar solo el campo hashed_password
         user.hashed_password = get_password_hash(password_data.new_password)
-        
+
         # Asegurar que el cargo se mantiene explícitamente
         if cargo_original is not None:
             user.cargo = cargo_original
-        
+
         db.commit()
         db.refresh(user)  # ✅ Refrescar para asegurar que los cambios se reflejen
-        
+
         # Verificar que el cargo se mantuvo después del refresh
         if cargo_original is not None and user.cargo != cargo_original:
             logger.warning(f"El cargo cambió después del refresh. Restaurando cargo original para usuario {user_id}")
