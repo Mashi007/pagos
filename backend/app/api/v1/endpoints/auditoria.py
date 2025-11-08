@@ -184,7 +184,25 @@ def listar_auditoria(
     current_user: User = Depends(get_current_user),
 ):
     # Listar registros de auditoría con filtros y paginación (incluye fuentes detalladas)
+    from sqlalchemy import inspect
+    from sqlalchemy.exc import ProgrammingError
+    
     try:
+        # Verificar si la tabla auditoria existe
+        inspector = inspect(db.bind)
+        tablas = inspector.get_table_names()
+        tabla_auditoria_existe = "auditoria" in tablas
+        
+        if not tabla_auditoria_existe:
+            logger.warning("Tabla 'auditoria' no existe en BD. Retornando lista vacía.")
+            return {
+                "items": [],
+                "total": 0,
+                "page": 1,
+                "page_size": limit,
+                "total_pages": 0,
+            }
+        
         # Construir query base (auditoría general)
         query = db.query(Auditoria).options(joinedload(Auditoria.usuario))
 
@@ -199,13 +217,26 @@ def listar_auditoria(
         max_to_load = min(skip + limit + 500, 5000)  # Máximo 5000 registros por tipo
 
         # Ejecutar consultas con límite optimizado
-        registros_general = query.limit(max_to_load).all()
+        try:
+            registros_general = query.limit(max_to_load).all()
+        except ProgrammingError:
+            logger.warning("Error consultando tabla auditoria, usando lista vacía")
+            registros_general = []
 
         # Optimizar queries de préstamos y pagos con límite y orden
-        registros_prestamos = (
-            db.query(PrestamoAuditoria).order_by(PrestamoAuditoria.fecha_cambio.desc()).limit(max_to_load).all()
-        )
-        registros_pagos = db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc()).limit(max_to_load).all()
+        try:
+            registros_prestamos = (
+                db.query(PrestamoAuditoria).order_by(PrestamoAuditoria.fecha_cambio.desc()).limit(max_to_load).all()
+            )
+        except ProgrammingError:
+            logger.warning("Error consultando tabla prestamo_auditoria, usando lista vacía")
+            registros_prestamos = []
+        
+        try:
+            registros_pagos = db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc()).limit(max_to_load).all()
+        except ProgrammingError:
+            logger.warning("Error consultando tabla pago_auditoria, usando lista vacía")
+            registros_pagos = []
 
         unified = _unificar_registros_auditoria_listado(registros_general, registros_prestamos, registros_pagos)
         unified = _aplicar_filtros_memoria(unified, usuario_email, modulo, accion)
@@ -451,39 +482,86 @@ def estadisticas_auditoria(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from sqlalchemy import inspect
+    from sqlalchemy.exc import ProgrammingError
+    
     try:
+        # Verificar si la tabla auditoria existe
+        inspector = inspect(db.bind)
+        tablas = inspector.get_table_names()
+        tabla_auditoria_existe = "auditoria" in tablas
+        
+        if not tabla_auditoria_existe:
+            logger.warning("Tabla 'auditoria' no existe en BD. Retornando estadísticas vacías.")
+            return AuditoriaStatsResponse(
+                total_acciones=0,
+                acciones_por_modulo={},
+                acciones_por_usuario={},
+                acciones_hoy=0,
+                acciones_esta_semana=0,
+                acciones_este_mes=0,
+            )
+        
         # Totales (sumando fuentes detalladas)
-        total_acciones = (
-            (db.query(func.count(Auditoria.id)).scalar() or 0)
-            + (db.query(func.count(PrestamoAuditoria.id)).scalar() or 0)
-            + (db.query(func.count(PagoAuditoria.id)).scalar() or 0)
-        )
+        try:
+            total_auditoria = db.query(func.count(Auditoria.id)).scalar() or 0
+        except ProgrammingError:
+            total_auditoria = 0
+            logger.warning("Error consultando tabla auditoria, usando 0")
+        
+        try:
+            total_prestamos = db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
+        except ProgrammingError:
+            total_prestamos = 0
+        
+        try:
+            total_pagos = db.query(func.count(PagoAuditoria.id)).scalar() or 0
+        except ProgrammingError:
+            total_pagos = 0
+        
+        total_acciones = total_auditoria + total_prestamos + total_pagos
 
         # Acciones por módulo (entidad)
         acciones_por_modulo: dict[str, int] = {}
         # Calcular acciones por módulo usando GROUP BY (más eficiente)
-        acciones_por_modulo_rows = (
-            db.query(Auditoria.entidad, func.count(Auditoria.id))
-            .group_by(Auditoria.entidad)
-            .all()
-        )
-        acciones_por_modulo = {row[0] or "DESCONOCIDO": row[1] for row in acciones_por_modulo_rows}
+        try:
+            acciones_por_modulo_rows = (
+                db.query(Auditoria.entidad, func.count(Auditoria.id))
+                .group_by(Auditoria.entidad)
+                .all()
+            )
+            acciones_por_modulo = {row[0] or "DESCONOCIDO": row[1] for row in acciones_por_modulo_rows}
+        except ProgrammingError:
+            logger.warning("Error consultando acciones por módulo de auditoria")
+            acciones_por_modulo = {}
+        
         # Agregar acciones de préstamos y pagos
-        acciones_por_modulo["PRESTAMOS"] = acciones_por_modulo.get("PRESTAMOS", 0) + (
-            db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
-        )
-        acciones_por_modulo["PAGOS"] = acciones_por_modulo.get("PAGOS", 0) + (
-            db.query(func.count(PagoAuditoria.id)).scalar() or 0
-        )
+        try:
+            acciones_por_modulo["PRESTAMOS"] = acciones_por_modulo.get("PRESTAMOS", 0) + (
+                db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
+            )
+        except ProgrammingError:
+            pass
+        
+        try:
+            acciones_por_modulo["PAGOS"] = acciones_por_modulo.get("PAGOS", 0) + (
+                db.query(func.count(PagoAuditoria.id)).scalar() or 0
+            )
+        except ProgrammingError:
+            pass
 
         # Acciones por usuario (email)
-        acciones_por_usuario_rows = (
-            db.query(User.email, func.count(Auditoria.id))
-            .join(User, User.id == Auditoria.usuario_id)
-            .group_by(User.email)
-            .all()
-        )
-        acciones_por_usuario = {row[0]: row[1] for row in acciones_por_usuario_rows}
+        try:
+            acciones_por_usuario_rows = (
+                db.query(User.email, func.count(Auditoria.id))
+                .join(User, User.id == Auditoria.usuario_id)
+                .group_by(User.email)
+                .all()
+            )
+            acciones_por_usuario = {row[0]: row[1] for row in acciones_por_usuario_rows}
+        except ProgrammingError:
+            logger.warning("Error consultando acciones por usuario de auditoria")
+            acciones_por_usuario = {}
 
         # Hoy / semana / mes
         from datetime import datetime, timedelta
@@ -493,24 +571,57 @@ def estadisticas_auditoria(
         inicio_semana = inicio_hoy - timedelta(days=6)
         inicio_mes = datetime(now.year, now.month, 1)
 
-        acciones_hoy = (
-            (db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_hoy).scalar() or 0)
-            + (db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0)
-            + (db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0)
-        )
-        acciones_esta_semana = (
-            (db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_semana).scalar() or 0)
-            + (
-                db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_semana).scalar()
-                or 0
-            )
-            + (db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_semana).scalar() or 0)
-        )
-        acciones_este_mes = (
-            (db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_mes).scalar() or 0)
-            + (db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0)
-            + (db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0)
-        )
+        # Calcular acciones por período de forma segura
+        try:
+            acciones_hoy_aud = db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_hoy).scalar() or 0
+        except ProgrammingError:
+            acciones_hoy_aud = 0
+        
+        try:
+            acciones_hoy_prest = db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0
+        except ProgrammingError:
+            acciones_hoy_prest = 0
+        
+        try:
+            acciones_hoy_pagos = db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0
+        except ProgrammingError:
+            acciones_hoy_pagos = 0
+        
+        acciones_hoy = acciones_hoy_aud + acciones_hoy_prest + acciones_hoy_pagos
+        
+        try:
+            acciones_semana_aud = db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_semana).scalar() or 0
+        except ProgrammingError:
+            acciones_semana_aud = 0
+        
+        try:
+            acciones_semana_prest = db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_semana).scalar() or 0
+        except ProgrammingError:
+            acciones_semana_prest = 0
+        
+        try:
+            acciones_semana_pagos = db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_semana).scalar() or 0
+        except ProgrammingError:
+            acciones_semana_pagos = 0
+        
+        acciones_esta_semana = acciones_semana_aud + acciones_semana_prest + acciones_semana_pagos
+        
+        try:
+            acciones_mes_aud = db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_mes).scalar() or 0
+        except ProgrammingError:
+            acciones_mes_aud = 0
+        
+        try:
+            acciones_mes_prest = db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0
+        except ProgrammingError:
+            acciones_mes_prest = 0
+        
+        try:
+            acciones_mes_pagos = db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0
+        except ProgrammingError:
+            acciones_mes_pagos = 0
+        
+        acciones_este_mes = acciones_mes_aud + acciones_mes_prest + acciones_mes_pagos
 
         return AuditoriaStatsResponse(
             total_acciones=total_acciones,

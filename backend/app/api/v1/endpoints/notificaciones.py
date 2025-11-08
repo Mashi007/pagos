@@ -204,14 +204,72 @@ def listar_notificaciones(
     Listar notificaciones con filtros y paginación
     """
     from app.utils.pagination import calculate_pagination_params, create_paginated_response
+    from sqlalchemy import text
+    from sqlalchemy.exc import ProgrammingError
 
     try:
         # Calcular paginación
         skip, limit = calculate_pagination_params(page=page, per_page=per_page, max_per_page=100)
 
-        # Query base
-        query = db.query(Notificacion)
+        # Query base - usar query raw para evitar problemas con columnas faltantes
+        from sqlalchemy import text
+        
+        # Verificar si la columna canal existe
+        try:
+            # Intentar hacer una query simple para verificar si la columna existe
+            db.execute(text("SELECT canal FROM notificaciones LIMIT 1"))
+            canal_exists = True
+        except ProgrammingError:
+            canal_exists = False
+            logger.warning("Columna 'canal' no existe en BD. Usando query sin canal.")
 
+        # Construir query según si canal existe
+        if canal_exists:
+            query = db.query(Notificacion)
+        else:
+            # Usar query raw seleccionando solo columnas que existen (usando parámetros seguros)
+            base_query = text("""
+                SELECT id, cliente_id, user_id, tipo, asunto, mensaje, estado, 
+                       programada_para, enviada_en, leida, intentos, 
+                       respuesta_servicio, error_mensaje, created_at
+                FROM notificaciones
+                WHERE (:estado IS NULL OR estado = :estado)
+                ORDER BY created_at DESC
+                LIMIT :limit OFFSET :skip
+            """)
+            
+            result = db.execute(
+                base_query,
+                {"estado": estado, "limit": limit, "skip": skip}
+            )
+            rows = result.fetchall()
+            
+            # Contar total (usando parámetros seguros)
+            count_query = text("""
+                SELECT COUNT(*) FROM notificaciones
+                WHERE (:estado IS NULL OR estado = :estado)
+            """)
+            total = db.execute(count_query, {"estado": estado}).scalar() or 0
+            
+            # Serializar resultados
+            items = []
+            for row in rows:
+                item_dict = {
+                    "id": row[0],
+                    "cliente_id": row[1],
+                    "tipo": row[3],
+                    "canal": None,  # No existe en BD
+                    "mensaje": row[5],
+                    "asunto": row[4],
+                    "estado": row[6],
+                    "fecha_envio": row[8],  # enviada_en
+                    "fecha_creacion": row[13],  # created_at
+                }
+                items.append(NotificacionResponse.model_validate(item_dict))
+            
+            return create_paginated_response(items=items, total=total, page=page, page_size=limit)
+
+        # Si canal existe, usar query normal
         if estado:
             query = query.filter(Notificacion.estado == estado)
 
@@ -227,15 +285,15 @@ def listar_notificaciones(
         # Retornar respuesta paginada
         return create_paginated_response(items=items, total=total, page=page, page_size=limit)
 
+    except ProgrammingError as pe:
+        # Manejar errores de columnas/tablas faltantes
+        error_str = str(pe).lower()
+        if "canal" in error_str and ("does not exist" in error_str or "undefined column" in error_str):
+            logger.warning("Columna 'canal' no existe en BD. Retornando respuesta vacía.")
+            return create_paginated_response(items=[], total=0, page=page, page_size=limit)
+        raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(pe)}")
     except Exception as e:
-        logger.error(f"Error listando notificaciones: {e}")
-        # Manejar error de columna 'canal' faltante
-        if "canal" in str(e).lower() and "does not exist" in str(e).lower():
-            logger.warning("Columna 'canal' no existe en BD. Se requiere migración de Alembic.")
-            raise HTTPException(
-                status_code=500,
-                detail="La columna 'canal' no existe en la tabla 'notificaciones'. Ejecute las migraciones de Alembic.",
-            )
+        logger.error(f"Error listando notificaciones: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
