@@ -227,7 +227,7 @@ def _aplicar_actualizaciones(user, update_data: dict):
         elif field == "rol":
             logger.debug("Campo 'rol' ignorado, se maneja con is_admin")
             continue
-        
+
         # Verificar que el campo exista en el modelo para campos normales
         if not hasattr(user, field):
             logger.warning(f"Campo '{field}' no existe en el modelo User, omitiendo...")
