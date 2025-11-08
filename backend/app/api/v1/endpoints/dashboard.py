@@ -512,7 +512,7 @@ def _procesar_distribucion_rango_monto(
                     except Exception:
                         pass
                 return []
-            
+
             if not prestamo_ids:
                 # Si no hay préstamos, construir respuesta con todos los rangos en 0
                 logger.warning("⚠️ [financiamiento-por-rangos] No se encontraron préstamos con los filtros aplicados")

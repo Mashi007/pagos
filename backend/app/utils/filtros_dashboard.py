@@ -58,18 +58,9 @@ class FiltrosDashboard:
             # Rango completo: verificar que al menos una fecha esté en el rango [fecha_inicio, fecha_fin]
             query = query.filter(
                 or_(
-                    and_(
-                        Prestamo.fecha_registro >= fecha_inicio,
-                        Prestamo.fecha_registro <= fecha_fin
-                    ),
-                    and_(
-                        Prestamo.fecha_aprobacion >= fecha_inicio,
-                        Prestamo.fecha_aprobacion <= fecha_fin
-                    ),
-                    and_(
-                        Prestamo.fecha_base_calculo >= fecha_inicio,
-                        Prestamo.fecha_base_calculo <= fecha_fin
-                    ),
+                    and_(Prestamo.fecha_registro >= fecha_inicio, Prestamo.fecha_registro <= fecha_fin),
+                    and_(Prestamo.fecha_aprobacion >= fecha_inicio, Prestamo.fecha_aprobacion <= fecha_fin),
+                    and_(Prestamo.fecha_base_calculo >= fecha_inicio, Prestamo.fecha_base_calculo <= fecha_fin),
                 )
             )
         elif fecha_inicio:
