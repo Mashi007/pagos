@@ -213,7 +213,7 @@ def listar_notificaciones(
 
         # Query base - usar query raw para evitar problemas con columnas faltantes
         from sqlalchemy import text
-        
+
         # Verificar si la columna canal existe
         try:
             # Intentar hacer una query simple para verificar si la columna existe
@@ -228,7 +228,8 @@ def listar_notificaciones(
             query = db.query(Notificacion)
         else:
             # Usar query raw seleccionando solo columnas que existen (usando parámetros seguros)
-            base_query = text("""
+            base_query = text(
+                """
                 SELECT id, cliente_id, user_id, tipo, asunto, mensaje, estado, 
                        programada_para, enviada_en, leida, intentos, 
                        respuesta_servicio, error_mensaje, created_at
@@ -236,21 +237,21 @@ def listar_notificaciones(
                 WHERE (:estado IS NULL OR estado = :estado)
                 ORDER BY created_at DESC
                 LIMIT :limit OFFSET :skip
-            """)
-            
-            result = db.execute(
-                base_query,
-                {"estado": estado, "limit": limit, "skip": skip}
+            """
             )
+
+            result = db.execute(base_query, {"estado": estado, "limit": limit, "skip": skip})
             rows = result.fetchall()
-            
+
             # Contar total (usando parámetros seguros)
-            count_query = text("""
+            count_query = text(
+                """
                 SELECT COUNT(*) FROM notificaciones
                 WHERE (:estado IS NULL OR estado = :estado)
-            """)
+            """
+            )
             total = db.execute(count_query, {"estado": estado}).scalar() or 0
-            
+
             # Serializar resultados
             items = []
             for row in rows:
@@ -266,7 +267,7 @@ def listar_notificaciones(
                     "fecha_creacion": row[13],  # created_at
                 }
                 items.append(NotificacionResponse.model_validate(item_dict))
-            
+
             return create_paginated_response(items=items, total=total, page=page, page_size=limit)
 
         # Si canal existe, usar query normal
