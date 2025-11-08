@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Users, Plus, Search, Edit, Trash2, Shield, Mail, UserCheck, UserX, Loader2, RefreshCw, X, Save } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -35,6 +35,27 @@ export function Usuarios() {
   useEffect(() => {
     cargarUsuarios()
   }, [])
+
+  // Cerrar modal con tecla Escape
+  useEffect(() => {
+    if (!showCreateForm) return
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCloseForm()
+      }
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    // Prevenir scroll del body cuando el modal está abierto
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'unset'
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCreateForm])
 
   const cargarUsuarios = async () => {
     try {
@@ -471,9 +492,16 @@ export function Usuarios() {
 
       {/* Modal de Crear/Editar Usuario */}
       {showCreateForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <div className="flex items-center justify-between mb-4">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={handleCloseForm}
+        >
+          <div 
+            className="bg-white rounded-lg w-full max-w-md flex flex-col max-h-[90vh] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header fijo */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
               <h2 className="text-xl font-bold">
                 {editingUsuario ? 'Editar Usuario' : 'Nuevo Usuario'}
               </h2>
@@ -487,7 +515,9 @@ export function Usuarios() {
               </Button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Contenido con scroll */}
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="overflow-y-auto p-6 space-y-4 flex-1">
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
                 <Input
@@ -575,8 +605,10 @@ export function Usuarios() {
                 />
                 <label htmlFor="is_active" className="text-sm font-medium text-gray-700">Usuario activo</label>
               </div>
+              </div>
 
-              <div className="flex justify-end space-x-2 pt-4">
+              {/* Footer fijo con botones */}
+              <div className="flex justify-end space-x-2 p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
                 <Button
                   type="button"
                   variant="outline"
