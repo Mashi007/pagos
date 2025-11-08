@@ -519,6 +519,15 @@ def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos
         for row in distribucion_query
     }
 
+    # ✅ Verificar si hay préstamos clasificados como "Otro" (no deberían existir, pero los incluimos)
+    otros_prestamos = distribucion_dict.get("Otro", {"cantidad": 0, "monto_total": 0.0})
+    if otros_prestamos["cantidad"] > 0:
+        logger.warning(
+            f"⚠️ Se encontraron {otros_prestamos['cantidad']} préstamos clasificados como 'Otro' "
+            f"(monto total: {otros_prestamos['monto_total']}). "
+            f"Esto puede indicar valores fuera del rango esperado o NULL."
+        )
+
     # Construir respuesta manteniendo el orden de los rangos originales
     distribucion_data = []
     for min_val, max_val, categoria in rangos:
@@ -536,6 +545,28 @@ def _procesar_distribucion_rango_monto(query_base, rangos: list, total_prestamos
                 "porcentaje_cantidad": round(porcentaje_cantidad, 2),
                 "porcentaje_monto": round(porcentaje_monto, 2),
             }
+        )
+
+    # ✅ Agregar rango "Otro" si existe (al final de la lista)
+    if otros_prestamos["cantidad"] > 0:
+        porcentaje_cantidad_otros = (otros_prestamos["cantidad"] / total_prestamos * 100) if total_prestamos > 0 else 0
+        porcentaje_monto_otros = (otros_prestamos["monto_total"] / total_monto * 100) if total_monto > 0 else 0
+        distribucion_data.append(
+            {
+                "categoria": "Otro",
+                "cantidad_prestamos": otros_prestamos["cantidad"],
+                "monto_total": otros_prestamos["monto_total"],
+                "porcentaje_cantidad": round(porcentaje_cantidad_otros, 2),
+                "porcentaje_monto": round(porcentaje_monto_otros, 2),
+            }
+        )
+
+    # ✅ Verificar que la suma de todos los rangos coincida con el total
+    suma_cantidad = sum(r["cantidad_prestamos"] for r in distribucion_data)
+    if suma_cantidad != total_prestamos:
+        logger.warning(
+            f"⚠️ DISCREPANCIA: Suma de rangos ({suma_cantidad}) no coincide con total_prestamos ({total_prestamos}). "
+            f"Diferencia: {abs(suma_cantidad - total_prestamos)} préstamos."
         )
 
     return distribucion_data
@@ -2930,6 +2961,22 @@ def obtener_financiamiento_por_rangos(
         ).first()
         total_prestamos = totales_query.total_prestamos or 0
         total_monto = float(totales_query.total_monto or Decimal("0"))
+
+        # ✅ Verificar préstamos con total_financiamiento NULL o <= 0
+        prestamos_invalidos = (
+            query_base.filter(
+                or_(
+                    Prestamo.total_financiamiento.is_(None),
+                    Prestamo.total_financiamiento <= 0
+                )
+            )
+            .count()
+        )
+        if prestamos_invalidos > 0:
+            logger.warning(
+                f"⚠️ Se encontraron {prestamos_invalidos} préstamos aprobados con total_financiamiento NULL o <= 0. "
+                f"Estos no se incluirán en la distribución por rangos."
+            )
 
         # ✅ Rangos de financiamiento de $300 en $300 (de mayor a menor para efecto pirámide)
         rangos = []
