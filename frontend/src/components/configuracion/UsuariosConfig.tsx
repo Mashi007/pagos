@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { PasswordField } from '@/components/ui/PasswordField'
+import { usePassword } from '@/hooks/usePassword'
 import { 
   Users, 
   Plus, 
@@ -92,6 +93,8 @@ export default function UsuariosConfig() {
     is_active: true
   })
 
+  // Hook para validar contraseña
+  const { validatePassword } = usePassword()
 
   useEffect(() => {
     loadUsuarios()
@@ -122,12 +125,20 @@ export default function UsuariosConfig() {
     if (!formData.email || !formData.nombre || !formData.apellido) {
       return false
     }
+    
+    // Si estamos creando un nuevo usuario, la contraseña es obligatoria
     if (!editingUser && !formData.password) {
       return false
     }
-    if (formData.password && formData.password.length < 8) {
-      return false
+    
+    // Si hay una contraseña (ya sea en creación o actualización), debe cumplir todos los requisitos
+    if (formData.password && formData.password.trim() !== '') {
+      const passwordValidation = validatePassword(formData.password)
+      if (!passwordValidation.isValid) {
+        return false
+      }
     }
+    
     return true
   }
 

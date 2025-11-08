@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PasswordField } from '@/components/ui/PasswordField'
+import { usePassword } from '@/hooks/usePassword'
 import { userService, User, UserCreate } from '@/services/userService'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { clearAuthStorage } from '@/utils/storage'
@@ -33,6 +34,9 @@ export function Usuarios() {
     cargo: 'Usuario', // Valor por defecto para evitar error de NOT NULL
     is_active: true
   })
+
+  // Hook para validar contraseña
+  const { validatePassword } = usePassword()
 
   // Cargar usuarios al montar el componente
   useEffect(() => {
@@ -144,8 +148,36 @@ export function Usuarios() {
     setShowCreateForm(true)
   }
 
+  // Validación del formulario
+  const isFormValid = () => {
+    if (!formData.email || !formData.nombre || !formData.apellido) {
+      return false
+    }
+    
+    // Si estamos creando un nuevo usuario, la contraseña es obligatoria
+    if (!editingUsuario && !formData.password) {
+      return false
+    }
+    
+    // Si hay una contraseña (ya sea en creación o actualización), debe cumplir todos los requisitos
+    if (formData.password && formData.password.trim() !== '') {
+      const passwordValidation = validatePassword(formData.password)
+      if (!passwordValidation.isValid) {
+        return false
+      }
+    }
+    
+    return true
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validar formulario antes de enviar
+    if (!isFormValid()) {
+      toast.error('Por favor completa todos los campos requeridos y asegúrate de que la contraseña cumpla con todos los requisitos')
+      return
+    }
     
     try {
       setIsSubmitting(true)
@@ -634,8 +666,8 @@ export function Usuarios() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="flex items-center gap-2"
+                  disabled={isSubmitting || !isFormValid()}
+                  className="flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? (
                     <Loader2 className="w-4 h-4 animate-spin" />

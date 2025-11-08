@@ -102,12 +102,18 @@ export function LoginForm() {
           })
         }
       } else if (error.response?.status === 401) {
+        // Extraer mensaje del backend (puede estar en detail)
+        const errorDetail = error.response?.data?.detail || error.response?.data?.message
+        const errorMessage = errorDetail || 'Credenciales incorrectas. Verifica tu email y contraseña.'
         setError('root', { 
-          message: 'Credenciales incorrectas. Verifica tu email y contraseña.' 
+          message: errorMessage
         })
       } else {
+        // Extraer mensaje del backend para otros errores
+        const errorDetail = error.response?.data?.detail || error.response?.data?.message
+        const errorMessage = errorDetail || `Error del servidor: ${error.response?.status || 'Desconocido'}`
         setError('root', { 
-          message: `Error del servidor: ${error.response?.status || 'Desconocido'}` 
+          message: errorMessage
         })
       }
     }

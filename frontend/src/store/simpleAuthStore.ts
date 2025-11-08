@@ -139,11 +139,26 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
 
       toast.success(`¡Bienvenido, ${response.user.nombre}!`)
     } catch (error: any) {
+      // Extraer mensaje de error del backend (puede estar en detail o message)
+      let errorMessage = 'Error al iniciar sesión'
+      
+      if (error.response?.data) {
+        // El backend FastAPI devuelve 'detail' para errores HTTP
+        errorMessage = error.response.data.detail || error.response.data.message || errorMessage
+        
+        // Si es un array (errores de validación), tomar el primer mensaje
+        if (Array.isArray(errorMessage)) {
+          errorMessage = errorMessage[0]?.msg || errorMessage[0] || errorMessage
+        }
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
       set({
         user: null,
         isAuthenticated: false,
         isLoading: false,
-        error: error.response?.data?.message || 'Error al iniciar sesión',
+        error: errorMessage,
       })
       throw error
     }

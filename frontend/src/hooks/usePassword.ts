@@ -95,7 +95,8 @@ export const usePassword = (options: UsePasswordOptions = {}) => {
     const hasUppercase = /[A-Z]/.test(pwd)
     const hasLowercase = /[a-z]/.test(pwd)
     const hasNumbers = /\d/.test(pwd)
-    const hasSymbols = /[!@#$%^&*]/.test(pwd)
+    // Símbolos permitidos: debe coincidir con el backend [!@#$%^&*()_+\-=\[\]{};:"\\|,.<>\/?]
+    const hasSymbols = /[!@#$%^&*()_+\-=\[\]{};:"\\|,.<>\/?]/.test(pwd)
     const hasMinLength = pwd.length >= MIN_PASSWORD_LENGTH
 
     return {
