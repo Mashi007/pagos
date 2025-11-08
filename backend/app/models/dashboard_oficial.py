@@ -163,5 +163,3 @@ class DashboardMetricasAcumuladas(Base):
 
     def __repr__(self):
         return f"<DashboardMetricasAcumuladas {self.fecha}>"
-
-
