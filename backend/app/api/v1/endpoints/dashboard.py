@@ -3180,7 +3180,7 @@ def obtener_financiamiento_por_rangos(
         # ✅ CORRECCIÓN: Usar FiltrosDashboard para aplicar filtros de manera consistente
         # Esto usa OR entre fecha_registro, fecha_aprobacion y fecha_base_calculo (menos restrictivo)
         query_base = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
-        
+
         # ✅ DIAGNÓSTICO: Contar préstamos ANTES de aplicar filtros
         total_antes_filtros = 0
         try:
