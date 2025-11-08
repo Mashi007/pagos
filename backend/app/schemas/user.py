@@ -5,6 +5,7 @@ Solo 2 roles: ADMIN (acceso completo) y USER (acceso limitado)
 Compatible con Pydantic v2.
 """
 
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -22,6 +23,7 @@ class UserBase(BaseModel):
     cargo: Optional[str] = Field(None, max_length=100)
     is_admin: bool = Field(default=False)  # Cambio clave: rol → is_admin
     is_active: bool = Field(default=True)
+    last_login: Optional[datetime] = Field(None, description="Último acceso del usuario")
 
 
 class UserCreate(UserBase):

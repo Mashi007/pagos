@@ -123,6 +123,12 @@ async def login(
         user_id = int(user.id)
         access_token, refresh_token = _generar_tokens_usuario(user_id)
 
+        # ✅ Actualizar último acceso del usuario
+        from datetime import datetime
+        user.last_login = datetime.utcnow()
+        db.commit()
+        db.refresh(user)
+
         logger.info(f"Login exitoso para: {login_data.email}")
         _registrar_auditoria_login(db, request, user_id, True, user_id)
 
@@ -135,6 +141,7 @@ async def login(
             "rol": user.rol,
             "is_admin": user.is_admin,
             "is_active": user.is_active,
+            "last_login": user.last_login.isoformat() if user.last_login else None,
         }
 
         # Calcular tiempo de expiración en segundos (4 horas = 240 minutos)

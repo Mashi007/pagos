@@ -34,6 +34,7 @@ class User(Base):
 
     # Timestamps
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    last_login = Column(DateTime, nullable=True)  # Último acceso del usuario
 
     # Relaciones
     aprobaciones_solicitadas = relationship("Aprobacion", foreign_keys="Aprobacion.solicitante_id")
@@ -67,4 +68,5 @@ class User(Base):
             "cargo": self.cargo,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "last_login": self.last_login.isoformat() if self.last_login else None,
         }
