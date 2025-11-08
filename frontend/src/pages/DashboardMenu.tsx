@@ -1407,7 +1407,30 @@ export function DashboardMenu() {
                         // ✅ Filtrar solo rangos con datos (cantidad_prestamos > 0)
                         const rangosConDatos = datosFinanciamientoRangos.rangos.filter(r => (r.cantidad_prestamos || 0) > 0)
                         
-                        if (rangosConDatos.length === 0) {
+                        // ✅ Filtrar rangos hasta máximo $2400 en el eje Y
+                        const filtrarRangoMaximo = (categoria: string) => {
+                          const cleanCategoria = categoria.replace(/[.,]/g, '')
+                          if (cleanCategoria.includes('+')) {
+                            // Si tiene +, verificar el valor mínimo
+                            const match = cleanCategoria.match(/\$(\d+)\+/)
+                            if (match) {
+                              const minVal = parseInt(match[1])
+                              return minVal <= 2400
+                            }
+                            return false
+                          }
+                          // Formato: $600 - $900, extraer el valor máximo
+                          const match = cleanCategoria.match(/\$(\d+)\s*-\s*\$(\d+)/)
+                          if (match) {
+                            const maxVal = parseInt(match[2])
+                            return maxVal <= 2400
+                          }
+                          return false
+                        }
+                        
+                        const rangosFiltrados = rangosConDatos.filter(r => filtrarRangoMaximo(r.categoria))
+                        
+                        if (rangosFiltrados.length === 0) {
                           return (
                             <div className="h-[450px] flex items-center justify-center text-gray-400">
                               No hay datos disponibles
@@ -1415,12 +1438,12 @@ export function DashboardMenu() {
                           )
                         }
                         
-                        // ✅ Escala fija del eje X: 0 a 2200
+                        // ✅ Escala fija del eje X: 0 a 1100
                         const dominioMin = 0
-                        const dominioMax = 2200
+                        const dominioMax = 1100
                         
                         // Ordenar rangos por valor numérico del rango (de menor a mayor - invertido)
-                        const rangosOrdenados = [...rangosConDatos].sort((a, b) => {
+                        const rangosOrdenados = [...rangosFiltrados].sort((a, b) => {
                           // Extraer el valor mínimo del rango para ordenar
                           const getMinValue = (categoria: string) => {
                             // Limpiar formato: remover puntos y comas
