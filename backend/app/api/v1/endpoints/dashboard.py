@@ -497,7 +497,7 @@ def _procesar_distribucion_rango_monto(
             # Construir query SQL directa usando los mismos filtros de query_base
             # Obtener el statement SQL de query_base y modificarlo para solo seleccionar columnas necesarias
             from sqlalchemy import text
-            
+
             # Obtener solo los IDs primero (esto no carga el modelo completo)
             try:
                 prestamo_ids_query = query_base.with_entities(Prestamo.id)
@@ -529,33 +529,31 @@ def _procesar_distribucion_rango_monto(
                         }
                     )
                 return distribucion_data
-            
             # Query SQL directa solo con las columnas que existen en la BD
             # Usar ANY con lista para PostgreSQL (más eficiente que IN con muchos valores)
-            query_sql = text("""
+            query_sql = text(
+                """
                 SELECT id, total_financiamiento 
                 FROM prestamos 
                 WHERE id = ANY(:ids)
-            """)
+            """
+            )
             result = db.execute(query_sql, {"ids": prestamo_ids})
             prestamos_data = [(row.id, row.total_financiamiento) for row in result]
         else:
             # Fallback: intentar con query_base (puede fallar si hay columnas faltantes)
             try:
-                prestamos_data = query_base.with_entities(
-                    Prestamo.id,
-                    Prestamo.total_financiamiento
-                ).all()
+                prestamos_data = query_base.with_entities(Prestamo.id, Prestamo.total_financiamiento).all()
             except Exception as e:
                 logger.error(f"Error obteniendo préstamos con query_base: {e}", exc_info=True)
                 return []
-        
+
         # ✅ Optimización: Crear diccionario de índice para búsqueda O(1)
         # Mapear cada rango a su índice para acceso rápido
         rango_index_map = {}
         max_rango_val = None
         paso_rango = None
-        
+
         for idx, (min_val, max_val, categoria) in enumerate(rangos):
             if max_val is None:
                 # Rango sin límite superior (ej: $50,000+)
@@ -566,19 +564,19 @@ def _procesar_distribucion_rango_monto(
                     # Detectar el paso del rango (asumiendo rangos uniformes)
                     paso_rango = max_val - min_val
                 rango_index_map[idx] = (min_val, max_val, categoria)
-        
+
         # Crear diccionario para mapear montos a categorías
         distribucion_dict = {}
         for prestamo_id, monto in prestamos_data:
             if monto is None or monto <= 0:
                 continue
-                
+
             monto_decimal = Decimal(str(monto)) if not isinstance(monto, Decimal) else monto
             monto_float = float(monto_decimal)
-            
+
             # ✅ Optimización: Calcular índice del rango directamente usando división
             categoria = "Otro"
-            
+
             # Primero verificar si está en el rango sin límite superior
             if max_rango_val is not None and monto_float >= max_rango_val:
                 # Buscar el rango sin límite superior
@@ -595,20 +593,20 @@ def _procesar_distribucion_rango_monto(
                         if min_v is not None and max_v is not None:
                             if min_v <= monto_float < max_v:
                                 categoria = cat
-                
+
                 # Si no encontró con cálculo directo, buscar manualmente
                 if categoria == "Otro":
                     for idx, (min_v, max_v, cat) in rango_index_map.items():
                         if max_v is not None and min_v <= monto_float < max_v:
                             categoria = cat
                             break
-            
+
             # Acumular en el diccionario
             if categoria not in distribucion_dict:
                 distribucion_dict[categoria] = {"cantidad": 0, "monto_total": Decimal("0")}
             distribucion_dict[categoria]["cantidad"] += 1
             distribucion_dict[categoria]["monto_total"] += monto_decimal
-        
+
         # Convertir Decimal a float para el resultado
         for cat in distribucion_dict:
             distribucion_dict[cat]["monto_total"] = float(distribucion_dict[cat]["monto_total"])
