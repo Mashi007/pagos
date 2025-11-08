@@ -36,7 +36,16 @@ class CobranzasService {
   // Obtener clientes atrasados
   async getClientesAtrasados(diasRetraso?: number): Promise<ClienteAtrasado[]> {
     const params = diasRetraso ? `?dias_retraso=${diasRetraso}` : ''
-    return await apiClient.get(`${this.baseUrl}/clientes-atrasados${params}`)
+    const url = `${this.baseUrl}/clientes-atrasados${params}`
+    
+    try {
+      const result = await apiClient.get<ClienteAtrasado[]>(url, { timeout: 60000 })
+      console.log(`✅ [Cobranzas] Clientes atrasados cargados: ${result.length}`)
+      return result
+    } catch (error: any) {
+      console.error('❌ [Cobranzas] Error cargando clientes atrasados:', error)
+      throw error
+    }
   }
 
   // Obtener clientes por cantidad de pagos atrasados
@@ -48,7 +57,16 @@ class CobranzasService {
 
   // Obtener cobranzas por analista
   async getCobranzasPorAnalista(): Promise<CobranzasPorAnalista[]> {
-    return await apiClient.get(`${this.baseUrl}/por-analista`)
+    const url = `${this.baseUrl}/por-analista`
+    
+    try {
+      const result = await apiClient.get<CobranzasPorAnalista[]>(url, { timeout: 60000 })
+      console.log(`✅ [Cobranzas] Datos por analista cargados: ${result.length}`)
+      return result
+    } catch (error: any) {
+      console.error('❌ [Cobranzas] Error cargando datos por analista:', error)
+      throw error
+    }
   }
 
   // Obtener clientes de un analista específico
@@ -58,12 +76,39 @@ class CobranzasService {
 
   // Obtener montos vencidos por mes
   async getMontosPorMes(): Promise<MontosPorMes[]> {
-    return await apiClient.get(`${this.baseUrl}/montos-por-mes`)
+    const url = `${this.baseUrl}/montos-por-mes`
+    
+    try {
+      const result = await apiClient.get<MontosPorMes[]>(url, { timeout: 60000 })
+      console.log(`✅ [Cobranzas] Montos por mes cargados: ${result.length}`)
+      return result
+    } catch (error: any) {
+      console.error('❌ [Cobranzas] Error cargando montos por mes:', error)
+      throw error
+    }
   }
 
   // Obtener resumen general
   async getResumen(): Promise<ResumenCobranzas> {
-    return await apiClient.get(`${this.baseUrl}/resumen`)
+    const url = `${this.baseUrl}/resumen`
+    console.log('🔍 [Cobranzas] Iniciando petición a:', url)
+    
+    try {
+      const startTime = Date.now()
+      const result = await apiClient.get<ResumenCobranzas>(url, { timeout: 60000 })
+      const duration = Date.now() - startTime
+      console.log(`✅ [Cobranzas] Respuesta recibida en ${duration}ms:`, result)
+      return result
+    } catch (error: any) {
+      console.error('❌ [Cobranzas] Error completo:', {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: url
+      })
+      throw error
+    }
   }
 
   // ============================================

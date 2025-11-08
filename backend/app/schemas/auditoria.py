@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
@@ -23,6 +24,7 @@ class AuditoriaCreate(AuditoriaBase):
 
 class AuditoriaResponse(AuditoriaBase):
     id: int
+    fecha: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

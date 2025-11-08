@@ -60,7 +60,10 @@ def _determinar_resultado_auditoria(exito_attr) -> str:
 
 def _convertir_registro_general_listado(registro) -> dict:
     """Convierte un registro de Auditoria general a dict para listado"""
-    usuario_email_val = getattr(registro.usuario, "email", None)
+    # Manejar caso donde usuario puede ser None
+    usuario_email_val = None
+    if hasattr(registro, "usuario") and registro.usuario is not None:
+        usuario_email_val = getattr(registro.usuario, "email", None)
     modulo_val = getattr(registro, "entidad", None)
     return {
         "id": registro.id,
@@ -458,10 +461,14 @@ def estadisticas_auditoria(
 
         # Acciones por módulo (entidad)
         acciones_por_modulo: dict[str, int] = {}
-        # Calcular acciones por módulo de forma segura
-        for r in db.query(Auditoria.entidad).all():
-            key = getattr(r, "entidad", None) or "DESCONOCIDO"
-            acciones_por_modulo[key] = acciones_por_modulo.get(key, 0) + 1
+        # Calcular acciones por módulo usando GROUP BY (más eficiente)
+        acciones_por_modulo_rows = (
+            db.query(Auditoria.entidad, func.count(Auditoria.id))
+            .group_by(Auditoria.entidad)
+            .all()
+        )
+        acciones_por_modulo = {row[0] or "DESCONOCIDO": row[1] for row in acciones_por_modulo_rows}
+        # Agregar acciones de préstamos y pagos
         acciones_por_modulo["PRESTAMOS"] = acciones_por_modulo.get("PRESTAMOS", 0) + (
             db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
         )
@@ -514,8 +521,8 @@ def estadisticas_auditoria(
             acciones_este_mes=acciones_este_mes,
         )
     except Exception as e:
-        logger.error(f"Error obteniendo estadísticas de auditoría: {e}")
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+        logger.error(f"Error obteniendo estadísticas de auditoría: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.post("/auditoria/registrar", response_model=AuditoriaResponse)

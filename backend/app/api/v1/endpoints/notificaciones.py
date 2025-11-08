@@ -41,9 +41,9 @@ class NotificacionCreate(BaseModel):
 
 class NotificacionResponse(BaseModel):
     id: int
-    cliente_id: int
+    cliente_id: Optional[int]
     tipo: str
-    canal: str
+    canal: Optional[str]
     mensaje: str
     asunto: Optional[str]
     estado: str
@@ -221,8 +221,11 @@ def listar_notificaciones(
         # Aplicar paginación
         notificaciones = query.order_by(Notificacion.created_at.desc()).offset(skip).limit(limit).all()
 
+        # Serializar notificaciones usando el schema
+        items = [NotificacionResponse.model_validate(notif) for notif in notificaciones]
+
         # Retornar respuesta paginada
-        return create_paginated_response(items=notificaciones, total=total, page=page, page_size=limit)
+        return create_paginated_response(items=items, total=total, page=page, page_size=limit)
 
     except Exception as e:
         logger.error(f"Error listando notificaciones: {e}")
