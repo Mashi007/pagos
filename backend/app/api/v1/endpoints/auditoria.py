@@ -462,11 +462,7 @@ def estadisticas_auditoria(
         # Acciones por módulo (entidad)
         acciones_por_modulo: dict[str, int] = {}
         # Calcular acciones por módulo usando GROUP BY (más eficiente)
-        acciones_por_modulo_rows = (
-            db.query(Auditoria.entidad, func.count(Auditoria.id))
-            .group_by(Auditoria.entidad)
-            .all()
-        )
+        acciones_por_modulo_rows = db.query(Auditoria.entidad, func.count(Auditoria.id)).group_by(Auditoria.entidad).all()
         acciones_por_modulo = {row[0] or "DESCONOCIDO": row[1] for row in acciones_por_modulo_rows}
         # Agregar acciones de préstamos y pagos
         acciones_por_modulo["PRESTAMOS"] = acciones_por_modulo.get("PRESTAMOS", 0) + (
