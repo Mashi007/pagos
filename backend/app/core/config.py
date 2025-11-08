@@ -446,6 +446,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
+        extra="ignore",  # Ignorar variables de entorno no definidas en el modelo
     )
 
 
