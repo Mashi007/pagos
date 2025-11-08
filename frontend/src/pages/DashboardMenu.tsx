@@ -1188,11 +1188,24 @@ export function DashboardMenu() {
                               return parseMes(String(a)) - parseMes(String(b))
                             })
                             
-                            return mesesOrdenados.map(mes => ({
-                              mes,
-                              morosidad: morosidadMap.get(mes) || 0,
-                              pagos: pagosMap.get(mes) || 0,
-                            }))
+                            // ✅ Calcular valores acumulados por mes
+                            let morosidadAcumulada = 0
+                            let pagosAcumulados = 0
+                            
+                            return mesesOrdenados.map(mes => {
+                              const morosidadMensual = morosidadMap.get(mes) || 0
+                              const pagosMensuales = pagosMap.get(mes) || 0
+                              
+                              // Acumular valores
+                              morosidadAcumulada += morosidadMensual
+                              pagosAcumulados += pagosMensuales
+                              
+                              return {
+                                mes,
+                                morosidad: morosidadAcumulada,
+                                pagos: pagosAcumulados,
+                              }
+                            })
                           })()}
                           margin={{ top: 10, right: 30, left: 20, bottom: 5 }}
                         >
@@ -1231,7 +1244,7 @@ export function DashboardMenu() {
                           <Tooltip 
                             formatter={(value: number, name: string) => [
                               formatCurrency(value),
-                              name === 'morosidad' ? 'Morosidad' : 'Pagos'
+                              name === 'morosidad' ? 'Morosidad (Acumulado)' : 'Pagos (Acumulado)'
                             ]}
                             contentStyle={{
                               backgroundColor: 'rgba(255, 255, 255, 0.98)',
