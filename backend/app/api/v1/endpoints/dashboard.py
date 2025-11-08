@@ -3177,42 +3177,24 @@ def obtener_financiamiento_por_rangos(
         }
         logger.info(f"🔍 [financiamiento-por-rangos] Filtros aplicados: {filtros_aplicados}")
 
-        # ✅ CORRECCIÓN: Si hay filtros de fecha muy restrictivos y no hay datos,
-        # intentar sin filtros de fecha primero para diagnosticar
+        # ✅ CORRECCIÓN: Usar FiltrosDashboard para aplicar filtros de manera consistente
+        # Esto usa OR entre fecha_registro, fecha_aprobacion y fecha_base_calculo (menos restrictivo)
         query_base = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
-
-        # Aplicar filtros NO relacionados con fechas primero
-        if analista:
-            query_base = query_base.filter(or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista))
-        if concesionario:
-            query_base = query_base.filter(Prestamo.concesionario == concesionario)
-        if modelo:
-            query_base = query_base.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
-
-        # ✅ DIAGNÓSTICO: Contar préstamos ANTES de aplicar filtros de fecha
-        total_antes_fecha = 0
+        
+        # ✅ DIAGNÓSTICO: Contar préstamos ANTES de aplicar filtros
+        total_antes_filtros = 0
         try:
-            total_antes_fecha = query_base.count()
-            logger.info(f"📊 [financiamiento-por-rangos] Total préstamos ANTES de filtros de fecha: {total_antes_fecha}")
+            total_antes_filtros = query_base.count()
+            logger.info(f"📊 [financiamiento-por-rangos] Total préstamos APROBADOS (sin filtros): {total_antes_filtros}")
         except Exception as e:
-            logger.error(f"Error contando préstamos antes de filtros de fecha: {e}", exc_info=True)
-            total_antes_fecha = 0
+            logger.error(f"Error contando préstamos antes de filtros: {e}", exc_info=True)
+            total_antes_filtros = 0
 
-        # Aplicar filtros de fecha SOLO si se proporcionan
-        # ✅ CORRECCIÓN: Usar solo fecha_aprobacion para filtros de fecha (más confiable que fecha_registro)
-        if fecha_inicio or fecha_fin:
-            condiciones_fecha = []
-            if fecha_inicio:
-                condiciones_fecha.append(Prestamo.fecha_aprobacion >= fecha_inicio)
-            if fecha_fin:
-                condiciones_fecha.append(Prestamo.fecha_aprobacion <= fecha_fin)
-            if condiciones_fecha:
-                query_base = query_base.filter(and_(*condiciones_fecha))
-                logger.info(
-                    f"📅 [financiamiento-por-rangos] Aplicando filtros de fecha: {filtros_aplicados['fecha_inicio']} a {filtros_aplicados['fecha_fin']}"
-                )
-        else:
-            logger.info("📅 [financiamiento-por-rangos] No se aplicaron filtros de fecha (ninguno proporcionado)")
+        # ✅ Usar FiltrosDashboard para aplicar todos los filtros de manera consistente
+        # Esto incluye filtros de analista, concesionario, modelo y fecha (con OR entre fechas)
+        query_base = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
 
         # ✅ DIAGNÓSTICO: Contar préstamos después de aplicar TODOS los filtros (antes de filtrar NULL)
         try:
@@ -3220,10 +3202,10 @@ def obtener_financiamiento_por_rangos(
             logger.info(
                 f"📊 [financiamiento-por-rangos] Total préstamos DESPUÉS de todos los filtros: {total_prestamos_despues_filtros}"
             )
-            if total_prestamos_despues_filtros == 0 and total_antes_fecha > 0:
+            if total_prestamos_despues_filtros == 0 and total_antes_filtros > 0:
                 logger.warning(
-                    f"⚠️ [financiamiento-por-rangos] Los filtros de fecha eliminaron todos los préstamos. "
-                    f"Total antes de fecha: {total_antes_fecha}, Total después: {total_prestamos_despues_filtros}"
+                    f"⚠️ [financiamiento-por-rangos] Los filtros eliminaron todos los préstamos. "
+                    f"Total antes de filtros: {total_antes_filtros}, Total después: {total_prestamos_despues_filtros}"
                 )
         except Exception as e:
             logger.error(f"Error contando préstamos después de filtros: {e}", exc_info=True)

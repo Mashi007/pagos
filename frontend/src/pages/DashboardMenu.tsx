@@ -1436,10 +1436,14 @@ export function DashboardMenu() {
                         if (rangosConDatos.length === 0) {
                           return (
                             <div className="h-[450px] flex flex-col items-center justify-center text-gray-400">
-                              <p className="text-sm mb-2">No hay datos disponibles en los rangos</p>
-                              {totalBackend > 0 && (
-                                <p className="text-xs text-gray-500 mt-2">
-                                  Total de préstamos: {totalBackend.toLocaleString('es-EC')}, pero no hay datos en los rangos configurados
+                              <p className="text-sm mb-2 font-semibold">No hay datos disponibles</p>
+                              {totalBackend > 0 ? (
+                                <p className="text-xs text-gray-500 mt-2 text-center px-4">
+                                  Total de préstamos (backend): {totalBackend.toLocaleString('es-EC')}, pero no hay datos en los rangos configurados
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-500 mt-2 text-center px-4">
+                                  No se encontraron préstamos aprobados con los filtros aplicados
                                 </p>
                               )}
                             </div>
