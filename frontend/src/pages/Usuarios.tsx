@@ -10,6 +10,7 @@ import { PasswordField } from '@/components/ui/PasswordField'
 import { userService, User, UserCreate } from '@/services/userService'
 import { toast } from 'sonner'
 import { getErrorMessage, getErrorDetail } from '@/types/errors'
+import { logger } from '@/utils/logger'
 
 export function Usuarios() {
   const [usuarios, setUsuarios] = useState<User[]>([])
@@ -39,23 +40,23 @@ export function Usuarios() {
     try {
       setLoading(true)
       setError(null)
-      console.log('🔄 Actualizando usuarios...')
-      console.log('📡 Llamando a API: /api/v1/usuarios')
+      logger.debug('Actualizando usuarios', { endpoint: '/api/v1/usuarios' })
       
       const response = await userService.listarUsuarios(1, 100)
-      console.log('✅ Respuesta API recibida:', response)
-      console.log('📊 Total usuarios:', response.total)
-      console.log('📋 Items recibidos:', response.items?.length || 0)
+      logger.debug('Respuesta API recibida', { 
+        total: response.total, 
+        itemsCount: response.items?.length || 0 
+      })
       
       if (response.items && Array.isArray(response.items)) {
         setUsuarios(response.items)
-        console.log('✅ Usuarios cargados exitosamente:', response.items.length)
+        logger.debug('Usuarios cargados exitosamente', { count: response.items.length })
       } else {
-        console.warn('⚠️ Respuesta sin items válidos:', response)
+        logger.warn('Respuesta sin items válidos', { response })
         setUsuarios([])
       }
     } catch (err) {
-      console.error('❌ Error API:', err)
+      logger.apiError('/api/v1/usuarios', err, { action: 'cargarUsuarios' })
       setError('Error al cargar usuarios')
       toast.error('Error al cargar usuarios')
       setUsuarios([])
@@ -77,22 +78,30 @@ export function Usuarios() {
       }
       
       await userService.eliminarUsuario(id)
+      logger.userAction('eliminar_usuario', { userId: id })
       toast.success('✅ Usuario eliminado PERMANENTEMENTE de la base de datos')
       cargarUsuarios() // Recargar lista
     } catch (err) {
+      logger.apiError(`/api/v1/usuarios/${id}`, err, { action: 'eliminarUsuario', userId: id })
       toast.error('❌ Error al eliminar usuario permanentemente')
-      console.error('Error:', err)
     }
   }
 
   const handleToggleActivo = async (usuario: User) => {
     try {
       await userService.toggleActivo(usuario.id, !usuario.is_active)
+      logger.userAction('toggle_usuario_activo', { 
+        userId: usuario.id, 
+        nuevoEstado: !usuario.is_active 
+      })
       toast.success(`Usuario ${usuario.is_active ? 'desactivado' : 'activado'} exitosamente`)
       cargarUsuarios() // Recargar lista
     } catch (err) {
+      logger.apiError(`/api/v1/usuarios/${usuario.id}/toggle`, err, { 
+        action: 'toggleActivo', 
+        userId: usuario.id 
+      })
       toast.error('Error al cambiar estado del usuario')
-      console.error('Error:', err)
     }
   }
 
@@ -149,9 +158,16 @@ export function Usuarios() {
       setShowCreateForm(false)
       setEditingUsuario(null)
       resetForm()
+      logger.userAction(editingUsuario ? 'actualizar_usuario' : 'crear_usuario', {
+        userId: editingUsuario?.id,
+        email: formData.email
+      })
       cargarUsuarios()
     } catch (err: unknown) {
-      console.error('Error guardando usuario:', err)
+      logger.apiError('/api/v1/usuarios', err, { 
+        action: editingUsuario ? 'actualizarUsuario' : 'crearUsuario',
+        editing: !!editingUsuario
+      })
       const errorMessage = getErrorMessage(err)
       const detail = getErrorDetail(err)
       toast.error(detail || errorMessage || 'Error al guardar usuario')

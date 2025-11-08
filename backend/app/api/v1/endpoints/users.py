@@ -214,20 +214,27 @@ def _actualizar_campo_simple(user, field: str, value):
 def _aplicar_actualizaciones(user, update_data: dict):
     """Aplica todas las actualizaciones a un usuario"""
     CAMPOS_VALIDOS = ["email", "nombre", "apellido", "cargo", "is_active"]
+    CAMPOS_ESPECIALES = ["password", "is_admin", "rol"]
 
     for field, value in update_data.items():
+        # Manejar campos especiales primero (no necesitan existir en el modelo)
+        if field == "password" and value:
+            _actualizar_password(user, value)
+            continue
+        elif field == "is_admin":
+            _actualizar_is_admin(user, value)
+            continue
+        elif field == "rol":
+            logger.debug("Campo 'rol' ignorado, se maneja con is_admin")
+            continue
+        
+        # Verificar que el campo exista en el modelo para campos normales
         if not hasattr(user, field):
             logger.warning(f"Campo '{field}' no existe en el modelo User, omitiendo...")
             continue
 
-        if field == "password" and value:
-            _actualizar_password(user, value)
-        elif field == "is_admin":
-            _actualizar_is_admin(user, value)
-        elif field == "rol":
-            logger.debug("Campo 'rol' ignorado, se maneja con is_admin")
-            continue
-        elif field in CAMPOS_VALIDOS:
+        # Aplicar actualización para campos válidos
+        if field in CAMPOS_VALIDOS:
             _actualizar_campo_simple(user, field, value)
         else:
             logger.warning(f"Campo '{field}' no se puede actualizar directamente, omitiendo...")
@@ -275,13 +282,13 @@ def update_user(
         if "email" in update_data and update_data["email"] != user.email:
             _validar_email_unico(db, update_data["email"], user_id)
 
-        logger.info(f"Actualizando usuario {user_id} con campos: {list(update_data.keys())}")
+        logger.debug(f"Actualizando usuario {user_id} con campos: {list(update_data.keys())}")
         _aplicar_actualizaciones(user, update_data)
 
         try:
             db.commit()
             db.refresh(user)
-            logger.info(f"Usuario {user_id} actualizado exitosamente")
+            logger.debug(f"Usuario {user_id} actualizado exitosamente")
         except Exception as commit_error:
             db.rollback()
             logger.error(

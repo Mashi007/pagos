@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, get_optional_current_user
 from app.core.config import settings
-from app.core.security import create_access_token, get_password_hash, verify_password
+from app.core.security import create_access_token, create_refresh_token, get_password_hash, verify_password
 from app.models.auditoria import Auditoria
 from app.models.user import User
 from app.schemas.auth import (
@@ -86,7 +86,7 @@ def _registrar_auditoria_login(
 def _generar_tokens_usuario(user_id: int) -> tuple[str, str]:
     """Genera access token y refresh token para el usuario"""
     access_token = create_access_token(subject=str(user_id))
-    refresh_token = create_access_token(subject=str(user_id), expires_delta=timedelta(days=7))
+    refresh_token = create_refresh_token(subject=str(user_id))
     return (access_token, refresh_token)
 
 

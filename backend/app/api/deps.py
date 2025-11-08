@@ -41,16 +41,16 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # Logging detallado para diagnóstico
+    # Logging detallado para diagnóstico (solo en modo debug)
     logger = logging.getLogger(__name__)
-    logger.info("🔐 get_current_user llamado - inicio de validación")
+    logger.debug("🔐 get_current_user llamado - inicio de validación")
 
     try:
         token = credentials.credentials
-        logger.info(f"✅ Token recibido - Longitud: {len(token)}")
+        logger.debug(f"✅ Token recibido - Longitud: {len(token)}")
 
         payload = decode_token(token)
-        logger.info(f"Payload keys: {list(payload.keys())}")
+        logger.debug(f"Payload keys: {list(payload.keys())}")
 
         # Verificar que sea un access token
         if payload.get("type") != "access":
@@ -62,7 +62,7 @@ def get_current_user(
             logger.warning("Token sin user_id (sub)")
             raise credentials_exception
 
-        logger.info(f"Buscando usuario con ID: {user_id}")
+        logger.debug(f"Buscando usuario con ID: {user_id}")
 
     except HTTPException:
         # Re-propagar HTTPException sin modificar

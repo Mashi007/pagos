@@ -569,7 +569,7 @@ def listar_pagos(
                 )
 
         total = _contar_total_pagos_validos(db, cedula)
-        logger.info(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")
+        logger.debug(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")
 
         pagos = _obtener_pagos_paginados(db, page, per_page)
         logger.info(f"📄 [listar_pagos] Pagos obtenidos de BD: {len(pagos)}")
@@ -1391,8 +1391,8 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
     else:
         fecha_fin_mes = date(año_consulta, mes_consulta + 1, 1)
 
-    logger.info(f"📊 [kpis_pagos] Calculando KPIs para mes {mes_consulta}/{año_consulta}")
-    logger.info(f"📅 [kpis_pagos] Rango de fechas: {fecha_inicio_mes} a {fecha_fin_mes}")
+    logger.debug(f"📊 [kpis_pagos] Calculando KPIs para mes {mes_consulta}/{año_consulta}")
+    logger.debug(f"📅 [kpis_pagos] Rango de fechas: {fecha_inicio_mes} a {fecha_fin_mes}")
 
     fecha_inicio_dt = datetime.combine(fecha_inicio_mes, datetime.min.time())
     fecha_fin_dt = datetime.combine(fecha_fin_mes, datetime.min.time())
@@ -1439,7 +1439,7 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
         monto_no_definido = Decimal("0")
 
     tiempo_pagos = int((time.time() - start_pagos) * 1000)
-    logger.info(
+    logger.debug(
         f"💰 [kpis_pagos] Monto cobrado: ${monto_cobrado_mes:,.2f}, NO DEFINIDO: ${monto_no_definido:,.2f} ({tiempo_pagos}ms)"
     )
 
@@ -1470,7 +1470,7 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
             pass  # Ignorar errores de rollback
         saldo_por_cobrar = Decimal("0.00")
     tiempo_saldo = int((time.time() - start_saldo) * 1000)
-    logger.info(f"💳 [kpis_pagos] Saldo por cobrar: ${saldo_por_cobrar:,.2f} ({tiempo_saldo}ms)")
+    logger.debug(f"💳 [kpis_pagos] Saldo por cobrar: ${saldo_por_cobrar:,.2f} ({tiempo_saldo}ms)")
 
     # OPTIMIZACIÓN 3: Combinar queries de clientes en una sola con CTE
     # Esto reduce de 2 queries a 1 y calcula ambos valores en una sola pasada
@@ -1503,12 +1503,12 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
     clientes_en_mora = clientes_result[1] or 0
     clientes_al_dia = max(0, clientes_con_cuotas - clientes_en_mora)
     tiempo_clientes = int((time.time() - start_clientes) * 1000)
-    logger.info(
+    logger.debug(
         f"👥 [kpis_pagos] Clientes - Total: {clientes_con_cuotas}, En mora: {clientes_en_mora}, Al día: {clientes_al_dia} ({tiempo_clientes}ms)"
     )
 
     tiempo_total = int((time.time() - start_total) * 1000)
-    logger.info(
+    logger.debug(
         f"⏱️ [kpis_pagos] Tiempo total: {tiempo_total}ms (pagos: {tiempo_pagos}ms, saldo: {tiempo_saldo}ms, clientes: {tiempo_clientes}ms)"
     )
 
@@ -1563,17 +1563,17 @@ def obtener_kpis_pagos(
         # Intentar obtener del caché
         cached_result = cache_backend.get(cache_key)
         if cached_result is not None:
-            logger.info(f"✅ [kpis_pagos] Cache HIT para mes {mes_consulta}/{año_consulta}")
+            logger.debug(f"✅ [kpis_pagos] Cache HIT para mes {mes_consulta}/{año_consulta}")
             return cached_result
 
         # Cache miss - calcular KPIs
-        logger.info(f"❌ [kpis_pagos] Cache MISS para mes {mes_consulta}/{año_consulta}, calculando...")
+        logger.debug(f"❌ [kpis_pagos] Cache MISS para mes {mes_consulta}/{año_consulta}, calculando...")
         try:
             result = _calcular_kpis_pagos_interno(db, mes_consulta, año_consulta)
 
             # Guardar en caché por 5 minutos (300 segundos)
             cache_backend.set(cache_key, result, ttl=300)
-            logger.info(f"💾 [kpis_pagos] Resultados guardados en caché para mes {mes_consulta}/{año_consulta}")
+            logger.debug(f"💾 [kpis_pagos] Resultados guardados en caché para mes {mes_consulta}/{año_consulta}")
 
             return result
         except Exception as calc_error:
@@ -1810,7 +1810,7 @@ def exportar_pagos_con_errores(
     El informe incluye las mismas columnas que la tabla pagos.
     """
     try:
-        logger.info("📊 [exportar_pagos_errores] Generando informe de pagos con errores...")
+        logger.debug("📊 [exportar_pagos_errores] Generando informe de pagos con errores...")
 
         # ✅ Consulta SQL para obtener pagos con errores de la tabla pagos
         query = text(
@@ -1846,7 +1846,7 @@ def exportar_pagos_con_errores(
 
         resultados = db.execute(query).fetchall()
 
-        logger.info(f"📊 [exportar_pagos_errores] Encontrados {len(resultados)} pagos con errores")
+        logger.debug(f"📊 [exportar_pagos_errores] Encontrados {len(resultados)} pagos con errores")
 
         # ✅ Generar archivo Excel
         wb = Workbook()
