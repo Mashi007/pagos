@@ -75,16 +75,17 @@ def listar_notificaciones_previas(
     """
     try:
         logger.info(f"📥 [NotificacionesPrevias] Solicitud GET / - estado={estado}")
-        
+
         # Verificar conexión a BD
         try:
             from sqlalchemy import text
+
             db.execute(text("SELECT 1"))
             logger.debug("✅ [NotificacionesPrevias] Conexión a BD verificada")
         except Exception as e:
             logger.error(f"❌ [NotificacionesPrevias] Error de conexión a BD: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Error de conexión a base de datos: {str(e)}")
-        
+
         service = NotificacionesPreviasService(db)
         resultados = service.obtener_notificaciones_previas_cached()
         logger.info(f"📊 [NotificacionesPrevias] Resultados calculados: {len(resultados)} registros")
