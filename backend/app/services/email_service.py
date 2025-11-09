@@ -87,7 +87,9 @@ class EmailService:
 
         logger.debug("📧 Usando configuración de email por defecto desde settings")
 
-    def send_email(self, to_emails: List[str], subject: str, body: str, is_html: bool = False, bcc_emails: Optional[List[str]] = None) -> Dict[str, Any]:
+    def send_email(
+        self, to_emails: List[str], subject: str, body: str, is_html: bool = False, bcc_emails: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
         """
         Enviar email
 
@@ -103,7 +105,7 @@ class EmailService:
         try:
             # Recargar configuración para obtener modo_pruebas actualizado
             self._cargar_configuracion()
-            
+
             # Si está en modo pruebas, redirigir todos los emails a email_pruebas
             emails_destinatarios = to_emails.copy()
             if self.modo_pruebas and self.email_pruebas:
@@ -120,7 +122,7 @@ class EmailService:
                 """
                 emails_destinatarios = [self.email_pruebas]
                 logger.warning(f"🧪 MODO PRUEBAS: Redirigiendo email de {', '.join(to_emails)} a {self.email_pruebas}")
-            
+
             # Crear mensaje
             msg = MIMEMultipart()
             msg["From"] = f"{self.from_name} <{self.from_email}>"
@@ -175,7 +177,7 @@ class EmailService:
             # Incluir CCO en la lista de destinatarios para sendmail
             todos_destinatarios = emails_destinatarios + emails_cco
             server.sendmail(self.from_email, todos_destinatarios, text)
-            
+
             # Solo cerrar conexión si no se reutiliza
             if not self.reuse_connection:
                 server.quit()
@@ -186,7 +188,10 @@ class EmailService:
             if emails_cco:
                 mensaje_exito += f" (CCO: {', '.join(emails_cco)})"
 
-            logger.info(f"Email enviado exitosamente a: {', '.join(emails_destinatarios)}" + (f" (CCO: {', '.join(emails_cco)})" if emails_cco else ""))
+            logger.info(
+                f"Email enviado exitosamente a: {', '.join(emails_destinatarios)}"
+                + (f" (CCO: {', '.join(emails_cco)})" if emails_cco else "")
+            )
             return {
                 "success": True,
                 "message": mensaje_exito,

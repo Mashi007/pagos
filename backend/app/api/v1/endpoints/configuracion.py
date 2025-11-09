@@ -923,7 +923,11 @@ def obtener_configuracion_envios(db: Session = Depends(get_db), current_user: Us
                 )
                 .first()
             )
-            habilitado = config_habilitado.valor.lower() in ("true", "1", "yes", "on") if config_habilitado and config_habilitado.valor else True
+            habilitado = (
+                config_habilitado.valor.lower() in ("true", "1", "yes", "on")
+                if config_habilitado and config_habilitado.valor
+                else True
+            )
 
             # CCO (hasta 3 correos)
             cco_emails = []
@@ -940,10 +944,7 @@ def obtener_configuracion_envios(db: Session = Depends(get_db), current_user: Us
                 if config_cco and config_cco.valor and config_cco.valor.strip():
                     cco_emails.append(config_cco.valor.strip())
 
-            config_dict[tipo] = {
-                "habilitado": habilitado,
-                "cco": cco_emails
-            }
+            config_dict[tipo] = {"habilitado": habilitado, "cco": cco_emails}
 
         return config_dict
 
@@ -1007,7 +1008,7 @@ def actualizar_configuracion_envios(
             if isinstance(cco_emails, list):
                 # Limitar a 3 correos máximo
                 cco_emails = [email.strip() for email in cco_emails[:3] if email and email.strip()]
-                
+
                 # Eliminar configuraciones CCO existentes para este tipo
                 for i in range(1, 4):
                     clave_cco = f"cco_{tipo}_{i}"
