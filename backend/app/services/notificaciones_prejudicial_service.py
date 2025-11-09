@@ -1,6 +1,6 @@
 """
 Servicio para calcular notificaciones prejudiciales
-Clientes con 2 o más cuotas atrasadas
+Clientes con 3 o más cuotas atrasadas
 """
 
 import logging
@@ -21,11 +21,11 @@ class NotificacionesPrejudicialService:
 
     def calcular_notificaciones_prejudiciales(self) -> List[dict]:
         """
-        Calcula clientes con 2 o más cuotas atrasadas (prejudiciales)
+        Calcula clientes con 3 o más cuotas atrasadas (prejudiciales)
 
         Condiciones:
         - Préstamos con estado = 'APROBADO'
-        - Clientes con 2 o más cuotas atrasadas
+        - Clientes con 3 o más cuotas atrasadas
         - Cuotas con estado ATRASADO
         - Clientes activos (estado != 'INACTIVO')
         - Ordenado por fecha de vencimiento más antigua primero
@@ -38,7 +38,7 @@ class NotificacionesPrejudicialService:
         try:
             logger.info("🔍 [NotificacionesPrejudicial] Iniciando cálculo de notificaciones prejudiciales...")
 
-            # Query optimizada: clientes con 2+ cuotas atrasadas
+            # Query optimizada: clientes con 3+ cuotas atrasadas
             # Ordenado por fecha de vencimiento más antigua primero
             query_optimizada = text(
                 """
@@ -67,7 +67,7 @@ class NotificacionesPrejudicialService:
                     SELECT DISTINCT cliente_id
                     FROM cuotas_atrasadas
                     GROUP BY cliente_id
-                    HAVING COUNT(*) >= 2
+                    HAVING COUNT(*) >= 3
                 )
                 SELECT
                     ca.prestamo_id,

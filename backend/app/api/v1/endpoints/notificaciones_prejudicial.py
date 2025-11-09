@@ -1,6 +1,6 @@
 """
 Endpoints para Notificaciones Prejudiciales
-Clientes con 2 o más cuotas atrasadas
+Clientes con 3 o más cuotas atrasadas
 """
 
 import logging
@@ -65,7 +65,7 @@ def listar_notificaciones_prejudiciales(
     Listar notificaciones prejudiciales
 
     - Préstamos con estado = 'APROBADO'
-    - Clientes con 2 o más cuotas atrasadas
+    - Clientes con 3 o más cuotas atrasadas
     - Cuotas con estado ATRASADO
     - Ordenado por fecha de vencimiento más antigua primero
     - Filtro opcional por estado de envío (ENVIADA, PENDIENTE, FALLIDA)
