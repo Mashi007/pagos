@@ -98,13 +98,131 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     }
   }
 
+  // Generar variables precargadas desde los campos de las tablas
+  const generarVariablesPrecargadas = (): NotificacionVariable[] => {
+    const CAMPOS_DISPONIBLES = {
+      clientes: [
+        { campo: 'id', descripcion: 'ID único del cliente' },
+        { campo: 'cedula', descripcion: 'Cédula de identidad' },
+        { campo: 'nombres', descripcion: 'Nombres completos' },
+        { campo: 'telefono', descripcion: 'Teléfono de contacto' },
+        { campo: 'email', descripcion: 'Correo electrónico' },
+        { campo: 'direccion', descripcion: 'Dirección de residencia' },
+        { campo: 'fecha_nacimiento', descripcion: 'Fecha de nacimiento' },
+        { campo: 'ocupacion', descripcion: 'Ocupación del cliente' },
+        { campo: 'estado', descripcion: 'Estado (ACTIVO, INACTIVO, FINALIZADO)' },
+        { campo: 'activo', descripcion: 'Estado activo (true/false)' },
+        { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
+        { campo: 'fecha_actualizacion', descripcion: 'Fecha de última actualización' },
+        { campo: 'usuario_registro', descripcion: 'Usuario que registró' },
+        { campo: 'notas', descripcion: 'Notas adicionales' },
+      ],
+      prestamos: [
+        { campo: 'id', descripcion: 'ID del préstamo' },
+        { campo: 'cliente_id', descripcion: 'ID del cliente' },
+        { campo: 'cedula', descripcion: 'Cédula del cliente' },
+        { campo: 'nombres', descripcion: 'Nombres del cliente' },
+        { campo: 'valor_activo', descripcion: 'Valor del activo (vehículo)' },
+        { campo: 'total_financiamiento', descripcion: 'Monto total financiado' },
+        { campo: 'fecha_requerimiento', descripcion: 'Fecha requerida del préstamo' },
+        { campo: 'modalidad_pago', descripcion: 'Modalidad (MENSUAL, QUINCENAL, SEMANAL)' },
+        { campo: 'numero_cuotas', descripcion: 'Número total de cuotas' },
+        { campo: 'cuota_periodo', descripcion: 'Monto de cuota por período' },
+        { campo: 'tasa_interes', descripcion: 'Tasa de interés (%)' },
+        { campo: 'fecha_base_calculo', descripcion: 'Fecha base para cálculo' },
+        { campo: 'producto', descripcion: 'Producto financiero' },
+        { campo: 'producto_financiero', descripcion: 'Producto financiero' },
+        { campo: 'concesionario', descripcion: 'Concesionario' },
+        { campo: 'analista', descripcion: 'Analista asignado' },
+        { campo: 'modelo_vehiculo', descripcion: 'Modelo del vehículo' },
+        { campo: 'estado', descripcion: 'Estado del préstamo' },
+        { campo: 'usuario_proponente', descripcion: 'Usuario proponente' },
+        { campo: 'usuario_aprobador', descripcion: 'Usuario aprobador' },
+        { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
+        { campo: 'fecha_aprobacion', descripcion: 'Fecha de aprobación' },
+      ],
+      cuotas: [
+        { campo: 'id', descripcion: 'ID de la cuota' },
+        { campo: 'prestamo_id', descripcion: 'ID del préstamo' },
+        { campo: 'numero_cuota', descripcion: 'Número de cuota' },
+        { campo: 'fecha_vencimiento', descripcion: 'Fecha de vencimiento' },
+        { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
+        { campo: 'monto_cuota', descripcion: 'Monto total de la cuota' },
+        { campo: 'monto_capital', descripcion: 'Monto de capital' },
+        { campo: 'monto_interes', descripcion: 'Monto de interés' },
+        { campo: 'saldo_capital_inicial', descripcion: 'Saldo capital inicial' },
+        { campo: 'saldo_capital_final', descripcion: 'Saldo capital final' },
+        { campo: 'capital_pagado', descripcion: 'Capital pagado' },
+        { campo: 'interes_pagado', descripcion: 'Interés pagado' },
+        { campo: 'mora_pagada', descripcion: 'Mora pagada' },
+        { campo: 'total_pagado', descripcion: 'Total pagado' },
+        { campo: 'capital_pendiente', descripcion: 'Capital pendiente' },
+        { campo: 'interes_pendiente', descripcion: 'Interés pendiente' },
+        { campo: 'dias_mora', descripcion: 'Días de mora' },
+        { campo: 'monto_mora', descripcion: 'Monto de mora' },
+        { campo: 'tasa_mora', descripcion: 'Tasa de mora (%)' },
+        { campo: 'dias_morosidad', descripcion: 'Días de morosidad' },
+        { campo: 'monto_morosidad', descripcion: 'Monto de morosidad' },
+        { campo: 'estado', descripcion: 'Estado de la cuota' },
+      ],
+      pagos: [
+        { campo: 'id', descripcion: 'ID del pago' },
+        { campo: 'cedula', descripcion: 'Cédula del cliente' },
+        { campo: 'prestamo_id', descripcion: 'ID del préstamo' },
+        { campo: 'numero_cuota', descripcion: 'Número de cuota' },
+        { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
+        { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
+        { campo: 'monto_pagado', descripcion: 'Monto pagado' },
+        { campo: 'numero_documento', descripcion: 'Número de documento' },
+        { campo: 'institucion_bancaria', descripcion: 'Institución bancaria' },
+        { campo: 'estado', descripcion: 'Estado del pago' },
+        { campo: 'conciliado', descripcion: 'Si está conciliado' },
+        { campo: 'fecha_conciliacion', descripcion: 'Fecha de conciliación' },
+      ],
+    }
+
+    const variablesPrecargadas: NotificacionVariable[] = []
+    
+    Object.entries(CAMPOS_DISPONIBLES).forEach(([tabla, campos]) => {
+      campos.forEach(({ campo, descripcion }) => {
+        // Generar nombre de variable: tabla_campo (ej: cliente_nombres, cuota_monto_cuota)
+        const nombreVariable = `${tabla.slice(0, tabla.length - 1)}_${campo}` // Remover 's' final
+        
+        variablesPrecargadas.push({
+          id: undefined, // Variables precargadas no tienen ID
+          nombre_variable: nombreVariable,
+          tabla: tabla,
+          campo_bd: campo,
+          descripcion: descripcion,
+          activa: true,
+        } as NotificacionVariable)
+      })
+    })
+    
+    return variablesPrecargadas
+  }
+
   const cargarVariables = async () => {
     try {
       const vars = await notificacionService.listarVariables(true) // Solo variables activas
-      setVariablesConfiguradas(vars || [])
+      const variablesUsuario = vars || []
+      
+      // Generar variables precargadas y combinarlas con las del usuario
+      const variablesPrecargadas = generarVariablesPrecargadas()
+      
+      // Combinar: las variables del usuario tienen prioridad (por nombre_variable)
+      const nombresVariablesUsuario = new Set(variablesUsuario.map(v => v.nombre_variable))
+      const variablesPrecargadasFiltradas = variablesPrecargadas.filter(
+        v => !nombresVariablesUsuario.has(v.nombre_variable)
+      )
+      
+      // Combinar ambas listas
+      const todasLasVariables = [...variablesUsuario, ...variablesPrecargadasFiltradas]
+      setVariablesConfiguradas(todasLasVariables)
     } catch (error: any) {
-      // Si falla, usar lista vacía (puede que no exista el endpoint aún)
-      setVariablesConfiguradas([])
+      // Si falla, usar solo variables precargadas
+      const variablesPrecargadas = generarVariablesPrecargadas()
+      setVariablesConfiguradas(variablesPrecargadas)
     }
   }
 
@@ -777,8 +895,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                 {variablesConfiguradas.length === 0 ? (
                   <div className="text-center py-8 text-sm text-gray-500 bg-white rounded-lg border-2 border-dashed border-gray-300">
                     <Database className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                    <p className="font-medium">No hay variables configuradas.</p>
-                    <p className="text-xs mt-1 text-gray-400">Ve a la pestaña "Genera Variables" para crear variables personalizadas.</p>
+                    <p className="font-medium">Cargando variables...</p>
                   </div>
                 ) : variablesFiltradas.length === 0 ? (
                   <div className="text-center py-8 text-sm text-gray-500 bg-white rounded-lg border-2 border-dashed border-gray-300">
