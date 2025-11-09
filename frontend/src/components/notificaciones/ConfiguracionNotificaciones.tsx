@@ -157,47 +157,47 @@ export function ConfiguracionNotificaciones() {
                 const ccoList = config.cco || []
                 
                 return (
-                  <div key={tipo} className="border rounded-md p-3 space-y-2 bg-gray-50/50">
-                    {/* Header compacto con toggle */}
+                  <div key={tipo} className="border rounded-lg p-4 space-y-3 bg-gray-50/50 hover:bg-gray-50 transition-colors">
+                    {/* Header con toggle */}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-700 truncate">{mapeo?.caso || tipo}</div>
-                        <div className="text-xs text-gray-500">{mapeo?.categoria || 'Sin categoría'}</div>
+                        <div className="text-sm font-semibold text-gray-800 truncate">{mapeo?.caso || tipo}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">{mapeo?.categoria || 'Sin categoría'}</div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-xs w-8 text-center ${!habilitado ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>OFF</span>
+                        <span className={`text-xs w-8 text-center font-medium ${!habilitado ? 'text-gray-900' : 'text-gray-400'}`}>OFF</span>
                         <button
                           type="button"
                           onClick={() => toggleEnvio(tipo)}
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
                             habilitado ? 'bg-blue-600' : 'bg-gray-300'
                           }`}
                         >
                           <span
-                            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                              habilitado ? 'translate-x-5' : 'translate-x-0.5'
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${
+                              habilitado ? 'translate-x-6' : 'translate-x-1'
                             }`}
                           />
                         </button>
-                        <span className={`text-xs w-8 text-center ${habilitado ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>ON</span>
+                        <span className={`text-xs w-8 text-center font-medium ${habilitado ? 'text-gray-900' : 'text-gray-400'}`}>ON</span>
                       </div>
                     </div>
                     
-                    {/* CCO compacto */}
-                    <div className="pt-2 border-t border-gray-200">
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <Copy className="h-3.5 w-3.5 text-gray-400" />
-                        <label className="text-xs font-medium text-gray-600">CCO:</label>
+                    {/* CCO mejorado - Layout vertical para mejor usabilidad */}
+                    <div className="pt-3 border-t border-gray-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Copy className="h-4 w-4 text-gray-500" />
+                        <label className="text-sm font-medium text-gray-700">Correos en CCO (hasta 3):</label>
                       </div>
-                      <div className="grid grid-cols-3 gap-1.5">
+                      <div className="space-y-2">
                         {[0, 1, 2].map(index => (
-                          <div key={index} className="flex items-center gap-1">
+                          <div key={index} className="flex items-center gap-2">
                             <Input
                               type="email"
-                              placeholder={`CCO${index + 1}`}
+                              placeholder={`CCO ${index + 1} (opcional)`}
                               value={ccoList[index] || ''}
                               onChange={(e) => actualizarCCO(tipo, index, e.target.value)}
-                              className="h-7 text-xs px-2"
+                              className="h-9 text-sm px-3 flex-1"
                               disabled={!habilitado}
                             />
                             {ccoList[index] && (
@@ -206,10 +206,11 @@ export function ConfiguracionNotificaciones() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => eliminarCCO(tipo, index)}
-                                className="h-7 w-7 p-0 flex-shrink-0"
+                                className="h-9 w-9 p-0 flex-shrink-0 hover:bg-red-50 hover:text-red-600"
                                 disabled={!habilitado}
+                                title="Eliminar correo"
                               >
-                                <X className="h-3 w-3" />
+                                <X className="h-4 w-4" />
                               </Button>
                             )}
                           </div>
