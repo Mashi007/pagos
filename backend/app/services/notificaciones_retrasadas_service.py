@@ -101,9 +101,7 @@ class NotificacionesRetrasadasService:
                 )
 
                 if elapsed_time > 30:
-                    logger.warning(
-                        f"⚠️ [NotificacionesRetrasadas] Query tardó {elapsed_time:.2f}s - considerar optimización"
-                    )
+                    logger.warning(f"⚠️ [NotificacionesRetrasadas] Query tardó {elapsed_time:.2f}s - considerar optimización")
 
             except Exception as query_error:
                 elapsed_time = time.time() - start_time
@@ -200,4 +198,3 @@ class NotificacionesRetrasadasService:
         Obtener notificaciones retrasadas (actualmente sin cache, calcula en tiempo real)
         """
         return self.calcular_notificaciones_retrasadas()
-

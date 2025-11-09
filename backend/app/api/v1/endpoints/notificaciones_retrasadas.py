@@ -93,7 +93,9 @@ def listar_notificaciones_retrasadas(
         if estado:
             resultados_antes = len(resultados)
             resultados = [r for r in resultados if r.get("estado") == estado]
-            logger.info(f"🔍 [NotificacionesRetrasadas] Filtrado por estado '{estado}': {resultados_antes} -> {len(resultados)}")
+            logger.info(
+                f"🔍 [NotificacionesRetrasadas] Filtrado por estado '{estado}': {resultados_antes} -> {len(resultados)}"
+            )
 
         # Contar por categorías
         dias_1 = len([r for r in resultados if r["dias_atrasado"] == 1])
@@ -139,4 +141,3 @@ def calcular_notificaciones_retrasadas(
     except Exception as e:
         logger.error(f"Error calculando notificaciones retrasadas: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
-
