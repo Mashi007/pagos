@@ -249,15 +249,19 @@ def diagnostico_cobranzas(
 @router.get("/clientes-atrasados")
 def obtener_clientes_atrasados(
     dias_retraso: Optional[int] = Query(None, description="Días de retraso para filtrar"),
+    incluir_admin: bool = Query(False, description="Incluir datos del administrador para diagnóstico"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Obtener clientes atrasados filtrados por días de retraso
+    Excluye admin por defecto, pero puede incluirse con incluir_admin=true para diagnóstico
+    Si no hay otros analistas en el sistema, incluye automáticamente al admin
 
     Args:
         dias_retraso: Filtrar por días específicos de retraso (1, 3, 5, etc.)
                      Si es None, devuelve todos los clientes atrasados
+        incluir_admin: Si es True, incluye datos del administrador
     """
     start_time = time.time()
 
@@ -268,6 +272,22 @@ def obtener_clientes_atrasados(
         # Cuotas vencidas (fecha_vencimiento < hoy y total_pagado < monto_cuota)
         # Excluir admin del listado
         from app.core.config import settings
+        
+        # Verificar si hay otros usuarios no-admin en el sistema
+        otros_analistas = (
+            db.query(func.count(User.id))
+            .filter(
+                User.is_active.is_(True),
+                or_(User.is_admin.is_(False), User.is_admin.is_(None))
+            )
+            .scalar()
+            or 0
+        )
+        
+        # Si no hay otros analistas, incluir admin automáticamente
+        if otros_analistas == 0:
+            logger.info(f"🔍 [clientes_atrasados] No hay otros analistas, incluyendo admin automáticamente")
+            incluir_admin = True
 
         # Optimización: Usar subquery para filtrar cuotas vencidas primero
         # Esto reduce el tamaño del dataset antes de hacer los JOINs
@@ -296,6 +316,16 @@ def obtener_clientes_atrasados(
         )
 
         # Query principal con JOINs optimizados
+        query_filters = [
+            Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
+        ]
+        
+        # Aplicar filtro de admin solo si incluir_admin=False
+        if not incluir_admin:
+            query_filters.extend([
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
+            ])
+        
         query = (
             db.query(
                 Cliente.cedula,
@@ -309,12 +339,14 @@ def obtener_clientes_atrasados(
             .join(Prestamo, Prestamo.cedula == Cliente.cedula)
             .join(cuotas_vencidas_subq, cuotas_vencidas_subq.c.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
-            .filter(
-                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
-                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
-                or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
-            )
+            .filter(*query_filters)
         )
+        
+        # Aplicar filtro de User.is_admin solo si incluir_admin=False
+        if not incluir_admin:
+            query = query.filter(
+                or_(User.is_admin.is_(False), User.is_admin.is_(None))  # Excluir admins
+            )
 
         resultados = query.all()
 
@@ -409,6 +441,7 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
 
 @router.get("/por-analista")
 def obtener_cobranzas_por_analista(
+    incluir_admin: bool = Query(False, description="Incluir datos del administrador para diagnóstico"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -416,12 +449,43 @@ def obtener_cobranzas_por_analista(
     Obtener estadísticas de cobranza por analista
     - Cantidad de clientes atrasados
     - Monto total sin cobrar
+    Excluye admin por defecto, pero puede incluirse con incluir_admin=true para diagnóstico
+    Si no hay otros analistas en el sistema, incluye automáticamente al admin
     """
     try:
         hoy = date.today()
 
         # Excluir admin del listado de analistas
         from app.core.config import settings
+        
+        # Verificar si hay otros usuarios no-admin en el sistema
+        otros_analistas = (
+            db.query(func.count(User.id))
+            .filter(
+                User.is_active.is_(True),
+                or_(User.is_admin.is_(False), User.is_admin.is_(None))
+            )
+            .scalar()
+            or 0
+        )
+        
+        # Si no hay otros analistas, incluir admin automáticamente
+        if otros_analistas == 0:
+            logger.info(f"🔍 [por_analista] No hay otros analistas, incluyendo admin automáticamente")
+            incluir_admin = True
+
+        query_filters = [
+            Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+            Prestamo.usuario_proponente.isnot(None),
+        ]
+        
+        # Aplicar filtro de admin solo si incluir_admin=False
+        if not incluir_admin:
+            query_filters.extend([
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
+            ])
 
         query = (
             db.query(
@@ -432,17 +496,16 @@ def obtener_cobranzas_por_analista(
             .join(Cliente, Cliente.cedula == Prestamo.cedula)
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
-            .filter(
-                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
-                Prestamo.usuario_proponente.isnot(None),
-                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
-                or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
-            )
-            .group_by(Prestamo.usuario_proponente)
-            .having(func.count(func.distinct(Cliente.cedula)) > 0)
+            .filter(*query_filters)
         )
+        
+        # Aplicar filtro de User.is_admin solo si incluir_admin=False
+        if not incluir_admin:
+            query = query.filter(
+                or_(User.is_admin.is_(False), User.is_admin.is_(None))  # Excluir admins
+            )
+        
+        query = query.group_by(Prestamo.usuario_proponente).having(func.count(func.distinct(Cliente.cedula)) > 0)
 
         resultados = query.all()
 
@@ -521,15 +584,45 @@ def obtener_clientes_por_analista(
 
 @router.get("/montos-por-mes")
 def obtener_montos_vencidos_por_mes(
+    incluir_admin: bool = Query(False, description="Incluir datos del administrador para diagnóstico"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Obtener montos vencidos agrupados por mes de vencimiento
-    Solo incluye cuotas vencidas
+    Solo incluye cuotas vencidas con los mismos filtros que el resumen
+    Excluye admin por defecto, pero puede incluirse con incluir_admin=true para diagnóstico
+    Si no hay otros analistas en el sistema, incluye automáticamente al admin
     """
     try:
         hoy = date.today()
+        from app.core.config import settings
+        
+        # Verificar si hay otros usuarios no-admin en el sistema
+        otros_analistas = (
+            db.query(func.count(User.id))
+            .filter(
+                User.is_active.is_(True),
+                or_(User.is_admin.is_(False), User.is_admin.is_(None))
+            )
+            .scalar()
+            or 0
+        )
+        
+        # Si no hay otros analistas, incluir admin automáticamente
+        if otros_analistas == 0:
+            logger.info(f"🔍 [montos_por_mes] No hay otros analistas, incluyendo admin automáticamente")
+            incluir_admin = True
+
+        query_filters = [
+            Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+        ]
+        
+        # Aplicar filtro de admin solo si incluir_admin=False
+        if not incluir_admin:
+            query_filters.append(Prestamo.usuario_proponente != settings.ADMIN_EMAIL)  # Excluir admin
 
         query = (
             db.query(
@@ -537,13 +630,19 @@ def obtener_montos_vencidos_por_mes(
                 func.count(Cuota.id).label("cantidad_cuotas"),
                 func.sum(Cuota.monto_cuota).label("monto_total"),
             )
-            .filter(
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
-            )
-            .group_by(func.date_trunc("month", Cuota.fecha_vencimiento))
-            .order_by(func.date_trunc("month", Cuota.fecha_vencimiento))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cedula == Cliente.cedula)
+            .outerjoin(User, User.email == Prestamo.usuario_proponente)
+            .filter(*query_filters)
         )
+        
+        # Aplicar filtro de User.is_admin solo si incluir_admin=False
+        if not incluir_admin:
+            query = query.filter(
+                or_(User.is_admin.is_(False), User.is_admin.is_(None))  # Excluir admins
+            )
+        
+        query = query.group_by(func.date_trunc("month", Cuota.fecha_vencimiento)).order_by(func.date_trunc("month", Cuota.fecha_vencimiento))
 
         resultados = query.all()
 
@@ -570,14 +669,34 @@ def obtener_resumen_cobranzas(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     incluir_diagnostico: bool = Query(False, description="Incluir información de diagnóstico"),
+    incluir_admin: bool = Query(False, description="Incluir datos del administrador para diagnóstico"),
 ):
     """
     Obtener resumen general de cobranzas
-    Excluye admin y solo cuenta préstamos aprobados o activos
+    Excluye admin por defecto, pero puede incluirse con incluir_admin=true para diagnóstico
+    Si no hay otros analistas en el sistema, incluye automáticamente al admin
+    Solo cuenta préstamos aprobados o activos
     """
     try:
         hoy = date.today()
         from app.core.config import settings
+        
+        # Verificar si hay otros usuarios no-admin en el sistema
+        # Si no hay, incluir automáticamente al admin
+        otros_analistas = (
+            db.query(func.count(User.id))
+            .filter(
+                User.is_active.is_(True),
+                or_(User.is_admin.is_(False), User.is_admin.is_(None))
+            )
+            .scalar()
+            or 0
+        )
+        
+        # Si no hay otros analistas, incluir admin automáticamente
+        if otros_analistas == 0:
+            logger.info(f"🔍 [resumen_cobranzas] No hay otros analistas en el sistema, incluyendo admin automáticamente")
+            incluir_admin = True
 
         # DIAGNÓSTICO: Verificar estados de préstamos con cuotas vencidas
         estados_prestamos = (
@@ -613,6 +732,20 @@ def obtener_resumen_cobranzas(
             cuotas_por_estado[estado_nombre] = cantidad
             logger.info(f"🔍 [resumen_cobranzas] Estado '{estado_nombre}': {cantidad} préstamos con cuotas vencidas")
 
+        # DIAGNÓSTICO: Verificar cuotas vencidas del admin
+        total_del_admin = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,
+                Prestamo.usuario_proponente == settings.ADMIN_EMAIL,
+            )
+            .scalar()
+            or 0
+        )
+        logger.info(f"🔍 [resumen_cobranzas] Total cuotas vencidas DEL admin: {total_del_admin}")
+
         # DIAGNÓSTICO: Verificar cuotas vencidas excluyendo admin
         total_sin_admin = (
             db.query(func.count(Cuota.id))
@@ -626,6 +759,26 @@ def obtener_resumen_cobranzas(
             or 0
         )
         logger.info(f"🔍 [resumen_cobranzas] Total cuotas vencidas SIN admin: {total_sin_admin}")
+
+        # DIAGNÓSTICO: Verificar usuarios únicos con cuotas vencidas
+        usuarios_con_cuotas_vencidas = (
+            db.query(
+                Prestamo.usuario_proponente,
+                func.count(func.distinct(Prestamo.id)).label("prestamos"),
+                func.count(Cuota.id).label("cuotas")
+            )
+            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,
+            )
+            .group_by(Prestamo.usuario_proponente)
+            .order_by(func.count(Cuota.id).desc())
+            .limit(10)
+            .all()
+        )
+        logger.info(f"🔍 [resumen_cobranzas] Top 10 usuarios con cuotas vencidas: {[(u[0], u[1], u[2]) for u in usuarios_con_cuotas_vencidas]}")
 
         # DIAGNÓSTICO: Verificar cuotas vencidas con filtro de estado APROBADO/ACTIVO
         total_aprobado_activo = (
@@ -643,36 +796,56 @@ def obtener_resumen_cobranzas(
 
         # Base query con joins necesarios y filtros
         # Incluir préstamos APROBADO y ACTIVO (ambos son válidos para cobranzas)
+        base_filters = [
+            Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+        ]
+        
+        # Aplicar filtro de admin solo si incluir_admin=False
+        if not incluir_admin:
+            base_filters.extend([
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
+            ])
+        
         base_query = (
             db.query(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .join(Cliente, Prestamo.cedula == Cliente.cedula)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
-            .filter(
-                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
-                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
-                or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
-            )
+            .filter(*base_filters)
         )
+        
+        # Aplicar filtro de User.is_admin solo si incluir_admin=False
+        if not incluir_admin:
+            base_query = base_query.filter(
+                or_(User.is_admin.is_(False), User.is_admin.is_(None))  # Excluir admins
+            )
 
         # Total de cuotas vencidas
         total_cuotas_vencidas = base_query.count()
 
         # Monto total adeudado
+        monto_filters = [
+            Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+        ]
+        
+        if not incluir_admin:
+            monto_filters.append(Prestamo.usuario_proponente != settings.ADMIN_EMAIL)
+        
         monto_query = (
             db.query(func.sum(Cuota.monto_cuota))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
-            .filter(
-                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
-                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
-                or_(User.is_admin.is_(False), User.is_admin.is_(None)),
-            )
+            .filter(*monto_filters)
         )
+        
+        if not incluir_admin:
+            monto_query = monto_query.filter(
+                or_(User.is_admin.is_(False), User.is_admin.is_(None))
+            )
         monto_total_adeudado = monto_query.scalar() or Decimal("0.0")
 
         # Cantidad de clientes únicos atrasados

@@ -34,9 +34,11 @@ class CobranzasService {
   private baseUrl = '/api/v1/cobranzas'
 
   // Obtener clientes atrasados
-  async getClientesAtrasados(diasRetraso?: number): Promise<ClienteAtrasado[]> {
-    const params = diasRetraso ? `?dias_retraso=${diasRetraso}` : ''
-    const url = `${this.baseUrl}/clientes-atrasados${params}`
+  async getClientesAtrasados(diasRetraso?: number, incluirAdmin: boolean = false): Promise<ClienteAtrasado[]> {
+    const params = new URLSearchParams()
+    if (diasRetraso) params.append('dias_retraso', diasRetraso.toString())
+    if (incluirAdmin) params.append('incluir_admin', 'true')
+    const url = `${this.baseUrl}/clientes-atrasados${params.toString() ? `?${params.toString()}` : ''}`
     
     try {
       const result = await apiClient.get<ClienteAtrasado[]>(url, { timeout: 60000 })
@@ -56,8 +58,8 @@ class CobranzasService {
   }
 
   // Obtener cobranzas por analista
-  async getCobranzasPorAnalista(): Promise<CobranzasPorAnalista[]> {
-    const url = `${this.baseUrl}/por-analista`
+  async getCobranzasPorAnalista(incluirAdmin: boolean = false): Promise<CobranzasPorAnalista[]> {
+    const url = `${this.baseUrl}/por-analista${incluirAdmin ? '?incluir_admin=true' : ''}`
     
     try {
       const result = await apiClient.get<CobranzasPorAnalista[]>(url, { timeout: 60000 })
@@ -75,8 +77,8 @@ class CobranzasService {
   }
 
   // Obtener montos vencidos por mes
-  async getMontosPorMes(): Promise<MontosPorMes[]> {
-    const url = `${this.baseUrl}/montos-por-mes`
+  async getMontosPorMes(incluirAdmin: boolean = false): Promise<MontosPorMes[]> {
+    const url = `${this.baseUrl}/montos-por-mes${incluirAdmin ? '?incluir_admin=true' : ''}`
     
     try {
       const result = await apiClient.get<MontosPorMes[]>(url, { timeout: 60000 })
@@ -89,8 +91,8 @@ class CobranzasService {
   }
 
   // Obtener resumen general
-  async getResumen(): Promise<ResumenCobranzas> {
-    const url = `${this.baseUrl}/resumen`
+  async getResumen(incluirAdmin: boolean = false): Promise<ResumenCobranzas> {
+    const url = `${this.baseUrl}/resumen${incluirAdmin ? '?incluir_admin=true' : ''}`
     console.log('🔍 [Cobranzas] Iniciando petición a:', url)
     
     try {

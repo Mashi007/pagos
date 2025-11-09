@@ -42,9 +42,11 @@ from app.api.v1.endpoints import (
     aprobaciones,
     auditoria,
     auth,
+    carga_masiva,
     clientes,
     cobranzas,
     concesionarios,
+    conciliacion_bancaria,
     configuracion,
     dashboard,
     health,
@@ -57,6 +59,7 @@ from app.api.v1.endpoints import (
     pagos_upload,
     prestamos,
     reportes,
+    scheduler_notificaciones,
     solicitudes,
     users,
     validadores,
@@ -302,6 +305,12 @@ app.include_router(concesionarios.router, prefix="/api/v1/concesionarios", tags=
 app.include_router(validadores.router, prefix="/api/v1/validadores", tags=["validadores"])
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(monitoring.router, prefix="/api/v1/monitoring", tags=["monitoring"])
+app.include_router(carga_masiva.router, prefix="/api/v1/carga-masiva", tags=["carga-masiva"])
+app.include_router(conciliacion_bancaria.router, prefix="/api/v1/conciliacion", tags=["conciliacion"])
+app.include_router(scheduler_notificaciones.router, prefix="/api/v1/scheduler", tags=["scheduler"])
+app.include_router(carga_masiva.router, prefix="/api/v1/carga-masiva", tags=["carga-masiva"])
+app.include_router(conciliacion_bancaria.router, prefix="/api/v1/conciliacion", tags=["conciliacion"])
+app.include_router(scheduler_notificaciones.router, prefix="/api/v1/scheduler", tags=["scheduler"])
 
 # Log detallado de rutas registradas
 logger.info("✅ Todos los routers registrados correctamente")
