@@ -64,7 +64,7 @@ class NotificacionesPrejudicialService:
                       AND cl.estado != 'INACTIVO'
                 ),
                 clientes_prejudiciales AS (
-                    SELECT DISTINCT cliente_id
+                    SELECT cliente_id
                     FROM cuotas_atrasadas
                     GROUP BY cliente_id
                     HAVING COUNT(*) >= 3
