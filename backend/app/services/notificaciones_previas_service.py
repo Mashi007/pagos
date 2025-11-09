@@ -85,8 +85,9 @@ class NotificacionesPreviasService:
             )
 
             import time
+
             start_time = time.time()
-            
+
             try:
                 # Ejecutar query con timeout implícito (el timeout de la conexión BD)
                 result = self.db.execute(
@@ -99,15 +100,22 @@ class NotificacionesPreviasService:
                 )
                 rows = result.fetchall()
                 elapsed_time = time.time() - start_time
-                logger.info(f"📊 [NotificacionesPrevias] Query optimizada completada en {elapsed_time:.2f}s - Encontrados {len(rows)} registros de cuotas próximas")
-                
+                logger.info(
+                    f"📊 [NotificacionesPrevias] Query optimizada completada en {elapsed_time:.2f}s - Encontrados {len(rows)} registros de cuotas próximas"
+                )
+
                 # Si la query tarda más de 30 segundos, registrar advertencia
                 if elapsed_time > 30:
-                    logger.warning(f"⚠️ [NotificacionesPrevias] Query tardó {elapsed_time:.2f}s - considerar optimización adicional o índices")
-                    
+                    logger.warning(
+                        f"⚠️ [NotificacionesPrevias] Query tardó {elapsed_time:.2f}s - considerar optimización adicional o índices"
+                    )
+
             except Exception as query_error:
                 elapsed_time = time.time() - start_time
-                logger.error(f"❌ [NotificacionesPrevias] Error ejecutando query optimizada después de {elapsed_time:.2f}s: {query_error}", exc_info=True)
+                logger.error(
+                    f"❌ [NotificacionesPrevias] Error ejecutando query optimizada después de {elapsed_time:.2f}s: {query_error}",
+                    exc_info=True,
+                )
                 # Retornar lista vacía en lugar de fallar completamente
                 logger.warning("⚠️ [NotificacionesPrevias] Retornando lista vacía debido a error en query")
                 return []
