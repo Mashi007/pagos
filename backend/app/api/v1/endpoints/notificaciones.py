@@ -1055,7 +1055,7 @@ def listar_variables(
         # Verificar si la tabla existe
         from sqlalchemy import inspect
         from sqlalchemy.exc import ProgrammingError
-        
+
         try:
             inspector = inspect(db.bind)
             if "notificacion_variables" not in inspector.get_table_names():
