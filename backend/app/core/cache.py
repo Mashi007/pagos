@@ -37,10 +37,13 @@ class MemoryCache(CacheBackend):
     Implementación de cache en memoria (fallback cuando Redis no está disponible)
     NO usar en producción con múltiples workers
     """
+    _warning_logged = False  # Variable de clase para evitar logs repetidos
 
     def __init__(self):
         self._cache: dict = {}
-        logger.warning("Usando MemoryCache - NO recomendado para producción con múltiples workers")
+        if not MemoryCache._warning_logged:
+            logger.warning("Usando MemoryCache - NO recomendado para producción con múltiples workers")
+            MemoryCache._warning_logged = True
 
     def get(self, key: str) -> Optional[Any]:
         """Obtener valor del cache"""
@@ -78,21 +81,16 @@ class MemoryCache(CacheBackend):
         return int(time.time())
 
 
+# Variable de módulo para evitar logs repetidos
+_cache_logs_shown = False
+
 # Intentar inicializar Redis, usar MemoryCache como fallback
 cache_backend: CacheBackend = MemoryCache()
-
-# Log inicial para diagnóstico
-logger.info("🔍 Iniciando inicialización de cache...")
 
 try:
     import redis
 
     from app.core.config import settings
-
-    # Log para verificar que se está intentando conectar
-    logger.info(f"🔍 REDIS_URL configurada: {bool(settings.REDIS_URL)}")
-    if settings.REDIS_URL:
-        logger.info(f"🔍 REDIS_URL valor: {settings.REDIS_URL[:50]}...")  # Primeros 50 caracteres
 
     # ✅ CONFIGURACIÓN DESDE VARIABLES DE ENTORNO
     # Prioridad: REDIS_URL > REDIS_HOST/REDIS_PORT/REDIS_DB
@@ -108,7 +106,6 @@ try:
                 db = parts[1] if len(parts) > 1 else str(settings.REDIS_DB)
                 redis_url = f"redis://:{settings.REDIS_PASSWORD}@{host_port}/{db}"
         redis_client = redis.from_url(redis_url, decode_responses=False, socket_timeout=settings.REDIS_SOCKET_TIMEOUT)
-        logger.info(f"🔗 Conectando a Redis usando REDIS_URL: {redis_url.split('@')[-1] if '@' in redis_url else redis_url}")
     else:
         # Usar componentes individuales
         redis_client = redis.Redis(
@@ -119,7 +116,6 @@ try:
             decode_responses=False,
             socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
         )
-        logger.info(f"🔗 Conectando a Redis: {settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}")
 
     # Test de conexión
     redis_client.ping()
@@ -172,17 +168,20 @@ try:
                 return False
 
     cache_backend = RedisCache(redis_client)
-    logger.info("✅ Redis cache inicializado correctamente")
+    if not _cache_logs_shown:
+        logger.info("✅ Redis cache inicializado correctamente")
+        _cache_logs_shown = True
 
 except ImportError:
-    logger.warning("⚠️ Redis no disponible (paquete no instalado), usando MemoryCache")
-    logger.info("   Para usar Redis en producción, instala: pip install 'redis>=5.0.0,<6.0.0'")
+    if not _cache_logs_shown:
+        # Los logs de MemoryCache ya se mostraron en __init__, solo mostrar info adicional
+        logger.info("   Para usar Redis en producción, instala: pip install 'redis>=5.0.0,<6.0.0'")
+        _cache_logs_shown = True
 except Exception as e:
-    logger.warning(f"⚠️ No se pudo conectar a Redis: {type(e).__name__}: {str(e)}")
-    logger.info(f"   REDIS_URL configurada: {bool(settings.REDIS_URL) if 'settings' in locals() else 'N/A'}")
-    if "settings" in locals() and settings.REDIS_URL:
-        logger.debug(f"   REDIS_URL valor: {settings.REDIS_URL[:80]}...")
-    logger.info("   Usando MemoryCache como fallback")
+    if not _cache_logs_shown:
+        logger.warning(f"⚠️ No se pudo conectar a Redis: {type(e).__name__}: {str(e)}")
+        logger.info("   Usando MemoryCache como fallback")
+        _cache_logs_shown = True
 
 
 def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):

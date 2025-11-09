@@ -15,7 +15,9 @@ import {
   Settings,
   Shield,
   Download,
-  Eye
+  Eye,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 // XLSX se importa dinámicamente cuando se necesita
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,6 +38,20 @@ export function Notificaciones() {
   const [filterCanal, setFilterCanal] = useState<string>('')
   const [page, setPage] = useState(1)
   const perPage = 20
+  
+  // Estado para controlar qué grupos de días están expandidos
+  const [gruposExpandidos, setGruposExpandidos] = useState<Record<string, boolean>>({
+    '5': true,  // Por defecto, todos expandidos
+    '3': true,
+    '1': true
+  })
+  
+  const toggleGrupo = (dias: string) => {
+    setGruposExpandidos(prev => ({
+      ...prev,
+      [dias]: !prev[dias]
+    }))
+  }
 
   // Cargar notificaciones previas si estamos en la pestaña "previa"
   const { data: notificacionesPreviasData, isLoading: isLoadingPrevias, error: errorPrevias, refetch: refetchPrevias } = useQuery({
@@ -560,26 +576,39 @@ export function Notificaciones() {
                       const ordenGrupos = ['5', '3', '1']
                       
                       return (
-                        <div className="space-y-8">
+                        <div className="space-y-4">
                           {ordenGrupos.map((dias) => {
                             const notificacionesGrupo = grupos[dias as keyof typeof grupos]
                             if (notificacionesGrupo.length === 0) return null
                             
+                            const estaExpandido = gruposExpandidos[dias]
+                            
                             return (
-                              <div key={dias} className="space-y-4">
-                                {/* Encabezado del grupo */}
-                                <div className="flex items-center gap-3 pb-2 border-b-2 border-gray-200">
-                                  <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-lg px-4 py-1">
-                                    {dias} días antes del vencimiento
-                                  </Badge>
-                                  <span className="text-sm text-gray-500">
-                                    ({notificacionesGrupo.length} {notificacionesGrupo.length === 1 ? 'notificación' : 'notificaciones'})
-                                  </span>
-                                </div>
+                              <div key={dias} className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                                {/* Encabezado del grupo (clickeable) */}
+                                <button
+                                  onClick={() => toggleGrupo(dias)}
+                                  className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    {estaExpandido ? (
+                                      <ChevronUp className="w-5 h-5 text-gray-500" />
+                                    ) : (
+                                      <ChevronDown className="w-5 h-5 text-gray-500" />
+                                    )}
+                                    <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-lg px-4 py-1">
+                                      {dias} días antes del vencimiento
+                                    </Badge>
+                                    <span className="text-sm text-gray-500">
+                                      ({notificacionesGrupo.length} {notificacionesGrupo.length === 1 ? 'notificación' : 'notificaciones'})
+                                    </span>
+                                  </div>
+                                </button>
                                 
-                                {/* Tarjetas del grupo */}
-                                <div className="space-y-4">
-                                  {notificacionesGrupo.map((notificacion) => (
+                                {/* Tarjetas del grupo (colapsable) */}
+                                {estaExpandido && (
+                                  <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
+                                    {notificacionesGrupo.map((notificacion) => (
                                     <Card 
                                       key={`${notificacion.prestamo_id}-${notificacion.dias_antes_vencimiento}`}
                                       className="bg-yellow-50 border-yellow-200 hover:shadow-md transition-shadow"
@@ -639,8 +668,9 @@ export function Notificaciones() {
                                         </div>
                                       </CardContent>
                                     </Card>
-                                  ))}
-                                </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             )
                           })}
