@@ -410,6 +410,7 @@ def obtener_montos_vencidos_por_mes(
 def obtener_resumen_cobranzas(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    incluir_diagnostico: bool = Query(False, description="Incluir información de diagnóstico"),
 ):
     """
     Obtener resumen general de cobranzas
@@ -444,6 +445,42 @@ def obtener_resumen_cobranzas(
             or 0
         )
         logger.info(f"🔍 [resumen_cobranzas] Total cuotas vencidas SIN filtro estado: {total_cuotas_sin_filtro}")
+
+        # DIAGNÓSTICO ADICIONAL: Cuotas vencidas por estado de préstamo
+        cuotas_por_estado = {}
+        for estado_row in estados_prestamos:
+            estado_nombre = estado_row[0]
+            cantidad = estado_row[1]
+            cuotas_por_estado[estado_nombre] = cantidad
+            logger.info(f"🔍 [resumen_cobranzas] Estado '{estado_nombre}': {cantidad} préstamos con cuotas vencidas")
+
+        # DIAGNÓSTICO: Verificar cuotas vencidas excluyendo admin
+        total_sin_admin = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
+            )
+            .scalar()
+            or 0
+        )
+        logger.info(f"🔍 [resumen_cobranzas] Total cuotas vencidas SIN admin: {total_sin_admin}")
+
+        # DIAGNÓSTICO: Verificar cuotas vencidas con filtro de estado APROBADO/ACTIVO
+        total_aprobado_activo = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,
+            )
+            .scalar()
+            or 0
+        )
+        logger.info(f"🔍 [resumen_cobranzas] Total cuotas vencidas APROBADO/ACTIVO: {total_aprobado_activo}")
 
         # Base query con joins necesarios y filtros
         # Incluir préstamos APROBADO y ACTIVO (ambos son válidos para cobranzas)
@@ -499,11 +536,29 @@ def obtener_resumen_cobranzas(
             f"${float(monto_total_adeudado):,.2f} adeudado, {clientes_unicos} clientes atrasados"
         )
 
-        return {
+        resultado = {
             "total_cuotas_vencidas": total_cuotas_vencidas,
             "monto_total_adeudado": float(monto_total_adeudado),
             "clientes_atrasados": clientes_unicos,
         }
+
+        # Agregar diagnóstico si se solicita
+        if incluir_diagnostico:
+            resultado["diagnostico"] = {
+                "fecha_corte": hoy.isoformat(),
+                "total_cuotas_vencidas_sin_filtros": total_cuotas_sin_filtro,
+                "total_cuotas_vencidas_sin_admin": total_sin_admin,
+                "total_cuotas_vencidas_aprobado_activo": total_aprobado_activo,
+                "estados_prestamos_con_cuotas_vencidas": dict(estados_prestamos),
+                "admin_email_excluido": settings.ADMIN_EMAIL,
+                "filtros_aplicados": {
+                    "estado_prestamo": ["APROBADO", "ACTIVO"],
+                    "excluir_admin": True,
+                    "criterio_cuota_vencida": "fecha_vencimiento < hoy AND total_pagado < monto_cuota",
+                },
+            }
+
+        return resultado
 
     except Exception as e:
         logger.error(f"Error obteniendo resumen de cobranzas: {e}", exc_info=True)

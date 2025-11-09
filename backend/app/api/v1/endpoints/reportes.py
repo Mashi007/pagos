@@ -780,7 +780,18 @@ def resumen_dashboard(
             total_clientes = 0
 
         try:
-            total_prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
+            # Total préstamos: usar query más robusta con func.count
+            total_prestamos_query = (
+                db.query(func.count(Prestamo.id))
+                .filter(Prestamo.estado == "APROBADO")
+            )
+            total_prestamos = total_prestamos_query.scalar() or 0
+            logger.info(f"[reportes.resumen] Total préstamos aprobados: {total_prestamos}")
+            
+            # Validación adicional: verificar que hay préstamos en la BD
+            if total_prestamos == 0:
+                total_todos_prestamos = db.query(func.count(Prestamo.id)).scalar() or 0
+                logger.warning(f"⚠️ [reportes.resumen] No hay préstamos APROBADOS. Total préstamos en BD: {total_todos_prestamos}")
         except Exception as e:
             logger.error(f"❌ [reportes.resumen] Error obteniendo total_prestamos: {e}", exc_info=True)
             try:
@@ -803,22 +814,27 @@ def resumen_dashboard(
         # Suma de capital_pendiente + interes_pendiente + monto_mora
         # Solo para préstamos aprobados y cuotas no pagadas
         try:
-            cartera_activa_query = (
-                db.query(
-                    func.sum(
-                        func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
-                        + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
-                        + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
-                    )
-                )
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.estado != "PAGADO",
-                )
+            cartera_activa_query = db.execute(
+                text("""
+                    SELECT COALESCE(SUM(
+                        COALESCE(c.capital_pendiente, 0) + 
+                        COALESCE(c.interes_pendiente, 0) + 
+                        COALESCE(c.monto_mora, 0)
+                    ), 0) as cartera_activa
+                    FROM cuotas c
+                    INNER JOIN prestamos p ON c.prestamo_id = p.id
+                    WHERE p.estado = 'APROBADO'
+                      AND c.estado != 'PAGADO'
+                """)
             )
-            cartera_activa = float(cartera_activa_query.scalar() or Decimal("0"))
-            logger.info(f"[reportes.resumen] Cartera activa: {cartera_activa}")
+            resultado_cartera = cartera_activa_query.scalar()
+            if resultado_cartera is None:
+                cartera_activa = 0.0
+            elif isinstance(resultado_cartera, Decimal):
+                cartera_activa = float(resultado_cartera)
+            else:
+                cartera_activa = float(resultado_cartera) if resultado_cartera else 0.0
+            logger.info(f"[reportes.resumen] Cartera activa: {cartera_activa:,.2f}")
         except Exception as e:
             logger.error(f"❌ [reportes.resumen] Error obteniendo cartera_activa: {e}", exc_info=True)
             try:
@@ -829,16 +845,17 @@ def resumen_dashboard(
 
         # Mora: préstamos con cuotas vencidas no pagadas
         try:
-            prestamos_mora = (
-                db.query(func.count(func.distinct(Prestamo.id)))
-                .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento < hoy,
-                    Cuota.estado != "PAGADO",
-                )
-                .scalar()
-            ) or 0
+            prestamos_mora_query = db.execute(
+                text("""
+                    SELECT COUNT(DISTINCT p.id) as prestamos_mora
+                    FROM prestamos p
+                    INNER JOIN cuotas c ON c.prestamo_id = p.id
+                    WHERE p.estado = 'APROBADO'
+                      AND c.fecha_vencimiento < :hoy
+                      AND c.estado != 'PAGADO'
+                """).bindparams(hoy=hoy)
+            )
+            prestamos_mora = prestamos_mora_query.scalar() or 0
             logger.info(f"[reportes.resumen] Préstamos en mora: {prestamos_mora}")
         except Exception as e:
             logger.error(f"❌ [reportes.resumen] Error obteniendo prestamos_mora: {e}", exc_info=True)
@@ -875,7 +892,7 @@ def resumen_dashboard(
                 pagos_mes = float(resultado_pagos)
             else:
                 pagos_mes = float(resultado_pagos) if resultado_pagos else 0.0
-            logger.info(f"[reportes.resumen] Pagos del mes: {pagos_mes} (desde {fecha_inicio_mes} hasta {hoy})")
+            logger.info(f"[reportes.resumen] Pagos del mes: {pagos_mes:,.2f} (desde {fecha_inicio_mes} hasta {hoy})")
         except Exception as e:
             logger.error(f"❌ [reportes.resumen] Error obteniendo pagos_mes: {e}", exc_info=True)
             try:
@@ -884,15 +901,19 @@ def resumen_dashboard(
                 pass
             pagos_mes = 0.0
 
-        return {
-            "total_clientes": total_clientes,
-            "total_prestamos": total_prestamos,
-            "total_pagos": total_pagos,
-            "cartera_activa": cartera_activa,
-            "prestamos_mora": prestamos_mora,
-            "pagos_mes": pagos_mes,
+        # Asegurar que todos los valores sean del tipo correcto
+        resultado = {
+            "total_clientes": int(total_clientes),
+            "total_prestamos": int(total_prestamos),
+            "total_pagos": int(total_pagos),
+            "cartera_activa": float(cartera_activa),
+            "prestamos_mora": int(prestamos_mora),
+            "pagos_mes": float(pagos_mes),
             "fecha_actualizacion": datetime.now().isoformat(),
         }
+        
+        logger.info(f"[reportes.resumen] Resumen generado: {resultado}")
+        return resultado
 
     except Exception as e:
         logger.error(f"❌ [reportes.resumen] Error obteniendo resumen: {e}", exc_info=True)
