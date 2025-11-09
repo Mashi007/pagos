@@ -547,143 +547,192 @@ export function Notificaciones() {
                     )}
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {(activeTab === 'previa' ? notificacionesPrevias : filteredNotificaciones).map((notificacion) => (
-                      <Card 
-                        key={activeTab === 'previa' ? `${notificacion.prestamo_id}-${notificacion.dias_antes_vencimiento}` : notificacion.id}
-                        className="bg-yellow-50 border-yellow-200 hover:shadow-md transition-shadow"
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start gap-4 flex-1">
-                              {/* Icono de campana */}
-                              <div className="mt-1">
-                                <Bell className="w-5 h-5 text-blue-600" />
+                  activeTab === 'previa' ? (
+                    // Agrupar notificaciones previas por días
+                    (() => {
+                      const grupos = {
+                        '5': notificacionesPrevias.filter(n => n.dias_antes_vencimiento === 5),
+                        '3': notificacionesPrevias.filter(n => n.dias_antes_vencimiento === 3),
+                        '1': notificacionesPrevias.filter(n => n.dias_antes_vencimiento === 1)
+                      }
+                      
+                      // Orden de visualización: 5, 3, 1
+                      const ordenGrupos = ['5', '3', '1']
+                      
+                      return (
+                        <div className="space-y-8">
+                          {ordenGrupos.map((dias) => {
+                            const notificacionesGrupo = grupos[dias as keyof typeof grupos]
+                            if (notificacionesGrupo.length === 0) return null
+                            
+                            return (
+                              <div key={dias} className="space-y-4">
+                                {/* Encabezado del grupo */}
+                                <div className="flex items-center gap-3 pb-2 border-b-2 border-gray-200">
+                                  <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-lg px-4 py-1">
+                                    {dias} días antes del vencimiento
+                                  </Badge>
+                                  <span className="text-sm text-gray-500">
+                                    ({notificacionesGrupo.length} {notificacionesGrupo.length === 1 ? 'notificación' : 'notificaciones'})
+                                  </span>
+                                </div>
+                                
+                                {/* Tarjetas del grupo */}
+                                <div className="space-y-4">
+                                  {notificacionesGrupo.map((notificacion) => (
+                                    <Card 
+                                      key={`${notificacion.prestamo_id}-${notificacion.dias_antes_vencimiento}`}
+                                      className="bg-yellow-50 border-yellow-200 hover:shadow-md transition-shadow"
+                                    >
+                                      <CardContent className="p-4">
+                                        <div className="flex items-start justify-between">
+                                          <div className="flex items-start gap-4 flex-1">
+                                            {/* Icono de campana */}
+                                            <div className="mt-1">
+                                              <Bell className="w-5 h-5 text-blue-600" />
+                                            </div>
+                                            
+                                            {/* Contenido principal */}
+                                            <div className="flex-1 space-y-2">
+                                              {/* Nombre y cédula */}
+                                              <div className="font-bold text-gray-900">
+                                                {notificacion.nombre || 'N/A'} - {notificacion.cedula || 'N/A'}
+                                              </div>
+                                              
+                                              {/* Detalles */}
+                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-sm">
+                                                <div className="text-gray-700">
+                                                  <span className="font-medium">Modelo:</span> {notificacion.modelo_vehiculo || 'N/A'}
+                                                </div>
+                                                <div className="text-gray-700">
+                                                  <span className="font-medium">Correo:</span> {notificacion.correo || 'N/A'}
+                                                </div>
+                                                <div className="text-gray-700">
+                                                  <span className="font-medium">Teléfono:</span> {notificacion.telefono || 'N/A'}
+                                                </div>
+                                                <div className="text-gray-700">
+                                                  <span className="font-medium">Fecha vencimiento:</span> {
+                                                    notificacion.fecha_vencimiento 
+                                                      ? new Date(notificacion.fecha_vencimiento).toLocaleDateString('es-ES')
+                                                      : 'N/A'
+                                                  }
+                                                </div>
+                                                <div className="text-gray-700">
+                                                  <span className="font-medium">Cuota #:</span> {notificacion.numero_cuota || 'N/A'} - <span className="font-medium">Monto:</span> <span className="text-green-600 font-semibold">${notificacion.monto_cuota ? notificacion.monto_cuota.toFixed(2) : '0.00'}</span>
+                                                </div>
+                                                {notificacion.prestamo_id && (
+                                                  <div className="text-gray-700">
+                                                    <span className="font-medium">Préstamo ID:</span> {notificacion.prestamo_id}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Badges a la derecha */}
+                                          <div className="flex flex-col items-end gap-2 ml-4">
+                                            {getEstadoBadge(notificacion.estado)}
+                                            <Badge className="bg-blue-100 text-blue-800 border-blue-300">
+                                              {notificacion.dias_antes_vencimiento} días antes
+                                            </Badge>
+                                          </div>
+                                        </div>
+                                      </CardContent>
+                                    </Card>
+                                  ))}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()
+                  ) : (
+                    // Notificaciones normales (sin agrupar)
+                    <div className="space-y-4">
+                      {filteredNotificaciones.map((notificacion) => (
+                        <Card 
+                          key={notificacion.id}
+                          className="bg-yellow-50 border-yellow-200 hover:shadow-md transition-shadow"
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-start gap-4 flex-1">
+                                {/* Icono de campana */}
+                                <div className="mt-1">
+                                  <Bell className="w-5 h-5 text-blue-600" />
+                                </div>
+                                
+                                {/* Contenido principal */}
+                                <div className="flex-1 space-y-2">
+                                  {/* Asunto */}
+                                  <div className="font-bold text-gray-900">
+                                    {notificacion.asunto || 'Sin asunto'}
+                                  </div>
+                                  
+                                  {/* Mensaje */}
+                                  <div className="text-gray-700 text-sm">
+                                    {notificacion.mensaje || 'Sin mensaje'}
+                                  </div>
+                                  
+                                  {/* Detalles adicionales */}
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-sm">
+                                    <div className="text-gray-700">
+                                      <span className="font-medium">Tipo:</span> {notificacion.tipo || 'N/A'}
+                                    </div>
+                                    <div className="text-gray-700">
+                                      <span className="font-medium">Canal:</span> {notificacion.canal || 'EMAIL'}
+                                    </div>
+                                    <div className="text-gray-700">
+                                      <span className="font-medium">Fecha:</span> {
+                                        notificacion.fecha_creacion || notificacion.created_at
+                                          ? new Date(notificacion.fecha_creacion || notificacion.created_at || Date.now()).toLocaleDateString('es-ES')
+                                          : 'N/A'
+                                      }
+                                    </div>
+                                    {notificacion.cliente_id && (
+                                      <div className="text-gray-700">
+                                        <span className="font-medium">Cliente ID:</span> {notificacion.cliente_id}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                               
-                              {/* Contenido principal */}
-                              <div className="flex-1 space-y-2">
-                                {activeTab === 'previa' ? (
-                                  <>
-                                    {/* Nombre y cédula */}
-                                    <div className="font-bold text-gray-900">
-                                      {notificacion.nombre || 'N/A'} - {notificacion.cedula || 'N/A'}
-                                    </div>
-                                    
-                                    {/* Detalles */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-sm">
-                                      <div className="text-gray-700">
-                                        <span className="font-medium">Modelo:</span> {notificacion.modelo_vehiculo || 'N/A'}
-                                      </div>
-                                      <div className="text-gray-700">
-                                        <span className="font-medium">Correo:</span> {notificacion.correo || 'N/A'}
-                                      </div>
-                                      <div className="text-gray-700">
-                                        <span className="font-medium">Teléfono:</span> {notificacion.telefono || 'N/A'}
-                                      </div>
-                                      <div className="text-gray-700">
-                                        <span className="font-medium">Días antes de vencimiento:</span> {notificacion.dias_antes_vencimiento || 'N/A'}
-                                      </div>
-                                      <div className="text-gray-700">
-                                        <span className="font-medium">Fecha vencimiento:</span> {
-                                          notificacion.fecha_vencimiento 
-                                            ? new Date(notificacion.fecha_vencimiento).toLocaleDateString('es-ES')
-                                            : 'N/A'
-                                        }
-                                      </div>
-                                      <div className="text-gray-700">
-                                        <span className="font-medium">Cuota #:</span> {notificacion.numero_cuota || 'N/A'} - <span className="font-medium">Monto:</span> <span className="text-green-600 font-semibold">${notificacion.monto_cuota ? notificacion.monto_cuota.toFixed(2) : '0.00'}</span>
-                                      </div>
-                                      {notificacion.prestamo_id && (
-                                        <div className="text-gray-700">
-                                          <span className="font-medium">Préstamo ID:</span> {notificacion.prestamo_id}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </>
-                                ) : (
-                                  <>
-                                    {/* Asunto */}
-                                    <div className="font-bold text-gray-900">
-                                      {notificacion.asunto || 'Sin asunto'}
-                                    </div>
-                                    
-                                    {/* Mensaje */}
-                                    <div className="text-gray-700 text-sm">
-                                      {notificacion.mensaje || 'Sin mensaje'}
-                                    </div>
-                                    
-                                    {/* Detalles adicionales */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-sm">
-                                      <div className="text-gray-700">
-                                        <span className="font-medium">Tipo:</span> {notificacion.tipo || 'N/A'}
-                                      </div>
-                                      <div className="text-gray-700">
-                                        <span className="font-medium">Canal:</span> {notificacion.canal || 'EMAIL'}
-                                      </div>
-                                      <div className="text-gray-700">
-                                        <span className="font-medium">Fecha:</span> {
-                                          notificacion.fecha_creacion || notificacion.created_at
-                                            ? new Date(notificacion.fecha_creacion || notificacion.created_at || Date.now()).toLocaleDateString('es-ES')
-                                            : 'N/A'
-                                        }
-                                      </div>
-                                      {notificacion.cliente_id && (
-                                        <div className="text-gray-700">
-                                          <span className="font-medium">Cliente ID:</span> {notificacion.cliente_id}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            
-                            {/* Badges a la derecha */}
-                            <div className="flex flex-col items-end gap-2 ml-4">
-                              {activeTab === 'previa' && (
-                                <>
-                                  {getEstadoBadge(notificacion.estado)}
-                                  <Badge className="bg-blue-100 text-blue-800 border-blue-300">
-                                    {notificacion.dias_antes_vencimiento} días antes
-                                  </Badge>
-                                </>
-                              )}
-                              {activeTab !== 'previa' && (
-                                <>
-                                  {getEstadoBadge(notificacion.estado)}
-                                  <div className="flex items-center gap-2 mt-2">
+                              {/* Badges a la derecha */}
+                              <div className="flex flex-col items-end gap-2 ml-4">
+                                {getEstadoBadge(notificacion.estado)}
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                      // Acción de ver detalles
+                                    }}
+                                  >
+                                    <Eye className="h-4 w-4 text-gray-600" />
+                                  </Button>
+                                  {notificacion.estado === 'FALLIDA' && (
                                     <Button
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8"
                                       onClick={() => {
-                                        // Acción de ver detalles
+                                        // Acción de reintentar
                                       }}
                                     >
-                                      <Eye className="h-4 w-4 text-gray-600" />
+                                      <RefreshCw className="h-4 w-4 text-red-600" />
                                     </Button>
-                                    {notificacion.estado === 'FALLIDA' && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8"
-                                        onClick={() => {
-                                          // Acción de reintentar
-                                        }}
-                                      >
-                                        <RefreshCw className="h-4 w-4 text-red-600" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                </>
-                              )}
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )
                 )}
 
                 {/* Paginación */}
