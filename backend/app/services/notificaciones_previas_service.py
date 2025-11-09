@@ -45,15 +45,17 @@ class NotificacionesPreviasService:
         try:
             # Verificar conexión a BD
             logger.info("🔍 [NotificacionesPrevias] Iniciando cálculo de notificaciones previas...")
-            
+
             # Obtener solo las columnas necesarias de préstamos aprobados usando SQL directo
             # Esto evita que SQLAlchemy intente acceder a columnas que no existen en BD
-            query_sql = text("""
+            query_sql = text(
+                """
                 SELECT id, cliente_id, cedula, modelo_vehiculo, producto
                 FROM prestamos
                 WHERE estado = :estado
-            """)
-            
+            """
+            )
+
             result = self.db.execute(query_sql, {"estado": "APROBADO"})
             prestamos_data = result.fetchall()
             logger.info(f"📊 [NotificacionesPrevias] Encontrados {len(prestamos_data)} préstamos aprobados")
@@ -68,7 +70,7 @@ class NotificacionesPreviasService:
                 cedula = prestamo_row[2]
                 modelo_vehiculo = prestamo_row[3]
                 producto = prestamo_row[4]
-                
+
                 # Verificar que NO tenga cuotas atrasadas
                 # Cuotas atrasadas: vencidas y no pagadas (estado != "PAGADO")
                 cuotas_atrasadas = (
@@ -116,12 +118,14 @@ class NotificacionesPreviasService:
                         tipo_notificacion = "PAGO_1_DIA_ANTES"
 
                     # Obtener datos del cliente usando SQL directo
-                    query_cliente = text("""
+                    query_cliente = text(
+                        """
                         SELECT id, nombres, email, telefono
                         FROM clientes
                         WHERE id = :cliente_id
-                    """)
-                    
+                    """
+                    )
+
                     result_cliente = self.db.execute(query_cliente, {"cliente_id": cliente_id})
                     cliente_row = result_cliente.fetchone()
 
@@ -139,21 +143,22 @@ class NotificacionesPreviasService:
                             # Buscar la notificación más reciente de este tipo para este cliente
                             # Ordenar por ID descendente (más reciente primero) ya que created_at puede no existir
                             try:
-                                query_notif = text("""
+                                query_notif = text(
+                                    """
                                     SELECT id, estado
                                     FROM notificaciones
                                     WHERE cliente_id = :cliente_id
                                       AND tipo = :tipo
                                     ORDER BY id DESC
                                     LIMIT 1
-                                """)
-                                
+                                """
+                                )
+
                                 result_notif = self.db.execute(
-                                    query_notif, 
-                                    {"cliente_id": cliente_id_val, "tipo": tipo_notificacion}
+                                    query_notif, {"cliente_id": cliente_id_val, "tipo": tipo_notificacion}
                                 )
                                 notif_row = result_notif.fetchone()
-                                
+
                                 if notif_row:
                                     estado_notificacion = notif_row[1]  # estado está en índice 1
                                     logger.debug(
