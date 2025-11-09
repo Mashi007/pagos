@@ -52,4 +52,3 @@ class NotificacionVariable(Base):
             "fecha_creacion": (self.fecha_creacion.isoformat() if self.fecha_creacion else None),
             "fecha_actualizacion": (self.fecha_actualizacion.isoformat() if self.fecha_actualizacion else None),
         }
-
