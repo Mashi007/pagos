@@ -25,7 +25,7 @@ router = APIRouter()
 
 class NotificacionPreviaResponse(BaseModel):
     """Schema para respuesta de notificación previa"""
-    
+
     prestamo_id: int
     cliente_id: int
     nombre: str
@@ -66,7 +66,7 @@ def listar_notificaciones_previas(
 ):
     """
     Listar notificaciones previas de clientes con cuotas próximas a vencer
-    
+
     - Clientes SIN cuotas atrasadas
     - Cuotas que vencen en 5, 3 o 1 día
     - Se actualiza cada vez que se cambia de pestaña
@@ -76,19 +76,19 @@ def listar_notificaciones_previas(
     try:
         service = NotificacionesPreviasService(db)
         resultados = service.obtener_notificaciones_previas_cached()
-        
+
         # Filtrar por estado si se proporciona
         if estado:
             resultados = [r for r in resultados if r.get("estado") == estado]
-        
+
         # Contar por categorías
         dias_5 = len([r for r in resultados if r["dias_antes_vencimiento"] == 5])
         dias_3 = len([r for r in resultados if r["dias_antes_vencimiento"] == 3])
         dias_1 = len([r for r in resultados if r["dias_antes_vencimiento"] == 1])
-        
+
         # Convertir a response models
         items = [NotificacionPreviaResponse(**r) for r in resultados]
-        
+
         return NotificacionesPreviasListResponse(
             items=items,
             total=len(items),
@@ -96,7 +96,7 @@ def listar_notificaciones_previas(
             dias_3=dias_3,
             dias_1=dias_1,
         )
-        
+
     except Exception as e:
         logger.error(f"Error listando notificaciones previas: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
