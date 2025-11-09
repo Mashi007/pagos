@@ -87,6 +87,175 @@ def healthcheck_cobranzas(
         raise HTTPException(status_code=500, detail="Error de conexión o consulta a la base de datos")
 
 
+@router.get("/diagnostico")
+def diagnostico_cobranzas(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Endpoint de diagnóstico para identificar por qué no hay datos en cobranzas.
+    Muestra información detallada sobre filtros y datos excluidos.
+    """
+    try:
+        hoy = date.today()
+        from app.core.config import settings
+
+        diagnostico = {
+            "fecha_corte": hoy.isoformat(),
+            "criterios_aplicados": {
+                "cuota_vencida": "fecha_vencimiento < hoy",
+                "pago_incompleto": "total_pagado < monto_cuota",
+                "estado_prestamo": ["APROBADO", "ACTIVO"],
+                "excluir_admin": True,
+                "admin_email": settings.ADMIN_EMAIL,
+            },
+            "diagnosticos": {},
+        }
+
+        # 1. Total de cuotas en la BD
+        total_cuotas = db.query(func.count(Cuota.id)).scalar() or 0
+        diagnostico["diagnosticos"]["total_cuotas_bd"] = total_cuotas
+
+        # 2. Cuotas vencidas (sin filtros)
+        cuotas_vencidas = (
+            db.query(func.count(Cuota.id))
+            .filter(Cuota.fecha_vencimiento < hoy)
+            .scalar()
+            or 0
+        )
+        diagnostico["diagnosticos"]["cuotas_vencidas_solo_fecha"] = cuotas_vencidas
+
+        # 3. Cuotas con pago incompleto (sin filtro de fecha)
+        cuotas_pago_incompleto = (
+            db.query(func.count(Cuota.id))
+            .filter(Cuota.total_pagado < Cuota.monto_cuota)
+            .scalar()
+            or 0
+        )
+        diagnostico["diagnosticos"]["cuotas_pago_incompleto"] = cuotas_pago_incompleto
+
+        # 4. Cuotas vencidas Y pago incompleto (criterio base)
+        cuotas_vencidas_incompletas = (
+            db.query(func.count(Cuota.id))
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,
+            )
+            .scalar()
+            or 0
+        )
+        diagnostico["diagnosticos"]["cuotas_vencidas_incompletas"] = cuotas_vencidas_incompletas
+
+        # 5. Estados de préstamos con cuotas vencidas
+        estados_prestamos = (
+            db.query(Prestamo.estado, func.count(func.distinct(Prestamo.id)))
+            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,
+            )
+            .group_by(Prestamo.estado)
+            .all()
+        )
+        diagnostico["diagnosticos"]["estados_prestamos_con_cuotas_vencidas"] = {
+            estado: cantidad for estado, cantidad in estados_prestamos
+        }
+
+        # 6. Cuotas vencidas de préstamos APROBADO/ACTIVO
+        cuotas_aprobado_activo = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,
+            )
+            .scalar()
+            or 0
+        )
+        diagnostico["diagnosticos"]["cuotas_aprobado_activo"] = cuotas_aprobado_activo
+
+        # 7. Cuotas vencidas excluyendo admin
+        cuotas_sin_admin = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
+            )
+            .scalar()
+            or 0
+        )
+        diagnostico["diagnosticos"]["cuotas_sin_admin"] = cuotas_sin_admin
+
+        # 8. Cuotas vencidas con TODOS los filtros aplicados
+        cuotas_final = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cedula == Cliente.cedula)
+            .outerjoin(User, User.email == Prestamo.usuario_proponente)
+            .filter(
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"]),
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
+                or_(User.is_admin.is_(False), User.is_admin.is_(None)),
+            )
+            .scalar()
+            or 0
+        )
+        diagnostico["diagnosticos"]["cuotas_con_todos_filtros"] = cuotas_final
+
+        # 9. Análisis de qué filtro está excluyendo más datos
+        diagnostico["analisis_filtros"] = {
+            "cuotas_perdidas_por_estado": cuotas_vencidas_incompletas - cuotas_aprobado_activo,
+            "cuotas_perdidas_por_admin": cuotas_aprobado_activo - cuotas_sin_admin,
+            "cuotas_perdidas_por_user_admin": cuotas_sin_admin - cuotas_final,
+        }
+
+        # 10. Ejemplo de cuotas vencidas (primeras 5)
+        ejemplo_cuotas = (
+            db.query(
+                Cuota.id,
+                Cuota.prestamo_id,
+                Cuota.fecha_vencimiento,
+                Cuota.monto_cuota,
+                Cuota.total_pagado,
+                Prestamo.estado,
+                Prestamo.usuario_proponente,
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.total_pagado < Cuota.monto_cuota,
+            )
+            .limit(5)
+            .all()
+        )
+        diagnostico["ejemplos_cuotas_vencidas"] = [
+            {
+                "cuota_id": c.id,
+                "prestamo_id": c.prestamo_id,
+                "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else None,
+                "monto_cuota": float(c.monto_cuota),
+                "total_pagado": float(c.total_pagado),
+                "estado_prestamo": c.estado,
+                "usuario_proponente": c.usuario_proponente,
+                "es_admin": c.usuario_proponente == settings.ADMIN_EMAIL,
+            }
+            for c in ejemplo_cuotas
+        ]
+
+        logger.info(f"🔍 [diagnostico_cobranzas] Diagnóstico completo: {diagnostico}")
+
+        return diagnostico
+
+    except Exception as e:
+        logger.error(f"Error en diagnóstico de cobranzas: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
 @router.get("/clientes-atrasados")
 def obtener_clientes_atrasados(
     dias_retraso: Optional[int] = Query(None, description="Días de retraso para filtrar"),
