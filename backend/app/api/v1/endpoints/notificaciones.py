@@ -1220,7 +1220,7 @@ def inicializar_variables_precargadas(
         # Verificar si la tabla existe
         from sqlalchemy import inspect
         from sqlalchemy.exc import ProgrammingError
-        
+
         try:
             inspector = inspect(db.bind)
             if "notificacion_variables" not in inspector.get_table_names():
@@ -1319,15 +1319,15 @@ def inicializar_variables_precargadas(
             for campo_info in campos:
                 campo = campo_info["campo"]
                 descripcion = campo_info["descripcion"]
-                
+
                 # Generar nombre de variable: tabla_campo (remover 's' final)
                 nombre_variable = f"{tabla[:-1]}_{campo}" if tabla.endswith("s") else f"{tabla}_{campo}"
-                
+
                 # Verificar si ya existe
-                existente = db.query(NotificacionVariable).filter(
-                    NotificacionVariable.nombre_variable == nombre_variable
-                ).first()
-                
+                existente = (
+                    db.query(NotificacionVariable).filter(NotificacionVariable.nombre_variable == nombre_variable).first()
+                )
+
                 if not existente:
                     nueva_variable = NotificacionVariable(
                         nombre_variable=nombre_variable,
@@ -1342,9 +1342,9 @@ def inicializar_variables_precargadas(
                     variables_existentes += 1
 
         db.commit()
-        
+
         logger.info(f"✅ Variables precargadas inicializadas: {variables_creadas} creadas, {variables_existentes} ya existían")
-        
+
         return {
             "mensaje": "Variables precargadas inicializadas exitosamente",
             "variables_creadas": variables_creadas,
