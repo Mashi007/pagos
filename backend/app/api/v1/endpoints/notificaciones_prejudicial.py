@@ -104,13 +104,13 @@ def listar_notificaciones_prejudiciales(
                     fecha_vencimiento = r.get("fecha_vencimiento") or ""
                     # Convertir a string si es una fecha
                     if fecha_vencimiento and not isinstance(fecha_vencimiento, str):
-                        if hasattr(fecha_vencimiento, 'isoformat'):
+                        if hasattr(fecha_vencimiento, "isoformat"):
                             fecha_vencimiento = fecha_vencimiento.isoformat()
                         else:
                             fecha_vencimiento = str(fecha_vencimiento)
                     elif not fecha_vencimiento:
                         fecha_vencimiento = ""
-                    
+
                     item_data = {
                         "prestamo_id": int(r.get("prestamo_id", 0)),
                         "cliente_id": int(r.get("cliente_id", 0)),
