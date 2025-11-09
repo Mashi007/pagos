@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Search, Plus, Trash2, Edit2, Save, X, Database, Link2 } from 'lucide-react'
+import { Search, Plus, Trash2, Edit2, Save, X, Database, Link } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { notificacionService, NotificacionVariable } from '@/services/notificacionService'
 
@@ -181,7 +181,7 @@ export function GeneraVariables() {
     v.nombre_variable.toLowerCase().includes(busqueda.toLowerCase()) ||
     v.campo_bd.toLowerCase().includes(busqueda.toLowerCase()) ||
     v.tabla.toLowerCase().includes(busqueda.toLowerCase()) ||
-    v.descripcion.toLowerCase().includes(busqueda.toLowerCase())
+    (v.descripcion || '').toLowerCase().includes(busqueda.toLowerCase())
   )
 
   const camposTabla = nuevaVariable.tabla ? CAMPOS_DISPONIBLES[nuevaVariable.tabla as keyof typeof CAMPOS_DISPONIBLES] || [] : []
@@ -192,7 +192,7 @@ export function GeneraVariables() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Database className="h-5 w-5 text-blue-600" />
-            Genera Variables {{variables}}
+            Genera Variables {'{{variables}}'}
           </CardTitle>
           <CardDescription>
             Configure variables personalizadas que se relacionan con todos los campos disponibles en la base de datos.
@@ -342,7 +342,7 @@ export function GeneraVariables() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Link2 className="h-3 w-3 text-gray-400" />
+                          <Link className="h-3 w-3 text-gray-400" />
                           <span className="text-sm font-mono">{variable.campo_bd}</span>
                         </div>
                       </TableCell>
