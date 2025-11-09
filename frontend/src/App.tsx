@@ -30,7 +30,6 @@ const Clientes = lazy(() => import('@/pages/Clientes').then(module => ({ default
 const Prestamos = lazy(() => import('@/pages/Prestamos').then(module => ({ default: module.Prestamos })))
 const Amortizacion = lazy(() => import('@/pages/Amortizacion').then(module => ({ default: module.Amortizacion })))
 const Reportes = lazy(() => import('@/pages/Reportes').then(module => ({ default: module.Reportes })))
-// const Aprobaciones = lazy(() => import('@/pages/Aprobaciones').then(module => ({ default: module.Aprobaciones })))  // MODULO APROBACIONES DESHABILITADO
 const Cobranzas = lazy(() => import('@/pages/Cobranzas').then(module => ({ default: module.Cobranzas })))
 const Auditoria = lazy(() => import('@/pages/Auditoria').then(module => ({ default: module.Auditoria })))
 const Notificaciones = lazy(() => import('@/pages/Notificaciones').then(module => ({ default: module.Notificaciones })))
@@ -176,12 +175,6 @@ function App() {
             path="cobranzas"
             element={<Cobranzas />}
           />
-
-          {/* MODULO APROBACIONES DESHABILITADO */}
-          {/* <Route
-            path="aprobaciones"
-            element={<Aprobaciones />}
-          /> */}
 
           {/* Notificaciones */}
           <Route path="notificaciones" element={<Notificaciones />} />

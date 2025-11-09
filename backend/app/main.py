@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 from app.api.v1.endpoints import (  # noqa: E402
     amortizacion,
     analistas,
-    aprobaciones,
+    # aprobaciones,  # MODULO APROBACIONES DESHABILITADO
     auditoria,
     auth,
     carga_masiva,
@@ -296,7 +296,8 @@ app.include_router(pagos_upload.router, prefix="/api/v1/pagos", tags=["pagos"])
 app.include_router(pagos_conciliacion.router, prefix="/api/v1/pagos", tags=["pagos"])
 app.include_router(amortizacion.router, prefix="/api/v1/amortizacion", tags=["amortizacion"])
 app.include_router(solicitudes.router, prefix="/api/v1/solicitudes", tags=["solicitudes"])
-app.include_router(aprobaciones.router, prefix="/api/v1/aprobaciones", tags=["aprobaciones"])
+# MODULO APROBACIONES DESHABILITADO
+# app.include_router(aprobaciones.router, prefix="/api/v1/aprobaciones", tags=["aprobaciones"])
 app.include_router(notificaciones.router, prefix="/api/v1/notificaciones", tags=["notificaciones"])
 app.include_router(notificaciones_previas.router, prefix="/api/v1/notificaciones-previas", tags=["notificaciones-previas"])
 

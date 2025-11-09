@@ -1145,32 +1145,6 @@ def obtener_cobros_diarios(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
-# DEPRECATED: Usar FiltrosDashboard desde app.utils.filtros_dashboard
-# Estas funciones se mantienen por compatibilidad pero se recomienda usar la clase centralizada
-def aplicar_filtros_prestamo(
-    query,
-    analista: Optional[str] = None,
-    concesionario: Optional[str] = None,
-    modelo: Optional[str] = None,
-    fecha_inicio: Optional[date] = None,
-    fecha_fin: Optional[date] = None,
-):
-    """Aplica filtros comunes a queries de préstamos - DEPRECATED: Usar FiltrosDashboard"""
-    return FiltrosDashboard.aplicar_filtros_prestamo(query, analista, concesionario, modelo, fecha_inicio, fecha_fin)
-
-
-def aplicar_filtros_pago(
-    query,
-    analista: Optional[str] = None,
-    concesionario: Optional[str] = None,
-    modelo: Optional[str] = None,
-    fecha_inicio: Optional[date] = None,
-    fecha_fin: Optional[date] = None,
-):
-    """Aplica filtros comunes a queries de pagos - DEPRECATED: Usar FiltrosDashboard"""
-    return FiltrosDashboard.aplicar_filtros_pago(query, analista, concesionario, modelo, fecha_inicio, fecha_fin)
-
-
 @router.get("/admin")
 @cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos
 def dashboard_administrador(

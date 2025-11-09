@@ -73,19 +73,6 @@ class NotificacionAutomaticaService:
             logger.error(f"Error obteniendo cuotas pendientes: {e}")
             return []
 
-    def obtener_cuotas_pendientes(self) -> List[Cuota]:
-        """
-        Obtener todas las cuotas pendientes (método legacy - mantener para compatibilidad)
-        DEPRECATED: Usar obtener_cuotas_pendientes_optimizado() en su lugar
-        """
-        try:
-            cuotas_pendientes = self.db.query(Cuota).filter(Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"])).all()
-            logger.info(f"Encontradas {len(cuotas_pendientes)} cuotas pendientes")
-            return cuotas_pendientes
-        except Exception as e:
-            logger.error(f"Error obteniendo cuotas pendientes: {e}")
-            return []
-
     def calcular_dias_para_vencimiento(self, fecha_vencimiento: datetime) -> int:
         """
         Calcular días hasta la fecha de vencimiento
