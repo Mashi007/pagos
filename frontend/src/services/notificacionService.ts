@@ -46,6 +46,17 @@ export interface EmailConfig {
   smtp_use_tls: string
 }
 
+export interface NotificacionVariable {
+  id?: number
+  nombre_variable: string
+  tabla: string
+  campo_bd: string
+  descripcion: string | null
+  activa: boolean
+  fecha_creacion?: string
+  fecha_actualizacion?: string
+}
+
 class NotificacionService {
   private baseUrl = '/api/v1/notificaciones'
 
@@ -142,6 +153,30 @@ class NotificacionService {
       `/api/v1/notificaciones-dia-pago/?${params}`,
       { timeout: 120000 } // 2 minutos de timeout
     )
+  }
+
+  // Variables de notificaciones
+  async listarVariables(activa?: boolean): Promise<NotificacionVariable[]> {
+    const params = new URLSearchParams()
+    if (activa !== undefined) params.append('activa', String(activa))
+    
+    return await apiClient.get<NotificacionVariable[]>(`${this.baseUrl}/variables?${params}`)
+  }
+
+  async obtenerVariable(id: number): Promise<NotificacionVariable> {
+    return await apiClient.get<NotificacionVariable>(`${this.baseUrl}/variables/${id}`)
+  }
+
+  async crearVariable(data: Partial<NotificacionVariable>): Promise<NotificacionVariable> {
+    return await apiClient.post<NotificacionVariable>(`${this.baseUrl}/variables`, data)
+  }
+
+  async actualizarVariable(id: number, data: Partial<NotificacionVariable>): Promise<NotificacionVariable> {
+    return await apiClient.put<NotificacionVariable>(`${this.baseUrl}/variables/${id}`, data)
+  }
+
+  async eliminarVariable(id: number): Promise<void> {
+    return await apiClient.delete(`${this.baseUrl}/variables/${id}`)
   }
 }
 

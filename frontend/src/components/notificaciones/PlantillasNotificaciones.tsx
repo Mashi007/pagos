@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { notificacionService, NotificacionPlantilla } from '@/services/notificacionService'
+import { notificacionService, NotificacionPlantilla, NotificacionVariable } from '@/services/notificacionService'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -9,11 +9,16 @@ import { Badge } from '@/components/ui/badge'
 import { useSearchClientes } from '@/hooks/useClientes'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import toast from 'react-hot-toast'
-import { Upload, Search, Eye, EyeOff, FileText } from 'lucide-react'
+import { Upload, Search, Eye, EyeOff, FileText, Database, ChevronDown, ChevronUp } from 'lucide-react'
 
 type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
 
-export function PlantillasNotificaciones() {
+interface PlantillasNotificacionesProps {
+  plantillaInicial?: NotificacionPlantilla | null
+  onPlantillaCargada?: () => void
+}
+
+export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada }: PlantillasNotificacionesProps = {}) {
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
   const [plantillasFiltradas, setPlantillasFiltradas] = useState<NotificacionPlantilla[]>([])
   const [loading, setLoading] = useState(false)
@@ -24,7 +29,8 @@ export function PlantillasNotificaciones() {
   const [mostrarHTML, setMostrarHTML] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [nombre, setNombre] = useState('')
-  const [tipo, setTipo] = useState('')
+  const [tipo, setTipo] = useState('') // Mantener para compatibilidad con edición individual
+  const [tiposSeleccionados, setTiposSeleccionados] = useState<string[]>([]) // Para creación múltiple
   const [activa, setActiva] = useState(true)
   const [asunto, setAsunto] = useState('')
   const [encabezado, setEncabezado] = useState('')
@@ -34,6 +40,9 @@ export function PlantillasNotificaciones() {
   const [focus, setFocus] = useState<EditorFocus>('cuerpo')
   const [clienteIdPrueba, setClienteIdPrueba] = useState<number | ''>('')
   const [variablesPrueba, setVariablesPrueba] = useState<Record<string, any>>({})
+  const [variablesConfiguradas, setVariablesConfiguradas] = useState<NotificacionVariable[]>([])
+  const [mostrarVariables, setMostrarVariables] = useState(false)
+  const [busquedaVariable, setBusquedaVariable] = useState('')
   const asuntoRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null)
   const encRef = useRef<HTMLTextAreaElement>(null)
   const cuerpoRef = useRef<HTMLTextAreaElement>(null)
@@ -48,8 +57,36 @@ export function PlantillasNotificaciones() {
     'nombre', 'monto', 'fecha_vencimiento', 'numero_cuota', 'credito_id', 'cedula', 'dias_atraso'
   ]
 
+  // Tipos organizados por categorías
+  const tiposPorCategoria = {
+    antes: [
+      { valor: 'PAGO_5_DIAS_ANTES', label: '5 días antes' },
+      { valor: 'PAGO_3_DIAS_ANTES', label: '3 días antes' },
+      { valor: 'PAGO_1_DIA_ANTES', label: '1 día antes' },
+    ],
+    diaPago: [
+      { valor: 'PAGO_DIA_0', label: 'Día de pago' },
+    ],
+    retraso: [
+      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 día de retraso' },
+      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso' },
+      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso' },
+    ],
+    prejudicial: [
+      { valor: 'PREJUDICIAL', label: 'Prejudicial' },
+    ],
+  }
+
   const tiposSugeridos = [
-    'PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES', 'PAGO_DIA_0', 'PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO'
+    'PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES', 'PAGO_DIA_0', 
+    'PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO', 'PREJUDICIAL'
+  ]
+
+  const todosLosTipos = [
+    ...tiposPorCategoria.antes,
+    ...tiposPorCategoria.diaPago,
+    ...tiposPorCategoria.retraso,
+    ...tiposPorCategoria.prejudicial,
   ]
 
   const cargar = async () => {
@@ -65,9 +102,44 @@ export function PlantillasNotificaciones() {
     }
   }
 
+  const cargarVariables = async () => {
+    try {
+      const vars = await notificacionService.listarVariables(true) // Solo variables activas
+      setVariablesConfiguradas(vars || [])
+    } catch (error: any) {
+      // Si falla, usar lista vacía (puede que no exista el endpoint aún)
+      setVariablesConfiguradas([])
+    }
+  }
+
   useEffect(() => {
     cargar()
+    cargarVariables()
   }, [])
+
+  // Cargar plantilla inicial si se proporciona (para edición desde Resumen)
+  useEffect(() => {
+    if (plantillaInicial && plantillas.length > 0) {
+      // Buscar la plantilla en la lista cargada para asegurar que esté actualizada
+      const plantillaEncontrada = plantillas.find(p => p.id === plantillaInicial.id)
+      const plantillaACargar = plantillaEncontrada || plantillaInicial
+      
+      setSelected(plantillaACargar)
+      setNombre(plantillaACargar.nombre)
+      setTipo(plantillaACargar.tipo)
+      setTiposSeleccionados([plantillaACargar.tipo])
+      setActiva(Boolean(plantillaACargar.activa))
+      setAsunto(plantillaACargar.asunto)
+      setEncabezado('')
+      setCuerpo(plantillaACargar.cuerpo)
+      setFirma('')
+      
+      // Notificar que la plantilla fue cargada
+      if (onPlantillaCargada) {
+        onPlantillaCargada()
+      }
+    }
+  }, [plantillaInicial, plantillas, onPlantillaCargada])
 
   // Filtrar plantillas
   useEffect(() => {
@@ -96,6 +168,7 @@ export function PlantillasNotificaciones() {
     setSelected(null)
     setNombre('')
     setTipo('')
+    setTiposSeleccionados([])
     setActiva(true)
     setAsunto('')
     setEncabezado('')
@@ -107,6 +180,7 @@ export function PlantillasNotificaciones() {
     setSelected(p)
     setNombre(p.nombre)
     setTipo(p.tipo)
+    setTiposSeleccionados([p.tipo]) // Al editar, solo un tipo
     setActiva(Boolean(p.activa))
     setAsunto(p.asunto)
     setEncabezado('')
@@ -114,9 +188,28 @@ export function PlantillasNotificaciones() {
     setFirma('')
   }
 
-  const insertarVariable = () => {
-    if (!variable) return
-    const token = `{{${variable}}}`
+  const toggleTipo = (tipoValor: string) => {
+    setTiposSeleccionados(prev => {
+      if (prev.includes(tipoValor)) {
+        return prev.filter(t => t !== tipoValor)
+      } else {
+        return [...prev, tipoValor]
+      }
+    })
+  }
+
+  const seleccionarTodos = () => {
+    setTiposSeleccionados(todosLosTipos.map(t => t.valor))
+  }
+
+  const deseleccionarTodos = () => {
+    setTiposSeleccionados([])
+  }
+
+  const insertarVariable = (nombreVariable?: string) => {
+    const varName = nombreVariable || variable
+    if (!varName) return
+    const token = `{{${varName}}}`
     const insertInto = (el: HTMLTextAreaElement | HTMLInputElement | null, setter: (v: string) => void, current: string) => {
       if (!el) {
         setter(current + token)
@@ -139,6 +232,16 @@ export function PlantillasNotificaciones() {
     if (focus === 'cuerpo') return insertInto(cuerpoRef.current, setCuerpo, cuerpo)
     if (focus === 'firma') return insertInto(firmaRef.current, setFirma, firma)
   }
+
+  const variablesFiltradas = useMemo(() => {
+    if (!busquedaVariable) return variablesConfiguradas
+    return variablesConfiguradas.filter(v => 
+      v.nombre_variable.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
+      v.descripcion?.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
+      v.tabla.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
+      v.campo_bd.toLowerCase().includes(busquedaVariable.toLowerCase())
+    )
+  }, [variablesConfiguradas, busquedaVariable])
 
   // Búsqueda clientes para prueba
   const [queryCliente, setQueryCliente] = useState('')
@@ -176,7 +279,10 @@ export function PlantillasNotificaciones() {
     if (focus === 'asunto') return // no aplicar html al asunto
   }
 
-  const validarObligatorias = (): string | null => {
+  const validarObligatorias = (tipoValidar?: string): string | null => {
+    const tipoAValidar = tipoValidar || tipo
+    if (!tipoAValidar) return null
+    
     // Reglas básicas por tipo
     const requeridasPorTipo: Record<string, string[]> = {
       'PAGO_5_DIAS_ANTES': ['nombre', 'monto', 'fecha_vencimiento'],
@@ -186,45 +292,106 @@ export function PlantillasNotificaciones() {
       'PAGO_1_DIA_ATRASADO': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
       'PAGO_3_DIAS_ATRASADO': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
       'PAGO_5_DIAS_ATRASADO': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
+      'PREJUDICIAL': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
     }
-    const requeridas = requeridasPorTipo[tipo] || []
+    const requeridas = requeridasPorTipo[tipoAValidar] || []
     const faltantes = requeridas.filter(v => !(`${asunto} ${cuerpoFinal}`).includes(`{{${v}}}`))
-    if (faltantes.length) return `Faltan variables obligatorias: ${faltantes.join(', ')}`
+    if (faltantes.length) return `Para ${tipoAValidar} faltan variables obligatorias: ${faltantes.join(', ')}`
     return null
   }
 
   const guardar = async () => {
-    const error = validarObligatorias()
-    if (error) {
-      toast.error(error)
+    // Si estamos editando una plantilla existente, guardar solo esa
+    if (selected?.id) {
+      const error = validarObligatorias()
+      if (error) {
+        toast.error(error)
+        return
+      }
+
+      if (!nombre.trim() || !tipo || !asunto.trim() || !cuerpoFinal.trim()) {
+        toast.error('Complete todos los campos obligatorios')
+        return
+      }
+
+      try {
+        const payload = {
+          nombre,
+          tipo,
+          asunto,
+          cuerpo: cuerpoFinal,
+          activa,
+        }
+
+        await notificacionService.actualizarPlantilla(selected.id, payload)
+        toast.success('Plantilla actualizada exitosamente')
+        await cargar()
+        limpiar()
+      } catch (error: any) {
+        toast.error(error?.response?.data?.detail || 'Error al guardar plantilla')
+      }
       return
     }
 
-    if (!nombre.trim() || !tipo || !asunto.trim() || !cuerpoFinal.trim()) {
+    // Si estamos creando nuevas plantillas, validar tipos seleccionados
+    if (tiposSeleccionados.length === 0) {
+      toast.error('Seleccione al menos un tipo de notificación')
+      return
+    }
+
+    if (!nombre.trim() || !asunto.trim() || !cuerpoFinal.trim()) {
       toast.error('Complete todos los campos obligatorios')
       return
     }
 
+    // Validar variables obligatorias para cada tipo
+    const errores: string[] = []
+    tiposSeleccionados.forEach(t => {
+      const error = validarObligatorias(t)
+      if (error) errores.push(error)
+    })
+
+    if (errores.length > 0) {
+      toast.error(errores[0]) // Mostrar solo el primer error
+      return
+    }
+
     try {
-      const payload = {
-        nombre,
-        tipo,
-        asunto,
-        cuerpo: cuerpoFinal,
-        activa,
+      // Crear una plantilla para cada tipo seleccionado
+      const plantillasCreadas: string[] = []
+      const erroresCreacion: string[] = []
+
+      for (const tipoSeleccionado of tiposSeleccionados) {
+        try {
+          const nombrePlantilla = `${nombre} - ${todosLosTipos.find(t => t.valor === tipoSeleccionado)?.label || tipoSeleccionado}`
+          
+          const payload = {
+            nombre: nombrePlantilla,
+            tipo: tipoSeleccionado,
+            asunto,
+            cuerpo: cuerpoFinal,
+            activa,
+          }
+
+          await notificacionService.crearPlantilla(payload)
+          plantillasCreadas.push(tipoSeleccionado)
+        } catch (error: any) {
+          erroresCreacion.push(`${tipoSeleccionado}: ${error?.response?.data?.detail || 'Error'}`)
+        }
       }
 
-      if (selected?.id) {
-        await notificacionService.actualizarPlantilla(selected.id, payload)
-        toast.success('Plantilla actualizada exitosamente')
-      } else {
-        await notificacionService.crearPlantilla(payload)
-        toast.success('Plantilla creada exitosamente')
+      if (plantillasCreadas.length > 0) {
+        toast.success(`Se crearon ${plantillasCreadas.length} plantilla(s) exitosamente`)
       }
+
+      if (erroresCreacion.length > 0) {
+        toast.error(`Errores al crear algunas plantillas: ${erroresCreacion.join(', ')}`)
+      }
+
       await cargar()
       limpiar()
     } catch (error: any) {
-      toast.error(error?.response?.data?.detail || 'Error al guardar plantilla')
+      toast.error(error?.response?.data?.detail || 'Error al guardar plantillas')
     }
   }
 
@@ -452,17 +619,124 @@ export function PlantillasNotificaciones() {
 
       <div className="col-span-8 space-y-4">
         <Card className="p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <div>
               <label className="text-sm text-gray-600">Nombre</label>
               <Input value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Recordatorio de pago" />
             </div>
             <div>
-              <label className="text-sm text-gray-600">Tipo (regla del programador)</label>
-              <select value={tipo} onChange={e=>setTipo(e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
-                <option value="">Seleccione...</option>
-                {tiposSugeridos.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <label className="text-sm text-gray-600 mb-2 block">
+                Tipos de Notificación {selected ? '(Edición - Solo un tipo)' : '(Seleccione uno o más para crear múltiples plantillas)'}
+              </label>
+              
+              {selected ? (
+                // Al editar, mostrar solo el tipo actual
+                <select value={tipo} onChange={e=>setTipo(e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
+                  <option value="">Seleccione...</option>
+                  {tiposSugeridos.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              ) : (
+                // Al crear, mostrar selector múltiple por categorías
+                <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-600">
+                      {tiposSeleccionados.length} tipo(s) seleccionado(s)
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={seleccionarTodos}
+                        className="text-xs"
+                      >
+                        Seleccionar todos
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={deseleccionarTodos}
+                        className="text-xs"
+                      >
+                        Deseleccionar todos
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Antes de vencimiento */}
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2 text-blue-700">📅 Antes de Fecha de Vencimiento</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      {tiposPorCategoria.antes.map(t => (
+                        <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tiposSeleccionados.includes(t.valor)}
+                            onChange={() => toggleTipo(t.valor)}
+                            className="rounded"
+                          />
+                          <span className="text-sm">{t.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Día de pago */}
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2 text-green-700">💰 Día de Pago</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      {tiposPorCategoria.diaPago.map(t => (
+                        <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tiposSeleccionados.includes(t.valor)}
+                            onChange={() => toggleTipo(t.valor)}
+                            className="rounded"
+                          />
+                          <span className="text-sm">{t.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Retraso */}
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2 text-orange-700">⚠️ Días de Retraso</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      {tiposPorCategoria.retraso.map(t => (
+                        <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tiposSeleccionados.includes(t.valor)}
+                            onChange={() => toggleTipo(t.valor)}
+                            className="rounded"
+                          />
+                          <span className="text-sm">{t.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Prejudicial */}
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2 text-red-700">🚨 Prejudicial</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      {tiposPorCategoria.prejudicial.map(t => (
+                        <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tiposSeleccionados.includes(t.valor)}
+                            onChange={() => toggleTipo(t.valor)}
+                            className="rounded"
+                          />
+                          <span className="text-sm">{t.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <input id="activa" type="checkbox" checked={activa} onChange={e=>setActiva(e.target.checked)} />
@@ -498,10 +772,119 @@ export function PlantillasNotificaciones() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Input value={variable} onChange={e=>setVariable(e.target.value)} placeholder="nombre, monto, fecha_vencimiento..." className="max-w-xs" />
-            <Button onClick={insertarVariable}>Agrega</Button>
-            <div className="text-xs text-gray-500">Sugeridas: {variablesSugeridas.map(v => `{{${v}}}`).join(', ')}</div>
+          {/* Panel de Variables Configuradas */}
+          <div className="border rounded-lg p-4 bg-gray-50">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Database className="h-4 w-4 text-blue-600" />
+                <label className="text-sm font-semibold">Variables Configuradas</label>
+                <Badge variant="outline" className="text-xs">
+                  {variablesConfiguradas.length} disponibles
+                </Badge>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setMostrarVariables(!mostrarVariables)
+                  if (!mostrarVariables) {
+                    cargarVariables() // Recargar al abrir
+                  }
+                }}
+              >
+                {mostrarVariables ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+
+            {mostrarVariables && (
+              <div className="space-y-3">
+                {/* Búsqueda de variables */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    value={busquedaVariable}
+                    onChange={e => setBusquedaVariable(e.target.value)}
+                    placeholder="Buscar variables por nombre, tabla o campo..."
+                    className="pl-10"
+                  />
+                </div>
+
+                {/* Lista de variables */}
+                {variablesConfiguradas.length === 0 ? (
+                  <div className="text-center py-4 text-sm text-gray-500">
+                    <p>No hay variables configuradas.</p>
+                    <p className="text-xs mt-1">Ve a la pestaña "Genera Variables" para crear variables personalizadas.</p>
+                  </div>
+                ) : variablesFiltradas.length === 0 ? (
+                  <div className="text-center py-4 text-sm text-gray-500">
+                    No se encontraron variables con ese criterio.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                    {variablesFiltradas.map(v => (
+                      <div
+                        key={v.id || v.nombre_variable}
+                        className="border rounded p-2 bg-white hover:bg-gray-50 cursor-pointer transition-colors"
+                        onClick={() => insertarVariable(v.nombre_variable)}
+                        title={`Click para insertar {{${v.nombre_variable}}}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <code className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-mono">
+                                {'{{'}{v.nombre_variable}{'}}'}
+                              </code>
+                              <Badge variant="outline" className="text-xs">{v.tabla}</Badge>
+                            </div>
+                            <div className="text-xs text-gray-600 truncate" title={v.campo_bd}>
+                              <span className="font-mono">{v.tabla}.{v.campo_bd}</span>
+                            </div>
+                            {v.descripcion && (
+                              <div className="text-xs text-gray-500 mt-1 line-clamp-1" title={v.descripcion}>
+                                {v.descripcion}
+                              </div>
+                            )}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              insertarVariable(v.nombre_variable)
+                            }}
+                          >
+                            Insertar
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Método alternativo: campo de texto para variables rápidas */}
+            <div className="mt-3 pt-3 border-t flex items-center gap-2">
+              <Input
+                value={variable}
+                onChange={e => setVariable(e.target.value)}
+                placeholder="Escriba nombre de variable..."
+                className="max-w-xs"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    insertarVariable()
+                  }
+                }}
+              />
+              <Button onClick={() => insertarVariable()} disabled={!variable}>
+                Insertar
+              </Button>
+              <div className="text-xs text-gray-500">
+                O escriba manualmente: {variablesSugeridas.slice(0, 3).map(v => `{{${v}}}`).join(', ')}...
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-2">

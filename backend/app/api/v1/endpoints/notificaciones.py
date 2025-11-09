@@ -13,12 +13,18 @@ from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
 from app.models.notificacion import Notificacion
 from app.models.notificacion_plantilla import NotificacionPlantilla
+from app.models.notificacion_variable import NotificacionVariable
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.schemas.notificacion_plantilla import (
     NotificacionPlantillaCreate,
     NotificacionPlantillaResponse,
     NotificacionPlantillaUpdate,
+)
+from app.schemas.notificacion_variable import (
+    NotificacionVariableCreate,
+    NotificacionVariableResponse,
+    NotificacionVariableUpdate,
 )
 from app.services.email_service import EmailService
 from app.services.notificacion_automatica_service import (
@@ -993,4 +999,181 @@ def procesar_notificaciones_automaticas(db: Session = Depends(get_db), current_u
 
     except Exception as e:
         logger.error(f"Error procesando notificaciones automáticas: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
+
+# ============================================
+# VARIABLES DE NOTIFICACIONES
+# ============================================
+
+
+@router.get("/variables", response_model=list[NotificacionVariableResponse])
+def listar_variables(
+    activa: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Listar todas las variables de notificaciones configuradas
+    """
+    try:
+        query = db.query(NotificacionVariable)
+        
+        if activa is not None:
+            query = query.filter(NotificacionVariable.activa == activa)
+        
+        variables = query.order_by(NotificacionVariable.nombre_variable).all()
+        return [v.to_dict() for v in variables]
+    
+    except Exception as e:
+        logger.error(f"Error listando variables: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
+
+@router.get("/variables/{variable_id}", response_model=NotificacionVariableResponse)
+def obtener_variable(
+    variable_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obtener una variable específica por ID
+    """
+    try:
+        variable = db.query(NotificacionVariable).filter(NotificacionVariable.id == variable_id).first()
+        
+        if not variable:
+            raise HTTPException(status_code=404, detail="Variable no encontrada")
+        
+        return variable.to_dict()
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo variable: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
+
+@router.post("/variables", response_model=NotificacionVariableResponse, status_code=201)
+def crear_variable(
+    variable: NotificacionVariableCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Crear una nueva variable de notificación
+    """
+    try:
+        # Verificar si ya existe una variable con ese nombre
+        existente = db.query(NotificacionVariable).filter(
+            NotificacionVariable.nombre_variable == variable.nombre_variable
+        ).first()
+        
+        if existente:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Ya existe una variable con el nombre '{variable.nombre_variable}'"
+            )
+        
+        nueva_variable = NotificacionVariable(
+            nombre_variable=variable.nombre_variable,
+            tabla=variable.tabla,
+            campo_bd=variable.campo_bd,
+            descripcion=variable.descripcion,
+            activa=variable.activa,
+        )
+        
+        db.add(nueva_variable)
+        db.commit()
+        db.refresh(nueva_variable)
+        
+        return nueva_variable.to_dict()
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creando variable: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
+
+@router.put("/variables/{variable_id}", response_model=NotificacionVariableResponse)
+def actualizar_variable(
+    variable_id: int,
+    variable: NotificacionVariableUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Actualizar una variable existente
+    """
+    try:
+        variable_db = db.query(NotificacionVariable).filter(NotificacionVariable.id == variable_id).first()
+        
+        if not variable_db:
+            raise HTTPException(status_code=404, detail="Variable no encontrada")
+        
+        # Si se actualiza el nombre, verificar que no exista otra con ese nombre
+        if variable.nombre_variable and variable.nombre_variable != variable_db.nombre_variable:
+            existente = db.query(NotificacionVariable).filter(
+                NotificacionVariable.nombre_variable == variable.nombre_variable,
+                NotificacionVariable.id != variable_id
+            ).first()
+            
+            if existente:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Ya existe una variable con el nombre '{variable.nombre_variable}'"
+                )
+        
+        # Actualizar campos
+        if variable.nombre_variable is not None:
+            variable_db.nombre_variable = variable.nombre_variable
+        if variable.tabla is not None:
+            variable_db.tabla = variable.tabla
+        if variable.campo_bd is not None:
+            variable_db.campo_bd = variable.campo_bd
+        if variable.descripcion is not None:
+            variable_db.descripcion = variable.descripcion
+        if variable.activa is not None:
+            variable_db.activa = variable.activa
+        
+        db.commit()
+        db.refresh(variable_db)
+        
+        return variable_db.to_dict()
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando variable: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
+
+@router.delete("/variables/{variable_id}", status_code=204)
+def eliminar_variable(
+    variable_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Eliminar una variable de notificación
+    """
+    try:
+        variable = db.query(NotificacionVariable).filter(NotificacionVariable.id == variable_id).first()
+        
+        if not variable:
+            raise HTTPException(status_code=404, detail="Variable no encontrada")
+        
+        db.delete(variable)
+        db.commit()
+        
+        return None
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error eliminando variable: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")

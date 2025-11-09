@@ -2,11 +2,15 @@ import { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmailConfig } from '@/components/configuracion/EmailConfig'
 import { PlantillasNotificaciones } from '@/components/notificaciones/PlantillasNotificaciones'
+import { GeneraVariables } from '@/components/notificaciones/GeneraVariables'
+import { ResumenPlantillas } from '@/components/notificaciones/ResumenPlantillas'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Mail, FileText, Settings } from 'lucide-react'
+import { Mail, FileText, Settings, Database, List } from 'lucide-react'
+import { NotificacionPlantilla } from '@/services/notificacionService'
 
 export function ConfiguracionNotificaciones() {
   const [activeTab, setActiveTab] = useState('email')
+  const [plantillaAEditar, setPlantillaAEditar] = useState<NotificacionPlantilla | null>(null)
 
   return (
     <div className="space-y-6">
@@ -24,9 +28,19 @@ export function ConfiguracionNotificaciones() {
         </CardHeader>
       </Card>
 
-      {/* Tabs para Email y Plantillas */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2">
+      {/* Tabs para Email, Plantillas, Variables y Resumen */}
+      <Tabs 
+        value={activeTab} 
+        onValueChange={(value) => {
+          setActiveTab(value)
+          // Si cambiamos a plantillas y hay una plantilla para editar, cargarla
+          if (value === 'plantillas' && plantillaAEditar) {
+            // La plantilla se pasará al componente PlantillasNotificaciones
+          }
+        }} 
+        className="space-y-4"
+      >
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="email" className="flex items-center gap-2">
             <Mail className="h-4 w-4" />
             Configuración Email
@@ -35,6 +49,14 @@ export function ConfiguracionNotificaciones() {
             <FileText className="h-4 w-4" />
             Plantillas
           </TabsTrigger>
+          <TabsTrigger value="variables" className="flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            Genera Variables
+          </TabsTrigger>
+          <TabsTrigger value="resumen" className="flex items-center gap-2">
+            <List className="h-4 w-4" />
+            Resumen
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="email" className="space-y-4">
@@ -42,7 +64,24 @@ export function ConfiguracionNotificaciones() {
         </TabsContent>
 
         <TabsContent value="plantillas" className="space-y-4">
-          <PlantillasNotificaciones />
+          <PlantillasNotificaciones 
+            plantillaInicial={plantillaAEditar}
+            onPlantillaCargada={() => setPlantillaAEditar(null)}
+          />
+        </TabsContent>
+
+        <TabsContent value="variables" className="space-y-4">
+          <GeneraVariables />
+        </TabsContent>
+
+        <TabsContent value="resumen" className="space-y-4">
+          <ResumenPlantillas 
+            onEditarPlantilla={(plantilla) => {
+              setPlantillaAEditar(plantilla)
+              setActiveTab('plantillas')
+            }}
+            onCambiarPestaña={(pestaña) => setActiveTab(pestaña)}
+          />
         </TabsContent>
       </Tabs>
     </div>
