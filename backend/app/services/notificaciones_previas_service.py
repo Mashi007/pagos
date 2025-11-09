@@ -62,6 +62,7 @@ class NotificacionesPreviasService:
 
             for prestamo_row in prestamos_data:
                 # Acceder a las columnas por índice (0: id, 1: cliente_id, 2: cedula, 3: modelo_vehiculo, 4: producto)
+                # Esto es necesario porque usamos SQL directo en lugar del ORM
                 prestamo_id = prestamo_row[0]
                 cliente_id = prestamo_row[1]
                 cedula = prestamo_row[2]
