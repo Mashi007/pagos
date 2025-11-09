@@ -318,12 +318,6 @@ app.include_router(monitoring.router, prefix="/api/v1/monitoring", tags=["monito
 app.include_router(carga_masiva.router, prefix="/api/v1/carga-masiva", tags=["carga-masiva"])
 app.include_router(conciliacion_bancaria.router, prefix="/api/v1/conciliacion", tags=["conciliacion"])
 app.include_router(scheduler_notificaciones.router, prefix="/api/v1/scheduler", tags=["scheduler"])
-app.include_router(carga_masiva.router, prefix="/api/v1/carga-masiva", tags=["carga-masiva"])
-app.include_router(conciliacion_bancaria.router, prefix="/api/v1/conciliacion", tags=["conciliacion"])
-app.include_router(scheduler_notificaciones.router, prefix="/api/v1/scheduler", tags=["scheduler"])
-app.include_router(carga_masiva.router, prefix="/api/v1/carga-masiva", tags=["carga-masiva"])
-app.include_router(conciliacion_bancaria.router, prefix="/api/v1/conciliacion", tags=["conciliacion"])
-app.include_router(scheduler_notificaciones.router, prefix="/api/v1/scheduler", tags=["scheduler"])
 
 # Log detallado de rutas registradas
 logger.info("✅ Todos los routers registrados correctamente")

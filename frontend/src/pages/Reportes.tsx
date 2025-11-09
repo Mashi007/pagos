@@ -121,8 +121,9 @@ export function Reportes() {
       setGenerandoReporte(tipo)
       toast.loading(`Generando reporte de ${tipo}...`)
 
+      const fechaCorte = new Date().toISOString().split('T')[0]
+      
       if (tipo === 'CARTERA') {
-        const fechaCorte = new Date().toISOString().split('T')[0]
         const blob = await reporteService.exportarReporteCartera(formato, fechaCorte)
         
         // Crear enlace de descarga
@@ -137,7 +138,6 @@ export function Reportes() {
         
         toast.dismiss()
         toast.success(`Reporte de ${tipo} generado exitosamente`)
-        // Refrescar KPIs/resumen tras descarga
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
         queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else if (tipo === 'PAGOS') {
@@ -154,9 +154,28 @@ export function Reportes() {
         toast.dismiss()
         toast.success(`Reporte de ${tipo} obtenido exitosamente`)
         console.log('Reporte de pagos:', reporte)
-        // Refrescar KPIs/resumen tras consulta
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
         queryClient.invalidateQueries({ queryKey: ['kpis'] })
+      } else if (tipo === 'MOROSIDAD') {
+        const reporte = await reporteService.getReporteMorosidad(fechaCorte)
+        toast.dismiss()
+        toast.success(`Reporte de ${tipo} obtenido exitosamente`)
+        console.log('Reporte de morosidad:', reporte)
+      } else if (tipo === 'FINANCIERO') {
+        const reporte = await reporteService.getReporteFinanciero(fechaCorte)
+        toast.dismiss()
+        toast.success(`Reporte de ${tipo} obtenido exitosamente`)
+        console.log('Reporte financiero:', reporte)
+      } else if (tipo === 'ASESORES') {
+        const reporte = await reporteService.getReporteAsesores(fechaCorte)
+        toast.dismiss()
+        toast.success(`Reporte de ${tipo} obtenido exitosamente`)
+        console.log('Reporte de asesores:', reporte)
+      } else if (tipo === 'PRODUCTOS') {
+        const reporte = await reporteService.getReporteProductos(fechaCorte)
+        toast.dismiss()
+        toast.success(`Reporte de ${tipo} obtenido exitosamente`)
+        console.log('Reporte de productos:', reporte)
       } else {
         toast.dismiss()
         toast.info(`Generación de reporte ${tipo} próximamente disponible`)
@@ -325,7 +344,7 @@ export function Reportes() {
             {tiposReporte.map((tipo) => {
               const IconComponent = tipo.icon
               const isGenerando = generandoReporte === tipo.value
-              const isDisponible = tipo.value === 'CARTERA' || tipo.value === 'PAGOS'
+              const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'FINANCIERO', 'ASESORES', 'PRODUCTOS'].includes(tipo.value)
               
               return (
                 <Card
