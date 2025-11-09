@@ -91,7 +91,9 @@ def listar_notificaciones_prejudiciales(
         if estado:
             resultados_antes = len(resultados)
             resultados = [r for r in resultados if r.get("estado") == estado]
-            logger.info(f"🔍 [NotificacionesPrejudicial] Filtrado por estado '{estado}': {resultados_antes} -> {len(resultados)}")
+            logger.info(
+                f"🔍 [NotificacionesPrejudicial] Filtrado por estado '{estado}': {resultados_antes} -> {len(resultados)}"
+            )
 
         # Convertir a response models
         items = [NotificacionPrejudicialResponse(**r) for r in resultados]
@@ -126,4 +128,3 @@ def calcular_notificaciones_prejudiciales(
     except Exception as e:
         logger.error(f"Error calculando notificaciones prejudiciales: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
-

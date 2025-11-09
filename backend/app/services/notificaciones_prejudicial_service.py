@@ -110,9 +110,7 @@ class NotificacionesPrejudicialService:
                 )
 
                 if elapsed_time > 30:
-                    logger.warning(
-                        f"⚠️ [NotificacionesPrejudicial] Query tardó {elapsed_time:.2f}s - considerar optimización"
-                    )
+                    logger.warning(f"⚠️ [NotificacionesPrejudicial] Query tardó {elapsed_time:.2f}s - considerar optimización")
 
             except Exception as query_error:
                 elapsed_time = time.time() - start_time
@@ -126,7 +124,7 @@ class NotificacionesPrejudicialService:
 
             # Obtener estados de notificaciones en batch
             cliente_ids = list(set(row[1] for row in rows))
-            tipo_notificacion = 'PREJUDICIAL'
+            tipo_notificacion = "PREJUDICIAL"
 
             estados_notificaciones = {}
             if cliente_ids:
@@ -209,4 +207,3 @@ class NotificacionesPrejudicialService:
         Obtener notificaciones prejudiciales (actualmente sin cache, calcula en tiempo real)
         """
         return self.calcular_notificaciones_prejudiciales()
-
