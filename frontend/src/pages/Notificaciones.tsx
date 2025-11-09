@@ -77,11 +77,23 @@ export function Notificaciones() {
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
   })
 
+  // Cargar notificaciones prejudiciales si estamos en la pestaña "prejudicial"
+  const { data: notificacionesPrejudicialesData, isLoading: isLoadingPrejudiciales, error: errorPrejudiciales, refetch: refetchPrejudiciales } = useQuery({
+    queryKey: ['notificaciones-prejudicial', filterEstado],
+    queryFn: () => notificacionService.listarNotificacionesPrejudiciales(filterEstado || undefined),
+    enabled: activeTab === 'prejudicial', // Solo cargar cuando esté en la pestaña prejudicial
+    staleTime: 30 * 1000, // Cache de 30 segundos
+    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos
+    refetchOnWindowFocus: true, // Refrescar al enfocar ventana
+    retry: 2, // Reintentar 2 veces en caso de error
+    retryDelay: 1000, // Esperar 1 segundo entre reintentos
+  })
+
   // Cargar notificaciones normales para otras pestañas
   const { data: notificacionesData, isLoading, error, refetch } = useQuery({
     queryKey: ['notificaciones', filterEstado, page, perPage],
     queryFn: () => notificacionService.listarNotificaciones(page, perPage, filterEstado || undefined),
-    enabled: activeTab !== 'previa' && activeTab !== 'retrasado', // Solo cargar cuando NO esté en previa o retrasado
+    enabled: activeTab !== 'previa' && activeTab !== 'retrasado' && activeTab !== 'prejudicial', // Solo cargar cuando NO esté en previa, retrasado o prejudicial
     staleTime: 30 * 1000, // Cache de 30 segundos
     refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos (reducido de 30s)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
@@ -98,6 +110,10 @@ export function Notificaciones() {
   // Datos de notificaciones retrasadas
   const notificacionesRetrasadas = notificacionesRetrasadasData?.items || []
   const totalRetrasadas = notificacionesRetrasadasData?.total || 0
+  
+  // Datos de notificaciones prejudiciales
+  const notificacionesPrejudiciales = notificacionesPrejudicialesData?.items || []
+  const totalPrejudiciales = notificacionesPrejudicialesData?.total || 0
 
   // Cargar estadísticas
   const { data: estadisticas } = useQuery({
@@ -199,6 +215,8 @@ export function Notificaciones() {
       refetchPrevias()
     } else if (activeTab === 'retrasado') {
       refetchRetrasadas()
+    } else if (activeTab === 'prejudicial') {
+      refetchPrejudiciales()
     } else {
       refetch()
     }
@@ -555,18 +573,19 @@ export function Notificaciones() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {((activeTab === 'previa' ? isLoadingPrevias : activeTab === 'retrasado' ? isLoadingRetrasadas : isLoading)) ? (
+            {((activeTab === 'previa' ? isLoadingPrevias : activeTab === 'retrasado' ? isLoadingRetrasadas : activeTab === 'prejudicial' ? isLoadingPrejudiciales : isLoading)) ? (
               <div className="text-center py-8">
                 <RefreshCw className="w-8 h-8 mx-auto mb-4 text-gray-400 animate-spin" />
                 <p className="text-gray-500">Cargando notificaciones...</p>
               </div>
-            ) : ((activeTab === 'previa' ? errorPrevias : activeTab === 'retrasado' ? errorRetrasadas : error)) ? (
+            ) : ((activeTab === 'previa' ? errorPrevias : activeTab === 'retrasado' ? errorRetrasadas : activeTab === 'prejudicial' ? errorPrejudiciales : error)) ? (
               <div className="text-center py-8 text-red-500">
                 <AlertTriangle className="w-12 h-12 mx-auto mb-4" />
                 <p>Error al cargar notificaciones</p>
                 <Button variant="outline" onClick={() => {
                   if (activeTab === 'previa') refetchPrevias()
                   else if (activeTab === 'retrasado') refetchRetrasadas()
+                  else if (activeTab === 'prejudicial') refetchPrejudiciales()
                   else refetch()
                 }} className="mt-4">
                   Reintentar
@@ -574,7 +593,7 @@ export function Notificaciones() {
               </div>
             ) : (
               <>
-                {((activeTab === 'previa' ? notificacionesPrevias.length === 0 : activeTab === 'retrasado' ? notificacionesRetrasadas.length === 0 : filteredNotificaciones.length === 0)) ? (
+                {((activeTab === 'previa' ? notificacionesPrevias.length === 0 : activeTab === 'retrasado' ? notificacionesRetrasadas.length === 0 : activeTab === 'prejudicial' ? notificacionesPrejudiciales.length === 0 : filteredNotificaciones.length === 0)) ? (
                   <div className="text-center py-12 text-gray-500">
                     <Bell className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                     <p className="text-lg font-medium">No se encontraron notificaciones</p>
@@ -703,6 +722,76 @@ export function Notificaciones() {
                         </div>
                       )
                     })()
+                  ) : activeTab === 'prejudicial' ? (
+                    // Notificaciones prejudiciales (sin agrupar, ordenadas por fecha más antigua)
+                    <div className="space-y-4">
+                      {notificacionesPrejudiciales.map((notificacion) => (
+                        <Card 
+                          key={`${notificacion.prestamo_id}-${notificacion.numero_cuota}`}
+                          className="bg-yellow-50 border-yellow-200 hover:shadow-md transition-shadow"
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-start gap-4 flex-1">
+                                {/* Icono de campana */}
+                                <div className="mt-1">
+                                  <Bell className="w-5 h-5 text-blue-600" />
+                                </div>
+                                
+                                {/* Contenido principal */}
+                                <div className="flex-1 space-y-2">
+                                  {/* Nombre y cédula */}
+                                  <div className="font-bold text-gray-900">
+                                    {notificacion.nombre || 'N/A'} - {notificacion.cedula || 'N/A'}
+                                  </div>
+                                  
+                                  {/* Detalles */}
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-sm">
+                                    <div className="text-gray-700">
+                                      <span className="font-medium">Modelo:</span> {notificacion.modelo_vehiculo || 'N/A'}
+                                    </div>
+                                    <div className="text-gray-700">
+                                      <span className="font-medium">Correo:</span> {notificacion.correo || 'N/A'}
+                                    </div>
+                                    <div className="text-gray-700">
+                                      <span className="font-medium">Teléfono:</span> {notificacion.telefono || 'N/A'}
+                                    </div>
+                                    <div className="text-gray-700">
+                                      <span className="font-medium">Fecha vencimiento:</span> {
+                                        notificacion.fecha_vencimiento 
+                                          ? new Date(notificacion.fecha_vencimiento).toLocaleDateString('es-ES')
+                                          : 'N/A'
+                                      }
+                                    </div>
+                                    <div className="text-gray-700">
+                                      <span className="font-medium">Cuota #:</span> {notificacion.numero_cuota || 'N/A'} - <span className="font-medium">Monto:</span> <span className="text-green-600 font-semibold">${notificacion.monto_cuota ? notificacion.monto_cuota.toFixed(2) : '0.00'}</span>
+                                    </div>
+                                    {notificacion.prestamo_id && (
+                                      <div className="text-gray-700">
+                                        <span className="font-medium">Préstamo ID:</span> {notificacion.prestamo_id}
+                                      </div>
+                                    )}
+                                    {notificacion.total_cuotas_atrasadas && (
+                                      <div className="text-gray-700">
+                                        <span className="font-medium">Total cuotas atrasadas:</span> <span className="text-red-600 font-semibold">{notificacion.total_cuotas_atrasadas}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Badges a la derecha */}
+                              <div className="flex flex-col items-end gap-2 ml-4">
+                                {getEstadoBadge(notificacion.estado)}
+                                <Badge className="bg-red-100 text-red-800 border-red-300">
+                                  Prejudicial
+                                </Badge>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   ) : (
                     // Notificaciones normales (sin agrupar)
                     <div className="space-y-4">

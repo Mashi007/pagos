@@ -123,6 +123,16 @@ class NotificacionService {
       { timeout: 120000 } // 2 minutos de timeout
     )
   }
+
+  async listarNotificacionesPrejudiciales(estado?: string): Promise<{ items: any[], total: number }> {
+    const params = new URLSearchParams()
+    if (estado) params.append('estado', estado)
+    
+    return await apiClient.get<{ items: any[], total: number }>(
+      `/api/v1/notificaciones-prejudicial/?${params}`,
+      { timeout: 120000 } // 2 minutos de timeout
+    )
+  }
 }
 
 class EmailConfigService {
