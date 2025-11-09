@@ -11,7 +11,9 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Settings,
+  FileWarning
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,8 +22,12 @@ import { Badge } from '@/components/ui/badge'
 import { useQuery } from '@tanstack/react-query'
 import { notificacionService, type Notificacion, type NotificacionStats } from '@/services/notificacionService'
 import { toast } from 'sonner'
+import { EmailConfig } from '@/components/configuracion/EmailConfig'
+
+type TabType = 'previa' | 'retrasado' | 'prejudicial' | 'configuracion'
 
 export function Notificaciones() {
+  const [activeTab, setActiveTab] = useState<TabType>('previa')
   const [searchTerm, setSearchTerm] = useState('')
   const [filterEstado, setFilterEstado] = useState<string>('')
   const [filterCanal, setFilterCanal] = useState<string>('')
@@ -50,8 +56,27 @@ export function Notificaciones() {
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
   })
 
-  // Filtrar notificaciones localmente por búsqueda y canal
+  // Tipos de notificación por pestaña
+  const tiposPorPestaña: Record<TabType, string[]> = {
+    previa: ['PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES', 'PAGO_DIA_0'],
+    retrasado: ['PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO'],
+    prejudicial: ['PREJUDICIAL', 'PREJUDICIAL_1', 'PREJUDICIAL_2'], // Tipos para notificaciones prejudiciales
+    configuracion: [] // No se muestran notificaciones en esta pestaña
+  }
+
+  // Filtrar notificaciones localmente por pestaña, búsqueda y canal
   const filteredNotificaciones = notificaciones.filter(notif => {
+    // Filtrar por pestaña activa (excepto configuración)
+    if (activeTab !== 'configuracion') {
+      const tiposPermitidos = tiposPorPestaña[activeTab]
+      if (!tiposPermitidos.includes(notif.tipo)) {
+        return false
+      }
+    } else {
+      // En configuración no mostramos notificaciones
+      return false
+    }
+
     const matchesSearch = 
       (notif.asunto || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (notif.mensaje || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -109,6 +134,9 @@ export function Notificaciones() {
       'PAGO_1_DIA_ATRASADO': { label: '1 día atrasado', color: 'bg-red-100 text-red-800' },
       'PAGO_3_DIAS_ATRASADO': { label: '3 días atrasado', color: 'bg-red-100 text-red-800' },
       'PAGO_5_DIAS_ATRASADO': { label: '5 días atrasado', color: 'bg-red-100 text-red-800' },
+      'PREJUDICIAL': { label: 'Prejudicial', color: 'bg-purple-100 text-purple-800' },
+      'PREJUDICIAL_1': { label: 'Prejudicial - Primera', color: 'bg-purple-100 text-purple-800' },
+      'PREJUDICIAL_2': { label: 'Prejudicial - Segunda', color: 'bg-purple-100 text-purple-800' },
     }
     const tipoInfo = tipos[tipo] || { label: tipo, color: 'bg-gray-100 text-gray-800' }
     return <Badge className={tipoInfo.color}>{tipoInfo.label}</Badge>
@@ -126,6 +154,13 @@ export function Notificaciones() {
     setPage(1)
   }
 
+  const tabs = [
+    { id: 'previa' as TabType, label: 'Notificación Previa', icon: Bell },
+    { id: 'retrasado' as TabType, label: 'Notificación Pago Retrasado', icon: AlertTriangle },
+    { id: 'prejudicial' as TabType, label: 'Notificación Prejudicial', icon: FileWarning },
+    { id: 'configuracion' as TabType, label: 'Configuración', icon: Settings },
+  ]
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -136,37 +171,88 @@ export function Notificaciones() {
       >
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Historial de Notificaciones</h1>
-            <p className="text-gray-600 mt-1">Verifica el estado de todos los envíos de email y notificaciones</p>
+            <h1 className="text-3xl font-bold text-gray-900">Notificaciones</h1>
+            <p className="text-gray-600 mt-1">Gestiona y configura las notificaciones del sistema</p>
           </div>
-          <div className="flex space-x-2">
-            <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Actualizar
-            </Button>
-          </div>
+          {activeTab !== 'configuracion' && (
+            <div className="flex space-x-2">
+              <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                Actualizar
+              </Button>
+            </div>
+          )}
         </div>
       </motion.div>
 
-      {/* Stats Cards */}
+      {/* Tabs */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1, duration: 0.5 }}
-        className="grid grid-cols-1 md:grid-cols-4 gap-6"
       >
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total</CardTitle>
-            <Bell className="h-4 w-4 text-gray-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-600">
-              {estadisticas?.total || 0}
-            </div>
-            <p className="text-xs text-gray-600">Notificaciones en el sistema</p>
-          </CardContent>
-        </Card>
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8" aria-label="Tabs">
+            {tabs.map((tab) => {
+              const Icon = tab.icon
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id)
+                    setPage(1)
+                    setSearchTerm('')
+                    setFilterEstado('')
+                    setFilterCanal('')
+                  }}
+                  className={`
+                    flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors
+                    ${
+                      activeTab === tab.id
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }
+                  `}
+                >
+                  <Icon className="w-5 h-5" />
+                  {tab.label}
+                </button>
+              )
+            })}
+          </nav>
+        </div>
+      </motion.div>
+
+      {/* Contenido según pestaña activa */}
+      {activeTab === 'configuracion' ? (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
+        >
+          <EmailConfig />
+        </motion.div>
+      ) : (
+        <>
+          {/* Stats Cards */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+            className="grid grid-cols-1 md:grid-cols-4 gap-6"
+          >
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total</CardTitle>
+                <Bell className="h-4 w-4 text-gray-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-600">
+                  {filteredNotificaciones.length}
+                </div>
+                <p className="text-xs text-gray-600">Notificaciones en esta pestaña</p>
+              </CardContent>
+            </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -401,6 +487,8 @@ export function Notificaciones() {
           </CardContent>
         </Card>
       </motion.div>
+        </>
+      )}
     </div>
   )
 }
