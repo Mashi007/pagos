@@ -781,17 +781,16 @@ def resumen_dashboard(
 
         try:
             # Total préstamos: usar query más robusta con func.count
-            total_prestamos_query = (
-                db.query(func.count(Prestamo.id))
-                .filter(Prestamo.estado == "APROBADO")
-            )
+            total_prestamos_query = db.query(func.count(Prestamo.id)).filter(Prestamo.estado == "APROBADO")
             total_prestamos = total_prestamos_query.scalar() or 0
             logger.info(f"[reportes.resumen] Total préstamos aprobados: {total_prestamos}")
-            
+
             # Validación adicional: verificar que hay préstamos en la BD
             if total_prestamos == 0:
                 total_todos_prestamos = db.query(func.count(Prestamo.id)).scalar() or 0
-                logger.warning(f"⚠️ [reportes.resumen] No hay préstamos APROBADOS. Total préstamos en BD: {total_todos_prestamos}")
+                logger.warning(
+                    f"⚠️ [reportes.resumen] No hay préstamos APROBADOS. Total préstamos en BD: {total_todos_prestamos}"
+                )
         except Exception as e:
             logger.error(f"❌ [reportes.resumen] Error obteniendo total_prestamos: {e}", exc_info=True)
             try:
@@ -815,7 +814,8 @@ def resumen_dashboard(
         # Solo para préstamos aprobados y cuotas no pagadas
         try:
             cartera_activa_query = db.execute(
-                text("""
+                text(
+                    """
                     SELECT COALESCE(SUM(
                         COALESCE(c.capital_pendiente, 0) + 
                         COALESCE(c.interes_pendiente, 0) + 
@@ -825,7 +825,8 @@ def resumen_dashboard(
                     INNER JOIN prestamos p ON c.prestamo_id = p.id
                     WHERE p.estado = 'APROBADO'
                       AND c.estado != 'PAGADO'
-                """)
+                """
+                )
             )
             resultado_cartera = cartera_activa_query.scalar()
             if resultado_cartera is None:
@@ -846,14 +847,16 @@ def resumen_dashboard(
         # Mora: préstamos con cuotas vencidas no pagadas
         try:
             prestamos_mora_query = db.execute(
-                text("""
+                text(
+                    """
                     SELECT COUNT(DISTINCT p.id) as prestamos_mora
                     FROM prestamos p
                     INNER JOIN cuotas c ON c.prestamo_id = p.id
                     WHERE p.estado = 'APROBADO'
                       AND c.fecha_vencimiento < :hoy
                       AND c.estado != 'PAGADO'
-                """).bindparams(hoy=hoy)
+                """
+                ).bindparams(hoy=hoy)
             )
             prestamos_mora = prestamos_mora_query.scalar() or 0
             logger.info(f"[reportes.resumen] Préstamos en mora: {prestamos_mora}")
@@ -911,7 +914,7 @@ def resumen_dashboard(
             "pagos_mes": float(pagos_mes),
             "fecha_actualizacion": datetime.now().isoformat(),
         }
-        
+
         logger.info(f"[reportes.resumen] Resumen generado: {resultado}")
         return resultado
 
