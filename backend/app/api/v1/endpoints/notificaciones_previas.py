@@ -67,10 +67,11 @@ def listar_notificaciones_previas(
     """
     Listar notificaciones previas de clientes con cuotas próximas a vencer
 
-    - Clientes SIN cuotas atrasadas
+    - Préstamos con estado = 'APROBADO' (todos los 3681 préstamos)
     - Cuotas que vencen en 5, 3 o 1 día
+    - NO discrimina por cuotas atrasadas (incluye todos)
     - Se actualiza cada vez que se cambia de pestaña
-    - Cálculo principal se hace a las 2 AM (scheduler)
+    - Cálculo principal se hace a las 4 AM (scheduler)
     - Filtro opcional por estado de envío (ENVIADA, PENDIENTE, FALLIDA)
     """
     try:

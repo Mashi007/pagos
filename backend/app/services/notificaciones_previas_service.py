@@ -29,8 +29,11 @@ class NotificacionesPreviasService:
         Calcula clientes con cuotas próximas a vencer (5, 3, 1 días antes)
 
         Condiciones:
-        - Cliente NO tiene cuotas atrasadas (todas las cuotas pasadas están pagadas)
-        - Tiene una cuota próxima que vence en 5, 3 o 1 día
+        - Préstamos con estado = 'APROBADO'
+        - Cuotas que vencen en 5, 3 o 1 día
+        - Cuotas con estado PENDIENTE o ADELANTADO
+        - Clientes activos (estado != 'INACTIVO')
+        - NO se discrimina por cuotas atrasadas (todos los préstamos aprobados)
 
         Returns:
             Lista de diccionarios con información de clientes y préstamos
@@ -46,12 +49,10 @@ class NotificacionesPreviasService:
             # Verificar conexión a BD
             logger.info("🔍 [NotificacionesPrevias] Iniciando cálculo de notificaciones previas...")
 
-            # Query optimizada: Una sola query con JOINs para obtener todo
-            # Usa LEFT JOIN con condición para excluir préstamos con atrasos
-            # Esto es más eficiente que NOT EXISTS para grandes volúmenes
+            # Query optimizada: NO filtra por cuotas atrasadas, solo por días y estado
             query_optimizada = text(
                 """
-                SELECT DISTINCT
+                SELECT
                     p.id as prestamo_id,
                     p.cliente_id,
                     cl.nombres as nombre_cliente,
@@ -75,13 +76,10 @@ class NotificacionesPreviasService:
                 FROM prestamos p
                 INNER JOIN cuotas c ON c.prestamo_id = p.id
                 INNER JOIN clientes cl ON cl.id = p.cliente_id
-                LEFT JOIN cuotas c_atrasadas ON c_atrasadas.prestamo_id = p.id
-                    AND c_atrasadas.fecha_vencimiento < :hoy
-                    AND c_atrasadas.estado != 'PAGADO'
                 WHERE p.estado = 'APROBADO'
                   AND (c.fecha_vencimiento = :fecha_5_dias OR c.fecha_vencimiento = :fecha_3_dias OR c.fecha_vencimiento = :fecha_1_dia)
                   AND c.estado IN ('PENDIENTE', 'ADELANTADO')
-                  AND c_atrasadas.id IS NULL  -- No tiene cuotas atrasadas
+                  AND cl.estado != 'INACTIVO'
                 ORDER BY dias_antes_vencimiento, c.fecha_vencimiento
             """
             )
@@ -90,10 +88,10 @@ class NotificacionesPreviasService:
             start_time = time.time()
             
             try:
+                # Ejecutar query con timeout implícito (el timeout de la conexión BD)
                 result = self.db.execute(
                     query_optimizada,
                     {
-                        "hoy": hoy,
                         "fecha_5_dias": fecha_5_dias,
                         "fecha_3_dias": fecha_3_dias,
                         "fecha_1_dia": fecha_1_dia,
@@ -102,10 +100,17 @@ class NotificacionesPreviasService:
                 rows = result.fetchall()
                 elapsed_time = time.time() - start_time
                 logger.info(f"📊 [NotificacionesPrevias] Query optimizada completada en {elapsed_time:.2f}s - Encontrados {len(rows)} registros de cuotas próximas")
+                
+                # Si la query tarda más de 30 segundos, registrar advertencia
+                if elapsed_time > 30:
+                    logger.warning(f"⚠️ [NotificacionesPrevias] Query tardó {elapsed_time:.2f}s - considerar optimización adicional o índices")
+                    
             except Exception as query_error:
                 elapsed_time = time.time() - start_time
                 logger.error(f"❌ [NotificacionesPrevias] Error ejecutando query optimizada después de {elapsed_time:.2f}s: {query_error}", exc_info=True)
-                raise
+                # Retornar lista vacía en lugar de fallar completamente
+                logger.warning("⚠️ [NotificacionesPrevias] Retornando lista vacía debido a error en query")
+                return []
 
             resultados = []
 
