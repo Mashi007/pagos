@@ -22,7 +22,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useQuery } from '@tanstack/react-query'
 import { notificacionService, type Notificacion, type NotificacionStats } from '@/services/notificacionService'
 import { toast } from 'sonner'
@@ -548,117 +547,112 @@ export function Notificaciones() {
                     )}
                   </div>
                 ) : (
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-gray-50">
-                          {activeTab === 'previa' ? (
-                            <>
-                              <TableHead>Cliente</TableHead>
-                              <TableHead>Cédula</TableHead>
-                              <TableHead>Modelo</TableHead>
-                              <TableHead>Correo</TableHead>
-                              <TableHead>Teléfono</TableHead>
-                              <TableHead className="text-center">Días antes</TableHead>
-                              <TableHead>Fecha Vencimiento</TableHead>
-                              <TableHead className="text-center">Cuota #</TableHead>
-                              <TableHead className="text-center">Monto</TableHead>
-                              <TableHead>Estado</TableHead>
-                            </>
-                          ) : (
-                            <>
-                              <TableHead>Asunto</TableHead>
-                              <TableHead>Mensaje</TableHead>
-                              <TableHead>Tipo</TableHead>
-                              <TableHead>Canal</TableHead>
-                              <TableHead>Estado</TableHead>
-                              <TableHead>Fecha</TableHead>
-                              <TableHead className="text-right">Acciones</TableHead>
-                            </>
-                          )}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {(activeTab === 'previa' ? notificacionesPrevias : filteredNotificaciones).map((notificacion) => (
-                          <TableRow 
-                            key={activeTab === 'previa' ? `${notificacion.prestamo_id}-${notificacion.dias_antes_vencimiento}` : notificacion.id}
-                            className="hover:bg-gray-50"
-                          >
-                            {activeTab === 'previa' ? (
-                              <>
-                                <TableCell>
-                                  <div className="font-medium text-gray-900">
-                                    {notificacion.nombre || 'N/A'}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-gray-600">
-                                  {notificacion.cedula || 'N/A'}
-                                </TableCell>
-                                <TableCell className="text-gray-600">
-                                  {notificacion.modelo_vehiculo || 'N/A'}
-                                </TableCell>
-                                <TableCell className="text-gray-600">
-                                  {notificacion.correo || 'N/A'}
-                                </TableCell>
-                                <TableCell className="text-gray-600">
-                                  {notificacion.telefono || 'N/A'}
-                                </TableCell>
-                                <TableCell className="text-center">
+                  <div className="space-y-4">
+                    {(activeTab === 'previa' ? notificacionesPrevias : filteredNotificaciones).map((notificacion) => (
+                      <Card 
+                        key={activeTab === 'previa' ? `${notificacion.prestamo_id}-${notificacion.dias_antes_vencimiento}` : notificacion.id}
+                        className="bg-yellow-50 border-yellow-200 hover:shadow-md transition-shadow"
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start gap-4 flex-1">
+                              {/* Icono de campana */}
+                              <div className="mt-1">
+                                <Bell className="w-5 h-5 text-blue-600" />
+                              </div>
+                              
+                              {/* Contenido principal */}
+                              <div className="flex-1 space-y-2">
+                                {activeTab === 'previa' ? (
+                                  <>
+                                    {/* Nombre y cédula */}
+                                    <div className="font-bold text-gray-900">
+                                      {notificacion.nombre || 'N/A'} - {notificacion.cedula || 'N/A'}
+                                    </div>
+                                    
+                                    {/* Detalles */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-sm">
+                                      <div className="text-gray-700">
+                                        <span className="font-medium">Modelo:</span> {notificacion.modelo_vehiculo || 'N/A'}
+                                      </div>
+                                      <div className="text-gray-700">
+                                        <span className="font-medium">Correo:</span> {notificacion.correo || 'N/A'}
+                                      </div>
+                                      <div className="text-gray-700">
+                                        <span className="font-medium">Teléfono:</span> {notificacion.telefono || 'N/A'}
+                                      </div>
+                                      <div className="text-gray-700">
+                                        <span className="font-medium">Días antes de vencimiento:</span> {notificacion.dias_antes_vencimiento || 'N/A'}
+                                      </div>
+                                      <div className="text-gray-700">
+                                        <span className="font-medium">Fecha vencimiento:</span> {
+                                          notificacion.fecha_vencimiento 
+                                            ? new Date(notificacion.fecha_vencimiento).toLocaleDateString('es-ES')
+                                            : 'N/A'
+                                        }
+                                      </div>
+                                      <div className="text-gray-700">
+                                        <span className="font-medium">Cuota #:</span> {notificacion.numero_cuota || 'N/A'} - <span className="font-medium">Monto:</span> <span className="text-green-600 font-semibold">${notificacion.monto_cuota ? notificacion.monto_cuota.toFixed(2) : '0.00'}</span>
+                                      </div>
+                                      {notificacion.prestamo_id && (
+                                        <div className="text-gray-700">
+                                          <span className="font-medium">Préstamo ID:</span> {notificacion.prestamo_id}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    {/* Asunto */}
+                                    <div className="font-bold text-gray-900">
+                                      {notificacion.asunto || 'Sin asunto'}
+                                    </div>
+                                    
+                                    {/* Mensaje */}
+                                    <div className="text-gray-700 text-sm">
+                                      {notificacion.mensaje || 'Sin mensaje'}
+                                    </div>
+                                    
+                                    {/* Detalles adicionales */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-sm">
+                                      <div className="text-gray-700">
+                                        <span className="font-medium">Tipo:</span> {notificacion.tipo || 'N/A'}
+                                      </div>
+                                      <div className="text-gray-700">
+                                        <span className="font-medium">Canal:</span> {notificacion.canal || 'EMAIL'}
+                                      </div>
+                                      <div className="text-gray-700">
+                                        <span className="font-medium">Fecha:</span> {
+                                          notificacion.fecha_creacion || notificacion.created_at
+                                            ? new Date(notificacion.fecha_creacion || notificacion.created_at || Date.now()).toLocaleDateString('es-ES')
+                                            : 'N/A'
+                                        }
+                                      </div>
+                                      {notificacion.cliente_id && (
+                                        <div className="text-gray-700">
+                                          <span className="font-medium">Cliente ID:</span> {notificacion.cliente_id}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Badges a la derecha */}
+                            <div className="flex flex-col items-end gap-2 ml-4">
+                              {activeTab === 'previa' && (
+                                <>
+                                  {getEstadoBadge(notificacion.estado)}
                                   <Badge className="bg-blue-100 text-blue-800 border-blue-300">
-                                    {notificacion.dias_antes_vencimiento} días
+                                    {notificacion.dias_antes_vencimiento} días antes
                                   </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center text-gray-600">
-                                    <Calendar className="w-4 h-4 mr-1 text-gray-400" />
-                                    {notificacion.fecha_vencimiento 
-                                      ? new Date(notificacion.fecha_vencimiento).toLocaleDateString('es-ES')
-                                      : 'N/A'}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-center text-gray-600">
-                                  {notificacion.numero_cuota || 'N/A'}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <span className="text-green-600 font-semibold">
-                                    ${notificacion.monto_cuota ? notificacion.monto_cuota.toFixed(2) : '0.00'}
-                                  </span>
-                                </TableCell>
-                                <TableCell>
+                                </>
+                              )}
+                              {activeTab !== 'previa' && (
+                                <>
                                   {getEstadoBadge(notificacion.estado)}
-                                </TableCell>
-                              </>
-                            ) : (
-                              <>
-                                <TableCell>
-                                  <div className="font-medium text-gray-900">
-                                    {notificacion.asunto || 'Sin asunto'}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <p className="text-gray-600 text-sm line-clamp-2 max-w-md">
-                                    {notificacion.mensaje || 'Sin mensaje'}
-                                  </p>
-                                </TableCell>
-                                <TableCell>
-                                  {getTipoBadge(notificacion.tipo)}
-                                </TableCell>
-                                <TableCell>
-                                  {getCanalBadge(notificacion.canal || 'EMAIL')}
-                                </TableCell>
-                                <TableCell>
-                                  {getEstadoBadge(notificacion.estado)}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center text-gray-600">
-                                    <Calendar className="w-4 h-4 mr-1 text-gray-400" />
-                                    {notificacion.fecha_creacion || notificacion.created_at
-                                      ? new Date(notificacion.fecha_creacion || notificacion.created_at || Date.now()).toLocaleDateString('es-ES')
-                                      : 'N/A'}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <div className="flex items-center justify-end gap-2">
+                                  <div className="flex items-center gap-2 mt-2">
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -682,13 +676,13 @@ export function Notificaciones() {
                                       </Button>
                                     )}
                                   </div>
-                                </TableCell>
-                              </>
-                            )}
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
                 )}
 
