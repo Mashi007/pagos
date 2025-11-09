@@ -37,6 +37,7 @@ class MemoryCache(CacheBackend):
     Implementación de cache en memoria (fallback cuando Redis no está disponible)
     NO usar en producción con múltiples workers
     """
+
     _warning_logged = False  # Variable de clase para evitar logs repetidos
 
     def __init__(self):
