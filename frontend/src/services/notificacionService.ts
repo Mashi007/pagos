@@ -107,7 +107,11 @@ class NotificacionService {
     const params = new URLSearchParams()
     if (estado) params.append('estado', estado)
     
-    return await apiClient.get<{ items: any[], total: number, dias_5: number, dias_3: number, dias_1: number }>(`/api/v1/notificaciones-previas/?${params}`)
+    // Usar timeout extendido para este endpoint que puede tardar más
+    return await apiClient.get<{ items: any[], total: number, dias_5: number, dias_3: number, dias_1: number }>(
+      `/api/v1/notificaciones-previas/?${params}`,
+      { timeout: 120000 } // 2 minutos de timeout
+    )
   }
 }
 

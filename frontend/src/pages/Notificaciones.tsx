@@ -42,6 +42,8 @@ export function Notificaciones() {
     staleTime: 30 * 1000, // Cache de 30 segundos
     refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
+    retry: 2, // Reintentar 2 veces en caso de error
+    retryDelay: 1000, // Esperar 1 segundo entre reintentos
   })
 
   // Cargar notificaciones normales para otras pestañas

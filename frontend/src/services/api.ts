@@ -241,6 +241,7 @@ class ApiClient {
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     // Detectar endpoints lentos y usar timeout extendido
     const isSlowEndpoint = url.includes('/dashboard/') || 
+                          url.includes('/notificaciones-previas') ||
                           url.includes('/admin') ||
                           url.includes('/evolucion') ||
                           url.includes('/tendencia')
