@@ -1064,7 +1064,7 @@ def probar_configuracion_email(
 ):
     """
     Probar configuración de email enviando un email de prueba a cualquier correo
-    
+
     Args:
         request: Objeto con email_destino opcional. Si no se proporciona, se envía al email del usuario actual.
                 Puedes enviar a CUALQUIER correo para verificar que funciona.
@@ -1087,15 +1087,16 @@ def probar_configuracion_email(
         if request:
             if isinstance(request, dict):
                 email_destino_val = request.get("email_destino")
-            elif hasattr(request, 'email_destino'):
+            elif hasattr(request, "email_destino"):
                 email_destino_val = request.email_destino
-        
+
         # Si se proporcionó un email, usarlo; si no, usar el email del usuario actual
         email_a_enviar = email_destino_val.strip() if email_destino_val and email_destino_val.strip() else current_user.email
-        
+
         # Validar formato de email
         import re
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+        email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         if not re.match(email_pattern, email_a_enviar):
             raise HTTPException(status_code=400, detail="Email de destino inválido")
 
