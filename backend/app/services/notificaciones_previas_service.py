@@ -106,6 +106,7 @@ class NotificacionesPreviasService:
 
                         if tipo_notificacion:
                             # Buscar la notificación más reciente de este tipo para este cliente
+                            # Ordenar por ID descendente (más reciente primero) ya que created_at puede no existir
                             notificacion_existente = (
                                 self.db.query(Notificacion)
                                 .filter(
@@ -114,7 +115,7 @@ class NotificacionesPreviasService:
                                         Notificacion.tipo == tipo_notificacion,
                                     )
                                 )
-                                .order_by(Notificacion.created_at.desc())
+                                .order_by(Notificacion.id.desc())
                                 .first()
                             )
 

@@ -288,7 +288,7 @@ def listar_notificaciones(
                     col_idx += 1  # asunto
                     mensaje = row[col_idx] if len(row) > col_idx else None
                     col_idx += 1  # mensaje
-                    estado = row[col_idx] if len(row) > col_idx else None
+                    estado_row = row[col_idx] if len(row) > col_idx else None
                     col_idx += 1  # estado
                     programada_para = row[col_idx] if len(row) > col_idx else None
                     col_idx += 1  # programada_para (no usado)
@@ -321,7 +321,7 @@ def listar_notificaciones(
                         "canal": None,  # No existe en BD cuando canal_exists = False
                         "mensaje": mensaje or "",
                         "asunto": asunto,
-                        "estado": estado or "PENDIENTE",
+                        "estado": estado_row or "PENDIENTE",
                         "fecha_envio": enviada_en,
                         "fecha_creacion": created_at,
                     }
@@ -337,10 +337,18 @@ def listar_notificaciones(
             query = query.filter(Notificacion.estado == estado)
 
         # Contar total
-        total = query.count()
+        try:
+            total = query.count()
+        except Exception as e:
+            logger.error(f"Error contando notificaciones: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Error contando notificaciones: {str(e)}")
 
         # Aplicar paginación
-        notificaciones = query.order_by(Notificacion.created_at.desc()).offset(skip).limit(limit).all()
+        try:
+            notificaciones = query.order_by(Notificacion.created_at.desc()).offset(skip).limit(limit).all()
+        except Exception as e:
+            logger.error(f"Error obteniendo notificaciones: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Error obteniendo notificaciones: {str(e)}")
 
         # Serializar notificaciones usando el schema con manejo de errores
         items = []
@@ -356,7 +364,7 @@ def listar_notificaciones(
                 
                 items.append(NotificacionResponse.model_validate(notif))
             except Exception as e:
-                logger.warning(f"Error serializando notificación {notif.id}: {e}")
+                logger.warning(f"Error serializando notificación {notif.id}: {e}", exc_info=True)
                 continue  # Continuar con el siguiente item en lugar de fallar todo
 
         # Retornar respuesta paginada
