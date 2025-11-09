@@ -4,12 +4,30 @@ Configuración de la aplicación
 
 import json
 import logging
+import os
 from typing import List, Optional
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
+
+
+def _get_default_cors_origins() -> List[str]:
+    """
+    Obtiene los CORS origins por defecto según el entorno.
+    En producción, solo incluye el frontend de producción.
+    En desarrollo, incluye localhost.
+    """
+    env = os.getenv("ENVIRONMENT", "development")
+    if env == "production":
+        return ["https://rapicredit.onrender.com"]
+    else:
+        return [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "https://rapicredit.onrender.com",
+        ]
 
 
 class Settings(BaseSettings):
@@ -43,11 +61,7 @@ class Settings(BaseSettings):
     # CORS
     # ============================================
     CORS_ORIGINS: List[str] = Field(
-        default=[
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "https://rapicredit.onrender.com",  # Frontend en producción
-        ],
+        default_factory=lambda: _get_default_cors_origins(),
         env="CORS_ORIGINS",
     )
 

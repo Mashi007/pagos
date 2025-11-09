@@ -364,9 +364,18 @@ def listar_notificaciones(
             logger.error(f"Error contando notificaciones: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Error contando notificaciones: {str(e)}")
 
-        # Aplicar paginación
+        # Aplicar paginación - usar created_at si existe, sino usar id
         try:
-            notificaciones = query.order_by(Notificacion.created_at.desc()).offset(skip).limit(limit).all()
+            if created_at_exists:
+                try:
+                    notificaciones = query.order_by(Notificacion.created_at.desc()).offset(skip).limit(limit).all()
+                except (AttributeError, ProgrammingError):
+                    # Si created_at no existe en el modelo o BD, usar id
+                    logger.warning("created_at no disponible en modelo/BD, usando id para ordenar")
+                    notificaciones = query.order_by(Notificacion.id.desc()).offset(skip).limit(limit).all()
+            else:
+                # Si created_at no existe, ordenar por id descendente
+                notificaciones = query.order_by(Notificacion.id.desc()).offset(skip).limit(limit).all()
         except Exception as e:
             logger.error(f"Error obteniendo notificaciones: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Error obteniendo notificaciones: {str(e)}")
@@ -379,9 +388,9 @@ def listar_notificaciones(
                 if not notif.mensaje:
                     logger.warning(f"Notificación {notif.id} tiene mensaje vacío, saltando...")
                     continue
-                if not notif.fecha_creacion:
-                    logger.warning(f"Notificación {notif.id} tiene fecha_creacion None, saltando...")
-                    continue
+                # Si created_at no existe, fecha_creacion puede ser None (no es crítico)
+                if created_at_exists and not notif.fecha_creacion:
+                    logger.warning(f"Notificación {notif.id} tiene fecha_creacion None, usando None...")
 
                 items.append(NotificacionResponse.model_validate(notif))
             except Exception as e:
