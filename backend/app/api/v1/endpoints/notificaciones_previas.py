@@ -74,12 +74,26 @@ def listar_notificaciones_previas(
     - Filtro opcional por estado de envío (ENVIADA, PENDIENTE, FALLIDA)
     """
     try:
+        logger.info(f"📥 [NotificacionesPrevias] Solicitud GET / - estado={estado}")
+        
+        # Verificar conexión a BD
+        try:
+            from sqlalchemy import text
+            db.execute(text("SELECT 1"))
+            logger.debug("✅ [NotificacionesPrevias] Conexión a BD verificada")
+        except Exception as e:
+            logger.error(f"❌ [NotificacionesPrevias] Error de conexión a BD: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Error de conexión a base de datos: {str(e)}")
+        
         service = NotificacionesPreviasService(db)
         resultados = service.obtener_notificaciones_previas_cached()
+        logger.info(f"📊 [NotificacionesPrevias] Resultados calculados: {len(resultados)} registros")
 
         # Filtrar por estado si se proporciona
         if estado:
+            resultados_antes = len(resultados)
             resultados = [r for r in resultados if r.get("estado") == estado]
+            logger.info(f"🔍 [NotificacionesPrevias] Filtrado por estado '{estado}': {resultados_antes} -> {len(resultados)}")
 
         # Contar por categorías
         dias_5 = len([r for r in resultados if r["dias_antes_vencimiento"] == 5])

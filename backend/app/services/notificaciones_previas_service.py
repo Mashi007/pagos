@@ -44,8 +44,12 @@ class NotificacionesPreviasService:
         fecha_1_dia = hoy + timedelta(days=1)
 
         try:
+            # Verificar conexión a BD
+            logger.info("🔍 [NotificacionesPrevias] Iniciando cálculo de notificaciones previas...")
+            
             # Obtener préstamos aprobados con sus cuotas
             prestamos_aprobados = self.db.query(Prestamo).filter(Prestamo.estado == "APROBADO").all()
+            logger.info(f"📊 [NotificacionesPrevias] Encontrados {len(prestamos_aprobados)} préstamos aprobados")
 
             resultados = []
 
@@ -107,20 +111,30 @@ class NotificacionesPreviasService:
                         if tipo_notificacion:
                             # Buscar la notificación más reciente de este tipo para este cliente
                             # Ordenar por ID descendente (más reciente primero) ya que created_at puede no existir
-                            notificacion_existente = (
-                                self.db.query(Notificacion)
-                                .filter(
-                                    and_(
-                                        Notificacion.cliente_id == cliente.id,
-                                        Notificacion.tipo == tipo_notificacion,
+                            try:
+                                notificacion_existente = (
+                                    self.db.query(Notificacion)
+                                    .filter(
+                                        and_(
+                                            Notificacion.cliente_id == cliente.id,
+                                            Notificacion.tipo == tipo_notificacion,
+                                        )
                                     )
+                                    .order_by(Notificacion.id.desc())
+                                    .first()
                                 )
-                                .order_by(Notificacion.id.desc())
-                                .first()
-                            )
 
-                            if notificacion_existente:
-                                estado_notificacion = notificacion_existente.estado
+                                if notificacion_existente:
+                                    estado_notificacion = notificacion_existente.estado
+                                    logger.debug(
+                                        f"📧 [NotificacionesPrevias] Cliente {cliente.id} tiene notificación {tipo_notificacion} "
+                                        f"con estado {estado_notificacion}"
+                                    )
+                            except Exception as e:
+                                logger.warning(
+                                    f"⚠️ [NotificacionesPrevias] Error buscando notificación para cliente {cliente.id}: {e}"
+                                )
+                                # Continuar con estado PENDIENTE por defecto
 
                         resultado = {
                             "prestamo_id": prestamo.id,
