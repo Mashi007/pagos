@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { FileText, Settings, Zap, Copy, X } from 'lucide-react'
+import { FileText, Settings, Zap, Copy, X, Bell, Calendar, AlertTriangle, Shield } from 'lucide-react'
 import { emailConfigService } from '@/services/notificacionService'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 
 export function ConfiguracionNotificaciones() {
@@ -12,6 +13,7 @@ export function ConfiguracionNotificaciones() {
   const [configEnvios, setConfigEnvios] = useState<Record<string, { habilitado: boolean, cco: string[] }>>({})
   const [guardandoEnvios, setGuardandoEnvios] = useState(false)
   const [cargando, setCargando] = useState(true)
+  const [activeTab, setActiveTab] = useState<string>('previa')
 
   // Mapeo de tipos a casos
   const mapeoTipos = {
@@ -25,12 +27,13 @@ export function ConfiguracionNotificaciones() {
     'PREJUDICIAL': { caso: 'Prejudicial', categoria: 'Prejudicial' },
   }
 
-  const tiposOrdenados = [
-    'PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES',
-    'PAGO_DIA_0',
-    'PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO',
-    'PREJUDICIAL'
-  ]
+  // Organización por pestañas
+  const tiposPorPestaña: Record<string, string[]> = {
+    'previa': ['PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES'],
+    'dia-pago': ['PAGO_DIA_0'],
+    'retrasada': ['PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO'],
+    'prejudicial': ['PREJUDICIAL']
+  }
 
   useEffect(() => {
     cargarConfiguracionEnvios()
@@ -146,84 +149,106 @@ export function ConfiguracionNotificaciones() {
               <p>Cargando configuración...</p>
             </div>
           ) : (
-          <div className="space-y-4">
-            {/* Grid mejorado - menos columnas para tarjetas más anchas y cómodas */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Función helper para renderizar cada tipo */}
-              {tiposOrdenados.map(tipo => {
-                const mapeo = mapeoTipos[tipo as keyof typeof mapeoTipos]
-                const config = configEnvios[tipo] || { habilitado: true, cco: [] }
-                const habilitado = config.habilitado
-                const ccoList = config.cco || []
-                
-                return (
-                  <div key={tipo} className="border rounded-lg p-5 space-y-4 bg-white hover:shadow-md transition-all">
-                    {/* Header con toggle */}
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-base font-semibold text-gray-900">{mapeo?.caso || tipo}</div>
-                        <div className="text-sm text-gray-600 mt-1">{mapeo?.categoria || 'Sin categoría'}</div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-xs w-8 text-center font-medium ${!habilitado ? 'text-gray-900' : 'text-gray-400'}`}>OFF</span>
-                        <button
-                          type="button"
-                          onClick={() => toggleEnvio(tipo)}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
-                            habilitado ? 'bg-blue-600' : 'bg-gray-300'
-                          }`}
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${
-                              habilitado ? 'translate-x-6' : 'translate-x-1'
-                            }`}
-                          />
-                        </button>
-                        <span className={`text-xs w-8 text-center font-medium ${habilitado ? 'text-gray-900' : 'text-gray-400'}`}>ON</span>
-                      </div>
-                    </div>
-                    
-                    {/* CCO mejorado - Campos más grandes y cómodos */}
-                    <div className="pt-4 border-t border-gray-200">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Copy className="h-5 w-5 text-gray-600" />
-                        <label className="text-sm font-semibold text-gray-800">Correos en CCO (hasta 3):</label>
-                      </div>
-                      <div className="space-y-3">
-                        {[0, 1, 2].map(index => (
-                          <div key={index} className="flex items-center gap-2">
-                            <Input
-                              type="email"
-                              placeholder={`ejemplo${index + 1}@correo.com`}
-                              value={ccoList[index] || ''}
-                              onChange={(e) => actualizarCCO(tipo, index, e.target.value)}
-                              className="h-10 text-base px-4 flex-1 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                              disabled={!habilitado}
-                            />
-                            {ccoList[index] && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => eliminarCCO(tipo, index)}
-                                className="h-10 w-10 p-0 flex-shrink-0 hover:bg-red-50 hover:text-red-600 transition-colors"
-                                disabled={!habilitado}
-                                title="Eliminar correo"
-                              >
-                                <X className="h-5 w-5" />
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="previa" className="flex items-center gap-2">
+                <Bell className="h-4 w-4" />
+                Notificación Previa
+              </TabsTrigger>
+              <TabsTrigger value="dia-pago" className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Día de Pago
+              </TabsTrigger>
+              <TabsTrigger value="retrasada" className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Retrasada
+              </TabsTrigger>
+              <TabsTrigger value="prejudicial" className="flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Prejudicial
+              </TabsTrigger>
+            </TabsList>
 
-            {/* Botón Guardar compacto */}
-            <div className="flex justify-end pt-2 border-t">
+            {/* Renderizar tarjetas por pestaña */}
+            {Object.entries(tiposPorPestaña).map(([pestaña, tipos]) => (
+              <TabsContent key={pestaña} value={pestaña} className="space-y-4 mt-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {tipos.map(tipo => {
+                    const mapeo = mapeoTipos[tipo as keyof typeof mapeoTipos]
+                    const config = configEnvios[tipo] || { habilitado: true, cco: [] }
+                    const habilitado = config.habilitado
+                    const ccoList = config.cco || []
+                    
+                    return (
+                      <div key={tipo} className="border rounded-lg p-5 space-y-4 bg-white hover:shadow-md transition-all">
+                        {/* Header con toggle */}
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-base font-semibold text-gray-900">{mapeo?.caso || tipo}</div>
+                            <div className="text-sm text-gray-600 mt-1">{mapeo?.categoria || 'Sin categoría'}</div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className={`text-xs w-8 text-center font-medium ${!habilitado ? 'text-gray-900' : 'text-gray-400'}`}>OFF</span>
+                            <button
+                              type="button"
+                              onClick={() => toggleEnvio(tipo)}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
+                                habilitado ? 'bg-blue-600' : 'bg-gray-300'
+                              }`}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${
+                                  habilitado ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                              />
+                            </button>
+                            <span className={`text-xs w-8 text-center font-medium ${habilitado ? 'text-gray-900' : 'text-gray-400'}`}>ON</span>
+                          </div>
+                        </div>
+                        
+                        {/* CCO mejorado - Campos más grandes y cómodos */}
+                        <div className="pt-4 border-t border-gray-200">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Copy className="h-5 w-5 text-gray-600" />
+                            <label className="text-sm font-semibold text-gray-800">Correos en CCO (hasta 3):</label>
+                          </div>
+                          <div className="space-y-3">
+                            {[0, 1, 2].map(index => (
+                              <div key={index} className="flex items-center gap-2">
+                                <Input
+                                  type="email"
+                                  placeholder={`ejemplo${index + 1}@correo.com`}
+                                  value={ccoList[index] || ''}
+                                  onChange={(e) => actualizarCCO(tipo, index, e.target.value)}
+                                  className="h-10 text-base px-4 flex-1 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                  disabled={!habilitado}
+                                />
+                                {ccoList[index] && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => eliminarCCO(tipo, index)}
+                                    className="h-10 w-10 p-0 flex-shrink-0 hover:bg-red-50 hover:text-red-600 transition-colors"
+                                    disabled={!habilitado}
+                                    title="Eliminar correo"
+                                  >
+                                    <X className="h-5 w-5" />
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </TabsContent>
+            ))}
+
+            {/* Botón Guardar - fuera de las pestañas para que siempre sea visible */}
+            <div className="flex justify-end pt-4 border-t mt-6">
               <Button
                 onClick={guardarConfiguracionEnvios}
                 disabled={guardandoEnvios}
@@ -234,7 +259,7 @@ export function ConfiguracionNotificaciones() {
                 {guardandoEnvios ? 'Guardando...' : 'Guardar Configuración'}
               </Button>
             </div>
-          </div>
+          </Tabs>
           )}
         </CardContent>
       </Card>
