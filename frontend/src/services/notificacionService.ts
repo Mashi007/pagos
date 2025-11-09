@@ -101,6 +101,14 @@ class NotificacionService {
   async procesarAutomaticas(): Promise<{ mensaje: string, estadisticas: any }> {
     return await apiClient.post(`${this.baseUrl}/automaticas/procesar`)
   }
+
+  // Notificaciones previas
+  async listarNotificacionesPrevias(estado?: string): Promise<{ items: any[], total: number, dias_5: number, dias_3: number, dias_1: number }> {
+    const params = new URLSearchParams()
+    if (estado) params.append('estado', estado)
+    
+    return await apiClient.get<{ items: any[], total: number, dias_5: number, dias_3: number, dias_1: number }>(`/api/v1/notificaciones-previas/?${params}`)
+  }
 }
 
 class EmailConfigService {

@@ -34,10 +34,21 @@ export function Notificaciones() {
   const [page, setPage] = useState(1)
   const perPage = 20
 
-  // Cargar notificaciones desde API
+  // Cargar notificaciones previas si estamos en la pestaña "previa"
+  const { data: notificacionesPreviasData, isLoading: isLoadingPrevias, error: errorPrevias, refetch: refetchPrevias } = useQuery({
+    queryKey: ['notificaciones-previas', filterEstado],
+    queryFn: () => notificacionService.listarNotificacionesPrevias(filterEstado || undefined),
+    enabled: activeTab === 'previa', // Solo cargar cuando esté en la pestaña previa
+    staleTime: 30 * 1000, // Cache de 30 segundos
+    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos
+    refetchOnWindowFocus: true, // Refrescar al enfocar ventana
+  })
+
+  // Cargar notificaciones normales para otras pestañas
   const { data: notificacionesData, isLoading, error, refetch } = useQuery({
     queryKey: ['notificaciones', filterEstado, page, perPage],
     queryFn: () => notificacionService.listarNotificaciones(page, perPage, filterEstado || undefined),
+    enabled: activeTab !== 'previa', // Solo cargar cuando NO esté en la pestaña previa
     staleTime: 30 * 1000, // Cache de 30 segundos
     refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos (reducido de 30s)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
@@ -46,6 +57,10 @@ export function Notificaciones() {
   const notificaciones = notificacionesData?.items || []
   const total = notificacionesData?.total || 0
   const totalPages = notificacionesData?.total_pages || 0
+  
+  // Datos de notificaciones previas
+  const notificacionesPrevias = notificacionesPreviasData?.items || []
+  const totalPrevias = notificacionesPreviasData?.total || 0
 
   // Cargar estadísticas
   const { data: estadisticas } = useQuery({
@@ -143,7 +158,11 @@ export function Notificaciones() {
   }
 
   const handleRefresh = () => {
-    refetch()
+    if (activeTab === 'previa') {
+      refetchPrevias()
+    } else {
+      refetch()
+    }
     toast.success('Notificaciones actualizadas')
   }
 
@@ -176,8 +195,8 @@ export function Notificaciones() {
           </div>
           {activeTab !== 'configuracion' && (
             <div className="flex space-x-2">
-              <Button variant="outline" onClick={handleRefresh} disabled={isLoading}>
-                <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              <Button variant="outline" onClick={handleRefresh} disabled={activeTab === 'previa' ? isLoadingPrevias : isLoading}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${(activeTab === 'previa' ? isLoadingPrevias : isLoading) ? 'animate-spin' : ''}`} />
                 Actualizar
               </Button>
             </div>
@@ -200,16 +219,18 @@ export function Notificaciones() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Buscar por asunto, mensaje o tipo..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
+              <div className={`grid grid-cols-1 gap-4 ${activeTab === 'previa' ? 'md:grid-cols-2' : 'md:grid-cols-4'}`}>
+                {activeTab !== 'previa' && (
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Buscar por asunto, mensaje o tipo..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                )}
                 <select
                   value={filterEstado}
                   onChange={(e) => {
@@ -222,18 +243,18 @@ export function Notificaciones() {
                   <option value="ENVIADA">Enviadas</option>
                   <option value="PENDIENTE">Pendientes</option>
                   <option value="FALLIDA">Fallidas</option>
-                  <option value="CANCELADA">Canceladas</option>
                 </select>
-                <select
-                  value={filterCanal}
-                  onChange={(e) => setFilterCanal(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Todos los canales</option>
-                  <option value="EMAIL">Email</option>
-                  <option value="WHATSAPP">WhatsApp</option>
-                  <option value="SMS">SMS</option>
-                </select>
+                {activeTab !== 'previa' && (
+                  <select
+                    value={filterCanal}
+                    onChange={(e) => setFilterCanal(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Todos los canales</option>
+                    <option value="EMAIL">Email</option>
+                    <option value="WHATSAPP">WhatsApp</option>
+                  </select>
+                )}
                 <Button variant="outline" onClick={handleLimpiarFiltros} className="flex items-center">
                   <Filter className="w-4 h-4 mr-2" />
                   Limpiar Filtros
@@ -307,7 +328,7 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-gray-600">
-                  {filteredNotificaciones.length}
+                  {activeTab === 'previa' ? totalPrevias : filteredNotificaciones.length}
                 </div>
                 <p className="text-xs text-gray-600">Notificaciones en esta pestaña</p>
               </CardContent>
@@ -320,7 +341,9 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
-                  {filteredNotificaciones.filter(n => n.estado === 'ENVIADA').length}
+                  {activeTab === 'previa' 
+                    ? notificacionesPrevias.filter(n => n.estado === 'ENVIADA').length
+                    : filteredNotificaciones.filter(n => n.estado === 'ENVIADA').length}
                 </div>
                 <p className="text-xs text-gray-600">Envíos exitosos</p>
               </CardContent>
@@ -333,7 +356,9 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-yellow-600">
-                  {filteredNotificaciones.filter(n => n.estado === 'PENDIENTE').length}
+                  {activeTab === 'previa'
+                    ? notificacionesPrevias.filter(n => n.estado === 'PENDIENTE').length
+                    : filteredNotificaciones.filter(n => n.estado === 'PENDIENTE').length}
                 </div>
                 <p className="text-xs text-gray-600">En espera de envío</p>
               </CardContent>
@@ -346,7 +371,9 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-600">
-                  {filteredNotificaciones.filter(n => n.estado === 'FALLIDA').length}
+                  {activeTab === 'previa'
+                    ? notificacionesPrevias.filter(n => n.estado === 'FALLIDA').length
+                    : filteredNotificaciones.filter(n => n.estado === 'FALLIDA').length}
                 </div>
                 <p className="text-xs text-gray-600">Requieren revisión</p>
               </CardContent>
@@ -367,24 +394,24 @@ export function Notificaciones() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {(activeTab === 'previa' ? isLoadingPrevias : isLoading) ? (
               <div className="text-center py-8">
                 <RefreshCw className="w-8 h-8 mx-auto mb-4 text-gray-400 animate-spin" />
                 <p className="text-gray-500">Cargando notificaciones...</p>
               </div>
-            ) : error ? (
+            ) : (activeTab === 'previa' ? errorPrevias : error) ? (
               <div className="text-center py-8 text-red-500">
                 <AlertTriangle className="w-12 h-12 mx-auto mb-4" />
                 <p>Error al cargar notificaciones</p>
-                <Button variant="outline" onClick={() => refetch()} className="mt-4">
+                <Button variant="outline" onClick={() => activeTab === 'previa' ? refetchPrevias() : refetch()} className="mt-4">
                   Reintentar
                 </Button>
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredNotificaciones.map((notificacion) => (
+                {(activeTab === 'previa' ? notificacionesPrevias : filteredNotificaciones).map((notificacion) => (
                   <div 
-                    key={notificacion.id} 
+                    key={activeTab === 'previa' ? `${notificacion.prestamo_id}-${notificacion.dias_antes_vencimiento}` : notificacion.id} 
                     className={`border rounded-lg p-4 hover:bg-gray-50 transition-colors ${
                       notificacion.estado === 'FALLIDA' ? 'bg-red-50 border-red-200' :
                       notificacion.estado === 'PENDIENTE' ? 'bg-yellow-50 border-yellow-200' :
@@ -396,7 +423,9 @@ export function Notificaciones() {
                       <div className="flex-1">
                         <div className="flex items-start space-x-3">
                           <div className="mt-1">
-                            {notificacion.canal === 'EMAIL' ? (
+                            {activeTab === 'previa' ? (
+                              <Bell className="w-5 h-5 text-blue-600" />
+                            ) : notificacion.canal === 'EMAIL' ? (
                               <Mail className="w-5 h-5 text-blue-600" />
                             ) : (
                               <Bell className="w-5 h-5 text-gray-600" />
@@ -405,31 +434,49 @@ export function Notificaciones() {
                           <div className="flex-1">
                             <div className="flex items-center space-x-2 mb-2">
                               <h3 className="font-semibold text-gray-900">
-                                {notificacion.asunto || 'Sin asunto'}
+                                {activeTab === 'previa' 
+                                  ? `${notificacion.nombre} - ${notificacion.cedula}`
+                                  : (notificacion.asunto || 'Sin asunto')}
                               </h3>
                             </div>
-                            <p className="text-gray-600 text-sm mb-2 line-clamp-2">
-                              {notificacion.mensaje}
-                            </p>
+                            {activeTab === 'previa' ? (
+                              <div className="text-gray-600 text-sm mb-2">
+                                <p><strong>Modelo:</strong> {notificacion.modelo_vehiculo}</p>
+                                <p><strong>Correo:</strong> {notificacion.correo}</p>
+                                <p><strong>Teléfono:</strong> {notificacion.telefono}</p>
+                                <p><strong>Días antes de vencimiento:</strong> {notificacion.dias_antes_vencimiento}</p>
+                                <p><strong>Fecha vencimiento:</strong> {new Date(notificacion.fecha_vencimiento).toLocaleDateString('es-ES')}</p>
+                                <p><strong>Cuota #:</strong> {notificacion.numero_cuota} - Monto: ${notificacion.monto_cuota.toFixed(2)}</p>
+                                <p><strong>Préstamo ID:</strong> {notificacion.prestamo_id}</p>
+                              </div>
+                            ) : (
+                              <p className="text-gray-600 text-sm mb-2 line-clamp-2">
+                                {notificacion.mensaje}
+                              </p>
+                            )}
                             <div className="flex items-center space-x-4 text-xs text-gray-500 flex-wrap gap-2">
-                              <span className="flex items-center">
-                                <Calendar className="w-3 h-3 mr-1" />
-                                Creada: {new Date(notificacion.fecha_creacion || notificacion.created_at || Date.now()).toLocaleString('es-ES')}
-                              </span>
-                              {notificacion.fecha_envio && (
-                                <span className="flex items-center">
-                                  <CheckCircle className="w-3 h-3 mr-1" />
-                                  Enviada: {new Date(notificacion.fecha_envio).toLocaleString('es-ES')}
-                                </span>
-                              )}
-                              {notificacion.cliente_id && (
-                                <span className="flex items-center">
-                                  <User className="w-3 h-3 mr-1" />
-                                  Cliente ID: {notificacion.cliente_id}
-                                </span>
+                              {activeTab !== 'previa' && (
+                                <>
+                                  <span className="flex items-center">
+                                    <Calendar className="w-3 h-3 mr-1" />
+                                    Creada: {new Date(notificacion.fecha_creacion || notificacion.created_at || Date.now()).toLocaleString('es-ES')}
+                                  </span>
+                                  {notificacion.fecha_envio && (
+                                    <span className="flex items-center">
+                                      <CheckCircle className="w-3 h-3 mr-1" />
+                                      Enviada: {new Date(notificacion.fecha_envio).toLocaleString('es-ES')}
+                                    </span>
+                                  )}
+                                  {notificacion.cliente_id && (
+                                    <span className="flex items-center">
+                                      <User className="w-3 h-3 mr-1" />
+                                      Cliente ID: {notificacion.cliente_id}
+                                    </span>
+                                  )}
+                                </>
                               )}
                             </div>
-                            {notificacion.estado === 'FALLIDA' && (
+                            {notificacion.estado === 'FALLIDA' && activeTab !== 'previa' && (
                               <div className="mt-2 p-2 bg-red-100 rounded text-xs text-red-800">
                                 <strong>Error:</strong> {notificacion.error_mensaje || 'Error desconocido'}
                               </div>
@@ -440,19 +487,24 @@ export function Notificaciones() {
                       <div className="flex items-center space-x-3">
                         <div className="flex flex-col space-y-2">
                           {getEstadoBadge(notificacion.estado)}
-                          {getCanalBadge(notificacion.canal || 'EMAIL')}
-                          {getTipoBadge(notificacion.tipo)}
+                          {activeTab !== 'previa' && getCanalBadge(notificacion.canal || 'EMAIL')}
+                          {activeTab !== 'previa' && getTipoBadge(notificacion.tipo)}
+                          {activeTab === 'previa' && (
+                            <Badge className="bg-blue-100 text-blue-800">
+                              {notificacion.dias_antes_vencimiento} días antes
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>
                   </div>
                 ))}
                 
-                {filteredNotificaciones.length === 0 && (
+                {(activeTab === 'previa' ? notificacionesPrevias.length === 0 : filteredNotificaciones.length === 0) && (
                   <div className="text-center py-8 text-gray-500">
                     <Bell className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                     <p>No se encontraron notificaciones con los filtros aplicados</p>
-                    {notificaciones.length > 0 && (
+                    {activeTab !== 'previa' && notificaciones.length > 0 && (
                       <p className="text-sm mt-2">
                         Mostrando {filteredNotificaciones.length} de {notificaciones.length} notificaciones
                       </p>

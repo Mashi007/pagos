@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
+from app.models.notificacion import Notificacion
 from app.models.prestamo import Prestamo
 
 logger = logging.getLogger(__name__)
@@ -85,11 +86,41 @@ class NotificacionesPreviasService:
                 if cuota_proxima:
                     # Calcular días antes de vencimiento
                     dias_antes = (cuota_proxima.fecha_vencimiento - hoy).days
-
+                    
+                    # Determinar tipo de notificación según días
+                    tipo_notificacion = None
+                    if dias_antes == 5:
+                        tipo_notificacion = "PAGO_5_DIAS_ANTES"
+                    elif dias_antes == 3:
+                        tipo_notificacion = "PAGO_3_DIAS_ANTES"
+                    elif dias_antes == 1:
+                        tipo_notificacion = "PAGO_1_DIA_ANTES"
+                    
                     # Obtener datos del cliente
                     cliente = self.db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
-
+                    
                     if cliente:
+                        # Buscar notificación relacionada si existe
+                        estado_notificacion = "PENDIENTE"  # Por defecto pendiente (aún no enviada)
+                        notificacion_existente = None
+                        
+                        if tipo_notificacion:
+                            # Buscar la notificación más reciente de este tipo para este cliente
+                            notificacion_existente = (
+                                self.db.query(Notificacion)
+                                .filter(
+                                    and_(
+                                        Notificacion.cliente_id == cliente.id,
+                                        Notificacion.tipo == tipo_notificacion,
+                                    )
+                                )
+                                .order_by(Notificacion.created_at.desc())
+                                .first()
+                            )
+                            
+                            if notificacion_existente:
+                                estado_notificacion = notificacion_existente.estado
+                        
                         resultado = {
                             "prestamo_id": prestamo.id,
                             "cliente_id": cliente.id,
@@ -102,6 +133,7 @@ class NotificacionesPreviasService:
                             "fecha_vencimiento": cuota_proxima.fecha_vencimiento.isoformat(),
                             "numero_cuota": cuota_proxima.numero_cuota,
                             "monto_cuota": float(cuota_proxima.monto_cuota),
+                            "estado": estado_notificacion,  # ENVIADA, PENDIENTE, FALLIDA
                         }
                         resultados.append(resultado)
 
