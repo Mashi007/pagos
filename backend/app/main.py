@@ -54,6 +54,7 @@ from app.api.v1.endpoints import (
     modelos_vehiculos,
     monitoring,
     notificaciones,
+    notificaciones_previas,
     pagos,
     pagos_conciliacion,
     pagos_upload,
@@ -227,7 +228,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI):
     """Gestión del ciclo de vida"""
     init_db_startup()
+    
+    # Iniciar scheduler para tareas automáticas
+    from app.core import scheduler as scheduler_module
+    scheduler_module.iniciar_scheduler()
+    
     yield
+    
+    # Detener scheduler al cerrar
+    scheduler_module.detener_scheduler()
     init_db_shutdown()
 
 
@@ -287,6 +296,7 @@ app.include_router(amortizacion.router, prefix="/api/v1/amortizacion", tags=["am
 app.include_router(solicitudes.router, prefix="/api/v1/solicitudes", tags=["solicitudes"])
 app.include_router(aprobaciones.router, prefix="/api/v1/aprobaciones", tags=["aprobaciones"])
 app.include_router(notificaciones.router, prefix="/api/v1/notificaciones", tags=["notificaciones"])
+app.include_router(notificaciones_previas.router, prefix="/api/v1/notificaciones-previas", tags=["notificaciones-previas"])
 app.include_router(reportes.router, prefix="/api/v1/reportes", tags=["reportes"])
 app.include_router(cobranzas.router, prefix="/api/v1/cobranzas", tags=["cobranzas"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
@@ -305,6 +315,9 @@ app.include_router(concesionarios.router, prefix="/api/v1/concesionarios", tags=
 app.include_router(validadores.router, prefix="/api/v1/validadores", tags=["validadores"])
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(monitoring.router, prefix="/api/v1/monitoring", tags=["monitoring"])
+app.include_router(carga_masiva.router, prefix="/api/v1/carga-masiva", tags=["carga-masiva"])
+app.include_router(conciliacion_bancaria.router, prefix="/api/v1/conciliacion", tags=["conciliacion"])
+app.include_router(scheduler_notificaciones.router, prefix="/api/v1/scheduler", tags=["scheduler"])
 app.include_router(carga_masiva.router, prefix="/api/v1/carga-masiva", tags=["carga-masiva"])
 app.include_router(conciliacion_bancaria.router, prefix="/api/v1/conciliacion", tags=["conciliacion"])
 app.include_router(scheduler_notificaciones.router, prefix="/api/v1/scheduler", tags=["scheduler"])
