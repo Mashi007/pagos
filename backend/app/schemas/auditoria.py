@@ -12,6 +12,7 @@ class AuditoriaBase(BaseModel):
     tabla: str
     registro_id: Optional[int] = None
     descripcion: Optional[str] = None
+    campo: Optional[str] = None  # Campo modificado (para auditorías detalladas)
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
     resultado: str = "EXITOSO"

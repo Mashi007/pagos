@@ -1,6 +1,6 @@
 import io
 import logging
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -65,6 +65,21 @@ def _convertir_registro_general_listado(registro) -> dict:
     if hasattr(registro, "usuario") and registro.usuario is not None:
         usuario_email_val = getattr(registro.usuario, "email", None)
     modulo_val = getattr(registro, "entidad", None)
+    # Extraer campo de la descripción si está disponible (formato: "ACCION campo: valor")
+    descripcion = getattr(registro, "detalles", None) or ""
+    campo = None
+    if descripcion and ":" in descripcion:
+        # Intentar extraer el campo de la descripción
+        partes = descripcion.split(":", 1)
+        if len(partes) > 0:
+            campo_parte = partes[0].strip()
+            # Remover la acción si está al inicio
+            for accion in ["CREAR", "ACTUALIZAR", "ELIMINAR", "UPDATE", "CREATE", "DELETE"]:
+                if campo_parte.startswith(accion):
+                    campo_parte = campo_parte[len(accion):].strip()
+                    break
+            if campo_parte:
+                campo = campo_parte
     return {
         "id": registro.id,
         "usuario_id": registro.usuario_id,
@@ -73,7 +88,8 @@ def _convertir_registro_general_listado(registro) -> dict:
         "modulo": modulo_val,
         "tabla": modulo_val,
         "registro_id": getattr(registro, "entidad_id", None),
-        "descripcion": getattr(registro, "detalles", None),
+        "descripcion": descripcion,
+        "campo": campo,  # Campo extraído de la descripción
         "ip_address": getattr(registro, "ip_address", None),
         "user_agent": getattr(registro, "user_agent", None),
         "resultado": _determinar_resultado_auditoria(getattr(registro, "exito", None)),
@@ -94,6 +110,7 @@ def _convertir_registro_prestamos_listado(registro: PrestamoAuditoria) -> dict:
         "tabla": "prestamos",
         "registro_id": registro.prestamo_id,
         "descripcion": desc,
+        "campo": registro.campo_modificado,  # Campo modificado explícito
         "ip_address": None,
         "user_agent": None,
         "resultado": "EXITOSO",
@@ -114,6 +131,7 @@ def _convertir_registro_pagos_listado(registro: PagoAuditoria) -> dict:
         "tabla": "pagos",
         "registro_id": registro.pago_id,
         "descripcion": desc,
+        "campo": registro.campo_modificado,  # Campo modificado explícito
         "ip_address": None,
         "user_agent": None,
         "resultado": "EXITOSO",
@@ -137,7 +155,12 @@ def _unificar_registros_auditoria_listado(
 
 
 def _aplicar_filtros_memoria(
-    unified: List[dict], usuario_email: Optional[str], modulo: Optional[str], accion: Optional[str]
+    unified: List[dict],
+    usuario_email: Optional[str],
+    modulo: Optional[str],
+    accion: Optional[str],
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
 ) -> List[dict]:
     """Aplica filtros en memoria sobre registros unificados"""
     if usuario_email:
@@ -146,6 +169,14 @@ def _aplicar_filtros_memoria(
         unified = [u for u in unified if u.get("modulo") == modulo]
     if accion:
         unified = [u for u in unified if u.get("accion") == accion]
+    if fecha_desde:
+        if isinstance(fecha_desde, date) and not isinstance(fecha_desde, datetime):
+            fecha_desde = datetime.combine(fecha_desde, datetime.min.time())
+        unified = [u for u in unified if u.get("fecha") and u["fecha"] >= fecha_desde]
+    if fecha_hasta:
+        if isinstance(fecha_hasta, date) and not isinstance(fecha_hasta, datetime):
+            fecha_hasta = datetime.combine(fecha_hasta, datetime.max.time())
+        unified = [u for u in unified if u.get("fecha") and u["fecha"] <= fecha_hasta]
     return unified
 
 
@@ -176,6 +207,8 @@ def listar_auditoria(
     usuario_email: Optional[str] = Query(None, description="Filtrar por email de usuario"),
     modulo: Optional[str] = Query(None, description="Filtrar por módulo"),
     accion: Optional[str] = Query(None, description="Filtrar por acción"),
+    fecha_desde: Optional[date] = Query(None, description="Filtrar desde fecha"),
+    fecha_hasta: Optional[date] = Query(None, description="Filtrar hasta fecha"),
     skip: int = Query(0, ge=0, description="Registros a omitir (paginación)"),
     limit: int = Query(50, ge=1, le=200, description="Registros por página"),
     ordenar_por: str = Query("fecha", description="Campo para ordenar"),
@@ -207,7 +240,7 @@ def listar_auditoria(
         query = db.query(Auditoria).options(joinedload(Auditoria.usuario))
 
         # Aplicar filtros
-        query = _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, None, None)
+        query = _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta)
 
         # Aplicar ordenamiento
         query = _aplicar_ordenamiento_auditoria(query, ordenar_por, orden)
@@ -225,21 +258,29 @@ def listar_auditoria(
 
         # Optimizar queries de préstamos y pagos con límite y orden
         try:
-            registros_prestamos = (
-                db.query(PrestamoAuditoria).order_by(PrestamoAuditoria.fecha_cambio.desc()).limit(max_to_load).all()
-            )
+            query_prestamos = db.query(PrestamoAuditoria).order_by(PrestamoAuditoria.fecha_cambio.desc())
+            if fecha_desde:
+                query_prestamos = query_prestamos.filter(PrestamoAuditoria.fecha_cambio >= fecha_desde)
+            if fecha_hasta:
+                query_prestamos = query_prestamos.filter(PrestamoAuditoria.fecha_cambio <= fecha_hasta)
+            registros_prestamos = query_prestamos.limit(max_to_load).all()
         except ProgrammingError:
             logger.warning("Error consultando tabla prestamo_auditoria, usando lista vacía")
             registros_prestamos = []
 
         try:
-            registros_pagos = db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc()).limit(max_to_load).all()
+            query_pagos = db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc())
+            if fecha_desde:
+                query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio >= fecha_desde)
+            if fecha_hasta:
+                query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio <= fecha_hasta)
+            registros_pagos = query_pagos.limit(max_to_load).all()
         except ProgrammingError:
             logger.warning("Error consultando tabla pago_auditoria, usando lista vacía")
             registros_pagos = []
 
         unified = _unificar_registros_auditoria_listado(registros_general, registros_prestamos, registros_pagos)
-        unified = _aplicar_filtros_memoria(unified, usuario_email, modulo, accion)
+        unified = _aplicar_filtros_memoria(unified, usuario_email, modulo, accion, fecha_desde, fecha_hasta)
         unified = _aplicar_ordenamiento_memoria(unified, ordenar_por, orden)
 
         paged, total, total_pages, current_page = _aplicar_paginacion_listado(unified, skip, limit)

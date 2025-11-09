@@ -40,7 +40,8 @@ export function Auditoria() {
     }, 30 * 60 * 1000) // 30 minutos
 
     return () => clearInterval(interval)
-  }, [currentPage, filtros])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, filtros.usuario_email, filtros.modulo, filtros.accion, filtros.fecha_desde, filtros.fecha_hasta])
 
   const cargarAuditoria = async () => {
     try {
@@ -59,16 +60,28 @@ export function Auditoria() {
         orden: filtros.orden
       }
       
-      console.log('📡 Llamando a API: /api/v1/auditoria')
+      console.log('📡 Llamando a API: /api/v1/auditoria con params:', params)
       const response = await auditoriaService.listarAuditoria(params)
       console.log('✅ Respuesta API:', response)
+      console.log('📊 Items recibidos:', response.items?.length || 0, 'Total:', response.total)
       
-      setAuditorias(response.items)
-      setTotal(response.total)
-    } catch (err) {
+      if (response.items && response.items.length > 0) {
+        setAuditorias(response.items)
+        setTotal(response.total)
+      } else {
+        setAuditorias([])
+        setTotal(response.total || 0)
+        if (response.total === 0) {
+          console.warn('⚠️ No hay registros de auditoría en la base de datos')
+        }
+      }
+    } catch (err: any) {
       console.error('❌ Error API:', err)
-      setError('Error al cargar auditoría')
-      toast.error('Error al cargar auditoría')
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Error al cargar auditoría'
+      setError(errorMessage)
+      toast.error(`Error al cargar auditoría: ${errorMessage}`)
+      setAuditorias([])
+      setTotal(0)
     } finally {
       setLoading(false)
     }
@@ -289,6 +302,26 @@ export function Auditoria() {
             </div>
           </div>
           
+          <div className="grid gap-4 md:grid-cols-2 mt-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Fecha Desde</label>
+              <Input
+                type="date"
+                value={filtros.fecha_desde}
+                onChange={(e) => setFiltros({ ...filtros, fecha_desde: e.target.value })}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Fecha Hasta</label>
+              <Input
+                type="date"
+                value={filtros.fecha_hasta}
+                onChange={(e) => setFiltros({ ...filtros, fecha_hasta: e.target.value })}
+              />
+            </div>
+          </div>
+          
           <div className="flex gap-2 mt-4">
             <Button onClick={handleFiltrar}>
               <Search className="w-4 h-4 mr-2" />
@@ -310,6 +343,7 @@ export function Auditoria() {
                 <TableHead>Email Usuario</TableHead>
                 <TableHead>Acción</TableHead>
                 <TableHead>Módulo</TableHead>
+                <TableHead>Campo</TableHead>
                 <TableHead>Descripción</TableHead>
                 <TableHead>Resultado</TableHead>
                 <TableHead>Fecha</TableHead>
@@ -318,14 +352,14 @@ export function Auditoria() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
                     <p className="text-gray-500">Cargando auditoría...</p>
                   </TableCell>
                 </TableRow>
               ) : error ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     <p className="text-red-500">{error}</p>
                     <Button onClick={cargarAuditoria} className="mt-2">
                       Reintentar
@@ -334,7 +368,7 @@ export function Auditoria() {
                 </TableRow>
               ) : auditorias.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     <p className="text-gray-500">No se encontraron registros de auditoría</p>
                   </TableCell>
                 </TableRow>
@@ -356,6 +390,9 @@ export function Auditoria() {
                       <Badge className={getModuloBadgeColor(auditoria.modulo)}>
                         {auditoria.modulo}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-600 font-medium">
+                      {auditoria.campo || '-'}
                     </TableCell>
                     <TableCell className="text-sm text-gray-600 max-w-xs truncate">
                       {auditoria.descripcion || `${auditoria.accion} en ${auditoria.modulo}${auditoria.registro_id ? ` #${auditoria.registro_id}` : ''}`}

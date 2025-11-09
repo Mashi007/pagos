@@ -9,6 +9,7 @@ export interface Auditoria {
   tabla: string
   registro_id?: number
   descripcion?: string
+  campo?: string  // Campo modificado (para auditorías detalladas)
   datos_anteriores?: any
   datos_nuevos?: any
   ip_address?: string
@@ -55,34 +56,35 @@ class AuditoriaService {
     try {
       console.log('🔍 Filtros enviados:', filters)
       const response = await apiClient.get<AuditoriaListResponse>(this.baseUrl, { params: filters })
-      console.log('📦 Respuesta recibida:', response)
+      console.log('📦 Respuesta recibida del servidor:', response)
       
       // Validar que la respuesta tenga la estructura esperada
       if (!response || typeof response !== 'object') {
+        console.error('❌ Respuesta inválida:', response)
         throw new Error('Respuesta inválida del servidor')
       }
       
       // Asegurar que tenga la estructura esperada
       const validResponse: AuditoriaListResponse = {
-        items: response.items || [],
-        total: response.total || 0,
-        page: response.page || 1,
-        page_size: response.page_size || 10,
-        total_pages: response.total_pages || 1
+        items: Array.isArray(response.items) ? response.items : [],
+        total: typeof response.total === 'number' ? response.total : 0,
+        page: typeof response.page === 'number' ? response.page : 1,
+        page_size: typeof response.page_size === 'number' ? response.page_size : 10,
+        total_pages: typeof response.total_pages === 'number' ? response.total_pages : 1
       }
       
+      console.log('✅ Respuesta validada:', validResponse)
       return validResponse
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error en listarAuditoria:', error)
+      console.error('❌ Detalles del error:', {
+        message: error?.message,
+        response: error?.response?.data,
+        status: error?.response?.status
+      })
       
-      // Retornar respuesta vacía en caso de error
-      return {
-        items: [],
-        total: 0,
-        page: 1,
-        page_size: 10,
-        total_pages: 1
-      }
+      // Re-lanzar el error para que el componente pueda manejarlo
+      throw error
     }
   }
 

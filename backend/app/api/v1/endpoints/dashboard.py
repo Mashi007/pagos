@@ -513,14 +513,27 @@ def _procesar_distribucion_rango_monto(
             # Construir query SQL optimizada con GROUP BY
             # Usar división entera para calcular el rango directamente en SQL
             try:
+                # ✅ DIAGNÓSTICO: Verificar query_base antes de obtener IDs
+                try:
+                    count_antes_ids = query_base.count()
+                    logger.info(f"📊 [financiamiento-por-rangos] query_base.count() antes de obtener IDs: {count_antes_ids}")
+                except Exception as e:
+                    logger.warning(f"⚠️ [financiamiento-por-rangos] No se pudo contar query_base antes de IDs: {e}")
+                
                 # Obtener los IDs de préstamos que cumplen los filtros
                 prestamo_ids_query = query_base.with_entities(Prestamo.id)
                 prestamo_ids_result = prestamo_ids_query.all()
                 prestamo_ids = [row[0] for row in prestamo_ids_result]
+                
+                logger.info(f"📊 [financiamiento-por-rangos] IDs obtenidos: {len(prestamo_ids)} préstamos")
 
                 if not prestamo_ids:
                     # Si no hay préstamos, construir respuesta con todos los rangos en 0
-                    logger.warning("⚠️ [financiamiento-por-rangos] No se encontraron préstamos con los filtros aplicados")
+                    logger.warning(
+                        f"⚠️ [financiamiento-por-rangos] No se encontraron préstamos con los filtros aplicados. "
+                        f"query_base.count()={count_antes_ids if 'count_antes_ids' in locals() else 'N/A'}, "
+                        f"total_prestamos={total_prestamos}"
+                    )
                     distribucion_data = []
                     for min_val, max_val, categoria in rangos:
                         distribucion_data.append(
@@ -3325,10 +3338,26 @@ def obtener_financiamiento_por_rangos(
                                 f"✅ [financiamiento-por-rangos] Encontrados {totales_alternativa.total_prestamos} préstamos válidos sin filtros de fecha. "
                                 f"Usando estos datos en lugar de retornar vacío."
                             )
-                            # Actualizar query_base y totales para usar datos sin filtros de fecha
+                            # ✅ Actualizar query_base y totales para usar datos sin filtros de fecha
                             query_base = query_diagnostico
                             total_prestamos = totales_alternativa.total_prestamos or 0
                             total_monto = float(totales_alternativa.total_monto or Decimal("0"))
+                            
+                            # ✅ VERIFICACIÓN: Contar query_base después de actualizar para confirmar
+                            try:
+                                count_verificacion = query_base.count()
+                                logger.info(
+                                    f"✅ [financiamiento-por-rangos] Fallback activado: Usando {total_prestamos} préstamos sin filtros de fecha. "
+                                    f"query_base actualizada, total_monto=${total_monto:,.2f}, "
+                                    f"query_base.count()={count_verificacion} (debe coincidir con total_prestamos)"
+                                )
+                                if count_verificacion != total_prestamos:
+                                    logger.warning(
+                                        f"⚠️ [financiamiento-por-rangos] DISCREPANCIA: query_base.count()={count_verificacion} "
+                                        f"no coincide con total_prestamos={total_prestamos}"
+                                    )
+                            except Exception as e:
+                                logger.error(f"❌ [financiamiento-por-rangos] Error verificando query_base después del fallback: {e}", exc_info=True)
                 except Exception as e:
                     logger.error(f"Error en diagnóstico adicional: {e}", exc_info=True)
         except Exception as e:
@@ -3360,6 +3389,19 @@ def obtener_financiamiento_por_rangos(
             logger.error(f"Error generando rangos: {e}", exc_info=True)
             rangos = [(0, None, "$0+")]  # Rango por defecto si falla
 
+        # ✅ DIAGNÓSTICO: Verificar estado antes de procesar distribución
+        # Verificar cuántos préstamos tiene query_base antes de procesar
+        try:
+            count_query_base = query_base.count()
+            logger.info(
+                f"📊 [financiamiento-por-rangos] Estado antes de procesar distribución: "
+                f"total_prestamos={total_prestamos}, total_monto={total_monto:,.2f}, "
+                f"rangos_generados={len(rangos)}, query_base.count()={count_query_base}"
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ [financiamiento-por-rangos] No se pudo contar query_base: {e}")
+            count_query_base = 0
+        
         # ✅ DIAGNÓSTICO: Medir tiempo de procesamiento de distribución
         tiempo_antes_procesamiento = time.time()
         tiempo_procesamiento = 0  # Inicializar para evitar error si hay excepción
@@ -3390,7 +3432,7 @@ def obtener_financiamiento_por_rangos(
 
         total_time = int((time.time() - start_time) * 1000)
         logger.info(f"⏱️ [financiamiento-por-rangos] Tiempo total: {total_time}ms (procesamiento: {tiempo_procesamiento}ms)")
-
+        
         # ✅ ALERTA: Si el endpoint es muy lento, registrar advertencia
         if total_time > 2000:
             logger.warning(
@@ -3398,6 +3440,14 @@ def obtener_financiamiento_por_rangos(
                 f"Total préstamos: {total_prestamos}, Total monto: {total_monto}, "
                 f"Rangos generados: {len(rangos)}, Rangos con datos: {len(distribucion_data) if distribucion_data else 0}"
             )
+
+        # ✅ DIAGNÓSTICO: Log final antes de retornar
+        rangos_con_datos = len([r for r in distribucion_data if r.get('cantidad_prestamos', 0) > 0]) if distribucion_data else 0
+        logger.info(
+            f"📊 [financiamiento-por-rangos] Respuesta final: "
+            f"total_prestamos={total_prestamos}, total_monto={total_monto:,.2f}, "
+            f"rangos_con_datos={rangos_con_datos}, total_rangos={len(distribucion_data) if distribucion_data else 0}"
+        )
 
         return {
             "rangos": distribucion_data,
