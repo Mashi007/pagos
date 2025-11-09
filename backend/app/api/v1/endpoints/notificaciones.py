@@ -30,6 +30,7 @@ from app.services.email_service import EmailService
 from app.services.notificacion_automatica_service import (
     NotificacionAutomaticaService,
 )
+from app.services.variables_notificacion_service import VariablesNotificacionService
 from app.services.whatsapp_service import WhatsAppService
 
 logger = logging.getLogger(__name__)
@@ -875,13 +876,43 @@ async def enviar_notificacion_con_plantilla(
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
-        # Reemplazar variables en el asunto y cuerpo
-        asunto = plantilla.asunto
-        cuerpo = plantilla.cuerpo
+        # Obtener préstamo y cuota relacionados si existen
+        prestamo = None
+        cuota = None
+        
+        # Intentar obtener el préstamo más reciente del cliente
+        from app.models.prestamo import Prestamo
+        from app.models.amortizacion import Cuota
+        
+        prestamo = db.query(Prestamo).filter(
+            Prestamo.cliente_id == cliente_id,
+            Prestamo.estado == "APROBADO"
+        ).order_by(Prestamo.fecha_registro.desc()).first()
+        
+        if prestamo:
+            # Obtener la cuota más próxima a vencer
+            cuota = db.query(Cuota).filter(
+                Cuota.prestamo_id == prestamo.id,
+                Cuota.estado.in_(["PENDIENTE", "ATRASADO"])
+            ).order_by(Cuota.fecha_vencimiento.asc()).first()
 
-        for key, value in variables.items():
-            asunto = asunto.replace(f"{{{{{key}}}}}", str(value))
-            cuerpo = cuerpo.replace(f"{{{{{key}}}}}", str(value))
+        # Construir variables desde la BD usando las variables configuradas
+        variables_service = VariablesNotificacionService(db=db)
+        
+        # Si se pasan variables manualmente, combinarlas con las de la BD
+        # Las variables manuales tienen prioridad sobre las de la BD
+        variables_bd = variables_service.construir_variables_desde_bd(
+            cliente=cliente,
+            prestamo=prestamo,
+            cuota=cuota,
+        )
+        
+        # Combinar: variables manuales tienen prioridad
+        variables_finales = {**variables_bd, **variables}
+
+        # Reemplazar variables en el asunto y cuerpo usando el servicio
+        asunto = variables_service.reemplazar_variables_en_texto(plantilla.asunto, variables_finales)
+        cuerpo = variables_service.reemplazar_variables_en_texto(plantilla.cuerpo, variables_finales)
 
         # Crear registro de notificación
         nueva_notif = Notificacion(

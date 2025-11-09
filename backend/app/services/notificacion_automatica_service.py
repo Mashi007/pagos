@@ -18,6 +18,7 @@ from app.models.notificacion import Notificacion
 from app.models.notificacion_plantilla import NotificacionPlantilla
 from app.models.prestamo import Prestamo
 from app.services.email_service import EmailService
+from app.services.variables_notificacion_service import VariablesNotificacionService
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class NotificacionAutomaticaService:
     def __init__(self, db: Session):
         self.db = db
         self.email_service = EmailService(db=db)
+        self.variables_service = VariablesNotificacionService(db=db)
         self._plantillas_cache: Dict[str, Optional[NotificacionPlantilla]] = {}
 
     def obtener_cuotas_pendientes_optimizado(self) -> List[Tuple[Cuota, Prestamo, Cliente]]:
@@ -168,31 +170,22 @@ class NotificacionAutomaticaService:
         """
         try:
 
-            # Preparar variables para la plantilla
-            variables = {
-                "nombre": cliente.nombres or "Cliente",
-                "monto": f"{cuota.monto_cuota:.2f}",
-                "fecha_vencimiento": (cuota.fecha_vencimiento.strftime("%d/%m/%Y") if cuota.fecha_vencimiento else "N/A"),
-                "numero_cuota": str(cuota.numero_cuota),
-                "credito_id": str(prestamo.id),
-                "cedula": cliente.cedula or "N/A",
-            }
-
-            # Calcular días de atraso si aplica
+            # Construir variables desde la BD usando las variables configuradas
+            dias_diferencia = None
             if cuota.fecha_vencimiento:
                 dias_diferencia = self.calcular_dias_para_vencimiento(cuota.fecha_vencimiento)
-                if dias_diferencia < 0:
-                    variables["dias_atraso"] = str(abs(dias_diferencia))
-                else:
-                    variables["dias_atraso"] = "0"
+            
+            # Usar el servicio de variables para construir variables dinámicamente desde la BD
+            variables = self.variables_service.construir_variables_desde_bd(
+                cliente=cliente,
+                prestamo=prestamo,
+                cuota=cuota,
+                dias_atraso=abs(dias_diferencia) if dias_diferencia and dias_diferencia < 0 else None,
+            )
 
-            # Reemplazar variables en el asunto y cuerpo
-            asunto = plantilla.asunto
-            cuerpo = plantilla.cuerpo
-
-            for key, value in variables.items():
-                asunto = asunto.replace(f"{{{{{key}}}}}", str(value))
-                cuerpo = cuerpo.replace(f"{{{{{key}}}}}", str(value))
+            # Reemplazar variables en el asunto y cuerpo usando el servicio
+            asunto = self.variables_service.reemplazar_variables_en_texto(plantilla.asunto, variables)
+            cuerpo = self.variables_service.reemplazar_variables_en_texto(plantilla.cuerpo, variables)
 
             # NOTA: La verificación de notificaciones existentes ya se hace en batch
             # en procesar_notificaciones_automaticas() para evitar queries N+1

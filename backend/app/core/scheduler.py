@@ -27,6 +27,7 @@ def calcular_notificaciones_previas_job():
         from app.models.notificacion_plantilla import NotificacionPlantilla
         from app.services.email_service import EmailService
         from app.services.notificaciones_previas_service import NotificacionesPreviasService
+        from app.services.variables_notificacion_service import VariablesNotificacionService
 
         logger.info("🔄 [Scheduler] Iniciando cálculo y envío de notificaciones previas...")
 
@@ -50,16 +51,20 @@ def calcular_notificaciones_previas_job():
         sin_plantilla = 0
         sin_email = 0
 
+        # Inicializar servicio de variables
+        variables_service = VariablesNotificacionService(db=db)
+        
         # Procesar cada notificación previa
         for resultado in resultados:
             cliente_id = resultado["cliente_id"]
             dias_antes = resultado["dias_antes_vencimiento"]
-            correo_cliente = resultado["correo"]
-            nombre_cliente = resultado["nombre"]
-            monto_cuota = resultado["monto_cuota"]
-            fecha_vencimiento = resultado["fecha_vencimiento"]
-            numero_cuota = resultado["numero_cuota"]
-            prestamo_id = resultado["prestamo_id"]
+            correo_cliente = resultado.get("correo", "")
+            # El campo puede ser "nombre_cliente" o "nombre" según la query
+            nombre_cliente = resultado.get("nombre_cliente", resultado.get("nombre", ""))
+            monto_cuota = resultado.get("monto_cuota", 0)
+            fecha_vencimiento = resultado.get("fecha_vencimiento", "")
+            numero_cuota = resultado.get("numero_cuota", "")
+            prestamo_id = resultado.get("prestamo_id", "")
 
             # Determinar tipo de notificación según días
             tipo_notificacion = None
@@ -91,23 +96,14 @@ def calcular_notificaciones_previas_job():
                 sin_plantilla += 1
                 continue
 
-            # Reemplazar variables en plantilla
-            asunto = plantilla.asunto
-            cuerpo = plantilla.cuerpo
+            # Construir variables desde el resultado de la query usando las variables configuradas
+            variables = variables_service.construir_variables_desde_dict(
+                datos_query=resultado,
+            )
 
-            # Variables disponibles
-            variables = {
-                "nombre": nombre_cliente,
-                "monto": f"{monto_cuota:.2f}",
-                "fecha_vencimiento": fecha_vencimiento,
-                "numero_cuota": str(numero_cuota),
-                "credito_id": str(prestamo_id),
-                "cedula": resultado.get("cedula", ""),
-            }
-
-            for key, value in variables.items():
-                asunto = asunto.replace(f"{{{{{key}}}}}", str(value))
-                cuerpo = cuerpo.replace(f"{{{{{key}}}}}", str(value))
+            # Reemplazar variables en plantilla usando el servicio
+            asunto = variables_service.reemplazar_variables_en_texto(plantilla.asunto, variables)
+            cuerpo = variables_service.reemplazar_variables_en_texto(plantilla.cuerpo, variables)
 
             # Crear registro de notificación
             nueva_notif = Notificacion(

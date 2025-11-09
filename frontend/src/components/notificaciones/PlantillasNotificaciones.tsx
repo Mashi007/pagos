@@ -6,10 +6,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card } from '@/components/ui/card'
 import { Tabs } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { useSearchClientes } from '@/hooks/useClientes'
-import { SearchableSelect } from '@/components/ui/searchable-select'
 import toast from 'react-hot-toast'
-import { Upload, Search, Eye, EyeOff, FileText, Database, ChevronDown, ChevronUp } from 'lucide-react'
+import { Upload, Search, FileText, Database, ChevronDown, ChevronUp } from 'lucide-react'
 
 type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
 
@@ -26,7 +24,6 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
   const [busqueda, setBusqueda] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
   const [filtroActiva, setFiltroActiva] = useState<boolean | null>(null)
-  const [mostrarHTML, setMostrarHTML] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [nombre, setNombre] = useState('')
   const [tipo, setTipo] = useState('') // Mantener para compatibilidad con edición individual
@@ -38,11 +35,10 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
   const [firma, setFirma] = useState('')
   const [variable, setVariable] = useState('')
   const [focus, setFocus] = useState<EditorFocus>('cuerpo')
-  const [clienteIdPrueba, setClienteIdPrueba] = useState<number | ''>('')
-  const [variablesPrueba, setVariablesPrueba] = useState<Record<string, any>>({})
   const [variablesConfiguradas, setVariablesConfiguradas] = useState<NotificacionVariable[]>([])
-  const [mostrarVariables, setMostrarVariables] = useState(false)
+  const [mostrarVariables, setMostrarVariables] = useState(true) // Por defecto visible
   const [busquedaVariable, setBusquedaVariable] = useState('')
+  const [filtroTablaVariable, setFiltroTablaVariable] = useState<string>('') // Filtro por tabla
   const asuntoRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null)
   const encRef = useRef<HTMLTextAreaElement>(null)
   const cuerpoRef = useRef<HTMLTextAreaElement>(null)
@@ -234,18 +230,43 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
   }
 
   const variablesFiltradas = useMemo(() => {
-    if (!busquedaVariable) return variablesConfiguradas
-    return variablesConfiguradas.filter(v => 
-      v.nombre_variable.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
-      v.descripcion?.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
-      v.tabla.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
-      v.campo_bd.toLowerCase().includes(busquedaVariable.toLowerCase())
-    )
-  }, [variablesConfiguradas, busquedaVariable])
+    let filtradas = variablesConfiguradas
+    
+    // Filtrar por tabla
+    if (filtroTablaVariable) {
+      filtradas = filtradas.filter(v => v.tabla === filtroTablaVariable)
+    }
+    
+    // Filtrar por búsqueda
+    if (busquedaVariable) {
+      filtradas = filtradas.filter(v => 
+        v.nombre_variable.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
+        (v.descripcion ?? '').toLowerCase().includes(busquedaVariable.toLowerCase()) ||
+        v.tabla.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
+        v.campo_bd.toLowerCase().includes(busquedaVariable.toLowerCase())
+      )
+    }
+    
+    return filtradas
+  }, [variablesConfiguradas, busquedaVariable, filtroTablaVariable])
+  
+  // Agrupar variables por tabla
+  const variablesPorTabla = useMemo(() => {
+    const agrupadas: Record<string, NotificacionVariable[]> = {}
+    variablesFiltradas.forEach(v => {
+      if (!agrupadas[v.tabla]) {
+        agrupadas[v.tabla] = []
+      }
+      agrupadas[v.tabla].push(v)
+    })
+    return agrupadas
+  }, [variablesFiltradas])
+  
+  // Obtener tablas únicas
+  const tablasUnicas = useMemo(() => {
+    return Array.from(new Set(variablesConfiguradas.map(v => v.tabla))).sort()
+  }, [variablesConfiguradas])
 
-  // Búsqueda clientes para prueba
-  const [queryCliente, setQueryCliente] = useState('')
-  const { data: resultadosClientes } = useSearchClientes(queryCliente)
 
   const aplicarFormato = (tag: 'b' | 'i' | 'u' | 'ul' | 'a') => {
     const wrap = (el: HTMLTextAreaElement | null, setter: (v: string) => void, current: string) => {
@@ -470,83 +491,6 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     }
   }
 
-  const enviarPrueba = async () => {
-    if (!selected?.id && !nombre.trim()) {
-      toast.error('Guarde o seleccione una plantilla primero')
-      return
-    }
-    
-    if (!clienteIdPrueba) {
-      toast.error('Seleccione un cliente de prueba')
-      return
-    }
-
-    try {
-      if (!selected?.id) {
-        // Guardar primero si es nueva
-        const error = validarObligatorias()
-        if (error) {
-          toast.error(error)
-          return
-        }
-        const nueva = await notificacionService.crearPlantilla({
-          nombre,
-          tipo,
-          asunto,
-          cuerpo: cuerpoFinal,
-          activa: false, // No activar automáticamente al probar
-        })
-        await notificacionService.enviarConPlantilla(nueva.id, { 
-          cliente_id: Number(clienteIdPrueba), 
-          variables: variablesPrueba 
-        })
-        await cargar()
-      } else {
-        await notificacionService.enviarConPlantilla(selected.id, { 
-          cliente_id: Number(clienteIdPrueba), 
-          variables: variablesPrueba 
-        })
-      }
-      toast.success('Email de prueba enviado exitosamente')
-    } catch (error: any) {
-      toast.error(error?.response?.data?.detail || 'Error al enviar prueba')
-    }
-  }
-
-  // Reemplazar variables en vista previa con datos de ejemplo
-  const cuerpoPreview = useMemo(() => {
-    let preview = cuerpoFinal
-    const ejemplos: Record<string, string> = {
-      nombre: 'Juan Pérez',
-      monto: '500.00',
-      fecha_vencimiento: '15/11/2025',
-      numero_cuota: '3',
-      credito_id: '123',
-      cedula: 'V-12345678',
-      dias_atraso: '2',
-    }
-    Object.entries(ejemplos).forEach(([key, val]) => {
-      preview = preview.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val)
-    })
-    return preview
-  }, [cuerpoFinal])
-
-  const asuntoPreview = useMemo(() => {
-    let preview = asunto
-    const ejemplos: Record<string, string> = {
-      nombre: 'Juan Pérez',
-      monto: '500.00',
-      fecha_vencimiento: '15/11/2025',
-      numero_cuota: '3',
-      credito_id: '123',
-      cedula: 'V-12345678',
-      dias_atraso: '2',
-    }
-    Object.entries(ejemplos).forEach(([key, val]) => {
-      preview = preview.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val)
-    })
-    return preview
-  }, [asunto])
 
   return (
     <div className="grid grid-cols-12 gap-4">
@@ -772,13 +716,13 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
             </div>
           </div>
 
-          {/* Panel de Variables Configuradas */}
-          <div className="border rounded-lg p-4 bg-gray-50">
-            <div className="flex items-center justify-between mb-3">
+          {/* Panel de Variables Configuradas - Mejorado e Intuitivo */}
+          <div className="border-2 border-blue-200 rounded-lg p-4 bg-gradient-to-br from-blue-50 to-white shadow-sm">
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <Database className="h-4 w-4 text-blue-600" />
-                <label className="text-sm font-semibold">Variables Configuradas</label>
-                <Badge variant="outline" className="text-xs">
+                <Database className="h-5 w-5 text-blue-600" />
+                <label className="text-base font-bold text-gray-800">Banco de Variables</label>
+                <Badge variant="outline" className="text-xs bg-blue-100 text-blue-800 border-blue-300">
                   {variablesConfiguradas.length} disponibles
                 </Badge>
               </div>
@@ -791,71 +735,124 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                     cargarVariables() // Recargar al abrir
                   }
                 }}
+                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
               >
                 {mostrarVariables ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </Button>
             </div>
 
             {mostrarVariables && (
-              <div className="space-y-3">
-                {/* Búsqueda de variables */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    value={busquedaVariable}
-                    onChange={e => setBusquedaVariable(e.target.value)}
-                    placeholder="Buscar variables por nombre, tabla o campo..."
-                    className="pl-10"
-                  />
+              <div className="space-y-4">
+                {/* Filtros mejorados */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Filtro por tabla */}
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Filtrar por tabla:</label>
+                    <select
+                      value={filtroTablaVariable}
+                      onChange={e => setFiltroTablaVariable(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Todas las tablas</option>
+                      {tablasUnicas.map(tabla => (
+                        <option key={tabla} value={tabla}>{tabla}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {/* Búsqueda de variables */}
+                  <div className="relative">
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Buscar variable:</label>
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" style={{ top: '60%' }} />
+                    <Input
+                      value={busquedaVariable}
+                      onChange={e => setBusquedaVariable(e.target.value)}
+                      placeholder="Nombre, tabla o campo..."
+                      className="pl-10"
+                    />
+                  </div>
                 </div>
 
-                {/* Lista de variables */}
+                {/* Lista de variables agrupadas por tabla */}
                 {variablesConfiguradas.length === 0 ? (
-                  <div className="text-center py-4 text-sm text-gray-500">
-                    <p>No hay variables configuradas.</p>
-                    <p className="text-xs mt-1">Ve a la pestaña "Genera Variables" para crear variables personalizadas.</p>
+                  <div className="text-center py-8 text-sm text-gray-500 bg-white rounded-lg border-2 border-dashed border-gray-300">
+                    <Database className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p className="font-medium">No hay variables configuradas.</p>
+                    <p className="text-xs mt-1 text-gray-400">Ve a la pestaña "Genera Variables" para crear variables personalizadas.</p>
                   </div>
                 ) : variablesFiltradas.length === 0 ? (
-                  <div className="text-center py-4 text-sm text-gray-500">
-                    No se encontraron variables con ese criterio.
+                  <div className="text-center py-8 text-sm text-gray-500 bg-white rounded-lg border-2 border-dashed border-gray-300">
+                    <p className="font-medium">No se encontraron variables con ese criterio.</p>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="mt-2"
+                      onClick={() => {
+                        setBusquedaVariable('')
+                        setFiltroTablaVariable('')
+                      }}
+                    >
+                      Limpiar filtros
+                    </Button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                    {variablesFiltradas.map(v => (
-                      <div
-                        key={v.id || v.nombre_variable}
-                        className="border rounded p-2 bg-white hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => insertarVariable(v.nombre_variable)}
-                        title={`Click para insertar {{${v.nombre_variable}}}`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <code className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-mono">
-                                {'{{'}{v.nombre_variable}{'}}'}
-                              </code>
-                              <Badge variant="outline" className="text-xs">{v.tabla}</Badge>
-                            </div>
-                            <div className="text-xs text-gray-600 truncate" title={v.campo_bd}>
-                              <span className="font-mono">{v.tabla}.{v.campo_bd}</span>
-                            </div>
-                            {v.descripcion && (
-                              <div className="text-xs text-gray-500 mt-1 line-clamp-1" title={v.descripcion}>
-                                {v.descripcion}
+                  <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                    {Object.entries(variablesPorTabla).map(([tabla, variables]) => (
+                      <div key={tabla} className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
+                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200">
+                          <Badge variant="outline" className="text-xs font-semibold bg-gray-100 text-gray-700 border-gray-300">
+                            {tabla}
+                          </Badge>
+                          <span className="text-xs text-gray-500">{variables.length} variable{variables.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {variables.map(v => (
+                            <div
+                              key={v.id || v.nombre_variable}
+                              className="group border-2 border-gray-200 rounded-lg p-3 bg-white hover:border-blue-400 hover:shadow-md cursor-pointer transition-all duration-200"
+                              onClick={() => insertarVariable(v.nombre_variable)}
+                              title={`Click para insertar {{${v.nombre_variable}}} en el campo activo`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  {/* Nombre de variable destacado */}
+                                  <div className="mb-2">
+                                    <code className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-mono font-semibold block w-fit">
+                                      {'{{'}{v.nombre_variable}{'}}'}
+                                    </code>
+                                  </div>
+                                  
+                                  {/* Mapeo a BD - Destacado */}
+                                  <div className="mb-1">
+                                    <div className="text-xs text-gray-500 mb-0.5">Mapea a:</div>
+                                    <div className="text-xs font-mono text-gray-700 bg-gray-50 px-2 py-1 rounded border border-gray-200">
+                                      <span className="font-semibold text-gray-900">{v.tabla}</span>.<span className="text-blue-700">{v.campo_bd}</span>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Descripción si existe */}
+                                  {v.descripcion && (
+                                    <div className="text-xs text-gray-600 mt-2 italic border-l-2 border-blue-200 pl-2">
+                                      {v.descripcion}
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Botón de inserción mejorado */}
+                                <Button
+                                  size="sm"
+                                  className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    insertarVariable(v.nombre_variable)
+                                    toast.success(`Variable {{${v.nombre_variable}}} insertada`, { duration: 1500 })
+                                  }}
+                                >
+                                  +
+                                </Button>
                               </div>
-                            )}
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="shrink-0"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              insertarVariable(v.nombre_variable)
-                            }}
-                          >
-                            Insertar
-                          </Button>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     ))}
@@ -898,50 +895,6 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                 </Button>
               </>
             )}
-          </div>
-        </Card>
-
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Vista previa</h3>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => setMostrarHTML(!mostrarHTML)}
-              title={mostrarHTML ? "Ver texto plano" : "Ver HTML renderizado"}
-            >
-              {mostrarHTML ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </Button>
-          </div>
-          <div className="border rounded p-3 bg-white">
-            <div className="text-sm text-gray-600 mb-1">Asunto:</div>
-            <div className="font-medium mb-3 text-sm">{asuntoPreview || '(sin asunto)'}</div>
-            <hr className="mb-3" />
-            {mostrarHTML ? (
-              <div 
-                className="text-sm prose prose-sm max-w-none"
-                dangerouslySetInnerHTML={{ __html: cuerpoPreview.replace(/\n/g, '<br>') }}
-              />
-            ) : (
-              <pre className="whitespace-pre-wrap text-sm mt-2">{cuerpoFinal || '(sin contenido)'}</pre>
-            )}
-          </div>
-
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <label className="text-sm text-gray-600">Cliente de prueba</label>
-              <SearchableSelect
-                value={clienteIdPrueba ? String(clienteIdPrueba) : ''}
-                onSearch={setQueryCliente}
-                onChange={(val) => setClienteIdPrueba(val ? Number(val) : '')}
-                options={(resultadosClientes || []).map((c: any) => ({
-                  label: `${c.cedula} - ${c.nombres}`,
-                  value: String(c.id ?? c.cliente_id ?? ''),
-                }))}
-                placeholder="Buscar por cédula o nombre..."
-              />
-            </div>
-            <Button onClick={enviarPrueba}>Enviar prueba</Button>
           </div>
         </Card>
       </div>
