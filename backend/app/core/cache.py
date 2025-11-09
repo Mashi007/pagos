@@ -175,15 +175,14 @@ try:
     logger.info("✅ Redis cache inicializado correctamente")
 
 except ImportError:
-    logger.error("⚠️ Redis no disponible (paquete no instalado), usando MemoryCache")
-    logger.error("   Instala redis: pip install 'redis>=5.0.0,<6.0.0'")
-    logger.error("   O específicamente: pip install redis==5.0.1")
+    logger.warning("⚠️ Redis no disponible (paquete no instalado), usando MemoryCache")
+    logger.info("   Para usar Redis en producción, instala: pip install 'redis>=5.0.0,<6.0.0'")
 except Exception as e:
-    logger.error(f"⚠️ ERROR al conectar a Redis: {type(e).__name__}: {str(e)}")
-    logger.error(f"   REDIS_URL configurada: {bool(settings.REDIS_URL) if 'settings' in locals() else 'N/A'}")
+    logger.warning(f"⚠️ No se pudo conectar a Redis: {type(e).__name__}: {str(e)}")
+    logger.info(f"   REDIS_URL configurada: {bool(settings.REDIS_URL) if 'settings' in locals() else 'N/A'}")
     if "settings" in locals() and settings.REDIS_URL:
-        logger.error(f"   REDIS_URL valor: {settings.REDIS_URL[:80]}...")
-    logger.error("   Usando MemoryCache como fallback")
+        logger.debug(f"   REDIS_URL valor: {settings.REDIS_URL[:80]}...")
+    logger.info("   Usando MemoryCache como fallback")
 
 
 def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
