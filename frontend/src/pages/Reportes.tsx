@@ -101,12 +101,18 @@ export function Reportes() {
   const queryClient = useQueryClient()
 
   // Obtener resumen del dashboard para KPIs
-  const { data: resumenData, isLoading: loadingResumen, isError: errorResumen } = useQuery({
+  const { 
+    data: resumenData, 
+    isLoading: loadingResumen, 
+    isError: errorResumen,
+    refetch: refetchResumen 
+  } = useQuery({
     queryKey: ['reportes-resumen'],
     queryFn: () => reporteService.getResumenDashboard(),
-    staleTime: 5 * 60 * 1000, // 5 minutos
-    retry: 1, // Solo un reintento para evitar múltiples peticiones fallidas
-    refetchOnWindowFocus: false, // No recargar automáticamente
+    staleTime: 2 * 60 * 1000, // 2 minutos - datos más frescos
+    retry: 2, // Dos reintentos para asegurar conexión
+    refetchOnWindowFocus: true, // Recargar cuando la ventana recupera el foco
+    refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos automáticamente
   })
 
   // Funciones para generar reportes
@@ -182,10 +188,11 @@ export function Reportes() {
   const reportesProcesando = mockReportes.filter((r) => r.estado === 'PROCESANDO').length
   const totalDescargas = mockReportes.reduce((sum, r) => sum + r.descargas, 0)
 
-  // KPIs desde el backend
-  const kpiCartera = resumenData?.cartera_activa || 0
-  const kpiPrestamosMora = resumenData?.prestamos_mora || 0
-  const kpiTotalPrestamos = resumenData?.total_prestamos || 0
+  // KPIs desde el backend - asegurar que sean números
+  const kpiCartera = Number(resumenData?.cartera_activa || 0)
+  const kpiPrestamosMora = Number(resumenData?.prestamos_mora || 0)
+  const kpiTotalPrestamos = Number(resumenData?.total_prestamos || 0)
+  const kpiPagosMes = Number(resumenData?.pagos_mes || 0)
 
   return (
     <motion.div
@@ -194,8 +201,34 @@ export function Reportes() {
       transition={{ duration: 0.3 }}
       className="space-y-6"
     >
-      <h1 className="text-3xl font-bold text-gray-900">Centro de Reportes</h1>
-      <p className="text-gray-600">Genera y descarga reportes detallados del sistema.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Centro de Reportes</h1>
+          <p className="text-gray-600">Genera y descarga reportes detallados del sistema.</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            refetchResumen()
+            toast.info('Actualizando datos...')
+          }}
+          disabled={loadingResumen}
+        >
+          <RefreshCw className={`mr-2 h-4 w-4 ${loadingResumen ? 'animate-spin' : ''}`} />
+          Actualizar KPIs
+        </Button>
+      </div>
+
+      {/* Mensaje de error si hay problema cargando datos */}
+      {errorResumen && (
+        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md">
+          <p className="font-semibold">Error al cargar datos de KPIs</p>
+          <p className="text-sm mt-1">
+            No se pudieron obtener los datos del servidor. Por favor, intenta actualizar manualmente.
+          </p>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -206,7 +239,12 @@ export function Reportes() {
           </CardHeader>
           <CardContent>
             {loadingResumen ? (
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Cargando...</span>
+              </div>
+            ) : errorResumen ? (
+              <div className="text-2xl font-bold text-gray-400">--</div>
             ) : (
               <div className="text-2xl font-bold">{formatCurrency(kpiCartera)}</div>
             )}
@@ -220,9 +258,14 @@ export function Reportes() {
           </CardHeader>
           <CardContent>
             {loadingResumen ? (
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Cargando...</span>
+              </div>
+            ) : errorResumen ? (
+              <div className="text-2xl font-bold text-gray-400">--</div>
             ) : (
-              <div className="text-2xl font-bold text-red-600">{kpiPrestamosMora}</div>
+              <div className="text-2xl font-bold text-red-600">{kpiPrestamosMora.toLocaleString()}</div>
             )}
             <p className="text-xs text-muted-foreground">Requieren atención</p>
           </CardContent>
@@ -234,9 +277,14 @@ export function Reportes() {
           </CardHeader>
           <CardContent>
             {loadingResumen ? (
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Cargando...</span>
+              </div>
+            ) : errorResumen ? (
+              <div className="text-2xl font-bold text-gray-400">--</div>
             ) : (
-              <div className="text-2xl font-bold">{kpiTotalPrestamos}</div>
+              <div className="text-2xl font-bold">{kpiTotalPrestamos.toLocaleString()}</div>
             )}
             <p className="text-xs text-muted-foreground">Préstamos activos</p>
           </CardContent>
@@ -248,10 +296,15 @@ export function Reportes() {
           </CardHeader>
           <CardContent>
             {loadingResumen ? (
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Cargando...</span>
+              </div>
+            ) : errorResumen ? (
+              <div className="text-2xl font-bold text-gray-400">--</div>
             ) : (
               <div className="text-2xl font-bold text-green-600">
-                {formatCurrency(resumenData?.pagos_mes || 0)}
+                {formatCurrency(kpiPagosMes)}
               </div>
             )}
             <p className="text-xs text-muted-foreground">Este mes</p>
