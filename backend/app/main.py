@@ -300,6 +300,11 @@ app.include_router(aprobaciones.router, prefix="/api/v1/aprobaciones", tags=["ap
 app.include_router(notificaciones.router, prefix="/api/v1/notificaciones", tags=["notificaciones"])
 app.include_router(notificaciones_previas.router, prefix="/api/v1/notificaciones-previas", tags=["notificaciones-previas"])
 
+# Importar router de notificaciones del día de pago
+from app.api.v1.endpoints import notificaciones_dia_pago  # noqa: E402
+
+app.include_router(notificaciones_dia_pago.router, prefix="/api/v1/notificaciones-dia-pago", tags=["notificaciones-dia-pago"])
+
 # Importar router de notificaciones retrasadas
 from app.api.v1.endpoints import notificaciones_retrasadas  # noqa: E402
 
