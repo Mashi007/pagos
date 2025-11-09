@@ -174,7 +174,7 @@ class NotificacionAutomaticaService:
             dias_diferencia = None
             if cuota.fecha_vencimiento:
                 dias_diferencia = self.calcular_dias_para_vencimiento(cuota.fecha_vencimiento)
-            
+
             # Usar el servicio de variables para construir variables dinámicamente desde la BD
             variables = self.variables_service.construir_variables_desde_bd(
                 cliente=cliente,
