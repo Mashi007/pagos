@@ -16,9 +16,9 @@ export function useClientesStats() {
       // Esto es más eficiente que traer todos los clientes
       return await clienteService.getStats()
     },
-    staleTime: 0, // Siempre actualizar
+    staleTime: 2 * 60 * 1000, // Cache de 2 minutos (optimizado)
     refetchOnWindowFocus: true, // Refrescar cuando el usuario vuelve a la ventana
     refetchOnMount: true, // Refrescar cuando el componente se monta
-    refetchInterval: 60000 // Refrescar cada minuto
+    refetchInterval: 5 * 60 * 1000 // Refrescar cada 5 minutos (optimizado de 1 minuto)
   })
 }
