@@ -134,16 +134,16 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       icon: FileText,
     },
     {
+      title: 'Notificaciones',
+      href: '/notificaciones',
+      icon: Bell,
+      badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
+    },
+    {
       title: 'Herramientas',
       icon: Wrench,
       isSubmenu: true,
       children: [
-        { 
-          title: 'Notificaciones', 
-          href: '/notificaciones', 
-          icon: Bell,
-          badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
-        },
         // Solo Admin: Plantillas de notificaciones
         ...(user?.is_admin ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: Mail }] : []),
         { title: 'Programador', href: '/scheduler', icon: Calendar },
