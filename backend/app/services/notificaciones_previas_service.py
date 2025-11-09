@@ -47,20 +47,37 @@ class NotificacionesPreviasService:
             # Verificar conexión a BD
             logger.info("🔍 [NotificacionesPrevias] Iniciando cálculo de notificaciones previas...")
             
-            # Obtener préstamos aprobados con sus cuotas
-            prestamos_aprobados = self.db.query(Prestamo).filter(Prestamo.estado == "APROBADO").all()
-            logger.info(f"📊 [NotificacionesPrevias] Encontrados {len(prestamos_aprobados)} préstamos aprobados")
+            # Obtener solo las columnas necesarias de préstamos aprobados
+            # Usar with_entities para evitar cargar columnas que no existen en BD
+            prestamos_data = (
+                self.db.query(
+                    Prestamo.id,
+                    Prestamo.cliente_id,
+                    Prestamo.cedula,
+                    Prestamo.modelo_vehiculo,
+                    Prestamo.producto,
+                )
+                .filter(Prestamo.estado == "APROBADO")
+                .all()
+            )
+            logger.info(f"📊 [NotificacionesPrevias] Encontrados {len(prestamos_data)} préstamos aprobados")
 
             resultados = []
 
-            for prestamo in prestamos_aprobados:
+            for prestamo_row in prestamos_data:
+                prestamo_id = prestamo_row.id
+                cliente_id = prestamo_row.cliente_id
+                cedula = prestamo_row.cedula
+                modelo_vehiculo = prestamo_row.modelo_vehiculo
+                producto = prestamo_row.producto
+                
                 # Verificar que NO tenga cuotas atrasadas
                 # Cuotas atrasadas: vencidas y no pagadas (estado != "PAGADO")
                 cuotas_atrasadas = (
                     self.db.query(Cuota)
                     .filter(
                         and_(
-                            Cuota.prestamo_id == prestamo.id,
+                            Cuota.prestamo_id == prestamo_id,
                             Cuota.fecha_vencimiento < hoy,
                             Cuota.estado != "PAGADO",  # Excluir cuotas pagadas
                         )
@@ -78,7 +95,7 @@ class NotificacionesPreviasService:
                     self.db.query(Cuota)
                     .filter(
                         and_(
-                            Cuota.prestamo_id == prestamo.id,
+                            Cuota.prestamo_id == prestamo_id,
                             Cuota.fecha_vencimiento.in_([fecha_5_dias, fecha_3_dias, fecha_1_dia]),
                             Cuota.estado.in_(["PENDIENTE", "ADELANTADO"]),  # Cuotas pendientes o adelantadas
                         )
@@ -100,10 +117,19 @@ class NotificacionesPreviasService:
                     elif dias_antes == 1:
                         tipo_notificacion = "PAGO_1_DIA_ANTES"
 
-                    # Obtener datos del cliente
-                    cliente = self.db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
+                    # Obtener datos del cliente (solo columnas necesarias)
+                    cliente_data = (
+                        self.db.query(
+                            Cliente.id,
+                            Cliente.nombres,
+                            Cliente.email,
+                            Cliente.telefono,
+                        )
+                        .filter(Cliente.id == cliente_id)
+                        .first()
+                    )
 
-                    if cliente:
+                    if cliente_data:
                         # Buscar notificación relacionada si existe
                         estado_notificacion = "PENDIENTE"  # Por defecto pendiente (aún no enviada)
                         notificacion_existente = None
@@ -116,7 +142,7 @@ class NotificacionesPreviasService:
                                     self.db.query(Notificacion)
                                     .filter(
                                         and_(
-                                            Notificacion.cliente_id == cliente.id,
+                                            Notificacion.cliente_id == cliente_data.id,
                                             Notificacion.tipo == tipo_notificacion,
                                         )
                                     )
@@ -127,23 +153,23 @@ class NotificacionesPreviasService:
                                 if notificacion_existente:
                                     estado_notificacion = notificacion_existente.estado
                                     logger.debug(
-                                        f"📧 [NotificacionesPrevias] Cliente {cliente.id} tiene notificación {tipo_notificacion} "
+                                        f"📧 [NotificacionesPrevias] Cliente {cliente_data.id} tiene notificación {tipo_notificacion} "
                                         f"con estado {estado_notificacion}"
                                     )
                             except Exception as e:
                                 logger.warning(
-                                    f"⚠️ [NotificacionesPrevias] Error buscando notificación para cliente {cliente.id}: {e}"
+                                    f"⚠️ [NotificacionesPrevias] Error buscando notificación para cliente {cliente_data.id}: {e}"
                                 )
                                 # Continuar con estado PENDIENTE por defecto
 
                         resultado = {
-                            "prestamo_id": prestamo.id,
-                            "cliente_id": cliente.id,
-                            "nombre": cliente.nombres,  # nombres ya incluye nombres + apellidos
-                            "cedula": prestamo.cedula,
-                            "modelo_vehiculo": prestamo.modelo_vehiculo or prestamo.producto or "N/A",
-                            "correo": cliente.email,
-                            "telefono": cliente.telefono,
+                            "prestamo_id": prestamo_id,
+                            "cliente_id": cliente_data.id,
+                            "nombre": cliente_data.nombres,  # nombres ya incluye nombres + apellidos
+                            "cedula": cedula,
+                            "modelo_vehiculo": modelo_vehiculo or producto or "N/A",
+                            "correo": cliente_data.email,
+                            "telefono": cliente_data.telefono,
                             "dias_antes_vencimiento": dias_antes,
                             "fecha_vencimiento": cuota_proxima.fecha_vencimiento.isoformat(),
                             "numero_cuota": cuota_proxima.numero_cuota,
