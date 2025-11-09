@@ -46,6 +46,57 @@
         originalWarn.apply(console, args);
       };
     </script>
+    <!-- Script para manejar errores de carga de módulos (cache desactualizado) -->
+    <script>
+      // Detectar errores de carga de módulos JavaScript
+      // Esto ocurre cuando el navegador tiene cache del index.html anterior
+      // con referencias a archivos con hashes antiguos que ya no existen
+      let reloadAttempted = false;
+      
+      function reloadPage() {
+        if (reloadAttempted) return; // Evitar loops infinitos
+        reloadAttempted = true;
+        console.warn('⚠️ Módulo JavaScript no encontrado (probable cache desactualizado). Recargando página...');
+        // Forzar recarga desde el servidor (bypass cache)
+        window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
+      }
+      
+      window.addEventListener('error', function(event) {
+        // Verificar si es un error de carga de módulo
+        if (event.target && event.target.tagName === 'SCRIPT' && event.target.type === 'module') {
+          const errorMessage = (event.message || '').toLowerCase();
+          const errorSource = (event.filename || event.target.src || '').toLowerCase();
+          
+          // Detectar errores de módulo que no se pudo cargar
+          if (
+            errorMessage.includes('failed to fetch dynamically imported module') ||
+            errorMessage.includes('error loading dynamically imported module') ||
+            errorMessage.includes('failed to load module') ||
+            errorMessage.includes('ha fallado la carga del módulo') ||
+            errorMessage.includes('failed to load module script') ||
+            (errorSource.includes('/assets/') && errorSource.includes('.js'))
+          ) {
+            reloadPage();
+            return;
+          }
+        }
+      }, true); // Usar capture phase para capturar errores antes de que se propaguen
+      
+      // También manejar errores no capturados de promesas rechazadas
+      window.addEventListener('unhandledrejection', function(event) {
+        const reason = (event.reason?.message || event.reason?.toString() || '').toLowerCase();
+        if (
+          reason.includes('failed to fetch dynamically imported module') ||
+          reason.includes('error loading dynamically imported module') ||
+          reason.includes('failed to load module') ||
+          reason.includes('ha fallado la carga del módulo') ||
+          (reason.includes('/assets/') && reason.includes('.js'))
+        ) {
+          event.preventDefault(); // Prevenir que el error se muestre en la consola
+          reloadPage();
+        }
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

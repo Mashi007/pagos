@@ -188,13 +188,20 @@ class ApiClient {
             clearAuthStorage()
             
             // Evitar mostrar toasts durante el redirect
-            const isAlreadyRedirecting = window.location.pathname === '/login'
+            const isAlreadyRedirecting = window.location.pathname === '/login' || this.isRedirectingToLogin
             
             if (!isAlreadyRedirecting) {
               this.isRedirectingToLogin = true
-              // Pequeño delay para asegurar que el storage se limpie
+              
+              // Log para debugging (solo en desarrollo)
+              if (process.env.NODE_ENV === 'development') {
+                console.warn('🔄 Refresh token falló. Redirigiendo al login...', refreshError)
+              }
+              
+              // Pequeño delay para asegurar que el storage se limpie y todas las peticiones fallen
               setTimeout(() => {
-                window.location.href = '/login'
+                // Usar replace para evitar que el usuario pueda volver atrás
+                window.location.replace('/login')
               }, 100)
             }
             
@@ -301,7 +308,23 @@ class ApiClient {
           }
       }
     } else if (error.request) {
-      // Error de red
+      // Error de red - puede ser que el servidor esté reiniciando
+      const errorCode = (error as any).code || ''
+      const errorMessage = error.message || ''
+      
+      // No mostrar toast para errores de conexión durante el inicio (servidor reiniciando)
+      // Estos errores son temporales y se resuelven automáticamente
+      if (
+        errorCode === 'ERR_NETWORK' ||
+        errorCode === 'ECONNREFUSED' ||
+        errorMessage.includes('Connection refused') ||
+        errorMessage.includes('NS_ERROR_CONNECTION_REFUSED')
+      ) {
+        // Solo loggear en consola, no mostrar toast (el usuario verá el error si persiste)
+        console.warn('⚠️ Servidor no disponible temporalmente. Esto es normal durante reinicios.')
+        return
+      }
+      
       toast.error('Error de conexión. Verifique su conexión a internet.')
     } else {
       // Error de configuración
