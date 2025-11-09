@@ -76,7 +76,7 @@ def _convertir_registro_general_listado(registro) -> dict:
             # Remover la acción si está al inicio
             for accion in ["CREAR", "ACTUALIZAR", "ELIMINAR", "UPDATE", "CREATE", "DELETE"]:
                 if campo_parte.startswith(accion):
-                    campo_parte = campo_parte[len(accion):].strip()
+                    campo_parte = campo_parte[len(accion) :].strip()
                     break
             if campo_parte:
                 campo = campo_parte
