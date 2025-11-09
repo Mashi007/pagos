@@ -19,7 +19,7 @@ import {
   Database,
   RefreshCw,
   Info,
-  SearchX,
+  XCircle,
   X,
   Settings,
 } from 'lucide-react'
@@ -1472,7 +1472,7 @@ export function DashboardMenu() {
                         
                         if (rangosConDatos.length === 0) {
                           const filtrosAplicados = construirFiltrosObject(periodo)
-                          const filtrosInfo = []
+                          const filtrosInfo: string[] = []
                           if (filtrosAplicados.analista) filtrosInfo.push(`Analista: ${filtrosAplicados.analista}`)
                           if (filtrosAplicados.concesionario) filtrosInfo.push(`Concesionario: ${filtrosAplicados.concesionario}`)
                           if (filtrosAplicados.modelo) filtrosInfo.push(`Modelo: ${filtrosAplicados.modelo}`)
@@ -1655,7 +1655,7 @@ export function DashboardMenu() {
                         <div className="flex flex-col items-center space-y-4 px-6 max-w-lg">
                           <div className="relative">
                             <div className="absolute inset-0 bg-orange-100 rounded-full blur-xl opacity-50"></div>
-                            <SearchX className="h-16 w-16 text-orange-400 relative z-10" strokeWidth={1.5} />
+                            <XCircle className="h-16 w-16 text-orange-400 relative z-10" strokeWidth={1.5} />
                           </div>
                           <div className="text-center space-y-3">
                             <p className="text-base font-semibold text-gray-700">No hay datos disponibles</p>
@@ -1666,7 +1666,7 @@ export function DashboardMenu() {
                                 </p>
                                 {tieneFiltrosActivos && (() => {
                                   const filtrosAplicados = construirFiltrosObject(periodo)
-                                  const filtrosInfo = []
+                                  const filtrosInfo: string[] = []
                                   if (filtrosAplicados.analista) filtrosInfo.push(`Analista: ${filtrosAplicados.analista}`)
                                   if (filtrosAplicados.concesionario) filtrosInfo.push(`Concesionario: ${filtrosAplicados.concesionario}`)
                                   if (filtrosAplicados.modelo) filtrosInfo.push(`Modelo: ${filtrosAplicados.modelo}`)
