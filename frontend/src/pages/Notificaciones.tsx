@@ -142,7 +142,8 @@ export function Notificaciones() {
 
   // Tipos de notificación por pestaña
   const tiposPorPestaña: Record<TabType, string[]> = {
-    previa: ['PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES', 'PAGO_DIA_0'],
+    previa: ['PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES'],
+    'dia-pago': ['PAGO_DIA_0'],
     retrasado: ['PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO'],
     prejudicial: ['PREJUDICIAL', 'PREJUDICIAL_1', 'PREJUDICIAL_2'], // Tipos para notificaciones prejudiciales
     configuracion: [] // No se muestran notificaciones en esta pestaña
