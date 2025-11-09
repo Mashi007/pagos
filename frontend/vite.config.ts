@@ -23,12 +23,60 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          router: ['react-router-dom'],
-          ui: ['framer-motion', 'lucide-react'],
-          query: ['@tanstack/react-query'],
-          utils: ['clsx', 'tailwind-merge', 'date-fns'],
+        manualChunks: (id) => {
+          // Separar node_modules en chunks más específicos
+          if (id.includes('node_modules')) {
+            // Librerías pesadas de exportación - cargar solo cuando se necesiten
+            if (id.includes('xlsx')) {
+              return 'xlsx'
+            }
+            if (id.includes('jspdf') || id.includes('html2canvas')) {
+              return 'pdf-export'
+            }
+            
+            // Recharts - separar en chunk propio para lazy loading
+            if (id.includes('recharts')) {
+              return 'recharts'
+            }
+            
+            // React core
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'react-vendor'
+            }
+            
+            // React Router
+            if (id.includes('react-router')) {
+              return 'router'
+            }
+            
+            // UI libraries
+            if (id.includes('framer-motion') || id.includes('lucide-react')) {
+              return 'ui-libs'
+            }
+            
+            // State management
+            if (id.includes('@tanstack/react-query') || id.includes('zustand')) {
+              return 'state-management'
+            }
+            
+            // Form libraries
+            if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform')) {
+              return 'form-libs'
+            }
+            
+            // Radix UI components
+            if (id.includes('@radix-ui')) {
+              return 'radix-ui'
+            }
+            
+            // Otras dependencias comunes
+            return 'vendor'
+          }
+          
+          // Separar componentes grandes del dashboard
+          if (id.includes('/pages/DashboardMenu')) {
+            return 'dashboard-menu'
+          }
         },
       },
       onwarn(warning, warn) {
@@ -47,8 +95,11 @@ export default defineConfig({
         }
         warn(warning);
       },
+      treeshake: {
+        moduleSideEffects: false, // Tree-shaking más agresivo
+      },
     },
-    chunkSizeWarningLimit: 1000,
+    chunkSizeWarningLimit: 500, // Reducir límite para detectar chunks grandes
     target: 'esnext',
     minify: 'esbuild',
     // Configuración de source maps para producción
@@ -58,6 +109,8 @@ export default defineConfig({
     cssCodeSplit: true,
     // Suprimir warnings de CSS durante el build
     cssMinify: 'esbuild',
+    // Optimizaciones adicionales
+    assetsInlineLimit: 4096, // Inline assets pequeños (< 4KB)
   },
   base: '/',
   preview: {

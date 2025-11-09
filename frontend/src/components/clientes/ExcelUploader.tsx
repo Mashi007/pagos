@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { SearchableSelect } from '@/components/ui/searchable-select'
-import * as XLSX from 'xlsx'
+// xlsx se importa dinámicamente para reducir el bundle inicial
 import { clienteService } from '@/services/clienteService'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -822,6 +822,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       if (sanitizedFileName !== file.name) {
         console.warn('Nombre de archivo sanitizado:', sanitizedFileName)
       }
+      
+      // ✅ Importar xlsx dinámicamente para reducir bundle inicial
+      const XLSXModule = await import('xlsx')
+      // xlsx puede exportarse como default o como named export
+      const XLSX = (XLSXModule.default || XLSXModule) as typeof import('xlsx')
       
       const data = await file.arrayBuffer()
       const workbook = XLSX.read(data, { type: 'array' })
