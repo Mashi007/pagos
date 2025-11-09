@@ -117,21 +117,11 @@ def diagnostico_cobranzas(
         diagnostico["diagnosticos"]["total_cuotas_bd"] = total_cuotas
 
         # 2. Cuotas vencidas (sin filtros)
-        cuotas_vencidas = (
-            db.query(func.count(Cuota.id))
-            .filter(Cuota.fecha_vencimiento < hoy)
-            .scalar()
-            or 0
-        )
+        cuotas_vencidas = db.query(func.count(Cuota.id)).filter(Cuota.fecha_vencimiento < hoy).scalar() or 0
         diagnostico["diagnosticos"]["cuotas_vencidas_solo_fecha"] = cuotas_vencidas
 
         # 3. Cuotas con pago incompleto (sin filtro de fecha)
-        cuotas_pago_incompleto = (
-            db.query(func.count(Cuota.id))
-            .filter(Cuota.total_pagado < Cuota.monto_cuota)
-            .scalar()
-            or 0
-        )
+        cuotas_pago_incompleto = db.query(func.count(Cuota.id)).filter(Cuota.total_pagado < Cuota.monto_cuota).scalar() or 0
         diagnostico["diagnosticos"]["cuotas_pago_incompleto"] = cuotas_pago_incompleto
 
         # 4. Cuotas vencidas Y pago incompleto (criterio base)
