@@ -236,7 +236,7 @@ export function Notificaciones() {
 
       // Crear el workbook y worksheet
       const wb = XLSX.utils.book_new()
-      const ws = XLSX.utils.json_to_sheet(datosExcel)
+      const ws = XLSX.utils.json_to_sheet(datosExcel) as any
 
       // Ajustar el ancho de las columnas
       const colWidths = activeTab === 'previa'
