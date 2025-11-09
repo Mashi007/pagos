@@ -185,11 +185,70 @@ export function Notificaciones() {
         </div>
       </motion.div>
 
-      {/* Tabs */}
+      {/* Filters - Movido antes de las pestañas */}
+      {activeTab !== 'configuracion' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.5 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Filter className="w-5 h-5 mr-2" />
+                Filtros y Búsqueda
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Buscar por asunto, mensaje o tipo..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <select
+                  value={filterEstado}
+                  onChange={(e) => {
+                    setFilterEstado(e.target.value)
+                    setPage(1)
+                  }}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Todos los estados</option>
+                  <option value="ENVIADA">Enviadas</option>
+                  <option value="PENDIENTE">Pendientes</option>
+                  <option value="FALLIDA">Fallidas</option>
+                  <option value="CANCELADA">Canceladas</option>
+                </select>
+                <select
+                  value={filterCanal}
+                  onChange={(e) => setFilterCanal(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Todos los canales</option>
+                  <option value="EMAIL">Email</option>
+                  <option value="WHATSAPP">WhatsApp</option>
+                  <option value="SMS">SMS</option>
+                </select>
+                <Button variant="outline" onClick={handleLimpiarFiltros} className="flex items-center">
+                  <Filter className="w-4 h-4 mr-2" />
+                  Limpiar Filtros
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Tabs - Movido después de los filtros */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.5 }}
+        transition={{ delay: 0.2, duration: 0.5 }}
       >
         <div className="border-b border-gray-200">
           <nav className="flex space-x-8" aria-label="Tabs">
@@ -228,7 +287,7 @@ export function Notificaciones() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.5 }}
+          transition={{ delay: 0.3, duration: 0.5 }}
         >
           <EmailConfig />
         </motion.div>
@@ -238,7 +297,7 @@ export function Notificaciones() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.5 }}
+            transition={{ delay: 0.3, duration: 0.5 }}
             className="grid grid-cols-1 md:grid-cols-4 gap-6"
           >
             <Card>
@@ -292,63 +351,6 @@ export function Notificaciones() {
                 <p className="text-xs text-gray-600">Requieren revisión</p>
               </CardContent>
             </Card>
-      </motion.div>
-
-      {/* Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.5 }}
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Filter className="w-5 h-5 mr-2" />
-              Filtros y Búsqueda
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Buscar por asunto, mensaje o tipo..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <select
-                value={filterEstado}
-                onChange={(e) => {
-                  setFilterEstado(e.target.value)
-                  setPage(1)
-                }}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Todos los estados</option>
-                <option value="ENVIADA">Enviadas</option>
-                <option value="PENDIENTE">Pendientes</option>
-                <option value="FALLIDA">Fallidas</option>
-                <option value="CANCELADA">Canceladas</option>
-              </select>
-              <select
-                value={filterCanal}
-                onChange={(e) => setFilterCanal(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Todos los canales</option>
-                <option value="EMAIL">Email</option>
-                <option value="WHATSAPP">WhatsApp</option>
-                <option value="SMS">SMS</option>
-              </select>
-              <Button variant="outline" onClick={handleLimpiarFiltros} className="flex items-center">
-                <Filter className="w-4 h-4 mr-2" />
-                Limpiar Filtros
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
       </motion.div>
 
       {/* Notificaciones List */}
