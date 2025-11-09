@@ -17,7 +17,7 @@ from decimal import Decimal
 from typing import List, Tuple
 
 from sqlalchemy.orm import Session
-from dateutil.relativedelta import relativedelta
+from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
 
 # Agregar el directorio raíz del proyecto al path
 sys.path.insert(0, str(__file__).replace("scripts/generar_cuotas_faltantes.py", ""))
