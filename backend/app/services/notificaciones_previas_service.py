@@ -46,7 +46,7 @@ class NotificacionesPreviasService:
         try:
             # Verificar conexión a BD
             logger.info("🔍 [NotificacionesPrevias] Iniciando cálculo de notificaciones previas...")
-            
+
             # Obtener solo las columnas necesarias de préstamos aprobados
             # Usar with_entities para evitar cargar columnas que no existen en BD
             prestamos_data = (
@@ -70,7 +70,7 @@ class NotificacionesPreviasService:
                 cedula = prestamo_row.cedula
                 modelo_vehiculo = prestamo_row.modelo_vehiculo
                 producto = prestamo_row.producto
-                
+
                 # Verificar que NO tenga cuotas atrasadas
                 # Cuotas atrasadas: vencidas y no pagadas (estado != "PAGADO")
                 cuotas_atrasadas = (
