@@ -87,8 +87,9 @@ class NotificacionesPreviasService:
             )
 
             import time
+
             start_time = time.time()
-            
+
             try:
                 result = self.db.execute(
                     query_optimizada,
@@ -101,10 +102,15 @@ class NotificacionesPreviasService:
                 )
                 rows = result.fetchall()
                 elapsed_time = time.time() - start_time
-                logger.info(f"📊 [NotificacionesPrevias] Query optimizada completada en {elapsed_time:.2f}s - Encontrados {len(rows)} registros de cuotas próximas")
+                logger.info(
+                    f"📊 [NotificacionesPrevias] Query optimizada completada en {elapsed_time:.2f}s - Encontrados {len(rows)} registros de cuotas próximas"
+                )
             except Exception as query_error:
                 elapsed_time = time.time() - start_time
-                logger.error(f"❌ [NotificacionesPrevias] Error ejecutando query optimizada después de {elapsed_time:.2f}s: {query_error}", exc_info=True)
+                logger.error(
+                    f"❌ [NotificacionesPrevias] Error ejecutando query optimizada después de {elapsed_time:.2f}s: {query_error}",
+                    exc_info=True,
+                )
                 raise
 
             resultados = []
