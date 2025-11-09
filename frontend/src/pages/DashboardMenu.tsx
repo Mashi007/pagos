@@ -1693,7 +1693,8 @@ export function DashboardMenu() {
                                   )
                                 })()}
                                 <p className="text-xs text-gray-400 italic">
-                                  💡 Sugerencia: Intenta ajustar los filtros o cambiar el período seleccionado
+                                  💡 Sugerencia: Intenta ajustar los filtros o cambiar el período seleccionado. 
+                                  Si los filtros de fecha no muestran resultados, el sistema intentará mostrar datos sin filtros de fecha.
                                 </p>
                               </div>
                             ) : (

@@ -3282,7 +3282,7 @@ def obtener_financiamiento_por_rangos(
                 f"📊 [financiamiento-por-rangos] Total préstamos final (con total_financiamiento > 0): {total_prestamos}, Total monto: {total_monto}"
             )
 
-            # ✅ DIAGNÓSTICO: Si no hay préstamos, verificar por qué
+            # ✅ DIAGNÓSTICO: Si no hay préstamos, verificar por qué y intentar sin filtros de fecha
             if total_prestamos == 0:
                 logger.warning(
                     f"⚠️ [financiamiento-por-rangos] No se encontraron préstamos válidos. "
@@ -3290,21 +3290,41 @@ def obtener_financiamiento_por_rangos(
                     f"Total después de filtros={total_prestamos_despues_filtros}, "
                     f"Total válidos (con monto > 0)={total_prestamos}"
                 )
-                # ✅ DIAGNÓSTICO ADICIONAL: Verificar si hay préstamos con fechas NULL
+                # ✅ MEJORA: Si los filtros de fecha están excluyendo todos los préstamos, intentar sin filtros de fecha
+                # pero solo si hay otros filtros activos (analista, concesionario, modelo) o si no hay filtros de fecha explícitos del usuario
                 try:
+                    # ✅ MEJORA: Verificar préstamos VÁLIDOS (con total_financiamiento > 0) sin filtros de fecha
                     query_diagnostico = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
                     query_diagnostico = FiltrosDashboard.aplicar_filtros_prestamo(
                         query_diagnostico, analista, concesionario, modelo, None, None  # Sin filtros de fecha
                     )
+                    query_diagnostico = query_diagnostico.filter(
+                        and_(Prestamo.total_financiamiento.isnot(None), Prestamo.total_financiamiento > 0)
+                    )
                     total_sin_filtro_fecha = query_diagnostico.count()
                     logger.info(
-                        f"📊 [financiamiento-por-rangos] Total préstamos APROBADOS sin filtro de fecha: {total_sin_filtro_fecha}"
+                        f"📊 [financiamiento-por-rangos] Total préstamos VÁLIDOS (con monto > 0) sin filtro de fecha: {total_sin_filtro_fecha}"
                     )
-                    if total_sin_filtro_fecha > 0 and total_prestamos_despues_filtros == 0:
+                    # ✅ MEJORA: Si hay préstamos válidos sin filtros de fecha pero no con filtros de fecha, usar los sin filtros
+                    if total_sin_filtro_fecha > 0 and total_prestamos == 0:
                         logger.warning(
-                            f"⚠️ [financiamiento-por-rangos] Los filtros de fecha están excluyendo todos los préstamos. "
-                            f"Total sin filtro de fecha: {total_sin_filtro_fecha}, Total con filtro de fecha: {total_prestamos_despues_filtros}"
+                            f"⚠️ [financiamiento-por-rangos] Los filtros de fecha están excluyendo todos los préstamos válidos. "
+                            f"Total válidos sin filtro de fecha: {total_sin_filtro_fecha}, Total válidos con filtro de fecha: {total_prestamos}"
                         )
+                        # ✅ MEJORA: Si hay préstamos válidos sin filtros de fecha, usar esos datos
+                        totales_alternativa = query_diagnostico.with_entities(
+                            func.count(Prestamo.id).label("total_prestamos"), 
+                            func.sum(Prestamo.total_financiamiento).label("total_monto")
+                        ).first()
+                        if totales_alternativa and totales_alternativa.total_prestamos and totales_alternativa.total_prestamos > 0:
+                            logger.info(
+                                f"✅ [financiamiento-por-rangos] Encontrados {totales_alternativa.total_prestamos} préstamos válidos sin filtros de fecha. "
+                                f"Usando estos datos en lugar de retornar vacío."
+                            )
+                            # Actualizar query_base y totales para usar datos sin filtros de fecha
+                            query_base = query_diagnostico
+                            total_prestamos = totales_alternativa.total_prestamos or 0
+                            total_monto = float(totales_alternativa.total_monto or Decimal("0"))
                 except Exception as e:
                     logger.error(f"Error en diagnóstico adicional: {e}", exc_info=True)
         except Exception as e:
@@ -3336,14 +3356,23 @@ def obtener_financiamiento_por_rangos(
             logger.error(f"Error generando rangos: {e}", exc_info=True)
             rangos = [(0, None, "$0+")]  # Rango por defecto si falla
 
+        # ✅ DIAGNÓSTICO: Medir tiempo de procesamiento de distribución
+        tiempo_antes_procesamiento = time.time()
+        tiempo_procesamiento = 0  # Inicializar para evitar error si hay excepción
         try:
             distribucion_data = _procesar_distribucion_rango_monto(query_base, rangos, total_prestamos, total_monto, db)
+            tiempo_procesamiento = int((time.time() - tiempo_antes_procesamiento) * 1000)
+            logger.info(f"⏱️ [financiamiento-por-rangos] Procesamiento de distribución completado en {tiempo_procesamiento}ms")
 
             # Ordenar de mayor a menor monto para efecto pirámide (solo si hay datos)
             if distribucion_data:
                 distribucion_data.sort(key=lambda x: x["monto_total"], reverse=True)
+                logger.info(f"📊 [financiamiento-por-rangos] {len(distribucion_data)} rangos procesados y ordenados")
+            else:
+                logger.warning(f"⚠️ [financiamiento-por-rangos] No se generaron rangos de distribución (distribucion_data vacío)")
         except Exception as e:
-            logger.error(f"Error procesando distribución por rangos: {e}", exc_info=True)
+            tiempo_procesamiento = int((time.time() - tiempo_antes_procesamiento) * 1000)
+            logger.error(f"❌ [financiamiento-por-rangos] Error procesando distribución por rangos después de {tiempo_procesamiento}ms: {e}", exc_info=True)
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción
             except Exception:
@@ -3351,7 +3380,15 @@ def obtener_financiamiento_por_rangos(
             distribucion_data = []
 
         total_time = int((time.time() - start_time) * 1000)
-        logger.info(f"⏱️ [financiamiento-por-rangos] Tiempo total: {total_time}ms")
+        logger.info(f"⏱️ [financiamiento-por-rangos] Tiempo total: {total_time}ms (procesamiento: {tiempo_procesamiento}ms)")
+        
+        # ✅ ALERTA: Si el endpoint es muy lento, registrar advertencia
+        if total_time > 2000:
+            logger.warning(
+                f"⚠️ [financiamiento-por-rangos] Endpoint lento detectado: {total_time}ms - "
+                f"Total préstamos: {total_prestamos}, Total monto: {total_monto}, "
+                f"Rangos generados: {len(rangos)}, Rangos con datos: {len(distribucion_data) if distribucion_data else 0}"
+            )
 
         return {
             "rangos": distribucion_data,
@@ -3363,8 +3400,11 @@ def obtener_financiamiento_por_rangos(
         raise
     except Exception as e:
         error_msg = str(e)
+        total_time = int((time.time() - start_time) * 1000)
         logger.error(f"❌ [financiamiento-por-rangos] Error obteniendo financiamiento por rangos: {error_msg}", exc_info=True)
         logger.error(f"❌ [financiamiento-por-rangos] Tipo de error: {type(e).__name__}")
+        logger.error(f"❌ [financiamiento-por-rangos] Tiempo transcurrido antes del error: {total_time}ms")
+        logger.error(f"❌ [financiamiento-por-rangos] Filtros aplicados: analista={analista}, concesionario={concesionario}, modelo={modelo}, fecha_inicio={fecha_inicio}, fecha_fin={fecha_fin}")
         try:
             db.rollback()  # ✅ Rollback para restaurar transacción después de error
         except Exception as rollback_error:

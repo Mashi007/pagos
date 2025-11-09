@@ -146,6 +146,31 @@ class PerformanceLoggingMiddleware(BaseHTTPMiddleware):
             log_level = logging.DEBUG
             emoji = "✅"
 
+        # ✅ DIAGNÓSTICO: Detectar requests lentos (> 2 segundos) y registrar información adicional
+        if response_time_ms > 2000:
+            logger.warning(
+                f"🐌 [SLOW REQUEST] {request.method} {request.url.path} - "
+                f"responseTimeMS={response_time_ms}ms - "
+                f"responseBytes={response_bytes} - "
+                f"status={response.status_code} - "
+                f'requestID="{request_id}" - '
+                f'queryParams="{request.url.query}"'
+            )
+
+        # ✅ DIAGNÓSTICO: Detectar respuestas muy pequeñas que podrían indicar errores o datos vacíos
+        # Respuestas pequeñas (< 1500 bytes) en endpoints de API que normalmente retornan datos
+        if response_bytes > 0 and response_bytes < 1500 and response.status_code == 200:
+            # Solo alertar en endpoints de API, no en assets estáticos
+            if request.url.path.startswith("/api/"):
+                logger.info(
+                    f"📦 [SMALL RESPONSE] {request.method} {request.url.path} - "
+                    f"responseBytes={response_bytes} - "
+                    f"responseTimeMS={response_time_ms}ms - "
+                    f'requestID="{request_id}" - '
+                    f'queryParams="{request.url.query}" - '
+                    f"Posible respuesta vacía o error silencioso"
+                )
+
         # Log estructurado compatible con formato de Render
         logger.log(
             log_level,
