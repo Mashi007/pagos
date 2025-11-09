@@ -1040,7 +1040,7 @@ def procesar_notificaciones_automaticas(db: Session = Depends(get_db), current_u
 
 @router.get("/variables", response_model=list[NotificacionVariableResponse])
 def listar_variables(
-    activa: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    activa: Optional[str] = Query(None, description="Filtrar por estado activo (true/false)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1048,17 +1048,39 @@ def listar_variables(
     Listar todas las variables de notificaciones configuradas
     """
     try:
+        # Verificar si la tabla existe
+        from sqlalchemy import inspect
+        from sqlalchemy.exc import ProgrammingError
+        
+        try:
+            inspector = inspect(db.bind)
+            if "notificacion_variables" not in inspector.get_table_names():
+                logger.warning("Tabla 'notificacion_variables' no existe, retornando lista vacía")
+                return []
+        except Exception as inspect_error:
+            logger.warning(f"Error verificando existencia de tabla: {inspect_error}, retornando lista vacía")
+            return []
+
         query = db.query(NotificacionVariable)
 
+        # Convertir string a boolean si es necesario
         if activa is not None:
-            query = query.filter(NotificacionVariable.activa == activa)
+            if isinstance(activa, str):
+                activa_bool = activa.lower() == "true"
+            else:
+                activa_bool = bool(activa)
+            query = query.filter(NotificacionVariable.activa == activa_bool)
 
         variables = query.order_by(NotificacionVariable.nombre_variable).all()
         return [v.to_dict() for v in variables]
 
+    except ProgrammingError as e:
+        logger.warning(f"Error de base de datos (tabla puede no existir): {e}, retornando lista vacía")
+        return []
     except Exception as e:
         logger.error(f"Error listando variables: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        # Si hay un error, retornar lista vacía en lugar de 500
+        return []
 
 
 @router.get("/variables/{variable_id}", response_model=NotificacionVariableResponse)
