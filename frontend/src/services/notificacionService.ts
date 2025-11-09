@@ -199,8 +199,9 @@ class EmailConfigService {
     return await apiClient.put(`${this.baseUrl}/email/configuracion`, config)
   }
 
-  async probarConfiguracionEmail(): Promise<any> {
-    return await apiClient.post(`${this.baseUrl}/email/probar`)
+  async probarConfiguracionEmail(emailDestino?: string): Promise<any> {
+    const params = emailDestino ? { email_destino: emailDestino } : {}
+    return await apiClient.post(`${this.baseUrl}/email/probar`, params)
   }
 
   async obtenerConfiguracionEnvios(): Promise<Record<string, { habilitado: boolean, cco: string[] }>> {

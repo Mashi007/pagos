@@ -36,6 +36,7 @@ export function EmailConfig() {
   const [resultadoPrueba, setResultadoPrueba] = useState<any>(null)
   const [modoPruebas, setModoPruebas] = useState<string>('false')
   const [emailPruebas, setEmailPruebas] = useState('')
+  const [emailPruebaDestino, setEmailPruebaDestino] = useState('') // Email para prueba de envío
   const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
   const [cargandoEnvios, setCargandoEnvios] = useState(false)
 
@@ -96,18 +97,31 @@ export function EmailConfig() {
       setProbando(true)
       setResultadoPrueba(null)
       
-      const resultado = await emailConfigService.probarConfiguracionEmail()
+      // Validar email si se proporcionó
+      if (emailPruebaDestino && emailPruebaDestino.trim()) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(emailPruebaDestino.trim())) {
+          toast.error('Por favor ingresa un email válido')
+          setProbando(false)
+          return
+        }
+      }
+      
+      const resultado = await emailConfigService.probarConfiguracionEmail(
+        emailPruebaDestino.trim() || undefined
+      )
       setResultadoPrueba(resultado)
       
       if (resultado.mensaje?.includes('enviado')) {
-        toast.success('Email de prueba enviado exitosamente')
+        toast.success(`Email de prueba enviado exitosamente a ${resultado.email_destino || 'tu correo'}`)
       } else {
         toast.error('Error enviando email de prueba')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error probando configuración:', error)
-      toast.error('Error probando configuración')
-      setResultadoPrueba({ error: 'Error desconocido' })
+      const mensajeError = error?.response?.data?.detail || error?.message || 'Error desconocido'
+      toast.error(`Error probando configuración: ${mensajeError}`)
+      setResultadoPrueba({ error: mensajeError })
     } finally {
       setProbando(false)
     }
@@ -272,6 +286,46 @@ export function EmailConfig() {
             )}
           </div>
 
+          {/* Ambiente de Prueba - Envío de Email de Prueba */}
+          <div className="border-t pt-4 mt-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                <TestTube className="h-5 w-5" />
+                Ambiente de Prueba - Envío de Email
+              </h3>
+              <p className="text-sm text-blue-700 mb-4">
+                Envía un correo de prueba a un email específico para verificar que la configuración SMTP funciona correctamente.
+              </p>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium block mb-2">
+                    Email de Destino para Prueba <span className="text-gray-500">(opcional)</span>
+                  </label>
+                  <Input
+                    type="email"
+                    value={emailPruebaDestino}
+                    onChange={(e) => setEmailPruebaDestino(e.target.value)}
+                    placeholder={config.smtp_user || "ejemplo@email.com"}
+                    className="max-w-md"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Si no especificas un email, se enviará a tu correo de usuario ({config.smtp_user || 'no configurado'})
+                  </p>
+                </div>
+                
+                <Button
+                  onClick={handleProbar}
+                  disabled={probando || !config.smtp_user}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+                >
+                  <TestTube className="h-4 w-4" />
+                  {probando ? 'Enviando Email de Prueba...' : 'Enviar Email de Prueba'}
+                </Button>
+              </div>
+            </div>
+          </div>
+
           {/* Botones */}
           <div className="flex gap-2 pt-4">
             <Button
@@ -281,16 +335,6 @@ export function EmailConfig() {
             >
               <Save className="h-4 w-4" />
               {guardando ? 'Guardando...' : 'Guardar Configuración'}
-            </Button>
-            
-            <Button
-              onClick={handleProbar}
-              disabled={probando || !config.smtp_user}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <TestTube className="h-4 w-4" />
-              {probando ? 'Probando...' : 'Probar Configuración'}
             </Button>
           </div>
 

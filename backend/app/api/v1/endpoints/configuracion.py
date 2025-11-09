@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -1052,9 +1052,23 @@ def actualizar_configuracion_envios(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
+class ProbarEmailRequest(BaseModel):
+    email_destino: Optional[str] = None
+
+
 @router.post("/email/probar")
-def probar_configuracion_email(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Probar configuración de email enviando un email de prueba"""
+def probar_configuracion_email(
+    request: Optional[ProbarEmailRequest] = Body(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Probar configuración de email enviando un email de prueba a cualquier correo
+    
+    Args:
+        request: Objeto con email_destino opcional. Si no se proporciona, se envía al email del usuario actual.
+                Puedes enviar a CUALQUIER correo para verificar que funciona.
+    """
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403,
@@ -1068,21 +1082,58 @@ def probar_configuracion_email(db: Session = Depends(get_db), current_user: User
         if not configs:
             raise HTTPException(status_code=400, detail="No hay configuración de email")
 
+        # Determinar email destino - acepta cualquier email válido
+        email_destino_val = None
+        if request:
+            if isinstance(request, dict):
+                email_destino_val = request.get("email_destino")
+            elif hasattr(request, 'email_destino'):
+                email_destino_val = request.email_destino
+        
+        # Si se proporcionó un email, usarlo; si no, usar el email del usuario actual
+        email_a_enviar = email_destino_val.strip() if email_destino_val and email_destino_val.strip() else current_user.email
+        
+        # Validar formato de email
+        import re
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email_a_enviar):
+            raise HTTPException(status_code=400, detail="Email de destino inválido")
+
         # Enviar email de prueba
         from app.services.email_service import EmailService
 
-        # Actualizar configuración global temporalmente
         email_service = EmailService(db=db)
         result = email_service.send_email(
-            to_emails=[current_user.email],
-            subject="Prueba de configuración - RapiCredit",
+            to_emails=[email_a_enviar],
+            subject="✅ Prueba de configuración - RapiCredit",
             body=f"""
             <html>
-            <body>
-                <h2>Email de prueba</h2>
-                <p>Esta es una prueba de la configuración de email.</p>
-                <p>Si recibes este email, la configuración está correcta.</p>
-                <p><strong>Fecha:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                    <div style="background-color: #4CAF50; color: white; padding: 15px; border-radius: 5px 5px 0 0; margin: -20px -20px 20px -20px;">
+                        <h2 style="margin: 0;">✅ Email de Prueba Exitoso</h2>
+                    </div>
+                    
+                    <p>Este es un <strong>email de prueba</strong> para verificar que la configuración SMTP está funcionando correctamente.</p>
+                    
+                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                        <p style="margin: 0;"><strong>📧 Destinatario:</strong> {email_a_enviar}</p>
+                        <p style="margin: 5px 0;"><strong>📅 Fecha y Hora:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                        <p style="margin: 5px 0;"><strong>👤 Usuario:</strong> {current_user.email}</p>
+                    </div>
+                    
+                    <p>Si recibes este email, significa que:</p>
+                    <ul>
+                        <li>✅ La configuración SMTP es correcta</li>
+                        <li>✅ Las credenciales son válidas</li>
+                        <li>✅ El servidor de email está funcionando</li>
+                        <li>✅ El sistema puede enviar correos normalmente</li>
+                    </ul>
+                    
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 12px;">
+                        <p>Este es un email automático del sistema RapiCredit</p>
+                    </div>
+                </div>
             </body>
             </html>
             """,
@@ -1091,15 +1142,19 @@ def probar_configuracion_email(db: Session = Depends(get_db), current_user: User
 
         if result.get("success"):
             return {
-                "mensaje": "Email de prueba enviado exitosamente",
+                "mensaje": f"Email de prueba enviado exitosamente a {email_a_enviar}",
+                "email_destino": email_a_enviar,
                 "detalle": result,
             }
         else:
             return {
                 "mensaje": "Error enviando email de prueba",
                 "error": result.get("message"),
+                "email_destino": email_a_enviar,
             }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error probando configuración de email: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
