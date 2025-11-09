@@ -53,7 +53,7 @@ def calcular_notificaciones_previas_job():
 
         # Inicializar servicio de variables
         variables_service = VariablesNotificacionService(db=db)
-        
+
         # Procesar cada notificación previa
         for resultado in resultados:
             cliente_id = resultado["cliente_id"]

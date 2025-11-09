@@ -879,26 +879,30 @@ async def enviar_notificacion_con_plantilla(
         # Obtener préstamo y cuota relacionados si existen
         prestamo = None
         cuota = None
-        
+
         # Intentar obtener el préstamo más reciente del cliente
         from app.models.prestamo import Prestamo
         from app.models.amortizacion import Cuota
-        
-        prestamo = db.query(Prestamo).filter(
-            Prestamo.cliente_id == cliente_id,
-            Prestamo.estado == "APROBADO"
-        ).order_by(Prestamo.fecha_registro.desc()).first()
-        
+
+        prestamo = (
+            db.query(Prestamo)
+            .filter(Prestamo.cliente_id == cliente_id, Prestamo.estado == "APROBADO")
+            .order_by(Prestamo.fecha_registro.desc())
+            .first()
+        )
+
         if prestamo:
             # Obtener la cuota más próxima a vencer
-            cuota = db.query(Cuota).filter(
-                Cuota.prestamo_id == prestamo.id,
-                Cuota.estado.in_(["PENDIENTE", "ATRASADO"])
-            ).order_by(Cuota.fecha_vencimiento.asc()).first()
+            cuota = (
+                db.query(Cuota)
+                .filter(Cuota.prestamo_id == prestamo.id, Cuota.estado.in_(["PENDIENTE", "ATRASADO"]))
+                .order_by(Cuota.fecha_vencimiento.asc())
+                .first()
+            )
 
         # Construir variables desde la BD usando las variables configuradas
         variables_service = VariablesNotificacionService(db=db)
-        
+
         # Si se pasan variables manualmente, combinarlas con las de la BD
         # Las variables manuales tienen prioridad sobre las de la BD
         variables_bd = variables_service.construir_variables_desde_bd(
@@ -906,7 +910,7 @@ async def enviar_notificacion_con_plantilla(
             prestamo=prestamo,
             cuota=cuota,
         )
-        
+
         # Combinar: variables manuales tienen prioridad
         variables_finales = {**variables_bd, **variables}
 
