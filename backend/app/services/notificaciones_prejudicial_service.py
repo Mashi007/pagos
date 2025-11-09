@@ -179,7 +179,7 @@ class NotificacionesPrejudicialService:
                             "modelo_vehiculo": modelo_vehiculo,
                             "correo": correo or "",
                             "telefono": telefono or "",
-                            "fecha_vencimiento": fecha_vencimiento.isoformat() if fecha_vencimiento else None,
+                            "fecha_vencimiento": fecha_vencimiento.isoformat() if fecha_vencimiento else "",
                             "numero_cuota": numero_cuota,
                             "monto_cuota": float(monto_cuota) if monto_cuota else 0.0,
                             "total_cuotas_atrasadas": int(total_cuotas_atrasadas) if total_cuotas_atrasadas else 0,

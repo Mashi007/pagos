@@ -92,7 +92,16 @@ export function Notificaciones() {
   // Cargar notificaciones prejudiciales si estamos en la pestaña "prejudicial"
   const { data: notificacionesPrejudicialesData, isLoading: isLoadingPrejudiciales, error: errorPrejudiciales, refetch: refetchPrejudiciales } = useQuery({
     queryKey: ['notificaciones-prejudicial', filterEstado],
-    queryFn: () => notificacionService.listarNotificacionesPrejudiciales(filterEstado || undefined),
+    queryFn: async () => {
+      try {
+        const result = await notificacionService.listarNotificacionesPrejudiciales(filterEstado || undefined)
+        console.log('📊 [NotificacionesPrejudicial] Datos recibidos:', result)
+        return result
+      } catch (error) {
+        console.error('❌ [NotificacionesPrejudicial] Error en query:', error)
+        throw error
+      }
+    },
     enabled: activeTab === 'prejudicial', // Solo cargar cuando esté en la pestaña prejudicial
     staleTime: 10 * 1000, // Cache de 10 segundos
     refetchInterval: 30 * 1000, // Refrescar cada 30 segundos para ver actualizaciones más rápido

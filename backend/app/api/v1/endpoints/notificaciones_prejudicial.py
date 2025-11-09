@@ -96,12 +96,52 @@ def listar_notificaciones_prejudiciales(
             )
 
         # Convertir a response models
-        items = [NotificacionPrejudicialResponse(**r) for r in resultados]
+        try:
+            items = []
+            for r in resultados:
+                try:
+                    # Asegurar que todos los campos requeridos estén presentes
+                    fecha_vencimiento = r.get("fecha_vencimiento") or ""
+                    # Convertir a string si es una fecha
+                    if fecha_vencimiento and not isinstance(fecha_vencimiento, str):
+                        if hasattr(fecha_vencimiento, 'isoformat'):
+                            fecha_vencimiento = fecha_vencimiento.isoformat()
+                        else:
+                            fecha_vencimiento = str(fecha_vencimiento)
+                    elif not fecha_vencimiento:
+                        fecha_vencimiento = ""
+                    
+                    item_data = {
+                        "prestamo_id": int(r.get("prestamo_id", 0)),
+                        "cliente_id": int(r.get("cliente_id", 0)),
+                        "nombre": str(r.get("nombre", "")),
+                        "cedula": str(r.get("cedula", "")),
+                        "modelo_vehiculo": str(r.get("modelo_vehiculo", "")),
+                        "correo": str(r.get("correo", "")),
+                        "telefono": str(r.get("telefono", "")),
+                        "fecha_vencimiento": fecha_vencimiento,
+                        "numero_cuota": int(r.get("numero_cuota", 0)),
+                        "monto_cuota": float(r.get("monto_cuota", 0.0)),
+                        "total_cuotas_atrasadas": int(r.get("total_cuotas_atrasadas", 0)),
+                        "estado": str(r.get("estado", "PENDIENTE")),
+                    }
+                    items.append(NotificacionPrejudicialResponse(**item_data))
+                except Exception as e:
+                    logger.warning(f"⚠️ [NotificacionesPrejudicial] Error convirtiendo item: {e}, datos: {r}")
+                    continue
 
-        return NotificacionesPrejudicialesListResponse(
-            items=items,
-            total=len(items),
-        )
+            logger.info(f"✅ [NotificacionesPrejudicial] Respuesta preparada: {len(items)} items")
+            return NotificacionesPrejudicialesListResponse(
+                items=items,
+                total=len(items),
+            )
+        except Exception as conversion_error:
+            logger.error(f"❌ [NotificacionesPrejudicial] Error en conversión: {conversion_error}", exc_info=True)
+            # Devolver respuesta vacía en lugar de fallar
+            return NotificacionesPrejudicialesListResponse(
+                items=[],
+                total=0,
+            )
 
     except Exception as e:
         logger.error(f"Error listando notificaciones prejudiciales: {e}", exc_info=True)
