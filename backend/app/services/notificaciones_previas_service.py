@@ -8,13 +8,12 @@ import logging
 from datetime import date, timedelta
 from typing import List, Optional
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, func, or_, text
 from sqlalchemy.orm import Session
 
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.notificacion import Notificacion
-from app.models.prestamo import Prestamo
 
 logger = logging.getLogger(__name__)
 
@@ -47,29 +46,27 @@ class NotificacionesPreviasService:
             # Verificar conexión a BD
             logger.info("🔍 [NotificacionesPrevias] Iniciando cálculo de notificaciones previas...")
             
-            # Obtener solo las columnas necesarias de préstamos aprobados
-            # Usar with_entities para evitar cargar columnas que no existen en BD
-            prestamos_data = (
-                self.db.query(
-                    Prestamo.id,
-                    Prestamo.cliente_id,
-                    Prestamo.cedula,
-                    Prestamo.modelo_vehiculo,
-                    Prestamo.producto,
-                )
-                .filter(Prestamo.estado == "APROBADO")
-                .all()
-            )
+            # Obtener solo las columnas necesarias de préstamos aprobados usando SQL directo
+            # Esto evita que SQLAlchemy intente acceder a columnas que no existen en BD
+            query_sql = text("""
+                SELECT id, cliente_id, cedula, modelo_vehiculo, producto
+                FROM prestamos
+                WHERE estado = :estado
+            """)
+            
+            result = self.db.execute(query_sql, {"estado": "APROBADO"})
+            prestamos_data = result.fetchall()
             logger.info(f"📊 [NotificacionesPrevias] Encontrados {len(prestamos_data)} préstamos aprobados")
 
             resultados = []
 
             for prestamo_row in prestamos_data:
-                prestamo_id = prestamo_row.id
-                cliente_id = prestamo_row.cliente_id
-                cedula = prestamo_row.cedula
-                modelo_vehiculo = prestamo_row.modelo_vehiculo
-                producto = prestamo_row.producto
+                # Acceder a las columnas por índice (0: id, 1: cliente_id, 2: cedula, 3: modelo_vehiculo, 4: producto)
+                prestamo_id = prestamo_row[0]
+                cliente_id = prestamo_row[1]
+                cedula = prestamo_row[2]
+                modelo_vehiculo = prestamo_row[3]
+                producto = prestamo_row[4]
                 
                 # Verificar que NO tenga cuotas atrasadas
                 # Cuotas atrasadas: vencidas y no pagadas (estado != "PAGADO")
@@ -117,19 +114,22 @@ class NotificacionesPreviasService:
                     elif dias_antes == 1:
                         tipo_notificacion = "PAGO_1_DIA_ANTES"
 
-                    # Obtener datos del cliente (solo columnas necesarias)
-                    cliente_data = (
-                        self.db.query(
-                            Cliente.id,
-                            Cliente.nombres,
-                            Cliente.email,
-                            Cliente.telefono,
-                        )
-                        .filter(Cliente.id == cliente_id)
-                        .first()
-                    )
+                    # Obtener datos del cliente usando SQL directo
+                    query_cliente = text("""
+                        SELECT id, nombres, email, telefono
+                        FROM clientes
+                        WHERE id = :cliente_id
+                    """)
+                    
+                    result_cliente = self.db.execute(query_cliente, {"cliente_id": cliente_id})
+                    cliente_row = result_cliente.fetchone()
 
-                    if cliente_data:
+                    if cliente_row:
+                        # Acceder a las columnas por índice (0: id, 1: nombres, 2: email, 3: telefono)
+                        cliente_id_val = cliente_row[0]
+                        cliente_nombres = cliente_row[1]
+                        cliente_email = cliente_row[2]
+                        cliente_telefono = cliente_row[3]
                         # Buscar notificación relacionada si existe
                         estado_notificacion = "PENDIENTE"  # Por defecto pendiente (aún no enviada)
                         notificacion_existente = None
@@ -138,38 +138,41 @@ class NotificacionesPreviasService:
                             # Buscar la notificación más reciente de este tipo para este cliente
                             # Ordenar por ID descendente (más reciente primero) ya que created_at puede no existir
                             try:
-                                notificacion_existente = (
-                                    self.db.query(Notificacion)
-                                    .filter(
-                                        and_(
-                                            Notificacion.cliente_id == cliente_data.id,
-                                            Notificacion.tipo == tipo_notificacion,
-                                        )
-                                    )
-                                    .order_by(Notificacion.id.desc())
-                                    .first()
+                                query_notif = text("""
+                                    SELECT id, estado
+                                    FROM notificaciones
+                                    WHERE cliente_id = :cliente_id
+                                      AND tipo = :tipo
+                                    ORDER BY id DESC
+                                    LIMIT 1
+                                """)
+                                
+                                result_notif = self.db.execute(
+                                    query_notif, 
+                                    {"cliente_id": cliente_id_val, "tipo": tipo_notificacion}
                                 )
-
-                                if notificacion_existente:
-                                    estado_notificacion = notificacion_existente.estado
+                                notif_row = result_notif.fetchone()
+                                
+                                if notif_row:
+                                    estado_notificacion = notif_row[1]  # estado está en índice 1
                                     logger.debug(
-                                        f"📧 [NotificacionesPrevias] Cliente {cliente_data.id} tiene notificación {tipo_notificacion} "
+                                        f"📧 [NotificacionesPrevias] Cliente {cliente_id_val} tiene notificación {tipo_notificacion} "
                                         f"con estado {estado_notificacion}"
                                     )
                             except Exception as e:
                                 logger.warning(
-                                    f"⚠️ [NotificacionesPrevias] Error buscando notificación para cliente {cliente_data.id}: {e}"
+                                    f"⚠️ [NotificacionesPrevias] Error buscando notificación para cliente {cliente_id_val}: {e}"
                                 )
                                 # Continuar con estado PENDIENTE por defecto
 
                         resultado = {
                             "prestamo_id": prestamo_id,
-                            "cliente_id": cliente_data.id,
-                            "nombre": cliente_data.nombres,  # nombres ya incluye nombres + apellidos
+                            "cliente_id": cliente_id_val,
+                            "nombre": cliente_nombres,  # nombres ya incluye nombres + apellidos
                             "cedula": cedula,
                             "modelo_vehiculo": modelo_vehiculo or producto or "N/A",
-                            "correo": cliente_data.email,
-                            "telefono": cliente_data.telefono,
+                            "correo": cliente_email,
+                            "telefono": cliente_telefono,
                             "dias_antes_vencimiento": dias_antes,
                             "fecha_vencimiento": cuota_proxima.fecha_vencimiento.isoformat(),
                             "numero_cuota": cuota_proxima.numero_cuota,
