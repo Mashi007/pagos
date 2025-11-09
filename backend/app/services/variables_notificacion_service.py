@@ -4,17 +4,17 @@ Usa las variables configuradas en notificacion_variables para obtener datos real
 """
 
 import logging
-from typing import Dict, Optional
 from datetime import date, datetime
+from typing import Dict, Optional
 
-from sqlalchemy.orm import Session
 from sqlalchemy import inspect
+from sqlalchemy.orm import Session
 
-from app.models.cliente import Cliente
-from app.models.prestamo import Prestamo
 from app.models.amortizacion import Cuota
-from app.models.pago import Pago
+from app.models.cliente import Cliente
 from app.models.notificacion_variable import NotificacionVariable
+from app.models.pago import Pago
+from app.models.prestamo import Prestamo
 
 logger = logging.getLogger(__name__)
 

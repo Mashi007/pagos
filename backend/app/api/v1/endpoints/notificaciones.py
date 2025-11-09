@@ -881,8 +881,8 @@ async def enviar_notificacion_con_plantilla(
         cuota = None
 
         # Intentar obtener el préstamo más reciente del cliente
-        from app.models.prestamo import Prestamo
         from app.models.amortizacion import Cuota
+        from app.models.prestamo import Prestamo
 
         prestamo = (
             db.query(Prestamo)
