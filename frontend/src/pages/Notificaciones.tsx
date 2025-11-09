@@ -22,7 +22,7 @@ import { Badge } from '@/components/ui/badge'
 import { useQuery } from '@tanstack/react-query'
 import { notificacionService, type Notificacion, type NotificacionStats } from '@/services/notificacionService'
 import { toast } from 'sonner'
-import { EmailConfig } from '@/components/configuracion/EmailConfig'
+import { ConfiguracionNotificaciones } from '@/components/notificaciones/ConfiguracionNotificaciones'
 
 type TabType = 'previa' | 'retrasado' | 'prejudicial' | 'configuracion'
 
@@ -310,7 +310,7 @@ export function Notificaciones() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.5 }}
         >
-          <EmailConfig />
+          <ConfiguracionNotificaciones />
         </motion.div>
       ) : (
         <>

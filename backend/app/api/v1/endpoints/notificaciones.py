@@ -871,23 +871,77 @@ async def enviar_notificacion_con_plantilla(
         db.commit()
         db.refresh(nueva_notif)
 
+        # Función helper para enviar email y actualizar estado
+        def enviar_y_actualizar_estado():
+            """Envía email y actualiza estado de notificación"""
+            from app.db.session import SessionLocal
+            
+            db_local = SessionLocal()
+            try:
+                # Recargar notificación para asegurar que tenemos la última versión
+                notif = db_local.query(Notificacion).filter(Notificacion.id == nueva_notif.id).first()
+                if not notif:
+                    logger.error(f"Notificación {nueva_notif.id} no encontrada para actualizar estado")
+                    return
+                
+                # Enviar email
+                if cliente.email:
+                    email_service = EmailService(db=db_local)
+                    resultado = email_service.send_email(
+                        to_emails=[str(cliente.email)],
+                        subject=asunto,
+                        body=cuerpo,
+                        is_html=True,
+                    )
+                    
+                    # Actualizar estado según resultado
+                    if resultado.get("success"):
+                        notif.estado = "ENVIADA"
+                        notif.enviada_en = datetime.utcnow()
+                        notif.respuesta_servicio = resultado.get("message", "Email enviado exitosamente")
+                        logger.info(f"✅ Notificación {notif.id} enviada exitosamente a {cliente.email}")
+                    else:
+                        notif.estado = "FALLIDA"
+                        notif.error_mensaje = resultado.get("message", "Error desconocido")
+                        notif.intentos = (notif.intentos or 0) + 1
+                        logger.error(f"❌ Error enviando notificación {notif.id}: {resultado.get('message')}")
+                else:
+                    notif.estado = "FALLIDA"
+                    notif.error_mensaje = "Cliente no tiene email registrado"
+                    logger.warning(f"⚠️ Cliente {cliente_id} no tiene email registrado")
+                
+                db_local.commit()
+            except Exception as e:
+                db_local.rollback()
+                logger.error(f"❌ Error en background task de envío de email: {e}", exc_info=True)
+                # Intentar marcar como fallida
+                try:
+                    notif = db_local.query(Notificacion).filter(Notificacion.id == nueva_notif.id).first()
+                    if notif:
+                        notif.estado = "FALLIDA"
+                        notif.error_mensaje = str(e)
+                        notif.intentos = (notif.intentos or 0) + 1
+                        db_local.commit()
+                except Exception:
+                    pass
+            finally:
+                db_local.close()
+
         # Enviar email en background
         if cliente.email:
-            email_service = EmailService(db=db)
-            background_tasks.add_task(
-                email_service.send_email,
-                to_emails=[str(cliente.email)],
-                subject=asunto,
-                body=cuerpo,
-                is_html=True,
-            )
-
-        logger.info(f"Notificación enviada usando plantilla {plantilla_id}")
+            background_tasks.add_task(enviar_y_actualizar_estado)
+            logger.info(f"📧 Email programado para envío usando plantilla {plantilla_id} a cliente {cliente_id}")
+        else:
+            # Si no tiene email, marcar como fallida inmediatamente
+            nueva_notif.estado = "FALLIDA"
+            nueva_notif.error_mensaje = "Cliente no tiene email registrado"
+            db.commit()
 
         return {
-            "mensaje": "Notificación enviada",
+            "mensaje": "Notificación programada para envío" if cliente.email else "Cliente no tiene email registrado",
             "cliente_id": cliente_id,
             "asunto": asunto,
+            "notificacion_id": nueva_notif.id,
         }
 
     except HTTPException:
