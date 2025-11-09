@@ -63,17 +63,17 @@ class FiltrosDashboard:
                     and_(
                         Prestamo.fecha_registro.isnot(None),
                         Prestamo.fecha_registro >= fecha_inicio,
-                        Prestamo.fecha_registro <= fecha_fin
+                        Prestamo.fecha_registro <= fecha_fin,
                     ),
                     and_(
                         Prestamo.fecha_aprobacion.isnot(None),
                         Prestamo.fecha_aprobacion >= fecha_inicio,
-                        Prestamo.fecha_aprobacion <= fecha_fin
+                        Prestamo.fecha_aprobacion <= fecha_fin,
                     ),
                     and_(
                         Prestamo.fecha_base_calculo.isnot(None),
                         Prestamo.fecha_base_calculo >= fecha_inicio,
-                        Prestamo.fecha_base_calculo <= fecha_fin
+                        Prestamo.fecha_base_calculo <= fecha_fin,
                     ),
                 )
             )
