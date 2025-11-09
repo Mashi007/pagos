@@ -299,6 +299,11 @@ app.include_router(solicitudes.router, prefix="/api/v1/solicitudes", tags=["soli
 app.include_router(aprobaciones.router, prefix="/api/v1/aprobaciones", tags=["aprobaciones"])
 app.include_router(notificaciones.router, prefix="/api/v1/notificaciones", tags=["notificaciones"])
 app.include_router(notificaciones_previas.router, prefix="/api/v1/notificaciones-previas", tags=["notificaciones-previas"])
+
+# Importar router de notificaciones retrasadas
+from app.api.v1.endpoints import notificaciones_retrasadas  # noqa: E402
+
+app.include_router(notificaciones_retrasadas.router, prefix="/api/v1/notificaciones-retrasadas", tags=["notificaciones-retrasadas"])
 app.include_router(reportes.router, prefix="/api/v1/reportes", tags=["reportes"])
 app.include_router(cobranzas.router, prefix="/api/v1/cobranzas", tags=["cobranzas"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])

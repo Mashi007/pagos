@@ -65,11 +65,23 @@ export function Notificaciones() {
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
   })
 
+  // Cargar notificaciones retrasadas si estamos en la pestaña "retrasado"
+  const { data: notificacionesRetrasadasData, isLoading: isLoadingRetrasadas, error: errorRetrasadas, refetch: refetchRetrasadas } = useQuery({
+    queryKey: ['notificaciones-retrasadas', filterEstado],
+    queryFn: () => notificacionService.listarNotificacionesRetrasadas(filterEstado || undefined),
+    enabled: activeTab === 'retrasado', // Solo cargar cuando esté en la pestaña retrasado
+    staleTime: 30 * 1000, // Cache de 30 segundos
+    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos
+    refetchOnWindowFocus: true, // Refrescar al enfocar ventana
+    retry: 2, // Reintentar 2 veces en caso de error
+    retryDelay: 1000, // Esperar 1 segundo entre reintentos
+  })
+
   // Cargar notificaciones normales para otras pestañas
   const { data: notificacionesData, isLoading, error, refetch } = useQuery({
     queryKey: ['notificaciones', filterEstado, page, perPage],
     queryFn: () => notificacionService.listarNotificaciones(page, perPage, filterEstado || undefined),
-    enabled: activeTab !== 'previa', // Solo cargar cuando NO esté en la pestaña previa
+    enabled: activeTab !== 'previa' && activeTab !== 'retrasado', // Solo cargar cuando NO esté en previa o retrasado
     staleTime: 30 * 1000, // Cache de 30 segundos
     refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos (reducido de 30s)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
@@ -82,6 +94,10 @@ export function Notificaciones() {
   // Datos de notificaciones previas
   const notificacionesPrevias = notificacionesPreviasData?.items || []
   const totalPrevias = notificacionesPreviasData?.total || 0
+  
+  // Datos de notificaciones retrasadas
+  const notificacionesRetrasadas = notificacionesRetrasadasData?.items || []
+  const totalRetrasadas = notificacionesRetrasadasData?.total || 0
 
   // Cargar estadísticas
   const { data: estadisticas } = useQuery({
@@ -181,6 +197,8 @@ export function Notificaciones() {
   const handleRefresh = () => {
     if (activeTab === 'previa') {
       refetchPrevias()
+    } else if (activeTab === 'retrasado') {
+      refetchRetrasadas()
     } else {
       refetch()
     }
@@ -537,22 +555,26 @@ export function Notificaciones() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {(activeTab === 'previa' ? isLoadingPrevias : isLoading) ? (
+            {((activeTab === 'previa' ? isLoadingPrevias : activeTab === 'retrasado' ? isLoadingRetrasadas : isLoading)) ? (
               <div className="text-center py-8">
                 <RefreshCw className="w-8 h-8 mx-auto mb-4 text-gray-400 animate-spin" />
                 <p className="text-gray-500">Cargando notificaciones...</p>
               </div>
-            ) : (activeTab === 'previa' ? errorPrevias : error) ? (
+            ) : ((activeTab === 'previa' ? errorPrevias : activeTab === 'retrasado' ? errorRetrasadas : error)) ? (
               <div className="text-center py-8 text-red-500">
                 <AlertTriangle className="w-12 h-12 mx-auto mb-4" />
                 <p>Error al cargar notificaciones</p>
-                <Button variant="outline" onClick={() => activeTab === 'previa' ? refetchPrevias() : refetch()} className="mt-4">
+                <Button variant="outline" onClick={() => {
+                  if (activeTab === 'previa') refetchPrevias()
+                  else if (activeTab === 'retrasado') refetchRetrasadas()
+                  else refetch()
+                }} className="mt-4">
                   Reintentar
                 </Button>
               </div>
             ) : (
               <>
-                {(activeTab === 'previa' ? notificacionesPrevias.length === 0 : filteredNotificaciones.length === 0) ? (
+                {((activeTab === 'previa' ? notificacionesPrevias.length === 0 : activeTab === 'retrasado' ? notificacionesRetrasadas.length === 0 : filteredNotificaciones.length === 0)) ? (
                   <div className="text-center py-12 text-gray-500">
                     <Bell className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                     <p className="text-lg font-medium">No se encontraron notificaciones</p>
@@ -563,17 +585,21 @@ export function Notificaciones() {
                     )}
                   </div>
                 ) : (
-                  activeTab === 'previa' ? (
-                    // Agrupar notificaciones previas por días
+                  (activeTab === 'previa' || activeTab === 'retrasado') ? (
+                    // Agrupar notificaciones previas o retrasadas por días
                     (() => {
+                      const datos = activeTab === 'previa' ? notificacionesPrevias : notificacionesRetrasadas
+                      const campoDias = activeTab === 'previa' ? 'dias_antes_vencimiento' : 'dias_atrasado'
+                      
                       const grupos = {
-                        '5': notificacionesPrevias.filter(n => n.dias_antes_vencimiento === 5),
-                        '3': notificacionesPrevias.filter(n => n.dias_antes_vencimiento === 3),
-                        '1': notificacionesPrevias.filter(n => n.dias_antes_vencimiento === 1)
+                        '5': datos.filter(n => n[campoDias] === 5),
+                        '3': datos.filter(n => n[campoDias] === 3),
+                        '1': datos.filter(n => n[campoDias] === 1)
                       }
                       
                       // Orden de visualización: 5, 3, 1
                       const ordenGrupos = ['5', '3', '1']
+                      const textoDias = activeTab === 'previa' ? 'días antes del vencimiento' : 'días atrasado'
                       
                       return (
                         <div className="space-y-4">
@@ -597,7 +623,7 @@ export function Notificaciones() {
                                       <ChevronDown className="w-5 h-5 text-gray-500" />
                                     )}
                                     <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-lg px-4 py-1">
-                                      {dias} días antes del vencimiento
+                                      {dias} {textoDias}
                                     </Badge>
                                     <span className="text-sm text-gray-500">
                                       ({notificacionesGrupo.length} {notificacionesGrupo.length === 1 ? 'notificación' : 'notificaciones'})
@@ -610,7 +636,7 @@ export function Notificaciones() {
                                   <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
                                     {notificacionesGrupo.map((notificacion) => (
                                     <Card 
-                                      key={`${notificacion.prestamo_id}-${notificacion.dias_antes_vencimiento}`}
+                                      key={`${notificacion.prestamo_id}-${notificacion[campoDias]}`}
                                       className="bg-yellow-50 border-yellow-200 hover:shadow-md transition-shadow"
                                     >
                                       <CardContent className="p-4">
@@ -662,7 +688,7 @@ export function Notificaciones() {
                                           <div className="flex flex-col items-end gap-2 ml-4">
                                             {getEstadoBadge(notificacion.estado)}
                                             <Badge className="bg-blue-100 text-blue-800 border-blue-300">
-                                              {notificacion.dias_antes_vencimiento} días antes
+                                              {notificacion[campoDias]} {activeTab === 'previa' ? 'días antes' : 'días atrasado'}
                                             </Badge>
                                           </div>
                                         </div>
