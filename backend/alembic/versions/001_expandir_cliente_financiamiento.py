@@ -21,14 +21,14 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    
+
     if "clientes" not in inspector.get_table_names():
         print("⚠️ Tabla 'clientes' no existe, saltando migración")
         return
-    
+
     # Verificar columnas existentes
     columns = [col["name"] for col in inspector.get_columns("clientes")]
-    
+
     # Agregar columnas solo si no existen
     if "modelo_vehiculo" not in columns:
         op.add_column("clientes", sa.Column("modelo_vehiculo", sa.String(100), nullable=True))
@@ -53,7 +53,7 @@ def upgrade() -> None:
 
     # Verificar índices existentes
     indexes = [idx["name"] for idx in inspector.get_indexes("clientes")]
-    
+
     # Crear índices solo si no existen
     if "idx_clientes_telefono" not in indexes:
         op.create_index("idx_clientes_telefono", "clientes", ["telefono"])
@@ -74,7 +74,7 @@ def upgrade() -> None:
 
     # Verificar foreign keys existentes
     foreign_keys = [fk["name"] for fk in inspector.get_foreign_keys("clientes")]
-    
+
     # Crear foreign key solo si no existe
     if "fk_clientes_asesor_id" not in foreign_keys:
         op.create_foreign_key("fk_clientes_asesor_id", "clientes", "users", ["asesor_id"], ["id"])

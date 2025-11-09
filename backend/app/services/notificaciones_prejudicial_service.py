@@ -42,7 +42,7 @@ class NotificacionesPrejudicialService:
             # Ordenado por fecha de vencimiento más antigua primero
             query_optimizada = text(
                 """WITH cuotas_atrasadas AS (
-                    SELECT 
+                    SELECT
                         p.id as prestamo_id,
                         p.cliente_id,
                         cl.nombres as nombre_cliente,
@@ -80,9 +80,9 @@ class NotificacionesPrejudicialService:
                     ca.fecha_vencimiento,
                     ca.numero_cuota,
                     ca.monto_cuota,
-                    (SELECT COUNT(*) 
-                     FROM cuotas c2 
-                     WHERE c2.prestamo_id = ca.prestamo_id 
+                    (SELECT COUNT(*)
+                     FROM cuotas c2
+                     WHERE c2.prestamo_id = ca.prestamo_id
                        AND c2.estado IN ('ATRASADO', 'PENDIENTE')
                        AND c2.fecha_vencimiento < :hoy
                        AND c2.total_pagado < c2.monto_cuota) as total_cuotas_atrasadas,

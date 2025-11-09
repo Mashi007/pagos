@@ -19,32 +19,32 @@ depends_on = None
 def upgrade():
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     # ============================================
     # TABLA: concesionarios
     # ============================================
     if 'concesionarios' in inspector.get_table_names():
         columns = [col['name'] for col in inspector.get_columns('concesionarios')]
-        
+
         # Asegurar que existan todas las columnas necesarias
         if 'nombre' not in columns:
             op.add_column('concesionarios', sa.Column('nombre', sa.String(length=255), nullable=False, server_default=''))
-        
+
         if 'activo' not in columns:
             op.add_column('concesionarios', sa.Column('activo', sa.Boolean(), nullable=False, server_default='true'))
-        
+
         if 'created_at' not in columns:
             op.execute(text("""
-                ALTER TABLE concesionarios 
+                ALTER TABLE concesionarios
                 ADD COLUMN created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             """))
-        
+
         if 'updated_at' not in columns:
             op.execute(text("""
-                ALTER TABLE concesionarios 
+                ALTER TABLE concesionarios
                 ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             """))
-        
+
         # Crear índices si no existen Y las columnas existen
         indexes = [idx['name'] for idx in inspector.get_indexes('concesionarios')]
         if 'ix_concesionarios_nombre' not in indexes and 'nombre' in columns:
@@ -52,7 +52,7 @@ def upgrade():
                 op.create_index('ix_concesionarios_nombre', 'concesionarios', ['nombre'])
             except Exception:
                 pass
-        
+
         print("✅ Tabla concesionarios actualizada")
     else:
         # Crear tabla si no existe
@@ -67,32 +67,32 @@ def upgrade():
         )
         op.create_index('ix_concesionarios_nombre', 'concesionarios', ['nombre'])
         print("✅ Tabla concesionarios creada")
-    
+
     # ============================================
     # TABLA: analistas
     # ============================================
     if 'analistas' in inspector.get_table_names():
         columns = [col['name'] for col in inspector.get_columns('analistas')]
-        
+
         # Asegurar que existan todas las columnas necesarias
         if 'nombre' not in columns:
             op.add_column('analistas', sa.Column('nombre', sa.String(length=255), nullable=False, server_default=''))
-        
+
         if 'activo' not in columns:
             op.add_column('analistas', sa.Column('activo', sa.Boolean(), nullable=False, server_default='true'))
-        
+
         if 'created_at' not in columns:
             op.execute(text("""
-                ALTER TABLE analistas 
+                ALTER TABLE analistas
                 ADD COLUMN created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             """))
-        
+
         if 'updated_at' not in columns:
             op.execute(text("""
-                ALTER TABLE analistas 
+                ALTER TABLE analistas
                 ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             """))
-        
+
         # Crear índices si no existen Y las columnas existen
         indexes = [idx['name'] for idx in inspector.get_indexes('analistas')]
         if 'ix_analistas_nombre' not in indexes and 'nombre' in columns:
@@ -100,7 +100,7 @@ def upgrade():
                 op.create_index('ix_analistas_nombre', 'analistas', ['nombre'])
             except Exception:
                 pass
-        
+
         print("✅ Tabla analistas actualizada")
     else:
         # Crear tabla si no existe
@@ -115,32 +115,32 @@ def upgrade():
         )
         op.create_index('ix_analistas_nombre', 'analistas', ['nombre'])
         print("✅ Tabla analistas creada")
-    
+
     # ============================================
     # TABLA: modelos_vehiculos
     # ============================================
     if 'modelos_vehiculos' in inspector.get_table_names():
         columns = [col['name'] for col in inspector.get_columns('modelos_vehiculos')]
-        
+
         # Asegurar que existan todas las columnas necesarias
         if 'modelo' not in columns:
             op.add_column('modelos_vehiculos', sa.Column('modelo', sa.String(length=100), nullable=False, server_default=''))
-        
+
         if 'activo' not in columns:
             op.add_column('modelos_vehiculos', sa.Column('activo', sa.Boolean(), nullable=False, server_default='true'))
-        
+
         if 'created_at' not in columns:
             op.execute(text("""
-                ALTER TABLE modelos_vehiculos 
+                ALTER TABLE modelos_vehiculos
                 ADD COLUMN created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             """))
-        
+
         if 'updated_at' not in columns:
             op.execute(text("""
-                ALTER TABLE modelos_vehiculos 
+                ALTER TABLE modelos_vehiculos
                 ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             """))
-        
+
         # Crear índices si no existen Y las columnas existen
         indexes = [idx['name'] for idx in inspector.get_indexes('modelos_vehiculos')]
         if 'ix_modelos_vehiculos_modelo' not in indexes and 'modelo' in columns:
@@ -148,13 +148,13 @@ def upgrade():
                 op.create_index('ix_modelos_vehiculos_modelo', 'modelos_vehiculos', ['modelo'])
             except Exception:
                 pass
-        
+
         if 'ix_modelos_vehiculos_activo' not in indexes and 'activo' in columns:
             try:
                 op.create_index('ix_modelos_vehiculos_activo', 'modelos_vehiculos', ['activo'])
             except Exception:
                 pass
-        
+
         # Verificar constraint único en modelo
         if 'modelo' in columns:
             try:
@@ -164,7 +164,7 @@ def upgrade():
                     op.create_unique_constraint('uq_modelos_vehiculos_modelo', 'modelos_vehiculos', ['modelo'])
             except Exception as e:
                 print(f"⚠️ No se pudo crear constraint único en modelo: {e}")
-        
+
         print("✅ Tabla modelos_vehiculos actualizada")
     else:
         # Crear tabla si no existe
@@ -186,4 +186,3 @@ def upgrade():
 def downgrade():
     # No hacer nada en downgrade, las tablas deben mantenerse
     pass
-

@@ -24,7 +24,7 @@ except ImportError:
 
 def verificar_amortizaciones():
     """Verifica acceso usando conexión directa con psycopg2"""
-    
+
     # Obtener DATABASE_URL de forma segura
     database_url = None
     try:
@@ -34,25 +34,25 @@ def verificar_amortizaciones():
             database_url = settings.DATABASE_URL
     except:
         pass
-    
+
     if not database_url:
         database_url = "postgresql://user:password@localhost/pagos_db"
-    
+
     # Manejar posibles problemas de encoding en la URL
     if isinstance(database_url, bytes):
         try:
             database_url = database_url.decode('utf-8', errors='replace')
         except:
             database_url = database_url.decode('latin1', errors='replace')
-    
+
     print("=" * 80)
     print("VERIFICACION DE ACCESO A AMORTIZACIONES")
     print("=" * 80)
-    
+
     try:
         # Parsear la URL y usar parámetros de conexión separados
         import urllib.parse
-        
+
         # Intentar parsear la URL de forma segura
         try:
             # Si la URL es bytes, decodificar primero
@@ -63,14 +63,14 @@ def verificar_amortizaciones():
                     database_url_str = str(database_url, errors='replace')
             else:
                 database_url_str = str(database_url)
-            
+
             parsed = urllib.parse.urlparse(database_url_str)
-            
+
             # Extraer parámetros de conexión
             host = parsed.hostname or 'localhost'
             port = parsed.port or 5432
             database = parsed.path.lstrip('/') or 'pagos_db'
-            
+
             # Decodificar usuario y contraseña de forma segura
             user = None
             password = None
@@ -84,7 +84,7 @@ def verificar_amortizaciones():
                     password = urllib.parse.unquote(parsed.password, encoding='utf-8', errors='replace')
                 except:
                     password = parsed.password
-            
+
             # Conectar con parámetros separados
             conn_params = {
                 'host': host,
@@ -96,9 +96,9 @@ def verificar_amortizaciones():
                 conn_params['user'] = user
             if password:
                 conn_params['password'] = password
-            
+
             conn = psycopg2.connect(**conn_params)
-            
+
         except Exception as parse_error:
             # Si falla el parsing, intentar conexión directa con manejo de errores
             print(f"[ADVERTENCIA] Error parseando URL, intentando conexion directa: {parse_error}")
@@ -116,19 +116,19 @@ def verificar_amortizaciones():
                 )
         conn.set_client_encoding('UTF8')
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        
+
         print(f"\n[OK] Conexion a base de datos establecida")
-        
+
         # 1. Contar préstamos
         cur.execute("SELECT COUNT(*) as total FROM prestamos")
         total_prestamos = cur.fetchone()['total']
         print(f"[OK] Total de prestamos: {total_prestamos}")
-        
+
         # 2. Contar cuotas
         cur.execute("SELECT COUNT(*) as total FROM cuotas")
         total_cuotas = cur.fetchone()['total']
         print(f"[OK] Total de cuotas/amortizaciones: {total_cuotas}")
-        
+
         # 3. Préstamos con cuotas
         cur.execute("""
             SELECT COUNT(DISTINCT p.id) as total
@@ -137,13 +137,13 @@ def verificar_amortizaciones():
         """)
         prestamos_con_cuotas = cur.fetchone()['total']
         print(f"[OK] Prestamos con cuotas generadas: {prestamos_con_cuotas}")
-        
+
         # 4. Estadísticas por estado de préstamo
         print("\n" + "-" * 80)
         print("ESTADISTICAS POR ESTADO DE PRESTAMO")
         print("-" * 80)
         cur.execute("""
-            SELECT 
+            SELECT
                 p.estado,
                 COUNT(DISTINCT p.id) as total_prestamos,
                 COUNT(c.id) as total_cuotas
@@ -155,13 +155,13 @@ def verificar_amortizaciones():
         for row in cur.fetchall():
             estado = row['estado'] or 'NULL'
             print(f"  {estado:15s}: {row['total_prestamos']:4d} prestamos, {row['total_cuotas']:6d} cuotas")
-        
+
         # 5. Estadísticas por estado de cuotas
         print("\n" + "-" * 80)
         print("ESTADISTICAS POR ESTADO DE CUOTAS")
         print("-" * 80)
         cur.execute("""
-            SELECT 
+            SELECT
                 estado,
                 COUNT(*) as total,
                 ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM cuotas), 2) as porcentaje
@@ -172,13 +172,13 @@ def verificar_amortizaciones():
         for row in cur.fetchall():
             estado = row['estado'] or 'NULL'
             print(f"  {estado:15s}: {row['total']:6d} cuotas ({row['porcentaje']:5.1f}%)")
-        
+
         # 6. Resumen de montos (préstamos aprobados)
         print("\n" + "-" * 80)
         print("RESUMEN DE MONTOS (SOLO PRESTAMOS APROBADOS)")
         print("-" * 80)
         cur.execute("""
-            SELECT 
+            SELECT
                 COALESCE(SUM(p.total_financiamiento), 0) as total_financiamiento,
                 COALESCE(SUM(c.total_pagado), 0) as total_pagado,
                 COALESCE(SUM(c.capital_pendiente), 0) as capital_pendiente,
@@ -189,7 +189,7 @@ def verificar_amortizaciones():
             WHERE p.estado = 'APROBADO'
         """)
         resumen = cur.fetchone()
-        
+
         print(f"  Total financiamiento: ${float(resumen['total_financiamiento']):,.2f}")
         print(f"  Total pagado: ${float(resumen['total_pagado']):,.2f}")
         print(f"  Capital pendiente: ${float(resumen['capital_pendiente']):,.2f}")
@@ -197,13 +197,13 @@ def verificar_amortizaciones():
         print(f"  Mora acumulada: ${float(resumen['mora_acumulada']):,.2f}")
         total_pendiente = resumen['capital_pendiente'] + resumen['interes_pendiente'] + resumen['mora_acumulada']
         print(f"  Total pendiente: ${float(total_pendiente):,.2f}")
-        
+
         # 7. Detalle de primeros 5 préstamos aprobados con cuotas
         print("\n" + "-" * 80)
         print("DETALLE DE PRESTAMOS APROBADOS CON CUOTAS (Primeros 5)")
         print("-" * 80)
         cur.execute("""
-            SELECT 
+            SELECT
                 p.id,
                 p.cedula,
                 p.nombres,
@@ -220,7 +220,7 @@ def verificar_amortizaciones():
             ORDER BY p.fecha_registro DESC
             LIMIT 5
         """)
-        
+
         for row in cur.fetchall():
             print(f"\n  Prestamo ID: {row['id']}")
             nombres = row['nombres'] or 'N/A'
@@ -229,7 +229,7 @@ def verificar_amortizaciones():
             print(f"     Monto: ${float(row['total_financiamiento']):,.2f}")
             print(f"     Cuotas: {row['total_cuotas']} total | {row['cuotas_pagadas']} pagadas | {row['cuotas_pendientes']} pendientes | {row['cuotas_vencidas']} vencidas")
             print(f"     Saldo pendiente: ${float(row['saldo_pendiente']):,.2f}")
-        
+
         # 8. Verificación final
         print("\n" + "=" * 80)
         print("VERIFICACION COMPLETA")
@@ -240,10 +240,10 @@ def verificar_amortizaciones():
         print(f"[OK] Consultas SQL directas: OK")
         print("\n[EXITO] ACCESO COMPLETO A AMORTIZACIONES CONFIRMADO")
         print("=" * 80)
-        
+
         cur.close()
         conn.close()
-        
+
     except psycopg2.Error as e:
         print(f"\n[ERROR] Error de base de datos: {e}")
         print(f"   Codigo: {e.pgcode if hasattr(e, 'pgcode') else 'N/A'}")
@@ -256,4 +256,3 @@ def verificar_amortizaciones():
 
 if __name__ == "__main__":
     verificar_amortizaciones()
-

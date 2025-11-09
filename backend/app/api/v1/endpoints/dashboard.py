@@ -539,12 +539,12 @@ def _procesar_distribucion_rango_monto(
                 query_sql = text(
                     """
                     WITH rangos_calculados AS (
-                        SELECT 
-                            CASE 
+                        SELECT
+                            CASE
                                 WHEN total_financiamiento >= :max_rango THEN :max_rango
                                 ELSE FLOOR(total_financiamiento / :paso_rango) * :paso_rango
                             END as rango_min,
-                            CASE 
+                            CASE
                                 WHEN total_financiamiento >= :max_rango THEN NULL
                                 ELSE FLOOR(total_financiamiento / :paso_rango) * :paso_rango + :paso_rango
                             END as rango_max,
@@ -554,7 +554,7 @@ def _procesar_distribucion_rango_monto(
                           AND total_financiamiento IS NOT NULL
                           AND total_financiamiento > 0
                     )
-                    SELECT 
+                    SELECT
                         rango_min,
                         rango_max,
                         COUNT(*) as cantidad_prestamos,
@@ -3462,8 +3462,8 @@ def obtener_composicion_morosidad(
             query_sql = text(
                 """
                 WITH cuotas_categorizadas AS (
-                    SELECT 
-                        CASE 
+                    SELECT
+                        CASE
                             WHEN dias_morosidad <= 5 THEN '0-5 días'
                             WHEN dias_morosidad <= 15 THEN '5-15 días'
                             WHEN dias_morosidad <= 60 THEN '1-2 meses'
@@ -3478,13 +3478,13 @@ def obtener_composicion_morosidad(
                       AND dias_morosidad > 0
                       AND monto_morosidad > 0
                 )
-                SELECT 
+                SELECT
                     categoria,
                     COUNT(*) as cantidad_cuotas,
                     SUM(monto_morosidad) as monto_total
                 FROM cuotas_categorizadas
                 GROUP BY categoria
-                ORDER BY 
+                ORDER BY
                     CASE categoria
                         WHEN '0-5 días' THEN 1
                         WHEN '5-15 días' THEN 2

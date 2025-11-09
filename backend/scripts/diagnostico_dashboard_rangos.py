@@ -46,7 +46,7 @@ def diagnosticar_prestamos(db: Session):
     # 3. Análisis de fechas
     print("📅 ANÁLISIS DE FECHAS:")
     print("-" * 80)
-    
+
     # Préstamos con fecha_registro
     con_fecha_registro = db.query(Prestamo).filter(
         and_(
@@ -55,7 +55,7 @@ def diagnosticar_prestamos(db: Session):
         )
     ).count()
     print(f"  • Con fecha_registro: {con_fecha_registro:,} ({con_fecha_registro/total_aprobados*100:.1f}%)")
-    
+
     # Préstamos con fecha_aprobacion
     con_fecha_aprobacion = db.query(Prestamo).filter(
         and_(
@@ -64,7 +64,7 @@ def diagnosticar_prestamos(db: Session):
         )
     ).count()
     print(f"  • Con fecha_aprobacion: {con_fecha_aprobacion:,} ({con_fecha_aprobacion/total_aprobados*100:.1f}%)")
-    
+
     # Préstamos con fecha_base_calculo
     con_fecha_base = db.query(Prestamo).filter(
         and_(
@@ -73,7 +73,7 @@ def diagnosticar_prestamos(db: Session):
         )
     ).count()
     print(f"  • Con fecha_base_calculo: {con_fecha_base:,} ({con_fecha_base/total_aprobados*100:.1f}%)")
-    
+
     # Préstamos con al menos una fecha
     con_al_menos_una_fecha = db.query(Prestamo).filter(
         and_(
@@ -86,7 +86,7 @@ def diagnosticar_prestamos(db: Session):
         )
     ).count()
     print(f"  • Con al menos una fecha: {con_al_menos_una_fecha:,} ({con_al_menos_una_fecha/total_aprobados*100:.1f}%)")
-    
+
     # Préstamos sin ninguna fecha
     sin_fechas = total_aprobados - con_al_menos_una_fecha
     print(f"  ⚠️  Sin ninguna fecha: {sin_fechas:,} ({sin_fechas/total_aprobados*100:.1f}%)")
@@ -96,12 +96,12 @@ def diagnosticar_prestamos(db: Session):
     hoy = date.today()
     fecha_inicio_ano = date(hoy.year, 1, 1)
     fecha_fin_ano = date(hoy.year, 12, 31)
-    
+
     print(f"📆 ANÁLISIS POR PERÍODO (Año {hoy.year}):")
     print("-" * 80)
     print(f"  Rango: {fecha_inicio_ano} a {fecha_fin_ano}")
     print()
-    
+
     # Préstamos con al menos una fecha en el rango del año
     prestamos_en_rango = db.query(Prestamo).filter(
         and_(
@@ -126,7 +126,7 @@ def diagnosticar_prestamos(db: Session):
         )
     ).count()
     print(f"  • Préstamos con fecha en rango del año: {prestamos_en_rango:,}")
-    
+
     # Préstamos válidos (con monto > 0) y en rango
     prestamos_validos_en_rango = db.query(Prestamo).filter(
         and_(
@@ -158,7 +158,7 @@ def diagnosticar_prestamos(db: Session):
     # 5. Distribución de montos
     print("💰 DISTRIBUCIÓN DE MONTOS:")
     print("-" * 80)
-    
+
     # Montos por rango
     rangos_monto = [
         (0, 300, "$0 - $300"),
@@ -170,7 +170,7 @@ def diagnosticar_prestamos(db: Session):
         (20000, 50000, "$20,000 - $50,000"),
         (50000, None, "$50,000+"),
     ]
-    
+
     for min_val, max_val, etiqueta in rangos_monto:
         if max_val is None:
             count = db.query(Prestamo).filter(
@@ -197,7 +197,7 @@ def diagnosticar_prestamos(db: Session):
     print("📋 RESUMEN Y RECOMENDACIONES:")
     print("=" * 80)
     print()
-    
+
     if total_aprobados == 0:
         print("❌ PROBLEMA CRÍTICO: No hay préstamos aprobados en la base de datos")
         print("   Acción: Verificar que los datos se hayan migrado correctamente")
@@ -229,7 +229,7 @@ def diagnosticar_prestamos(db: Session):
         print("   1. Que el endpoint /api/v1/dashboard/financiamiento-por-rangos esté funcionando")
         print("   2. Que los filtros en el frontend estén correctamente configurados")
         print("   3. Los logs del backend para ver si hay errores")
-    
+
     print()
     print("=" * 80)
 
@@ -241,7 +241,7 @@ def verificar_fechas_problema(db: Session):
     print("🔍 VERIFICACIÓN DE PRÉSTAMOS CON PROBLEMAS DE FECHAS")
     print("=" * 80)
     print()
-    
+
     # Préstamos aprobados sin ninguna fecha
     prestamos_sin_fecha = db.query(Prestamo).filter(
         and_(
@@ -251,18 +251,18 @@ def verificar_fechas_problema(db: Session):
             Prestamo.fecha_base_calculo.is_(None)
         )
     ).limit(10).all()
-    
+
     if prestamos_sin_fecha:
         print(f"⚠️  Encontrados préstamos sin ninguna fecha (mostrando primeros 10):")
         for p in prestamos_sin_fecha:
             print(f"  • ID: {p.id}, Cliente: {p.cedula}, Monto: ${p.total_financiamiento or 0:,.2f}")
         print()
-    
+
     # Préstamos con monto válido pero fuera del rango del año
     hoy = date.today()
     fecha_inicio_ano = date(hoy.year, 1, 1)
     fecha_fin_ano = date(hoy.year, 12, 31)
-    
+
     prestamos_fuera_rango = db.query(Prestamo).filter(
         and_(
             Prestamo.estado == "APROBADO",
@@ -293,7 +293,7 @@ def verificar_fechas_problema(db: Session):
             )
         )
     ).limit(10).all()
-    
+
     if prestamos_fuera_rango:
         print(f"📅 Préstamos válidos pero fuera del rango del año {hoy.year} (mostrando primeros 10):")
         for p in prestamos_fuera_rango:
@@ -325,4 +325,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

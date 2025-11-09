@@ -15,15 +15,15 @@ from app.core.security import get_password_hash
 
 def generar_sql_completo(email: str, password: str, archivo_salida: str = "UPDATE_PASSWORD_FINAL.sql"):
     """Genera SQL completo con hash incluido"""
-    
+
     # Generar hash de la contraseña
     hashed = get_password_hash(password)
-    
+
     sql = f"""-- ============================================================================
 -- SCRIPT SQL PARA ACTUALIZAR CONTRASEÑA EN BASE DE DATOS
 -- Generado automáticamente el: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 -- ============================================================================
--- 
+--
 -- Usuario: {email}
 -- Nueva contraseña: {password}
 -- Hash: {hashed}
@@ -42,7 +42,7 @@ def generar_sql_completo(email: str, password: str, archivo_salida: str = "UPDAT
 BEGIN;
 
 -- Paso 1: Verificar que el usuario existe
-SELECT 
+SELECT
     id,
     email,
     nombre,
@@ -56,13 +56,13 @@ WHERE email = '{email}';
 
 -- Paso 2: Actualizar contraseña con hash generado
 UPDATE users
-SET 
+SET
     hashed_password = '{hashed}',
     updated_at = NOW()
 WHERE email = '{email}';
 
 -- Paso 3: Verificar que se actualizó correctamente
-SELECT 
+SELECT
     id,
     email,
     nombre,
@@ -70,7 +70,7 @@ SELECT
     is_admin,
     is_active,
     updated_at,
-    CASE 
+    CASE
         WHEN updated_at > NOW() - INTERVAL '1 minute' THEN '✅ Contraseña actualizada correctamente'
         ELSE '⚠️ Verificar actualización'
     END as estado
@@ -87,11 +87,11 @@ COMMIT;
 --   Contraseña: {password}
 -- ============================================================================
 """
-    
+
     # Guardar en archivo
     with open(archivo_salida, 'w', encoding='utf-8') as f:
         f.write(sql)
-    
+
     print("=" * 80)
     print("✅ SQL GENERADO EXITOSAMENTE")
     print("=" * 80)
@@ -113,7 +113,7 @@ COMMIT;
     print("   - DBeaver Cloud")
     print("   - Cualquier cliente SQL")
     print("\n" + "=" * 80)
-    
+
     return archivo_salida
 
 if __name__ == "__main__":
@@ -123,10 +123,9 @@ if __name__ == "__main__":
         print("  python generar_sql_completo.py itmaster@rapicreditca.com Casa1803+")
         print("  python generar_sql_completo.py itmaster@rapicreditca.com Casa1803+ update.sql")
         sys.exit(1)
-    
+
     email = sys.argv[1]
     password = sys.argv[2]
     archivo_salida = sys.argv[3] if len(sys.argv) > 3 else "UPDATE_PASSWORD_FINAL.sql"
-    
-    generar_sql_completo(email, password, archivo_salida)
 
+    generar_sql_completo(email, password, archivo_salida)

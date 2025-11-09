@@ -20,13 +20,13 @@ def upgrade():
     # Verificar si la columna ya existe antes de agregarla
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     if 'prestamos' not in inspector.get_table_names():
         print("⚠️ Tabla 'prestamos' no existe, saltando migración")
         return
-    
+
     columns = [col['name'] for col in inspector.get_columns('prestamos')]
-    
+
     # Agregar columna usuario_autoriza si no existe
     if 'usuario_autoriza' not in columns:
         op.add_column('prestamos', sa.Column('usuario_autoriza', sa.String(length=100), nullable=True))
@@ -39,13 +39,12 @@ def downgrade():
     # Eliminar la columna si existe
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     if 'prestamos' not in inspector.get_table_names():
         return
-    
+
     columns = [col['name'] for col in inspector.get_columns('prestamos')]
-    
+
     if 'usuario_autoriza' in columns:
         op.drop_column('prestamos', 'usuario_autoriza')
         print("✅ Columna 'usuario_autoriza' eliminada de tabla prestamos")
-

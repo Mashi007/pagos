@@ -18,7 +18,7 @@ depends_on = None
 def upgrade():
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    
+
     # Verificar si la tabla ya existe
     if "notificacion_plantillas" not in inspector.get_table_names():
         # Crear tabla notificacion_plantillas
@@ -40,10 +40,10 @@ def upgrade():
         )
     else:
         print("Tabla 'notificacion_plantillas' ya existe")
-    
+
     # Verificar índices existentes
     indexes = [idx["name"] for idx in inspector.get_indexes("notificacion_plantillas")] if "notificacion_plantillas" in inspector.get_table_names() else []
-    
+
     if "ix_notificacion_plantillas_id" not in indexes:
         op.create_index(op.f('ix_notificacion_plantillas_id'), 'notificacion_plantillas', ['id'], unique=False)
 
@@ -52,4 +52,3 @@ def downgrade():
     # Eliminar tabla
     op.drop_index(op.f('ix_notificacion_plantillas_id'), table_name='notificacion_plantillas')
     op.drop_table('notificacion_plantillas')
-

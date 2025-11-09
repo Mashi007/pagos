@@ -20,20 +20,20 @@ depends_on = None
 def upgrade():
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     if 'prestamos_evaluacion' not in inspector.get_table_names():
         print("⚠️ Tabla 'prestamos_evaluacion' no existe, saltando migración")
         return
-    
+
     columns = [col['name'] for col in inspector.get_columns('prestamos_evaluacion')]
-    
+
     # Agregar nuevas columnas para los 7 criterios (100 puntos)
-    
+
     # ============================================
     # CRITERIO 1: CAPACIDAD DE PAGO (mantener ratio_endeudamiento y ratio_cobertura, ajustar valores)
     # ============================================
     # Columnas ya existen, solo actualizar descripción en comentarios
-    
+
     # ============================================
     # CRITERIO 2: ESTABILIDAD LABORAL (23 puntos)
     # ============================================
@@ -42,7 +42,7 @@ def upgrade():
         op.add_column('prestamos_evaluacion', sa.Column('antiguedad_trabajo_puntos', sa.Numeric(5, 2), nullable=True, server_default='0'))
     if 'meses_trabajo' not in columns:
         op.add_column('prestamos_evaluacion', sa.Column('meses_trabajo', sa.Numeric(6, 2), nullable=True))
-    
+
     # Mantener tipo_empleo_puntos existente, agregar nuevos campos
     if 'tipo_empleo_descripcion' not in columns:
         op.add_column('prestamos_evaluacion', sa.Column('tipo_empleo_descripcion', sa.String(length=50), nullable=True))
@@ -50,7 +50,7 @@ def upgrade():
         op.add_column('prestamos_evaluacion', sa.Column('sector_economico_puntos', sa.Numeric(5, 2), nullable=True, server_default='0'))
     if 'sector_economico_descripcion' not in columns:
         op.add_column('prestamos_evaluacion', sa.Column('sector_economico_descripcion', sa.String(length=50), nullable=True))
-    
+
     # ============================================
     # CRITERIO 3: REFERENCIAS PERSONALES (5 puntos)
     # ============================================
@@ -60,7 +60,7 @@ def upgrade():
         op.add_column('prestamos_evaluacion', sa.Column('referencias_descripcion', sa.String(length=50), nullable=True))
     if 'num_referencias_verificadas' not in columns:
         op.add_column('prestamos_evaluacion', sa.Column('num_referencias_verificadas', sa.Integer(), nullable=True))
-    
+
     # ============================================
     # CRITERIO 4: ARRAIGO GEOGRÁFICO (12 puntos)
     # ============================================
@@ -70,7 +70,7 @@ def upgrade():
         op.add_column('prestamos_evaluacion', sa.Column('arraigo_familiar_puntos', sa.Numeric(5, 2), nullable=True, server_default='0'))
     if 'arraigo_laboral_puntos' not in columns:
         op.add_column('prestamos_evaluacion', sa.Column('arraigo_laboral_puntos', sa.Numeric(5, 2), nullable=True, server_default='0'))
-    
+
     # ============================================
     # CRITERIO 5: PERFIL SOCIODEMOGRÁFICO (17 puntos)
     # ============================================
@@ -86,7 +86,7 @@ def upgrade():
         op.add_column('prestamos_evaluacion', sa.Column('hijos_puntos', sa.Numeric(5, 2), nullable=True, server_default='0'))
     if 'hijos_descripcion' not in columns:
         op.add_column('prestamos_evaluacion', sa.Column('hijos_descripcion', sa.String(length=50), nullable=True))
-    
+
     # ============================================
     # CRITERIO 6: EDAD DEL CLIENTE (5 puntos)
     # ============================================
@@ -94,7 +94,7 @@ def upgrade():
         op.add_column('prestamos_evaluacion', sa.Column('edad_puntos', sa.Numeric(5, 2), nullable=True, server_default='0'))
     if 'edad_cliente' not in columns:
         op.add_column('prestamos_evaluacion', sa.Column('edad_cliente', sa.Integer(), nullable=True))
-    
+
     # ============================================
     # ACTUALIZAR CAMPO: requisitos_adicionales (expandir de 200 a 500 caracteres)
     # ============================================
@@ -106,23 +106,23 @@ def upgrade():
                            existing_nullable=True)
         except Exception as e:
             print(f"⚠️ No se pudo modificar columna 'requisitos_adicionales': {e}")
-    
+
     # ============================================
     # ELIMINAR COLUMNAS OBSOLETAS (opcional - mantener por compatibilidad)
     # ============================================
     # NO eliminamos las columnas antiguas para mantener compatibilidad
     # Los campos antiguos serán migrados gradualmente
-    
+
 
 def downgrade():
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     if 'prestamos_evaluacion' not in inspector.get_table_names():
         return
-    
+
     columns = [col['name'] for col in inspector.get_columns('prestamos_evaluacion')]
-    
+
     # Eliminar las nuevas columnas agregadas si existen
     if 'edad_cliente' in columns:
         op.drop_column('prestamos_evaluacion', 'edad_cliente')
@@ -162,7 +162,7 @@ def downgrade():
         op.drop_column('prestamos_evaluacion', 'meses_trabajo')
     if 'antiguedad_trabajo_puntos' in columns:
         op.drop_column('prestamos_evaluacion', 'antiguedad_trabajo_puntos')
-    
+
     # Restaurar longitud original de requisitos_adicionales
     if 'requisitos_adicionales' in columns:
         try:
@@ -172,5 +172,3 @@ def downgrade():
                            existing_nullable=True)
         except Exception as e:
             print(f"⚠️ No se pudo restaurar columna 'requisitos_adicionales': {e}")
-
-

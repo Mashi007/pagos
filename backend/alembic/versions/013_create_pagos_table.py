@@ -58,7 +58,7 @@ def upgrade() -> None:
     # Verificar índices existentes y columnas de la tabla
     indexes = [idx["name"] for idx in inspector.get_indexes("pagos")]
     columns = [col["name"] for col in inspector.get_columns("pagos")]
-    
+
     # Crear índices solo si no existen Y las columnas existen
     if "ix_pagos_cedula_cliente" not in indexes and "cedula_cliente" in columns:
         op.create_index("ix_pagos_cedula_cliente", "pagos", ["cedula_cliente"])

@@ -45,7 +45,7 @@ def verificar_conexion_bd():
     print("\n" + "="*60)
     print("1. VERIFICANDO CONEXIÓN A BASE DE DATOS")
     print("="*60)
-    
+
     try:
         # Intentar conectar
         with engine.connect() as conn:
@@ -61,7 +61,7 @@ def verificar_tablas():
     print("\n" + "="*60)
     print("2. VERIFICANDO EXISTENCIA DE TABLAS")
     print("="*60)
-    
+
     inspector = inspect(engine)
     tablas_requeridas = [
         ('analistas', 'Analistas'),
@@ -70,9 +70,9 @@ def verificar_tablas():
         ('clientes', 'Clientes'),
         ('users', 'Usuarios')
     ]
-    
+
     tablas_existentes = inspector.get_table_names()
-    
+
     for tabla, nombre in tablas_requeridas:
         if tabla in tablas_existentes:
             print_success(f"Tabla '{tabla}' ({nombre}): EXISTE")
@@ -83,7 +83,7 @@ def verificar_estructura_tabla(tabla, columnas_requeridas):
     """Verificar estructura de una tabla específica"""
     inspector = inspect(engine)
     columnas = [col['name'] for col in inspector.get_columns(tabla)]
-    
+
     for columna in columnas_requeridas:
         if columna in columnas:
             print_success(f"  ✓ Columna '{columna}': presente")
@@ -95,18 +95,18 @@ def verificar_analistas():
     print("\n" + "="*60)
     print("3. VERIFICANDO TABLA ANALISTAS")
     print("="*60)
-    
+
     db = SessionLocal()
     try:
         analistas = db.query(Analista).all()
         print_success(f"Total de analistas en BD: {len(analistas)}")
-        
+
         activos = len([a for a in analistas if a.activo])
         inactivos = len([a for a in analistas if not a.activo])
-        
+
         print_info(f"  - Activos: {activos}")
         print_info(f"  - Inactivos: {inactivos}")
-        
+
         if len(analistas) > 0:
             print("\nPrimeros 3 analistas:")
             for i, analista in enumerate(analistas[:3], 1):
@@ -121,18 +121,18 @@ def verificar_concesionarios():
     print("\n" + "="*60)
     print("4. VERIFICANDO TABLA CONCESIONARIOS")
     print("="*60)
-    
+
     try:
         db = SessionLocal()
         concesionarios = db.query(Concesionario).all()
         print_success(f"Total de concesionarios en BD: {len(concesionarios)}")
-        
+
         activos = len([c for c in concesionarios if c.activo])
         inactivos = len([c for c in concesionarios if not c.activo])
-        
+
         print_info(f"  - Activos: {activos}")
         print_info(f"  - Inactivos: {inactivos}")
-        
+
         if len(concesionarios) > 0:
             print("\nPrimeros 3 concesionarios:")
             for i, concesionario in enumerate(concesionarios[:3], 1):
@@ -148,18 +148,18 @@ def verificar_modelos_vehiculos():
     print("\n" + "="*60)
     print("5. VERIFICANDO TABLA MODELOS_VEHICULOS")
     print("="*60)
-    
+
     try:
         db = SessionLocal()
         modelos = db.query(ModeloVehiculo).all()
         print_success(f"Total de modelos en BD: {len(modelos)}")
-        
+
         activos = len([m for m in modelos if m.activo])
         inactivos = len([m for m in modelos if not m.activo])
-        
+
         print_info(f"  - Activos: {activos}")
         print_info(f"  - Inactivos: {inactivos}")
-        
+
         if len(modelos) > 0:
             print("\nPrimeros 3 modelos:")
             for i, modelo in enumerate(modelos[:3], 1):
@@ -175,27 +175,27 @@ def verificar_sincronizacion_clientes():
     print("\n" + "="*60)
     print("6. VERIFICANDO SINCRONIZACIÓN CON TABLA CLIENTES")
     print("="*60)
-    
+
     try:
         from app.models.cliente import Cliente
         db = SessionLocal()
-        
+
         # Verificar que los clientes tengan analistas válidos
         clientes = db.query(Cliente).all()
         print_success(f"Total de clientes en BD: {len(clientes)}")
-        
+
         # Contar por analista
         analistas_unicos = set([c.analista for c in clientes if c.analista])
         print_info(f"Analistas únicos en clientes: {len(analistas_unicos)}")
-        
+
         # Contar por concesionario
         concesionarios_unicos = set([c.concesionario for c in clientes if c.concesionario])
         print_info(f"Concesionarios únicos en clientes: {len(concesionarios_unicos)}")
-        
+
         # Contar por modelo
         modelos_unicos = set([c.modelo_vehiculo for c in clientes if c.modelo_vehiculo])
         print_info(f"Modelos únicos en clientes: {len(modelos_unicos)}")
-        
+
     except Exception as e:
         print_error(f"Error al leer clientes: {str(e)}")
     finally:
@@ -207,25 +207,24 @@ def main():
     print("VERIFICACIÓN DE BASES DE DATOS")
     print("Analistas, Concesionarios y Modelos de Vehículos")
     print("="*60)
-    
+
     # 1. Verificar conexión
     if not verificar_conexion_bd():
         print_error("\n❌ No se puede continuar sin conexión a BD")
         return
-    
+
     # 2. Verificar tablas
     verificar_tablas()
-    
+
     # 3. Verificar datos
     verificar_analistas()
     verificar_concesionarios()
     verificar_modelos_vehiculos()
     verificar_sincronizacion_clientes()
-    
+
     print("\n" + "="*60)
     print("VERIFICACIÓN COMPLETADA")
     print("="*60 + "\n")
 
 if __name__ == "__main__":
     main()
-

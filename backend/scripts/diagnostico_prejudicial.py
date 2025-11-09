@@ -23,13 +23,13 @@ def diagnosticar_prejudicial():
     """Diagnostica por qué no hay notificaciones prejudiciales"""
     db = SessionLocal()
     hoy = date.today()
-    
+
     print("=" * 80)
     print("DIAGNOSTICO: NOTIFICACIONES PREJUDICIALES")
     print("=" * 80)
     print(f"Fecha actual: {hoy}")
     print()
-    
+
     try:
         # 1. Verificar cuotas atrasadas en general
         print("1. Verificando cuotas atrasadas...")
@@ -45,11 +45,11 @@ def diagnosticar_prejudicial():
         total_cuotas_atrasadas = result.scalar()
         print(f"   [OK] Total de cuotas atrasadas: {total_cuotas_atrasadas}")
         print()
-        
+
         # 2. Verificar clientes con cuotas atrasadas
         print("2. Verificando clientes con cuotas atrasadas...")
         query_clientes_atrasados = text("""
-            SELECT 
+            SELECT
                 p.cliente_id,
                 cl.nombres,
                 COUNT(*) as cuotas_atrasadas
@@ -73,12 +73,12 @@ def diagnosticar_prejudicial():
                 cliente_id, nombre, cuotas = row
                 print(f"      - Cliente ID {cliente_id} ({nombre}): {cuotas} cuotas atrasadas")
         print()
-        
+
         # 3. Verificar clientes con 3+ cuotas atrasadas (criterio prejudicial)
         print("3. Verificando clientes con 3+ cuotas atrasadas (PREJUDICIAL)...")
         query_prejudicial = text("""
             WITH cuotas_atrasadas AS (
-                SELECT 
+                SELECT
                     p.cliente_id,
                     COUNT(*) as total_cuotas
                 FROM prestamos p
@@ -91,7 +91,7 @@ def diagnosticar_prejudicial():
                 GROUP BY p.cliente_id
                 HAVING COUNT(*) >= 3
             )
-            SELECT 
+            SELECT
                 ca.cliente_id,
                 cl.nombres,
                 cl.cedula,
@@ -111,12 +111,12 @@ def diagnosticar_prejudicial():
         else:
             print("   [WARN] No se encontraron clientes con 3+ cuotas atrasadas")
         print()
-        
+
         # 4. Ejecutar la consulta completa del servicio
         print("4. Ejecutando consulta completa del servicio...")
         query_completa = text("""
             WITH cuotas_atrasadas AS (
-                SELECT 
+                SELECT
                     p.id as prestamo_id,
                     p.cliente_id,
                     cl.nombres as nombre_cliente,
@@ -153,10 +153,10 @@ def diagnosticar_prejudicial():
                 ca.fecha_vencimiento,
                 ca.numero_cuota,
                 ca.monto_cuota,
-                (SELECT COUNT(*) 
-                 FROM cuotas c2 
-                 WHERE c2.prestamo_id = ca.prestamo_id 
-                   AND c2.estado = 'ATRASADO' 
+                (SELECT COUNT(*)
+                 FROM cuotas c2
+                 WHERE c2.prestamo_id = ca.prestamo_id
+                   AND c2.estado = 'ATRASADO'
                    AND c2.fecha_vencimiento < :hoy) as total_cuotas_atrasadas,
                 'PREJUDICIAL' as tipo_notificacion
             FROM cuotas_atrasadas ca
@@ -175,7 +175,7 @@ def diagnosticar_prejudicial():
         else:
             print("   [WARN] La consulta no devolvio resultados")
         print()
-        
+
         # 5. Verificar estados de préstamos
         print("5. Verificando estados de prestamos...")
         query_estados_prestamos = text("""
@@ -190,7 +190,7 @@ def diagnosticar_prejudicial():
         for estado, total in estados_prestamos:
             print(f"      - {estado}: {total} prestamos")
         print()
-        
+
         # 6. Verificar estados de cuotas
         print("6. Verificando estados de cuotas...")
         query_estados_cuotas = text("""
@@ -205,7 +205,7 @@ def diagnosticar_prejudicial():
         for estado, total in estados_cuotas:
             print(f"      - {estado}: {total} cuotas")
         print()
-        
+
         # 7. Verificar estados de clientes
         print("7. Verificando estados de clientes...")
         query_estados_clientes = text("""
@@ -220,11 +220,11 @@ def diagnosticar_prejudicial():
         for estado, total in estados_clientes:
             print(f"      - {estado}: {total} clientes")
         print()
-        
+
         print("=" * 80)
         print("[OK] DIAGNOSTICO COMPLETADO")
         print("=" * 80)
-        
+
     except Exception as e:
         print(f"[ERROR] Error durante el diagnostico: {e}")
         import traceback
@@ -234,4 +234,3 @@ def diagnosticar_prejudicial():
 
 if __name__ == "__main__":
     diagnosticar_prejudicial()
-

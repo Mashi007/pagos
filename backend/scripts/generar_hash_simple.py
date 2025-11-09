@@ -17,16 +17,16 @@ if __name__ == "__main__":
         print("\nEjemplo:")
         print("  python generar_hash_simple.py Casa1803+")
         sys.exit(1)
-    
+
     password = sys.argv[1]
-    
+
     # Generar hash usando bcrypt directamente
     # bcrypt requiere bytes, no string
     password_bytes = password.encode('utf-8')
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password_bytes, salt)
     hashed_str = hashed.decode('utf-8')
-    
+
     print("\n" + "=" * 80)
     print("HASH GENERADO")
     print("=" * 80)
@@ -41,4 +41,3 @@ if __name__ == "__main__":
     print(f"WHERE email = 'itmaster@rapicreditca.com';")
     print("\nCOMMIT;")
     print("=" * 80)
-

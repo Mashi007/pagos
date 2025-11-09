@@ -23,16 +23,16 @@ def test_endpoint(base_url: str = "http://localhost:8000", token: str = None):
     print("🧪 PRUEBA DEL ENDPOINT: /api/v1/dashboard/financiamiento-por-rangos")
     print("=" * 80)
     print()
-    
+
     if not token:
         print("⚠️  No se proporcionó token de autenticación")
         print("   El endpoint puede requerir autenticación")
         print()
-    
+
     headers = {}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    
+
     # Casos de prueba
     casos_prueba = [
         {
@@ -54,28 +54,28 @@ def test_endpoint(base_url: str = "http://localhost:8000", token: str = None):
             }
         },
     ]
-    
+
     for caso in casos_prueba:
         print(f"📋 Prueba: {caso['nombre']}")
         print("-" * 80)
-        
+
         url = f"{base_url}/api/v1/dashboard/financiamiento-por-rangos"
-        
+
         try:
             response = requests.get(url, params=caso["params"], headers=headers, timeout=30)
-            
+
             print(f"  Status Code: {response.status_code}")
-            
+
             if response.status_code == 200:
                 data = response.json()
                 total_prestamos = data.get("total_prestamos", 0)
                 total_monto = data.get("total_monto", 0)
                 rangos = data.get("rangos", [])
-                
+
                 print(f"  ✅ Total préstamos: {total_prestamos:,}")
                 print(f"  ✅ Total monto: ${total_monto:,.2f}")
                 print(f"  ✅ Rangos con datos: {len([r for r in rangos if r.get('cantidad_prestamos', 0) > 0])}")
-                
+
                 # Mostrar primeros 5 rangos con datos
                 rangos_con_datos = [r for r in rangos if r.get("cantidad_prestamos", 0) > 0][:5]
                 if rangos_con_datos:
@@ -84,7 +84,7 @@ def test_endpoint(base_url: str = "http://localhost:8000", token: str = None):
                         print(f"     • {rango.get('categoria', 'N/A')}: {rango.get('cantidad_prestamos', 0):,} préstamos, ${rango.get('monto_total', 0):,.2f}")
                 else:
                     print(f"  ⚠️  No hay rangos con datos")
-                
+
                 if total_prestamos == 0:
                     print(f"  ⚠️  ADVERTENCIA: El endpoint retorna 0 préstamos")
                     print(f"     Esto puede indicar un problema con los filtros de fecha")
@@ -95,7 +95,7 @@ def test_endpoint(base_url: str = "http://localhost:8000", token: str = None):
                     print(f"     Detalle: {error_data.get('detail', 'Sin detalle')}")
                 except:
                     print(f"     Respuesta: {response.text[:200]}")
-        
+
         except requests.exceptions.ConnectionError:
             print(f"  ❌ Error: No se pudo conectar al servidor en {base_url}")
             print(f"     Verifica que el backend esté corriendo")
@@ -103,16 +103,16 @@ def test_endpoint(base_url: str = "http://localhost:8000", token: str = None):
             print(f"  ❌ Error: Timeout esperando respuesta del servidor")
         except Exception as e:
             print(f"  ❌ Error inesperado: {e}")
-        
+
         print()
-    
+
     print("=" * 80)
 
 
 def main():
     """Función principal"""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Probar endpoint de financiamiento-por-rangos")
     parser.add_argument(
         "--url",
@@ -123,12 +123,11 @@ def main():
         "--token",
         help="Token de autenticación (Bearer token)"
     )
-    
+
     args = parser.parse_args()
-    
+
     test_endpoint(base_url=args.url, token=args.token)
 
 
 if __name__ == "__main__":
     main()
-

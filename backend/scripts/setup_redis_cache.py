@@ -27,7 +27,7 @@ def check_redis_connection():
     try:
         import redis
         from app.core.config import settings
-        
+
         # Intentar conectar
         if settings.REDIS_URL:
             client = redis.from_url(settings.REDIS_URL, decode_responses=False)
@@ -41,17 +41,17 @@ def check_redis_connection():
                 decode_responses=False,
             )
             print(f"✅ Configurado Redis: {settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}")
-        
+
         # Test de conexión
         client.ping()
         print("✅ Conexión a Redis exitosa")
-        
+
         # Información adicional
         info = client.info()
         print(f"   Versión Redis: {info.get('redis_version', 'N/A')}")
         print(f"   Memoria usada: {info.get('used_memory_human', 'N/A')}")
         print(f"   Claves: {client.dbsize()}")
-        
+
         return True
     except ImportError:
         print("❌ Cliente Redis no instalado")
@@ -68,10 +68,10 @@ def check_cache_backend():
     """Verificar qué backend de cache está en uso"""
     try:
         from app.core.cache import cache_backend
-        
+
         backend_type = type(cache_backend).__name__
         print(f"\n📦 Backend de cache actual: {backend_type}")
-        
+
         if backend_type == "RedisCache":
             print("✅ Usando Redis (óptimo para producción)")
         elif backend_type == "MemoryCache":
@@ -80,20 +80,20 @@ def check_cache_backend():
             print("   - Se pierde al reiniciar")
         else:
             print(f"ℹ️  Usando {backend_type}")
-        
+
         # Test básico
         test_key = "test_cache_verification"
         test_value = {"test": True, "timestamp": "2025-11-09"}
-        
+
         cache_backend.set(test_key, test_value, ttl=60)
         retrieved = cache_backend.get(test_key)
-        
+
         if retrieved == test_value:
             print("✅ Test de cache exitoso")
             cache_backend.delete(test_key)
         else:
             print("⚠️  Test de cache falló")
-        
+
         return True
     except Exception as e:
         print(f"❌ Error verificando cache: {e}")
@@ -104,11 +104,11 @@ def print_recommendations():
     print("\n" + "="*60)
     print("📋 RECOMENDACIONES")
     print("="*60)
-    
+
     try:
         from app.core.cache import cache_backend
         backend_type = type(cache_backend).__name__
-        
+
         if backend_type == "MemoryCache":
             print("\n🚀 Para mejorar el cache:")
             print("\n1. INSTALAR REDIS (Recomendado):")
@@ -134,18 +134,18 @@ def main():
     print("="*60)
     print("🔍 VERIFICACIÓN DE CACHE")
     print("="*60)
-    
+
     print("\n1. Verificando instalación de Redis...")
     redis_installed = check_redis_installation()
-    
+
     print("\n2. Verificando conexión a Redis...")
     redis_connected = check_redis_connection()
-    
+
     print("\n3. Verificando backend de cache...")
     cache_ok = check_cache_backend()
-    
+
     print_recommendations()
-    
+
     print("\n" + "="*60)
     if redis_installed and redis_connected and cache_ok:
         print("✅ TODO CORRECTO - Cache configurado óptimamente")
@@ -156,4 +156,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

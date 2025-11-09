@@ -20,16 +20,16 @@ def upgrade():
     # Primero verificar si la columna existe, si no existe, agregarla
     from sqlalchemy import inspect
     conn = op.get_bind()
-    
+
     # Verificar si la tabla existe
     inspector = inspect(conn)
     if 'pagos' not in inspector.get_table_names():
         print("⚠️ Tabla 'pagos' no existe, saltando migración")
         return
-    
+
     # Verificar si la columna existe
     columns = [col['name'] for col in inspector.get_columns('pagos')]
-    
+
     if 'numero_cuota' not in columns:
         # Si no existe, agregarla como nullable
         op.add_column('pagos', sa.Column('numero_cuota', sa.Integer(), nullable=True))
@@ -47,15 +47,15 @@ def downgrade():
     # Revertir: hacer numero_cuota NOT NULL con valor por defecto
     from sqlalchemy import inspect
     conn = op.get_bind()
-    
+
     # Verificar si la tabla existe
     inspector = inspect(conn)
     if 'pagos' not in inspector.get_table_names():
         return
-    
+
     # Verificar si la columna existe
     columns = [col['name'] for col in inspector.get_columns('pagos')]
-    
+
     if 'numero_cuota' in columns:
         try:
             op.alter_column('pagos', 'numero_cuota',
@@ -64,4 +64,3 @@ def downgrade():
                            server_default=sa.text('0'))
         except Exception as e:
             print(f"⚠️ No se pudo modificar columna numero_cuota: {e}")
-

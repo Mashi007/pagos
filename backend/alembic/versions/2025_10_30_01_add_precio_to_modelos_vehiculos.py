@@ -21,11 +21,11 @@ def upgrade() -> None:
         # Agregar columnas si no existen
         conn = op.get_bind()
         inspector = sa.inspect(conn)
-        
+
         if 'modelos_vehiculos' not in inspector.get_table_names():
             print("⚠️ Tabla 'modelos_vehiculos' no existe, saltando migración")
             return
-        
+
         cols = {c['name'] for c in inspector.get_columns('modelos_vehiculos')}
 
         if 'precio' not in cols:
@@ -44,10 +44,10 @@ def downgrade() -> None:
     try:
         conn = op.get_bind()
         inspector = sa.inspect(conn)
-        
+
         if 'modelos_vehiculos' not in inspector.get_table_names():
             return
-        
+
         cols = {c['name'] for c in inspector.get_columns('modelos_vehiculos')}
 
         if 'actualizado_por' in cols:
@@ -59,5 +59,3 @@ def downgrade() -> None:
     except Exception as e:
         print(f"⚠️ Error en downgrade: {e}")
         pass
-
-

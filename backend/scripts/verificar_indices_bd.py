@@ -131,7 +131,7 @@ INDICES_RECOMENDADOS = {
 def obtener_indices_existentes(db):
     """Obtener lista de índices existentes en la base de datos"""
     query = text("""
-        SELECT 
+        SELECT
             schemaname,
             tablename,
             indexname,
@@ -280,4 +280,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

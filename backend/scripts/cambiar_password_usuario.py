@@ -18,41 +18,41 @@ from app.utils.validators import validate_password_strength
 def cambiar_password_usuario(email: str, nueva_password: str):
     """Cambiar contraseña de un usuario específico"""
     db = SessionLocal()
-    
+
     try:
         # Buscar usuario por email
         usuario = db.query(User).filter(User.email == email.lower().strip()).first()
-        
+
         if not usuario:
             print(f"ERROR - Usuario no encontrado: {email}")
             return False
-        
+
         print(f"OK - Usuario encontrado: {usuario.email}")
         print(f"   Nombre: {usuario.nombre} {usuario.apellido}")
         print(f"   Rol: {usuario.rol}")
         print(f"   Admin: {usuario.is_admin}")
         print(f"   Activo: {usuario.is_active}")
-        
+
         # Validar nueva contraseña
         is_valid, message = validate_password_strength(nueva_password)
         if not is_valid:
             print(f"ERROR - La contraseña no cumple con los requisitos: {message}")
             return False
-        
+
         # Actualizar contraseña
         usuario.hashed_password = get_password_hash(nueva_password)
-        
+
         # Actualizar updated_at
         from datetime import datetime
         usuario.updated_at = datetime.utcnow()
-        
+
         db.commit()
         db.refresh(usuario)
-        
+
         print(f"OK - Contraseña actualizada exitosamente para: {email}")
         print(f"   Nueva contraseña: {nueva_password}")
         return True
-        
+
     except Exception as e:
         print(f"ERROR - Error al actualizar contraseña: {e}")
         db.rollback()
@@ -66,20 +66,19 @@ if __name__ == "__main__":
         print("\nEjemplo:")
         print("  python cambiar_password_usuario.py itmaster@rapicreditca.com Casa1803+")
         sys.exit(1)
-    
+
     email = sys.argv[1]
     nueva_password = sys.argv[2]
-    
+
     print(f"Cambiando contraseña para: {email}")
     print(f"   Nueva contraseña: {nueva_password}")
     print()
-    
+
     success = cambiar_password_usuario(email, nueva_password)
-    
+
     if success:
         print("\nProceso completado exitosamente")
         sys.exit(0)
     else:
         print("\nProceso falló")
         sys.exit(1)
-

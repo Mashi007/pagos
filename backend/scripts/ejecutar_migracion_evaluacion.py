@@ -20,19 +20,19 @@ from alembic.config import Config
 def main():
     """Ejecutar la migración de Alembic"""
     alembic_cfg = Config("alembic.ini")
-    
+
     # Configurar la URL de la base de datos desde .env
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         print("ERROR: DATABASE_URL no está configurada en .env")
         sys.exit(1)
-    
+
     alembic_cfg.set_main_option("sqlalchemy.url", database_url)
-    
+
     print("=" * 60)
     print("EJECUTANDO MIGRACIÓN: 7 Criterios de Evaluación")
     print("=" * 60)
-    
+
     try:
         # Ejecutar upgrade
         command.upgrade(alembic_cfg, "head")
@@ -43,5 +43,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

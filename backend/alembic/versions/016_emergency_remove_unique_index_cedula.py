@@ -20,39 +20,39 @@ def upgrade():
     """EMERGENCY: Force remove the unique index ix_clientes_cedula"""
     from sqlalchemy import text
     connection = op.get_bind()
-    
+
     # Verificar existencia usando SQL directo para evitar problemas de transacción
     try:
         result = connection.execute(text("""
             SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_schema = 'public' 
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public'
                 AND table_name = 'clientes'
             )
         """))
         table_exists = result.scalar()
-        
+
         if not table_exists:
             print("⚠️ Tabla 'clientes' no existe, saltando migración")
             return
-        
+
         result = connection.execute(text("""
             SELECT EXISTS (
-                SELECT FROM information_schema.columns 
-                WHERE table_schema = 'public' 
-                AND table_name = 'clientes' 
+                SELECT FROM information_schema.columns
+                WHERE table_schema = 'public'
+                AND table_name = 'clientes'
                 AND column_name = 'cedula'
             )
         """))
         column_exists = result.scalar()
-        
+
         if not column_exists:
             print("⚠️ Columna 'cedula' no existe en tabla 'clientes', saltando migración")
             return
     except Exception as e:
         print(f"⚠️ Error verificando tabla/columna: {e}")
         # Continuar de todas formas, usar SQL directo con IF EXISTS
-    
+
     # Drop the problematic unique index
     try:
         connection.execute(text("DROP INDEX IF EXISTS ix_clientes_cedula"))
@@ -65,14 +65,14 @@ def upgrade():
         # Verificar si el índice ya existe usando SQL directo
         result = connection.execute(text("""
             SELECT EXISTS (
-                SELECT FROM pg_indexes 
-                WHERE schemaname = 'public' 
-                AND tablename = 'clientes' 
+                SELECT FROM pg_indexes
+                WHERE schemaname = 'public'
+                AND tablename = 'clientes'
                 AND indexname = 'idx_clientes_cedula_performance'
             )
         """))
         index_exists = result.scalar()
-        
+
         if not index_exists:
             connection.execute(text("CREATE INDEX IF NOT EXISTS idx_clientes_cedula_performance ON clientes (cedula)"))
             print("✅ Índice 'idx_clientes_cedula_performance' creado")
@@ -88,14 +88,14 @@ def downgrade():
     from sqlalchemy import text
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    
+
     if "clientes" not in inspector.get_table_names():
         return
-    
+
     columns = [col["name"] for col in inspector.get_columns("clientes")]
     if "cedula" not in columns:
         return
-    
+
     # Drop the performance index
     op.execute(text("DROP INDEX IF EXISTS idx_clientes_cedula_performance"))
 

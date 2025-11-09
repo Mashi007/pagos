@@ -20,13 +20,13 @@ depends_on = None
 def upgrade():
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     if 'prestamos_evaluacion' not in inspector.get_table_names():
         print("⚠️ Tabla 'prestamos_evaluacion' no existe, saltando migración")
         return
-    
+
     columns = [col['name'] for col in inspector.get_columns('prestamos_evaluacion')]
-    
+
     # Agregar campos para 3 referencias individuales
     if 'referencia1_calificacion' not in columns:
         op.add_column('prestamos_evaluacion', sa.Column('referencia1_calificacion', sa.Integer(), nullable=True, server_default='0'))
@@ -40,17 +40,17 @@ def upgrade():
         op.add_column('prestamos_evaluacion', sa.Column('referencia3_calificacion', sa.Integer(), nullable=True, server_default='0'))
     if 'referencia3_observaciones' not in columns:
         op.add_column('prestamos_evaluacion', sa.Column('referencia3_observaciones', sa.String(length=200), nullable=True))
-    
+
 
 def downgrade():
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     if 'prestamos_evaluacion' not in inspector.get_table_names():
         return
-    
+
     columns = [col['name'] for col in inspector.get_columns('prestamos_evaluacion')]
-    
+
     # Eliminar las nuevas columnas si existen
     if 'referencia3_observaciones' in columns:
         op.drop_column('prestamos_evaluacion', 'referencia3_observaciones')
@@ -64,4 +64,3 @@ def downgrade():
         op.drop_column('prestamos_evaluacion', 'referencia1_observaciones')
     if 'referencia1_calificacion' in columns:
         op.drop_column('prestamos_evaluacion', 'referencia1_calificacion')
-

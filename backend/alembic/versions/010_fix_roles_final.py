@@ -22,11 +22,11 @@ def upgrade() -> None:
     # Verificar si la columna is_admin ya existe
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    
+
     if "users" not in inspector.get_table_names():
         print("⚠️ Tabla 'users' no existe, saltando migración")
         return
-    
+
     columns = [col["name"] for col in inspector.get_columns("users")]
 
     if "is_admin" not in columns:

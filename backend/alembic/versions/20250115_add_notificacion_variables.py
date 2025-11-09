@@ -18,7 +18,7 @@ depends_on = None
 def upgrade():
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    
+
     # Verificar si la tabla ya existe
     if "notificacion_variables" not in inspector.get_table_names():
         # Crear tabla notificacion_variables
@@ -37,17 +37,17 @@ def upgrade():
         )
     else:
         print("Tabla 'notificacion_variables' ya existe")
-    
+
     # Verificar índices existentes
     indexes = [idx["name"] for idx in inspector.get_indexes("notificacion_variables")] if "notificacion_variables" in inspector.get_table_names() else []
-    
+
     # Crear índices si no existen
     if "ix_notificacion_variables_id" not in indexes:
         op.create_index(op.f('ix_notificacion_variables_id'), 'notificacion_variables', ['id'], unique=False)
-    
+
     if "ix_notificacion_variables_nombre_variable" not in indexes:
         op.create_index(op.f('ix_notificacion_variables_nombre_variable'), 'notificacion_variables', ['nombre_variable'], unique=False)
-    
+
     if "ix_notificacion_variables_activa" not in indexes:
         op.create_index(op.f('ix_notificacion_variables_activa'), 'notificacion_variables', ['activa'], unique=False)
 
@@ -57,7 +57,6 @@ def downgrade():
     op.drop_index(op.f('ix_notificacion_variables_activa'), table_name='notificacion_variables')
     op.drop_index(op.f('ix_notificacion_variables_nombre_variable'), table_name='notificacion_variables')
     op.drop_index(op.f('ix_notificacion_variables_id'), table_name='notificacion_variables')
-    
+
     # Eliminar tabla
     op.drop_table('notificacion_variables')
-

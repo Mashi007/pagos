@@ -1114,15 +1114,15 @@ def probar_configuracion_email(
                     <div style="background-color: #4CAF50; color: white; padding: 15px; border-radius: 5px 5px 0 0; margin: -20px -20px 20px -20px;">
                         <h2 style="margin: 0;">✅ Email de Prueba Exitoso</h2>
                     </div>
-                    
+
                     <p>Este es un <strong>email de prueba</strong> para verificar que la configuración SMTP está funcionando correctamente.</p>
-                    
+
                     <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
                         <p style="margin: 0;"><strong>📧 Destinatario:</strong> {email_a_enviar}</p>
                         <p style="margin: 5px 0;"><strong>📅 Fecha y Hora:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
                         <p style="margin: 5px 0;"><strong>👤 Usuario:</strong> {current_user.email}</p>
                     </div>
-                    
+
                     <p>Si recibes este email, significa que:</p>
                     <ul>
                         <li>✅ La configuración SMTP es correcta</li>
@@ -1130,7 +1130,7 @@ def probar_configuracion_email(
                         <li>✅ El servidor de email está funcionando</li>
                         <li>✅ El sistema puede enviar correos normalmente</li>
                     </ul>
-                    
+
                     <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 12px;">
                         <p>Este es un email automático del sistema RapiCredit</p>
                     </div>

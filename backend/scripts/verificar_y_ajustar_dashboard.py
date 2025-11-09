@@ -20,11 +20,11 @@ def ejecutar_script(script_name: str, args: list = None):
     if not script_path.exists():
         print(f"❌ Script no encontrado: {script_path}")
         return False
-    
+
     cmd = [sys.executable, str(script_path)]
     if args:
         cmd.extend(args)
-    
+
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, cwd=project_root)
         print(result.stdout)
@@ -39,7 +39,7 @@ def ejecutar_script(script_name: str, args: list = None):
 def main():
     """Función principal"""
     import argparse
-    
+
     parser = argparse.ArgumentParser(
         description="Verificar y ajustar el dashboard de Financiamiento por Rangos"
     )
@@ -63,14 +63,14 @@ def main():
         action="store_true",
         help="Saltar la prueba del endpoint"
     )
-    
+
     args = parser.parse_args()
-    
+
     print("=" * 80)
     print("🔍 VERIFICACIÓN Y AJUSTE DEL DASHBOARD")
     print("=" * 80)
     print()
-    
+
     # Paso 1: Diagnóstico
     if not args.skip_diagnostico:
         print("📋 PASO 1: Ejecutando diagnóstico...")
@@ -79,7 +79,7 @@ def main():
         print()
         print("=" * 80)
         print()
-    
+
     # Paso 2: Ajustes (si se solicita)
     if not args.skip_ajustes:
         if args.execute:
@@ -95,7 +95,7 @@ def main():
         print()
         print("=" * 80)
         print()
-    
+
     # Paso 3: Prueba del endpoint
     if not args.skip_test:
         print("🧪 PASO 3: Probando endpoint...")
@@ -106,7 +106,7 @@ def main():
         print()
         print("=" * 80)
         print()
-    
+
     print("✅ Verificación completada")
     print()
     print("📝 Próximos pasos:")
@@ -118,4 +118,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

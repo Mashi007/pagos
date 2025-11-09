@@ -62,5 +62,3 @@ def downgrade():
         op.drop_column("notificaciones", "asunto")
     if "canal" in columns:
         op.drop_column("notificaciones", "canal")
-
-

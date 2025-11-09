@@ -11,12 +11,12 @@ def main():
     # Cambiar al directorio del backend
     backend_dir = Path(__file__).parent.parent
     os.chdir(backend_dir)
-    
+
     print("=" * 80)
     print("EJECUTANDO ANÁLISIS DE CÓDIGO CON FLAKE8")
     print("=" * 80)
     print()
-    
+
     # Ejecutar flake8
     try:
         result = subprocess.run(
@@ -25,7 +25,7 @@ def main():
             text=True,
             cwd=backend_dir
         )
-        
+
         if result.returncode == 0:
             print("✅ No se encontraron errores de código con flake8")
             return 0
@@ -36,7 +36,7 @@ def main():
             print(result.stderr)
             print("-" * 80)
             return result.returncode
-            
+
     except FileNotFoundError:
         print("❌ ERROR: Python no encontrado en el PATH")
         print("   Por favor, instala Python o activa tu entorno virtual")
@@ -47,4 +47,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

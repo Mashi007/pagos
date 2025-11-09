@@ -20,11 +20,11 @@ def upgrade():
     # Verificar si la columna ya existe antes de agregarla
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    
+
     if "users" not in inspector.get_table_names():
         print("⚠️ Tabla 'users' no existe, saltando migración")
         return
-    
+
     columns = [col["name"] for col in inspector.get_columns("users")]
 
     if "cargo" not in columns:
@@ -39,10 +39,10 @@ def downgrade():
     # Verificar si la columna existe antes de eliminarla
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    
+
     if "users" not in inspector.get_table_names():
         return
-    
+
     columns = [col["name"] for col in inspector.get_columns("users")]
 
     if "cargo" in columns:

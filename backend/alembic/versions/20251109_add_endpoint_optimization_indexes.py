@@ -45,7 +45,7 @@ def _column_exists(inspector, table_name: str, column_name: str) -> bool:
 def upgrade():
     """
     Agregar índices críticos para optimizar endpoints del dashboard.
-    
+
     PRIORIDAD ALTA:
     1. idx_prestamos_estado_fecha_aprobacion - Optimiza kpis-principales
     2. idx_prestamos_total_financiamiento - Optimiza financiamiento-por-rangos
@@ -54,9 +54,9 @@ def upgrade():
     """
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     print("\n🚀 Iniciando migración de índices para optimización de endpoints...")
-    
+
     # ============================================
     # ÍNDICES CRÍTICOS: PRESTAMOS
     # ============================================
@@ -65,7 +65,7 @@ def upgrade():
         # Optimiza: /dashboard/kpis-principales
         index_name = 'idx_prestamos_estado_fecha_aprobacion'
         if not _index_exists(inspector, 'prestamos', index_name):
-            if (_column_exists(inspector, 'prestamos', 'estado') and 
+            if (_column_exists(inspector, 'prestamos', 'estado') and
                 _column_exists(inspector, 'prestamos', 'fecha_aprobacion')):
                 try:
                     op.create_index(
@@ -81,7 +81,7 @@ def upgrade():
                 print("ℹ️ Columnas requeridas no existen en 'prestamos', omitiendo...")
         else:
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
-        
+
         # 2. Índice en total_financiamiento (parcial para APROBADO)
         # Optimiza: /dashboard/financiamiento-por-rangos
         index_name = 'idx_prestamos_total_financiamiento'
@@ -101,7 +101,7 @@ def upgrade():
                 print("ℹ️ Columna 'total_financiamiento' no existe en 'prestamos', omitiendo...")
         else:
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
-        
+
         # 3. Índice funcional para date_trunc('month', fecha_aprobacion)
         # Optimiza: /dashboard/financiamiento-tendencia-mensual
         index_name = 'idx_prestamos_fecha_aprobacion_month'
@@ -122,7 +122,7 @@ def upgrade():
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
     else:
         print("ℹ️ Tabla 'prestamos' no existe, omitiendo índices...")
-    
+
     # ============================================
     # ÍNDICES CRÍTICOS: CUOTAS
     # ============================================
@@ -145,7 +145,7 @@ def upgrade():
                 print("ℹ️ Columna 'dias_morosidad' no existe en 'cuotas', omitiendo...")
         else:
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
-        
+
         # 5. Índice en monto_morosidad (parcial para > 0)
         # Optimiza: /dashboard/composicion-morosidad
         index_name = 'idx_cuotas_monto_morosidad'
@@ -164,7 +164,7 @@ def upgrade():
                 print("ℹ️ Columna 'monto_morosidad' no existe en 'cuotas', omitiendo...")
         else:
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
-        
+
         # 6. Índice compuesto: fecha_vencimiento + estado + total_pagado
         # Optimiza: /cobranzas/clientes-atrasados
         index_name = 'idx_cuotas_vencimiento_estado_pago'
@@ -187,7 +187,7 @@ def upgrade():
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
     else:
         print("ℹ️ Tabla 'cuotas' no existe, omitiendo índices...")
-    
+
     # Ejecutar ANALYZE para actualizar estadísticas
     try:
         print("\n📊 Actualizando estadísticas de tablas...")
@@ -201,7 +201,7 @@ def upgrade():
                     print(f"⚠️ No se pudo ejecutar ANALYZE en '{table}': {e}")
     except Exception as e:
         print(f"⚠️ Advertencia al ejecutar ANALYZE: {e}")
-    
+
     print("\n✅ Migración de índices para optimización de endpoints completada")
     print("📈 Impacto esperado:")
     print("   - kpis-principales: Reducción de 2-5s a <1s")
@@ -216,9 +216,9 @@ def downgrade():
     """
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     print("\n🔄 Iniciando rollback de índices de optimización de endpoints...")
-    
+
     indices_to_drop = [
         ('prestamos', 'idx_prestamos_estado_fecha_aprobacion'),
         ('prestamos', 'idx_prestamos_total_financiamiento'),
@@ -227,7 +227,7 @@ def downgrade():
         ('cuotas', 'idx_cuotas_monto_morosidad'),
         ('cuotas', 'idx_cuotas_vencimiento_estado_pago'),
     ]
-    
+
     for table_name, index_name in indices_to_drop:
         if _table_exists(inspector, table_name) and _index_exists(inspector, table_name, index_name):
             try:
@@ -240,6 +240,5 @@ def downgrade():
                 print(f"ℹ️ Tabla '{table_name}' no existe, omitiendo eliminación...")
             else:
                 print(f"ℹ️ Índice '{index_name}' no existe en '{table_name}', omitiendo...")
-    
-    print("\n✅ Rollback de índices de optimización de endpoints completado")
 
+    print("\n✅ Rollback de índices de optimización de endpoints completado")

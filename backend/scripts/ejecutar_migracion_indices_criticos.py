@@ -22,15 +22,15 @@ from alembic.config import Config
 def main():
     """Ejecutar la migración de índices críticos"""
     alembic_cfg = Config("alembic.ini")
-    
+
     # Configurar la URL de la base de datos desde .env
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         print("ERROR: DATABASE_URL no está configurada en .env")
         sys.exit(1)
-    
+
     alembic_cfg.set_main_option("sqlalchemy.url", database_url)
-    
+
     print("=" * 70)
     print("🚀 EJECUTANDO MIGRACIÓN: Índices Críticos de Performance")
     print("=" * 70)
@@ -38,7 +38,7 @@ def main():
     print("📈 Impacto esperado: Reducción de timeouts de 57s a <500ms (114x mejora)")
     print("=" * 70)
     print()
-    
+
     try:
         # Ejecutar upgrade
         command.upgrade(alembic_cfg, "head")
@@ -63,4 +63,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

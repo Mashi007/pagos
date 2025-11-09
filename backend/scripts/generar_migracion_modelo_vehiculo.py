@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 def generar_migracion():
     """Generar migración para agregar columna modelo_vehiculo"""
     from datetime import datetime
-    
+
     # Generar nombre de archivo con timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"alembic/versions/{timestamp}_add_modelo_vehiculo_to_clientes.py"

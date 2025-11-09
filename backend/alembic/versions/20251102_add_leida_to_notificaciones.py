@@ -44,5 +44,3 @@ def downgrade():
     columns = [c["name"] for c in inspector.get_columns("notificaciones")]
     if "leida" in columns:
         op.drop_column("notificaciones", "leida")
-
-

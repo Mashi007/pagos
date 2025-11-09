@@ -846,7 +846,7 @@ async def monitor_indexes_performance(
         dashboard_endpoints = {
             "financiamiento_tendencia_mensual": {
                 "query": """
-                    SELECT 
+                    SELECT
                         EXTRACT(YEAR FROM fecha_aprobacion) as año,
                         EXTRACT(MONTH FROM fecha_aprobacion) as mes,
                         COUNT(*) as total,
@@ -862,7 +862,7 @@ async def monitor_indexes_performance(
             },
             "evolucion_pagos": {
                 "query": """
-                    SELECT 
+                    SELECT
                         EXTRACT(YEAR FROM fecha_pago) as año,
                         EXTRACT(MONTH FROM fecha_pago) as mes,
                         SUM(monto_pagado) as total_pagado
@@ -877,7 +877,7 @@ async def monitor_indexes_performance(
             },
             "cobranzas_mensuales": {
                 "query": """
-                    SELECT 
+                    SELECT
                         EXTRACT(YEAR FROM fecha_vencimiento) as año,
                         EXTRACT(MONTH FROM fecha_vencimiento) as mes,
                         COUNT(*) as total_cuotas,
@@ -892,7 +892,7 @@ async def monitor_indexes_performance(
             },
             "notificaciones_estadisticas": {
                 "query": """
-                    SELECT 
+                    SELECT
                         estado,
                         COUNT(*) as total
                     FROM notificaciones

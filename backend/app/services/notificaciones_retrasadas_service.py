@@ -70,8 +70,8 @@ class NotificacionesRetrasadasService:
                 INNER JOIN cuotas c ON c.prestamo_id = p.id
                 INNER JOIN clientes cl ON cl.id = p.cliente_id
                 WHERE p.estado = 'APROBADO'
-                  AND (c.fecha_vencimiento = :fecha_1_dia_atrasado 
-                       OR c.fecha_vencimiento = :fecha_3_dias_atrasado 
+                  AND (c.fecha_vencimiento = :fecha_1_dia_atrasado
+                       OR c.fecha_vencimiento = :fecha_3_dias_atrasado
                        OR c.fecha_vencimiento = :fecha_5_dias_atrasado)
                   AND c.estado IN ('ATRASADO', 'PENDIENTE')
                   AND cl.estado != 'INACTIVO'

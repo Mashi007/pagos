@@ -49,7 +49,7 @@ def upgrade():
     """
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     # ============================================
     # ÍNDICE 1: pagos.fecha_registro
     # ============================================
@@ -73,7 +73,7 @@ def upgrade():
             print("ℹ️ Columna 'fecha_registro' no existe en tabla 'pagos', omitiendo índice...")
     else:
         print("ℹ️ Tabla 'pagos' no existe, omitiendo índice...")
-    
+
     # ============================================
     # ÍNDICE 2: cuotas.fecha_vencimiento
     # ============================================
@@ -97,7 +97,7 @@ def upgrade():
             print("ℹ️ Columna 'fecha_vencimiento' no existe en tabla 'cuotas', omitiendo índice...")
     else:
         print("ℹ️ Tabla 'cuotas' no existe, omitiendo índice...")
-    
+
     # ============================================
     # ÍNDICE 3: prestamos.fecha_registro
     # ============================================
@@ -121,7 +121,7 @@ def upgrade():
             print("ℹ️ Columna 'fecha_registro' no existe en tabla 'prestamos', omitiendo índice...")
     else:
         print("ℹ️ Tabla 'prestamos' no existe, omitiendo índice...")
-    
+
     # ============================================
     # ÍNDICE 4: prestamos_auditoria.fecha_cambio
     # ============================================
@@ -145,7 +145,7 @@ def upgrade():
             print("ℹ️ Columna 'fecha_cambio' no existe en tabla 'prestamos_auditoria', omitiendo índice...")
     else:
         print("ℹ️ Tabla 'prestamos_auditoria' no existe, omitiendo índice...")
-    
+
     print("\n✅ Migración de índices de performance completada")
 
 
@@ -156,7 +156,7 @@ def downgrade():
     """
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     # Eliminar índices si existen
     indices_to_drop = [
         ('pagos', 'ix_pagos_fecha_registro'),
@@ -164,7 +164,7 @@ def downgrade():
         ('prestamos', 'ix_prestamos_fecha_registro'),
         ('prestamos_auditoria', 'ix_prestamos_auditoria_fecha_cambio'),
     ]
-    
+
     for table_name, index_name in indices_to_drop:
         if _table_exists(inspector, table_name) and _index_exists(inspector, table_name, index_name):
             try:
@@ -177,6 +177,5 @@ def downgrade():
                 print(f"ℹ️ Tabla '{table_name}' no existe, omitiendo eliminación de índice...")
             else:
                 print(f"ℹ️ Índice '{index_name}' no existe en tabla '{table_name}', omitiendo...")
-    
-    print("\n✅ Rollback de índices de performance completado")
 
+    print("\n✅ Rollback de índices de performance completado")

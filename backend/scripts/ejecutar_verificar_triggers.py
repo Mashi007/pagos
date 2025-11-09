@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 def ejecutar_verificacion_triggers():
     """Ejecuta las consultas de verificación de triggers"""
-    
+
     try:
         # Intentar crear la sesión
         db = SessionLocal()
@@ -46,18 +46,18 @@ def ejecutar_verificacion_triggers():
         print("2. Que la base de datos esté accesible")
         print("3. Que las credenciales sean correctas")
         return
-    
+
     try:
         print("=" * 80)
         print("VERIFICACION DE TRIGGERS EN LA TABLA USERS")
         print("=" * 80)
         print()
-        
+
         # 1. Verificar triggers relacionados con la tabla 'users'
         print("1. TRIGGERS EN LA TABLA 'users':")
         print("-" * 80)
         query1 = text("""
-            SELECT 
+            SELECT
                 trigger_name,
                 event_manipulation,
                 event_object_table,
@@ -70,7 +70,7 @@ def ejecutar_verificacion_triggers():
         """)
         result1 = db.execute(query1)
         triggers = result1.fetchall()
-        
+
         if triggers:
             for trigger in triggers:
                 print(f"  [OK] Trigger encontrado: {trigger.trigger_name}")
@@ -81,12 +81,12 @@ def ejecutar_verificacion_triggers():
         else:
             print("  [OK] No se encontraron triggers en la tabla 'users'")
         print()
-        
+
         # 2. Verificar funciones que puedan estar relacionadas con users
         print("2. FUNCIONES RELACIONADAS CON 'users' O 'cargo':")
         print("-" * 80)
         query2 = text("""
-            SELECT 
+            SELECT
                 routine_name,
                 routine_type,
                 routine_definition
@@ -97,7 +97,7 @@ def ejecutar_verificacion_triggers():
         """)
         result2 = db.execute(query2)
         funciones = result2.fetchall()
-        
+
         if funciones:
             for func in funciones:
                 print(f"  [ADVERTENCIA] Funcion encontrada: {func.routine_name} ({func.routine_type})")
@@ -106,23 +106,23 @@ def ejecutar_verificacion_triggers():
         else:
             print("  [OK] No se encontraron funciones relacionadas con 'users' o 'cargo'")
         print()
-        
+
         # 3. Verificar constraints o defaults en la columna cargo
         print("3. INFORMACION DE LA COLUMNA 'cargo':")
         print("-" * 80)
         query3 = text("""
-            SELECT 
+            SELECT
                 column_name,
                 column_default,
                 is_nullable,
                 data_type
             FROM information_schema.columns
-            WHERE table_name = 'users' 
+            WHERE table_name = 'users'
               AND column_name = 'cargo';
         """)
         result3 = db.execute(query3)
         columna = result3.fetchone()
-        
+
         if columna:
             print(f"  [OK] Columna 'cargo' encontrada:")
             print(f"     - Tipo de dato: {columna.data_type}")
@@ -131,12 +131,12 @@ def ejecutar_verificacion_triggers():
         else:
             print("  [ADVERTENCIA] Columna 'cargo' no encontrada")
         print()
-        
+
         # 4. Verificar constraints relacionados con cargo
         print("4. CONSTRAINTS RELACIONADOS CON 'cargo':")
         print("-" * 80)
         query4 = text("""
-            SELECT 
+            SELECT
                 conname AS constraint_name,
                 contype AS constraint_type,
                 pg_get_constraintdef(oid) AS constraint_definition
@@ -146,7 +146,7 @@ def ejecutar_verificacion_triggers():
         """)
         result4 = db.execute(query4)
         constraints = result4.fetchall()
-        
+
         if constraints:
             for constraint in constraints:
                 print(f"  [ADVERTENCIA] Constraint encontrado: {constraint.constraint_name}")
@@ -156,18 +156,18 @@ def ejecutar_verificacion_triggers():
         else:
             print("  [OK] No se encontraron constraints relacionados con 'cargo'")
         print()
-        
+
         # 5. Verificar valores actuales de cargo en la tabla users
         print("5. VALORES ACTUALES DE 'cargo' EN LA TABLA 'users':")
         print("-" * 80)
         query5 = text("""
-            SELECT 
+            SELECT
                 id,
                 email,
                 nombre,
                 apellido,
                 cargo,
-                CASE 
+                CASE
                     WHEN cargo IS NULL THEN 'NULL'
                     WHEN cargo = '' THEN 'VACÍO'
                     ELSE cargo
@@ -177,7 +177,7 @@ def ejecutar_verificacion_triggers():
         """)
         result5 = db.execute(query5)
         usuarios = result5.fetchall()
-        
+
         if usuarios:
             print(f"  Total de usuarios: {len(usuarios)}")
             print()
@@ -189,11 +189,11 @@ def ejecutar_verificacion_triggers():
         else:
             print("  [ADVERTENCIA] No se encontraron usuarios en la tabla")
         print()
-        
+
         print("=" * 80)
         print("[OK] Verificacion completada")
         print("=" * 80)
-        
+
     except Exception as e:
         logger.error(f"Error ejecutando verificacion: {e}")
         print(f"\n[ERROR] Error: {e}")
@@ -212,4 +212,3 @@ if __name__ == "__main__":
         print(f"\n\n[ERROR] Error fatal: {e}")
         import traceback
         traceback.print_exc()
-

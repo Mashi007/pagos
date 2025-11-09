@@ -45,16 +45,16 @@ def _column_exists(inspector, table_name: str, column_name: str) -> bool:
 def upgrade():
     """
     Agregar índices críticos de performance para resolver timeouts de 57+ segundos.
-    
+
     NOTA IMPORTANTE: CREATE INDEX CONCURRENTLY no puede ejecutarse dentro de transacciones.
     Esta migración usa CREATE INDEX normal (sin CONCURRENTLY) para que funcione con Alembic.
     En producción, puede ejecutarse manualmente con CONCURRENTLY si es necesario.
     """
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     print("\n🚀 Iniciando migración de índices críticos de performance...")
-    
+
     # ============================================
     # ÍNDICES CRÍTICOS: NOTIFICACIONES
     # Resuelve timeout de 57s en /api/v1/notificaciones/estadisticas/resumen
@@ -79,7 +79,7 @@ def upgrade():
                 print("ℹ️ Columna 'estado' no existe en 'notificaciones', omitiendo...")
         else:
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
-        
+
         # Índice en leida (si existe la columna)
         index_name = 'idx_notificaciones_leida'
         if not _index_exists(inspector, 'notificaciones', index_name):
@@ -99,7 +99,7 @@ def upgrade():
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
     else:
         print("ℹ️ Tabla 'notificaciones' no existe, omitiendo índices...")
-    
+
     # ============================================
     # ÍNDICES CRÍTICOS: PAGOS_STAGING
     # Resuelve queries lentas en KPIs de pagos
@@ -120,7 +120,7 @@ def upgrade():
                 print(f"⚠️ Advertencia: No se pudo crear índice '{index_name}': {e}")
         else:
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
-        
+
         # Índice funcional para monto_pagado::numeric
         index_name = 'idx_pagos_staging_monto_numeric'
         if not _index_exists(inspector, 'pagos_staging', index_name):
@@ -138,7 +138,7 @@ def upgrade():
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
     else:
         print("ℹ️ Tabla 'pagos_staging' no existe, omitiendo índices...")
-    
+
     # ============================================
     # ÍNDICES CRÍTICOS: CUOTAS
     # Resuelve queries de morosidad y KPIs
@@ -147,7 +147,7 @@ def upgrade():
         # Índice compuesto para fecha_vencimiento + estado (crítico para queries de mora)
         index_name = 'idx_cuotas_vencimiento_estado'
         if not _index_exists(inspector, 'cuotas', index_name):
-            if (_column_exists(inspector, 'cuotas', 'fecha_vencimiento') and 
+            if (_column_exists(inspector, 'cuotas', 'fecha_vencimiento') and
                 _column_exists(inspector, 'cuotas', 'estado')):
                 try:
                     # Índice compuesto parcial - usar SQL directo
@@ -163,7 +163,7 @@ def upgrade():
                 print("ℹ️ Columnas requeridas no existen en 'cuotas', omitiendo...")
         else:
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
-        
+
         # Índice en prestamo_id (ya debería existir, pero verificar)
         index_name = 'idx_cuotas_prestamo_id'
         if not _index_exists(inspector, 'cuotas', index_name):
@@ -184,7 +184,7 @@ def upgrade():
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
     else:
         print("ℹ️ Tabla 'cuotas' no existe, omitiendo índices...")
-    
+
     # ============================================
     # ÍNDICES CRÍTICOS: PRESTAMOS
     # Resuelve filtros frecuentes en dashboard
@@ -208,7 +208,7 @@ def upgrade():
                 print("ℹ️ Columna 'estado' no existe en 'prestamos', omitiendo...")
         else:
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
-        
+
         # Índice en cedula (crítico para búsquedas por cliente)
         index_name = 'idx_prestamos_cedula'
         if not _index_exists(inspector, 'prestamos', index_name):
@@ -229,7 +229,7 @@ def upgrade():
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
     else:
         print("ℹ️ Tabla 'prestamos' no existe, omitiendo índices...")
-    
+
     # Ejecutar ANALYZE para actualizar estadísticas
     try:
         print("\n📊 Actualizando estadísticas de tablas...")
@@ -243,7 +243,7 @@ def upgrade():
                     print(f"⚠️ No se pudo ejecutar ANALYZE en '{table}': {e}")
     except Exception as e:
         print(f"⚠️ Advertencia al ejecutar ANALYZE: {e}")
-    
+
     print("\n✅ Migración de índices críticos completada")
     print("📈 Impacto esperado: Reducción de timeouts de 57s a <500ms (114x mejora)")
 
@@ -254,9 +254,9 @@ def downgrade():
     """
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     print("\n🔄 Iniciando rollback de índices críticos...")
-    
+
     indices_to_drop = [
         ('notificaciones', 'idx_notificaciones_estado'),
         ('notificaciones', 'idx_notificaciones_leida'),
@@ -267,7 +267,7 @@ def downgrade():
         ('prestamos', 'idx_prestamos_estado'),
         ('prestamos', 'idx_prestamos_cedula'),
     ]
-    
+
     for table_name, index_name in indices_to_drop:
         if _table_exists(inspector, table_name) and _index_exists(inspector, table_name, index_name):
             try:
@@ -280,6 +280,5 @@ def downgrade():
                 print(f"ℹ️ Tabla '{table_name}' no existe, omitiendo eliminación...")
             else:
                 print(f"ℹ️ Índice '{index_name}' no existe en '{table_name}', omitiendo...")
-    
-    print("\n✅ Rollback de índices críticos completado")
 
+    print("\n✅ Rollback de índices críticos completado")

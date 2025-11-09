@@ -51,9 +51,9 @@ def upgrade():
     """
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     print("\n🚀 Iniciando migración de índices funcionales para GROUP BY...")
-    
+
     # ============================================
     # ÍNDICES FUNCIONALES: PAGOS_STAGING
     # Para GROUP BY EXTRACT(YEAR/MONTH FROM fecha_pago)
@@ -76,7 +76,7 @@ def upgrade():
                 print("ℹ️ Columna 'fecha_pago' no existe en 'pagos_staging', omitiendo...")
         else:
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
-        
+
         # Índice compuesto funcional para EXTRACT(YEAR, MONTH FROM fecha_pago::timestamp)
         index_name = 'idx_pagos_staging_extract_year_month'
         if not _index_exists(inspector, 'pagos_staging', index_name):
@@ -99,7 +99,7 @@ def upgrade():
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
     else:
         print("ℹ️ Tabla 'pagos_staging' no existe, omitiendo índices...")
-    
+
     # ============================================
     # ÍNDICES FUNCIONALES: CUOTAS
     # Para GROUP BY EXTRACT(YEAR/MONTH FROM fecha_vencimiento)
@@ -127,7 +127,7 @@ def upgrade():
             print(f"ℹ️ Índice '{index_name}' ya existe, omitiendo...")
     else:
         print("ℹ️ Tabla 'cuotas' no existe, omitiendo índices...")
-    
+
     # Ejecutar ANALYZE para actualizar estadísticas
     try:
         print("\n📊 Actualizando estadísticas de tablas...")
@@ -141,7 +141,7 @@ def upgrade():
                     print(f"⚠️ No se pudo ejecutar ANALYZE en '{table}': {e}")
     except Exception as e:
         print(f"⚠️ Advertencia al ejecutar ANALYZE: {e}")
-    
+
     print("\n✅ Migración de índices funcionales para GROUP BY completada")
     print("📈 Impacto esperado: Reducción de tiempos de GROUP BY de 17-31s a <2s")
 
@@ -152,15 +152,15 @@ def downgrade():
     """
     connection = op.get_bind()
     inspector = inspect(connection)
-    
+
     print("\n🔄 Iniciando rollback de índices funcionales para GROUP BY...")
-    
+
     indices_to_drop = [
         ('pagos_staging', 'idx_pagos_staging_extract_year'),
         ('pagos_staging', 'idx_pagos_staging_extract_year_month'),
         ('cuotas', 'idx_cuotas_extract_year_month'),
     ]
-    
+
     for table_name, index_name in indices_to_drop:
         if _table_exists(inspector, table_name) and _index_exists(inspector, table_name, index_name):
             try:
@@ -173,6 +173,5 @@ def downgrade():
                 print(f"ℹ️ Tabla '{table_name}' no existe, omitiendo eliminación...")
             else:
                 print(f"ℹ️ Índice '{index_name}' no existe en '{table_name}', omitiendo...")
-    
-    print("\n✅ Rollback de índices funcionales para GROUP BY completado")
 
+    print("\n✅ Rollback de índices funcionales para GROUP BY completado")

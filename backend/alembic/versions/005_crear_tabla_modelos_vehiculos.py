@@ -19,7 +19,7 @@ depends_on = None
 def upgrade():
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    
+
     # Verificar si la tabla ya existe
     if "modelos_vehiculos" not in inspector.get_table_names():
         # Crear tabla modelos_vehiculos
@@ -43,7 +43,7 @@ def upgrade():
         print("Tabla 'modelos_vehiculos' ya existe")
         # Si la tabla existe, agregar columnas faltantes
         columns = [col["name"] for col in inspector.get_columns("modelos_vehiculos")]
-        
+
         if "marca" not in columns:
             op.add_column("modelos_vehiculos", sa.Column("marca", sa.String(50), nullable=True))
         if "nombre_completo" not in columns:
@@ -61,7 +61,7 @@ def upgrade():
     if "modelos_vehiculos" in inspector.get_table_names():
         indexes = [idx["name"] for idx in inspector.get_indexes("modelos_vehiculos")]
         columns = [col["name"] for col in inspector.get_columns("modelos_vehiculos")]
-        
+
         # Crear índices solo si no existen Y las columnas existen
         if "ix_modelos_vehiculos_marca" not in indexes and "marca" in columns:
             op.create_index("ix_modelos_vehiculos_marca", "modelos_vehiculos", ["marca"])

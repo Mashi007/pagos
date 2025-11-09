@@ -19,7 +19,7 @@ depends_on = None
 def upgrade() -> None:
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    
+
     # Verificar si la columna ya existe
     if 'users' in inspector.get_table_names():
         columns = [col["name"] for col in inspector.get_columns("users")]

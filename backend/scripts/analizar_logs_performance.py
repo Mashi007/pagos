@@ -4,7 +4,7 @@ Script para analizar logs de performance y identificar endpoints lentos
 
 Uso:
     python scripts/analizar_logs_performance.py <archivo_log> [--threshold 1000] [--limit 20]
-    
+
 Ejemplo:
     python scripts/analizar_logs_performance.py logs/app.log --threshold 2000 --limit 10
 """
@@ -25,11 +25,11 @@ def parse_log_line(line: str) -> Dict:
     """
     # Patrón para extraer métricas de performance
     pattern = r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z).*?responseTimeMS=(\d+).*?responseBytes=(\d+).*?status=(\d+).*?(GET|POST|PUT|DELETE|PATCH)\s+([^\s]+)'
-    
+
     match = re.search(pattern, line)
     if not match:
         return None
-    
+
     try:
         timestamp_str = match.group(1)
         response_time_ms = int(match.group(2))
@@ -37,11 +37,11 @@ def parse_log_line(line: str) -> Dict:
         status_code = int(match.group(4))
         method = match.group(5)
         path = match.group(6).split()[0] if ' ' in match.group(6) else match.group(6)
-        
+
         # Limpiar path (remover query params para agrupar mejor)
         if '?' in path:
             path = path.split('?')[0]
-        
+
         return {
             "timestamp": timestamp_str,
             "method": method,
@@ -65,10 +65,10 @@ def analyze_logs(file_path: Path, threshold_ms: int = 1000) -> Dict:
         "total_bytes": 0,
         "requests": []
     })
-    
+
     total_lines = 0
     parsed_lines = 0
-    
+
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
@@ -78,16 +78,16 @@ def analyze_logs(file_path: Path, threshold_ms: int = 1000) -> Dict:
                     parsed_lines += 1
                     key = f"{parsed['method']}:{parsed['path']}"
                     metric = metrics[key]
-                    
+
                     metric["count"] += 1
                     metric["total_time_ms"] += parsed["response_time_ms"]
                     metric["min_time_ms"] = min(metric["min_time_ms"], parsed["response_time_ms"])
                     metric["max_time_ms"] = max(metric["max_time_ms"], parsed["response_time_ms"])
                     metric["total_bytes"] += parsed["response_bytes"]
-                    
+
                     if parsed["status_code"] >= 400:
                         metric["error_count"] += 1
-                    
+
                     metric["requests"].append(parsed)
     except FileNotFoundError:
         print(f"❌ Error: Archivo no encontrado: {file_path}", file=sys.stderr)
@@ -95,7 +95,7 @@ def analyze_logs(file_path: Path, threshold_ms: int = 1000) -> Dict:
     except Exception as e:
         print(f"❌ Error leyendo archivo: {e}", file=sys.stderr)
         sys.exit(1)
-    
+
     # Calcular promedios y generar lista de endpoints lentos
     slow_endpoints = []
     for key, metric in metrics.items():
@@ -103,7 +103,7 @@ def analyze_logs(file_path: Path, threshold_ms: int = 1000) -> Dict:
             avg_time_ms = metric["total_time_ms"] / metric["count"]
             avg_bytes = metric["total_bytes"] / metric["count"]
             error_rate = (metric["error_count"] / metric["count"]) * 100
-            
+
             if avg_time_ms >= threshold_ms:
                 method, path = key.split(':', 1)
                 slow_endpoints.append({
@@ -117,10 +117,10 @@ def analyze_logs(file_path: Path, threshold_ms: int = 1000) -> Dict:
                     "error_rate": round(error_rate, 2),
                     "avg_bytes": round(avg_bytes, 2),
                 })
-    
+
     # Ordenar por tiempo promedio descendente
     slow_endpoints.sort(key=lambda x: x["avg_time_ms"], reverse=True)
-    
+
     return {
         "total_lines": total_lines,
         "parsed_lines": parsed_lines,
@@ -140,18 +140,18 @@ def print_report(analysis: Dict, threshold_ms: int, limit: int):
     print(f"   - Líneas parseadas: {analysis['parsed_lines']:,}")
     print(f"   - Endpoints únicos: {analysis['total_endpoints']}")
     print(f"   - Umbral de tiempo: {threshold_ms}ms")
-    
+
     slow_endpoints = analysis['slow_endpoints'][:limit]
-    
+
     if not slow_endpoints:
         print(f"\n✅ No se encontraron endpoints lentos (≥{threshold_ms}ms)")
         return
-    
+
     print(f"\n🐌 Endpoints Lentos (Top {len(slow_endpoints)}):")
     print("-"*80)
     print(f"{'Endpoint':<50} {'Count':<8} {'Avg(ms)':<10} {'Max(ms)':<10} {'Errors':<8}")
     print("-"*80)
-    
+
     for endpoint in slow_endpoints:
         error_indicator = "⚠️" if endpoint["error_rate"] > 0 else "  "
         print(
@@ -161,9 +161,9 @@ def print_report(analysis: Dict, threshold_ms: int, limit: int):
             f"{endpoint['max_time_ms']:<10.2f} "
             f"{error_indicator} {endpoint['error_rate']:.1f}%"
         )
-    
+
     print("\n" + "="*80)
-    
+
     # Mostrar detalles de los 3 más lentos
     if slow_endpoints:
         print("\n🔍 Detalles de los 3 Endpoints Más Lentos:")
@@ -206,17 +206,17 @@ Ejemplos:
         default=20,
         help="Número máximo de endpoints a mostrar (default: 20)"
     )
-    
+
     args = parser.parse_args()
-    
+
     if not args.log_file.exists():
         print(f"❌ Error: Archivo no encontrado: {args.log_file}", file=sys.stderr)
         sys.exit(1)
-    
+
     print(f"🔍 Analizando logs: {args.log_file}")
     print(f"⏱️  Umbral: {args.threshold}ms")
     print(f"📊 Límite: {args.limit} endpoints")
-    
+
     analysis = analyze_logs(args.log_file, threshold_ms=args.threshold)
     print_report(analysis, args.threshold, args.limit)
 

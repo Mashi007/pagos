@@ -23,7 +23,7 @@ def verificar_modelos_vehiculos():
             # Verificar si la tabla existe
             result = conn.execute(text("""
                 SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
+                    SELECT FROM information_schema.tables
                     WHERE table_name = 'modelos_vehiculos'
                 )
             """))
@@ -42,8 +42,8 @@ def verificar_modelos_vehiculos():
 
             # Obtener algunos registros
             result = conn.execute(text("""
-                SELECT id, nombre, marca, activo 
-                FROM modelos_vehiculos 
+                SELECT id, nombre, marca, activo
+                FROM modelos_vehiculos
                 LIMIT 10
             """))
 

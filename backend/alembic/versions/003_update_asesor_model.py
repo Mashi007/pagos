@@ -21,13 +21,13 @@ def upgrade():
     """Update asesor model to make apellido and email nullable"""
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    
+
     if "asesores" not in inspector.get_table_names():
         print("⚠️ Tabla 'asesores' no existe, saltando migración")
         return
-    
+
     columns = [col["name"] for col in inspector.get_columns("asesores")]
-    
+
     # Make apellido nullable
     if "apellido" in columns:
         try:
@@ -49,12 +49,12 @@ def downgrade():
     """Revert asesor model changes"""
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    
+
     if "asesores" not in inspector.get_table_names():
         return
-    
+
     columns = [col["name"] for col in inspector.get_columns("asesores")]
-    
+
     # Make apellido not nullable
     if "apellido" in columns:
         try:

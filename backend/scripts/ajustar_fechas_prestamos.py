@@ -28,11 +28,11 @@ def ajustar_fechas_faltantes(db: Session, dry_run: bool = True):
     print("🔧 AJUSTE DE FECHAS FALTANTES EN PRÉSTAMOS")
     print("=" * 80)
     print()
-    
+
     if dry_run:
         print("⚠️  MODO DRY RUN - No se realizarán cambios en la base de datos")
         print()
-    
+
     # Encontrar préstamos sin ninguna fecha
     prestamos_sin_fecha = db.query(Prestamo).filter(
         and_(
@@ -42,22 +42,22 @@ def ajustar_fechas_faltantes(db: Session, dry_run: bool = True):
             Prestamo.fecha_base_calculo.is_(None)
         )
     ).all()
-    
+
     print(f"📊 Préstamos sin ninguna fecha: {len(prestamos_sin_fecha):,}")
     print()
-    
+
     if not prestamos_sin_fecha:
         print("✅ No hay préstamos sin fecha que ajustar")
         return
-    
+
     # Estrategia: usar fecha_aprobacion = fecha_registro si existe, o fecha actual si no
     # Pero primero intentar usar fecha_base_calculo si existe
     ajustados = 0
     fecha_por_defecto = date.today()
-    
+
     for prestamo in prestamos_sin_fecha:
         fecha_a_asignar = None
-        
+
         # Prioridad 1: fecha_base_calculo (si existe)
         if prestamo.fecha_base_calculo:
             fecha_a_asignar = prestamo.fecha_base_calculo
@@ -70,7 +70,7 @@ def ajustar_fechas_faltantes(db: Session, dry_run: bool = True):
         # Prioridad 4: fecha por defecto (hoy)
         else:
             fecha_a_asignar = fecha_por_defecto
-        
+
         if not dry_run:
             # Asignar fecha_aprobacion si no tiene ninguna
             if not prestamo.fecha_aprobacion:
@@ -81,13 +81,13 @@ def ajustar_fechas_faltantes(db: Session, dry_run: bool = True):
             # Asignar fecha_base_calculo si no tiene ninguna
             if not prestamo.fecha_base_calculo:
                 prestamo.fecha_base_calculo = fecha_a_asignar
-            
+
             db.commit()
             ajustados += 1
         else:
             print(f"  [DRY RUN] Préstamo ID {prestamo.id}: asignaría fecha_aprobacion = {fecha_a_asignar}")
             ajustados += 1
-    
+
     if not dry_run:
         print(f"✅ Ajustados {ajustados:,} préstamos")
     else:
@@ -103,16 +103,16 @@ def normalizar_fechas_inconsistentes(db: Session, dry_run: bool = True):
     print("🔧 NORMALIZACIÓN DE FECHAS INCONSISTENTES")
     print("=" * 80)
     print()
-    
+
     if dry_run:
         print("⚠️  MODO DRY RUN - No se realizarán cambios en la base de datos")
         print()
-    
+
     # Encontrar préstamos con fechas inconsistentes
     prestamos = db.query(Prestamo).filter(
         Prestamo.estado == "APROBADO"
     ).all()
-    
+
     inconsistentes = []
     for prestamo in prestamos:
         fechas = []
@@ -122,20 +122,20 @@ def normalizar_fechas_inconsistentes(db: Session, dry_run: bool = True):
             fechas.append(("aprobacion", prestamo.fecha_aprobacion))
         if prestamo.fecha_base_calculo:
             fechas.append(("base_calculo", prestamo.fecha_base_calculo))
-        
+
         if len(fechas) >= 2:
             # Verificar si hay inconsistencias (fecha_aprobacion antes de fecha_registro)
             fechas_ordenadas = sorted(fechas, key=lambda x: x[1])
             if fechas_ordenadas[0][0] == "aprobacion" and fechas_ordenadas[-1][0] == "registro":
                 inconsistentes.append(prestamo)
-    
+
     print(f"📊 Préstamos con fechas inconsistentes: {len(inconsistentes):,}")
     print()
-    
+
     if not inconsistentes:
         print("✅ No hay préstamos con fechas inconsistentes")
         return
-    
+
     ajustados = 0
     for prestamo in inconsistentes[:10]:  # Limitar a 10 para no sobrecargar
         if not dry_run:
@@ -147,7 +147,7 @@ def normalizar_fechas_inconsistentes(db: Session, dry_run: bool = True):
                 fechas.append(prestamo.fecha_aprobacion)
             if prestamo.fecha_base_calculo:
                 fechas.append(prestamo.fecha_base_calculo)
-            
+
             if fechas:
                 fecha_mas_reciente = max(fechas)
                 prestamo.fecha_aprobacion = fecha_mas_reciente
@@ -156,7 +156,7 @@ def normalizar_fechas_inconsistentes(db: Session, dry_run: bool = True):
         else:
             print(f"  [DRY RUN] Préstamo ID {prestamo.id}: normalizaría fechas")
             ajustados += 1
-    
+
     if not dry_run:
         print(f"✅ Normalizados {ajustados:,} préstamos")
     else:
@@ -167,7 +167,7 @@ def normalizar_fechas_inconsistentes(db: Session, dry_run: bool = True):
 def main():
     """Función principal"""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Ajustar fechas de préstamos para el dashboard")
     parser.add_argument(
         "--execute",
@@ -184,19 +184,19 @@ def main():
         action="store_true",
         help="Solo normalizar fechas inconsistentes"
     )
-    
+
     args = parser.parse_args()
-    
+
     dry_run = not args.execute
-    
+
     db: Session = SessionLocal()
     try:
         if not args.solo_inconsistentes:
             ajustar_fechas_faltantes(db, dry_run=dry_run)
-        
+
         if not args.solo_fechas_faltantes:
             normalizar_fechas_inconsistentes(db, dry_run=dry_run)
-        
+
         if dry_run:
             print()
             print("=" * 80)
@@ -213,4 +213,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

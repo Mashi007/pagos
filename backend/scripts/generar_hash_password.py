@@ -18,10 +18,10 @@ if __name__ == "__main__":
         print("\nEjemplo:")
         print("  python generar_hash_password.py Casa1803+")
         sys.exit(1)
-    
+
     password = sys.argv[1]
     hashed = get_password_hash(password)
-    
+
     print(f"\nContraseña: {password}")
     print(f"Hash: {hashed}\n")
     print("SQL para actualizar en la base de datos:")
@@ -31,4 +31,3 @@ if __name__ == "__main__":
     print(f"    updated_at = NOW()")
     print(f"WHERE email = 'itmaster@rapicreditca.com';")
     print("-" * 80)
-

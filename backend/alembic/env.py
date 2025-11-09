@@ -47,7 +47,7 @@ def run_migrations_online() -> None:
     """Ejecutar migraciones en modo 'online'."""
     configuration = config.get_section(config.config_ini_section)
     configuration["sqlalchemy.url"] = get_url()
-    
+
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",

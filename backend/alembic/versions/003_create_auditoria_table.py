@@ -19,7 +19,7 @@ depends_on = None
 def upgrade():
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    
+
     # Verificar si la tabla ya existe
     if "auditoria" not in inspector.get_table_names():
         # Crear tabla de auditoría (singular, como en el modelo)
@@ -46,7 +46,7 @@ def upgrade():
     if "auditoria" in inspector.get_table_names():
         indexes = [idx["name"] for idx in inspector.get_indexes("auditoria")]
         columns = [col["name"] for col in inspector.get_columns("auditoria")]
-        
+
         # Crear índices solo si no existen Y las columnas existen
         if "ix_auditoria_id" not in indexes and "id" in columns:
             op.create_index("ix_auditoria_id", "auditoria", ["id"], unique=False)

@@ -16,14 +16,14 @@ from app.core.security import get_password_hash
 def generar_sql_password(email: str, password: str, output_file: str = None):
     """Genera SQL para actualizar contraseña"""
     hashed = get_password_hash(password)
-    
+
     sql = f"""-- Script SQL para actualizar contraseña de usuario
 -- Generado el: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 -- Email: {email}
 -- Nueva contraseña: {password}
 
 -- Verificar usuario antes de actualizar
-SELECT 
+SELECT
     id,
     email,
     nombre,
@@ -37,13 +37,13 @@ WHERE email = '{email}';
 
 -- Actualizar contraseña
 UPDATE users
-SET 
+SET
     hashed_password = '{hashed}',
     updated_at = NOW()
 WHERE email = '{email}';
 
 -- Verificar actualización
-SELECT 
+SELECT
     id,
     email,
     nombre,
@@ -51,7 +51,7 @@ SELECT
     is_admin,
     is_active,
     updated_at,
-    CASE 
+    CASE
         WHEN hashed_password = '{hashed}' THEN '✅ Contraseña actualizada correctamente'
         ELSE '❌ Error: La contraseña no se actualizó'
     END as estado
@@ -61,7 +61,7 @@ WHERE email = '{email}';
 -- Confirmar cambios
 COMMIT;
 """
-    
+
     if output_file:
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(sql)
@@ -71,7 +71,7 @@ COMMIT;
         print(f"\nO copia y pega el contenido del archivo en tu cliente SQL.")
     else:
         print(sql)
-    
+
     return sql
 
 if __name__ == "__main__":
@@ -81,14 +81,13 @@ if __name__ == "__main__":
         print("  python actualizar_password_sql.py itmaster@rapicreditca.com Casa1803+")
         print("  python actualizar_password_sql.py itmaster@rapicreditca.com Casa1803+ update_password.sql")
         sys.exit(1)
-    
+
     email = sys.argv[1]
     password = sys.argv[2]
     output_file = sys.argv[3] if len(sys.argv) > 3 else None
-    
+
     print(f"🔄 Generando SQL para actualizar contraseña...")
     print(f"   Email: {email}")
     print(f"   Nueva contraseña: {password}\n")
-    
-    generar_sql_password(email, password, output_file)
 
+    generar_sql_password(email, password, output_file)

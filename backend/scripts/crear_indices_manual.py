@@ -47,16 +47,16 @@ def crear_indices():
     """Crear todos los índices críticos de performance"""
     engine = create_engine(settings.DATABASE_URL)
     inspector = inspect(engine)
-    
+
     indices_creados = 0
     indices_omitidos = 0
     errores = []
-    
+
     print("=" * 80)
     print("🚀 CREANDO ÍNDICES CRÍTICOS DE PERFORMANCE")
     print("=" * 80)
     print()
-    
+
     with engine.connect() as connection:
         # ============================================
         # ÍNDICES: NOTIFICACIONES
@@ -67,7 +67,7 @@ def crear_indices():
                 ('idx_notificaciones_tipo', ['tipo']),
                 ('idx_notificaciones_fecha_creacion', ['fecha_creacion']),
             ]
-            
+
             for idx_name, columns in indices_notificaciones:
                 if not _index_exists(inspector, 'notificaciones', idx_name):
                     if all(_column_exists(inspector, 'notificaciones', col) for col in columns):
@@ -86,7 +86,7 @@ def crear_indices():
                 else:
                     print(f"ℹ️ Índice '{idx_name}' ya existe, omitiendo...")
                     indices_omitidos += 1
-        
+
         # ============================================
         # ÍNDICES: CUOTAS
         # ============================================
@@ -94,7 +94,7 @@ def crear_indices():
             # Índice compuesto para fecha_vencimiento + estado
             idx_name = 'idx_cuotas_vencimiento_estado'
             if not _index_exists(inspector, 'cuotas', idx_name):
-                if (_column_exists(inspector, 'cuotas', 'fecha_vencimiento') and 
+                if (_column_exists(inspector, 'cuotas', 'fecha_vencimiento') and
                     _column_exists(inspector, 'cuotas', 'estado')):
                     try:
                         connection.execute(text(
@@ -108,7 +108,7 @@ def crear_indices():
                     except Exception as e:
                         print(f"⚠️ Error creando índice '{idx_name}': {e}")
                         errores.append(f"{idx_name}: {e}")
-            
+
             # Índice en prestamo_id
             idx_name = 'idx_cuotas_prestamo_id'
             if not _index_exists(inspector, 'cuotas', idx_name):
@@ -123,7 +123,7 @@ def crear_indices():
                     except Exception as e:
                         print(f"⚠️ Error creando índice '{idx_name}': {e}")
                         errores.append(f"{idx_name}: {e}")
-            
+
             # Índice funcional para GROUP BY
             idx_name = 'idx_cuotas_extract_year_month'
             if not _index_exists(inspector, 'cuotas', idx_name):
@@ -143,7 +143,7 @@ def crear_indices():
                     except Exception as e:
                         print(f"⚠️ Error creando índice '{idx_name}': {e}")
                         errores.append(f"{idx_name}: {e}")
-        
+
         # ============================================
         # ÍNDICES: PRESTAMOS
         # ============================================
@@ -155,7 +155,7 @@ def crear_indices():
                 ('idx_prestamos_estado_fecha_aprobacion', ['estado', 'fecha_aprobacion']),
                 ('idx_prestamos_estado_fecha_registro', ['estado', 'fecha_registro']),
             ]
-            
+
             for idx_name, columns in indices_prestamos:
                 if not _index_exists(inspector, 'prestamos', idx_name):
                     if all(_column_exists(inspector, 'prestamos', col) for col in columns):
@@ -174,7 +174,7 @@ def crear_indices():
                 else:
                     print(f"ℹ️ Índice '{idx_name}' ya existe, omitiendo...")
                     indices_omitidos += 1
-        
+
         # ============================================
         # ÍNDICES: PAGOS
         # ============================================
@@ -185,7 +185,7 @@ def crear_indices():
                 ('idx_pagos_fecha_pago_activo', ['fecha_pago', 'activo']),
                 ('idx_pagos_fecha_pago_monto', ['fecha_pago', 'monto_pagado']),
             ]
-            
+
             for idx_name, columns in indices_pagos:
                 if not _index_exists(inspector, 'pagos', idx_name):
                     if all(_column_exists(inspector, 'pagos', col) for col in columns):
@@ -204,7 +204,7 @@ def crear_indices():
                 else:
                     print(f"ℹ️ Índice '{idx_name}' ya existe, omitiendo...")
                     indices_omitidos += 1
-        
+
         # ============================================
         # ÍNDICES: PAGOS_STAGING (si existe)
         # ============================================
@@ -230,7 +230,7 @@ def crear_indices():
             else:
                 print(f"ℹ️ Índice '{idx_name}' ya existe, omitiendo...")
                 indices_omitidos += 1
-            
+
             # Índice funcional para monto_pagado::numeric
             idx_name = 'idx_pagos_staging_monto_numeric'
             if not _index_exists(inspector, 'pagos_staging', idx_name):
@@ -252,7 +252,7 @@ def crear_indices():
             else:
                 print(f"ℹ️ Índice '{idx_name}' ya existe, omitiendo...")
                 indices_omitidos += 1
-            
+
             # Índice funcional para EXTRACT(YEAR FROM fecha_pago::timestamp)
             idx_name = 'idx_pagos_staging_extract_year'
             if not _index_exists(inspector, 'pagos_staging', idx_name):
@@ -274,7 +274,7 @@ def crear_indices():
             else:
                 print(f"ℹ️ Índice '{idx_name}' ya existe, omitiendo...")
                 indices_omitidos += 1
-            
+
             # Índice compuesto funcional para EXTRACT(YEAR, MONTH FROM fecha_pago::timestamp)
             idx_name = 'idx_pagos_staging_extract_year_month'
             if not _index_exists(inspector, 'pagos_staging', idx_name):
@@ -299,7 +299,7 @@ def crear_indices():
             else:
                 print(f"ℹ️ Índice '{idx_name}' ya existe, omitiendo...")
                 indices_omitidos += 1
-        
+
         # Ejecutar ANALYZE para actualizar estadísticas
         try:
             print("\n📊 Actualizando estadísticas de tablas...")
@@ -314,7 +314,7 @@ def crear_indices():
                         print(f"⚠️ No se pudo ejecutar ANALYZE en '{table}': {e}")
         except Exception as e:
             print(f"⚠️ Advertencia al ejecutar ANALYZE: {e}")
-    
+
     print()
     print("=" * 80)
     print("📊 RESUMEN")
@@ -326,7 +326,7 @@ def crear_indices():
         for error in errores:
             print(f"   - {error}")
     print()
-    
+
     if indices_creados > 0:
         print("✅ Índices creados exitosamente")
         print("📈 Impacto esperado: Mejora significativa en tiempos de queries")
@@ -340,4 +340,3 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Error ejecutando script: {e}", exc_info=True)
         sys.exit(1)
-

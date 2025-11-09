@@ -18,12 +18,12 @@ def verificar_cache():
     print("🔍 VERIFICACIÓN DEL SISTEMA DE CACHE")
     print("=" * 80)
     print()
-    
+
     # 1. Tipo de cache
     cache_type = "MemoryCache" if isinstance(cache_backend, MemoryCache) else "RedisCache"
     print(f"📦 Tipo de cache: {cache_type}")
     print()
-    
+
     # 2. Configuración
     print("⚙️  Configuración:")
     print(f"   REDIS_URL: {'✅ Configurada' if settings.REDIS_URL else '❌ No configurada'}")
@@ -37,12 +37,12 @@ def verificar_cache():
     print(f"   REDIS_PASSWORD: {'✅ Configurada' if settings.REDIS_PASSWORD else '❌ No configurada'}")
     print(f"   REDIS_SOCKET_TIMEOUT: {settings.REDIS_SOCKET_TIMEOUT}s")
     print()
-    
+
     # 3. Pruebas de operatividad
     print("🧪 Pruebas de operatividad:")
     test_key = "test_cache_verification"
     test_value = {"test": True, "timestamp": time.time()}
-    
+
     # Prueba de escritura
     try:
         write_success = cache_backend.set(test_key, test_value, ttl=10)
@@ -52,7 +52,7 @@ def verificar_cache():
             print("   ❌ Escritura: FALLÓ")
     except Exception as e:
         print(f"   ❌ Escritura: ERROR - {e}")
-    
+
     # Prueba de lectura
     try:
         read_value = cache_backend.get(test_key)
@@ -62,7 +62,7 @@ def verificar_cache():
             print("   ❌ Lectura: FALLÓ - Valor no encontrado o incorrecto")
     except Exception as e:
         print(f"   ❌ Lectura: ERROR - {e}")
-    
+
     # Prueba de eliminación
     try:
         delete_success = cache_backend.delete(test_key)
@@ -72,9 +72,9 @@ def verificar_cache():
             print("   ❌ Eliminación: FALLÓ")
     except Exception as e:
         print(f"   ❌ Eliminación: ERROR - {e}")
-    
+
     print()
-    
+
     # 4. Verificar conexión Redis (si aplica)
     if cache_type == "RedisCache":
         print("🔗 Verificación de conexión Redis:")
@@ -87,7 +87,7 @@ def verificar_cache():
         except Exception as e:
             print(f"   ❌ Redis NO responde: {e}")
         print()
-    
+
     # 5. Advertencias
     print("⚠️  Advertencias:")
     warnings = []
@@ -96,16 +96,16 @@ def verificar_cache():
         warnings.append("   ⚠️  El cache no se comparte entre workers, puede causar inconsistencias")
     if not settings.REDIS_URL and cache_type == "MemoryCache":
         warnings.append("   ⚠️  REDIS_URL no configurada - usando fallback MemoryCache")
-    
+
     if warnings:
         for warning in warnings:
             print(warning)
     else:
         print("   ✅ No hay advertencias")
-    
+
     print()
     print("=" * 80)
-    
+
     # 6. Resumen
     print("📊 RESUMEN:")
     if cache_type == "RedisCache":
@@ -113,7 +113,7 @@ def verificar_cache():
     else:
         print("   ⚠️  Cache en memoria (MemoryCache) - considerar configurar Redis para producción")
     print()
-    
+
     # 7. Recomendaciones
     if cache_type == "MemoryCache":
         print("💡 RECOMENDACIONES:")
@@ -126,4 +126,3 @@ def verificar_cache():
 
 if __name__ == "__main__":
     verificar_cache()
-

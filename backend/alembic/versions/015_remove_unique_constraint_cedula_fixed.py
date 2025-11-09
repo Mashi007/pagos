@@ -20,42 +20,42 @@ def upgrade():
     """Remove ALL unique constraints from cedula column in clientes table"""
     import sqlalchemy as sa
     from sqlalchemy import text
-    
+
     connection = op.get_bind()
-    
+
     # Verificar existencia de tabla usando SQL directo para evitar problemas de transacción
     try:
         result = connection.execute(text("""
             SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_schema = 'public' 
+                SELECT FROM information_schema.tables
+                WHERE table_schema = 'public'
                 AND table_name = 'clientes'
             )
         """))
         table_exists = result.scalar()
-        
+
         if not table_exists:
             print("⚠️ Tabla 'clientes' no existe, saltando migración")
             return
-        
+
         # Verificar existencia de columna usando SQL directo
         result = connection.execute(text("""
             SELECT EXISTS (
-                SELECT FROM information_schema.columns 
-                WHERE table_schema = 'public' 
-                AND table_name = 'clientes' 
+                SELECT FROM information_schema.columns
+                WHERE table_schema = 'public'
+                AND table_name = 'clientes'
                 AND column_name = 'cedula'
             )
         """))
         column_exists = result.scalar()
-        
+
         if not column_exists:
             print("⚠️ Columna 'cedula' no existe en tabla 'clientes', saltando migración")
             return
     except Exception as e:
         print(f"⚠️ Error verificando tabla/columna: {e}")
         # Continuar de todas formas, usar SQL directo con IF EXISTS
-    
+
     # Eliminar constraints usando SQL directo con IF EXISTS
     try:
         connection.execute(text("ALTER TABLE clientes DROP CONSTRAINT IF EXISTS clientes_cedula_key"))
@@ -81,14 +81,14 @@ def upgrade():
         # Verificar si el índice ya existe usando SQL directo
         result = connection.execute(text("""
             SELECT EXISTS (
-                SELECT FROM pg_indexes 
-                WHERE schemaname = 'public' 
-                AND tablename = 'clientes' 
+                SELECT FROM pg_indexes
+                WHERE schemaname = 'public'
+                AND tablename = 'clientes'
                 AND indexname = 'ix_clientes_cedula_non_unique'
             )
         """))
         index_exists = result.scalar()
-        
+
         if not index_exists:
             connection.execute(text("CREATE INDEX IF NOT EXISTS ix_clientes_cedula_non_unique ON clientes(cedula)"))
             print("✅ Índice no único 'ix_clientes_cedula_non_unique' creado")
@@ -103,14 +103,14 @@ def downgrade():
     import sqlalchemy as sa
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    
+
     if "clientes" not in inspector.get_table_names():
         return
-    
+
     columns = [col["name"] for col in inspector.get_columns("clientes")]
     if "cedula" not in columns:
         return
-    
+
     # Drop the non-unique index
     try:
         op.drop_index("ix_clientes_cedula_non_unique", "clientes")

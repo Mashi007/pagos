@@ -455,7 +455,7 @@ def reporte_morosidad(
             text(
                 """
                 SELECT
-                    CASE 
+                    CASE
                         WHEN c.dias_morosidad BETWEEN 1 AND 30 THEN '1-30 días'
                         WHEN c.dias_morosidad BETWEEN 31 AND 60 THEN '31-60 días'
                         WHEN c.dias_morosidad BETWEEN 61 AND 90 THEN '61-90 días'
@@ -474,7 +474,7 @@ def reporte_morosidad(
                   AND c.monto_morosidad > 0
                   AND cl.estado != 'INACTIVO'
                 GROUP BY rango_dias
-                ORDER BY 
+                ORDER BY
                     CASE rango_dias
                         WHEN '1-30 días' THEN 1
                         WHEN '31-60 días' THEN 2
@@ -500,7 +500,7 @@ def reporte_morosidad(
         analistas_query = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     COALESCE(p.analista, p.producto_financiero, 'Sin Analista') as analista,
                     COUNT(DISTINCT p.id) as cantidad_prestamos,
                     COUNT(DISTINCT p.cedula) as cantidad_clientes,
@@ -533,7 +533,7 @@ def reporte_morosidad(
         detalle_query = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     p.id as prestamo_id,
                     p.cedula,
                     p.nombres,
@@ -606,7 +606,7 @@ def reporte_financiero(
         resumen_query = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     COALESCE(SUM(pa.monto_pagado), 0) as total_ingresos,
                     COUNT(pa.id) as cantidad_pagos,
                     COALESCE(SUM(p.total_financiamiento), 0) as cartera_total,
@@ -634,7 +634,7 @@ def reporte_financiero(
         ingresos_query = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     DATE_TRUNC('month', pa.fecha_pago)::date as mes,
                     COUNT(pa.id) as cantidad_pagos,
                     COALESCE(SUM(pa.monto_pagado), 0) as monto_total
@@ -663,7 +663,7 @@ def reporte_financiero(
         egresos_query = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     DATE_TRUNC('month', c.fecha_vencimiento)::date as mes,
                     COUNT(c.id) as cantidad_cuotas,
                     COALESCE(SUM(c.monto_cuota), 0) as monto_programado
@@ -744,7 +744,7 @@ def reporte_asesores(
         resumen_query = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     COALESCE(p.analista, p.producto_financiero, 'Sin Analista') as analista,
                     COUNT(DISTINCT p.id) as total_prestamos,
                     COUNT(DISTINCT p.cedula) as total_clientes,
@@ -787,7 +787,7 @@ def reporte_asesores(
         desempeno_query = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     COALESCE(p.analista, p.producto_financiero, 'Sin Analista') as analista,
                     DATE_TRUNC('month', p.fecha_aprobacion)::date as mes,
                     COUNT(DISTINCT p.id) as prestamos_aprobados,
@@ -821,7 +821,7 @@ def reporte_asesores(
         clientes_query = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     COALESCE(p.analista, p.producto_financiero, 'Sin Analista') as analista,
                     p.cedula,
                     p.nombres,
@@ -883,7 +883,7 @@ def reporte_productos(
         resumen_query = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     COALESCE(p.modelo_vehiculo, p.producto, 'Sin Modelo') as producto,
                     COUNT(DISTINCT p.id) as total_prestamos,
                     COUNT(DISTINCT p.cedula) as total_clientes,
@@ -925,7 +925,7 @@ def reporte_productos(
         concesionario_query = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     p.concesionario,
                     COALESCE(p.modelo_vehiculo, p.producto, 'Sin Modelo') as producto,
                     COUNT(DISTINCT p.id) as cantidad_prestamos,
@@ -954,7 +954,7 @@ def reporte_productos(
         tendencia_query = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     COALESCE(p.modelo_vehiculo, p.producto, 'Sin Modelo') as producto,
                     DATE_TRUNC('month', p.fecha_aprobacion)::date as mes,
                     COUNT(DISTINCT p.id) as prestamos_aprobados,
@@ -1445,8 +1445,8 @@ def resumen_dashboard(
                 text(
                     """
                     SELECT COALESCE(SUM(
-                        COALESCE(c.capital_pendiente, 0) + 
-                        COALESCE(c.interes_pendiente, 0) + 
+                        COALESCE(c.capital_pendiente, 0) +
+                        COALESCE(c.interes_pendiente, 0) +
                         COALESCE(c.monto_mora, 0)
                     ), 0) as cartera_activa
                     FROM cuotas c
