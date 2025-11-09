@@ -181,7 +181,7 @@ export function GeneraVariables() {
     v.nombre_variable.toLowerCase().includes(busqueda.toLowerCase()) ||
     v.campo_bd.toLowerCase().includes(busqueda.toLowerCase()) ||
     v.tabla.toLowerCase().includes(busqueda.toLowerCase()) ||
-    (v.descripcion || '').toLowerCase().includes(busqueda.toLowerCase())
+    (v.descripcion ?? '').toLowerCase().includes(busqueda.toLowerCase())
   )
 
   const camposTabla = nuevaVariable.tabla ? CAMPOS_DISPONIBLES[nuevaVariable.tabla as keyof typeof CAMPOS_DISPONIBLES] || [] : []
@@ -192,7 +192,7 @@ export function GeneraVariables() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Database className="h-5 w-5 text-blue-600" />
-            Genera Variables {'{{variables}}'}
+            Genera Variables {`{{variables}}`}
           </CardTitle>
           <CardDescription>
             Configure variables personalizadas que se relacionan con todos los campos disponibles en la base de datos.

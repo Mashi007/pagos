@@ -5,7 +5,7 @@ import { PlantillasNotificaciones } from '@/components/notificaciones/Plantillas
 import { GeneraVariables } from '@/components/notificaciones/GeneraVariables'
 import { ResumenPlantillas } from '@/components/notificaciones/ResumenPlantillas'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Mail, FileText, Settings, Database, LayoutList } from 'lucide-react'
+import { Mail, FileText, Settings, Database, List } from 'lucide-react'
 import { NotificacionPlantilla } from '@/services/notificacionService'
 
 export function ConfiguracionNotificaciones() {
@@ -54,7 +54,7 @@ export function ConfiguracionNotificaciones() {
             Genera Variables
           </TabsTrigger>
           <TabsTrigger value="resumen" className="flex items-center gap-2">
-            <LayoutList className="h-4 w-4" />
+            <List className="h-4 w-4" />
             Resumen
           </TabsTrigger>
         </TabsList>
