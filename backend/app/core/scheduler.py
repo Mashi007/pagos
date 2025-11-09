@@ -101,8 +101,6 @@ def calcular_notificaciones_previas_job():
     """Job que calcula y ENVÍA notificaciones previas a las 4 AM"""
     db = SessionLocal()
     try:
-        from datetime import datetime
-
         from app.models.notificacion import Notificacion
         from app.models.notificacion_plantilla import NotificacionPlantilla
         from app.services.email_service import EmailService
@@ -155,12 +153,6 @@ def calcular_notificaciones_previas_job():
             cliente_id = resultado["cliente_id"]
             dias_antes = resultado["dias_antes_vencimiento"]
             correo_cliente = resultado.get("correo", "")
-            # El campo puede ser "nombre_cliente" o "nombre" según la query
-            nombre_cliente = resultado.get("nombre_cliente", resultado.get("nombre", ""))
-            monto_cuota = resultado.get("monto_cuota", 0)
-            fecha_vencimiento = resultado.get("fecha_vencimiento", "")
-            numero_cuota = resultado.get("numero_cuota", "")
-            prestamo_id = resultado.get("prestamo_id", "")
 
             # Determinar tipo de notificación según días
             tipo_notificacion = None
@@ -271,7 +263,7 @@ def calcular_notificaciones_previas_job():
         # Cerrar conexión SMTP reutilizada
         try:
             email_service.close_connection()
-        except:
+        except Exception:
             pass
         db.close()
 
@@ -280,8 +272,6 @@ def calcular_notificaciones_dia_pago_job():
     """Job que calcula y ENVÍA notificaciones del día de pago a las 4 AM"""
     db = SessionLocal()
     try:
-        from datetime import datetime
-
         from app.models.notificacion import Notificacion
         from app.models.notificacion_plantilla import NotificacionPlantilla
         from app.services.email_service import EmailService
@@ -423,7 +413,7 @@ def calcular_notificaciones_dia_pago_job():
         # Cerrar conexión SMTP reutilizada
         try:
             email_service.close_connection()
-        except:
+        except Exception:
             pass
         db.close()
 
@@ -432,8 +422,6 @@ def calcular_notificaciones_retrasadas_job():
     """Job que calcula y ENVÍA notificaciones retrasadas a las 4 AM"""
     db = SessionLocal()
     try:
-        from datetime import datetime
-
         from app.models.notificacion import Notificacion
         from app.models.notificacion_plantilla import NotificacionPlantilla
         from app.services.email_service import EmailService
@@ -594,7 +582,7 @@ def calcular_notificaciones_retrasadas_job():
         # Cerrar conexión SMTP reutilizada
         try:
             email_service.close_connection()
-        except:
+        except Exception:
             pass
         db.close()
 
@@ -603,8 +591,6 @@ def calcular_notificaciones_prejudiciales_job():
     """Job que calcula y ENVÍA notificaciones prejudiciales a las 4 AM"""
     db = SessionLocal()
     try:
-        from datetime import datetime
-
         from app.models.notificacion import Notificacion
         from app.models.notificacion_plantilla import NotificacionPlantilla
         from app.services.email_service import EmailService
@@ -754,7 +740,7 @@ def calcular_notificaciones_prejudiciales_job():
         # Cerrar conexión SMTP reutilizada
         try:
             email_service.close_connection()
-        except:
+        except Exception:
             pass
         db.close()
 

@@ -140,7 +140,7 @@ def check_imports():
             print(f"  {error}")
         return False
     else:
-        print(f"\n[OK] Todos los imports son correctos")
+        print("\n[OK] Todos los imports son correctos")
         return True
 
 def check_table_operations():
@@ -191,7 +191,7 @@ def check_table_operations():
             print(f"  ... y {len(warnings) - 20} más")
         return False
     else:
-        print(f"\n[OK] Todas las operaciones parecen tener verificaciones")
+        print("\n[OK] Todas las operaciones parecen tener verificaciones")
         return True
 
 def main():

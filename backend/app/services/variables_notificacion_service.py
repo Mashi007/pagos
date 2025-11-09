@@ -32,7 +32,7 @@ class VariablesNotificacionService:
             if self._variables_cache is None:
                 query = self.db.query(NotificacionVariable)
                 if solo_activas:
-                    query = query.filter(NotificacionVariable.activa == True)
+                    query = query.filter(NotificacionVariable.activa.is_(True))
                 self._variables_cache = query.all()
             return self._variables_cache
         except Exception as e:
@@ -187,7 +187,7 @@ class VariablesNotificacionService:
                     elif campo_query in ["monto_cuota", "monto_capital", "monto_interes"]:
                         try:
                             valor = f"{float(valor_raw):.2f}" if valor_raw else "0.00"
-                        except:
+                        except Exception:
                             valor = str(valor_raw) if valor_raw else "0.00"
                     else:
                         valor = str(valor_raw) if valor_raw else ""
@@ -202,7 +202,7 @@ class VariablesNotificacionService:
                 monto = datos_query.get("monto_cuota", 0)
                 try:
                     variables["monto"] = f"{float(monto):.2f}"
-                except:
+                except Exception:
                     variables["monto"] = str(monto)
 
             if "fecha_vencimiento" not in variables:

@@ -13,9 +13,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 def verificar_redis():
     """Verificar configuración y conexión de Redis"""
 
-    print("="*70)
+    print("=" * 70)
     print("🔍 VERIFICACIÓN DE REDIS")
-    print("="*70)
+    print("=" * 70)
 
     # 1. Verificar variables de entorno
     print("\n1️⃣ VERIFICANDO VARIABLES DE ENTORNO...")
@@ -42,7 +42,7 @@ def verificar_redis():
             print(f"   Usando componentes: {redis_host}:{redis_port}/{redis_db}")
 
     if redis_password:
-        print(f"✅ REDIS_PASSWORD configurado: *** (oculto)")
+        print("✅ REDIS_PASSWORD configurado: *** (oculto)")
     else:
         print("ℹ️  REDIS_PASSWORD no configurado (puede ser normal si Redis no requiere autenticación)")
 
@@ -76,7 +76,7 @@ def verificar_redis():
                 client = cache_backend.client
                 info = client.info()
 
-                print(f"\n📊 Información de Redis:")
+                print("\n📊 Información de Redis:")
                 print(f"   - Versión: {info.get('redis_version', 'N/A')}")
                 print(f"   - Memoria usada: {info.get('used_memory_human', 'N/A')}")
                 print(f"   - Claves en cache: {client.dbsize()}")
@@ -181,12 +181,12 @@ def main():
     """Función principal"""
     try:
         resultado = verificar_redis()
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         if resultado == 0:
             print("✅ VERIFICACIÓN COMPLETADA")
         else:
             print("❌ VERIFICACIÓN FALLÓ - Revisar errores arriba")
-        print("="*70)
+        print("=" * 70)
         return resultado
     except Exception as e:
         print(f"\n❌ Error fatal: {e}")

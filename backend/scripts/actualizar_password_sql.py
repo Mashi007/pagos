@@ -66,9 +66,9 @@ COMMIT;
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(sql)
         print(f"✅ SQL generado en: {output_file}")
-        print(f"\nPara ejecutar en PostgreSQL:")
+        print("\nPara ejecutar en PostgreSQL:")
         print(f"  psql -U tu_usuario -d tu_base_de_datos -f {output_file}")
-        print(f"\nO copia y pega el contenido del archivo en tu cliente SQL.")
+        print("\nO copia y pega el contenido del archivo en tu cliente SQL.")
     else:
         print(sql)
 
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     password = sys.argv[2]
     output_file = sys.argv[3] if len(sys.argv) > 3 else None
 
-    print(f"🔄 Generando SQL para actualizar contraseña...")
+    print("🔄 Generando SQL para actualizar contraseña...")
     print(f"   Email: {email}")
     print(f"   Nueva contraseña: {password}\n")
 

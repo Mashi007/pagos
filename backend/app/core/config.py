@@ -471,8 +471,6 @@ try:
 except Exception as e:
     if "CORS_ORIGINS" in str(e):
         # Si falla por CORS_ORIGINS, intentar sin la variable de entorno
-        import os
-
         cors_env_backup = os.environ.pop("CORS_ORIGINS", None)
         try:
             settings = Settings()

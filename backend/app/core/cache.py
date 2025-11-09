@@ -119,7 +119,7 @@ try:
                 # Construir URL con password: redis://default:password@host:port/db
                 # Render.com usa 'default' como usuario
                 redis_url = f"redis://default:{settings.REDIS_PASSWORD}@{host_port}/{db}"
-                logger.info(f"🔗 Configurando Redis con password desde REDIS_PASSWORD")
+                logger.info("🔗 Configurando Redis con password desde REDIS_PASSWORD")
             else:
                 # Si no es formato redis://, intentar agregar password de otra forma
                 logger.warning(f"⚠️ Formato de REDIS_URL no reconocido: {redis_url[:20]}...")
@@ -129,7 +129,7 @@ try:
             if not redis_url.endswith("/0") and "/" not in redis_url.replace("redis://", ""):
                 if not redis_url.endswith("/"):
                     redis_url = f"{redis_url}/0"
-            logger.info(f"🔗 Conectando a Redis sin autenticación (sin usuario/password)")
+            logger.info("🔗 Conectando a Redis sin autenticación (sin usuario/password)")
 
         # Log de URL (sin mostrar password completo)
         if "@" in redis_url:
@@ -220,7 +220,7 @@ except Exception as e:
 
         # ✅ MEJORA: Mensajes más específicos según el tipo de error
         if "NOAUTH" in error_msg or "Authentication" in error_msg:
-            logger.warning(f"⚠️ Redis requiere autenticación pero no se proporcionó password")
+            logger.warning("⚠️ Redis requiere autenticación pero no se proporcionó password")
             logger.info("   Opciones:")
             logger.info("   1. Agregar REDIS_PASSWORD en variables de entorno")
             logger.info("   2. O usar URL completa: redis://default:password@host:port")

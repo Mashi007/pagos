@@ -24,9 +24,9 @@ def verificar_rol_usuario(email: str):
             print(f"❌ Usuario no encontrado: {email}")
             return None
 
-        print(f"\n{'='*60}")
-        print(f"📧 INFORMACIÓN DEL USUARIO")
-        print(f"{'='*60}")
+        print("\n" + "=" * 60)
+        print("📧 INFORMACIÓN DEL USUARIO")
+        print("=" * 60)
         print(f"Email:           {usuario.email}")
         print(f"Nombre:          {usuario.nombre} {usuario.apellido}")
         print(f"Rol (campo):     {usuario.rol}")
@@ -43,7 +43,7 @@ def verificar_rol_usuario(email: str):
             rol_efectivo = f"USER (Usuario - Acceso limitado) - Rol en BD: {usuario.rol}"
 
         print(f"\n🎯 ROL EFECTIVO: {rol_efectivo}")
-        print(f"\n")
+        print("\n")
 
         return usuario
 

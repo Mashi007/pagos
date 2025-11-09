@@ -73,7 +73,7 @@ def reconciliar_pagos_cuotas(dry_run: bool = True):
     try:
         # 1. Pagos con prestamo_id y numero_cuota - verificar que la cuota existe
         pagos_con_info = db.query(Pago).filter(
-            Pago.activo == True,
+            Pago.activo.is_(True),
             Pago.prestamo_id.isnot(None),
             Pago.numero_cuota.isnot(None)
         ).all()
@@ -112,7 +112,7 @@ def reconciliar_pagos_cuotas(dry_run: bool = True):
 
         # 2. Pagos sin prestamo_id o numero_cuota - intentar reconciliar por cédula y fecha
         pagos_sin_info = db.query(Pago).filter(
-            Pago.activo == True,
+            Pago.activo.is_(True),
             or_(Pago.prestamo_id.is_(None), Pago.numero_cuota.is_(None))
         ).all()
 

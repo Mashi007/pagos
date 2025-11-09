@@ -15,7 +15,7 @@ if sys.platform == 'win32':
             sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'replace')
         if hasattr(sys.stderr, 'buffer'):
             sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'replace')
-    except:
+    except Exception:
         pass  # Si falla, continuar sin cambiar encoding
 
 # Agregar el directorio raíz del proyecto al path
@@ -124,7 +124,7 @@ def ejecutar_verificacion_triggers():
         columna = result3.fetchone()
 
         if columna:
-            print(f"  [OK] Columna 'cargo' encontrada:")
+            print("  [OK] Columna 'cargo' encontrada:")
             print(f"     - Tipo de dato: {columna.data_type}")
             print(f"     - Nullable: {columna.is_nullable}")
             print(f"     - Default: {columna.column_default or 'NULL'}")

@@ -253,7 +253,7 @@ def verificar_fechas_problema(db: Session):
     ).limit(10).all()
 
     if prestamos_sin_fecha:
-        print(f"⚠️  Encontrados préstamos sin ninguna fecha (mostrando primeros 10):")
+        print("⚠️  Encontrados préstamos sin ninguna fecha (mostrando primeros 10):")
         for p in prestamos_sin_fecha:
             print(f"  • ID: {p.id}, Cliente: {p.cedula}, Monto: ${p.total_financiamiento or 0:,.2f}")
         print()

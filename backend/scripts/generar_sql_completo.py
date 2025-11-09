@@ -105,7 +105,7 @@ COMMIT;
     print("\n1. Ejecutar desde línea de comandos PostgreSQL:")
     print(f"   psql -U tu_usuario -d tu_base_de_datos -f {archivo_salida}")
     print("\n2. O desde psql interactivo:")
-    print(f"   psql -U tu_usuario -d tu_base_de_datos")
+    print("   psql -U tu_usuario -d tu_base_de_datos")
     print(f"   \\i {archivo_salida}")
     print("\n3. O copia y pega el contenido del archivo en:")
     print("   - pgAdmin")

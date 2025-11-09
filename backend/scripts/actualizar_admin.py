@@ -58,7 +58,7 @@ def actualizar_admin():
 
         # Verificar otros usuarios admin
         print("\nUsuarios administradores en el sistema:")
-        admins = db.query(User).filter(User.is_admin == True).all()
+        admins = db.query(User).filter(User.is_admin.is_(True)).all()
 
         for admin in admins:
             print(f"   - {admin.email} ({admin.nombre} {admin.apellido}) - Activo: {admin.is_active}")

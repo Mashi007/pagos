@@ -80,10 +80,10 @@ def main():
             fixed_count += 1
             print(f"[OK] Corregido: {py_file.relative_to(backend_dir)}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Archivos procesados: {total_count}")
     print(f"Archivos corregidos: {fixed_count}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":

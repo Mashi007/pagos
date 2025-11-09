@@ -10,9 +10,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def main():
-    print("="*60)
+    print("=" * 60)
     print("🔍 VERIFICACIÓN DE CACHE")
-    print("="*60)
+    print("=" * 60)
 
     try:
         # 1. Verificar tipo de backend
@@ -31,7 +31,7 @@ def main():
             try:
                 client = cache_backend.client
                 info = client.info()
-                print(f"\n📊 Información de Redis:")
+                print("\n📊 Información de Redis:")
                 print(f"   - Versión: {info.get('redis_version', 'N/A')}")
                 print(f"   - Memoria usada: {info.get('used_memory_human', 'N/A')}")
                 print(f"   - Claves en cache: {client.dbsize()}")
@@ -93,7 +93,7 @@ def main():
                 print(f"   - REDIS_PORT: {settings.REDIS_PORT}")
                 print(f"   - REDIS_DB: {settings.REDIS_DB}")
                 if settings.REDIS_PASSWORD:
-                    print(f"   - REDIS_PASSWORD: *** (configurado)")
+                    print("   - REDIS_PASSWORD: *** (configurado)")
         except Exception as e:
             print(f"   ⚠️  Error obteniendo configuración: {e}")
 

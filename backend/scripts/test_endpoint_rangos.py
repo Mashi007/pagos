@@ -79,28 +79,28 @@ def test_endpoint(base_url: str = "http://localhost:8000", token: str = None):
                 # Mostrar primeros 5 rangos con datos
                 rangos_con_datos = [r for r in rangos if r.get("cantidad_prestamos", 0) > 0][:5]
                 if rangos_con_datos:
-                    print(f"  📊 Primeros rangos con datos:")
+                    print("  📊 Primeros rangos con datos:")
                     for rango in rangos_con_datos:
                         print(f"     • {rango.get('categoria', 'N/A')}: {rango.get('cantidad_prestamos', 0):,} préstamos, ${rango.get('monto_total', 0):,.2f}")
                 else:
-                    print(f"  ⚠️  No hay rangos con datos")
+                    print("  ⚠️  No hay rangos con datos")
 
                 if total_prestamos == 0:
-                    print(f"  ⚠️  ADVERTENCIA: El endpoint retorna 0 préstamos")
-                    print(f"     Esto puede indicar un problema con los filtros de fecha")
+                    print("  ⚠️  ADVERTENCIA: El endpoint retorna 0 préstamos")
+                    print("     Esto puede indicar un problema con los filtros de fecha")
             else:
                 print(f"  ❌ Error: {response.status_code}")
                 try:
                     error_data = response.json()
                     print(f"     Detalle: {error_data.get('detail', 'Sin detalle')}")
-                except:
+                except Exception:
                     print(f"     Respuesta: {response.text[:200]}")
 
         except requests.exceptions.ConnectionError:
             print(f"  ❌ Error: No se pudo conectar al servidor en {base_url}")
-            print(f"     Verifica que el backend esté corriendo")
+            print("     Verifica que el backend esté corriendo")
         except requests.exceptions.Timeout:
-            print(f"  ❌ Error: Timeout esperando respuesta del servidor")
+            print("  ❌ Error: Timeout esperando respuesta del servidor")
         except Exception as e:
             print(f"  ❌ Error inesperado: {e}")
 

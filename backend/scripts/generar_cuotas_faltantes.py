@@ -438,7 +438,7 @@ def main():
                     logger.error(f"❌ {mensaje}")
 
             logger.info("=" * 70)
-            logger.info(f"RESUMEN:")
+            logger.info("RESUMEN:")
             logger.info(f"  Total procesados: {total_procesados}")
             logger.info(f"  Exitosos: {total_exitosos}")
             logger.info(f"  Fallidos: {total_procesados - total_exitosos}")

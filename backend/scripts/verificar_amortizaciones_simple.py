@@ -32,7 +32,7 @@ def verificar_amortizaciones():
         if not database_url:
             from app.core.config import settings
             database_url = settings.DATABASE_URL
-    except:
+    except Exception:
         pass
 
     if not database_url:
@@ -42,7 +42,7 @@ def verificar_amortizaciones():
     if isinstance(database_url, bytes):
         try:
             database_url = database_url.decode('utf-8', errors='replace')
-        except:
+        except Exception:
             database_url = database_url.decode('latin1', errors='replace')
 
     print("=" * 80)
@@ -59,7 +59,7 @@ def verificar_amortizaciones():
             if isinstance(database_url, bytes):
                 try:
                     database_url_str = database_url.decode('latin1', errors='replace')
-                except:
+                except Exception:
                     database_url_str = str(database_url, errors='replace')
             else:
                 database_url_str = str(database_url)
@@ -77,12 +77,12 @@ def verificar_amortizaciones():
             if parsed.username:
                 try:
                     user = urllib.parse.unquote(parsed.username, encoding='utf-8', errors='replace')
-                except:
+                except Exception:
                     user = parsed.username
             if parsed.password:
                 try:
                     password = urllib.parse.unquote(parsed.password, encoding='utf-8', errors='replace')
-                except:
+                except Exception:
                     password = parsed.password
 
             # Conectar con parámetros separados
@@ -105,7 +105,7 @@ def verificar_amortizaciones():
             try:
                 # Intentar como string primero
                 conn = psycopg2.connect(database_url, client_encoding='UTF8')
-            except:
+            except Exception:
                 # Si falla, usar valores por defecto
                 print("[ADVERTENCIA] Usando valores por defecto para conexion")
                 conn = psycopg2.connect(
@@ -117,7 +117,7 @@ def verificar_amortizaciones():
         conn.set_client_encoding('UTF8')
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
-        print(f"\n[OK] Conexion a base de datos establecida")
+        print("\n[OK] Conexion a base de datos establecida")
 
         # 1. Contar préstamos
         cur.execute("SELECT COUNT(*) as total FROM prestamos")
@@ -237,7 +237,7 @@ def verificar_amortizaciones():
         print(f"[OK] Acceso a tabla 'prestamos': OK ({total_prestamos} registros)")
         print(f"[OK] Acceso a tabla 'cuotas': OK ({total_cuotas} registros)")
         print(f"[OK] Relacion prestamos-cuotas: OK ({prestamos_con_cuotas} prestamos con cuotas)")
-        print(f"[OK] Consultas SQL directas: OK")
+        print("[OK] Consultas SQL directas: OK")
         print("\n[EXITO] ACCESO COMPLETO A AMORTIZACIONES CONFIRMADO")
         print("=" * 80)
 

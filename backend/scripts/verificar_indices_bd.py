@@ -227,10 +227,10 @@ def main():
                         "indice": idx["nombre"],
                     })
             else:
-                print(f"   ⚠️  No se encontraron índices existentes")
+                print("   ⚠️  No se encontraron índices existentes")
 
             # Verificar índices recomendados
-            print(f"\n   Índices recomendados:")
+            print("\n   Índices recomendados:")
             for idx_rec in indices_recomendados:
                 nombre = idx_rec["nombre"]
                 existe = verificar_indice_existe(indices_existentes, tabla, nombre)

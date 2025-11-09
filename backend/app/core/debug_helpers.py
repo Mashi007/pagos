@@ -206,7 +206,7 @@ def log_graph_debug_info(endpoint: str, data: list, y_axis_domain: Optional[list
         for field in numeric_fields:
             values = [item.get(field, 0) for item in data if isinstance(item.get(field), (int, float))]
             if values:
-                logger.info(f"📊 {field}: min={min(values):.2f}, max={max(values):.2f}, avg={sum(values)/len(values):.2f}")
+                logger.info(f"📊 {field}: min={min(values):.2f}, max={max(values):.2f}, avg={sum(values) / len(values):.2f}")
 
     if y_axis_domain:
         logger.info(f"📏 Dominio del eje Y: {y_axis_domain}")

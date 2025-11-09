@@ -135,7 +135,7 @@ def print_report(analysis: Dict, threshold_ms: int, limit: int):
     print("\n" + "="*80)
     print("📊 REPORTE DE ANÁLISIS DE PERFORMANCE")
     print("="*80)
-    print(f"\n📈 Estadísticas Generales:")
+    print("\n📈 Estadísticas Generales:")
     print(f"   - Líneas totales procesadas: {analysis['total_lines']:,}")
     print(f"   - Líneas parseadas: {analysis['parsed_lines']:,}")
     print(f"   - Endpoints únicos: {analysis['total_endpoints']}")

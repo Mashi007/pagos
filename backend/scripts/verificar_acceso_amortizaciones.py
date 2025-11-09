@@ -32,7 +32,7 @@ def safe_str(value):
             # Intentar decodificar como UTF-8, luego latin1 como fallback
             try:
                 return value.decode('utf-8', errors='replace')
-            except:
+            except Exception:
                 return value.decode('latin1', errors='replace')
         if isinstance(value, str):
             # Si ya es string, verificar que es UTF-8 válido
@@ -42,7 +42,7 @@ def safe_str(value):
     except (UnicodeDecodeError, UnicodeEncodeError):
         try:
             return str(value).encode('latin1', errors='replace').decode('latin1')
-        except:
+        except Exception:
             return str(value).encode('ascii', errors='replace').decode('ascii')
 
 def create_safe_engine():
@@ -56,7 +56,7 @@ def create_safe_engine():
             database_url = getattr(settings, 'DATABASE_URL', None)
         if not database_url:
             database_url = "postgresql://user:password@localhost/pagos_db"
-    except:
+    except Exception:
         database_url = "postgresql://user:password@localhost/pagos_db"
 
     # Intentar reparar la URL si tiene problemas de encoding
@@ -115,7 +115,7 @@ def verificar_amortizaciones():
         db = SessionLocal()
     except Exception as e:
         print(f"[ERROR] No se pudo conectar a la base de datos: {e}")
-        print(f"Verifica que DATABASE_URL este correctamente configurada")
+        print("Verifica que DATABASE_URL este correctamente configurada")
         return
 
     try:
@@ -134,7 +134,7 @@ def verificar_amortizaciones():
         try:
             db_name = settings.DATABASE_URL.split('@')[-1] if '@' in settings.DATABASE_URL else settings.DATABASE_URL
             db_name_safe = safe_str(db_name) if db_name else "N/A"
-        except:
+        except Exception:
             db_name_safe = "localhost/pagos_db"
 
         print(f"\nBase de datos: {db_name_safe}")
@@ -287,12 +287,12 @@ def verificar_amortizaciones():
         print(f"[OK] Acceso a tabla 'prestamos': OK ({total_prestamos} registros)")
         print(f"[OK] Acceso a tabla 'cuotas': OK ({total_cuotas} registros)")
         print(f"[OK] Relacion prestamos-cuotas: OK ({prestamos_con_cuotas} prestamos con cuotas)")
-        print(f"[OK] Calculos y agregaciones: OK")
+        print("[OK] Calculos y agregaciones: OK")
         print("\n[EXITO] ACCESO COMPLETO A AMORTIZACIONES CONFIRMADO")
         print("=" * 80)
 
     except Exception as e:
-        print(f"\n[ERROR] ERROR al acceder a las amortizaciones:")
+        print("\n[ERROR] ERROR al acceder a las amortizaciones:")
         print(f"   {type(e).__name__}: {str(e)}")
         import traceback
         traceback.print_exc()
