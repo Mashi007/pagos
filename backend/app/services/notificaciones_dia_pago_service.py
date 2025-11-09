@@ -82,9 +82,7 @@ class NotificacionesDiaPagoService:
                 )
 
                 if elapsed_time > 30:
-                    logger.warning(
-                        f"⚠️ [NotificacionesDiaPago] Query tardó {elapsed_time:.2f}s - considerar optimización"
-                    )
+                    logger.warning(f"⚠️ [NotificacionesDiaPago] Query tardó {elapsed_time:.2f}s - considerar optimización")
 
             except Exception as query_error:
                 elapsed_time = time.time() - start_time
@@ -98,7 +96,7 @@ class NotificacionesDiaPagoService:
 
             # Obtener estados de notificaciones en batch
             cliente_ids = list(set(row[1] for row in rows))
-            tipo_notificacion = 'PAGO_DIA_0'
+            tipo_notificacion = "PAGO_DIA_0"
 
             estados_notificaciones = {}
             if cliente_ids:
@@ -179,4 +177,3 @@ class NotificacionesDiaPagoService:
         Obtener notificaciones del día de pago (actualmente sin cache, calcula en tiempo real)
         """
         return self.calcular_notificaciones_dia_pago()
-

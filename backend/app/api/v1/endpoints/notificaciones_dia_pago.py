@@ -125,4 +125,3 @@ def calcular_notificaciones_dia_pago(
     except Exception as e:
         logger.error(f"Error calculando notificaciones del día de pago: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
-
