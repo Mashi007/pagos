@@ -48,7 +48,7 @@ class NotificacionResponse(BaseModel):
     asunto: Optional[str]
     estado: str
     fecha_envio: Optional[datetime]
-    fecha_creacion: datetime
+    fecha_creacion: Optional[datetime]  # Opcional porque puede no existir en BD
 
     class Config:
         from_attributes = True
@@ -215,6 +215,7 @@ def listar_notificaciones(
         # Verificar qué columnas existen usando inspect (más seguro, no aborta transacciones)
         canal_exists = False
         leida_exists = False
+        created_at_exists = False
         try:
             from sqlalchemy import inspect as sql_inspect
 
@@ -224,15 +225,19 @@ def listar_notificaciones(
             columns = [col["name"] for col in inspector.get_columns("notificaciones")]
             canal_exists = "canal" in columns
             leida_exists = "leida" in columns
+            created_at_exists = "created_at" in columns
             if not canal_exists:
                 logger.warning("Columna 'canal' no existe en BD. Usando query sin canal.")
             if not leida_exists:
                 logger.warning("Columna 'leida' no existe en BD. Usando query sin leida.")
+            if not created_at_exists:
+                logger.warning("Columna 'created_at' no existe en BD. Usando 'id' para ordenar.")
         except Exception as e:
             # Si falla la inspección, asumir que no existen y continuar
             logger.warning(f"No se pudo verificar columnas: {e}. Usando query básica.")
             canal_exists = False
             leida_exists = False
+            created_at_exists = False
 
         # Construir query según si canal existe
         if canal_exists:
@@ -253,18 +258,21 @@ def listar_notificaciones(
                 "intentos",
                 "respuesta_servicio",
                 "error_mensaje",
-                "created_at",
             ]
             if leida_exists:
                 select_columns.insert(select_columns.index("enviada_en") + 1, "leida")
+            if created_at_exists:
+                select_columns.append("created_at")
 
             columns_str = ", ".join(select_columns)
+            # Usar created_at si existe, sino usar id para ordenar
+            order_by = "created_at DESC" if created_at_exists else "id DESC"
             base_query = sql_text(
                 f"""
                 SELECT {columns_str}
                 FROM notificaciones
                 WHERE (:estado IS NULL OR estado = :estado)
-                ORDER BY created_at DESC
+                ORDER BY {order_by}
                 LIMIT :limit OFFSET :skip
             """
             )
@@ -314,16 +322,18 @@ def listar_notificaciones(
                     col_idx += 1
                     _ = row[col_idx] if len(row) > col_idx else None  # error_mensaje (no usado)
                     col_idx += 1
-                    created_at = row[col_idx] if len(row) > col_idx else None
-                    col_idx += 1  # created_at
+                    created_at = None
+                    if created_at_exists:
+                        created_at = row[col_idx] if len(row) > col_idx else None
+                        col_idx += 1  # created_at
 
                     # Validar que los campos requeridos no sean None
                     if not mensaje:
                         logger.warning(f"Notificación {row_id} tiene mensaje vacío, saltando...")
                         continue
-                    if not created_at:
-                        logger.warning(f"Notificación {row_id} tiene created_at None, saltando...")
-                        continue
+                    # Si created_at no existe, usar None (no es crítico)
+                    if created_at_exists and not created_at:
+                        logger.warning(f"Notificación {row_id} tiene created_at None, usando None...")
 
                     item_dict = {
                         "id": row_id,
@@ -334,7 +344,7 @@ def listar_notificaciones(
                         "asunto": asunto,
                         "estado": estado_row or "PENDIENTE",
                         "fecha_envio": enviada_en,
-                        "fecha_creacion": created_at,
+                        "fecha_creacion": created_at,  # Puede ser None si created_at no existe
                     }
                     items.append(NotificacionResponse.model_validate(item_dict))
                 except Exception as e:

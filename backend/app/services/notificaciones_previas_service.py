@@ -130,12 +130,13 @@ class NotificacionesPreviasService:
             estados_notificaciones = {}
             if cliente_ids and tipos_notificacion:
                 try:
+                    # Cast explícito de tipo enum a text para comparación
                     query_estados = text(
                         """
-                        SELECT cliente_id, tipo, estado
+                        SELECT cliente_id, tipo::text, estado
                         FROM notificaciones
                         WHERE cliente_id = ANY(:cliente_ids)
-                          AND tipo = ANY(:tipos)
+                          AND tipo::text = ANY(:tipos)
                         ORDER BY id DESC
                     """
                     )

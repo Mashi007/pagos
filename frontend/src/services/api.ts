@@ -246,8 +246,10 @@ class ApiClient {
                           url.includes('/evolucion') ||
                           url.includes('/tendencia')
     
-    const timeout = isSlowEndpoint ? SLOW_ENDPOINT_TIMEOUT_MS : DEFAULT_TIMEOUT_MS
-    const finalConfig = { ...config, timeout: config?.timeout || timeout }
+    const defaultTimeout = isSlowEndpoint ? SLOW_ENDPOINT_TIMEOUT_MS : DEFAULT_TIMEOUT_MS
+    // Priorizar timeout explícito si se proporciona, sino usar el calculado
+    const timeout = config?.timeout ?? defaultTimeout
+    const finalConfig = { ...config, timeout }
     
     const response: AxiosResponse<T> = await this.client.get(url, finalConfig)
     return response.data
