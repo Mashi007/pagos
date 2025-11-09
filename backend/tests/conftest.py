@@ -5,6 +5,7 @@ Configuración común para todas las pruebas
 
 import pytest
 import asyncio
+import os
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -18,7 +19,11 @@ from app.core.security import get_password_hash
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
-engine = create_engine
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -28,6 +33,7 @@ def event_loop():
     """Crear event loop para pruebas asíncronas"""
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
+    loop.close()
 
 
 @pytest.fixture(scope="function")
@@ -46,12 +52,12 @@ def db_session(test_db):
     yield session
 
     transaction.rollback()
+    connection.close()
 
 
 @pytest.fixture(scope="function")
 def test_client(db_session):
     """Crear cliente de prueba FastAPI"""
-
 
     def override_get_db():
         try:
@@ -70,10 +76,14 @@ def test_client(db_session):
 @pytest.fixture(scope="function")
 def test_user(db_session):
     """Crear usuario de prueba"""
-    user = User
+    user = User(
+        email="test@example.com",
+        nombre="Test",
+        apellido="User",
         hashed_password=get_password_hash("testpassword123"),
         is_admin=False,
         is_active=True,
+    )
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)
@@ -83,10 +93,14 @@ def test_user(db_session):
 @pytest.fixture(scope="function")
 def test_admin_user(db_session):
     """Crear usuario administrador de prueba"""
-    admin = User
+    admin = User(
+        email="admin@example.com",
+        nombre="Admin",
+        apellido="User",
         hashed_password=get_password_hash("adminpassword123"),
         is_admin=True,
         is_active=True,
+    )
     db_session.add(admin)
     db_session.commit()
     db_session.refresh(admin)
@@ -96,8 +110,10 @@ def test_admin_user(db_session):
 @pytest.fixture(scope="function")
 def auth_headers(test_client, test_user):
     """Crear headers de autenticación para pruebas"""
+    response = test_client.post(
         "/api/v1/auth/login",
         data={"username": test_user.email, "password": "testpassword123"},
+    )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -105,25 +121,41 @@ def auth_headers(test_client, test_user):
 @pytest.fixture(scope="function")
 def admin_headers(test_client, test_admin_user):
     """Crear headers de autenticación para admin"""
+    response = test_client.post(
         "/api/v1/auth/login",
         data={"username": test_admin_user.email, "password": "adminpassword123"},
+    )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture(scope="function")
 def sample_cliente_data():
-    return 
+    return {
+        "cedula": "V12345678",
+        "nombres": "Juan",
+        "apellidos": "Pérez",
+        "email": "juan@example.com",
+        "telefono": "+58412123456",
+    }
 
 
 @pytest.fixture(scope="function")
 def sample_pago_data():
-    return 
+    return {
+        "monto": 1000.00,
+        "fecha_pago": "2024-01-15",
+        "metodo_pago": "transferencia",
+    }
 
 
 @pytest.fixture(scope="function")
 def sample_prestamo_data():
-    return 
+    return {
+        "monto_total": 50000.00,
+        "cuota_inicial": 5000.00,
+        "numero_cuotas": 24,
+    }
 
 
 # Configuración de entorno de prueba
@@ -131,12 +163,14 @@ def sample_prestamo_data():
 def setup_test_environment():
     """Configurar entorno de prueba"""
     # Configurar variables de entorno para testing
+    os.environ["ENVIRONMENT"] = "test"
+    os.environ["DEBUG"] = "True"
+    os.environ["LOG_LEVEL"] = "DEBUG"
 
     yield
 
     # Limpiar variables de entorno después de las pruebas
     test_env_vars = ["ENVIRONMENT", "DEBUG", "LOG_LEVEL"]
     for var in test_env_vars:
-
-"""
-"""
+        if var in os.environ:
+            del os.environ[var]

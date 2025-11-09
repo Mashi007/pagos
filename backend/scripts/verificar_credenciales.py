@@ -5,6 +5,7 @@ Script para probar diferentes credenciales de administrador
 
 import requests
 import logging
+import os
 from dotenv import load_dotenv
 
 # Constantes de configuración
@@ -14,9 +15,10 @@ TOKEN_PREFIX_LENGTH = 20
 
 load_dotenv()
 
-logging.basicConfig
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+BASE_URL = os.getenv("BASE_URL", "https://rapicredit.onrender.com")
 
 
 def probar_credenciales_admin():
@@ -25,6 +27,7 @@ def probar_credenciales_admin():
     logger.info("=" * SEPARATOR_LENGTH)
 
     # Diferentes combinaciones de credenciales
+    credenciales = [
         {"email": "itmaster@rapicreditca.com", "password": "admin123"},
         {"email": "itmaster@rapicreditca.com", "password": "Admin123"},
         {"email": "itmaster@rapicreditca.com", "password": "ADMIN123"},
@@ -33,18 +36,23 @@ def probar_credenciales_admin():
         {"email": "admin@rapicreditca.com", "password": "admin123"},
         {"email": "admin@rapicreditca.com", "password": "Admin123"},
         {"email": "admin@rapicreditca.com", "password": "ADMIN123"},
+    ]
 
+    for i, creds in enumerate(credenciales, 1):
         logger.info(f"📊 Intento {i}: {creds['email']} / {creds['password']}")
         try:
+            response = requests.post(
                 f"{BASE_URL}/api/v1/auth/login",
                 json={**creds, "remember": True},
+                timeout=REQUEST_TIMEOUT
+            )
             logger.info(f"   📊 Status Code: {response.status_code}")
 
             if response.status_code == 200:
                 data = response.json()
                 logger.info("   ✅ LOGIN EXITOSO!")
                 logger.info(f"   📊 Usuario: {data['user']['email']}")
-                logger.info
+                logger.info(f"   📊 Rol: {'Administrador' if data['user'].get('is_admin') else 'Usuario'}")
                 logger.info(f"   📊 Token obtenido: {data['access_token'][:20]}...")
                 return data["access_token"]
             else:
@@ -70,20 +78,23 @@ def probar_login_usuario_prueba():
         {"email": "prueba2@gmail.com", "password": "CASA1803"},
         {"email": "prueba2@gmail.com", "password": "Prueba123"},
         {"email": "prueba2@gmail.com", "password": "prueba123"},
+    ]
 
     for i, creds in enumerate(credenciales_usuario, 1):
         logger.info(f"📊 Intento {i}: {creds['email']} / {creds['password']}")
         try:
+            response = requests.post(
                 f"{BASE_URL}/api/v1/auth/login",
                 json={**creds, "remember": True},
+                timeout=REQUEST_TIMEOUT
+            )
             logger.info(f"   📊 Status Code: {response.status_code}")
 
             if response.status_code == 200:
                 data = response.json()
                 logger.info("   ✅ LOGIN EXITOSO!")
                 logger.info(f"   📊 Usuario: {data['user']['email']}")
-                logger.info
-                logger.info
+                logger.info(f"   📊 Rol: {'Administrador' if data['user'].get('is_admin') else 'Usuario'}")
                 return True
             else:
                 logger.info(f"   ❌ Error: {response.status_code}")

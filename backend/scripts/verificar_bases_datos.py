@@ -123,7 +123,6 @@ def verificar_concesionarios():
     print("="*60)
     
     try:
-        from app.models.concesionario import Concesionario
         db = SessionLocal()
         concesionarios = db.query(Concesionario).all()
         print_success(f"Total de concesionarios en BD: {len(concesionarios)}")
@@ -151,7 +150,6 @@ def verificar_modelos_vehiculos():
     print("="*60)
     
     try:
-        from app.models.modelo_vehiculo import ModeloVehiculo
         db = SessionLocal()
         modelos = db.query(ModeloVehiculo).all()
         print_success(f"Total de modelos en BD: {len(modelos)}")

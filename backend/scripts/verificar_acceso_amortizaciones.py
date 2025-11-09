@@ -47,7 +47,6 @@ def safe_str(value):
 
 def create_safe_engine():
     """Crea un engine con manejo robusto de codificación"""
-    import os
     import urllib.parse
     
     # Obtener DATABASE_URL de forma segura

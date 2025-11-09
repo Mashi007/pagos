@@ -203,7 +203,7 @@ def listar_notificaciones(
     """
     Listar notificaciones con filtros y paginación
     """
-    from sqlalchemy import text
+    from sqlalchemy import text as sql_text
     from sqlalchemy.exc import ProgrammingError
 
     from app.utils.pagination import calculate_pagination_params, create_paginated_response
@@ -212,13 +212,10 @@ def listar_notificaciones(
         # Calcular paginación
         skip, limit = calculate_pagination_params(page=page, per_page=per_page, max_per_page=100)
 
-        # Query base - usar query raw para evitar problemas con columnas faltantes
-        from sqlalchemy import text
-
         # Verificar si la columna canal existe
         try:
             # Intentar hacer una query simple para verificar si la columna existe
-            db.execute(text("SELECT canal FROM notificaciones LIMIT 1"))
+            db.execute(sql_text("SELECT canal FROM notificaciones LIMIT 1"))
             canal_exists = True
         except ProgrammingError:
             canal_exists = False
@@ -229,7 +226,7 @@ def listar_notificaciones(
             query = db.query(Notificacion)
         else:
             # Usar query raw seleccionando solo columnas que existen (usando parámetros seguros)
-            base_query = text(
+            base_query = sql_text(
                 """
                 SELECT id, cliente_id, user_id, tipo, asunto, mensaje, estado, 
                        programada_para, enviada_en, leida, intentos, 
@@ -245,7 +242,7 @@ def listar_notificaciones(
             rows = result.fetchall()
 
             # Contar total (usando parámetros seguros)
-            count_query = text(
+            count_query = sql_text(
                 """
                 SELECT COUNT(*) FROM notificaciones
                 WHERE (:estado IS NULL OR estado = :estado)

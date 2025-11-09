@@ -18,7 +18,11 @@ logger = logging.getLogger(__name__)
 
 def generar_migracion():
     """Generar migración para agregar columna modelo_vehiculo"""
-
+    from datetime import datetime
+    
+    # Generar nombre de archivo con timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"alembic/versions/{timestamp}_add_modelo_vehiculo_to_clientes.py"
 
     migracion_content = f'''"""Add modelo_vehiculo column to clientes table
 
@@ -33,6 +37,8 @@ down_revision = None  # Cambiar por la revisión anterior
 branch_labels = None
 depends_on = None
 
+MODELO_VEHICULO_LENGTH = {MODELO_VEHICULO_LENGTH}
+
 
 def upgrade():
     """Agregar columna modelo_vehiculo a la tabla clientes"""
@@ -43,9 +49,8 @@ def upgrade():
 
     if 'modelo_vehiculo' not in columns:
         op.add_column('clientes', sa.Column('modelo_vehiculo', sa.String(MODELO_VEHICULO_LENGTH), nullable=True))
-        logger.info("Columna modelo_vehiculo agregada a la tabla clientes")
     else:
-        logger.info("Columna modelo_vehiculo ya existe en la tabla clientes")
+        pass  # Columna ya existe
 
 
 def downgrade():
@@ -57,9 +62,8 @@ def downgrade():
 
     if 'modelo_vehiculo' in columns:
         op.drop_column('clientes', 'modelo_vehiculo')
-        logger.info("Columna modelo_vehiculo eliminada de la tabla clientes")
     else:
-        logger.info("Columna modelo_vehiculo no existe en la tabla clientes")
+        pass  # Columna no existe
 '''
 
     try:

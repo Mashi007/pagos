@@ -49,6 +49,8 @@ if database_url:
         logger.warning(f"⚠️ No se pudo procesar DATABASE_URL para encoding: {e}")
         # Continuar con la URL original
 
+from sqlalchemy import or_
+
 from app.db.session import SessionLocal
 from app.models.amortizacion import Cuota
 from app.models.pago import Pago

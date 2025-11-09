@@ -13,7 +13,7 @@ import {
   Clock,
   RefreshCw,
   Settings,
-  FileWarning
+  ShieldAlert
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -157,7 +157,7 @@ export function Notificaciones() {
   const tabs = [
     { id: 'previa' as TabType, label: 'Notificación Previa', icon: Bell },
     { id: 'retrasado' as TabType, label: 'Notificación Pago Retrasado', icon: AlertTriangle },
-    { id: 'prejudicial' as TabType, label: 'Notificación Prejudicial', icon: FileWarning },
+    { id: 'prejudicial' as TabType, label: 'Notificación Prejudicial', icon: ShieldAlert },
     { id: 'configuracion' as TabType, label: 'Configuración', icon: Settings },
   ]
 
