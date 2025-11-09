@@ -291,8 +291,8 @@ def listar_notificaciones(
                     col_idx += 1  # id
                     cliente_id = row[col_idx] if len(row) > col_idx else None
                     col_idx += 1  # cliente_id
-                    user_id = row[col_idx] if len(row) > col_idx else None
-                    col_idx += 1  # user_id (no usado)
+                    _ = row[col_idx] if len(row) > col_idx else None  # user_id (no usado)
+                    col_idx += 1
                     tipo = row[col_idx] if len(row) > col_idx else None
                     col_idx += 1  # tipo
                     asunto = row[col_idx] if len(row) > col_idx else None
@@ -301,19 +301,19 @@ def listar_notificaciones(
                     col_idx += 1  # mensaje
                     estado_row = row[col_idx] if len(row) > col_idx else None
                     col_idx += 1  # estado
-                    programada_para = row[col_idx] if len(row) > col_idx else None
-                    col_idx += 1  # programada_para (no usado)
+                    _ = row[col_idx] if len(row) > col_idx else None  # programada_para (no usado)
+                    col_idx += 1
                     enviada_en = row[col_idx] if len(row) > col_idx else None
                     col_idx += 1  # enviada_en
                     if leida_exists:
-                        leida = row[col_idx] if len(row) > col_idx else None
-                        col_idx += 1  # leida (solo si existe)
-                    intentos = row[col_idx] if len(row) > col_idx else None
-                    col_idx += 1  # intentos (no usado)
-                    respuesta_servicio = row[col_idx] if len(row) > col_idx else None
-                    col_idx += 1  # respuesta_servicio (no usado)
-                    error_mensaje = row[col_idx] if len(row) > col_idx else None
-                    col_idx += 1  # error_mensaje (no usado)
+                        _ = row[col_idx] if len(row) > col_idx else None  # leida (solo si existe)
+                        col_idx += 1
+                    _ = row[col_idx] if len(row) > col_idx else None  # intentos (no usado)
+                    col_idx += 1
+                    _ = row[col_idx] if len(row) > col_idx else None  # respuesta_servicio (no usado)
+                    col_idx += 1
+                    _ = row[col_idx] if len(row) > col_idx else None  # error_mensaje (no usado)
+                    col_idx += 1
                     created_at = row[col_idx] if len(row) > col_idx else None
                     col_idx += 1  # created_at
 

@@ -137,7 +137,6 @@ class NotificacionesPreviasService:
                         cliente_telefono = cliente_row[3]
                         # Buscar notificación relacionada si existe
                         estado_notificacion = "PENDIENTE"  # Por defecto pendiente (aún no enviada)
-                        notificacion_existente = None
 
                         if tipo_notificacion:
                             # Buscar la notificación más reciente de este tipo para este cliente

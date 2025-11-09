@@ -424,13 +424,11 @@ def reporte_morosidad(
         if not fecha_corte:
             fecha_corte = date.today()
 
-        hoy = fecha_corte
-
         # 1. Resumen General de Morosidad
         resumen_query = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     COUNT(DISTINCT p.id) as total_prestamos_mora,
                     COUNT(DISTINCT p.cedula) as total_clientes_mora,
                     COALESCE(SUM(c.monto_morosidad), 0) as monto_total_mora,
@@ -456,7 +454,7 @@ def reporte_morosidad(
         distribucion_query = db.execute(
             text(
                 """
-                SELECT 
+                SELECT
                     CASE 
                         WHEN c.dias_morosidad BETWEEN 1 AND 30 THEN '1-30 días'
                         WHEN c.dias_morosidad BETWEEN 31 AND 60 THEN '31-60 días'
@@ -603,8 +601,6 @@ def reporte_financiero(
         logger.info("[reportes.financiero] Iniciando generación de reporte")
         if not fecha_corte:
             fecha_corte = date.today()
-
-        hoy = fecha_corte
 
         # 1. Resumen Financiero General
         resumen_query = db.execute(
@@ -798,7 +794,7 @@ def reporte_asesores(
                     COALESCE(SUM(p.total_financiamiento), 0) as monto_aprobado,
                     COALESCE(SUM(pa.monto_pagado), 0) as monto_cobrado
                 FROM prestamos p
-                LEFT JOIN pagos pa ON pa.prestamo_id = p.id 
+                LEFT JOIN pagos pa ON pa.prestamo_id = p.id
                     AND pa.activo = true
                     AND DATE_TRUNC('month', pa.fecha_pago) = DATE_TRUNC('month', p.fecha_aprobacion)
                 INNER JOIN clientes cl ON cl.id = p.cliente_id

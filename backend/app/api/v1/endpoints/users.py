@@ -214,7 +214,8 @@ def _actualizar_campo_simple(user, field: str, value):
 def _aplicar_actualizaciones(user, update_data: dict):
     """Aplica todas las actualizaciones a un usuario"""
     CAMPOS_VALIDOS = ["email", "nombre", "apellido", "cargo", "is_active"]
-    CAMPOS_ESPECIALES = ["password", "is_admin", "rol"]
+    # CAMPOS_ESPECIALES no se usa actualmente, pero se mantiene para futuras validaciones
+    # CAMPOS_ESPECIALES = ["password", "is_admin", "rol"]
 
     for field, value in update_data.items():
         # Manejar campos especiales primero (no necesitan existir en el modelo)

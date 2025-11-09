@@ -533,8 +533,8 @@ def _procesar_distribucion_rango_monto(
             # Usar ANY con lista para PostgreSQL (más eficiente que IN con muchos valores)
             query_sql = text(
                 """
-                SELECT id, total_financiamiento 
-                FROM prestamos 
+                SELECT id, total_financiamiento
+                FROM prestamos
                 WHERE id = ANY(:ids)
             """
             )
@@ -1079,7 +1079,7 @@ def _calcular_total_cobrado_acumulativo(
 
         result = db.execute(query_sql)
         return Decimal(str(result.scalar() or 0))
-    except Exception as e:
+    except Exception:
         logger.error(
             "Error en query total_cobrado_acumulativo",
             extra={"analista": analista, "concesionario": concesionario, "modelo": modelo},

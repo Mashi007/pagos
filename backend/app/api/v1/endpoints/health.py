@@ -583,13 +583,13 @@ async def verify_database_indexes(
             )
         else:
             results["status"] = "error"
-            results["message"] = f"❌ No se encontraron índices críticos"
+            results["message"] = "❌ No se encontraron índices críticos"
 
         # Obtener información adicional de índices funcionales usando SQL directo
         try:
             func_indexes_query = text(
                 """
-                SELECT 
+                SELECT
                     schemaname,
                     tablename,
                     indexname,
@@ -829,10 +829,7 @@ async def monitor_indexes_performance(
     Ejecuta queries de prueba para medir tiempos de respuesta y comparar
     con los tiempos esperados después de crear los índices.
     """
-    from sqlalchemy import inspect
-
     try:
-        inspector = inspect(db.bind)
         results = {
             "status": "success",
             "timestamp": time.time(),

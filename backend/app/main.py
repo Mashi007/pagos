@@ -36,7 +36,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Routers
-from app.api.v1.endpoints import (
+# Imports después de logging por diseño - ver comentario arriba
+from app.api.v1.endpoints import (  # noqa: E402
     amortizacion,
     analistas,
     aprobaciones,
@@ -68,10 +69,10 @@ from app.api.v1.endpoints import (
 
 # Forzar inicialización de cache DESPUÉS de configurar logging
 # Ahora los logs de inicialización del cache se mostrarán correctamente
-from app.core import cache  # noqa: F401
-from app.core.exceptions import global_exception_handler
-from app.core.performance_monitor import performance_monitor
-from app.db.init_db import init_db_shutdown, init_db_startup
+from app.core import cache  # noqa: F401, E402
+from app.core.exceptions import global_exception_handler  # noqa: E402
+from app.core.performance_monitor import performance_monitor  # noqa: E402
+from app.db.init_db import init_db_shutdown, init_db_startup  # noqa: E402
 
 # No crear otro logger duplicado - usar el root logger o el logger del módulo
 # app_logger removido para evitar duplicación

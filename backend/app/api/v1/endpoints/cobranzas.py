@@ -283,7 +283,7 @@ def obtener_clientes_atrasados(
 
         # Si no hay otros analistas, incluir admin automáticamente
         if otros_analistas == 0:
-            logger.info(f"🔍 [clientes_atrasados] No hay otros analistas, incluyendo admin automáticamente")
+            logger.info("🔍 [clientes_atrasados] No hay otros analistas, incluyendo admin automáticamente")
             incluir_admin = True
 
         # Optimización: Usar subquery para filtrar cuotas vencidas primero
@@ -465,7 +465,7 @@ def obtener_cobranzas_por_analista(
 
         # Si no hay otros analistas, incluir admin automáticamente
         if otros_analistas == 0:
-            logger.info(f"🔍 [por_analista] No hay otros analistas, incluyendo admin automáticamente")
+            logger.info("🔍 [por_analista] No hay otros analistas, incluyendo admin automáticamente")
             incluir_admin = True
 
         query_filters = [
@@ -602,7 +602,7 @@ def obtener_montos_vencidos_por_mes(
 
         # Si no hay otros analistas, incluir admin automáticamente
         if otros_analistas == 0:
-            logger.info(f"🔍 [montos_por_mes] No hay otros analistas, incluyendo admin automáticamente")
+            logger.info("🔍 [montos_por_mes] No hay otros analistas, incluyendo admin automáticamente")
             incluir_admin = True
 
         query_filters = [
@@ -683,7 +683,7 @@ def obtener_resumen_cobranzas(
 
         # Si no hay otros analistas, incluir admin automáticamente
         if otros_analistas == 0:
-            logger.info(f"🔍 [resumen_cobranzas] No hay otros analistas en el sistema, incluyendo admin automáticamente")
+            logger.info("🔍 [resumen_cobranzas] No hay otros analistas en el sistema, incluyendo admin automáticamente")
             incluir_admin = True
 
         # DIAGNÓSTICO: Verificar estados de préstamos con cuotas vencidas
