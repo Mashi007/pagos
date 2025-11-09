@@ -754,13 +754,18 @@ def iniciar_scheduler():
             return
 
         # ✅ PROTECCIÓN: Verificar si los jobs ya existen antes de agregarlos
-        job_ids = ["notificaciones_previas", "notificaciones_dia_pago", "notificaciones_retrasadas", "notificaciones_prejudiciales"]
+        job_ids = [
+            "notificaciones_previas",
+            "notificaciones_dia_pago",
+            "notificaciones_retrasadas",
+            "notificaciones_prejudiciales",
+        ]
         try:
             existing_jobs = {job.id for job in scheduler.get_jobs()}
         except Exception:
             # Si no se pueden obtener jobs (scheduler no iniciado), asumir que no hay jobs
             existing_jobs = set()
-        
+
         # Agregar job para notificaciones previas (4 AM diariamente)
         if "notificaciones_previas" not in existing_jobs:
             scheduler.add_job(
