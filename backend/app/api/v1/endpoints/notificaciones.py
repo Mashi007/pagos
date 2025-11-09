@@ -217,12 +217,13 @@ def listar_notificaciones(
         leida_exists = False
         try:
             from sqlalchemy import inspect as sql_inspect
+
             # Obtener el engine de forma compatible con SQLAlchemy 1.x y 2.x
-            engine = db.bind if hasattr(db, 'bind') else db.get_bind()
+            engine = db.bind if hasattr(db, "bind") else db.get_bind()
             inspector = sql_inspect(engine)
-            columns = [col['name'] for col in inspector.get_columns('notificaciones')]
-            canal_exists = 'canal' in columns
-            leida_exists = 'leida' in columns
+            columns = [col["name"] for col in inspector.get_columns("notificaciones")]
+            canal_exists = "canal" in columns
+            leida_exists = "leida" in columns
             if not canal_exists:
                 logger.warning("Columna 'canal' no existe en BD. Usando query sin canal.")
             if not leida_exists:
@@ -240,13 +241,23 @@ def listar_notificaciones(
             # Usar query raw seleccionando solo columnas que existen (usando parámetros seguros)
             # Construir SELECT dinámicamente según columnas disponibles
             select_columns = [
-                "id", "cliente_id", "user_id", "tipo", "asunto", "mensaje", "estado",
-                "programada_para", "enviada_en", "intentos",
-                "respuesta_servicio", "error_mensaje", "created_at"
+                "id",
+                "cliente_id",
+                "user_id",
+                "tipo",
+                "asunto",
+                "mensaje",
+                "estado",
+                "programada_para",
+                "enviada_en",
+                "intentos",
+                "respuesta_servicio",
+                "error_mensaje",
+                "created_at",
             ]
             if leida_exists:
                 select_columns.insert(select_columns.index("enviada_en") + 1, "leida")
-            
+
             columns_str = ", ".join(select_columns)
             base_query = sql_text(
                 f"""
@@ -305,7 +316,7 @@ def listar_notificaciones(
                     col_idx += 1  # error_mensaje (no usado)
                     created_at = row[col_idx] if len(row) > col_idx else None
                     col_idx += 1  # created_at
-                    
+
                     # Validar que los campos requeridos no sean None
                     if not mensaje:
                         logger.warning(f"Notificación {row_id} tiene mensaje vacío, saltando...")
@@ -313,7 +324,7 @@ def listar_notificaciones(
                     if not created_at:
                         logger.warning(f"Notificación {row_id} tiene created_at None, saltando...")
                         continue
-                    
+
                     item_dict = {
                         "id": row_id,
                         "cliente_id": cliente_id,
@@ -361,7 +372,7 @@ def listar_notificaciones(
                 if not notif.fecha_creacion:
                     logger.warning(f"Notificación {notif.id} tiene fecha_creacion None, saltando...")
                     continue
-                
+
                 items.append(NotificacionResponse.model_validate(notif))
             except Exception as e:
                 logger.warning(f"Error serializando notificación {notif.id}: {e}", exc_info=True)
