@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { FileText, Settings, Zap, Copy, X, Bell, Calendar, AlertTriangle, Shield } from 'lucide-react'
+import { Settings, Zap, Copy, X, Bell, Calendar, AlertTriangle, Shield } from 'lucide-react'
 import { emailConfigService } from '@/services/notificacionService'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,16 +15,44 @@ export function ConfiguracionNotificaciones() {
   const [cargando, setCargando] = useState(true)
   const [activeTab, setActiveTab] = useState<string>('previa')
 
-  // Mapeo de tipos a casos
+  // Mapeo de tipos a casos con colores por categoría
   const mapeoTipos = {
-    'PAGO_5_DIAS_ANTES': { caso: '5 días antes', categoria: 'Notificación Previa' },
-    'PAGO_3_DIAS_ANTES': { caso: '3 días antes', categoria: 'Notificación Previa' },
-    'PAGO_1_DIA_ANTES': { caso: '1 día antes', categoria: 'Notificación Previa' },
-    'PAGO_DIA_0': { caso: 'Día de pago', categoria: 'Día de Pago' },
-    'PAGO_1_DIA_ATRASADO': { caso: '1 día de retraso', categoria: 'Notificación Retrasada' },
-    'PAGO_3_DIAS_ATRASADO': { caso: '3 días de retraso', categoria: 'Notificación Retrasada' },
-    'PAGO_5_DIAS_ATRASADO': { caso: '5 días de retraso', categoria: 'Notificación Retrasada' },
-    'PREJUDICIAL': { caso: 'Prejudicial', categoria: 'Prejudicial' },
+    'PAGO_5_DIAS_ANTES': { caso: '5 días antes', categoria: 'Notificación Previa', color: 'blue' },
+    'PAGO_3_DIAS_ANTES': { caso: '3 días antes', categoria: 'Notificación Previa', color: 'blue' },
+    'PAGO_1_DIA_ANTES': { caso: '1 día antes', categoria: 'Notificación Previa', color: 'blue' },
+    'PAGO_DIA_0': { caso: 'Día de pago', categoria: 'Día de Pago', color: 'green' },
+    'PAGO_1_DIA_ATRASADO': { caso: '1 día de retraso', categoria: 'Notificación Retrasada', color: 'orange' },
+    'PAGO_3_DIAS_ATRASADO': { caso: '3 días de retraso', categoria: 'Notificación Retrasada', color: 'orange' },
+    'PAGO_5_DIAS_ATRASADO': { caso: '5 días de retraso', categoria: 'Notificación Retrasada', color: 'orange' },
+    'PREJUDICIAL': { caso: 'Prejudicial', categoria: 'Prejudicial', color: 'red' },
+  }
+
+  // Colores por categoría
+  const coloresCategoria = {
+    'blue': {
+      bg: 'bg-blue-50',
+      border: 'border-blue-200',
+      text: 'text-blue-900',
+      badge: 'bg-blue-100 text-blue-800'
+    },
+    'green': {
+      bg: 'bg-green-50',
+      border: 'border-green-200',
+      text: 'text-green-900',
+      badge: 'bg-green-100 text-green-800'
+    },
+    'orange': {
+      bg: 'bg-orange-50',
+      border: 'border-orange-200',
+      text: 'text-orange-900',
+      badge: 'bg-orange-100 text-orange-800'
+    },
+    'red': {
+      bg: 'bg-red-50',
+      border: 'border-red-200',
+      text: 'text-red-900',
+      badge: 'bg-red-100 text-red-800'
+    }
   }
 
   // Organización por pestañas
@@ -149,44 +177,70 @@ export function ConfiguracionNotificaciones() {
               <p>Cargando configuración...</p>
             </div>
           ) : (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="previa" className="flex items-center gap-2">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="grid w-full grid-cols-4 h-12 bg-gray-100 p-1">
+              <TabsTrigger 
+                value="previa" 
+                className="flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white transition-all"
+              >
                 <Bell className="h-4 w-4" />
-                Notificación Previa
+                <span className="font-medium">Notificación Previa</span>
               </TabsTrigger>
-              <TabsTrigger value="dia-pago" className="flex items-center gap-2">
+              <TabsTrigger 
+                value="dia-pago" 
+                className="flex items-center gap-2 data-[state=active]:bg-green-500 data-[state=active]:text-white transition-all"
+              >
                 <Calendar className="h-4 w-4" />
-                Día de Pago
+                <span className="font-medium">Día de Pago</span>
               </TabsTrigger>
-              <TabsTrigger value="retrasada" className="flex items-center gap-2">
+              <TabsTrigger 
+                value="retrasada" 
+                className="flex items-center gap-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white transition-all"
+              >
                 <AlertTriangle className="h-4 w-4" />
-                Retrasada
+                <span className="font-medium">Retrasada</span>
               </TabsTrigger>
-              <TabsTrigger value="prejudicial" className="flex items-center gap-2">
+              <TabsTrigger 
+                value="prejudicial" 
+                className="flex items-center gap-2 data-[state=active]:bg-red-500 data-[state=active]:text-white transition-all"
+              >
                 <Shield className="h-4 w-4" />
-                Prejudicial
+                <span className="font-medium">Prejudicial</span>
               </TabsTrigger>
             </TabsList>
 
             {/* Renderizar tarjetas por pestaña */}
-            {Object.entries(tiposPorPestaña).map(([pestaña, tipos]) => (
-              <TabsContent key={pestaña} value={pestaña} className="space-y-4 mt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {tipos.map(tipo => {
-                    const mapeo = mapeoTipos[tipo as keyof typeof mapeoTipos]
-                    const config = configEnvios[tipo] || { habilitado: true, cco: [] }
-                    const habilitado = config.habilitado
-                    const ccoList = config.cco || []
-                    
-                    return (
-                      <div key={tipo} className="border rounded-lg p-5 space-y-4 bg-white hover:shadow-md transition-all">
-                        {/* Header con toggle */}
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="text-base font-semibold text-gray-900">{mapeo?.caso || tipo}</div>
-                            <div className="text-sm text-gray-600 mt-1">{mapeo?.categoria || 'Sin categoría'}</div>
-                          </div>
+            {Object.entries(tiposPorPestaña).map(([pestaña, tipos]) => {
+              const primeraTarjeta = mapeoTipos[tipos[0] as keyof typeof mapeoTipos]
+              const colorCategoria = primeraTarjeta?.color || 'blue'
+              const colores = coloresCategoria[colorCategoria as keyof typeof coloresCategoria]
+              
+              return (
+                <TabsContent key={pestaña} value={pestaña} className="space-y-4 mt-6">
+                  <div className={`grid grid-cols-1 ${tipos.length === 1 ? 'md:grid-cols-1 max-w-2xl mx-auto' : tipos.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'} gap-5`}>
+                    {tipos.map(tipo => {
+                      const mapeo = mapeoTipos[tipo as keyof typeof mapeoTipos]
+                      const config = configEnvios[tipo] || { habilitado: true, cco: [] }
+                      const habilitado = config.habilitado
+                      const ccoList = config.cco || []
+                      const colorTipo = mapeo?.color || 'blue'
+                      const coloresTarjeta = coloresCategoria[colorTipo as keyof typeof coloresCategoria]
+                      
+                      return (
+                        <div 
+                          key={tipo} 
+                          className={`border-2 rounded-xl p-6 space-y-4 ${coloresTarjeta.bg} ${coloresTarjeta.border} hover:shadow-lg transition-all transform hover:-translate-y-1`}
+                        >
+                          {/* Header con toggle */}
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className={`text-lg font-bold ${coloresTarjeta.text}`}>
+                                {mapeo?.caso || tipo}
+                              </div>
+                              <div className={`text-sm ${coloresTarjeta.text} opacity-75 mt-1`}>
+                                {mapeo?.categoria || 'Sin categoría'}
+                              </div>
+                            </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span className={`text-xs w-8 text-center font-medium ${!habilitado ? 'text-gray-900' : 'text-gray-400'}`}>OFF</span>
                             <button
@@ -206,82 +260,64 @@ export function ConfiguracionNotificaciones() {
                           </div>
                         </div>
                         
-                        {/* CCO mejorado - Campos más grandes y cómodos */}
-                        <div className="pt-4 border-t border-gray-200">
-                          <div className="flex items-center gap-2 mb-3">
-                            <Copy className="h-5 w-5 text-gray-600" />
-                            <label className="text-sm font-semibold text-gray-800">Correos en CCO (hasta 3):</label>
-                          </div>
-                          <div className="space-y-3">
-                            {[0, 1, 2].map(index => (
-                              <div key={index} className="flex items-center gap-2">
-                                <Input
-                                  type="email"
-                                  placeholder={`ejemplo${index + 1}@correo.com`}
-                                  value={ccoList[index] || ''}
-                                  onChange={(e) => actualizarCCO(tipo, index, e.target.value)}
-                                  className="h-10 text-base px-4 flex-1 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                                  disabled={!habilitado}
-                                />
-                                {ccoList[index] && (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => eliminarCCO(tipo, index)}
-                                    className="h-10 w-10 p-0 flex-shrink-0 hover:bg-red-50 hover:text-red-600 transition-colors"
+                          {/* CCO mejorado - Campos más grandes y cómodos */}
+                          <div className={`pt-4 border-t-2 ${colorTipo === 'blue' ? 'border-blue-300' : colorTipo === 'green' ? 'border-green-300' : colorTipo === 'orange' ? 'border-orange-300' : 'border-red-300'} opacity-50`}>
+                            <div className="flex items-center gap-2 mb-4">
+                              <Copy className={`h-5 w-5 ${coloresTarjeta.text} opacity-75`} />
+                              <label className={`text-sm font-bold ${coloresTarjeta.text}`}>
+                                Correos en CCO (hasta 3):
+                              </label>
+                            </div>
+                            <div className="space-y-3">
+                              {[0, 1, 2].map(index => (
+                                <div key={index} className="flex items-center gap-2">
+                                  <Input
+                                    type="email"
+                                    placeholder={`ejemplo${index + 1}@correo.com`}
+                                    value={ccoList[index] || ''}
+                                    onChange={(e) => actualizarCCO(tipo, index, e.target.value)}
+                                    className="h-11 text-base px-4 flex-1 bg-white border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg"
                                     disabled={!habilitado}
-                                    title="Eliminar correo"
-                                  >
-                                    <X className="h-5 w-5" />
-                                  </Button>
-                                )}
-                              </div>
-                            ))}
+                                  />
+                                  {ccoList[index] && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => eliminarCCO(tipo, index)}
+                                      className="h-11 w-11 p-0 flex-shrink-0 hover:bg-red-100 hover:text-red-600 transition-colors rounded-lg"
+                                      disabled={!habilitado}
+                                      title="Eliminar correo"
+                                    >
+                                      <X className="h-5 w-5" />
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </TabsContent>
-            ))}
+                      )
+                    })}
+                  </div>
+                </TabsContent>
+              )
+            })}
 
             {/* Botón Guardar - fuera de las pestañas para que siempre sea visible */}
-            <div className="flex justify-end pt-4 border-t mt-6">
+            <div className="flex justify-end pt-6 border-t-2 border-gray-200 mt-8">
               <Button
                 onClick={guardarConfiguracionEnvios}
                 disabled={guardandoEnvios}
-                size="sm"
-                className="flex items-center gap-2"
+                size="lg"
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all"
               >
-                <Settings className="h-4 w-4" />
-                {guardandoEnvios ? 'Guardando...' : 'Guardar Configuración'}
+                <Settings className="h-5 w-5" />
+                {guardandoEnvios ? 'Guardando...' : 'Guardar Configuración de Envíos'}
               </Button>
             </div>
           </Tabs>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Información sobre dónde configurar plantillas */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <FileText className="h-4 w-4 text-blue-600" />
-            Configuración de Plantillas
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Para crear, editar o gestionar plantillas, ve a <strong>Herramientas → Plantillas</strong>
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-800">
-              💡 Para ver el resumen completo de todas las plantillas configuradas, ve a <strong>Herramientas → Plantillas → Resumen</strong>.
-              Allí podrás ver todas las plantillas organizadas por tipo y caso, con opciones para editar o eliminar.
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>
