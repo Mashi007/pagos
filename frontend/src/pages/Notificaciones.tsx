@@ -645,6 +645,11 @@ export function Notificaciones() {
               <div className="text-center py-8 text-red-500">
                 <AlertTriangle className="w-12 h-12 mx-auto mb-4" />
                 <p>Error al cargar notificaciones</p>
+                {activeTab === 'prejudicial' && errorPrejudiciales && (
+                  <p className="text-sm text-red-400 mt-2">
+                    {errorPrejudiciales instanceof Error ? errorPrejudiciales.message : 'Error desconocido'}
+                  </p>
+                )}
                 <Button variant="outline" onClick={() => {
                   if (activeTab === 'previa') refetchPrevias()
                   else if (activeTab === 'dia-pago') refetchDiaPago()
@@ -661,6 +666,11 @@ export function Notificaciones() {
                   <div className="text-center py-12 text-gray-500">
                     <Bell className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                     <p className="text-lg font-medium">No se encontraron notificaciones</p>
+                    {activeTab === 'prejudicial' && (
+                      <p className="text-sm text-gray-400 mt-2">
+                        No hay clientes con 3 o más cuotas atrasadas en este momento.
+                      </p>
+                    )}
                     {(activeTab !== 'previa' && activeTab !== 'dia-pago' && activeTab !== 'retrasado' && activeTab !== 'prejudicial') && notificaciones.length > 0 && (
                       <p className="text-sm text-gray-400 mt-2">
                         Intenta ajustar los filtros para ver más resultados

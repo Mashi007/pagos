@@ -104,9 +104,15 @@ def obtener_cuotas_pendientes(self) -> List[Cuota]:
 
 **Estado:** Variables legacy para compatibilidad
 
+**Análisis de uso:**
+- ✅ **Verificado:** Variables legacy se agregan solo si no están configuradas en BD
+- ✅ **Verificado:** Útiles para compatibilidad con plantillas antiguas que usan `{{nombre}}`, `{{monto}}`, etc.
+- ✅ **Verificado:** Se usan como fallback cuando no hay configuración en `notificacion_variables`
+
 **Acción requerida:**
-- Revisar si estas variables legacy están siendo utilizadas
-- Si no, eliminar el código legacy
+- ✅ **MANTENER:** Variables legacy son útiles para compatibilidad
+- ⚠️ **Recomendación:** Documentar que estas variables son legacy pero se mantienen por compatibilidad
+- ✅ **Estado:** No obsoleto - Funcionalidad de compatibilidad necesaria
 
 ---
 
@@ -120,10 +126,16 @@ def obtener_cuotas_pendientes(self) -> List[Cuota]:
 """Informe de distribución de mora por rangos de antigüedad (legacy - usar /por-categoria-dias)"""
 ```
 
+**Análisis de uso:**
+- ✅ **Verificado:** Endpoint EN USO activo en frontend
+- ✅ **Frontend:** `cobranzasService.getInformeAntiguedadSaldos()` (línea 214)
+- ✅ **Frontend:** `InformesCobranzas.tsx` lo usa (línea 149-150)
+- ⚠️ **Nota:** Existe endpoint nuevo `/por-categoria-dias` pero el legacy sigue en uso
+
 **Acción requerida:**
-- Verificar si este endpoint está siendo utilizado
-- Si no, marcarlo como deprecated o eliminarlo
-- Documentar la migración a `/por-categoria-dias`
+- ✅ **MANTENER:** Endpoint en uso activo, no eliminar
+- ⚠️ **Recomendación:** Migrar frontend a `/por-categoria-dias` y luego deprecar este endpoint
+- ✅ **Estado:** Legacy pero funcional - Requiere migración del frontend primero
 
 ---
 
@@ -137,10 +149,16 @@ def obtener_cuotas_pendientes(self) -> List[Cuota]:
 # ⚠️ DEPRECATED: Usar morosidad_mensual. Este campo es mensual (NO acumulativo)
 ```
 
+**Análisis de uso:**
+- ✅ **Verificado:** Campo `morosidad` EN USO en frontend
+- ✅ **Frontend:** `DashboardMenu.tsx` usa `morosidad` en múltiples lugares (líneas 176, 398, 978, 1012, 1054)
+- ✅ **Backend:** Campo `morosidad_mensual` también se envía (línea 4381)
+- ⚠️ **Nota:** Frontend usa ambos campos, requiere migración gradual
+
 **Acción requerida:**
-- Verificar uso del campo deprecated
-- Migrar a `morosidad_mensual` si es necesario
-- Documentar el cambio
+- ✅ **MANTENER:** Campo en uso, no eliminar todavía
+- ⚠️ **Recomendación:** Migrar frontend a usar solo `morosidad_mensual` y luego eliminar `morosidad`
+- ✅ **Estado:** Deprecated pero en uso - Requiere migración del frontend primero
 
 ---
 
@@ -287,11 +305,22 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
    - ✅ **COMPLETADO:** Eliminadas `aplicar_filtros_prestamo()` y `aplicar_filtros_pago()` de `dashboard.py` - 2025-01-27
    - ✅ **COMPLETADO:** Eliminado `obtener_cuotas_pendientes()` de `notificacion_automatica_service.py` - 2025-01-27
 
-### Fase 2: Limpieza de Código Legacy (Media Prioridad)
+### Fase 2: Limpieza de Código Legacy (Media Prioridad) ✅ REVISADO
 
-1. **Revisar y eliminar variables legacy** en `variables_notificacion_service.py`
-2. **Decidir sobre endpoint legacy** en `cobranzas.py` (eliminar o documentar)
-3. **Migrar campo deprecated** en dashboard a `morosidad_mensual`
+1. ✅ **Variables legacy en `variables_notificacion_service.py`** - **MANTENER**
+   - Variables útiles para compatibilidad con plantillas antiguas
+   - Se agregan solo si no están configuradas en BD
+   - Estado: Funcionalidad de compatibilidad necesaria
+
+2. ✅ **Endpoint legacy en `cobranzas.py`** - **MANTENER (EN USO)**
+   - Endpoint `/informes/antiguedad-saldos` está en uso activo en frontend
+   - Existe endpoint nuevo `/por-categoria-dias` pero no se usa todavía
+   - Acción: Migrar frontend primero, luego deprecar endpoint legacy
+
+3. ✅ **Campo deprecated en dashboard** - **MANTENER (EN USO)**
+   - Campo `morosidad` está en uso en frontend (múltiples lugares)
+   - Campo `morosidad_mensual` también se envía
+   - Acción: Migrar frontend a usar solo `morosidad_mensual`, luego eliminar `morosidad`
 
 ### Fase 3: Limpieza de Código Comentado (Baja Prioridad) ✅ COMPLETADO
 
@@ -326,9 +355,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 - [x] ✅ **ELIMINADO** método deprecated de `notificacion_automatica_service.py` (líneas 76-87) - 2025-01-27
 
 ### Código Legacy
-- [ ] Revisar variables legacy en `variables_notificacion_service.py`
-- [ ] Decidir sobre endpoint legacy en `cobranzas.py`
-- [ ] Migrar campo deprecated en dashboard
+- [x] ✅ Revisar variables legacy en `variables_notificacion_service.py` - **MANTENER: Útiles para compatibilidad con plantillas**
+- [x] ✅ Decidir sobre endpoint legacy en `cobranzas.py` - **MANTENER: En uso activo en frontend**
+- [x] ✅ Revisar campo deprecated en dashboard - **MANTENER: En uso en frontend, requiere migración gradual**
 
 ### Código Comentado
 - [x] ✅ Decidir sobre módulo Aprobaciones - ELIMINADO - 2025-01-27
@@ -351,22 +380,37 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ---
 
-## 🎯 CONCLUSIÓN
+## 🎯 CONCLUSIÓN Y RESUMEN FINAL
 
-El proyecto tiene **componentes obsoletos identificados** que requieren atención:
+### ✅ Componentes Eliminados (Completado)
 
-- **2 funciones DEPRECATED** que deben ser eliminadas o migradas
-- **3 métodos legacy** que deben ser reemplazados por versiones optimizadas
-- **Módulo deshabilitado** que requiere decisión (eliminar o reactivar)
-- **Dependencias** que requieren revisión de versiones actuales
+- ✅ **2 funciones DEPRECATED** eliminadas de `dashboard.py`
+- ✅ **1 método DEPRECATED** eliminado de `notificacion_automatica_service.py`
+- ✅ **Módulo Aprobaciones** deshabilitado completamente
+- ✅ **4 archivos SQL obsoletos** eliminados
 
-**Recomendación:** Ejecutar la Fase 1 (eliminación de código DEPRECATED) como prioridad alta para mantener el código limpio y evitar confusión futura.
+### ⚠️ Componentes Legacy Mantenidos (Requieren Migración)
+
+- ⚠️ **Variables legacy** en `variables_notificacion_service.py` - **MANTENER** (compatibilidad)
+- ⚠️ **Endpoint legacy** `/informes/antiguedad-saldos` - **MANTENER** (en uso activo)
+- ⚠️ **Campo deprecated** `morosidad` - **MANTENER** (en uso en frontend)
+
+**Recomendación:** 
+- Los componentes legacy mantenidos están en uso activo
+- Requieren migración del frontend antes de eliminar
+- No son críticos para eliminar inmediatamente
+
+### 📋 Estado de la Auditoría
+
+**✅ Fase 1 COMPLETADA:** Código deprecated no utilizado eliminado  
+**✅ Fase 2 REVISADA:** Componentes legacy identificados y documentados  
+**✅ Fase 3 COMPLETADA:** Código comentado eliminado  
+**⏳ Fase 4 PENDIENTE:** Actualización de dependencias
 
 ---
 
-**Próximos pasos:**
-1. Ejecutar búsquedas para verificar uso de funciones deprecated
-2. Crear plan de migración si hay uso activo
-3. Ejecutar eliminación de código deprecated
-4. Actualizar esta auditoría con resultados
+**✅ AUDITORÍA COMPLETADA - 2025-01-27**
+- Componentes obsoletos no utilizados: **ELIMINADOS**
+- Componentes legacy en uso: **DOCUMENTADOS** para migración futura
+- Archivos SQL obsoletos: **ELIMINADOS**
 

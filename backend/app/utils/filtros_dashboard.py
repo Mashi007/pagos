@@ -53,32 +53,48 @@ class FiltrosDashboard:
             query = query.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
         # ✅ FIX: Usar OR entre fecha_registro, fecha_aprobacion y fecha_base_calculo
         # Un préstamo se incluye si AL MENOS UNA de sus fechas está dentro del rango
+        # ✅ CORRECCIÓN: Manejar NULL correctamente - si una fecha es NULL, se ignora en la comparación
         # Esto coincide con la lógica de la consulta SQL de verificación
         if fecha_inicio and fecha_fin:
             # Rango completo: verificar que al menos una fecha esté en el rango [fecha_inicio, fecha_fin]
+            # ✅ CORRECCIÓN: Usar isnot(None) para excluir NULLs de las comparaciones
             query = query.filter(
                 or_(
-                    and_(Prestamo.fecha_registro >= fecha_inicio, Prestamo.fecha_registro <= fecha_fin),
-                    and_(Prestamo.fecha_aprobacion >= fecha_inicio, Prestamo.fecha_aprobacion <= fecha_fin),
-                    and_(Prestamo.fecha_base_calculo >= fecha_inicio, Prestamo.fecha_base_calculo <= fecha_fin),
+                    and_(
+                        Prestamo.fecha_registro.isnot(None),
+                        Prestamo.fecha_registro >= fecha_inicio,
+                        Prestamo.fecha_registro <= fecha_fin
+                    ),
+                    and_(
+                        Prestamo.fecha_aprobacion.isnot(None),
+                        Prestamo.fecha_aprobacion >= fecha_inicio,
+                        Prestamo.fecha_aprobacion <= fecha_fin
+                    ),
+                    and_(
+                        Prestamo.fecha_base_calculo.isnot(None),
+                        Prestamo.fecha_base_calculo >= fecha_inicio,
+                        Prestamo.fecha_base_calculo <= fecha_fin
+                    ),
                 )
             )
         elif fecha_inicio:
             # Solo fecha inicio: verificar que al menos una fecha >= fecha_inicio
+            # ✅ CORRECCIÓN: Usar isnot(None) para excluir NULLs de las comparaciones
             query = query.filter(
                 or_(
-                    Prestamo.fecha_registro >= fecha_inicio,
-                    Prestamo.fecha_aprobacion >= fecha_inicio,
-                    Prestamo.fecha_base_calculo >= fecha_inicio,
+                    and_(Prestamo.fecha_registro.isnot(None), Prestamo.fecha_registro >= fecha_inicio),
+                    and_(Prestamo.fecha_aprobacion.isnot(None), Prestamo.fecha_aprobacion >= fecha_inicio),
+                    and_(Prestamo.fecha_base_calculo.isnot(None), Prestamo.fecha_base_calculo >= fecha_inicio),
                 )
             )
         elif fecha_fin:
             # Solo fecha fin: verificar que al menos una fecha <= fecha_fin
+            # ✅ CORRECCIÓN: Usar isnot(None) para excluir NULLs de las comparaciones
             query = query.filter(
                 or_(
-                    Prestamo.fecha_registro <= fecha_fin,
-                    Prestamo.fecha_aprobacion <= fecha_fin,
-                    Prestamo.fecha_base_calculo <= fecha_fin,
+                    and_(Prestamo.fecha_registro.isnot(None), Prestamo.fecha_registro <= fecha_fin),
+                    and_(Prestamo.fecha_aprobacion.isnot(None), Prestamo.fecha_aprobacion <= fecha_fin),
+                    and_(Prestamo.fecha_base_calculo.isnot(None), Prestamo.fecha_base_calculo <= fecha_fin),
                 )
             )
         return query

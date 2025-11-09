@@ -7,8 +7,11 @@ import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 
 export function ConfiguracionNotificaciones() {
+  console.log('🔄 [ConfiguracionNotificaciones] Componente renderizado')
+  
   const [configEnvios, setConfigEnvios] = useState<Record<string, { habilitado: boolean, cco: string[] }>>({})
   const [guardandoEnvios, setGuardandoEnvios] = useState(false)
+  const [cargando, setCargando] = useState(true)
 
   // Mapeo de tipos a casos
   const mapeoTipos = {
@@ -35,10 +38,17 @@ export function ConfiguracionNotificaciones() {
 
   const cargarConfiguracionEnvios = async () => {
     try {
+      setCargando(true)
+      console.log('🔄 [ConfiguracionNotificaciones] Cargando configuración de envíos...')
       const data = await emailConfigService.obtenerConfiguracionEnvios()
+      console.log('✅ [ConfiguracionNotificaciones] Datos recibidos:', data)
       setConfigEnvios(data || {})
+      console.log('📊 [ConfiguracionNotificaciones] Estado actualizado:', Object.keys(data || {}).length, 'tipos configurados')
     } catch (error) {
-      console.error('Error cargando configuración de envíos:', error)
+      console.error('❌ [ConfiguracionNotificaciones] Error cargando configuración de envíos:', error)
+      toast.error('Error al cargar la configuración de envíos')
+    } finally {
+      setCargando(false)
     }
   }
 
@@ -131,6 +141,11 @@ export function ConfiguracionNotificaciones() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {cargando ? (
+            <div className="text-center py-8 text-gray-500">
+              <p>Cargando configuración...</p>
+            </div>
+          ) : (
           <div className="space-y-3">
             {/* Grid compacto para todas las notificaciones */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -219,6 +234,7 @@ export function ConfiguracionNotificaciones() {
               </Button>
             </div>
           </div>
+          )}
         </CardContent>
       </Card>
 

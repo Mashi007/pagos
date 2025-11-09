@@ -3232,6 +3232,23 @@ def obtener_financiamiento_por_rangos(
                     f"Total después de filtros={total_prestamos_despues_filtros}, "
                     f"Total válidos (con monto > 0)={total_prestamos}"
                 )
+                # ✅ DIAGNÓSTICO ADICIONAL: Verificar si hay préstamos con fechas NULL
+                try:
+                    query_diagnostico = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
+                    query_diagnostico = FiltrosDashboard.aplicar_filtros_prestamo(
+                        query_diagnostico, analista, concesionario, modelo, None, None  # Sin filtros de fecha
+                    )
+                    total_sin_filtro_fecha = query_diagnostico.count()
+                    logger.info(
+                        f"📊 [financiamiento-por-rangos] Total préstamos APROBADOS sin filtro de fecha: {total_sin_filtro_fecha}"
+                    )
+                    if total_sin_filtro_fecha > 0 and total_prestamos_despues_filtros == 0:
+                        logger.warning(
+                            f"⚠️ [financiamiento-por-rangos] Los filtros de fecha están excluyendo todos los préstamos. "
+                            f"Total sin filtro de fecha: {total_sin_filtro_fecha}, Total con filtro de fecha: {total_prestamos_despues_filtros}"
+                        )
+                except Exception as e:
+                    logger.error(f"Error en diagnóstico adicional: {e}", exc_info=True)
         except Exception as e:
             logger.error(f"Error calculando totales en financiamiento-por-rangos: {e}", exc_info=True)
             total_prestamos = 0

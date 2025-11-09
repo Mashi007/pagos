@@ -86,6 +86,10 @@ def listar_notificaciones_prejudiciales(
         service = NotificacionesPrejudicialService(db)
         resultados = service.obtener_notificaciones_prejudiciales_cached()
         logger.info(f"📊 [NotificacionesPrejudicial] Resultados calculados: {len(resultados)} registros")
+        
+        # Log detallado si no hay resultados
+        if len(resultados) == 0:
+            logger.info("ℹ️ [NotificacionesPrejudicial] No se encontraron clientes con 3+ cuotas atrasadas")
 
         # Filtrar por estado si se proporciona
         if estado:
