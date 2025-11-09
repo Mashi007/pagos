@@ -66,7 +66,7 @@ def listar_notificaciones_prejudiciales(
 
     - Préstamos con estado = 'APROBADO'
     - Clientes con 3 o más cuotas atrasadas
-    - Cuotas con estado ATRASADO
+    - Cuotas con estado ATRASADO o PENDIENTE que tienen fecha_vencimiento < hoy y no están pagadas
     - Ordenado por fecha de vencimiento más antigua primero
     - Filtro opcional por estado de envío (ENVIADA, PENDIENTE, FALLIDA)
     """

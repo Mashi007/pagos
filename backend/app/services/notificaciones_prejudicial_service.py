@@ -58,8 +58,9 @@ class NotificacionesPrejudicialService:
                     INNER JOIN cuotas c ON c.prestamo_id = p.id
                     INNER JOIN clientes cl ON cl.id = p.cliente_id
                     WHERE p.estado = 'APROBADO'
-                      AND c.estado = 'ATRASADO'
+                      AND c.estado IN ('ATRASADO', 'PENDIENTE')
                       AND c.fecha_vencimiento < :hoy
+                      AND c.total_pagado < c.monto_cuota
                       AND cl.estado != 'INACTIVO'
                 ),
                 clientes_prejudiciales AS (
@@ -82,8 +83,9 @@ class NotificacionesPrejudicialService:
                     (SELECT COUNT(*) 
                      FROM cuotas c2 
                      WHERE c2.prestamo_id = ca.prestamo_id 
-                       AND c2.estado = 'ATRASADO' 
-                       AND c2.fecha_vencimiento < :hoy) as total_cuotas_atrasadas,
+                       AND c2.estado IN ('ATRASADO', 'PENDIENTE')
+                       AND c2.fecha_vencimiento < :hoy
+                       AND c2.total_pagado < c2.monto_cuota) as total_cuotas_atrasadas,
                     'PREJUDICIAL' as tipo_notificacion
                 FROM cuotas_atrasadas ca
                 INNER JOIN clientes_prejudiciales cp ON cp.cliente_id = ca.cliente_id

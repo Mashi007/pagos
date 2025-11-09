@@ -22,6 +22,7 @@ from sqlalchemy import case, func, or_  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
+from app.core.cache import cache_result
 from app.models.amortizacion import Cuota
 from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
@@ -247,6 +248,7 @@ def diagnostico_cobranzas(
 
 
 @router.get("/clientes-atrasados")
+@cache_result(ttl=300, key_prefix="cobranzas")  # Cache por 5 minutos
 def obtener_clientes_atrasados(
     dias_retraso: Optional[int] = Query(None, description="Días de retraso para filtrar"),
     incluir_admin: bool = Query(False, description="Incluir datos del administrador para diagnóstico"),
