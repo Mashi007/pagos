@@ -146,9 +146,9 @@ export function ConfiguracionNotificaciones() {
               <p>Cargando configuración...</p>
             </div>
           ) : (
-          <div className="space-y-3">
-            {/* Grid compacto para todas las notificaciones */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="space-y-4">
+            {/* Grid mejorado - menos columnas para tarjetas más anchas y cómodas */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Función helper para renderizar cada tipo */}
               {tiposOrdenados.map(tipo => {
                 const mapeo = mapeoTipos[tipo as keyof typeof mapeoTipos]
@@ -157,12 +157,12 @@ export function ConfiguracionNotificaciones() {
                 const ccoList = config.cco || []
                 
                 return (
-                  <div key={tipo} className="border rounded-lg p-4 space-y-3 bg-gray-50/50 hover:bg-gray-50 transition-colors">
+                  <div key={tipo} className="border rounded-lg p-5 space-y-4 bg-white hover:shadow-md transition-all">
                     {/* Header con toggle */}
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-gray-800 truncate">{mapeo?.caso || tipo}</div>
-                        <div className="text-xs text-gray-500 mt-0.5">{mapeo?.categoria || 'Sin categoría'}</div>
+                        <div className="text-base font-semibold text-gray-900">{mapeo?.caso || tipo}</div>
+                        <div className="text-sm text-gray-600 mt-1">{mapeo?.categoria || 'Sin categoría'}</div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className={`text-xs w-8 text-center font-medium ${!habilitado ? 'text-gray-900' : 'text-gray-400'}`}>OFF</span>
@@ -183,21 +183,21 @@ export function ConfiguracionNotificaciones() {
                       </div>
                     </div>
                     
-                    {/* CCO mejorado - Layout vertical para mejor usabilidad */}
-                    <div className="pt-3 border-t border-gray-200">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Copy className="h-4 w-4 text-gray-500" />
-                        <label className="text-sm font-medium text-gray-700">Correos en CCO (hasta 3):</label>
+                    {/* CCO mejorado - Campos más grandes y cómodos */}
+                    <div className="pt-4 border-t border-gray-200">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Copy className="h-5 w-5 text-gray-600" />
+                        <label className="text-sm font-semibold text-gray-800">Correos en CCO (hasta 3):</label>
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {[0, 1, 2].map(index => (
                           <div key={index} className="flex items-center gap-2">
                             <Input
                               type="email"
-                              placeholder={`CCO ${index + 1} (opcional)`}
+                              placeholder={`ejemplo${index + 1}@correo.com`}
                               value={ccoList[index] || ''}
                               onChange={(e) => actualizarCCO(tipo, index, e.target.value)}
-                              className="h-9 text-sm px-3 flex-1"
+                              className="h-10 text-base px-4 flex-1 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                               disabled={!habilitado}
                             />
                             {ccoList[index] && (
@@ -206,11 +206,11 @@ export function ConfiguracionNotificaciones() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => eliminarCCO(tipo, index)}
-                                className="h-9 w-9 p-0 flex-shrink-0 hover:bg-red-50 hover:text-red-600"
+                                className="h-10 w-10 p-0 flex-shrink-0 hover:bg-red-50 hover:text-red-600 transition-colors"
                                 disabled={!habilitado}
                                 title="Eliminar correo"
                               >
-                                <X className="h-4 w-4" />
+                                <X className="h-5 w-5" />
                               </Button>
                             )}
                           </div>
