@@ -39,6 +39,12 @@ const API_BASE_URL = env.API_URL
 
 class ApiClient {
   private client: AxiosInstance
+  private isRefreshing = false
+  private isRedirectingToLogin = false
+  private failedQueue: Array<{
+    resolve: (value?: any) => void
+    reject: (reason?: any) => void
+  }> = []
 
   constructor() {
     this.client = axios.create({
@@ -87,56 +93,105 @@ class ApiClient {
       async (error) => {
         const originalRequest = error.config
 
-        // Auto-refresh de tokens con protección contra loops infinitos
+        // Auto-refresh de tokens con protección contra loops infinitos y race conditions
         if (error.response?.status === 401 && !originalRequest._retry) {
+          // No intentar refresh en endpoints de autenticación
+          const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh']
+          const isAuthEndpoint = authEndpoints.some(endpoint => originalRequest.url?.includes(endpoint))
+          
+          if (isAuthEndpoint) {
+            // En endpoints de auth, simplemente propagar el error sin intentar refresh
+            this.handleError(error)
+            return Promise.reject(error)
+          }
+
+          // Si ya hay un refresh en progreso, encolar esta petición
+          if (this.isRefreshing) {
+            return new Promise<string>((resolve, reject) => {
+              this.failedQueue.push({ resolve, reject })
+            })
+              .then((token) => {
+                if (!token) {
+                  throw new Error('Token no disponible después del refresh')
+                }
+                originalRequest.headers.Authorization = `Bearer ${token}`
+                return this.client(originalRequest)
+              })
+              .catch((err) => {
+                return Promise.reject(err)
+              })
+          }
+
           originalRequest._retry = true
+          this.isRefreshing = true
 
           try {
-            // No intentar refresh en endpoints de autenticación
-            const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh']
-            const isAuthEndpoint = authEndpoints.some(endpoint => originalRequest.url?.includes(endpoint))
-            
-            if (isAuthEndpoint) {
-              // En endpoints de auth, simplemente propagar el error sin intentar refresh
-              this.handleError(error)
-              return Promise.reject(error)
-            }
-
             const rememberMe = safeGetItem('remember_me', false)
             const refreshToken = rememberMe 
               ? safeGetItem('refresh_token', '') 
               : safeGetSessionItem('refresh_token', '')
               
-            if (refreshToken) {
-              const response = await this.client.post('/api/v1/auth/refresh', {
-                refresh_token: refreshToken,
-              })
-              
-              const { access_token, refresh_token: newRefreshToken } = response.data
-              
-              // Guardar en el almacenamiento correspondiente usando funciones seguras
-              if (rememberMe) {
-                safeSetItem('access_token', access_token)
-                safeSetItem('refresh_token', newRefreshToken)
-              } else {
-                safeSetSessionItem('access_token', access_token)
-                safeSetSessionItem('refresh_token', newRefreshToken)
-              }
-
-              // Reintentar la petición original
-              originalRequest.headers.Authorization = `Bearer ${access_token}`
-              return this.client(originalRequest)
-            } else {
+            if (!refreshToken) {
               throw new Error('No refresh token available')
             }
-          } catch (refreshError) {
+
+            // Hacer la petición de refresh con validación estricta (lanzar error para 4xx)
+            let response
+            try {
+              // Crear una instancia temporal de axios sin el interceptor para evitar loops
+              const refreshClient = axios.create({
+                baseURL: API_BASE_URL,
+                timeout: DEFAULT_TIMEOUT_MS,
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                validateStatus: (status) => status < 400, // Lanzar error para 4xx y 5xx
+              })
+              
+              response = await refreshClient.post('/api/v1/auth/refresh', {
+                refresh_token: refreshToken,
+              })
+            } catch (error: any) {
+              // Si el refresh token está expirado o es inválido, el servidor devuelve 401
+              if (error.response?.status === 401 || error.response?.status === 400) {
+                throw new Error('Refresh token inválido o expirado')
+              }
+              // Para otros errores (red, timeout, etc.), propagar el error
+              throw error
+            }
+            
+            // Verificar si la respuesta es válida
+            if (!response || !response.data || !response.data.access_token) {
+              throw new Error('Refresh token inválido o expirado')
+            }
+            
+            const { access_token, refresh_token: newRefreshToken } = response.data
+            
+            // Guardar en el almacenamiento correspondiente usando funciones seguras
+            if (rememberMe) {
+              safeSetItem('access_token', access_token)
+              safeSetItem('refresh_token', newRefreshToken)
+            } else {
+              safeSetSessionItem('access_token', access_token)
+              safeSetSessionItem('refresh_token', newRefreshToken)
+            }
+
+            // Procesar todas las peticiones en cola
+            this.processQueue(null, access_token)
+
+            // Reintentar la petición original
+            originalRequest.headers.Authorization = `Bearer ${access_token}`
+            return this.client(originalRequest)
+          } catch (refreshError: any) {
             // Si no se puede renovar el token, limpiar datos y redirigir al login
+            this.processQueue(refreshError, null)
             clearAuthStorage()
             
             // Evitar mostrar toasts durante el redirect
             const isAlreadyRedirecting = window.location.pathname === '/login'
             
             if (!isAlreadyRedirecting) {
+              this.isRedirectingToLogin = true
               // Pequeño delay para asegurar que el storage se limpie
               setTimeout(() => {
                 window.location.href = '/login'
@@ -144,14 +199,31 @@ class ApiClient {
             }
             
             return Promise.reject(refreshError)
+          } finally {
+            this.isRefreshing = false
           }
         }
 
-        // Manejar otros errores
-        this.handleError(error)
+        // Manejar otros errores - pero no mostrar toast si estamos redirigiendo al login
+        if (!this.isRedirectingToLogin) {
+          this.handleError(error)
+        }
         return Promise.reject(error)
       }
     )
+  }
+
+  private processQueue(error: any, token: string | null) {
+    this.failedQueue.forEach((prom) => {
+      if (error) {
+        prom.reject(error)
+      } else if (token) {
+        prom.resolve(token)
+      } else {
+        prom.reject(new Error('Token no disponible después del refresh'))
+      }
+    })
+    this.failedQueue = []
   }
 
   private handleError(error: unknown) {
