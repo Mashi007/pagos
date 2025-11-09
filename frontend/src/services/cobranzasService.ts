@@ -260,6 +260,36 @@ class CobranzasService {
   async procesarNotificacionesAtrasos(): Promise<{ mensaje: string, estadisticas: any }> {
     return await apiClient.post(`${this.baseUrl}/notificaciones/atrasos`)
   }
+
+  // Obtener diagnóstico completo
+  async getDiagnostico(): Promise<any> {
+    const url = `${this.baseUrl}/diagnostico`
+    console.log('🔍 [Cobranzas] Obteniendo diagnóstico completo...')
+    
+    try {
+      const result = await apiClient.get(url, { timeout: 60000 })
+      console.log('✅ [Cobranzas] Diagnóstico recibido:', result)
+      return result
+    } catch (error: any) {
+      console.error('❌ [Cobranzas] Error obteniendo diagnóstico:', error)
+      throw error
+    }
+  }
+
+  // Obtener resumen con diagnóstico
+  async getResumenConDiagnostico(): Promise<any> {
+    const url = `${this.baseUrl}/resumen?incluir_diagnostico=true`
+    console.log('🔍 [Cobranzas] Obteniendo resumen con diagnóstico...')
+    
+    try {
+      const result = await apiClient.get(url, { timeout: 60000 })
+      console.log('✅ [Cobranzas] Resumen con diagnóstico recibido:', result)
+      return result
+    } catch (error: any) {
+      console.error('❌ [Cobranzas] Error obteniendo resumen con diagnóstico:', error)
+      throw error
+    }
+  }
 }
 
 export const cobranzasService = new CobranzasService()

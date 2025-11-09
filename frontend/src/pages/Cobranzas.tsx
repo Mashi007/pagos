@@ -25,6 +25,8 @@ export function Cobranzas() {
   const [tabActiva, setTabActiva] = useState('resumen')
   const [filtroDiasRetraso, setFiltroDiasRetraso] = useState<number | undefined>(undefined)
   const [procesandoNotificaciones, setProcesandoNotificaciones] = useState(false)
+  const [mostrandoDiagnostico, setMostrandoDiagnostico] = useState(false)
+  const [diagnosticoData, setDiagnosticoData] = useState<any>(null)
 
   // Query para resumen
   const { 
@@ -233,6 +235,24 @@ export function Cobranzas() {
     }
   }
 
+  // Ejecutar diagnóstico
+  const ejecutarDiagnostico = async () => {
+    setMostrandoDiagnostico(true)
+    try {
+      const resultado = await cobranzasService.getDiagnostico()
+      setDiagnosticoData(resultado)
+      toast.success('Diagnóstico completado. Revisa la consola para más detalles.')
+    } catch (error: unknown) {
+      const { getErrorMessage } = await import('@/types/errors')
+      const errorMessage = getErrorMessage(error)
+      console.error('Error obteniendo diagnóstico:', errorMessage)
+      toast.error(errorMessage || 'Error al obtener diagnóstico')
+      setDiagnosticoData(null)
+    } finally {
+      setMostrandoDiagnostico(false)
+    }
+  }
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -244,6 +264,24 @@ export function Cobranzas() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            onClick={ejecutarDiagnostico}
+            disabled={mostrandoDiagnostico}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            {mostrandoDiagnostico ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Ejecutando...
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="h-4 w-4" />
+                🔍 Diagnóstico
+              </>
+            )}
+          </Button>
           <Button 
             onClick={procesarNotificaciones}
             disabled={procesandoNotificaciones}
@@ -271,6 +309,76 @@ export function Cobranzas() {
           </Button>
         </div>
       </div>
+
+      {/* Mostrar diagnóstico si está disponible */}
+      {diagnosticoData && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">🔍 Diagnóstico de Cobranzas</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDiagnosticoData(null)}
+              >
+                ✕
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600">Total Cuotas BD</p>
+                  <p className="text-2xl font-bold">{diagnosticoData.diagnosticos?.total_cuotas_bd || 0}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Cuotas Vencidas</p>
+                  <p className="text-2xl font-bold">{diagnosticoData.diagnosticos?.cuotas_vencidas_solo_fecha || 0}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Pago Incompleto</p>
+                  <p className="text-2xl font-bold">{diagnosticoData.diagnosticos?.cuotas_pago_incompleto || 0}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Vencidas + Incompletas</p>
+                  <p className="text-2xl font-bold">{diagnosticoData.diagnosticos?.cuotas_vencidas_incompletas || 0}</p>
+                </div>
+              </div>
+              
+              {diagnosticoData.diagnosticos?.estados_prestamos_con_cuotas_vencidas && (
+                <div>
+                  <p className="text-sm font-semibold mb-2">Estados de Préstamos con Cuotas Vencidas:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(diagnosticoData.diagnosticos.estados_prestamos_con_cuotas_vencidas).map(([estado, cantidad]: [string, any]) => (
+                      <Badge key={estado} variant="outline">
+                        {estado}: {cantidad}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {diagnosticoData.analisis_filtros && (
+                <div>
+                  <p className="text-sm font-semibold mb-2">Análisis de Filtros:</p>
+                  <div className="space-y-1 text-sm">
+                    <p>• Perdidas por estado: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_estado || 0}</p>
+                    <p>• Perdidas por admin: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_admin || 0}</p>
+                    <p>• Perdidas por user admin: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_user_admin || 0}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4">
+                <p className="text-xs text-gray-500">
+                  💡 Revisa la consola del navegador (F12) para ver el diagnóstico completo con todos los detalles.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Mensajes de error globales */}
       {errorResumen && (
