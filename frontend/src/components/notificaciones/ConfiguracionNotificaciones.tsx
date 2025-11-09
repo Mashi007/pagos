@@ -148,7 +148,7 @@ export function ConfiguracionNotificaciones() {
           ) : (
           <div className="space-y-3">
             {/* Grid compacto para todas las notificaciones */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {/* Función helper para renderizar cada tipo */}
               {tiposOrdenados.map(tipo => {
                 const mapeo = mapeoTipos[tipo as keyof typeof mapeoTipos]
