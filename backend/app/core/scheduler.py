@@ -21,11 +21,12 @@ def calcular_notificaciones_previas_job():
     """Job que calcula y ENVÍA notificaciones previas a las 4 AM"""
     db = SessionLocal()
     try:
-        from app.services.notificaciones_previas_service import NotificacionesPreviasService
-        from app.services.email_service import EmailService
-        from app.models.notificacion_plantilla import NotificacionPlantilla
-        from app.models.notificacion import Notificacion
         from datetime import datetime
+
+        from app.models.notificacion import Notificacion
+        from app.models.notificacion_plantilla import NotificacionPlantilla
+        from app.services.email_service import EmailService
+        from app.services.notificaciones_previas_service import NotificacionesPreviasService
 
         logger.info("🔄 [Scheduler] Iniciando cálculo y envío de notificaciones previas...")
 
