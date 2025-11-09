@@ -46,7 +46,7 @@ class NotificacionesPreviasService:
         try:
             # Verificar conexión a BD
             logger.info("🔍 [NotificacionesPrevias] Iniciando cálculo de notificaciones previas...")
-            
+
             # Obtener préstamos aprobados con sus cuotas
             prestamos_aprobados = self.db.query(Prestamo).filter(Prestamo.estado == "APROBADO").all()
             logger.info(f"📊 [NotificacionesPrevias] Encontrados {len(prestamos_aprobados)} préstamos aprobados")
