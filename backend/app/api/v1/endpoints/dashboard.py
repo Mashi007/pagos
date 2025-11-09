@@ -519,12 +519,12 @@ def _procesar_distribucion_rango_monto(
                     logger.info(f"📊 [financiamiento-por-rangos] query_base.count() antes de obtener IDs: {count_antes_ids}")
                 except Exception as e:
                     logger.warning(f"⚠️ [financiamiento-por-rangos] No se pudo contar query_base antes de IDs: {e}")
-                
+
                 # Obtener los IDs de préstamos que cumplen los filtros
                 prestamo_ids_query = query_base.with_entities(Prestamo.id)
                 prestamo_ids_result = prestamo_ids_query.all()
                 prestamo_ids = [row[0] for row in prestamo_ids_result]
-                
+
                 logger.info(f"📊 [financiamiento-por-rangos] IDs obtenidos: {len(prestamo_ids)} préstamos")
 
                 if not prestamo_ids:
@@ -3342,7 +3342,7 @@ def obtener_financiamiento_por_rangos(
                             query_base = query_diagnostico
                             total_prestamos = totales_alternativa.total_prestamos or 0
                             total_monto = float(totales_alternativa.total_monto or Decimal("0"))
-                            
+
                             # ✅ VERIFICACIÓN: Contar query_base después de actualizar para confirmar
                             try:
                                 count_verificacion = query_base.count()
@@ -3357,7 +3357,10 @@ def obtener_financiamiento_por_rangos(
                                         f"no coincide con total_prestamos={total_prestamos}"
                                     )
                             except Exception as e:
-                                logger.error(f"❌ [financiamiento-por-rangos] Error verificando query_base después del fallback: {e}", exc_info=True)
+                                logger.error(
+                                    f"❌ [financiamiento-por-rangos] Error verificando query_base después del fallback: {e}",
+                                    exc_info=True,
+                                )
                 except Exception as e:
                     logger.error(f"Error en diagnóstico adicional: {e}", exc_info=True)
         except Exception as e:
@@ -3401,7 +3404,7 @@ def obtener_financiamiento_por_rangos(
         except Exception as e:
             logger.warning(f"⚠️ [financiamiento-por-rangos] No se pudo contar query_base: {e}")
             count_query_base = 0
-        
+
         # ✅ DIAGNÓSTICO: Medir tiempo de procesamiento de distribución
         tiempo_antes_procesamiento = time.time()
         tiempo_procesamiento = 0  # Inicializar para evitar error si hay excepción
@@ -3432,7 +3435,7 @@ def obtener_financiamiento_por_rangos(
 
         total_time = int((time.time() - start_time) * 1000)
         logger.info(f"⏱️ [financiamiento-por-rangos] Tiempo total: {total_time}ms (procesamiento: {tiempo_procesamiento}ms)")
-        
+
         # ✅ ALERTA: Si el endpoint es muy lento, registrar advertencia
         if total_time > 2000:
             logger.warning(
@@ -3442,7 +3445,9 @@ def obtener_financiamiento_por_rangos(
             )
 
         # ✅ DIAGNÓSTICO: Log final antes de retornar
-        rangos_con_datos = len([r for r in distribucion_data if r.get('cantidad_prestamos', 0) > 0]) if distribucion_data else 0
+        rangos_con_datos = (
+            len([r for r in distribucion_data if r.get("cantidad_prestamos", 0) > 0]) if distribucion_data else 0
+        )
         logger.info(
             f"📊 [financiamiento-por-rangos] Respuesta final: "
             f"total_prestamos={total_prestamos}, total_monto={total_monto:,.2f}, "
