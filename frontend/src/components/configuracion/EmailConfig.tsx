@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react'
+import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Send, Clock, XCircle, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { emailConfigService } from '@/services/notificacionService'
+import { emailConfigService, notificacionService, type Notificacion } from '@/services/notificacionService'
 
 interface EmailConfigData {
   smtp_host: string
@@ -15,6 +15,8 @@ interface EmailConfigData {
   from_email: string
   from_name: string
   smtp_use_tls: string
+  modo_pruebas?: string
+  email_pruebas?: string
 }
 
 export function EmailConfig() {
@@ -32,18 +34,37 @@ export function EmailConfig() {
   const [guardando, setGuardando] = useState(false)
   const [probando, setProbando] = useState(false)
   const [resultadoPrueba, setResultadoPrueba] = useState<any>(null)
+  const [modoPruebas, setModoPruebas] = useState<string>('false')
+  const [emailPruebas, setEmailPruebas] = useState('')
+  const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
+  const [cargandoEnvios, setCargandoEnvios] = useState(false)
 
   useEffect(() => {
     cargarConfiguracion()
+    cargarEnviosRecientes()
   }, [])
 
   const cargarConfiguracion = async () => {
     try {
       const data = await emailConfigService.obtenerConfiguracionEmail()
       setConfig(data)
+      setModoPruebas(data.modo_pruebas || 'false')
+      setEmailPruebas(data.email_pruebas || '')
     } catch (error) {
       console.error('Error cargando configuración de email:', error)
       toast.error('Error cargando configuración')
+    }
+  }
+
+  const cargarEnviosRecientes = async () => {
+    setCargandoEnvios(true)
+    try {
+      const resultado = await notificacionService.listarNotificaciones(1, 10)
+      setEnviosRecientes(resultado.items || [])
+    } catch (error) {
+      console.error('Error cargando envíos recientes:', error)
+    } finally {
+      setCargandoEnvios(false)
     }
   }
 
@@ -54,8 +75,14 @@ export function EmailConfig() {
   const handleGuardar = async () => {
     try {
       setGuardando(true)
-      await emailConfigService.actualizarConfiguracionEmail(config)
+      const configCompleta = {
+        ...config,
+        modo_pruebas: modoPruebas,
+        email_pruebas: modoPruebas === 'true' ? emailPruebas : ''
+      }
+      await emailConfigService.actualizarConfiguracionEmail(configCompleta)
       toast.success('Configuración de email guardada exitosamente')
+      await cargarConfiguracion()
     } catch (error) {
       console.error('Error guardando configuración:', error)
       toast.error('Error guardando configuración')
@@ -194,6 +221,57 @@ export function EmailConfig() {
             <label className="text-sm font-medium">Usar TLS (Recomendado para Gmail)</label>
           </div>
 
+          {/* Selector de Ambiente */}
+          <div className="border-t pt-4 mt-4">
+            <div className="mb-4">
+              <label className="text-sm font-medium block mb-2">Ambiente de Envío</label>
+              <div className="flex gap-4">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="ambiente"
+                    value="false"
+                    checked={modoPruebas === 'false'}
+                    onChange={(e) => setModoPruebas(e.target.value)}
+                    className="rounded"
+                  />
+                  <span className="text-sm">Producción (Envíos reales a clientes)</span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="ambiente"
+                    value="true"
+                    checked={modoPruebas === 'true'}
+                    onChange={(e) => setModoPruebas(e.target.value)}
+                    className="rounded"
+                  />
+                  <span className="text-sm">Pruebas (Todos los emails a dirección de prueba)</span>
+                </label>
+              </div>
+            </div>
+
+            {modoPruebas === 'true' && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="mb-3">
+                  <label className="text-sm font-medium block mb-2">
+                    Email de Pruebas <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="email"
+                    value={emailPruebas}
+                    onChange={(e) => setEmailPruebas(e.target.value)}
+                    placeholder="pruebas@ejemplo.com"
+                    className="max-w-md"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    En modo pruebas, todos los emails se enviarán a esta dirección en lugar de a los clientes reales.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Botones */}
           <div className="flex gap-2 pt-4">
             <Button
@@ -240,6 +318,95 @@ export function EmailConfig() {
                   )}
                 </div>
               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Verificación de Envíos Reales */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Send className="h-5 w-5 text-blue-600" />
+            Verificación de Envíos Reales
+          </CardTitle>
+          <CardDescription>
+            Historial reciente de correos enviados para verificar que el sistema está funcionando correctamente
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex justify-between items-center mb-4">
+            <div className="text-sm text-gray-600">
+              Últimos 10 envíos de notificaciones
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={cargarEnviosRecientes}
+              disabled={cargandoEnvios}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${cargandoEnvios ? 'animate-spin' : ''}`} />
+              Actualizar
+            </Button>
+          </div>
+
+          {cargandoEnvios ? (
+            <div className="text-center py-8 text-gray-500">Cargando envíos...</div>
+          ) : enviosRecientes.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+              <p>No hay envíos recientes</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {enviosRecientes.map((envio) => (
+                <div
+                  key={envio.id}
+                  className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge
+                          className={
+                            envio.estado === 'ENVIADA'
+                              ? 'bg-green-100 text-green-800'
+                              : envio.estado === 'FALLIDA'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }
+                        >
+                          {envio.estado}
+                        </Badge>
+                        <span className="text-sm font-medium text-gray-700">
+                          {envio.asunto || 'Sin asunto'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500 space-y-1">
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {envio.fecha_envio
+                            ? new Date(envio.fecha_envio).toLocaleString('es-ES')
+                            : envio.fecha_creacion
+                            ? new Date(envio.fecha_creacion).toLocaleString('es-ES')
+                            : 'Sin fecha'}
+                        </div>
+                        {envio.tipo && (
+                          <div className="text-xs text-gray-600">
+                            Tipo: {envio.tipo}
+                          </div>
+                        )}
+                        {envio.error_mensaje && (
+                          <div className="text-xs text-red-600 flex items-start gap-1">
+                            <XCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                            <span>{envio.error_mensaje}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>

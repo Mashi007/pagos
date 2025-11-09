@@ -16,16 +16,19 @@ logger = logging.getLogger(__name__)
 
 
 class EmailService:
-    """Servicio para envío de emails"""
+    """Servicio para envío de emails con soporte para envíos masivos"""
 
-    def __init__(self, db: Optional[Session] = None):
+    def __init__(self, db: Optional[Session] = None, reuse_connection: bool = False):
         """
         Inicializar servicio de email
 
         Args:
             db: Sesión de base de datos opcional para leer configuración desde BD
+            reuse_connection: Si True, reutiliza la conexión SMTP para múltiples envíos (útil para envíos masivos)
         """
         self.db = db
+        self.reuse_connection = reuse_connection
+        self._smtp_server_connection = None
         self._cargar_configuracion()
 
     def _cargar_configuracion(self):
@@ -38,6 +41,8 @@ class EmailService:
         self.from_email = settings.FROM_EMAIL
         self.from_name = settings.FROM_NAME
         self.smtp_use_tls = settings.SMTP_USE_TLS
+        self.modo_pruebas = False
+        self.email_pruebas = ""
 
         # Si hay sesión de BD, intentar cargar configuración desde BD
         if self.db:
@@ -67,8 +72,14 @@ class EmailService:
                         self.from_name = config_dict["from_name"]
                     if config_dict.get("smtp_use_tls"):
                         self.smtp_use_tls = config_dict["smtp_use_tls"].lower() in ("true", "1", "yes", "on")
+                    if config_dict.get("modo_pruebas"):
+                        self.modo_pruebas = config_dict["modo_pruebas"].lower() in ("true", "1", "yes", "on")
+                    if config_dict.get("email_pruebas"):
+                        self.email_pruebas = config_dict["email_pruebas"]
 
                     logger.info("✅ Configuración de email cargada desde base de datos")
+                    if self.modo_pruebas:
+                        logger.warning(f"⚠️ MODO PRUEBAS ACTIVO: Todos los emails se enviarán a {self.email_pruebas}")
                     return
 
             except Exception as e:
@@ -76,7 +87,7 @@ class EmailService:
 
         logger.debug("📧 Usando configuración de email por defecto desde settings")
 
-    def send_email(self, to_emails: List[str], subject: str, body: str, is_html: bool = False) -> Dict[str, Any]:
+    def send_email(self, to_emails: List[str], subject: str, body: str, is_html: bool = False, bcc_emails: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Enviar email
 
@@ -90,11 +101,40 @@ class EmailService:
             Dict con resultado del envío
         """
         try:
+            # Recargar configuración para obtener modo_pruebas actualizado
+            self._cargar_configuracion()
+            
+            # Si está en modo pruebas, redirigir todos los emails a email_pruebas
+            emails_destinatarios = to_emails.copy()
+            if self.modo_pruebas and self.email_pruebas:
+                emails_originales = ", ".join(to_emails)
+                # Agregar información de destinatarios originales al asunto y cuerpo
+                subject = f"[PRUEBAS - Originalmente para: {emails_originales}] {subject}"
+                body = f"""
+                <div style="background-color: #fff3cd; border: 2px solid #ffc107; padding: 10px; margin-bottom: 20px;">
+                    <strong>⚠️ MODO PRUEBAS ACTIVO</strong><br>
+                    Este email estaba destinado a: {emails_originales}<br>
+                    En producción, este email se enviaría a los destinatarios reales.
+                </div>
+                {body}
+                """
+                emails_destinatarios = [self.email_pruebas]
+                logger.warning(f"🧪 MODO PRUEBAS: Redirigiendo email de {', '.join(to_emails)} a {self.email_pruebas}")
+            
             # Crear mensaje
             msg = MIMEMultipart()
             msg["From"] = f"{self.from_name} <{self.from_email}>"
-            msg["To"] = ", ".join(to_emails)
+            msg["To"] = ", ".join(emails_destinatarios)
             msg["Subject"] = subject
+
+            # Agregar CCO (BCC) si se proporciona
+            emails_cco = []
+            if bcc_emails:
+                # Filtrar emails vacíos y validar
+                emails_cco = [email.strip() for email in bcc_emails if email and email.strip()]
+                if emails_cco:
+                    msg["Bcc"] = ", ".join(emails_cco)
+                    logger.info(f"📧 Agregando {len(emails_cco)} correo(s) en CCO: {', '.join(emails_cco)}")
 
             # Agregar cuerpo
             if is_html:
@@ -102,24 +142,58 @@ class EmailService:
             else:
                 msg.attach(MIMEText(body, "plain"))
 
-            # Enviar email
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+            # Enviar email - reutilizar conexión si está habilitado
+            if self.reuse_connection and self._smtp_server_connection:
+                # Reutilizar conexión existente
+                server = self._smtp_server_connection
+                try:
+                    # Verificar que la conexión sigue activa
+                    server.noop()
+                except (smtplib.SMTPServerDisconnected, OSError):
+                    # Reconectar si se perdió la conexión
+                    logger.warning("⚠️ Conexión SMTP perdida, reconectando...")
+                    self._smtp_server_connection = None
+                    server = None
+            else:
+                server = None
 
-            if self.smtp_use_tls:
-                server.starttls()
+            if not server:
+                # Crear nueva conexión
+                server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30)
 
-            if self.smtp_username and self.smtp_password:
-                server.login(self.smtp_username, self.smtp_password)
+                if self.smtp_use_tls:
+                    server.starttls()
+
+                if self.smtp_username and self.smtp_password:
+                    server.login(self.smtp_username, self.smtp_password)
+
+                # Guardar conexión si se debe reutilizar
+                if self.reuse_connection:
+                    self._smtp_server_connection = server
 
             text = msg.as_string()
-            server.sendmail(self.from_email, to_emails, text)
-            server.quit()
+            # Incluir CCO en la lista de destinatarios para sendmail
+            todos_destinatarios = emails_destinatarios + emails_cco
+            server.sendmail(self.from_email, todos_destinatarios, text)
+            
+            # Solo cerrar conexión si no se reutiliza
+            if not self.reuse_connection:
+                server.quit()
 
-            logger.info(f"Email enviado exitosamente a: {', '.join(to_emails)}")
+            mensaje_exito = "Email enviado exitosamente"
+            if self.modo_pruebas:
+                mensaje_exito = f"Email enviado exitosamente (MODO PRUEBAS: originalmente para {', '.join(to_emails)})"
+            if emails_cco:
+                mensaje_exito += f" (CCO: {', '.join(emails_cco)})"
+
+            logger.info(f"Email enviado exitosamente a: {', '.join(emails_destinatarios)}" + (f" (CCO: {', '.join(emails_cco)})" if emails_cco else ""))
             return {
                 "success": True,
-                "message": "Email enviado exitosamente",
-                "recipients": to_emails,
+                "message": mensaje_exito,
+                "recipients": emails_destinatarios,
+                "bcc_recipients": emails_cco if emails_cco else [],
+                "original_recipients": to_emails if self.modo_pruebas else None,
+                "modo_pruebas": self.modo_pruebas,
             }
 
         except Exception as e:
@@ -218,6 +292,16 @@ class EmailService:
         """
 
         return self.send_email([email], subject, body, is_html=True)
+
+    def close_connection(self):
+        """Cerrar conexión SMTP reutilizada si existe"""
+        if self._smtp_server_connection:
+            try:
+                self._smtp_server_connection.quit()
+            except Exception as e:
+                logger.warning(f"⚠️ Error cerrando conexión SMTP: {e}")
+            finally:
+                self._smtp_server_connection = None
 
     def test_connection(self) -> Dict[str, Any]:
         """

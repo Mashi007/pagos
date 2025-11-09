@@ -889,6 +889,168 @@ def actualizar_configuracion_email(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
+@router.get("/notificaciones/envios")
+def obtener_configuracion_envios(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Obtener configuración de habilitación de envíos y CCO por tipo de notificación"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden ver configuración de envíos",
+        )
+
+    try:
+        # Tipos de notificación
+        tipos = [
+            "PAGO_5_DIAS_ANTES",
+            "PAGO_3_DIAS_ANTES",
+            "PAGO_1_DIA_ANTES",
+            "PAGO_DIA_0",
+            "PAGO_1_DIA_ATRASADO",
+            "PAGO_3_DIAS_ATRASADO",
+            "PAGO_5_DIAS_ATRASADO",
+            "PREJUDICIAL",
+        ]
+
+        config_dict = {}
+        for tipo in tipos:
+            # Habilitación
+            clave_habilitado = f"envio_habilitado_{tipo}"
+            config_habilitado = (
+                db.query(ConfiguracionSistema)
+                .filter(
+                    ConfiguracionSistema.categoria == "NOTIFICACIONES",
+                    ConfiguracionSistema.clave == clave_habilitado,
+                )
+                .first()
+            )
+            habilitado = config_habilitado.valor.lower() in ("true", "1", "yes", "on") if config_habilitado and config_habilitado.valor else True
+
+            # CCO (hasta 3 correos)
+            cco_emails = []
+            for i in range(1, 4):  # CCO 1, 2, 3
+                clave_cco = f"cco_{tipo}_{i}"
+                config_cco = (
+                    db.query(ConfiguracionSistema)
+                    .filter(
+                        ConfiguracionSistema.categoria == "NOTIFICACIONES",
+                        ConfiguracionSistema.clave == clave_cco,
+                    )
+                    .first()
+                )
+                if config_cco and config_cco.valor and config_cco.valor.strip():
+                    cco_emails.append(config_cco.valor.strip())
+
+            config_dict[tipo] = {
+                "habilitado": habilitado,
+                "cco": cco_emails
+            }
+
+        return config_dict
+
+    except Exception as e:
+        logger.error(f"Error obteniendo configuración de envíos: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.put("/notificaciones/envios")
+def actualizar_configuracion_envios(
+    config_data: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Actualizar configuración de habilitación de envíos y CCO por tipo de notificación"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden actualizar configuración de envíos",
+        )
+
+    try:
+        configuraciones = []
+        for tipo, config_tipo in config_data.items():
+            # Actualizar habilitación
+            if isinstance(config_tipo, dict):
+                habilitado = config_tipo.get("habilitado", True)
+                cco_emails = config_tipo.get("cco", [])
+            else:
+                # Compatibilidad con formato anterior (solo boolean)
+                habilitado = config_tipo if isinstance(config_tipo, bool) else True
+                cco_emails = []
+
+            # Guardar habilitación
+            clave_habilitado = f"envio_habilitado_{tipo}"
+            config = (
+                db.query(ConfiguracionSistema)
+                .filter(
+                    ConfiguracionSistema.categoria == "NOTIFICACIONES",
+                    ConfiguracionSistema.clave == clave_habilitado,
+                )
+                .first()
+            )
+
+            if config:
+                config.valor = "true" if habilitado else "false"
+                configuraciones.append(config)
+            else:
+                nueva_config = ConfiguracionSistema(
+                    categoria="NOTIFICACIONES",
+                    clave=clave_habilitado,
+                    valor="true" if habilitado else "false",
+                    tipo_dato="BOOLEAN",
+                    visible_frontend=True,
+                    descripcion=f"Habilitar envío de notificaciones tipo {tipo}",
+                )
+                db.add(nueva_config)
+                configuraciones.append(nueva_config)
+
+            # Guardar CCO (hasta 3 correos)
+            if isinstance(cco_emails, list):
+                # Limitar a 3 correos máximo
+                cco_emails = [email.strip() for email in cco_emails[:3] if email and email.strip()]
+                
+                # Eliminar configuraciones CCO existentes para este tipo
+                for i in range(1, 4):
+                    clave_cco = f"cco_{tipo}_{i}"
+                    config_cco_existente = (
+                        db.query(ConfiguracionSistema)
+                        .filter(
+                            ConfiguracionSistema.categoria == "NOTIFICACIONES",
+                            ConfiguracionSistema.clave == clave_cco,
+                        )
+                        .first()
+                    )
+                    if config_cco_existente:
+                        db.delete(config_cco_existente)
+
+                # Crear nuevas configuraciones CCO
+                for i, email in enumerate(cco_emails, 1):
+                    clave_cco = f"cco_{tipo}_{i}"
+                    nueva_config_cco = ConfiguracionSistema(
+                        categoria="NOTIFICACIONES",
+                        clave=clave_cco,
+                        valor=email,
+                        tipo_dato="STRING",
+                        visible_frontend=True,
+                        descripcion=f"CCO {i} para notificaciones tipo {tipo}",
+                    )
+                    db.add(nueva_config_cco)
+                    configuraciones.append(nueva_config_cco)
+
+        db.commit()
+
+        logger.info(f"Configuración de envíos y CCO actualizada por {current_user.email}")
+
+        return {
+            "mensaje": "Configuración de envíos y CCO actualizada exitosamente",
+            "configuraciones_actualizadas": len(configuraciones),
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando configuración de envíos: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
 @router.post("/email/probar")
 def probar_configuracion_email(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Probar configuración de email enviando un email de prueba"""

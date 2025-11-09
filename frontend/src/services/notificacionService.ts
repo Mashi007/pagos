@@ -44,6 +44,8 @@ export interface EmailConfig {
   from_email: string
   from_name: string
   smtp_use_tls: string
+  modo_pruebas?: string
+  email_pruebas?: string
 }
 
 export interface NotificacionVariable {
@@ -199,6 +201,14 @@ class EmailConfigService {
 
   async probarConfiguracionEmail(): Promise<any> {
     return await apiClient.post(`${this.baseUrl}/email/probar`)
+  }
+
+  async obtenerConfiguracionEnvios(): Promise<Record<string, { habilitado: boolean, cco: string[] }>> {
+    return await apiClient.get<Record<string, { habilitado: boolean, cco: string[] }>>(`${this.baseUrl}/notificaciones/envios`)
+  }
+
+  async actualizarConfiguracionEnvios(config: Record<string, { habilitado: boolean, cco: string[] }>): Promise<any> {
+    return await apiClient.put(`${this.baseUrl}/notificaciones/envios`, config)
   }
 }
 

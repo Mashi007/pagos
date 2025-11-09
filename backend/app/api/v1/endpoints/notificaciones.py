@@ -420,7 +420,7 @@ def listar_notificaciones(
 
 
 @router.get("/estadisticas/resumen")
-@cache_result(ttl=300, key_prefix="notificaciones")
+@cache_result(ttl=30, key_prefix="notificaciones")  # Cache reducido a 30 segundos para actualizaciones más rápidas
 def obtener_estadisticas_notificaciones(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

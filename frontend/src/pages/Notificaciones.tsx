@@ -41,9 +41,9 @@ export function Notificaciones() {
   
   // Estado para controlar qué grupos de días están expandidos
   const [gruposExpandidos, setGruposExpandidos] = useState<Record<string, boolean>>({
-    '5': true,  // Por defecto, todos expandidos
-    '3': true,
-    '1': true
+    '5': false,  // Por defecto, todos contraídos
+    '3': false,
+    '1': false
   })
   
   const toggleGrupo = (dias: string) => {
@@ -58,8 +58,8 @@ export function Notificaciones() {
     queryKey: ['notificaciones-previas', filterEstado],
     queryFn: () => notificacionService.listarNotificacionesPrevias(filterEstado || undefined),
     enabled: activeTab === 'previa', // Solo cargar cuando esté en la pestaña previa
-    staleTime: 30 * 1000, // Cache de 30 segundos
-    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos
+    staleTime: 10 * 1000, // Cache de 10 segundos
+    refetchInterval: 30 * 1000, // Refrescar cada 30 segundos para ver actualizaciones más rápido
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
     retry: 2, // Reintentar 2 veces en caso de error
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
@@ -70,8 +70,8 @@ export function Notificaciones() {
     queryKey: ['notificaciones-dia-pago', filterEstado],
     queryFn: () => notificacionService.listarNotificacionesDiaPago(filterEstado || undefined),
     enabled: activeTab === 'dia-pago', // Solo cargar cuando esté en la pestaña dia-pago
-    staleTime: 30 * 1000, // Cache de 30 segundos
-    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos
+    staleTime: 10 * 1000, // Cache de 10 segundos
+    refetchInterval: 30 * 1000, // Refrescar cada 30 segundos para ver actualizaciones más rápido
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
     retry: 2, // Reintentar 2 veces en caso de error
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
@@ -82,8 +82,8 @@ export function Notificaciones() {
     queryKey: ['notificaciones-retrasadas', filterEstado],
     queryFn: () => notificacionService.listarNotificacionesRetrasadas(filterEstado || undefined),
     enabled: activeTab === 'retrasado', // Solo cargar cuando esté en la pestaña retrasado
-    staleTime: 30 * 1000, // Cache de 30 segundos
-    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos
+    staleTime: 10 * 1000, // Cache de 10 segundos
+    refetchInterval: 30 * 1000, // Refrescar cada 30 segundos para ver actualizaciones más rápido
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
     retry: 2, // Reintentar 2 veces en caso de error
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
@@ -94,8 +94,8 @@ export function Notificaciones() {
     queryKey: ['notificaciones-prejudicial', filterEstado],
     queryFn: () => notificacionService.listarNotificacionesPrejudiciales(filterEstado || undefined),
     enabled: activeTab === 'prejudicial', // Solo cargar cuando esté en la pestaña prejudicial
-    staleTime: 30 * 1000, // Cache de 30 segundos
-    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos
+    staleTime: 10 * 1000, // Cache de 10 segundos
+    refetchInterval: 30 * 1000, // Refrescar cada 30 segundos para ver actualizaciones más rápido
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
     retry: 2, // Reintentar 2 veces en caso de error
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
@@ -591,6 +591,12 @@ export function Notificaciones() {
                 <div className="text-2xl font-bold text-red-600">
                   {activeTab === 'previa'
                     ? notificacionesPrevias.filter(n => n.estado === 'FALLIDA').length
+                    : activeTab === 'dia-pago'
+                    ? notificacionesDiaPago.filter(n => n.estado === 'FALLIDA').length
+                    : activeTab === 'retrasado'
+                    ? notificacionesRetrasadas.filter(n => n.estado === 'FALLIDA').length
+                    : activeTab === 'prejudicial'
+                    ? notificacionesPrejudiciales.filter(n => n.estado === 'FALLIDA').length
                     : filteredNotificaciones.filter(n => n.estado === 'FALLIDA').length}
                 </div>
                 <p className="text-xs text-gray-600 mb-2">Requieren revisión</p>
