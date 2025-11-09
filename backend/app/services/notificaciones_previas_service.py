@@ -86,7 +86,7 @@ class NotificacionesPreviasService:
                 if cuota_proxima:
                     # Calcular días antes de vencimiento
                     dias_antes = (cuota_proxima.fecha_vencimiento - hoy).days
-                    
+
                     # Determinar tipo de notificación según días
                     tipo_notificacion = None
                     if dias_antes == 5:
@@ -95,15 +95,15 @@ class NotificacionesPreviasService:
                         tipo_notificacion = "PAGO_3_DIAS_ANTES"
                     elif dias_antes == 1:
                         tipo_notificacion = "PAGO_1_DIA_ANTES"
-                    
+
                     # Obtener datos del cliente
                     cliente = self.db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
-                    
+
                     if cliente:
                         # Buscar notificación relacionada si existe
                         estado_notificacion = "PENDIENTE"  # Por defecto pendiente (aún no enviada)
                         notificacion_existente = None
-                        
+
                         if tipo_notificacion:
                             # Buscar la notificación más reciente de este tipo para este cliente
                             notificacion_existente = (
@@ -117,10 +117,10 @@ class NotificacionesPreviasService:
                                 .order_by(Notificacion.created_at.desc())
                                 .first()
                             )
-                            
+
                             if notificacion_existente:
                                 estado_notificacion = notificacion_existente.estado
-                        
+
                         resultado = {
                             "prestamo_id": prestamo.id,
                             "cliente_id": cliente.id,
