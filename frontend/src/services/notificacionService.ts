@@ -178,6 +178,12 @@ class NotificacionService {
   async eliminarVariable(id: number): Promise<void> {
     return await apiClient.delete(`${this.baseUrl}/variables/${id}`)
   }
+
+  async inicializarVariablesPrecargadas(): Promise<{ mensaje: string, variables_creadas: number, variables_existentes: number, total: number }> {
+    return await apiClient.post<{ mensaje: string, variables_creadas: number, variables_existentes: number, total: number }>(
+      `${this.baseUrl}/variables/inicializar-precargadas`
+    )
+  }
 }
 
 class EmailConfigService {

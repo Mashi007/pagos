@@ -106,6 +106,19 @@ export function GeneraVariables() {
     activa: true,
   })
 
+  const inicializarVariablesPrecargadas = async () => {
+    try {
+      await notificacionService.inicializarVariablesPrecargadas()
+      // Recargar variables después de inicializar
+      await cargarVariables()
+    } catch (error: any) {
+      // Si falla, no es crítico - las variables precargadas del frontend seguirán funcionando
+      if (error?.response?.status !== 404) {
+        console.warn('No se pudieron inicializar variables precargadas en BD:', error?.response?.data?.detail || error.message)
+      }
+    }
+  }
+
   const cargarVariables = async () => {
     setLoading(true)
     try {
@@ -123,7 +136,8 @@ export function GeneraVariables() {
   }
 
   useEffect(() => {
-    cargarVariables()
+    // Inicializar variables precargadas automáticamente al cargar el componente
+    inicializarVariablesPrecargadas()
   }, [])
 
   const guardarVariable = async (variable: VariableConfig) => {

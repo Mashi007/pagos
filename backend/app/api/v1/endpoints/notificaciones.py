@@ -1207,6 +1207,163 @@ def actualizar_variable(
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
+@router.post("/variables/inicializar-precargadas")
+def inicializar_variables_precargadas(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Inicializar variables precargadas en la base de datos
+    Crea automáticamente todas las variables basadas en los campos de las tablas
+    """
+    try:
+        # Verificar si la tabla existe
+        from sqlalchemy import inspect
+        from sqlalchemy.exc import ProgrammingError
+        
+        try:
+            inspector = inspect(db.bind)
+            if "notificacion_variables" not in inspector.get_table_names():
+                logger.warning("Tabla 'notificacion_variables' no existe")
+                raise HTTPException(status_code=400, detail="La tabla 'notificacion_variables' no existe en la base de datos")
+        except Exception as inspect_error:
+            logger.warning(f"Error verificando existencia de tabla: {inspect_error}")
+            raise HTTPException(status_code=400, detail=f"Error verificando tabla: {str(inspect_error)}")
+
+        # Definir campos disponibles (mismo que en frontend)
+        CAMPOS_DISPONIBLES = {
+            "clientes": [
+                {"campo": "id", "descripcion": "ID único del cliente"},
+                {"campo": "cedula", "descripcion": "Cédula de identidad"},
+                {"campo": "nombres", "descripcion": "Nombres completos"},
+                {"campo": "telefono", "descripcion": "Teléfono de contacto"},
+                {"campo": "email", "descripcion": "Correo electrónico"},
+                {"campo": "direccion", "descripcion": "Dirección de residencia"},
+                {"campo": "fecha_nacimiento", "descripcion": "Fecha de nacimiento"},
+                {"campo": "ocupacion", "descripcion": "Ocupación del cliente"},
+                {"campo": "estado", "descripcion": "Estado (ACTIVO, INACTIVO, FINALIZADO)"},
+                {"campo": "activo", "descripcion": "Estado activo (true/false)"},
+                {"campo": "fecha_registro", "descripcion": "Fecha de registro"},
+                {"campo": "fecha_actualizacion", "descripcion": "Fecha de última actualización"},
+                {"campo": "usuario_registro", "descripcion": "Usuario que registró"},
+                {"campo": "notas", "descripcion": "Notas adicionales"},
+            ],
+            "prestamos": [
+                {"campo": "id", "descripcion": "ID del préstamo"},
+                {"campo": "cliente_id", "descripcion": "ID del cliente"},
+                {"campo": "cedula", "descripcion": "Cédula del cliente"},
+                {"campo": "nombres", "descripcion": "Nombres del cliente"},
+                {"campo": "valor_activo", "descripcion": "Valor del activo (vehículo)"},
+                {"campo": "total_financiamiento", "descripcion": "Monto total financiado"},
+                {"campo": "fecha_requerimiento", "descripcion": "Fecha requerida del préstamo"},
+                {"campo": "modalidad_pago", "descripcion": "Modalidad (MENSUAL, QUINCENAL, SEMANAL)"},
+                {"campo": "numero_cuotas", "descripcion": "Número total de cuotas"},
+                {"campo": "cuota_periodo", "descripcion": "Monto de cuota por período"},
+                {"campo": "tasa_interes", "descripcion": "Tasa de interés (%)"},
+                {"campo": "fecha_base_calculo", "descripcion": "Fecha base para cálculo"},
+                {"campo": "producto", "descripcion": "Producto financiero"},
+                {"campo": "producto_financiero", "descripcion": "Producto financiero"},
+                {"campo": "concesionario", "descripcion": "Concesionario"},
+                {"campo": "analista", "descripcion": "Analista asignado"},
+                {"campo": "modelo_vehiculo", "descripcion": "Modelo del vehículo"},
+                {"campo": "estado", "descripcion": "Estado del préstamo"},
+                {"campo": "usuario_proponente", "descripcion": "Usuario proponente"},
+                {"campo": "usuario_aprobador", "descripcion": "Usuario aprobador"},
+                {"campo": "fecha_registro", "descripcion": "Fecha de registro"},
+                {"campo": "fecha_aprobacion", "descripcion": "Fecha de aprobación"},
+            ],
+            "cuotas": [
+                {"campo": "id", "descripcion": "ID de la cuota"},
+                {"campo": "prestamo_id", "descripcion": "ID del préstamo"},
+                {"campo": "numero_cuota", "descripcion": "Número de cuota"},
+                {"campo": "fecha_vencimiento", "descripcion": "Fecha de vencimiento"},
+                {"campo": "fecha_pago", "descripcion": "Fecha de pago"},
+                {"campo": "monto_cuota", "descripcion": "Monto total de la cuota"},
+                {"campo": "monto_capital", "descripcion": "Monto de capital"},
+                {"campo": "monto_interes", "descripcion": "Monto de interés"},
+                {"campo": "saldo_capital_inicial", "descripcion": "Saldo capital inicial"},
+                {"campo": "saldo_capital_final", "descripcion": "Saldo capital final"},
+                {"campo": "capital_pagado", "descripcion": "Capital pagado"},
+                {"campo": "interes_pagado", "descripcion": "Interés pagado"},
+                {"campo": "mora_pagada", "descripcion": "Mora pagada"},
+                {"campo": "total_pagado", "descripcion": "Total pagado"},
+                {"campo": "capital_pendiente", "descripcion": "Capital pendiente"},
+                {"campo": "interes_pendiente", "descripcion": "Interés pendiente"},
+                {"campo": "dias_mora", "descripcion": "Días de mora"},
+                {"campo": "monto_mora", "descripcion": "Monto de mora"},
+                {"campo": "tasa_mora", "descripcion": "Tasa de mora (%)"},
+                {"campo": "dias_morosidad", "descripcion": "Días de morosidad"},
+                {"campo": "monto_morosidad", "descripcion": "Monto de morosidad"},
+                {"campo": "estado", "descripcion": "Estado de la cuota"},
+            ],
+            "pagos": [
+                {"campo": "id", "descripcion": "ID del pago"},
+                {"campo": "cedula", "descripcion": "Cédula del cliente"},
+                {"campo": "prestamo_id", "descripcion": "ID del préstamo"},
+                {"campo": "numero_cuota", "descripcion": "Número de cuota"},
+                {"campo": "fecha_pago", "descripcion": "Fecha de pago"},
+                {"campo": "fecha_registro", "descripcion": "Fecha de registro"},
+                {"campo": "monto_pagado", "descripcion": "Monto pagado"},
+                {"campo": "numero_documento", "descripcion": "Número de documento"},
+                {"campo": "institucion_bancaria", "descripcion": "Institución bancaria"},
+                {"campo": "estado", "descripcion": "Estado del pago"},
+                {"campo": "conciliado", "descripcion": "Si está conciliado"},
+                {"campo": "fecha_conciliacion", "descripcion": "Fecha de conciliación"},
+            ],
+        }
+
+        variables_creadas = 0
+        variables_existentes = 0
+
+        for tabla, campos in CAMPOS_DISPONIBLES.items():
+            for campo_info in campos:
+                campo = campo_info["campo"]
+                descripcion = campo_info["descripcion"]
+                
+                # Generar nombre de variable: tabla_campo (remover 's' final)
+                nombre_variable = f"{tabla[:-1]}_{campo}" if tabla.endswith("s") else f"{tabla}_{campo}"
+                
+                # Verificar si ya existe
+                existente = db.query(NotificacionVariable).filter(
+                    NotificacionVariable.nombre_variable == nombre_variable
+                ).first()
+                
+                if not existente:
+                    nueva_variable = NotificacionVariable(
+                        nombre_variable=nombre_variable,
+                        tabla=tabla,
+                        campo_bd=campo,
+                        descripcion=descripcion,
+                        activa=True,
+                    )
+                    db.add(nueva_variable)
+                    variables_creadas += 1
+                else:
+                    variables_existentes += 1
+
+        db.commit()
+        
+        logger.info(f"✅ Variables precargadas inicializadas: {variables_creadas} creadas, {variables_existentes} ya existían")
+        
+        return {
+            "mensaje": "Variables precargadas inicializadas exitosamente",
+            "variables_creadas": variables_creadas,
+            "variables_existentes": variables_existentes,
+            "total": variables_creadas + variables_existentes,
+        }
+
+    except HTTPException:
+        raise
+    except ProgrammingError as e:
+        db.rollback()
+        logger.error(f"Error de base de datos: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(e)}")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error inicializando variables precargadas: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
+
 @router.delete("/variables/{variable_id}", status_code=204)
 def eliminar_variable(
     variable_id: int,
