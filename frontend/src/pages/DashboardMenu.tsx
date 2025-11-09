@@ -16,6 +16,12 @@ import {
   FileText,
   PieChart,
   LineChart,
+  Database,
+  RefreshCw,
+  Info,
+  SearchX,
+  X,
+  Settings,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -56,7 +62,7 @@ export function DashboardMenu() {
 
   const [filtros, setFiltros] = useState<DashboardFiltros>({})
   const [periodo, setPeriodo] = useState('año') // ✅ Por defecto: "Este año"
-  const { construirParams, construirFiltrosObject } = useDashboardFiltros(filtros)
+  const { construirParams, construirFiltrosObject, tieneFiltrosActivos, cantidadFiltrosActivos } = useDashboardFiltros(filtros)
 
   // ✅ OPTIMIZACIÓN PRIORIDAD 1: Carga por batches con priorización
   // Batch 1: CRÍTICO - Opciones de filtros y KPIs principales (carga inmediata)
@@ -1454,7 +1460,7 @@ export function DashboardMenu() {
                           Reintentar
                         </Button>
                       </div>
-                    ) : datosFinanciamientoRangos && datosFinanciamientoRangos.rangos && Array.isArray(datosFinanciamientoRangos.rangos) && datosFinanciamientoRangos.rangos.length > 0 ? (
+                    ) : datosFinanciamientoRangos?.rangos && Array.isArray(datosFinanciamientoRangos.rangos) && datosFinanciamientoRangos.rangos.length > 0 ? (
                       (() => {
                         // ✅ Filtrar solo rangos con datos (cantidad_prestamos > 0)
                         const rangosConDatos = datosFinanciamientoRangos.rangos.filter(r => (r.cantidad_prestamos || 0) > 0)
@@ -1465,28 +1471,101 @@ export function DashboardMenu() {
                         const diferencia = totalBackend - sumaRangosMostrados
                         
                         if (rangosConDatos.length === 0) {
+                          const filtrosAplicados = construirFiltrosObject(periodo)
+                          const filtrosInfo = []
+                          if (filtrosAplicados.analista) filtrosInfo.push(`Analista: ${filtrosAplicados.analista}`)
+                          if (filtrosAplicados.concesionario) filtrosInfo.push(`Concesionario: ${filtrosAplicados.concesionario}`)
+                          if (filtrosAplicados.modelo) filtrosInfo.push(`Modelo: ${filtrosAplicados.modelo}`)
+                          if (filtrosAplicados.fecha_inicio) filtrosInfo.push(`Desde: ${new Date(filtrosAplicados.fecha_inicio).toLocaleDateString('es-EC')}`)
+                          if (filtrosAplicados.fecha_fin) filtrosInfo.push(`Hasta: ${new Date(filtrosAplicados.fecha_fin).toLocaleDateString('es-EC')}`)
+                          
                           return (
-                            <div className="h-[450px] flex flex-col items-center justify-center text-gray-400">
-                              <p className="text-sm mb-2 font-semibold">No hay datos disponibles</p>
-                              {totalBackend > 0 ? (
-                                <p className="text-xs text-gray-500 mt-2 text-center px-4">
-                                  Total de préstamos (backend): {totalBackend.toLocaleString('es-EC')}, pero no hay datos en los rangos configurados
-                                </p>
-                              ) : (
-                                <p className="text-xs text-gray-500 mt-2 text-center px-4">
-                                  No se encontraron préstamos aprobados con los filtros aplicados
-                                </p>
-                              )}
+                            <div className="h-[450px] flex flex-col items-center justify-center">
+                              <div className="flex flex-col items-center space-y-4 px-6 max-w-lg">
+                                <div className="relative">
+                                  <div className="absolute inset-0 bg-orange-100 rounded-full blur-xl opacity-50"></div>
+                                  <Database className="h-16 w-16 text-orange-400 relative z-10" strokeWidth={1.5} />
+                                </div>
+                                <div className="text-center space-y-3">
+                                  <p className="text-base font-semibold text-gray-700">No hay datos disponibles</p>
+                                  {totalBackend > 0 ? (
+                                    <div className="space-y-3">
+                                      <p className="text-sm text-gray-500">
+                                        Se encontraron <span className="font-semibold text-orange-600">{totalBackend.toLocaleString('es-EC')}</span> préstamos en el backend, pero no hay datos en los rangos configurados.
+                                      </p>
+                                      <div className="flex items-center justify-center gap-2 text-xs text-gray-400 bg-orange-50 rounded-lg px-3 py-2">
+                                        <Info className="h-4 w-4" />
+                                        <span>Los préstamos pueden estar fuera del rango de $0 - $50,000</span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-3">
+                                      <p className="text-sm text-gray-500">
+                                        No se encontraron préstamos aprobados con los filtros aplicados.
+                                      </p>
+                                      {tieneFiltrosActivos && (
+                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-left">
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <Filter className="h-4 w-4 text-blue-600" />
+                                            <span className="text-xs font-semibold text-blue-800">
+                                              Filtros activos ({cantidadFiltrosActivos}):
+                                            </span>
+                                          </div>
+                                          <ul className="text-xs text-blue-700 space-y-1 ml-6">
+                                            {filtrosInfo.map((info, idx) => (
+                                              <li key={idx} className="list-disc">{info}</li>
+                                            ))}
+                                          </ul>
+                                          <p className="text-xs text-blue-600 mt-2 italic">
+                                            Período: {periodo === 'año' ? 'Este año' : periodo === 'mes' ? 'Este mes' : periodo === 'semana' ? 'Esta semana' : periodo}
+                                          </p>
+                                        </div>
+                                      )}
+                                      <p className="text-xs text-gray-400 italic">
+                                        💡 Sugerencia: Intenta ajustar los filtros o cambiar el período seleccionado
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Button 
+                                    onClick={() => refetchFinanciamientoRangos()} 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="border-orange-200 text-orange-600 hover:bg-orange-50"
+                                  >
+                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                    Recargar datos
+                                  </Button>
+                                  {tieneFiltrosActivos && (
+                                    <Button 
+                                      onClick={() => {
+                                        setFiltros({})
+                                        refetchFinanciamientoRangos()
+                                      }} 
+                                      variant="outline" 
+                                      size="sm"
+                                      className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                                    >
+                                      <X className="h-4 w-4 mr-2" />
+                                      Limpiar filtros
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           )
                         }
                         
                         // ✅ Calcular el máximo dinámicamente basado en los datos reales
                         // Encontrar el valor máximo de cantidad_prestamos en los rangos con datos
-                        const maxCantidad = Math.max(...rangosConDatos.map(r => r.cantidad_prestamos || 0))
+                        // ✅ BUGFIX: Validar que haya datos antes de calcular max
+                        const maxCantidad = rangosConDatos.length > 0 
+                          ? Math.max(...rangosConDatos.map(r => r.cantidad_prestamos || 0))
+                          : 0
                         // Agregar un 10% de margen para mejor visualización
                         const dominioMin = 0
-                        const dominioMax = Math.ceil(maxCantidad * 1.1)
+                        const dominioMax = maxCantidad > 0 ? Math.ceil(maxCantidad * 1.1) : 100
                         
                         // Ordenar rangos por valor numérico del rango (de menor a mayor - invertido)
                         const rangosOrdenados = [...rangosConDatos].sort((a, b) => {
@@ -1572,13 +1651,83 @@ export function DashboardMenu() {
                         )
                       })()
                     ) : (
-                      <div className="h-[450px] flex flex-col items-center justify-center text-gray-400">
-                        <p className="text-sm mb-2">No hay datos disponibles</p>
-                        {datosFinanciamientoRangos && datosFinanciamientoRangos.total_prestamos === 0 && (
-                          <p className="text-xs text-gray-500 mt-2">
-                            No se encontraron préstamos aprobados con los filtros aplicados
-                          </p>
-                        )}
+                      <div className="h-[450px] flex flex-col items-center justify-center">
+                        <div className="flex flex-col items-center space-y-4 px-6 max-w-lg">
+                          <div className="relative">
+                            <div className="absolute inset-0 bg-orange-100 rounded-full blur-xl opacity-50"></div>
+                            <SearchX className="h-16 w-16 text-orange-400 relative z-10" strokeWidth={1.5} />
+                          </div>
+                          <div className="text-center space-y-3">
+                            <p className="text-base font-semibold text-gray-700">No hay datos disponibles</p>
+                            {datosFinanciamientoRangos && datosFinanciamientoRangos.total_prestamos === 0 ? (
+                              <div className="space-y-3">
+                                <p className="text-sm text-gray-500">
+                                  No se encontraron préstamos aprobados con los filtros aplicados.
+                                </p>
+                                {tieneFiltrosActivos && (() => {
+                                  const filtrosAplicados = construirFiltrosObject(periodo)
+                                  const filtrosInfo = []
+                                  if (filtrosAplicados.analista) filtrosInfo.push(`Analista: ${filtrosAplicados.analista}`)
+                                  if (filtrosAplicados.concesionario) filtrosInfo.push(`Concesionario: ${filtrosAplicados.concesionario}`)
+                                  if (filtrosAplicados.modelo) filtrosInfo.push(`Modelo: ${filtrosAplicados.modelo}`)
+                                  if (filtrosAplicados.fecha_inicio) filtrosInfo.push(`Desde: ${new Date(filtrosAplicados.fecha_inicio).toLocaleDateString('es-EC')}`)
+                                  if (filtrosAplicados.fecha_fin) filtrosInfo.push(`Hasta: ${new Date(filtrosAplicados.fecha_fin).toLocaleDateString('es-EC')}`)
+                                  
+                                  return (
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-left">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <Filter className="h-4 w-4 text-blue-600" />
+                                        <span className="text-xs font-semibold text-blue-800">
+                                          Filtros activos ({cantidadFiltrosActivos}):
+                                        </span>
+                                      </div>
+                                      <ul className="text-xs text-blue-700 space-y-1 ml-6">
+                                        {filtrosInfo.map((info, idx) => (
+                                          <li key={idx} className="list-disc">{info}</li>
+                                        ))}
+                                      </ul>
+                                      <p className="text-xs text-blue-600 mt-2 italic">
+                                        Período: {periodo === 'año' ? 'Este año' : periodo === 'mes' ? 'Este mes' : periodo === 'semana' ? 'Esta semana' : periodo}
+                                      </p>
+                                    </div>
+                                  )
+                                })()}
+                                <p className="text-xs text-gray-400 italic">
+                                  💡 Sugerencia: Intenta ajustar los filtros o cambiar el período seleccionado
+                                </p>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500">
+                                No se pudieron cargar los datos. Verifica tu conexión e intenta nuevamente.
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Button 
+                              onClick={() => refetchFinanciamientoRangos()} 
+                              variant="outline" 
+                              size="sm"
+                              className="border-orange-200 text-orange-600 hover:bg-orange-50"
+                            >
+                              <RefreshCw className="h-4 w-4 mr-2" />
+                              Recargar datos
+                            </Button>
+                            {tieneFiltrosActivos && (
+                              <Button 
+                                onClick={() => {
+                                  setFiltros({})
+                                  refetchFinanciamientoRangos()
+                                }} 
+                                variant="outline" 
+                                size="sm"
+                                className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                              >
+                                <X className="h-4 w-4 mr-2" />
+                                Limpiar filtros
+                              </Button>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )}
                     {/* ✅ Mostrar resumen de totales si hay datos */}
