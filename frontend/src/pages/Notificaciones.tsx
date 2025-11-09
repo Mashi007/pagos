@@ -17,7 +17,7 @@ import {
   Download,
   Eye
 } from 'lucide-react'
-import * as XLSX from 'xlsx'
+// XLSX se importa dinámicamente cuando se necesita
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -179,7 +179,7 @@ export function Notificaciones() {
     setPage(1)
   }
 
-  const descargarExcel = (estado: 'PENDIENTE' | 'FALLIDA') => {
+  const descargarExcel = async (estado: 'PENDIENTE' | 'FALLIDA') => {
     try {
       // Obtener las notificaciones según el estado
       const notificacionesFiltradas = activeTab === 'previa'
@@ -190,6 +190,10 @@ export function Notificaciones() {
         toast.warning(`No hay notificaciones ${estado === 'PENDIENTE' ? 'pendientes' : 'fallidas'} para descargar`)
         return
       }
+
+      // Importar XLSX dinámicamente
+      const { importXLSX } = await import('@/types/xlsx')
+      const XLSX = await importXLSX()
 
       // Preparar los datos para Excel
       const datosExcel = notificacionesFiltradas.map(notif => {
