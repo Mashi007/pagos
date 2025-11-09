@@ -98,14 +98,49 @@ try:
     if settings.REDIS_URL:
         # Usar URL completa si está disponible
         redis_url = settings.REDIS_URL
-        # Si tiene password, incluirla en la URL
+        
+        # ✅ MEJORA: Manejar URLs de Render.com que pueden venir sin password
+        # Render.com puede proporcionar URLs en formato: redis://red-xxxxx:6379
+        # Si no tiene password en la URL pero REDIS_PASSWORD está configurado, agregarlo
+        # Si no tiene password, intentar conectar sin autenticación
         if settings.REDIS_PASSWORD and "@" not in redis_url:
-            # Extraer componentes de la URL si es necesario
+            # Extraer componentes de la URL
             if redis_url.startswith("redis://"):
-                parts = redis_url.replace("redis://", "").split("/")
-                host_port = parts[0]
-                db = parts[1] if len(parts) > 1 else str(settings.REDIS_DB)
-                redis_url = f"redis://:{settings.REDIS_PASSWORD}@{host_port}/{db}"
+                # Remover protocolo
+                url_without_protocol = redis_url.replace("redis://", "")
+                
+                # Separar host:port y db (si existe)
+                if "/" in url_without_protocol:
+                    host_port, db = url_without_protocol.split("/", 1)
+                else:
+                    host_port = url_without_protocol
+                    db = str(settings.REDIS_DB)
+                
+                # Construir URL con password: redis://default:password@host:port/db
+                # Render.com usa 'default' como usuario
+                redis_url = f"redis://default:{settings.REDIS_PASSWORD}@{host_port}/{db}"
+                logger.info(f"🔗 Configurando Redis con password desde REDIS_PASSWORD")
+            else:
+                # Si no es formato redis://, intentar agregar password de otra forma
+                logger.warning(f"⚠️ Formato de REDIS_URL no reconocido: {redis_url[:20]}...")
+        elif "@" not in redis_url:
+            # ✅ NUEVO: Si no hay password configurado y la URL no tiene autenticación
+            # Agregar /0 si no tiene base de datos especificada
+            if not redis_url.endswith("/0") and "/" not in redis_url.replace("redis://", ""):
+                if not redis_url.endswith("/"):
+                    redis_url = f"{redis_url}/0"
+            logger.info(f"🔗 Conectando a Redis sin autenticación (sin usuario/password)")
+        
+        # Log de URL (sin mostrar password completo)
+        if "@" in redis_url:
+            # Ocultar password en logs
+            safe_url = redis_url.split("@")[0].split(":")[0] + ":***@" + redis_url.split("@")[1]
+            logger.info(f"🔗 Conectando a Redis: {safe_url}")
+        else:
+            logger.info(f"🔗 Conectando a Redis: {redis_url}")
+        
+        # ✅ Intentar conexión sin password primero si no hay @ en la URL
+        # Si falla, el error se capturará en el except general
         redis_client = redis.from_url(redis_url, decode_responses=False, socket_timeout=settings.REDIS_SOCKET_TIMEOUT)
     else:
         # Usar componentes individuales
@@ -180,7 +215,21 @@ except ImportError:
         _cache_logs_shown = True
 except Exception as e:
     if not _cache_logs_shown:
-        logger.warning(f"⚠️ No se pudo conectar a Redis: {type(e).__name__}: {str(e)}")
+        error_msg = str(e)
+        error_type = type(e).__name__
+        
+        # ✅ MEJORA: Mensajes más específicos según el tipo de error
+        if "NOAUTH" in error_msg or "Authentication" in error_msg:
+            logger.warning(f"⚠️ Redis requiere autenticación pero no se proporcionó password")
+            logger.info("   Opciones:")
+            logger.info("   1. Agregar REDIS_PASSWORD en variables de entorno")
+            logger.info("   2. O usar URL completa: redis://default:password@host:port")
+        elif "Connection refused" in error_msg or "Name or service not known" in error_msg:
+            logger.warning(f"⚠️ No se pudo conectar a Redis: {error_type}")
+            logger.info("   Verificar que Redis esté corriendo y la URL sea correcta")
+        else:
+            logger.warning(f"⚠️ No se pudo conectar a Redis: {error_type}: {error_msg}")
+        
         logger.info("   Usando MemoryCache como fallback")
         _cache_logs_shown = True
 
