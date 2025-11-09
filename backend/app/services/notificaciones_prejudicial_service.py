@@ -41,8 +41,7 @@ class NotificacionesPrejudicialService:
             # Query optimizada: clientes con 3+ cuotas atrasadas
             # Ordenado por fecha de vencimiento más antigua primero
             query_optimizada = text(
-                """
-                WITH cuotas_atrasadas AS (
+                """WITH cuotas_atrasadas AS (
                     SELECT 
                         p.id as prestamo_id,
                         p.cliente_id,
@@ -88,8 +87,7 @@ class NotificacionesPrejudicialService:
                     'PREJUDICIAL' as tipo_notificacion
                 FROM cuotas_atrasadas ca
                 INNER JOIN clientes_prejudiciales cp ON cp.cliente_id = ca.cliente_id
-                ORDER BY ca.fecha_vencimiento ASC, ca.cliente_id, ca.numero_cuota
-            """
+                ORDER BY ca.fecha_vencimiento ASC, ca.cliente_id, ca.numero_cuota"""
             )
 
             import time
@@ -97,12 +95,9 @@ class NotificacionesPrejudicialService:
             start_time = time.time()
 
             try:
-                result = self.db.execute(
-                    query_optimizada,
-                    {
-                        "hoy": hoy,
-                    },
-                )
+                # Usar bindparams para asegurar que los parámetros se pasen correctamente
+                query_bind = query_optimizada.bindparams(hoy=hoy)
+                result = self.db.execute(query_bind)
                 rows = result.fetchall()
                 elapsed_time = time.time() - start_time
                 logger.info(
