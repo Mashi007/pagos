@@ -98,7 +98,7 @@ try:
     if settings.REDIS_URL:
         # Usar URL completa si está disponible
         redis_url = settings.REDIS_URL
-        
+
         # ✅ MEJORA: Manejar URLs de Render.com que pueden venir sin password
         # Render.com puede proporcionar URLs en formato: redis://red-xxxxx:6379
         # Si no tiene password en la URL pero REDIS_PASSWORD está configurado, agregarlo
@@ -108,14 +108,14 @@ try:
             if redis_url.startswith("redis://"):
                 # Remover protocolo
                 url_without_protocol = redis_url.replace("redis://", "")
-                
+
                 # Separar host:port y db (si existe)
                 if "/" in url_without_protocol:
                     host_port, db = url_without_protocol.split("/", 1)
                 else:
                     host_port = url_without_protocol
                     db = str(settings.REDIS_DB)
-                
+
                 # Construir URL con password: redis://default:password@host:port/db
                 # Render.com usa 'default' como usuario
                 redis_url = f"redis://default:{settings.REDIS_PASSWORD}@{host_port}/{db}"
@@ -130,7 +130,7 @@ try:
                 if not redis_url.endswith("/"):
                     redis_url = f"{redis_url}/0"
             logger.info(f"🔗 Conectando a Redis sin autenticación (sin usuario/password)")
-        
+
         # Log de URL (sin mostrar password completo)
         if "@" in redis_url:
             # Ocultar password en logs
@@ -138,7 +138,7 @@ try:
             logger.info(f"🔗 Conectando a Redis: {safe_url}")
         else:
             logger.info(f"🔗 Conectando a Redis: {redis_url}")
-        
+
         # ✅ Intentar conexión sin password primero si no hay @ en la URL
         # Si falla, el error se capturará en el except general
         redis_client = redis.from_url(redis_url, decode_responses=False, socket_timeout=settings.REDIS_SOCKET_TIMEOUT)
@@ -217,7 +217,7 @@ except Exception as e:
     if not _cache_logs_shown:
         error_msg = str(e)
         error_type = type(e).__name__
-        
+
         # ✅ MEJORA: Mensajes más específicos según el tipo de error
         if "NOAUTH" in error_msg or "Authentication" in error_msg:
             logger.warning(f"⚠️ Redis requiere autenticación pero no se proporcionó password")
@@ -229,7 +229,7 @@ except Exception as e:
             logger.info("   Verificar que Redis esté corriendo y la URL sea correcta")
         else:
             logger.warning(f"⚠️ No se pudo conectar a Redis: {error_type}: {error_msg}")
-        
+
         logger.info("   Usando MemoryCache como fallback")
         _cache_logs_shown = True
 
