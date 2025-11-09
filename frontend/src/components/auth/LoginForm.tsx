@@ -57,6 +57,7 @@ export function LoginForm() {
     handleSubmit,
     formState: { errors },
     setError,
+    watch,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -65,6 +66,9 @@ export function LoginForm() {
       remember: true, // Por defecto activado para persistencia
     },
   })
+
+  // Observar el valor del checkbox para reflejar su estado
+  const rememberChecked = watch('remember')
 
   const onSubmit = async (data: LoginFormData) => {
     try {
@@ -213,6 +217,7 @@ export function LoginForm() {
                   <input
                     {...register('remember')}
                     type="checkbox"
+                    checked={rememberChecked}
                     className="rounded border-gray-300 text-primary focus:ring-primary"
                   />
                   <span className="text-sm text-muted-foreground">
