@@ -1018,13 +1018,13 @@ def listar_variables(
     """
     try:
         query = db.query(NotificacionVariable)
-        
+
         if activa is not None:
             query = query.filter(NotificacionVariable.activa == activa)
-        
+
         variables = query.order_by(NotificacionVariable.nombre_variable).all()
         return [v.to_dict() for v in variables]
-    
+
     except Exception as e:
         logger.error(f"Error listando variables: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
@@ -1041,12 +1041,12 @@ def obtener_variable(
     """
     try:
         variable = db.query(NotificacionVariable).filter(NotificacionVariable.id == variable_id).first()
-        
+
         if not variable:
             raise HTTPException(status_code=404, detail="Variable no encontrada")
-        
+
         return variable.to_dict()
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1065,16 +1065,13 @@ def crear_variable(
     """
     try:
         # Verificar si ya existe una variable con ese nombre
-        existente = db.query(NotificacionVariable).filter(
-            NotificacionVariable.nombre_variable == variable.nombre_variable
-        ).first()
-        
+        existente = (
+            db.query(NotificacionVariable).filter(NotificacionVariable.nombre_variable == variable.nombre_variable).first()
+        )
+
         if existente:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Ya existe una variable con el nombre '{variable.nombre_variable}'"
-            )
-        
+            raise HTTPException(status_code=400, detail=f"Ya existe una variable con el nombre '{variable.nombre_variable}'")
+
         nueva_variable = NotificacionVariable(
             nombre_variable=variable.nombre_variable,
             tabla=variable.tabla,
@@ -1082,13 +1079,13 @@ def crear_variable(
             descripcion=variable.descripcion,
             activa=variable.activa,
         )
-        
+
         db.add(nueva_variable)
         db.commit()
         db.refresh(nueva_variable)
-        
+
         return nueva_variable.to_dict()
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1109,23 +1106,25 @@ def actualizar_variable(
     """
     try:
         variable_db = db.query(NotificacionVariable).filter(NotificacionVariable.id == variable_id).first()
-        
+
         if not variable_db:
             raise HTTPException(status_code=404, detail="Variable no encontrada")
-        
+
         # Si se actualiza el nombre, verificar que no exista otra con ese nombre
         if variable.nombre_variable and variable.nombre_variable != variable_db.nombre_variable:
-            existente = db.query(NotificacionVariable).filter(
-                NotificacionVariable.nombre_variable == variable.nombre_variable,
-                NotificacionVariable.id != variable_id
-            ).first()
-            
+            existente = (
+                db.query(NotificacionVariable)
+                .filter(
+                    NotificacionVariable.nombre_variable == variable.nombre_variable, NotificacionVariable.id != variable_id
+                )
+                .first()
+            )
+
             if existente:
                 raise HTTPException(
-                    status_code=400,
-                    detail=f"Ya existe una variable con el nombre '{variable.nombre_variable}'"
+                    status_code=400, detail=f"Ya existe una variable con el nombre '{variable.nombre_variable}'"
                 )
-        
+
         # Actualizar campos
         if variable.nombre_variable is not None:
             variable_db.nombre_variable = variable.nombre_variable
@@ -1137,12 +1136,12 @@ def actualizar_variable(
             variable_db.descripcion = variable.descripcion
         if variable.activa is not None:
             variable_db.activa = variable.activa
-        
+
         db.commit()
         db.refresh(variable_db)
-        
+
         return variable_db.to_dict()
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1162,15 +1161,15 @@ def eliminar_variable(
     """
     try:
         variable = db.query(NotificacionVariable).filter(NotificacionVariable.id == variable_id).first()
-        
+
         if not variable:
             raise HTTPException(status_code=404, detail="Variable no encontrada")
-        
+
         db.delete(variable)
         db.commit()
-        
+
         return None
-    
+
     except HTTPException:
         raise
     except Exception as e:

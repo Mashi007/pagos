@@ -34,4 +34,3 @@ class NotificacionVariableResponse(NotificacionVariableBase):
 
     class Config:
         from_attributes = True
-
