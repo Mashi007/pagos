@@ -228,13 +228,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI):
     """Gestión del ciclo de vida"""
     init_db_startup()
-    
+
     # Iniciar scheduler para tareas automáticas
     from app.core import scheduler as scheduler_module
+
     scheduler_module.iniciar_scheduler()
-    
+
     yield
-    
+
     # Detener scheduler al cerrar
     scheduler_module.detener_scheduler()
     init_db_shutdown()

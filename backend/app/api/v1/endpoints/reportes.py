@@ -428,7 +428,8 @@ def reporte_morosidad(
 
         # 1. Resumen General de Morosidad
         resumen_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     COUNT(DISTINCT p.id) as total_prestamos_mora,
                     COUNT(DISTINCT p.cedula) as total_clientes_mora,
@@ -442,7 +443,8 @@ def reporte_morosidad(
                   AND c.dias_morosidad > 0
                   AND c.monto_morosidad > 0
                   AND cl.estado != 'INACTIVO'
-            """)
+            """
+            )
         )
         resumen = resumen_query.first()
         total_prestamos_mora = resumen[0] or 0
@@ -452,7 +454,8 @@ def reporte_morosidad(
 
         # 2. Distribución por Rango de Días
         distribucion_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     CASE 
                         WHEN c.dias_morosidad BETWEEN 1 AND 30 THEN '1-30 días'
@@ -481,7 +484,8 @@ def reporte_morosidad(
                         WHEN '91-180 días' THEN 4
                         ELSE 5
                     END
-            """)
+            """
+            )
         )
         distribucion_por_rango = [
             {
@@ -496,7 +500,8 @@ def reporte_morosidad(
 
         # 3. Morosidad por Analista
         analistas_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     COALESCE(p.analista, p.producto_financiero, 'Sin Analista') as analista,
                     COUNT(DISTINCT p.id) as cantidad_prestamos,
@@ -512,7 +517,8 @@ def reporte_morosidad(
                   AND cl.estado != 'INACTIVO'
                 GROUP BY COALESCE(p.analista, p.producto_financiero, 'Sin Analista')
                 ORDER BY monto_total_mora DESC
-            """)
+            """
+            )
         )
         morosidad_por_analista = [
             {
@@ -527,7 +533,8 @@ def reporte_morosidad(
 
         # 4. Detalle de Préstamos en Mora
         detalle_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     p.id as prestamo_id,
                     p.cedula,
@@ -548,7 +555,8 @@ def reporte_morosidad(
                   AND cl.estado != 'INACTIVO'
                 GROUP BY p.id, p.cedula, p.nombres, p.total_financiamiento, p.analista, p.producto_financiero, p.concesionario
                 ORDER BY monto_total_mora DESC
-            """)
+            """
+            )
         )
         detalle_prestamos = [
             {
@@ -600,7 +608,8 @@ def reporte_financiero(
 
         # 1. Resumen Financiero General
         resumen_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     COALESCE(SUM(pa.monto_pagado), 0) as total_ingresos,
                     COUNT(pa.id) as cantidad_pagos,
@@ -613,7 +622,8 @@ def reporte_financiero(
                 INNER JOIN clientes cl ON cl.id = p.cliente_id
                 WHERE p.estado = 'APROBADO'
                   AND cl.estado != 'INACTIVO'
-            """)
+            """
+            )
         )
         resumen = resumen_query.first()
         total_ingresos = Decimal(str(resumen[0] or 0))
@@ -626,7 +636,8 @@ def reporte_financiero(
 
         # 2. Ingresos por Mes (Últimos 12 meses)
         ingresos_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     DATE_TRUNC('month', pa.fecha_pago)::date as mes,
                     COUNT(pa.id) as cantidad_pagos,
@@ -640,7 +651,8 @@ def reporte_financiero(
                   AND pa.fecha_pago >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '12 months'
                 GROUP BY DATE_TRUNC('month', pa.fecha_pago)
                 ORDER BY mes DESC
-            """)
+            """
+            )
         )
         ingresos_por_mes = [
             {
@@ -653,7 +665,8 @@ def reporte_financiero(
 
         # 3. Egresos Programados (Cuotas por Vencer)
         egresos_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     DATE_TRUNC('month', c.fecha_vencimiento)::date as mes,
                     COUNT(c.id) as cantidad_cuotas,
@@ -668,7 +681,8 @@ def reporte_financiero(
                   AND c.fecha_vencimiento < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '12 months'
                 GROUP BY DATE_TRUNC('month', c.fecha_vencimiento)
                 ORDER BY mes
-            """)
+            """
+            )
         )
         egresos_programados = [
             {
@@ -684,16 +698,18 @@ def reporte_financiero(
         ingresos_dict = {item["mes"]: item["monto_total"] for item in ingresos_por_mes}
         egresos_dict = {item["mes"]: item["monto_programado"] for item in egresos_programados}
         todos_meses = set(list(ingresos_dict.keys()) + list(egresos_dict.keys()))
-        
+
         for mes in sorted(todos_meses):
             ingresos = ingresos_dict.get(mes, 0)
             egresos = egresos_dict.get(mes, 0)
-            flujo_caja.append({
-                "mes": mes,
-                "ingresos": ingresos,
-                "egresos_programados": egresos,
-                "flujo_neto": ingresos - egresos,
-            })
+            flujo_caja.append(
+                {
+                    "mes": mes,
+                    "ingresos": ingresos,
+                    "egresos_programados": egresos,
+                    "flujo_neto": ingresos - egresos,
+                }
+            )
 
         resultado = ReporteFinanciero(
             fecha_corte=fecha_corte,
@@ -730,7 +746,8 @@ def reporte_asesores(
 
         # 1. Resumen por Analista
         resumen_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     COALESCE(p.analista, p.producto_financiero, 'Sin Analista') as analista,
                     COUNT(DISTINCT p.id) as total_prestamos,
@@ -746,7 +763,8 @@ def reporte_asesores(
                   AND cl.estado != 'INACTIVO'
                 GROUP BY COALESCE(p.analista, p.producto_financiero, 'Sin Analista')
                 ORDER BY cartera_total DESC
-            """)
+            """
+            )
         )
         resumen_por_analista = []
         for row in resumen_query.fetchall():
@@ -755,21 +773,24 @@ def reporte_asesores(
             morosidad_total = float(row[4])
             porcentaje_cobrado = (total_cobrado / cartera_total * 100) if cartera_total > 0 else 0
             porcentaje_morosidad = (morosidad_total / cartera_total * 100) if cartera_total > 0 else 0
-            
-            resumen_por_analista.append({
-                "analista": row[0],
-                "total_prestamos": row[1],
-                "total_clientes": row[2],
-                "cartera_total": cartera_total,
-                "morosidad_total": morosidad_total,
-                "total_cobrado": total_cobrado,
-                "porcentaje_cobrado": porcentaje_cobrado,
-                "porcentaje_morosidad": porcentaje_morosidad,
-            })
+
+            resumen_por_analista.append(
+                {
+                    "analista": row[0],
+                    "total_prestamos": row[1],
+                    "total_clientes": row[2],
+                    "cartera_total": cartera_total,
+                    "morosidad_total": morosidad_total,
+                    "total_cobrado": total_cobrado,
+                    "porcentaje_cobrado": porcentaje_cobrado,
+                    "porcentaje_morosidad": porcentaje_morosidad,
+                }
+            )
 
         # 2. Desempeño Mensual (Últimos 6 meses)
         desempeno_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     COALESCE(p.analista, p.producto_financiero, 'Sin Analista') as analista,
                     DATE_TRUNC('month', p.fecha_aprobacion)::date as mes,
@@ -786,7 +807,8 @@ def reporte_asesores(
                   AND p.fecha_aprobacion >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '6 months'
                 GROUP BY COALESCE(p.analista, p.producto_financiero, 'Sin Analista'), DATE_TRUNC('month', p.fecha_aprobacion)
                 ORDER BY analista, mes DESC
-            """)
+            """
+            )
         )
         desempeno_mensual = [
             {
@@ -801,7 +823,8 @@ def reporte_asesores(
 
         # 3. Clientes por Analista
         clientes_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     COALESCE(p.analista, p.producto_financiero, 'Sin Analista') as analista,
                     p.cedula,
@@ -818,7 +841,8 @@ def reporte_asesores(
                   AND cl.estado != 'INACTIVO'
                 GROUP BY COALESCE(p.analista, p.producto_financiero, 'Sin Analista'), p.cedula, p.nombres
                 ORDER BY analista, monto_total_prestamos DESC
-            """)
+            """
+            )
         )
         clientes_por_analista = [
             {
@@ -861,7 +885,8 @@ def reporte_productos(
 
         # 1. Resumen por Producto/Modelo
         resumen_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     COALESCE(p.modelo_vehiculo, p.producto, 'Sin Modelo') as producto,
                     COUNT(DISTINCT p.id) as total_prestamos,
@@ -878,28 +903,32 @@ def reporte_productos(
                   AND cl.estado != 'INACTIVO'
                 GROUP BY COALESCE(p.modelo_vehiculo, p.producto, 'Sin Modelo')
                 ORDER BY cartera_total DESC
-            """)
+            """
+            )
         )
         resumen_por_producto = []
         for row in resumen_query.fetchall():
             cartera_total = float(row[3])
             total_cobrado = float(row[5])
             porcentaje_cobrado = (total_cobrado / cartera_total * 100) if cartera_total > 0 else 0
-            
-            resumen_por_producto.append({
-                "producto": row[0],
-                "total_prestamos": row[1],
-                "total_clientes": row[2],
-                "cartera_total": cartera_total,
-                "promedio_prestamo": float(row[4]),
-                "total_cobrado": total_cobrado,
-                "morosidad_total": float(row[6]),
-                "porcentaje_cobrado": porcentaje_cobrado,
-            })
+
+            resumen_por_producto.append(
+                {
+                    "producto": row[0],
+                    "total_prestamos": row[1],
+                    "total_clientes": row[2],
+                    "cartera_total": cartera_total,
+                    "promedio_prestamo": float(row[4]),
+                    "total_cobrado": total_cobrado,
+                    "morosidad_total": float(row[6]),
+                    "porcentaje_cobrado": porcentaje_cobrado,
+                }
+            )
 
         # 2. Productos por Concesionario
         concesionario_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     p.concesionario,
                     COALESCE(p.modelo_vehiculo, p.producto, 'Sin Modelo') as producto,
@@ -912,7 +941,8 @@ def reporte_productos(
                   AND p.concesionario IS NOT NULL
                 GROUP BY p.concesionario, COALESCE(p.modelo_vehiculo, p.producto, 'Sin Modelo')
                 ORDER BY p.concesionario, monto_total DESC
-            """)
+            """
+            )
         )
         productos_por_concesionario = [
             {
@@ -926,7 +956,8 @@ def reporte_productos(
 
         # 3. Tendencia de Productos (Últimos 12 meses)
         tendencia_query = db.execute(
-            text("""
+            text(
+                """
                 SELECT 
                     COALESCE(p.modelo_vehiculo, p.producto, 'Sin Modelo') as producto,
                     DATE_TRUNC('month', p.fecha_aprobacion)::date as mes,
@@ -939,7 +970,8 @@ def reporte_productos(
                   AND p.fecha_aprobacion >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '12 months'
                 GROUP BY COALESCE(p.modelo_vehiculo, p.producto, 'Sin Modelo'), DATE_TRUNC('month', p.fecha_aprobacion)
                 ORDER BY producto, mes DESC
-            """)
+            """
+            )
         )
         tendencia_mensual = [
             {
