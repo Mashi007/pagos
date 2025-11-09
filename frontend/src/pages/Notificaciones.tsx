@@ -254,46 +254,44 @@ export function Notificaciones() {
               </CardContent>
             </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Enviadas</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {estadisticas?.enviadas || 0}
-            </div>
-            <p className="text-xs text-gray-600">
-              {estadisticas?.tasa_exito ? `${estadisticas.tasa_exito.toFixed(1)}% éxito` : 'Envíos exitosos'}
-            </p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Enviadas</CardTitle>
+                <CheckCircle className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {filteredNotificaciones.filter(n => n.estado === 'ENVIADA').length}
+                </div>
+                <p className="text-xs text-gray-600">Envíos exitosos</p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
-              {estadisticas?.pendientes || 0}
-            </div>
-            <p className="text-xs text-gray-600">En espera de envío</p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
+                <Clock className="h-4 w-4 text-yellow-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600">
+                  {filteredNotificaciones.filter(n => n.estado === 'PENDIENTE').length}
+                </div>
+                <p className="text-xs text-gray-600">En espera de envío</p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Fallidas</CardTitle>
-            <XCircle className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {estadisticas?.fallidas || 0}
-            </div>
-            <p className="text-xs text-gray-600">Requieren revisión</p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Fallidas</CardTitle>
+                <XCircle className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  {filteredNotificaciones.filter(n => n.estado === 'FALLIDA').length}
+                </div>
+                <p className="text-xs text-gray-600">Requieren revisión</p>
+              </CardContent>
+            </Card>
       </motion.div>
 
       {/* Filters */}
