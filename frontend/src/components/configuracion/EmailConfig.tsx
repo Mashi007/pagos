@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Send, Clock, XCircle, RefreshCw } from 'lucide-react'
+import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, PaperPlane, Clock, XCircle, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -327,7 +327,7 @@ export function EmailConfig() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Send className="h-5 w-5 text-blue-600" />
+            <PaperPlane className="h-5 w-5 text-blue-600" />
             Verificación de Envíos Reales
           </CardTitle>
           <CardDescription>

@@ -5,7 +5,7 @@ import { PlantillasNotificaciones } from '@/components/notificaciones/Plantillas
 import { GeneraVariables } from '@/components/notificaciones/GeneraVariables'
 import { ResumenPlantillas } from '@/components/notificaciones/ResumenPlantillas'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Mail, FileText, Settings, Database, CheckCircle, AlertCircle, Power, Copy, X } from 'lucide-react'
+import { Mail, FileText, Settings, Database, CheckCircle, AlertCircle, Zap, Copy, X } from 'lucide-react'
 import { NotificacionPlantilla, notificacionService, emailConfigService } from '@/services/notificacionService'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -150,7 +150,7 @@ export function ConfiguracionNotificaciones() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Power className="h-5 w-5 text-blue-600" />
+            <Zap className="h-5 w-5 text-blue-600" />
             Control de Envíos Automáticos
           </CardTitle>
           <CardDescription>
