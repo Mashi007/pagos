@@ -212,25 +212,45 @@ def listar_notificaciones(
         # Calcular paginación
         skip, limit = calculate_pagination_params(page=page, per_page=per_page, max_per_page=100)
 
-        # Verificar si la columna canal existe
+        # Verificar qué columnas existen usando inspect (más seguro, no aborta transacciones)
+        canal_exists = False
+        leida_exists = False
         try:
-            # Intentar hacer una query simple para verificar si la columna existe
-            db.execute(sql_text("SELECT canal FROM notificaciones LIMIT 1"))
-            canal_exists = True
-        except ProgrammingError:
+            from sqlalchemy import inspect as sql_inspect
+            # Obtener el engine de forma compatible con SQLAlchemy 1.x y 2.x
+            engine = db.bind if hasattr(db, 'bind') else db.get_bind()
+            inspector = sql_inspect(engine)
+            columns = [col['name'] for col in inspector.get_columns('notificaciones')]
+            canal_exists = 'canal' in columns
+            leida_exists = 'leida' in columns
+            if not canal_exists:
+                logger.warning("Columna 'canal' no existe en BD. Usando query sin canal.")
+            if not leida_exists:
+                logger.warning("Columna 'leida' no existe en BD. Usando query sin leida.")
+        except Exception as e:
+            # Si falla la inspección, asumir que no existen y continuar
+            logger.warning(f"No se pudo verificar columnas: {e}. Usando query básica.")
             canal_exists = False
-            logger.warning("Columna 'canal' no existe en BD. Usando query sin canal.")
+            leida_exists = False
 
         # Construir query según si canal existe
         if canal_exists:
             query = db.query(Notificacion)
         else:
             # Usar query raw seleccionando solo columnas que existen (usando parámetros seguros)
+            # Construir SELECT dinámicamente según columnas disponibles
+            select_columns = [
+                "id", "cliente_id", "user_id", "tipo", "asunto", "mensaje", "estado",
+                "programada_para", "enviada_en", "intentos",
+                "respuesta_servicio", "error_mensaje", "created_at"
+            ]
+            if leida_exists:
+                select_columns.insert(select_columns.index("enviada_en") + 1, "leida")
+            
+            columns_str = ", ".join(select_columns)
             base_query = sql_text(
-                """
-                SELECT id, cliente_id, user_id, tipo, asunto, mensaje, estado, 
-                       programada_para, enviada_en, leida, intentos, 
-                       respuesta_servicio, error_mensaje, created_at
+                f"""
+                SELECT {columns_str}
                 FROM notificaciones
                 WHERE (:estado IS NULL OR estado = :estado)
                 ORDER BY created_at DESC
@@ -250,21 +270,65 @@ def listar_notificaciones(
             )
             total = db.execute(count_query, {"estado": estado}).scalar() or 0
 
-            # Serializar resultados
+            # Serializar resultados - mapear índices dinámicamente según columnas disponibles
             items = []
             for row in rows:
-                item_dict = {
-                    "id": row[0],
-                    "cliente_id": row[1],
-                    "tipo": row[3],
-                    "canal": None,  # No existe en BD
-                    "mensaje": row[5],
-                    "asunto": row[4],
-                    "estado": row[6],
-                    "fecha_envio": row[8],  # enviada_en
-                    "fecha_creacion": row[13],  # created_at
-                }
-                items.append(NotificacionResponse.model_validate(item_dict))
+                try:
+                    # Mapear índices según el orden de las columnas en select_columns
+                    col_idx = 0
+                    row_id = row[col_idx] if len(row) > col_idx else None
+                    col_idx += 1  # id
+                    cliente_id = row[col_idx] if len(row) > col_idx else None
+                    col_idx += 1  # cliente_id
+                    user_id = row[col_idx] if len(row) > col_idx else None
+                    col_idx += 1  # user_id (no usado)
+                    tipo = row[col_idx] if len(row) > col_idx else None
+                    col_idx += 1  # tipo
+                    asunto = row[col_idx] if len(row) > col_idx else None
+                    col_idx += 1  # asunto
+                    mensaje = row[col_idx] if len(row) > col_idx else None
+                    col_idx += 1  # mensaje
+                    estado = row[col_idx] if len(row) > col_idx else None
+                    col_idx += 1  # estado
+                    programada_para = row[col_idx] if len(row) > col_idx else None
+                    col_idx += 1  # programada_para (no usado)
+                    enviada_en = row[col_idx] if len(row) > col_idx else None
+                    col_idx += 1  # enviada_en
+                    if leida_exists:
+                        leida = row[col_idx] if len(row) > col_idx else None
+                        col_idx += 1  # leida (solo si existe)
+                    intentos = row[col_idx] if len(row) > col_idx else None
+                    col_idx += 1  # intentos (no usado)
+                    respuesta_servicio = row[col_idx] if len(row) > col_idx else None
+                    col_idx += 1  # respuesta_servicio (no usado)
+                    error_mensaje = row[col_idx] if len(row) > col_idx else None
+                    col_idx += 1  # error_mensaje (no usado)
+                    created_at = row[col_idx] if len(row) > col_idx else None
+                    col_idx += 1  # created_at
+                    
+                    # Validar que los campos requeridos no sean None
+                    if not mensaje:
+                        logger.warning(f"Notificación {row_id} tiene mensaje vacío, saltando...")
+                        continue
+                    if not created_at:
+                        logger.warning(f"Notificación {row_id} tiene created_at None, saltando...")
+                        continue
+                    
+                    item_dict = {
+                        "id": row_id,
+                        "cliente_id": cliente_id,
+                        "tipo": tipo or "",
+                        "canal": None,  # No existe en BD cuando canal_exists = False
+                        "mensaje": mensaje or "",
+                        "asunto": asunto,
+                        "estado": estado or "PENDIENTE",
+                        "fecha_envio": enviada_en,
+                        "fecha_creacion": created_at,
+                    }
+                    items.append(NotificacionResponse.model_validate(item_dict))
+                except Exception as e:
+                    logger.warning(f"Error serializando notificación {row[0] if len(row) > 0 else 'unknown'}: {e}")
+                    continue  # Continuar con el siguiente item en lugar de fallar todo
 
             return create_paginated_response(items=items, total=total, page=page, page_size=limit)
 
@@ -278,8 +342,22 @@ def listar_notificaciones(
         # Aplicar paginación
         notificaciones = query.order_by(Notificacion.created_at.desc()).offset(skip).limit(limit).all()
 
-        # Serializar notificaciones usando el schema
-        items = [NotificacionResponse.model_validate(notif) for notif in notificaciones]
+        # Serializar notificaciones usando el schema con manejo de errores
+        items = []
+        for notif in notificaciones:
+            try:
+                # Validar que los campos requeridos existan
+                if not notif.mensaje:
+                    logger.warning(f"Notificación {notif.id} tiene mensaje vacío, saltando...")
+                    continue
+                if not notif.fecha_creacion:
+                    logger.warning(f"Notificación {notif.id} tiene fecha_creacion None, saltando...")
+                    continue
+                
+                items.append(NotificacionResponse.model_validate(notif))
+            except Exception as e:
+                logger.warning(f"Error serializando notificación {notif.id}: {e}")
+                continue  # Continuar con el siguiente item en lugar de fallar todo
 
         # Retornar respuesta paginada
         return create_paginated_response(items=items, total=total, page=page, page_size=limit)
