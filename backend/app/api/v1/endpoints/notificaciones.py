@@ -875,7 +875,7 @@ async def enviar_notificacion_con_plantilla(
         def enviar_y_actualizar_estado():
             """Envía email y actualiza estado de notificación"""
             from app.db.session import SessionLocal
-            
+
             db_local = SessionLocal()
             try:
                 # Recargar notificación para asegurar que tenemos la última versión
@@ -883,7 +883,7 @@ async def enviar_notificacion_con_plantilla(
                 if not notif:
                     logger.error(f"Notificación {nueva_notif.id} no encontrada para actualizar estado")
                     return
-                
+
                 # Enviar email
                 if cliente.email:
                     email_service = EmailService(db=db_local)
@@ -893,7 +893,7 @@ async def enviar_notificacion_con_plantilla(
                         body=cuerpo,
                         is_html=True,
                     )
-                    
+
                     # Actualizar estado según resultado
                     if resultado.get("success"):
                         notif.estado = "ENVIADA"
@@ -909,7 +909,7 @@ async def enviar_notificacion_con_plantilla(
                     notif.estado = "FALLIDA"
                     notif.error_mensaje = "Cliente no tiene email registrado"
                     logger.warning(f"⚠️ Cliente {cliente_id} no tiene email registrado")
-                
+
                 db_local.commit()
             except Exception as e:
                 db_local.rollback()
