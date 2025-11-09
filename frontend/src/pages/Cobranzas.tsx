@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   AlertTriangle, 
@@ -13,7 +14,8 @@ import {
   BarChart3,
   Bell,
   Loader2,
-  Eye
+  Eye,
+  Search
 } from 'lucide-react'
 import { cobranzasService } from '@/services/cobranzasService'
 import { useQuery } from '@tanstack/react-query'
@@ -27,6 +29,7 @@ export function Cobranzas() {
   const [procesandoNotificaciones, setProcesandoNotificaciones] = useState(false)
   const [mostrandoDiagnostico, setMostrandoDiagnostico] = useState(false)
   const [diagnosticoData, setDiagnosticoData] = useState<any>(null)
+  const [busquedaResumen, setBusquedaResumen] = useState<string>('')
 
   // Query para resumen
   const { 
@@ -471,7 +474,7 @@ export function Cobranzas() {
         <TabsContent value="resumen" className="space-y-4">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-4">
                 <div>
                   <CardTitle>Clientes Atrasados</CardTitle>
                   <CardDescription>
@@ -481,15 +484,38 @@ export function Cobranzas() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={async () => await exportarAExcel(
-                      clientesAtrasados || [],
-                      'clientes-atrasados',
-                      ['cedula', 'nombres', 'analista', 'prestamo_id', 'cuotas_vencidas', 'total_adeudado', 'fecha_primera_vencida']
-                    )}
+                    onClick={async () => {
+                      // Filtrar clientes según búsqueda para exportar
+                      const clientesParaExportar = busquedaResumen.trim()
+                        ? (clientesAtrasados || []).filter(cliente => 
+                            cliente.cedula.toLowerCase().includes(busquedaResumen.toLowerCase()) ||
+                            cliente.nombres.toLowerCase().includes(busquedaResumen.toLowerCase())
+                          )
+                        : (clientesAtrasados || [])
+                      
+                      await exportarAExcel(
+                        clientesParaExportar,
+                        busquedaResumen.trim() 
+                          ? `clientes-atrasados-${busquedaResumen.replace(/\s+/g, '-')}` 
+                          : 'clientes-atrasados',
+                        ['cedula', 'nombres', 'analista', 'prestamo_id', 'cuotas_vencidas', 'total_adeudado', 'fecha_primera_vencida']
+                      )
+                    }}
                   >
                   <Download className="h-4 w-4 mr-2" />
                   Exportar Excel
                 </Button>
+              </div>
+              {/* Cuadro de búsqueda */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Buscar por nombre o cédula..."
+                  value={busquedaResumen}
+                  onChange={(e) => setBusquedaResumen(e.target.value)}
+                  className="pl-10"
+                />
               </div>
             </CardHeader>
             <CardContent>
@@ -522,36 +548,71 @@ export function Cobranzas() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-2">Cédula</th>
-                        <th className="text-left p-2">Nombres</th>
-                        <th className="text-left p-2">Analista</th>
-                        <th className="text-right p-2">Cuotas Vencidas</th>
-                        <th className="text-right p-2">Total Adeudado</th>
-                        <th className="text-left p-2">Fecha Primera Vencida</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {clientesAtrasados.map((cliente, index) => (
-                        <tr key={index} className="border-b hover:bg-gray-50">
-                          <td className="p-2 font-mono">{cliente.cedula}</td>
-                          <td className="p-2">{cliente.nombres}</td>
-                          <td className="p-2">{cliente.analista}</td>
-                          <td className="p-2 text-right">{cliente.cuotas_vencidas}</td>
-                          <td className="p-2 text-right">
-                            ${cliente.total_adeudado.toLocaleString('es-VE')}
-                          </td>
-                          <td className="p-2">
-                            {cliente.fecha_primera_vencida
-                              ? new Date(cliente.fecha_primera_vencida).toLocaleDateString('es-VE')
-                              : 'N/A'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  {(() => {
+                    // Filtrar clientes según búsqueda
+                    let clientesFiltrados = busquedaResumen.trim()
+                      ? clientesAtrasados.filter(cliente => 
+                          cliente.cedula.toLowerCase().includes(busquedaResumen.toLowerCase()) ||
+                          cliente.nombres.toLowerCase().includes(busquedaResumen.toLowerCase())
+                        )
+                      : clientesAtrasados
+                    
+                    // Ordenar por Total Adeudado de mayor a menor
+                    clientesFiltrados = [...clientesFiltrados].sort((a, b) => 
+                      (b.total_adeudado || 0) - (a.total_adeudado || 0)
+                    )
+
+                    if (clientesFiltrados.length === 0 && busquedaResumen.trim()) {
+                      return (
+                        <div className="text-center py-8">
+                          <Search className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">
+                            No se encontraron clientes que coincidan con "{busquedaResumen}"
+                          </p>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <>
+                        {busquedaResumen.trim() && (
+                          <div className="mb-4 text-sm text-muted-foreground">
+                            Mostrando {clientesFiltrados.length} de {clientesAtrasados.length} clientes
+                          </div>
+                        )}
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left p-2">Cédula</th>
+                              <th className="text-left p-2">Nombres</th>
+                              <th className="text-left p-2">Analista</th>
+                              <th className="text-right p-2">Cuotas Vencidas</th>
+                              <th className="text-right p-2">Total Adeudado</th>
+                              <th className="text-left p-2">Fecha Primera Vencida</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {clientesFiltrados.map((cliente, index) => (
+                              <tr key={index} className="border-b hover:bg-gray-50">
+                                <td className="p-2 font-mono">{cliente.cedula}</td>
+                                <td className="p-2">{cliente.nombres}</td>
+                                <td className="p-2">{cliente.analista}</td>
+                                <td className="p-2 text-right">{cliente.cuotas_vencidas}</td>
+                                <td className="p-2 text-right">
+                                  ${cliente.total_adeudado.toLocaleString('es-VE')}
+                                </td>
+                                <td className="p-2">
+                                  {cliente.fecha_primera_vencida
+                                    ? new Date(cliente.fecha_primera_vencida).toLocaleDateString('es-VE')
+                                    : 'N/A'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </>
+                    )
+                  })()}
                 </div>
               )}
             </CardContent>
