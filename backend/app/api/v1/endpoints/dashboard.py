@@ -494,7 +494,7 @@ def _procesar_distribucion_rango_monto(
         # Esto reduce de 2 queries + procesamiento a 1 query con GROUP BY
         if db is not None:
             from sqlalchemy import text
-            
+
             # Detectar paso del rango (asumiendo rangos uniformes)
             paso_rango = None
             max_rango_val = None
@@ -504,11 +504,11 @@ def _procesar_distribucion_rango_monto(
                         paso_rango = max_val - min_val
                 else:
                     max_rango_val = min_val
-            
+
             if paso_rango is None or paso_rango <= 0:
                 logger.warning("⚠️ No se pudo detectar paso del rango, usando método fallback")
                 return _procesar_distribucion_rango_monto_fallback(query_base, rangos, total_prestamos, total_monto, db)
-            
+
             # Obtener el WHERE clause de query_base
             # Construir query SQL optimizada con GROUP BY
             # Usar división entera para calcular el rango directamente en SQL
@@ -517,7 +517,7 @@ def _procesar_distribucion_rango_monto(
                 prestamo_ids_query = query_base.with_entities(Prestamo.id)
                 prestamo_ids_result = prestamo_ids_query.all()
                 prestamo_ids = [row[0] for row in prestamo_ids_result]
-                
+
                 if not prestamo_ids:
                     # Si no hay préstamos, construir respuesta con todos los rangos en 0
                     logger.warning("⚠️ [financiamiento-por-rangos] No se encontraron préstamos con los filtros aplicados")
@@ -533,10 +533,11 @@ def _procesar_distribucion_rango_monto(
                             }
                         )
                     return distribucion_data
-                
+
                 # Query SQL optimizada con GROUP BY usando división entera
                 # Calcular el rango usando: FLOOR(total_financiamiento / paso_rango) * paso_rango
-                query_sql = text("""
+                query_sql = text(
+                    """
                     WITH rangos_calculados AS (
                         SELECT 
                             CASE 
@@ -561,33 +562,37 @@ def _procesar_distribucion_rango_monto(
                     FROM rangos_calculados
                     GROUP BY rango_min, rango_max
                     ORDER BY rango_min
-                """)
-                
-                result = db.execute(query_sql, {
-                    "ids": prestamo_ids,
-                    "paso_rango": float(paso_rango),
-                    "max_rango": float(max_rango_val) if max_rango_val else 50000.0
-                })
-                
+                """
+                )
+
+                result = db.execute(
+                    query_sql,
+                    {
+                        "ids": prestamo_ids,
+                        "paso_rango": float(paso_rango),
+                        "max_rango": float(max_rango_val) if max_rango_val else 50000.0,
+                    },
+                )
+
                 # Crear diccionario con resultados de SQL
                 distribucion_dict = {}
                 for row in result:
                     rango_min = float(row.rango_min) if row.rango_min else 0
                     rango_max = float(row.rango_max) if row.rango_max else None
-                    
+
                     # Formatear categoría
                     if rango_max is None:
                         categoria = f"${int(rango_min):,}+".replace(",", "")
                     else:
                         categoria = f"${int(rango_min):,} - ${int(rango_max):,}".replace(",", "")
-                    
+
                     distribucion_dict[categoria] = {
                         "cantidad": int(row.cantidad_prestamos),
-                        "monto_total": float(row.monto_total)
+                        "monto_total": float(row.monto_total),
                     }
-                
+
                 logger.info(f"📊 [financiamiento-por-rangos] Procesados {len(distribucion_dict)} rangos con GROUP BY SQL")
-                
+
                 # Construir respuesta manteniendo el orden de los rangos originales
                 distribucion_data = []
                 for min_val, max_val, categoria in rangos:
@@ -597,13 +602,15 @@ def _procesar_distribucion_rango_monto(
                     porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
                     porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
 
-                    distribucion_data.append({
-                        "categoria": categoria,
-                        "cantidad_prestamos": cantidad,
-                        "monto_total": monto_total,
-                        "porcentaje_cantidad": round(porcentaje_cantidad, 2),
-                        "porcentaje_monto": round(porcentaje_monto, 2),
-                    })
+                    distribucion_data.append(
+                        {
+                            "categoria": categoria,
+                            "cantidad_prestamos": cantidad,
+                            "monto_total": monto_total,
+                            "porcentaje_cantidad": round(porcentaje_cantidad, 2),
+                            "porcentaje_monto": round(porcentaje_monto, 2),
+                        }
+                    )
 
                 # ✅ Verificar que la suma de todos los rangos coincida con el total
                 try:
@@ -617,7 +624,7 @@ def _procesar_distribucion_rango_monto(
                     logger.error(f"Error verificando suma de rangos: {e}", exc_info=True)
 
                 return distribucion_data
-                
+
             except Exception as e:
                 logger.warning(f"⚠️ Error en query optimizada, usando método fallback: {e}")
                 return _procesar_distribucion_rango_monto_fallback(query_base, rangos, total_prestamos, total_monto, db)
@@ -647,26 +654,28 @@ def _procesar_distribucion_rango_monto_fallback(
 
     try:
         from sqlalchemy import text
-        
+
         if db is not None:
             # Obtener IDs primero
             try:
                 prestamo_ids_query = query_base.with_entities(Prestamo.id)
                 prestamo_ids_result = prestamo_ids_query.all()
                 prestamo_ids = [row[0] for row in prestamo_ids_result]
-                
+
                 if not prestamo_ids:
                     distribucion_data = []
                     for min_val, max_val, categoria in rangos:
-                        distribucion_data.append({
-                            "categoria": categoria,
-                            "cantidad_prestamos": 0,
-                            "monto_total": 0.0,
-                            "porcentaje_cantidad": 0.0,
-                            "porcentaje_monto": 0.0,
-                        })
+                        distribucion_data.append(
+                            {
+                                "categoria": categoria,
+                                "cantidad_prestamos": 0,
+                                "monto_total": 0.0,
+                                "porcentaje_cantidad": 0.0,
+                                "porcentaje_monto": 0.0,
+                            }
+                        )
                     return distribucion_data
-                
+
                 # Query SQL directa
                 query_sql = text("SELECT id, total_financiamiento FROM prestamos WHERE id = ANY(:ids)")
                 result = db.execute(query_sql, {"ids": prestamo_ids})
@@ -724,13 +733,15 @@ def _procesar_distribucion_rango_monto_fallback(
         porcentaje_cantidad = (cantidad / total_prestamos * 100) if total_prestamos > 0 else 0
         porcentaje_monto = (monto_total / total_monto * 100) if total_monto > 0 else 0
 
-        distribucion_data.append({
-            "categoria": categoria,
-            "cantidad_prestamos": cantidad,
-            "monto_total": monto_total,
-            "porcentaje_cantidad": round(porcentaje_cantidad, 2),
-            "porcentaje_monto": round(porcentaje_monto, 2),
-        })
+        distribucion_data.append(
+            {
+                "categoria": categoria,
+                "cantidad_prestamos": cantidad,
+                "monto_total": monto_total,
+                "porcentaje_cantidad": round(porcentaje_cantidad, 2),
+                "porcentaje_monto": round(porcentaje_monto, 2),
+            }
+        )
 
     return distribucion_data
 
@@ -3431,14 +3442,14 @@ def obtener_composicion_morosidad(
         # ✅ OPTIMIZACIÓN: Usar GROUP BY en SQL en lugar de procesamiento en Python
         # Categorizar días de atraso directamente en SQL usando CASE WHEN
         from sqlalchemy import text
-        
+
         try:
             # Construir query SQL optimizada con GROUP BY
             # Obtener los IDs de cuotas que cumplen los filtros
             cuota_ids_query = query_base.with_entities(Cuota.id)
             cuota_ids_result = cuota_ids_query.all()
             cuota_ids = [row[0] for row in cuota_ids_result]
-            
+
             if not cuota_ids:
                 # Si no hay cuotas, retornar respuesta vacía
                 return {
@@ -3446,9 +3457,10 @@ def obtener_composicion_morosidad(
                     "total_morosidad": 0.0,
                     "total_cuotas": 0,
                 }
-            
+
             # Query SQL optimizada con GROUP BY y categorización
-            query_sql = text("""
+            query_sql = text(
+                """
                 WITH cuotas_categorizadas AS (
                     SELECT 
                         CASE 
@@ -3482,29 +3494,27 @@ def obtener_composicion_morosidad(
                         WHEN '6 meses - 1 año' THEN 6
                         WHEN 'Más de 1 año' THEN 7
                     END
-            """)
-            
+            """
+            )
+
             result = db.execute(query_sql, {"ids": cuota_ids})
-            
+
             # Crear diccionario con resultados
             puntos_por_categoria = {}
             total_morosidad = Decimal("0")
             total_cuotas = 0
-            
+
             for row in result:
                 categoria = row.categoria
                 cantidad = int(row.cantidad_cuotas)
                 monto = float(row.monto_total)
-                
-                puntos_por_categoria[categoria] = {
-                    "monto": Decimal(str(monto)),
-                    "cantidad": cantidad
-                }
+
+                puntos_por_categoria[categoria] = {"monto": Decimal(str(monto)), "cantidad": cantidad}
                 total_morosidad += Decimal(str(monto))
                 total_cuotas += cantidad
-            
+
             logger.info(f"📊 [composicion-morosidad] Procesados {len(puntos_por_categoria)} categorías con GROUP BY SQL")
-            
+
         except Exception as e:
             logger.warning(f"⚠️ Error en query optimizada de morosidad, usando método fallback: {e}")
             # Fallback: procesar en Python
@@ -4191,16 +4201,17 @@ def obtener_financiamiento_tendencia_mensual(
             # ✅ OPTIMIZACIÓN: Usar date_trunc en lugar de EXTRACT para mejor rendimiento con índices
             # Query optimizada: GROUP BY usando date_trunc('month', fecha_aprobacion)
             from sqlalchemy import text
-            
+
             # Construir query SQL con date_trunc para aprovechar índices funcionales
-            query_nuevos = db.query(
-                func.date_trunc('month', Prestamo.fecha_aprobacion).label("mes"),
-                func.count(Prestamo.id).label("cantidad"),
-                func.sum(Prestamo.total_financiamiento).label("monto_total"),
-            ).filter(*filtros_base).group_by(
-                func.date_trunc('month', Prestamo.fecha_aprobacion)
-            ).order_by(
-                func.date_trunc('month', Prestamo.fecha_aprobacion)
+            query_nuevos = (
+                db.query(
+                    func.date_trunc("month", Prestamo.fecha_aprobacion).label("mes"),
+                    func.count(Prestamo.id).label("cantidad"),
+                    func.sum(Prestamo.total_financiamiento).label("monto_total"),
+                )
+                .filter(*filtros_base)
+                .group_by(func.date_trunc("month", Prestamo.fecha_aprobacion))
+                .order_by(func.date_trunc("month", Prestamo.fecha_aprobacion))
             )
 
             # Aplicar filtros adicionales (si hay)
@@ -4274,9 +4285,9 @@ def obtener_financiamiento_tendencia_mensual(
                 num_mes = mes_datetime.month
             else:
                 # Fallback si no es datetime/date
-                año_mes = int(mes_datetime.year) if hasattr(mes_datetime, 'year') else int(mes_datetime)
-                num_mes = int(mes_datetime.month) if hasattr(mes_datetime, 'month') else 1
-            
+                año_mes = int(mes_datetime.year) if hasattr(mes_datetime, "year") else int(mes_datetime)
+                num_mes = int(mes_datetime.month) if hasattr(mes_datetime, "month") else 1
+
             nuevos_por_mes[(año_mes, num_mes)] = {
                 "cantidad": row.cantidad or 0,
                 "monto": float(row.monto_total or Decimal("0")),
