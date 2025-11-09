@@ -25,7 +25,7 @@ def _verificar_envio_habilitado(db: "Session", tipo_notificacion: str) -> bool:
     """Verificar si el envío de un tipo de notificación está habilitado"""
     try:
         from app.models.configuracion_sistema import ConfiguracionSistema
-        
+
         clave = f"envio_habilitado_{tipo_notificacion}"
         config = (
             db.query(ConfiguracionSistema)
@@ -48,7 +48,7 @@ def _obtener_cco_configurados(db: "Session", tipo_notificacion: str) -> List[str
     """Obtener lista de correos CCO configurados para un tipo de notificación"""
     try:
         from app.models.configuracion_sistema import ConfiguracionSistema
-        
+
         cco_emails = []
         for i in range(1, 4):  # CCO 1, 2, 3
             clave_cco = f"cco_{tipo_notificacion}_{i}"
@@ -62,7 +62,7 @@ def _obtener_cco_configurados(db: "Session", tipo_notificacion: str) -> List[str
             )
             if config_cco and config_cco.valor and config_cco.valor.strip():
                 cco_emails.append(config_cco.valor.strip())
-        
+
         return cco_emails
     except Exception as e:
         logger.warning(f"⚠️ Error obteniendo CCO para {tipo_notificacion}: {e}")
@@ -73,7 +73,7 @@ def _obtener_delay_envio(db: "Session") -> float:
     """Obtener delay configurado entre envíos (en segundos)"""
     try:
         from app.models.configuracion_sistema import ConfiguracionSistema
-        
+
         clave = "delay_envio_email_segundos"
         config = (
             db.query(ConfiguracionSistema)
@@ -88,7 +88,9 @@ def _obtener_delay_envio(db: "Session") -> float:
             try:
                 return float(config.valor)
             except (ValueError, TypeError):
-                logger.warning(f"⚠️ Valor inválido para delay_envio_email_segundos: {config.valor}, usando 2 segundos por defecto")
+                logger.warning(
+                    f"⚠️ Valor inválido para delay_envio_email_segundos: {config.valor}, usando 2 segundos por defecto"
+                )
         return 2.0  # 2 segundos por defecto
     except Exception as e:
         logger.warning(f"⚠️ Error obteniendo delay de envío: {e}, usando 2 segundos por defecto")
@@ -139,15 +141,17 @@ def calcular_notificaciones_previas_job():
         # Procesar cada notificación previa con delays para evitar colisiones
         total_resultados = len(resultados)
         import time
-        
+
         for indice, resultado in enumerate(resultados, 1):
             # Delay entre cada envío para evitar colisiones (excepto el primero)
             if indice > 1:
                 time.sleep(delay_envio)
-            
+
             # Log de progreso cada 10 emails
             if indice % 10 == 0:
-                logger.info(f"📊 Progreso: {indice}/{total_resultados} emails procesados ({enviadas} enviadas, {fallidas} fallidas)")
+                logger.info(
+                    f"📊 Progreso: {indice}/{total_resultados} emails procesados ({enviadas} enviadas, {fallidas} fallidas)"
+                )
             cliente_id = resultado["cliente_id"]
             dias_antes = resultado["dias_antes_vencimiento"]
             correo_cliente = resultado.get("correo", "")
@@ -235,7 +239,9 @@ def calcular_notificaciones_previas_job():
                     nueva_notif.respuesta_servicio = resultado_email.get("message", "Email enviado exitosamente")
                     enviadas += 1
                     cco_info = f" (CCO: {', '.join(cco_emails)})" if cco_emails else ""
-                    logger.info(f"✅ Email enviado a {correo_cliente}{cco_info} (Cliente {cliente_id}, {dias_antes} días antes)")
+                    logger.info(
+                        f"✅ Email enviado a {correo_cliente}{cco_info} (Cliente {cliente_id}, {dias_antes} días antes)"
+                    )
                 else:
                     nueva_notif.estado = "FALLIDA"
                     nueva_notif.error_mensaje = resultado_email.get("message", "Error desconocido")
@@ -309,16 +315,18 @@ def calcular_notificaciones_dia_pago_job():
         # Procesar cada notificación con delays para evitar colisiones
         total_resultados = len(resultados)
         import time
-        
+
         for indice, resultado in enumerate(resultados, 1):
             # Delay entre cada envío para evitar colisiones (excepto el primero)
             if indice > 1:
                 time.sleep(delay_envio)
-            
+
             # Log de progreso cada 10 emails
             if indice % 10 == 0:
-                logger.info(f"📊 Progreso: {indice}/{total_resultados} emails procesados ({enviadas} enviadas, {fallidas} fallidas)")
-            
+                logger.info(
+                    f"📊 Progreso: {indice}/{total_resultados} emails procesados ({enviadas} enviadas, {fallidas} fallidas)"
+                )
+
             cliente_id = resultado["cliente_id"]
             correo_cliente = resultado.get("correo", "")
             tipo_notificacion = "PAGO_DIA_0"
@@ -464,16 +472,18 @@ def calcular_notificaciones_retrasadas_job():
         # Procesar cada notificación con delays para evitar colisiones
         total_resultados = len(resultados)
         import time
-        
+
         for indice, resultado in enumerate(resultados, 1):
             # Delay entre cada envío para evitar colisiones (excepto el primero)
             if indice > 1:
                 time.sleep(delay_envio)
-            
+
             # Log de progreso cada 10 emails
             if indice % 10 == 0:
-                logger.info(f"📊 Progreso: {indice}/{total_resultados} emails procesados ({enviadas} enviadas, {fallidas} fallidas)")
-            
+                logger.info(
+                    f"📊 Progreso: {indice}/{total_resultados} emails procesados ({enviadas} enviadas, {fallidas} fallidas)"
+                )
+
             cliente_id = resultado["cliente_id"]
             dias_atrasado = resultado.get("dias_atrasado", 0)
             correo_cliente = resultado.get("correo", "")
@@ -552,7 +562,9 @@ def calcular_notificaciones_retrasadas_job():
                     nueva_notif.respuesta_servicio = resultado_email.get("message", "Email enviado exitosamente")
                     enviadas += 1
                     cco_info = f" (CCO: {', '.join(cco_emails)})" if cco_emails else ""
-                    logger.info(f"✅ Email enviado a {correo_cliente}{cco_info} (Cliente {cliente_id}, {dias_atrasado} días atrasado)")
+                    logger.info(
+                        f"✅ Email enviado a {correo_cliente}{cco_info} (Cliente {cliente_id}, {dias_atrasado} días atrasado)"
+                    )
                 else:
                     nueva_notif.estado = "FALLIDA"
                     nueva_notif.error_mensaje = resultado_email.get("message", "Error desconocido")
@@ -626,11 +638,11 @@ def calcular_notificaciones_prejudiciales_job():
         # Procesar cada notificación (solo una por cliente para evitar duplicados)
         clientes_procesados = set()
         tipo_notificacion = "PREJUDICIAL"
-        
+
         # Procesar con delays para evitar colisiones
         total_resultados = len(resultados)
         import time
-        
+
         for indice, resultado in enumerate(resultados, 1):
             cliente_id = resultado["cliente_id"]
             correo_cliente = resultado.get("correo", "")
@@ -639,14 +651,16 @@ def calcular_notificaciones_prejudiciales_job():
             if cliente_id in clientes_procesados:
                 continue
             clientes_procesados.add(cliente_id)
-            
+
             # Delay entre cada envío para evitar colisiones (excepto el primero)
             if indice > 1:
                 time.sleep(delay_envio)
-            
+
             # Log de progreso cada 10 emails
             if indice % 10 == 0:
-                logger.info(f"📊 Progreso: {indice}/{total_resultados} emails procesados ({enviadas} enviadas, {fallidas} fallidas)")
+                logger.info(
+                    f"📊 Progreso: {indice}/{total_resultados} emails procesados ({enviadas} enviadas, {fallidas} fallidas)"
+                )
 
             # Verificar si el envío está habilitado
             if not _verificar_envio_habilitado(db, tipo_notificacion):
