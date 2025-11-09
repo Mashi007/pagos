@@ -748,45 +748,74 @@ def calcular_notificaciones_prejudiciales_job():
 def iniciar_scheduler():
     """Inicia el scheduler con todas las tareas programadas"""
     try:
+        # ✅ PROTECCIÓN: Verificar si el scheduler ya está corriendo
+        if scheduler.running:
+            logger.warning("⚠️ Scheduler ya está corriendo, omitiendo inicialización")
+            return
+
+        # ✅ PROTECCIÓN: Verificar si los jobs ya existen antes de agregarlos
+        job_ids = ["notificaciones_previas", "notificaciones_dia_pago", "notificaciones_retrasadas", "notificaciones_prejudiciales"]
+        try:
+            existing_jobs = {job.id for job in scheduler.get_jobs()}
+        except Exception:
+            # Si no se pueden obtener jobs (scheduler no iniciado), asumir que no hay jobs
+            existing_jobs = set()
+        
         # Agregar job para notificaciones previas (4 AM diariamente)
-        scheduler.add_job(
-            calcular_notificaciones_previas_job,
-            trigger=CronTrigger(hour=4, minute=0),  # 4:00 AM todos los días
-            id="notificaciones_previas",
-            name="Calcular y Enviar Notificaciones Previas",
-            replace_existing=True,
-        )
+        if "notificaciones_previas" not in existing_jobs:
+            scheduler.add_job(
+                calcular_notificaciones_previas_job,
+                trigger=CronTrigger(hour=4, minute=0),  # 4:00 AM todos los días
+                id="notificaciones_previas",
+                name="Calcular y Enviar Notificaciones Previas",
+                replace_existing=True,
+            )
+        else:
+            logger.debug("Job 'notificaciones_previas' ya existe, omitiendo")
 
         # Agregar job para día de pago (4 AM diariamente)
-        scheduler.add_job(
-            calcular_notificaciones_dia_pago_job,
-            trigger=CronTrigger(hour=4, minute=0),  # 4:00 AM todos los días
-            id="notificaciones_dia_pago",
-            name="Calcular y Enviar Notificaciones Día de Pago",
-            replace_existing=True,
-        )
+        if "notificaciones_dia_pago" not in existing_jobs:
+            scheduler.add_job(
+                calcular_notificaciones_dia_pago_job,
+                trigger=CronTrigger(hour=4, minute=0),  # 4:00 AM todos los días
+                id="notificaciones_dia_pago",
+                name="Calcular y Enviar Notificaciones Día de Pago",
+                replace_existing=True,
+            )
+        else:
+            logger.debug("Job 'notificaciones_dia_pago' ya existe, omitiendo")
 
         # Agregar job para notificaciones retrasadas (4 AM diariamente)
-        scheduler.add_job(
-            calcular_notificaciones_retrasadas_job,
-            trigger=CronTrigger(hour=4, minute=0),  # 4:00 AM todos los días
-            id="notificaciones_retrasadas",
-            name="Calcular y Enviar Notificaciones Retrasadas",
-            replace_existing=True,
-        )
+        if "notificaciones_retrasadas" not in existing_jobs:
+            scheduler.add_job(
+                calcular_notificaciones_retrasadas_job,
+                trigger=CronTrigger(hour=4, minute=0),  # 4:00 AM todos los días
+                id="notificaciones_retrasadas",
+                name="Calcular y Enviar Notificaciones Retrasadas",
+                replace_existing=True,
+            )
+        else:
+            logger.debug("Job 'notificaciones_retrasadas' ya existe, omitiendo")
 
         # Agregar job para notificaciones prejudiciales (4 AM diariamente)
-        scheduler.add_job(
-            calcular_notificaciones_prejudiciales_job,
-            trigger=CronTrigger(hour=4, minute=0),  # 4:00 AM todos los días
-            id="notificaciones_prejudiciales",
-            name="Calcular y Enviar Notificaciones Prejudiciales",
-            replace_existing=True,
-        )
+        if "notificaciones_prejudiciales" not in existing_jobs:
+            scheduler.add_job(
+                calcular_notificaciones_prejudiciales_job,
+                trigger=CronTrigger(hour=4, minute=0),  # 4:00 AM todos los días
+                id="notificaciones_prejudiciales",
+                name="Calcular y Enviar Notificaciones Prejudiciales",
+                replace_existing=True,
+            )
+        else:
+            logger.debug("Job 'notificaciones_prejudiciales' ya existe, omitiendo")
 
-        # Iniciar scheduler
-        scheduler.start()
-        logger.info("✅ Scheduler iniciado correctamente")
+        # Iniciar scheduler solo si no está corriendo
+        if not scheduler.running:
+            scheduler.start()
+            logger.info("✅ Scheduler iniciado correctamente")
+        else:
+            logger.info("✅ Scheduler ya estaba corriendo")
+
         logger.info("📅 Jobs programados para ejecutarse diariamente a las 4:00 AM:")
         logger.info("   - Notificaciones Previas (5, 3, 1 días antes)")
         logger.info("   - Día de Pago (Día 0)")
