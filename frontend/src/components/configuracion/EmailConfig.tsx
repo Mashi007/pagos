@@ -77,9 +77,25 @@ export function EmailConfig() {
   }
 
   const validarConfiguracionGmail = (): string | null => {
+    console.log('🔍 [EmailConfig] Validando configuración:', {
+      smtp_host: config.smtp_host,
+      smtp_port: config.smtp_port,
+      smtp_user: config.smtp_user,
+      from_email: config.from_email,
+      tiene_password: !!config.smtp_password,
+      password_length: config.smtp_password?.length || 0
+    })
+    
     // Validaciones generales primero
     if (!config.smtp_host || !config.smtp_port || !config.smtp_user || !config.from_email) {
-      return 'Por favor completa todos los campos requeridos.'
+      const camposFaltantes = []
+      if (!config.smtp_host) camposFaltantes.push('Servidor SMTP')
+      if (!config.smtp_port) camposFaltantes.push('Puerto SMTP')
+      if (!config.smtp_user) camposFaltantes.push('Email de Usuario')
+      if (!config.from_email) camposFaltantes.push('Email del Remitente')
+      
+      console.warn('⚠️ [EmailConfig] Campos faltantes:', camposFaltantes)
+      return `Por favor completa todos los campos requeridos. Faltan: ${camposFaltantes.join(', ')}`
     }
     
     // Validar que si es Gmail/Google Workspace, cumpla con los requisitos
@@ -90,17 +106,25 @@ export function EmailConfig() {
       
       // Validar puerto correcto para Gmail/Google Workspace
       const puerto = parseInt(config.smtp_port)
+      if (isNaN(puerto)) {
+        console.warn('⚠️ [EmailConfig] Puerto inválido:', config.smtp_port)
+        return 'El puerto SMTP debe ser un número válido.'
+      }
+      
       if (puerto !== 587 && puerto !== 465) {
+        console.warn('⚠️ [EmailConfig] Puerto no válido para Gmail:', puerto)
         return 'Gmail/Google Workspace requiere puerto 587 (TLS) o 465 (SSL). El puerto 587 es recomendado.'
       }
       
       // Validar que TLS esté habilitado para puerto 587
       if (puerto === 587 && config.smtp_use_tls !== 'true') {
+        console.warn('⚠️ [EmailConfig] TLS no habilitado para puerto 587')
         return 'Para puerto 587, TLS debe estar habilitado (requerido por Gmail/Google Workspace).'
       }
       
       // Validar que tenga contraseña de aplicación
       if (!config.smtp_password || config.smtp_password.trim().length === 0) {
+        console.warn('⚠️ [EmailConfig] Contraseña de aplicación faltante')
         return 'Debes ingresar una Contraseña de Aplicación de Gmail/Google Workspace (no tu contraseña normal). Requiere 2FA activado.'
       }
       
@@ -108,23 +132,30 @@ export function EmailConfig() {
       // Gmail/Google Workspace puede mostrar la contraseña con espacios (ej: "abcd efgh ijkl mnop"), pero al usarla se eliminan
       const passwordSinEspacios = config.smtp_password.replace(/\s/g, '')
       if (passwordSinEspacios.length !== 16) {
-        return 'La Contraseña de Aplicación de Gmail/Google Workspace debe tener exactamente 16 caracteres (los espacios se eliminan automáticamente).'
+        console.warn('⚠️ [EmailConfig] Contraseña de aplicación con longitud incorrecta:', passwordSinEspacios.length)
+        return `La Contraseña de Aplicación de Gmail/Google Workspace debe tener exactamente 16 caracteres (los espacios se eliminan automáticamente). Longitud actual: ${passwordSinEspacios.length} caracteres.`
       }
     }
     
+    console.log('✅ [EmailConfig] Validación exitosa')
     return null
   }
 
   const handleGuardar = async () => {
+    console.log('🔄 [EmailConfig] handleGuardar llamado', { config, modoPruebas, emailPruebas })
+    
     // Validar configuración antes de guardar
     const errorValidacion = validarConfiguracionGmail()
     if (errorValidacion) {
+      console.warn('⚠️ [EmailConfig] Validación falló:', errorValidacion)
       toast.error(errorValidacion)
       return
     }
     
     try {
       setGuardando(true)
+      console.log('💾 [EmailConfig] Iniciando guardado de configuración...')
+      
       // Limpiar espacios de la contraseña de aplicación (Gmail puede mostrarla con espacios)
       const passwordLimpia = config.smtp_password ? config.smtp_password.replace(/\s/g, '') : ''
       
@@ -134,11 +165,25 @@ export function EmailConfig() {
         modo_pruebas: modoPruebas,
         email_pruebas: modoPruebas === 'true' ? emailPruebas : ''
       }
-      await emailConfigService.actualizarConfiguracionEmail(configCompleta)
+      
+      console.log('📤 [EmailConfig] Enviando configuración al backend:', {
+        ...configCompleta,
+        smtp_password: configCompleta.smtp_password ? '***' : '(vacío)'
+      })
+      
+      const resultado = await emailConfigService.actualizarConfiguracionEmail(configCompleta)
+      console.log('✅ [EmailConfig] Configuración guardada exitosamente:', resultado)
+      
       toast.success('Configuración de email guardada exitosamente')
       await cargarConfiguracion()
     } catch (error: any) {
-      console.error('Error guardando configuración:', error)
+      console.error('❌ [EmailConfig] Error guardando configuración:', error)
+      console.error('❌ [EmailConfig] Detalles del error:', {
+        message: error?.message,
+        response: error?.response?.data,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText
+      })
       
       // Extraer mensaje de error específico del backend
       let mensajeError = 'Error guardando configuración'
