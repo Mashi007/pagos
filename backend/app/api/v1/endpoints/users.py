@@ -375,9 +375,9 @@ def delete_user(
 
         # Verificar relaciones antes de eliminar
         # Contar registros relacionados para diagnóstico
+        from app.models.aprobacion import Aprobacion
         from app.models.auditoria import Auditoria
         from app.models.notificacion import Notificacion
-        from app.models.aprobacion import Aprobacion
 
         auditoria_count = db.query(Auditoria).filter(Auditoria.usuario_id == user_id).count()
         notificaciones_count = db.query(Notificacion).filter(Notificacion.user_id == user_id).count()
