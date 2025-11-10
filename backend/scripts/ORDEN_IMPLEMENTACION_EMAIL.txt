@@ -1,0 +1,184 @@
+═══════════════════════════════════════════════════════════════════════════════
+  📧 ORDEN DE IMPLEMENTACIÓN - CONFIGURACIÓN DE EMAIL
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PASO 1: VERIFICAR ESTADO ACTUAL                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+📄 Script: verificar_email_simple.sql
+📍 Ubicación: backend/scripts/verificar_email_simple.sql
+
+✅ ACCIÓN:
+   1. Abrir DBeaver
+   2. Abrir el archivo: backend/scripts/verificar_email_simple.sql
+   3. Ejecutar Query 1 y Query 2
+   4. Verificar que todas muestren "❌ FALTANTE" o "NO CONFIGURADO"
+
+✅ RESULTADO ESPERADO:
+   - Confirmar que NO hay configuraciones de email en la BD
+   - Estado actual: TODAS las configuraciones faltantes
+
+───────────────────────────────────────────────────────────────────────────────
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PASO 2: PREPARAR VALORES                                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+📝 VALORES NECESARIOS (para Gmail):
+
+   smtp_host:        smtp.gmail.com
+   smtp_port:        587 (TLS) o 465 (SSL)
+   smtp_user:        tu-email@gmail.com
+   smtp_password:    App Password de Gmail (16 caracteres)
+   from_email:       noreply@rapicredit.com
+   from_name:        RapiCredit
+   smtp_use_tls:     true (para puerto 587)
+   modo_pruebas:     false (producción) o true (desarrollo)
+   email_pruebas:    pruebas@ejemplo.com (solo si modo_pruebas=true)
+
+🔗 Obtener App Password de Gmail:
+   https://myaccount.google.com/apppasswords
+   (Requiere 2FA activado)
+
+───────────────────────────────────────────────────────────────────────────────
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PASO 3: INSERTAR CONFIGURACIÓN                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+📄 Script: ejemplo_configuracion_gmail.sql
+📍 Ubicación: backend/scripts/ejemplo_configuracion_gmail.sql
+
+✅ ACCIÓN:
+   1. Abrir el archivo: backend/scripts/ejemplo_configuracion_gmail.sql
+   2. REEMPLAZAR estos valores:
+      - <TU-EMAIL@gmail.com>        → Tu email real de Gmail
+      - <TU-APP-PASSWORD>            → Tu App Password de Gmail
+      - <noreply@rapicredit.com>     → Email remitente deseado
+      - <pruebas@ejemplo.com>        → Email para pruebas (opcional)
+   3. Ejecutar TODO el script (Ctrl+Enter o botón "Execute SQL Script")
+   4. Verificar que no haya errores
+
+✅ RESULTADO ESPERADO:
+   - Mensaje: "INSERT 0 1" o similar para cada INSERT
+   - Sin errores de sintaxis o constraint
+
+───────────────────────────────────────────────────────────────────────────────
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PASO 4: VERIFICAR CONFIGURACIÓN INSERTADA                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+📄 Script: verificar_email_simple.sql (Query 1 y Query 2)
+📍 Ubicación: backend/scripts/verificar_email_simple.sql
+
+✅ ACCIÓN:
+   1. Ejecutar Query 1 del script verificar_email_simple.sql
+   2. Verificar que todas las configuraciones tengan valores
+   3. Ejecutar Query 2 del script
+   4. Verificar que todas muestren "✅ OK"
+
+✅ RESULTADO ESPERADO:
+   Query 1: Todas las configuraciones con valores (no "NO CONFIGURADO")
+   Query 2: Todas las configuraciones requeridas muestran "✅ OK"
+
+───────────────────────────────────────────────────────────────────────────────
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PASO 5: PROBAR CONEXIÓN SMTP                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+🌐 Método 1: Desde la API (Recomendado)
+
+   URL: https://rapicredit.onrender.com/api/v1/configuracion/email/estado
+   Método: GET
+   Autenticación: Requerida (token de admin)
+
+✅ RESULTADO ESPERADO:
+   {
+     "configurada": true,
+     "mensaje": "Configuración completa y válida",
+     "conexion_smtp": {
+       "success": true,
+       "message": "Conexión SMTP exitosa"
+     }
+   }
+
+🌐 Método 2: Desde la Interfaz Web
+
+   URL: https://rapicredit.onrender.com/configuracion?tab=email
+   Acción: Hacer clic en "Probar Configuración"
+
+───────────────────────────────────────────────────────────────────────────────
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PASO 6: ENVIAR EMAIL DE PRUEBA                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+🌐 Método 1: Desde la API
+
+   URL: https://rapicredit.onrender.com/api/v1/configuracion/email/probar
+   Método: POST
+   Headers:
+     Content-Type: application/json
+     Authorization: Bearer <tu_token>
+   Body:
+     {
+       "email_destino": "tu-email@ejemplo.com"
+     }
+
+✅ RESULTADO ESPERADO:
+   {
+     "mensaje": "Email de prueba enviado exitosamente a tu-email@ejemplo.com",
+     "email_destino": "tu-email@ejemplo.com",
+     "detalle": {
+       "success": true,
+       "message": "Email enviado exitosamente"
+     }
+   }
+
+🌐 Método 2: Desde la Interfaz Web
+
+   URL: https://rapicredit.onrender.com/configuracion?tab=email
+   Acción: Hacer clic en "Enviar Email de Prueba"
+
+───────────────────────────────────────────────────────────────────────────────
+
+═══════════════════════════════════════════════════════════════════════════════
+  📁 ARCHIVOS DE SCRIPTS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. verificar_email_simple.sql
+   → Verificación rápida (4 queries simples)
+   → Usar en PASO 1 y PASO 4
+
+2. verificar_configuracion_email.sql
+   → Verificación completa (6 queries detalladas)
+   → Alternativa más completa para verificación
+
+3. ejemplo_configuracion_gmail.sql
+   → Inserción para Gmail (listo para usar)
+   → Usar en PASO 3 (recomendado para Gmail)
+
+4. insertar_configuracion_email.sql
+   → Inserción genérica (para cualquier proveedor)
+   → Alternativa para proveedores que no sean Gmail
+
+5. README_IMPLEMENTACION_EMAIL.md
+   → Documentación completa con troubleshooting
+   → Consultar si hay problemas
+
+═══════════════════════════════════════════════════════════════════════════════
+  ✅ CHECKLIST FINAL
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] PASO 1: Verificación inicial completada
+[ ] PASO 2: Valores de configuración preparados
+[ ] PASO 3: Configuración insertada en BD
+[ ] PASO 4: Verificación de configuración exitosa
+[ ] PASO 5: Conexión SMTP probada y exitosa
+[ ] PASO 6: Email de prueba enviado y recibido
+
+═══════════════════════════════════════════════════════════════════════════════
+

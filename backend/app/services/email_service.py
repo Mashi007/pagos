@@ -79,7 +79,10 @@ class EmailService:
 
                     logger.info("✅ Configuración de email cargada desde base de datos")
                     if self.modo_pruebas:
-                        logger.warning(f"⚠️ MODO PRUEBAS ACTIVO: Todos los emails se enviarán a {self.email_pruebas}")
+                        if self.email_pruebas:
+                            logger.warning(f"⚠️ MODO PRUEBAS ACTIVO: Todos los emails se enviarán a {self.email_pruebas}")
+                        else:
+                            logger.warning("⚠️ MODO PRUEBAS ACTIVO pero email_pruebas no está configurado. Los emails fallarán si se intentan enviar.")
                     return
 
             except Exception as e:
@@ -115,10 +118,23 @@ class EmailService:
             # Recargar configuración para obtener modo_pruebas actualizado
             self._cargar_configuracion()
 
+            # Validar configuración antes de enviar
+            if not self.smtp_server:
+                raise ValueError("SMTP server no configurado")
+            if not self.smtp_port or self.smtp_port <= 0:
+                raise ValueError(f"Puerto SMTP inválido: {self.smtp_port}")
+            if not self.from_email:
+                raise ValueError("Email remitente (from_email) no configurado")
+            
             # Si está en modo pruebas, redirigir todos los emails a email_pruebas
             # (excepto si se fuerza envío real, útil para pruebas de configuración)
             emails_destinatarios = to_emails.copy()
-            if self.modo_pruebas and self.email_pruebas and not forzar_envio_real:
+            if self.modo_pruebas and not forzar_envio_real:
+                if not self.email_pruebas:
+                    raise ValueError(
+                        "⚠️ MODO PRUEBAS activo pero email_pruebas no está configurado. "
+                        "Configure un email de pruebas o desactive modo_pruebas para enviar a destinatarios reales."
+                    )
                 emails_originales = ", ".join(to_emails)
                 # Agregar información de destinatarios originales al asunto y cuerpo
                 subject = f"[PRUEBAS - Originalmente para: {emails_originales}] {subject}"
@@ -176,8 +192,14 @@ class EmailService:
                 if self.smtp_use_tls:
                     server.starttls()
 
+                # Validar credenciales antes de intentar login
                 if self.smtp_username and self.smtp_password:
+                    if not self.smtp_username.strip() or not self.smtp_password.strip():
+                        raise ValueError("Credenciales SMTP (usuario o contraseña) están vacías")
                     server.login(self.smtp_username, self.smtp_password)
+                elif self.smtp_username or self.smtp_password:
+                    # Si solo uno de los dos está configurado, es un error
+                    raise ValueError("Credenciales SMTP incompletas: se requiere tanto usuario como contraseña")
 
                 # Guardar conexión si se debe reutilizar
                 if self.reuse_connection:
@@ -211,11 +233,59 @@ class EmailService:
                 "modo_pruebas": self.modo_pruebas,
             }
 
-        except Exception as e:
-            logger.error(f"Error enviando email: {str(e)}")
+        except smtplib.SMTPAuthenticationError as e:
+            error_msg = f"Error de autenticación SMTP: {str(e)}. Verifique usuario y contraseña."
+            logger.error(error_msg)
             return {
                 "success": False,
-                "message": f"Error enviando email: {str(e)}",
+                "message": error_msg,
+                "error_type": "AUTHENTICATION_ERROR",
+                "recipients": to_emails,
+            }
+        except smtplib.SMTPConnectError as e:
+            error_msg = f"Error conectando al servidor SMTP {self.smtp_server}:{self.smtp_port}: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error_type": "CONNECTION_ERROR",
+                "recipients": to_emails,
+            }
+        except smtplib.SMTPServerDisconnected as e:
+            error_msg = f"Conexión SMTP perdida: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error_type": "DISCONNECTED_ERROR",
+                "recipients": to_emails,
+            }
+        except smtplib.SMTPException as e:
+            error_msg = f"Error SMTP: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error_type": "SMTP_ERROR",
+                "recipients": to_emails,
+            }
+        except ValueError as e:
+            # Errores de validación de configuración
+            error_msg = f"Error de configuración: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error_type": "CONFIGURATION_ERROR",
+                "recipients": to_emails,
+            }
+        except Exception as e:
+            error_msg = f"Error inesperado enviando email: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return {
+                "success": False,
+                "message": error_msg,
+                "error_type": "UNKNOWN_ERROR",
                 "recipients": to_emails,
             }
 
@@ -326,18 +396,36 @@ class EmailService:
             Dict con resultado de la prueba
         """
         try:
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+            # Validar configuración antes de probar
+            if not self.smtp_server:
+                return {"success": False, "message": "SMTP server no configurado", "error_type": "CONFIGURATION_ERROR"}
+            if not self.smtp_port or self.smtp_port <= 0:
+                return {"success": False, "message": f"Puerto SMTP inválido: {self.smtp_port}", "error_type": "CONFIGURATION_ERROR"}
+            if not self.from_email:
+                return {"success": False, "message": "Email remitente (from_email) no configurado", "error_type": "CONFIGURATION_ERROR"}
+            
+            server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30)
 
             if self.smtp_use_tls:
                 server.starttls()
 
             if self.smtp_username and self.smtp_password:
+                if not self.smtp_username.strip() or not self.smtp_password.strip():
+                    server.quit()
+                    return {"success": False, "message": "Credenciales SMTP vacías", "error_type": "CONFIGURATION_ERROR"}
                 server.login(self.smtp_username, self.smtp_password)
+            elif self.smtp_username or self.smtp_password:
+                server.quit()
+                return {"success": False, "message": "Credenciales SMTP incompletas", "error_type": "CONFIGURATION_ERROR"}
 
             server.quit()
 
             return {"success": True, "message": "Conexión SMTP exitosa"}
 
+        except smtplib.SMTPAuthenticationError as e:
+            return {"success": False, "message": f"Error de autenticación: {str(e)}", "error_type": "AUTHENTICATION_ERROR"}
+        except smtplib.SMTPConnectError as e:
+            return {"success": False, "message": f"Error conectando a {self.smtp_server}:{self.smtp_port}: {str(e)}", "error_type": "CONNECTION_ERROR"}
         except Exception as e:
-            logger.error(f"Error probando conexión SMTP: {str(e)}")
-            return {"success": False, "message": f"Error de conexión SMTP: {str(e)}"}
+            logger.error(f"Error probando conexión SMTP: {str(e)}", exc_info=True)
+            return {"success": False, "message": f"Error de conexión SMTP: {str(e)}", "error_type": "UNKNOWN_ERROR"}

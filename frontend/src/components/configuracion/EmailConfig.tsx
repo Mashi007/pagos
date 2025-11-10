@@ -62,6 +62,16 @@ export function EmailConfig() {
         data.from_email = data.smtp_user
       }
       
+      // Asegurar que smtp_use_tls sea siempre un string 'true' o 'false'
+      if (data.smtp_use_tls === undefined || data.smtp_use_tls === null) {
+        data.smtp_use_tls = 'true' // Por defecto: true para Gmail
+      } else if (typeof data.smtp_use_tls === 'boolean') {
+        data.smtp_use_tls = data.smtp_use_tls ? 'true' : 'false'
+      } else if (typeof data.smtp_use_tls === 'string') {
+        // Normalizar valores de string
+        data.smtp_use_tls = (data.smtp_use_tls.toLowerCase() === 'true' || data.smtp_use_tls === '1') ? 'true' : 'false'
+      }
+      
       setConfig(data)
       setModoPruebas(data.modo_pruebas || 'true') // Por defecto: Pruebas si no hay configuración
       setEmailPruebas(data.email_pruebas || '')

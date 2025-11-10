@@ -782,6 +782,26 @@ def _procesar_configuraciones_email(configs: list) -> Dict[str, Any]:
         try:
             if hasattr(config, "clave") and config.clave:
                 valor = config.valor if hasattr(config, "valor") and config.valor is not None else ""
+                
+                # Normalizar valores booleanos a strings para el frontend
+                # El frontend espera strings 'true'/'false' para campos como smtp_use_tls
+                if config.clave in ('smtp_use_tls', 'modo_pruebas'):
+                    if isinstance(valor, bool):
+                        valor = 'true' if valor else 'false'
+                    elif isinstance(valor, str):
+                        # Normalizar strings: 'True', 'TRUE', '1', 'yes' -> 'true'
+                        valor_lower = valor.lower().strip()
+                        if valor_lower in ('true', '1', 'yes', 'on'):
+                            valor = 'true'
+                        elif valor_lower in ('false', '0', 'no', 'off', ''):
+                            valor = 'false'
+                        else:
+                            # Si no es reconocible, mantener el valor original
+                            pass
+                    else:
+                        # Si es None o otro tipo, usar 'false' por defecto
+                        valor = 'false' if config.clave == 'smtp_use_tls' else 'true'
+                
                 config_dict[config.clave] = valor
                 logger.debug(f"📝 Configuración: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
             else:
@@ -1260,6 +1280,105 @@ class ProbarEmailRequest(BaseModel):
     email_destino: Optional[str] = None
     subject: Optional[str] = None
     mensaje: Optional[str] = None
+
+
+@router.get("/email/estado")
+def verificar_estado_configuracion_email(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Verificar el estado de la configuración de email sin enviar un email
+    Útil para verificar si la configuración está completa y válida
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden verificar configuración de email",
+        )
+
+    try:
+        from app.services.email_service import EmailService
+
+        # Obtener configuración
+        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "EMAIL").all()
+
+        if not configs:
+            return {
+                "configurada": False,
+                "mensaje": "No hay configuración de email en la base de datos",
+                "configuraciones": {},
+                "problemas": ["No hay configuraciones de EMAIL en la base de datos"],
+            }
+
+        config_dict = {config.clave: config.valor for config in configs}
+
+        # Verificar configuraciones requeridas
+        problemas = []
+        configuraciones_requeridas = {
+            "smtp_host": config_dict.get("smtp_host"),
+            "smtp_port": config_dict.get("smtp_port"),
+            "smtp_user": config_dict.get("smtp_user"),
+            "smtp_password": config_dict.get("smtp_password"),
+            "from_email": config_dict.get("from_email"),
+        }
+
+        # Validar cada configuración requerida
+        if not configuraciones_requeridas["smtp_host"]:
+            problemas.append("smtp_host no está configurado")
+        if not configuraciones_requeridas["smtp_port"]:
+            problemas.append("smtp_port no está configurado")
+        elif not configuraciones_requeridas["smtp_port"].isdigit():
+            problemas.append("smtp_port debe ser un número")
+        elif not (1 <= int(configuraciones_requeridas["smtp_port"]) <= 65535):
+            problemas.append("smtp_port debe estar entre 1 y 65535")
+        if not configuraciones_requeridas["smtp_user"]:
+            problemas.append("smtp_user no está configurado")
+        if not configuraciones_requeridas["smtp_password"]:
+            problemas.append("smtp_password no está configurado o está vacío")
+        if not configuraciones_requeridas["from_email"]:
+            problemas.append("from_email no está configurado")
+
+        # Verificar problema crítico: modo_pruebas sin email_pruebas
+        modo_pruebas = config_dict.get("modo_pruebas", "true").lower() in ("true", "1", "yes", "on")
+        email_pruebas = config_dict.get("email_pruebas", "").strip()
+        if modo_pruebas and not email_pruebas:
+            problemas.append(
+                "⚠️ MODO PRUEBAS activo pero email_pruebas no está configurado. "
+                "Los emails fallarán si se intentan enviar."
+            )
+
+        # Preparar respuesta con valores ocultos para seguridad
+        configuraciones_visibles = {}
+        for clave, valor in config_dict.items():
+            if clave in ("smtp_password", "smtp_user"):
+                configuraciones_visibles[clave] = "*** (oculto)" if valor else None
+            else:
+                configuraciones_visibles[clave] = valor
+
+        # Probar conexión SMTP si todas las configuraciones están presentes
+        conexion_smtp = None
+        if not problemas:
+            try:
+                email_service = EmailService(db=db)
+                conexion_smtp = email_service.test_connection()
+            except Exception as e:
+                problemas.append(f"Error probando conexión SMTP: {str(e)}")
+                conexion_smtp = {"success": False, "message": str(e)}
+
+        return {
+            "configurada": len(problemas) == 0,
+            "mensaje": "Configuración completa y válida" if len(problemas) == 0 else f"Se encontraron {len(problemas)} problema(s)",
+            "configuraciones": configuraciones_visibles,
+            "problemas": problemas,
+            "conexion_smtp": conexion_smtp,
+            "modo_pruebas": modo_pruebas,
+            "email_pruebas": email_pruebas if email_pruebas else None,
+        }
+
+    except Exception as e:
+        logger.error(f"Error verificando estado de configuración de email: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
 @router.post("/email/probar")
