@@ -280,27 +280,24 @@ async def envio_masivo(
             # Preparar datos para envío masivo optimizado
             emails_data = []
             notificaciones_por_email = {}  # Mapear email -> lista de notificaciones
-            
+
             for notif in notificaciones_creadas:
                 cliente = next(c for c in clientes if c.id == notif.cliente_id)
                 email_cliente = str(cliente.email).strip()
-                
+
                 if email_cliente and "@" in email_cliente:
                     # Agregar variables personalizadas para cada cliente
                     variables = {
-                        'nombre': cliente.nombre or '',
-                        'apellido': cliente.apellido or '',
-                        'email': email_cliente,
-                        'telefono': cliente.telefono or '',
+                        "nombre": cliente.nombre or "",
+                        "apellido": cliente.apellido or "",
+                        "email": email_cliente,
+                        "telefono": cliente.telefono or "",
                     }
-                    
-                    emails_data.append({
-                        'email': email_cliente,
-                        'variables': variables,
-                        'notificacion_id': notif.id,
-                        'cliente_id': cliente.id
-                    })
-                    
+
+                    emails_data.append(
+                        {"email": email_cliente, "variables": variables, "notificacion_id": notif.id, "cliente_id": cliente.id}
+                    )
+
                     # Agrupar notificaciones por email (por si hay duplicados)
                     if email_cliente not in notificaciones_por_email:
                         notificaciones_por_email[email_cliente] = []
@@ -311,16 +308,16 @@ async def envio_masivo(
                     notif.error_mensaje = "Cliente no tiene email válido"
                     db.commit()
                     logger.warning(f"⚠️ Cliente {cliente.id} no tiene email válido, saltando...")
-            
+
             if emails_data:
                 # ✅ Usar algoritmo optimizado de envío masivo
                 def enviar_emails_masivos_optimizado():
                     """Envía emails masivos usando algoritmo optimizado con rate limiting"""
                     from app.db.session import SessionLocal
-                    
+
                     db_local = SessionLocal()
                     email_service = EmailService(db=db_local, reuse_connection=True)
-                    
+
                     try:
                         # Configuración optimizada para Gmail
                         # Gmail permite ~500 emails/día en cuentas personales
@@ -336,23 +333,23 @@ async def envio_masivo(
                             max_retries=3,
                             retry_delay=2.0,
                         )
-                        
+
                         # ✅ Actualizar estados de notificaciones según resultados
                         # Crear mapeo de email -> resultado
                         emails_enviados = set()
                         emails_fallidos = {}
-                        
+
                         # Procesar errores para identificar fallos
-                        for error in resultado.get('errores', []):
-                            email_error = error.get('email')
+                        for error in resultado.get("errores", []):
+                            email_error = error.get("email")
                             if email_error:
-                                emails_fallidos[email_error] = error.get('error', 'Error desconocido')
-                        
+                                emails_fallidos[email_error] = error.get("error", "Error desconocido")
+
                         # Actualizar notificaciones exitosas
                         for email_data in emails_data:
-                            email_destino = email_data['email']
-                            notif_id = email_data['notificacion_id']
-                            
+                            email_destino = email_data["email"]
+                            notif_id = email_data["notificacion_id"]
+
                             if email_destino not in emails_fallidos:
                                 # Email enviado exitosamente
                                 notif_local = db_local.query(Notificacion).filter(Notificacion.id == notif_id).first()
@@ -370,7 +367,7 @@ async def envio_masivo(
                                     notif_local.error_mensaje = emails_fallidos[email_destino]
                                     notif_local.intentos = (notif_local.intentos or 0) + 1
                                     db_local.commit()
-                        
+
                         logger.info(
                             f"✅ Envío masivo optimizado completado: "
                             f"{resultado['enviados']}/{resultado['total']} enviados "
@@ -378,15 +375,17 @@ async def envio_masivo(
                             f"Tiempo: {resultado['tiempo_total']}s | "
                             f"Velocidad: {resultado['emails_por_segundo']} emails/s"
                         )
-                        
+
                     except Exception as e:
                         logger.error(f"❌ Error en envío masivo optimizado: {e}", exc_info=True)
                         # Marcar todas las notificaciones como fallidas
                         try:
                             for email_data in emails_data:
-                                notif_local = db_local.query(Notificacion).filter(
-                                    Notificacion.id == email_data['notificacion_id']
-                                ).first()
+                                notif_local = (
+                                    db_local.query(Notificacion)
+                                    .filter(Notificacion.id == email_data["notificacion_id"])
+                                    .first()
+                                )
                                 if notif_local:
                                     notif_local.estado = "FALLIDA"
                                     notif_local.error_mensaje = f"Error en envío masivo: {str(e)}"
@@ -396,13 +395,13 @@ async def envio_masivo(
                             db_local.rollback()
                     finally:
                         db_local.close()
-                
+
                 # Ejecutar en background
                 background_tasks.add_task(enviar_emails_masivos_optimizado)
                 logger.info(f"📧 Envío masivo optimizado programado para {len(emails_data)} emails")
             else:
                 logger.warning("⚠️ No hay emails válidos para enviar")
-        
+
         # Programar envíos individuales para WhatsApp (mantener lógica actual)
         elif request.canal == "WHATSAPP":
             for notif in notificaciones_creadas:
