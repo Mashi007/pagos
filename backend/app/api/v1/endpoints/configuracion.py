@@ -1662,7 +1662,7 @@ async def test_completo_whatsapp(
     3. Validación de credenciales
     4. Estado de rate limits
     5. Envío de mensaje de prueba (opcional)
-    
+
     Retorna diagnóstico detallado de todos los componentes
     """
     if not current_user.is_admin:
@@ -1871,9 +1871,7 @@ async def test_completo_whatsapp(
         # RESUMEN FINAL
         # ============================================
         todos_exitosos = resultados["resumen"]["fallidos"] == 0
-        resultados["resumen"]["estado_general"] = (
-            "✅ TODO CORRECTO" if todos_exitosos else "⚠️ HAY PROBLEMAS"
-        )
+        resultados["resumen"]["estado_general"] = "✅ TODO CORRECTO" if todos_exitosos else "⚠️ HAY PROBLEMAS"
         resultados["resumen"]["recomendaciones"] = []
 
         if not test_config["exito"]:

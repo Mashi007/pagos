@@ -475,7 +475,7 @@ except Exception as e:
         try:
             settings = Settings()
             logger.info(
-                "ℹ️ CORS_ORIGINS no pudo ser parseado desde variable de entorno. " 
+                "ℹ️ CORS_ORIGINS no pudo ser parseado desde variable de entorno. "
                 "Usando valores por defecto que se filtrarán automáticamente."
             )
         except Exception:
