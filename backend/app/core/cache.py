@@ -92,13 +92,17 @@ cache_backend: CacheBackend = MemoryCache()
 try:
     logger.debug("🔍 Iniciando diagnóstico de Redis...")
     import redis
+
     logger.debug(f"✅ Módulo redis importado. Versión: {redis.__version__ if hasattr(redis, '__version__') else 'N/A'}")
 
     from app.core.config import settings
+
     logger.debug("✅ Settings importado")
-    
+
     # Solo mostrar configuración detallada en modo debug
-    logger.debug(f"Redis config - URL: {bool(settings.REDIS_URL)}, Host: {settings.REDIS_HOST}, Port: {settings.REDIS_PORT}, DB: {settings.REDIS_DB}")
+    logger.debug(
+        f"Redis config - URL: {bool(settings.REDIS_URL)}, Host: {settings.REDIS_HOST}, Port: {settings.REDIS_PORT}, DB: {settings.REDIS_DB}"
+    )
 
     # ✅ CONFIGURACIÓN DESDE VARIABLES DE ENTORNO
     # Prioridad: REDIS_URL > REDIS_HOST/REDIS_PORT/REDIS_DB
@@ -159,7 +163,7 @@ try:
                 health_check_interval=30,
             )
             logger.debug("Cliente Redis creado")
-            
+
             # Test de conexión inmediato
             redis_client.ping()
             logger.debug("Test de conexión a Redis exitoso")
@@ -213,7 +217,7 @@ try:
         logger.debug("Usando componentes individuales (REDIS_HOST/PORT/DB) para conexión...")
         # Usar componentes individuales
         logger.debug(f"Host: {settings.REDIS_HOST}, Port: {settings.REDIS_PORT}, DB: {settings.REDIS_DB}")
-        
+
         redis_client = redis.Redis(
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,
@@ -278,7 +282,7 @@ try:
                 return False
 
     cache_backend = RedisCache(redis_client)
-    
+
     if not _cache_logs_shown:
         logger.info("✅ Redis cache inicializado correctamente")
         _cache_logs_shown = True
