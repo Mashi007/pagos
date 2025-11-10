@@ -89,14 +89,14 @@ export function useSidebarCounts() {
     // Suscribirse a cambios de visibilidad
     document.addEventListener('visibilitychange', handleVisibilityChange)
     
-    // Actualizar cada 2 minutos (120 segundos) en lugar de 30 segundos
-    // Esto reduce significativamente la carga del servidor
+    // Actualizar cada 5 minutos (300 segundos) - optimizado para reducir carga del servidor
+    // Esto reduce significativamente la carga del servidor y los requests repetitivos
     const interval = setInterval(() => {
       // Solo actualizar si la página está visible
       if (document.visibilityState === 'visible') {
         fetchCounts()
       }
-    }, 120000) // 2 minutos
+    }, 300000) // 5 minutos
     
     return () => {
       clearInterval(interval)

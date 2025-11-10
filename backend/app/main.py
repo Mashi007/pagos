@@ -146,15 +146,31 @@ class PerformanceLoggingMiddleware(BaseHTTPMiddleware):
             log_level = logging.DEBUG
             emoji = "✅"
 
-        # ✅ DIAGNÓSTICO: Detectar requests lentos (> 2 segundos) y registrar información adicional
+        # ✅ DIAGNÓSTICO: Detectar requests lentos y registrar información adicional
         if response_time_ms > 2000:
-            logger.warning(
-                f"🐌 [SLOW REQUEST] {request.method} {request.url.path} - "
+            # Categorizar según severidad
+            if response_time_ms > 5000:
+                log_level = logging.ERROR
+                emoji_severity = "🚨"
+                severity = "CRÍTICO"
+            elif response_time_ms > 3000:
+                log_level = logging.WARNING
+                emoji_severity = "⚠️"
+                severity = "MUY LENTO"
+            else:
+                log_level = logging.WARNING
+                emoji_severity = "🐌"
+                severity = "LENTO"
+            
+            logger.log(
+                log_level,
+                f"{emoji_severity} [SLOW REQUEST - {severity}] {request.method} {request.url.path} - "
                 f"responseTimeMS={response_time_ms}ms - "
                 f"responseBytes={response_bytes} - "
                 f"status={response.status_code} - "
                 f'requestID="{request_id}" - '
-                f'queryParams="{request.url.query}"'
+                f'queryParams="{request.url.query}" - '
+                f"💡 Considerar optimizar queries o agregar índices"
             )
 
         # ✅ DIAGNÓSTICO: Detectar respuestas muy pequeñas que podrían indicar errores o datos vacíos
@@ -162,14 +178,31 @@ class PerformanceLoggingMiddleware(BaseHTTPMiddleware):
         if response_bytes > 0 and response_bytes < 1500 and response.status_code == 200:
             # Solo alertar en endpoints de API, no en assets estáticos
             if request.url.path.startswith("/api/"):
-                logger.info(
-                    f"📦 [SMALL RESPONSE] {request.method} {request.url.path} - "
-                    f"responseBytes={response_bytes} - "
-                    f"responseTimeMS={response_time_ms}ms - "
-                    f'requestID="{request_id}" - '
-                    f'queryParams="{request.url.query}" - '
-                    f"Posible respuesta vacía o error silencioso"
-                )
+                # Determinar si es un endpoint que normalmente retorna datos grandes
+                endpoints_con_datos = [
+                    "/api/v1/dashboard",
+                    "/api/v1/pagos/kpis",
+                    "/api/v1/notificaciones/estadisticas",
+                    "/api/v1/clientes",
+                    "/api/v1/prestamos",
+                ]
+                es_endpoint_con_datos = any(request.url.path.startswith(ep) for ep in endpoints_con_datos)
+                
+                if es_endpoint_con_datos:
+                    logger.warning(
+                        f"⚠️ [SMALL RESPONSE] {request.method} {request.url.path} - "
+                        f"responseBytes={response_bytes} - "
+                        f"responseTimeMS={response_time_ms}ms - "
+                        f'requestID="{request_id}" - '
+                        f'queryParams="{request.url.query}" - '
+                        f"⚠️ Posible respuesta vacía o datos incompletos - Revisar lógica del endpoint"
+                    )
+                else:
+                    logger.debug(
+                        f"📦 [SMALL RESPONSE] {request.method} {request.url.path} - "
+                        f"responseBytes={response_bytes} - "
+                        f"responseTimeMS={response_time_ms}ms"
+                    )
 
         # Log estructurado compatible con formato de Render
         logger.log(

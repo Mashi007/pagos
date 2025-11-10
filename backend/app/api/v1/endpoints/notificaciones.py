@@ -462,14 +462,28 @@ def obtener_estadisticas_notificaciones(
                 logger.warning(f"Error al consultar columna 'leida', usando aproximación: {pe}")
             no_leidas = enviadas  # Aproximación: todas las enviadas se consideran no leídas
 
-        return {
+        # ✅ VALIDACIÓN: Asegurar que siempre retornamos una estructura completa
+        # Incluso si no hay datos, retornar valores por defecto válidos
+        resultado = {
             "total": total,
             "enviadas": enviadas,
             "pendientes": pendientes,
             "fallidas": fallidas,
             "no_leidas": no_leidas,
-            "tasa_exito": (enviadas / total * 100) if total > 0 else 0,
+            "tasa_exito": round((enviadas / total * 100) if total > 0 else 0.0, 2),
         }
+        
+        # ✅ LOGGING: Registrar si no hay datos (puede indicar problema)
+        if total == 0:
+            logger.info("📊 [estadisticas_notificaciones] No hay notificaciones en la base de datos")
+        else:
+            logger.debug(
+                f"📊 [estadisticas_notificaciones] Total: {total}, "
+                f"Enviadas: {enviadas}, Pendientes: {pendientes}, "
+                f"Fallidas: {fallidas}, No leídas: {no_leidas}"
+            )
+        
+        return resultado
 
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}", exc_info=True)

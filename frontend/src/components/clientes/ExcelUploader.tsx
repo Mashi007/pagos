@@ -221,8 +221,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   // Efecto para verificar estado del servicio al cargar
   useEffect(() => {
     checkServiceStatus()
-    // Verificar cada 2 minutos (optimizado de 30s para reducir requests)
-    const interval = setInterval(checkServiceStatus, 2 * 60 * 1000)
+    // Verificar cada 5 minutos (optimizado para reducir requests y carga del servidor)
+    const interval = setInterval(checkServiceStatus, 5 * 60 * 1000)
     return () => clearInterval(interval)
   }, [])
 

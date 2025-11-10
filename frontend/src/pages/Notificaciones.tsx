@@ -58,8 +58,8 @@ export function Notificaciones() {
     queryKey: ['notificaciones-previas', filterEstado],
     queryFn: () => notificacionService.listarNotificacionesPrevias(filterEstado || undefined),
     enabled: activeTab === 'previa', // Solo cargar cuando esté en la pestaña previa
-    staleTime: 30 * 1000, // Cache de 30 segundos
-    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos (optimizado de 30s)
+    staleTime: 2 * 60 * 1000, // Cache de 2 minutos
+    refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos (optimizado para reducir carga)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
     retry: 2, // Reintentar 2 veces en caso de error
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
@@ -70,8 +70,8 @@ export function Notificaciones() {
     queryKey: ['notificaciones-dia-pago', filterEstado],
     queryFn: () => notificacionService.listarNotificacionesDiaPago(filterEstado || undefined),
     enabled: activeTab === 'dia-pago', // Solo cargar cuando esté en la pestaña dia-pago
-    staleTime: 30 * 1000, // Cache de 30 segundos
-    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos (optimizado de 30s)
+    staleTime: 2 * 60 * 1000, // Cache de 2 minutos
+    refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos (optimizado para reducir carga)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
     retry: 2, // Reintentar 2 veces en caso de error
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
@@ -82,8 +82,8 @@ export function Notificaciones() {
     queryKey: ['notificaciones-retrasadas', filterEstado],
     queryFn: () => notificacionService.listarNotificacionesRetrasadas(filterEstado || undefined),
     enabled: activeTab === 'retrasado', // Solo cargar cuando esté en la pestaña retrasado
-    staleTime: 30 * 1000, // Cache de 30 segundos
-    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos (optimizado de 30s)
+    staleTime: 2 * 60 * 1000, // Cache de 2 minutos
+    refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos (optimizado para reducir carga)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
     retry: 2, // Reintentar 2 veces en caso de error
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
@@ -103,8 +103,8 @@ export function Notificaciones() {
       }
     },
     enabled: activeTab === 'prejudicial', // Solo cargar cuando esté en la pestaña prejudicial
-    staleTime: 30 * 1000, // Cache de 30 segundos
-    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos (optimizado de 30s)
+    staleTime: 2 * 60 * 1000, // Cache de 2 minutos
+    refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos (optimizado para reducir carga)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
     retry: 2, // Reintentar 2 veces en caso de error
     retryDelay: 1000, // Esperar 1 segundo entre reintentos

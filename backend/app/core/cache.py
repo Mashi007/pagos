@@ -139,9 +139,61 @@ try:
         else:
             logger.info(f"🔗 Conectando a Redis: {redis_url}")
 
-        # ✅ Intentar conexión sin password primero si no hay @ en la URL
-        # Si falla, el error se capturará en el except general
-        redis_client = redis.from_url(redis_url, decode_responses=False, socket_timeout=settings.REDIS_SOCKET_TIMEOUT)
+        # ✅ Intentar conexión con mejor manejo de errores y reintentos
+        redis_client = None
+        try:
+            redis_client = redis.from_url(
+                redis_url, 
+                decode_responses=False, 
+                socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
+                socket_connect_timeout=settings.REDIS_SOCKET_TIMEOUT,
+                retry_on_timeout=True,
+                health_check_interval=30
+            )
+            # Test de conexión inmediato
+            redis_client.ping()
+            logger.info("✅ Test de conexión a Redis exitoso")
+        except (redis.AuthenticationError, redis.ResponseError) as auth_err:
+            # Si falla por autenticación, intentar con password si está disponible
+            error_msg = str(auth_err)
+            if ("NOAUTH" in error_msg or "Authentication" in error_msg or 
+                "authentication" in error_msg.lower() or 
+                isinstance(auth_err, redis.AuthenticationError)):
+                if settings.REDIS_PASSWORD and "@" not in redis_url:
+                    logger.warning(f"⚠️ Error de autenticación Redis: {auth_err}")
+                    logger.info("   Intentando con password desde REDIS_PASSWORD...")
+                    # Reconstruir URL con password
+                    if redis_url.startswith("redis://"):
+                        url_parts = redis_url.replace("redis://", "").split(":")
+                        if len(url_parts) >= 2:
+                            host = url_parts[0]
+                            port_db = ":".join(url_parts[1:])
+                            if "/" not in port_db:
+                                port_db = f"{port_db}/0"
+                            redis_url_with_pass = f"redis://default:{settings.REDIS_PASSWORD}@{host}:{port_db}"
+                            redis_client = redis.from_url(
+                                redis_url_with_pass,
+                                decode_responses=False,
+                                socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
+                                socket_connect_timeout=settings.REDIS_SOCKET_TIMEOUT
+                            )
+                            redis_client.ping()
+                            logger.info("✅ Conexión a Redis exitosa con password")
+                        else:
+                            raise
+                    else:
+                        raise
+                else:
+                    # Si no hay password configurado, lanzar error para que se capture en except general
+                    raise
+            else:
+                # Otro tipo de error, lanzar para capturar en except general
+                raise
+        except Exception as conn_err:
+            # Si falla la conexión inicial, lanzar para capturar en except general
+            raise
+        
+        # Si llegamos aquí, redis_client está definido y funcionando
     else:
         # Usar componentes individuales
         redis_client = redis.Redis(
@@ -153,8 +205,10 @@ try:
             socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
         )
 
-    # Test de conexión
-    redis_client.ping()
+    # Test de conexión ya se hizo arriba si usamos REDIS_URL
+    # Solo hacer ping si usamos componentes individuales
+    if not settings.REDIS_URL:
+        redis_client.ping()
 
     class RedisCache(CacheBackend):
         """Implementación de cache usando Redis"""
@@ -219,18 +273,38 @@ except Exception as e:
         error_type = type(e).__name__
 
         # ✅ MEJORA: Mensajes más específicos según el tipo de error
-        if "NOAUTH" in error_msg or "Authentication" in error_msg:
+        if "NOAUTH" in error_msg or "Authentication" in error_msg or "authentication" in error_msg.lower():
             logger.warning("⚠️ Redis requiere autenticación pero no se proporcionó password")
-            logger.info("   Opciones:")
-            logger.info("   1. Agregar REDIS_PASSWORD en variables de entorno")
-            logger.info("   2. O usar URL completa: redis://default:password@host:port")
-        elif "Connection refused" in error_msg or "Name or service not known" in error_msg:
+            logger.info("   Diagnóstico:")
+            logger.info(f"   - REDIS_URL configurada: {'Sí' if settings.REDIS_URL else 'No'}")
+            if settings.REDIS_URL:
+                # Mostrar URL sin password
+                safe_url = settings.REDIS_URL.split("@")[0] if "@" in settings.REDIS_URL else settings.REDIS_URL
+                logger.info(f"   - REDIS_URL: {safe_url}")
+            logger.info(f"   - REDIS_PASSWORD configurada: {'Sí' if settings.REDIS_PASSWORD else 'No'}")
+            logger.info("   Soluciones:")
+            logger.info("   1. Agregar REDIS_PASSWORD en variables de entorno de Render")
+            logger.info("   2. O usar URL completa: redis://default:password@host:port/db")
+            logger.info("   3. Verificar en Render Dashboard > Redis > Internal Redis URL (incluye password)")
+        elif "Connection refused" in error_msg or "Name or service not known" in error_msg or "timeout" in error_msg.lower():
             logger.warning(f"⚠️ No se pudo conectar a Redis: {error_type}")
-            logger.info("   Verificar que Redis esté corriendo y la URL sea correcta")
+            logger.info("   Diagnóstico:")
+            logger.info(f"   - REDIS_URL: {settings.REDIS_URL or 'No configurada'}")
+            logger.info(f"   - REDIS_HOST: {settings.REDIS_HOST}")
+            logger.info(f"   - REDIS_PORT: {settings.REDIS_PORT}")
+            logger.info("   Verificar:")
+            logger.info("   1. Que Redis esté corriendo en Render")
+            logger.info("   2. Que la URL sea correcta (copiar desde Render Dashboard)")
+            logger.info("   3. Que el servicio Redis esté activo")
         else:
             logger.warning(f"⚠️ No se pudo conectar a Redis: {error_type}: {error_msg}")
+            logger.info("   Diagnóstico:")
+            logger.info(f"   - REDIS_URL: {settings.REDIS_URL or 'No configurada'}")
+            logger.info(f"   - REDIS_PASSWORD: {'Configurada' if settings.REDIS_PASSWORD else 'No configurada'}")
+            logger.info(f"   - Error completo: {error_msg}")
 
-        logger.info("   Usando MemoryCache como fallback")
+        logger.warning("   ⚠️ Usando MemoryCache como fallback - NO recomendado para producción con múltiples workers")
+        logger.info("   💡 Para resolver: Verificar configuración de Redis en Render Dashboard")
         _cache_logs_shown = True
 
 
@@ -278,17 +352,20 @@ def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
                 # Intentar obtener del cache
                 cached_result = cache_backend.get(cache_key)
                 if cached_result is not None:
-                    logger.info(f"✅ Cache HIT: {cache_key}")
+                    # ✅ MEJORA: Reducir verbosidad en producción - solo loggear en DEBUG
+                    logger.debug(f"✅ Cache HIT: {cache_key}")
                     return cached_result
 
                 # Ejecutar función
+                # ✅ MEJORA: Loggear cache miss solo en INFO o superior (no DEBUG)
                 logger.info(f"❌ Cache MISS: {cache_key} - Ejecutando función...")
                 result = await func(*args, **kwargs)
 
                 # Guardar en cache
                 cache_saved = cache_backend.set(cache_key, result, ttl=ttl)
                 if cache_saved:
-                    logger.info(f"💾 Cache guardado: {cache_key} (TTL: {ttl}s)")
+                    # ✅ MEJORA: Reducir verbosidad - solo loggear en DEBUG
+                    logger.debug(f"💾 Cache guardado: {cache_key} (TTL: {ttl}s)")
                 else:
                     logger.warning(f"⚠️  Error guardando en cache: {cache_key}")
 
@@ -350,10 +427,12 @@ def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
                     # Intentar obtener del cache
                     cached_result = cache_backend.get(cache_key)
                     if cached_result is not None:
-                        logger.info(f"✅ Cache HIT: {cache_key}")
+                        # ✅ MEJORA: Reducir verbosidad en producción - solo loggear en DEBUG
+                        logger.debug(f"✅ Cache HIT: {cache_key}")
                         return cached_result
 
                     # Ejecutar función
+                    # ✅ MEJORA: Loggear cache miss solo en INFO o superior (no DEBUG)
                     logger.info(f"❌ Cache MISS: {cache_key} - Ejecutando función...")
                     result = func(*args, **kwargs)
 
@@ -361,7 +440,8 @@ def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
                     try:
                         cache_saved = cache_backend.set(cache_key, result, ttl=ttl)
                         if cache_saved:
-                            logger.info(f"💾 Cache guardado: {cache_key} (TTL: {ttl}s)")
+                            # ✅ MEJORA: Reducir verbosidad - solo loggear en DEBUG
+                            logger.debug(f"💾 Cache guardado: {cache_key} (TTL: {ttl}s)")
                         else:
                             logger.warning(f"⚠️  Error guardando en cache: {cache_key}")
                     except Exception as e:

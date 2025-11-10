@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, readdirSync } from 'fs';
 import { createProxyMiddleware } from 'http-proxy-middleware';
+import compression from 'compression';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,6 +63,24 @@ app.use((req, res, next) => {
 });
 
 // ============================================
+// COMPRESSION MIDDLEWARE - Gzip para reducir tamaño de respuestas
+// ============================================
+// Comprimir todas las respuestas (texto, JSON, HTML, CSS, JS)
+// Esto reduce ~70% del tamaño de las respuestas, mejorando significativamente el rendimiento
+app.use(compression({
+  filter: (req, res) => {
+    // Comprimir todo excepto si el cliente no lo soporta o ya está comprimido
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    // Usar el filtro por defecto de compression
+    return compression.filter(req, res);
+  },
+  level: 6, // Nivel de compresión balanceado (1-9, 6 es un buen balance)
+  threshold: 1024, // Solo comprimir respuestas mayores a 1KB
+}));
+
+// ============================================
 // LOGGING MIDDLEWARE - Para debug de peticiones
 // ============================================
 // Reducir logging en producción para mejorar rendimiento
@@ -73,6 +92,7 @@ const isProduction = process.env.NODE_ENV === 'production' ||
 // Log de diagnóstico solo al inicio
 if (!isDevelopment) {
   console.log(`🔇 Logging reducido en producción (NODE_ENV=${process.env.NODE_ENV || 'undefined'}, PORT=${process.env.PORT || 'undefined'})`);
+  console.log(`✅ Compresión gzip activada (threshold: 1KB, level: 6)`);
 }
 
 app.use((req, res, next) => {
@@ -158,6 +178,32 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
     },
     onProxyRes: (proxyRes, req, res) => {
       const status = proxyRes.statusCode;
+      
+      // ✅ OPTIMIZACIÓN: Agregar cache headers para respuestas exitosas de GET
+      // Esto reduce la carga en el backend para datos que no cambian frecuentemente
+      if (status >= 200 && status < 300 && req.method === 'GET') {
+        // Identificar endpoints que pueden ser cacheados
+        const cacheableEndpoints = [
+          '/api/v1/modelos-vehiculos',
+          '/api/v1/concesionarios',
+          '/api/v1/analistas',
+          '/api/v1/configuracion'
+        ];
+        
+        const isCacheable = cacheableEndpoints.some(endpoint => req.path.includes(endpoint));
+        
+        if (isCacheable) {
+          // Cache por 5 minutos para datos que cambian poco
+          res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
+        } else if (req.path.includes('/api/v1/dashboard') || req.path.includes('/api/v1/kpis')) {
+          // Cache corto (30 segundos) para datos del dashboard que cambian más frecuentemente
+          res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=10');
+        } else {
+          // No cachear por defecto para otros endpoints (datos dinámicos)
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+      }
+      
       // Solo loggear errores en producción, todo en desarrollo
       if (!isDevelopment && status >= 400) {
         const emoji = status >= 400 ? '❌' : '⚠️';
