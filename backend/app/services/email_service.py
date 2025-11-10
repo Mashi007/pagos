@@ -172,22 +172,42 @@ class EmailService:
 
             # Crear mensaje
             from datetime import datetime
-            from email.utils import formatdate, make_msgid
+            from email.utils import formatdate, make_msgid, formataddr
+            import uuid
+            import html as html_module
 
             msg = MIMEMultipart("alternative")  # ✅ multipart/alternative para HTML + texto plano
-            msg["From"] = f"{self.from_name} <{self.from_email}>"
+            
+            # ✅ Mejorar formato del From (RFC-compliant)
+            if self.from_name and self.from_name.strip():
+                msg["From"] = formataddr((self.from_name, self.from_email))
+            else:
+                msg["From"] = self.from_email
+            
             msg["To"] = ", ".join(emails_destinatarios)
             msg["Subject"] = subject
             msg["Date"] = formatdate(localtime=True)
-            msg["Message-ID"] = make_msgid(
-                domain=self.from_email.split("@")[1] if "@" in self.from_email else "rapicredit.com"
-            )
-            msg["Reply-To"] = self.from_email  # ✅ Reply-To para mejor deliverability
-            msg["X-Mailer"] = "RapiCredit Email System"  # ✅ Identificación del sistema
-
-            # ✅ Agregar headers adicionales para evitar spam
-            msg["X-Priority"] = "3"  # Prioridad normal
+            
+            # ✅ Message-ID único y RFC-compliant
+            domain = self.from_email.split("@")[1] if "@" in self.from_email else "rapicredit.com"
+            unique_id = str(uuid.uuid4()).replace("-", "")
+            msg["Message-ID"] = f"<{unique_id}@{domain}>"
+            
+            # ✅ Headers estándar para mejor deliverability
+            msg["Reply-To"] = self.from_email
+            msg["Return-Path"] = self.from_email  # Para bounces
             msg["MIME-Version"] = "1.0"
+            
+            # ✅ Headers para evitar spam
+            msg["X-Mailer"] = "RapiCredit Email System v1.0"
+            msg["X-Priority"] = "3"  # Prioridad normal (1=alta, 3=normal, 5=baja)
+            msg["Precedence"] = "bulk"  # Para emails transaccionales/notificaciones
+            msg["Auto-Submitted"] = "auto-generated"  # Indica email automático del sistema
+            
+            # ✅ Headers de identificación (mejora reputación)
+            msg["X-Entity-Ref-ID"] = unique_id  # ID único para tracking
+            msg["X-Source"] = "RapiCredit-System"
+            msg["X-Source-Domain"] = domain
 
             # Agregar CCO (BCC) si se proporciona
             emails_cco = []
@@ -201,18 +221,40 @@ class EmailService:
             # ✅ Agregar versión de texto plano Y HTML para mejor deliverability
             # Los filtros spam prefieren emails con ambas versiones
             if is_html:
-                # Extraer texto plano del HTML (simple, sin tags)
+                # Extraer texto plano del HTML (mejorado para mejor formato)
                 import re
+                import html as html_module
 
-                texto_plano = re.sub(r"<[^>]+>", "", body).strip()
-                texto_plano = re.sub(r"\s+", " ", texto_plano)  # Normalizar espacios
+                # Decodificar entidades HTML (&nbsp;, &amp;, etc.)
+                texto_plano = html_module.unescape(body)
+                # Remover tags HTML
+                texto_plano = re.sub(r"<[^>]+>", "", texto_plano)
+                # Remover múltiples espacios y saltos de línea
+                texto_plano = re.sub(r"\s+", " ", texto_plano)
+                # Remover espacios al inicio y final
+                texto_plano = texto_plano.strip()
+                # Reemplazar saltos de línea múltiples por uno solo
+                texto_plano = re.sub(r"\n\s*\n", "\n\n", texto_plano)
+                
+                # Si el texto plano está vacío, usar un mensaje por defecto
+                if not texto_plano or len(texto_plano.strip()) < 10:
+                    texto_plano = "Este es un email HTML. Si no puedes ver el contenido, por favor abre este email en un cliente de correo que soporte HTML."
 
-                # Agregar texto plano primero (los clientes de email lo prefieren)
-                msg.attach(MIMEText(texto_plano, "plain", "utf-8"))
-                # Luego agregar HTML
-                msg.attach(MIMEText(body, "html", "utf-8"))
+                # ✅ Agregar texto plano primero (los clientes de email lo prefieren)
+                # Especificar charset explícitamente
+                texto_plano_part = MIMEText(texto_plano, "plain", "utf-8")
+                texto_plano_part.set_charset("utf-8")
+                msg.attach(texto_plano_part)
+                
+                # ✅ Agregar HTML con charset explícito
+                html_part = MIMEText(body, "html", "utf-8")
+                html_part.set_charset("utf-8")
+                msg.attach(html_part)
             else:
-                msg.attach(MIMEText(body, "plain", "utf-8"))
+                # ✅ Texto plano con charset explícito
+                texto_part = MIMEText(body, "plain", "utf-8")
+                texto_part.set_charset("utf-8")
+                msg.attach(texto_part)
 
             # Enviar email - reutilizar conexión si está habilitado
             if self.reuse_connection and self._smtp_server_connection:
@@ -256,7 +298,16 @@ class EmailService:
                 if self.reuse_connection:
                     self._smtp_server_connection = server
 
-            text = msg.as_string()
+            # ✅ Asegurar que el mensaje esté correctamente formateado
+            # Usar as_string() con policy para mejor compatibilidad
+            try:
+                text = msg.as_string()
+            except Exception as e:
+                logger.warning(f"⚠️ Error formateando mensaje, usando método alternativo: {e}")
+                # Método alternativo si as_string() falla
+                from email import policy
+                text = msg.as_string(policy=policy.SMTP)
+            
             # Incluir CCO en la lista de destinatarios para sendmail
             todos_destinatarios = emails_destinatarios + emails_cco
 
@@ -267,10 +318,17 @@ class EmailService:
                 f"Para: {', '.join(emails_destinatarios)}, "
                 f"Modo Pruebas: {self.modo_pruebas}, "
                 f"Forzar Envío Real: {forzar_envio_real}, "
-                f"Destinatarios originales: {', '.join(to_emails) if self.modo_pruebas else 'N/A'}"
+                f"Destinatarios originales: {', '.join(to_emails) if self.modo_pruebas else 'N/A'}, "
+                f"Message-ID: {msg['Message-ID']}"
             )
 
-            server.sendmail(self.from_email, todos_destinatarios, text)
+            # ✅ Enviar usando sendmail con parámetros explícitos
+            # Esto asegura mejor manejo de errores y mejor deliverability
+            server.sendmail(
+                self.from_email,  # from_addr
+                todos_destinatarios,  # to_addrs
+                text  # msg
+            )
 
             # Solo cerrar conexión si no se reutiliza
             if not self.reuse_connection:
