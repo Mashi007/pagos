@@ -294,7 +294,7 @@ export function Configuracion() {
                 esperado: logoInfo.filename,
                 encontrado: updatedConfig.logo_filename
               })
-              toast.warning('El logo se guardó pero hay una discrepancia. Por favor, verifica.')
+              toast.warn('El logo se guardó pero hay una discrepancia. Por favor, verifica.')
               // Continuar con el guardado aunque haya discrepancia
               setLogoPreview(null)
               setLogoInfo(null)

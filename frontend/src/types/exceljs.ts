@@ -83,15 +83,21 @@ export async function createAndDownloadExcel(
   })
   
   // Ajustar ancho de columnas automáticamente
-  worksheet.columns.forEach(column => {
-    if (column.header) {
+  worksheet.columns.forEach((column, index) => {
+    if (column) {
       let maxLength = 10
-      column.eachCell({ includeEmpty: true }, (cell) => {
-        const cellValue = cell.value?.toString() || ''
-        if (cellValue.length > maxLength) {
-          maxLength = cellValue.length
-        }
-      })
+      // Iterar sobre todas las filas para encontrar el ancho máximo
+      if (worksheet.eachRow) {
+        worksheet.eachRow((row) => {
+          const cell = row.getCell(index + 1)
+          if (cell && cell.value !== null && cell.value !== undefined) {
+            const cellValue = cell.value.toString()
+            if (cellValue.length > maxLength) {
+              maxLength = cellValue.length
+            }
+          }
+        })
+      }
       column.width = Math.min(maxLength + 2, 50)
     }
   })
@@ -144,15 +150,21 @@ export async function createMultiSheetExcel(
     })
     
     // Ajustar ancho de columnas
-    worksheet.columns.forEach(column => {
-      if (column.header) {
+    worksheet.columns.forEach((column, index) => {
+      if (column) {
         let maxLength = 10
-        column.eachCell({ includeEmpty: true }, (cell) => {
-          const cellValue = cell.value?.toString() || ''
-          if (cellValue.length > maxLength) {
-            maxLength = cellValue.length
-          }
-        })
+        // Iterar sobre todas las filas para encontrar el ancho máximo
+        if (worksheet.eachRow) {
+          worksheet.eachRow((row) => {
+            const cell = row.getCell(index + 1)
+            if (cell && cell.value !== null && cell.value !== undefined) {
+              const cellValue = cell.value.toString()
+              if (cellValue.length > maxLength) {
+                maxLength = cellValue.length
+              }
+            }
+          })
+        }
         column.width = Math.min(maxLength + 2, 50)
       }
     })

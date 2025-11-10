@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/button'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { formatCurrency } from '@/utils'
 import { apiClient } from '@/services/api'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
@@ -546,7 +546,7 @@ export function DashboardMenu() {
           datosExportCobranzas = cobranzasResponse
         } catch (error) {
           console.error('Error consultando datos con filtros de fecha:', error)
-          toast.warning('Algunos datos pueden no estar filtrados por fecha')
+          toast.error('Algunos datos pueden no estar filtrados por fecha')
         }
       }
       

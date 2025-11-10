@@ -29,7 +29,7 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
       }
       
       if (validation.warnings && validation.warnings.length > 0) {
-        validation.warnings.forEach(warning => toast.warning(warning))
+        validation.warnings.forEach(warning => toast.warn(warning))
       }
       
       setFile(selectedFile)
@@ -52,7 +52,7 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
       }
       
       if (result.errores > 0) {
-        toast.warning(`${result.errores} errores encontrados`)
+        toast.warn(`${result.errores} errores encontrados`)
       }
       
       if (result.success > 0) {

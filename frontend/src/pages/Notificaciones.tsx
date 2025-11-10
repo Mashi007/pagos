@@ -266,7 +266,7 @@ export function Notificaciones() {
         : filteredNotificaciones.filter(n => n.estado === estado)
 
       if (notificacionesFiltradas.length === 0) {
-        toast.warning(`No hay notificaciones ${estado === 'PENDIENTE' ? 'pendientes' : 'fallidas'} para descargar`)
+        toast.warn(`No hay notificaciones ${estado === 'PENDIENTE' ? 'pendientes' : 'fallidas'} para descargar`)
         return
       }
 

@@ -29,7 +29,7 @@ export function ConciliacionExcelUploader({ onClose, onSuccess }: ConciliacionEx
       }
       
       if (validation.warnings && validation.warnings.length > 0) {
-        validation.warnings.forEach(warning => toast.warning(warning))
+        validation.warnings.forEach(warning => toast.warn(warning))
       }
       
       setFile(selectedFile)
@@ -52,7 +52,7 @@ export function ConciliacionExcelUploader({ onClose, onSuccess }: ConciliacionEx
       }
       
       if (result.pagos_no_encontrados > 0) {
-        toast.warning(`${result.pagos_no_encontrados} documentos no encontrados en el sistema`)
+        toast.warn(`${result.pagos_no_encontrados} documentos no encontrados en el sistema`)
       }
       
       if (result.errores > 0) {
