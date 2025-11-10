@@ -1053,10 +1053,10 @@ def actualizar_configuracion_email(
 
         # ✅ Flush para aplicar cambios antes del commit
         db.flush()
-        
+
         # ✅ Commit explícito para persistir cambios
         db.commit()
-        
+
         logger.info(f"✅ Configuración de email guardada - {len(configuraciones)} configuraciones actualizadas/creadas")
 
         # Determinar si la validación SMTP fue exitosa (Google aceptó)
