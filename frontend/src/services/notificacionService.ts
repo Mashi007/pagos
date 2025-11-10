@@ -196,7 +196,20 @@ class EmailConfigService {
   }
 
   async actualizarConfiguracionEmail(config: Partial<EmailConfig>): Promise<any> {
-    return await apiClient.put(`${this.baseUrl}/email/configuracion`, config)
+    console.log('📤 [EmailConfigService] Enviando PUT a:', `${this.baseUrl}/email/configuracion`)
+    console.log('📤 [EmailConfigService] Datos a enviar:', {
+      ...config,
+      smtp_password: config.smtp_password ? '***' : '(vacío)'
+    })
+    
+    try {
+      const resultado = await apiClient.put(`${this.baseUrl}/email/configuracion`, config)
+      console.log('✅ [EmailConfigService] Respuesta exitosa:', resultado)
+      return resultado
+    } catch (error) {
+      console.error('❌ [EmailConfigService] Error en PUT:', error)
+      throw error
+    }
   }
 
   async probarConfiguracionEmail(emailDestino?: string, subject?: string, mensaje?: string): Promise<any> {

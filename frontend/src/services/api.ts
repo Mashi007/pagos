@@ -455,8 +455,15 @@ class ApiClient {
   }
 
   async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.put(url, data, config)
-    return response.data
+    console.log('📤 [ApiClient] PUT request:', { url, data: data ? '***' : '(vacío)', config })
+    try {
+      const response: AxiosResponse<T> = await this.client.put(url, data, config)
+      console.log('✅ [ApiClient] PUT response:', { url, status: response.status, data: response.data })
+      return response.data
+    } catch (error) {
+      console.error('❌ [ApiClient] PUT error:', { url, error })
+      throw error
+    }
   }
 
   async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
