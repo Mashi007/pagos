@@ -154,20 +154,22 @@ class EmailService:
             # Crear mensaje
             from email.utils import formatdate, make_msgid
             from datetime import datetime
-            
+
             msg = MIMEMultipart("alternative")  # ✅ multipart/alternative para HTML + texto plano
             msg["From"] = f"{self.from_name} <{self.from_email}>"
             msg["To"] = ", ".join(emails_destinatarios)
             msg["Subject"] = subject
             msg["Date"] = formatdate(localtime=True)
-            msg["Message-ID"] = make_msgid(domain=self.from_email.split("@")[1] if "@" in self.from_email else "rapicredit.com")
+            msg["Message-ID"] = make_msgid(
+                domain=self.from_email.split("@")[1] if "@" in self.from_email else "rapicredit.com"
+            )
             msg["Reply-To"] = self.from_email  # ✅ Reply-To para mejor deliverability
             msg["X-Mailer"] = "RapiCredit Email System"  # ✅ Identificación del sistema
-            
+
             # ✅ Agregar headers adicionales para evitar spam
             msg["X-Priority"] = "3"  # Prioridad normal
             msg["MIME-Version"] = "1.0"
-            
+
             # Agregar CCO (BCC) si se proporciona
             emails_cco = []
             if bcc_emails:
@@ -182,9 +184,10 @@ class EmailService:
             if is_html:
                 # Extraer texto plano del HTML (simple, sin tags)
                 import re
-                texto_plano = re.sub(r'<[^>]+>', '', body).strip()
-                texto_plano = re.sub(r'\s+', ' ', texto_plano)  # Normalizar espacios
-                
+
+                texto_plano = re.sub(r"<[^>]+>", "", body).strip()
+                texto_plano = re.sub(r"\s+", " ", texto_plano)  # Normalizar espacios
+
                 # Agregar texto plano primero (los clientes de email lo prefieren)
                 msg.attach(MIMEText(texto_plano, "plain", "utf-8"))
                 # Luego agregar HTML
