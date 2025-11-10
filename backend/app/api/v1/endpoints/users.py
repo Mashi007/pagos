@@ -86,14 +86,14 @@ def create_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     # Crear usuario
-    # El ENUM en la BD solo acepta 'ADMIN'
     # El control de acceso real se hace con is_admin=True/False
+    # El campo rol se sincroniza con is_admin
 
     new_user = User(
         email=user_data.email,
         nombre=user_data.nombre,
         apellido=user_data.apellido,
-        rol="ADMIN",  # Valor único aceptado por el ENUM
+        rol="ADMIN" if user_data.is_admin else "USER",  # ✅ Sincronizar rol con is_admin
         cargo=user_data.cargo,
         is_admin=user_data.is_admin,  # Control real de permisos
         hashed_password=get_password_hash(user_data.password),
@@ -432,3 +432,86 @@ def delete_user(
             error_message = "Error de integridad de datos al eliminar el usuario"
 
         raise HTTPException(status_code=500, detail=error_message)
+
+
+@router.post("/{user_id}/activate", response_model=UserResponse)
+def activate_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Activar usuario (solo ADMIN)"""
+    try:
+        # Verificar permisos
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="Solo administradores pueden activar usuarios")
+
+        # Buscar usuario
+        user = db.query(User).filter(User.id == user_id).first()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+        if user.is_active:
+            logger.info(f"Usuario {user_id} ya está activo")
+            return user
+
+        user.is_active = True
+        db.commit()
+        db.refresh(user)
+
+        logger.info(f"Usuario {user_id} activado por admin {current_user.id}")
+        return user
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error activando usuario {user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
+@router.post("/{user_id}/deactivate", response_model=UserResponse)
+def deactivate_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Desactivar usuario (solo ADMIN)"""
+    try:
+        # Verificar permisos
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="Solo administradores pueden desactivar usuarios")
+
+        # Buscar usuario
+        user = db.query(User).filter(User.id == user_id).first()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+        # No permitir desactivar el último admin activo
+        if user.is_admin and user.is_active:
+            admin_count = db.query(User).filter(User.is_admin, User.is_active == True).count()
+            if admin_count <= 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No se puede desactivar el último administrador activo del sistema",
+                )
+
+        if not user.is_active:
+            logger.info(f"Usuario {user_id} ya está inactivo")
+            return user
+
+        user.is_active = False
+        db.commit()
+        db.refresh(user)
+
+        logger.info(f"Usuario {user_id} desactivado por admin {current_user.id}")
+        return user
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error desactivando usuario {user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
