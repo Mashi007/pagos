@@ -56,14 +56,16 @@ export function EmailConfig() {
     try {
       const data = await emailConfigService.obtenerConfiguracionEmail()
       
-      console.log('📥 [EmailConfig] Datos recibidos del backend:', {
-        smtp_host: data.smtp_host,
-        smtp_port: data.smtp_port,
-        smtp_user: data.smtp_user ? '***' : '(vacío)',
-        from_email: data.from_email || '(vacío)',
-        tiene_password: !!data.smtp_password,
-        smtp_use_tls: data.smtp_use_tls
-      })
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('📥 [EmailConfig] Datos recibidos del backend:', {
+          smtp_host: data.smtp_host,
+          smtp_port: data.smtp_port,
+          smtp_user: data.smtp_user ? '***' : '(vacío)',
+          from_email: data.from_email || '(vacío)',
+          tiene_password: !!data.smtp_password,
+          smtp_use_tls: data.smtp_use_tls
+        })
+      }
       
       // ESCENARIO 1: Si from_email está vacío pero smtp_user tiene valor, usar smtp_user como from_email por defecto
       // Esto asegura que en la primera carga, ambos campos tengan el mismo valor si from_email no está configurado
@@ -85,14 +87,16 @@ export function EmailConfig() {
         }
       }
       
-      console.log('📤 [EmailConfig] Datos después de procesamiento:', {
-        smtp_host: data.smtp_host,
-        smtp_port: data.smtp_port,
-        smtp_user: data.smtp_user ? '***' : '(vacío)',
-        from_email: data.from_email || '(vacío)',
-        tiene_password: !!data.smtp_password,
-        smtp_use_tls: data.smtp_use_tls
-      })
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('📤 [EmailConfig] Datos después de procesamiento:', {
+          smtp_host: data.smtp_host,
+          smtp_port: data.smtp_port,
+          smtp_user: data.smtp_user ? '***' : '(vacío)',
+          from_email: data.from_email || '(vacío)',
+          tiene_password: !!data.smtp_password,
+          smtp_use_tls: data.smtp_use_tls
+        })
+      }
       
       // Asegurar que smtp_use_tls sea siempre un string 'true' o 'false'
       if (data.smtp_use_tls === undefined || data.smtp_use_tls === null) {
@@ -180,17 +184,19 @@ export function EmailConfig() {
   // NOTA: Solo valida campos OBLIGATORIOS para guardar. El email de pruebas NO es obligatorio.
   // Usa useMemo para evitar recalcular en cada render
   const puedeGuardar = useMemo((): boolean => {
-    // Logging detallado para diagnóstico (también en producción para debugging)
-    console.log('🔍 [EmailConfig] Verificando si puede guardar:', {
-      smtp_host: config.smtp_host || '(vacío)',
-      smtp_port: config.smtp_port || '(vacío)',
-      smtp_user: config.smtp_user ? '***' : '(vacío)',
-      from_email: config.from_email || '(vacío)',
-      tiene_password: !!config.smtp_password,
-      password_length: config.smtp_password?.length || 0,
-      smtp_use_tls: config.smtp_use_tls,
-      es_gmail: config.smtp_host?.toLowerCase().includes('gmail.com')
-    })
+    // Logging detallado solo en desarrollo
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('🔍 [EmailConfig] Verificando si puede guardar:', {
+        smtp_host: config.smtp_host || '(vacío)',
+        smtp_port: config.smtp_port || '(vacío)',
+        smtp_user: config.smtp_user ? '***' : '(vacío)',
+        from_email: config.from_email || '(vacío)',
+        tiene_password: !!config.smtp_password,
+        password_length: config.smtp_password?.length || 0,
+        smtp_use_tls: config.smtp_use_tls,
+        es_gmail: config.smtp_host?.toLowerCase().includes('gmail.com')
+      })
+    }
     
     // Campos obligatorios básicos
     const camposFaltantes: string[] = []
@@ -200,40 +206,54 @@ export function EmailConfig() {
     if (!config.from_email || !config.from_email.trim()) camposFaltantes.push('from_email')
     
     if (camposFaltantes.length > 0) {
-      console.warn('❌ [EmailConfig] Faltan campos obligatorios básicos:', camposFaltantes)
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('❌ [EmailConfig] Faltan campos obligatorios básicos:', camposFaltantes)
+      }
       return false
     }
     
     // Validar puerto numérico
     const puerto = parseInt(config.smtp_port)
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
-      console.warn('❌ [EmailConfig] Puerto inválido:', config.smtp_port)
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('❌ [EmailConfig] Puerto inválido:', config.smtp_port)
+      }
       return false
     }
-    console.log('✅ [EmailConfig] Puerto válido:', puerto)
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('✅ [EmailConfig] Puerto válido:', puerto)
+    }
     
     // Si es Gmail/Google Workspace, requiere contraseña
     if (config.smtp_host.toLowerCase().includes('gmail.com')) {
       if (!config.smtp_password || config.smtp_password.trim().length === 0) {
-        console.warn('❌ [EmailConfig] Gmail requiere contraseña')
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('❌ [EmailConfig] Gmail requiere contraseña')
+        }
         return false
       }
-      console.log('✅ [EmailConfig] Contraseña presente para Gmail')
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('✅ [EmailConfig] Contraseña presente para Gmail')
+      }
       
       // Validar TLS para puerto 587
       if (puerto === 587 && config.smtp_use_tls !== 'true') {
-        console.warn('❌ [EmailConfig] Puerto 587 requiere TLS, actual:', config.smtp_use_tls)
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('❌ [EmailConfig] Puerto 587 requiere TLS, actual:', config.smtp_use_tls)
+        }
         return false
       }
-      if (puerto === 587) {
-        console.log('✅ [EmailConfig] TLS habilitado para puerto 587')
+      if (process.env.NODE_ENV === 'development' && puerto === 587) {
+        console.debug('✅ [EmailConfig] TLS habilitado para puerto 587')
       }
     }
     
     // NOTA: NO validamos el email de pruebas aquí porque NO es obligatorio para guardar
     // El email de pruebas solo se valida cuando se intenta enviar un email de prueba
     
-    console.log('✅ [EmailConfig] Puede guardar - todos los campos obligatorios están completos')
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('✅ [EmailConfig] Puede guardar - todos los campos obligatorios están completos')
+    }
     return true
   }, [config.smtp_host, config.smtp_port, config.smtp_user, config.from_email, config.smtp_password, config.smtp_use_tls])
 
