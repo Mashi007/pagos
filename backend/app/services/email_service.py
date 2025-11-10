@@ -217,7 +217,7 @@ class EmailService:
             text = msg.as_string()
             # Incluir CCO en la lista de destinatarios para sendmail
             todos_destinatarios = emails_destinatarios + emails_cco
-            
+
             # ✅ Logging detallado antes de enviar
             logger.info(
                 f"📧 Enviando email - "
@@ -227,7 +227,7 @@ class EmailService:
                 f"Forzar Envío Real: {forzar_envio_real}, "
                 f"Destinatarios originales: {', '.join(to_emails) if self.modo_pruebas else 'N/A'}"
             )
-            
+
             server.sendmail(self.from_email, todos_destinatarios, text)
 
             # Solo cerrar conexión si no se reutiliza
