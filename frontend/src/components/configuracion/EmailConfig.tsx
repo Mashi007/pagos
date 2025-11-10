@@ -21,6 +21,7 @@ interface EmailConfigData {
 }
 
 export function EmailConfig() {
+  // Estado principal
   const [config, setConfig] = useState<EmailConfigData>({
     smtp_host: 'smtp.gmail.com',
     smtp_port: '587',
@@ -30,330 +31,185 @@ export function EmailConfig() {
     from_name: 'RapiCredit',
     smtp_use_tls: 'true'
   })
-  
+
+  // Estado de UI
   const [mostrarPassword, setMostrarPassword] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [probando, setProbando] = useState(false)
-  const [resultadoPrueba, setResultadoPrueba] = useState<any>(null)
-  const [modoPruebas, setModoPruebas] = useState<string>('true') // Por defecto: Pruebas (más seguro)
+  const [modoPruebas, setModoPruebas] = useState<string>('true')
   const [emailPruebas, setEmailPruebas] = useState('')
-  const [emailPruebaDestino, setEmailPruebaDestino] = useState('') // Email para prueba de envío
-  const [subjectPrueba, setSubjectPrueba] = useState('') // Subject para prueba de envío
-  const [mensajePrueba, setMensajePrueba] = useState('') // Mensaje para prueba de envío
-  const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
-  const [cargandoEnvios, setCargandoEnvios] = useState(false)
+  const [emailPruebaDestino, setEmailPruebaDestino] = useState('')
+  const [subjectPrueba, setSubjectPrueba] = useState('')
+  const [mensajePrueba, setMensajePrueba] = useState('')
   const [errorValidacion, setErrorValidacion] = useState<string | null>(null)
+
+  // Estado de vinculación
   const [vinculacionConfirmada, setVinculacionConfirmada] = useState<boolean>(false)
   const [mensajeVinculacion, setMensajeVinculacion] = useState<string | null>(null)
   const [requiereAppPassword, setRequiereAppPassword] = useState<boolean>(false)
 
+  // Estado de envíos
+  const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
+  const [cargandoEnvios, setCargandoEnvios] = useState(false)
+  const [resultadoPrueba, setResultadoPrueba] = useState<any>(null)
+
+  // Cargar configuración al montar
   useEffect(() => {
     cargarConfiguracion()
     cargarEnviosRecientes()
   }, [])
 
+  // Cargar configuración desde backend
   const cargarConfiguracion = async () => {
     try {
       const data = await emailConfigService.obtenerConfiguracionEmail()
       
-      if (process.env.NODE_ENV === 'development') {
-        console.debug('📥 [EmailConfig] Datos recibidos del backend:', {
-          smtp_host: data.smtp_host,
-          smtp_port: data.smtp_port,
-          smtp_user: data.smtp_user ? '***' : '(vacío)',
-          from_email: data.from_email || '(vacío)',
-          tiene_password: !!data.smtp_password,
-          smtp_use_tls: data.smtp_use_tls
-        })
-      }
-      
-      // ESCENARIO 1: Si from_email está vacío pero smtp_user tiene valor, usar smtp_user como from_email por defecto
-      // Esto asegura que en la primera carga, ambos campos tengan el mismo valor si from_email no está configurado
-      if ((!data.from_email || data.from_email.trim() === '') && data.smtp_user && data.smtp_user.trim() !== '') {
+      // Sincronizar from_email con smtp_user si está vacío
+      if ((!data.from_email || data.from_email.trim() === '') && data.smtp_user?.trim()) {
         data.from_email = data.smtp_user
-        console.log('✅ [EmailConfig] from_email sincronizado con smtp_user:', data.smtp_user)
       }
       
-      // ESCENARIO 2: Si from_email sigue vacío después de la sincronización, forzar un valor por defecto
-      // Esto previene que el botón se deshabilite por un campo vacío
-      if (!data.from_email || data.from_email.trim() === '') {
-        if (data.smtp_user && data.smtp_user.trim() !== '') {
-          data.from_email = data.smtp_user
-          console.log('✅ [EmailConfig] from_email forzado a smtp_user:', data.smtp_user)
-        } else {
-          // Si tampoco hay smtp_user, usar un valor por defecto temporal
-          data.from_email = data.from_email || ''
-          console.warn('⚠️ [EmailConfig] from_email y smtp_user están vacíos')
-        }
-      }
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.debug('📤 [EmailConfig] Datos después de procesamiento:', {
-          smtp_host: data.smtp_host,
-          smtp_port: data.smtp_port,
-          smtp_user: data.smtp_user ? '***' : '(vacío)',
-          from_email: data.from_email || '(vacío)',
-          tiene_password: !!data.smtp_password,
-          smtp_use_tls: data.smtp_use_tls
-        })
-      }
-      
-      // Asegurar que smtp_use_tls sea siempre un string 'true' o 'false'
+      // Normalizar smtp_use_tls a string 'true' o 'false'
       if (data.smtp_use_tls === undefined || data.smtp_use_tls === null) {
-        data.smtp_use_tls = 'true' // Por defecto: true para Gmail
+        data.smtp_use_tls = 'true'
       } else if (typeof data.smtp_use_tls === 'boolean') {
         data.smtp_use_tls = data.smtp_use_tls ? 'true' : 'false'
       } else if (typeof data.smtp_use_tls === 'string') {
-        // Normalizar valores de string
         data.smtp_use_tls = (data.smtp_use_tls.toLowerCase() === 'true' || data.smtp_use_tls === '1') ? 'true' : 'false'
       }
       
       setConfig(data)
-      setModoPruebas(data.modo_pruebas || 'true') // Por defecto: Pruebas si no hay configuración
+      setModoPruebas(data.modo_pruebas || 'true')
       setEmailPruebas(data.email_pruebas || '')
     } catch (error) {
-      console.error('Error cargando configuración de email:', error)
+      console.error('Error cargando configuración:', error)
       toast.error('Error cargando configuración')
     }
   }
 
+  // Cargar envíos recientes
   const cargarEnviosRecientes = async () => {
     setCargandoEnvios(true)
     try {
       const resultado = await notificacionService.listarNotificaciones(1, 10)
       setEnviosRecientes(resultado.items || [])
     } catch (error) {
-      console.error('Error cargando envíos recientes:', error)
+      console.error('Error cargando envíos:', error)
     } finally {
       setCargandoEnvios(false)
     }
   }
 
+  // Manejar cambios en campos
   const handleChange = (campo: keyof EmailConfigData, valor: string) => {
     setConfig(prev => {
-      const nuevoConfig = { ...prev, [campo]: valor }
+      const nuevo = { ...prev, [campo]: valor }
       
-      // ESCENARIO 1: Si se cambia smtp_user y from_email está vacío o es igual al valor anterior de smtp_user,
-      // actualizar from_email automáticamente con el nuevo valor
-      if (campo === 'smtp_user') {
-        const fromEmailVacio = !prev.from_email || prev.from_email.trim() === ''
-        const fromEmailIgualAlAnterior = prev.from_email === prev.smtp_user
-        
-        // Si from_email está vacío O si from_email es igual al smtp_user anterior (estaba sincronizado),
-        // entonces sincronizar con el nuevo smtp_user
-        if (fromEmailVacio || fromEmailIgualAlAnterior) {
-          nuevoConfig.from_email = valor
-        }
+      // Sincronizar from_email con smtp_user si está vacío o igual al anterior
+      if (campo === 'smtp_user' && (!prev.from_email || prev.from_email === prev.smtp_user)) {
+        nuevo.from_email = valor
       }
       
-      return nuevoConfig
+      return nuevo
     })
     
-    // Limpiar error de validación cuando el usuario modifica los campos
     if (errorValidacion) {
       setErrorValidacion(null)
     }
   }
 
-  // Función para obtener mensaje de campos faltantes (para mostrar al usuario)
+  // Validar si se puede guardar
+  const puedeGuardar = useMemo((): boolean => {
+    // Campos obligatorios
+    if (!config.smtp_host?.trim() || !config.smtp_port?.trim() || 
+        !config.smtp_user?.trim() || !config.from_email?.trim()) {
+      return false
+    }
+    
+    // Puerto válido
+    const puerto = parseInt(config.smtp_port)
+    if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
+      return false
+    }
+    
+    // Si es Gmail, requiere contraseña y TLS para puerto 587
+    if (config.smtp_host.toLowerCase().includes('gmail.com')) {
+      if (!config.smtp_password?.trim()) {
+        return false
+      }
+      if (puerto === 587 && config.smtp_use_tls !== 'true') {
+        return false
+      }
+    }
+    
+    return true
+  }, [config])
+
+  // Obtener campos faltantes para mensaje
   const obtenerCamposFaltantes = (): string[] => {
-    const camposFaltantes: string[] = []
-    if (!config.smtp_host) camposFaltantes.push('Servidor SMTP')
-    if (!config.smtp_port) camposFaltantes.push('Puerto SMTP')
-    if (!config.smtp_user) camposFaltantes.push('Email de Usuario')
-    if (!config.from_email) camposFaltantes.push('Email del Remitente')
+    const faltantes: string[] = []
+    if (!config.smtp_host?.trim()) faltantes.push('Servidor SMTP')
+    if (!config.smtp_port?.trim()) faltantes.push('Puerto SMTP')
+    if (!config.smtp_user?.trim()) faltantes.push('Email de Usuario')
+    if (!config.from_email?.trim()) faltantes.push('Email del Remitente')
     
     const puerto = parseInt(config.smtp_port || '0')
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
-      camposFaltantes.push('Puerto SMTP válido')
+      faltantes.push('Puerto SMTP válido')
     }
     
     if (config.smtp_host?.toLowerCase().includes('gmail.com')) {
-      if (!config.smtp_password || config.smtp_password.trim().length === 0) {
-        camposFaltantes.push('Contraseña de Aplicación')
+      if (!config.smtp_password?.trim()) {
+        faltantes.push('Contraseña de Aplicación')
       }
       if (puerto === 587 && config.smtp_use_tls !== 'true') {
-        camposFaltantes.push('TLS habilitado (requerido para puerto 587)')
+        faltantes.push('TLS habilitado')
       }
     }
     
-    return camposFaltantes
+    return faltantes
   }
 
-  // Función para determinar si el botón debe estar habilitado
-  // NOTA: Solo valida campos OBLIGATORIOS para guardar. El email de pruebas NO es obligatorio.
-  // Usa useMemo para evitar recalcular en cada render
-  const puedeGuardar = useMemo((): boolean => {
-    // Logging detallado solo en desarrollo
-    if (process.env.NODE_ENV === 'development') {
-      console.debug('🔍 [EmailConfig] Verificando si puede guardar:', {
-        smtp_host: config.smtp_host || '(vacío)',
-        smtp_port: config.smtp_port || '(vacío)',
-        smtp_user: config.smtp_user ? '***' : '(vacío)',
-        from_email: config.from_email || '(vacío)',
-        tiene_password: !!config.smtp_password,
-        password_length: config.smtp_password?.length || 0,
-        smtp_use_tls: config.smtp_use_tls,
-        es_gmail: config.smtp_host?.toLowerCase().includes('gmail.com')
-      })
-    }
-    
-    // Campos obligatorios básicos
-    const camposFaltantes: string[] = []
-    if (!config.smtp_host || !config.smtp_host.trim()) camposFaltantes.push('smtp_host')
-    if (!config.smtp_port || !config.smtp_port.trim()) camposFaltantes.push('smtp_port')
-    if (!config.smtp_user || !config.smtp_user.trim()) camposFaltantes.push('smtp_user')
-    if (!config.from_email || !config.from_email.trim()) camposFaltantes.push('from_email')
-    
+  // Validar configuración antes de guardar
+  const validarConfiguracion = (): string | null => {
+    const camposFaltantes = obtenerCamposFaltantes()
     if (camposFaltantes.length > 0) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('❌ [EmailConfig] Faltan campos obligatorios básicos:', camposFaltantes)
-      }
-      return false
+      return `Completa los siguientes campos: ${camposFaltantes.join(', ')}`
     }
     
-    // Validar puerto numérico
     const puerto = parseInt(config.smtp_port)
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('❌ [EmailConfig] Puerto inválido:', config.smtp_port)
-      }
-      return false
-    }
-    if (process.env.NODE_ENV === 'development') {
-      console.debug('✅ [EmailConfig] Puerto válido:', puerto)
+      return 'El puerto SMTP debe ser un número válido entre 1 y 65535'
     }
     
-    // Si es Gmail/Google Workspace, requiere contraseña
     if (config.smtp_host.toLowerCase().includes('gmail.com')) {
-      if (!config.smtp_password || config.smtp_password.trim().length === 0) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('❌ [EmailConfig] Gmail requiere contraseña')
-        }
-        return false
-      }
-      if (process.env.NODE_ENV === 'development') {
-        console.debug('✅ [EmailConfig] Contraseña presente para Gmail')
-      }
-      
-      // Validar TLS para puerto 587
       if (puerto === 587 && config.smtp_use_tls !== 'true') {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('❌ [EmailConfig] Puerto 587 requiere TLS, actual:', config.smtp_use_tls)
-        }
-        return false
+        return 'Para puerto 587, TLS debe estar habilitado (requerido por Gmail)'
       }
-      if (process.env.NODE_ENV === 'development' && puerto === 587) {
-        console.debug('✅ [EmailConfig] TLS habilitado para puerto 587')
+      if (!config.smtp_password?.trim()) {
+        return 'Debes ingresar una contraseña para autenticarte con Gmail/Google Workspace'
       }
     }
     
-    // NOTA: NO validamos el email de pruebas aquí porque NO es obligatorio para guardar
-    // El email de pruebas solo se valida cuando se intenta enviar un email de prueba
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.debug('✅ [EmailConfig] Puede guardar - todos los campos obligatorios están completos')
-    }
-    return true
-  }, [config.smtp_host, config.smtp_port, config.smtp_user, config.from_email, config.smtp_password, config.smtp_use_tls])
-
-  const validarConfiguracionGmail = (): string | null => {
-    console.log('🔍 [EmailConfig] Validando configuración:', {
-      smtp_host: config.smtp_host,
-      smtp_port: config.smtp_port,
-      smtp_user: config.smtp_user,
-      from_email: config.from_email,
-      tiene_password: !!config.smtp_password,
-      password_length: config.smtp_password?.length || 0,
-      modo_pruebas: modoPruebas,
-      email_pruebas: emailPruebas
-    })
-    
-    // Validaciones generales primero - solo campos obligatorios
-    if (!config.smtp_host || !config.smtp_port || !config.smtp_user || !config.from_email) {
-      const camposFaltantes: string[] = []
-      if (!config.smtp_host) camposFaltantes.push('Servidor SMTP')
-      if (!config.smtp_port) camposFaltantes.push('Puerto SMTP')
-      if (!config.smtp_user) camposFaltantes.push('Email de Usuario')
-      if (!config.from_email) camposFaltantes.push('Email del Remitente')
-      
-      console.warn('⚠️ [EmailConfig] Campos faltantes:', camposFaltantes)
-      return `Por favor completa todos los campos requeridos. Faltan: ${camposFaltantes.join(', ')}`
-    }
-    
-    // NOTA: El email de pruebas NO es obligatorio para guardar la configuración
-    // Solo se validará cuando se intente enviar un email de prueba en modo pruebas
-    // Esto permite guardar la configuración SMTP primero y luego configurar las pruebas
-    
-    // Validar formato de email de pruebas solo si está configurado (opcional)
-    if (emailPruebas && emailPruebas.trim().length > 0) {
-      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-      if (!emailPattern.test(emailPruebas.trim())) {
-        console.warn('⚠️ [EmailConfig] Email de pruebas con formato inválido')
-        return 'El Email de Pruebas debe tener un formato válido (ejemplo: pruebas@ejemplo.com).'
-      }
-    }
-    
-    // Validar puerto numérico válido
-    const puerto = parseInt(config.smtp_port)
-    if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
-      console.warn('⚠️ [EmailConfig] Puerto inválido:', config.smtp_port)
-      return 'El puerto SMTP debe ser un número válido entre 1 y 65535.'
-    }
-    
-    // Validar que si es Gmail/Google Workspace, tenga configuración básica correcta
-    if (config.smtp_host.toLowerCase().includes('gmail.com')) {
-      // Validar puerto recomendado para Gmail/Google Workspace
-      if (puerto !== 587 && puerto !== 465) {
-        console.warn('⚠️ [EmailConfig] Puerto no estándar para Gmail:', puerto)
-        // Solo advertir, no bloquear - permitir otros puertos
-      }
-      
-      // Validar que TLS esté habilitado para puerto 587
-      if (puerto === 587 && config.smtp_use_tls !== 'true') {
-        console.warn('⚠️ [EmailConfig] TLS no habilitado para puerto 587')
-        return 'Para puerto 587, TLS debe estar habilitado (requerido por Gmail/Google Workspace).'
-      }
-      
-      // Validar que tenga contraseña (pero no validar longitud estricta)
-      // La validación real se hará en el backend al intentar enviar emails
-      if (!config.smtp_password || config.smtp_password.trim().length === 0) {
-        console.warn('⚠️ [EmailConfig] Contraseña faltante')
-        return 'Debes ingresar una contraseña para autenticarte con Gmail/Google Workspace.'
-      }
-      
-      // NOTA: Ya no validamos la longitud de la contraseña estrictamente
-      // El backend probará la conexión y mostrará el error real si la contraseña no es válida
-      // Esto permite usar OAuth2 tokens u otros métodos de autenticación si están disponibles
-    }
-    
-    console.log('✅ [EmailConfig] Validación exitosa')
     return null
   }
 
+  // Guardar configuración
   const handleGuardar = async () => {
-    console.log('🔄 [EmailConfig] handleGuardar llamado', { config, modoPruebas, emailPruebas })
-    
-    // Validar configuración antes de guardar
-    const errorValidacion = validarConfiguracionGmail()
-    if (errorValidacion) {
-      console.warn('⚠️ [EmailConfig] Validación falló:', errorValidacion)
-      setErrorValidacion(errorValidacion)
-      toast.error(errorValidacion, {
-        duration: 8000, // Mostrar por más tiempo
-      })
+    const error = validarConfiguracion()
+    if (error) {
+      setErrorValidacion(error)
+      toast.error(error)
       return
     }
     
-    // Limpiar error de validación si pasa
     setErrorValidacion(null)
     
     try {
       setGuardando(true)
-      console.log('💾 [EmailConfig] Iniciando guardado de configuración...')
       
-      // Limpiar espacios de la contraseña de aplicación (Gmail puede mostrarla con espacios)
-      const passwordLimpia = config.smtp_password ? config.smtp_password.replace(/\s/g, '') : ''
+      // Limpiar espacios de la contraseña
+      const passwordLimpia = config.smtp_password?.replace(/\s/g, '') || ''
       
       const configCompleta = {
         ...config,
@@ -362,125 +218,60 @@ export function EmailConfig() {
         email_pruebas: modoPruebas === 'true' ? emailPruebas : ''
       }
       
-      console.log('📤 [EmailConfig] Enviando configuración al backend:', {
-        ...configCompleta,
-        smtp_password: configCompleta.smtp_password ? '***' : '(vacío)'
-      })
-      
       const resultado = await emailConfigService.actualizarConfiguracionEmail(configCompleta)
       
-      // Verificar si la respuesta indica un error (aunque no se haya lanzado excepción)
-      if (resultado && typeof resultado === 'object' && 'detail' in resultado) {
-        // Si hay un campo 'detail', probablemente es un error
-        const errorDetail = (resultado as any).detail
-        if (errorDetail && typeof errorDetail === 'string' && errorDetail.toLowerCase().includes('no se pudieron validar')) {
-          throw new Error(errorDetail)
-        }
-      }
-      
-      console.log('✅ [EmailConfig] Configuración guardada exitosamente:', resultado)
-      
-      // Guardar estado de vinculación para mostrar banner permanente
-      const confirmada = resultado?.vinculacion_confirmada === true
-      const requiereAppPasswordFlag = resultado?.requiere_app_password === true
-      setVinculacionConfirmada(confirmada)
+      // Actualizar estado de vinculación
+      setVinculacionConfirmada(resultado?.vinculacion_confirmada === true)
       setMensajeVinculacion(resultado?.mensaje_vinculacion || null)
-      setRequiereAppPassword(requiereAppPasswordFlag)
+      setRequiereAppPassword(resultado?.requiere_app_password === true)
       
-      // Mostrar mensaje de éxito con información de vinculación si está disponible
-      if (confirmada) {
-        toast.success(
-          resultado.mensaje_vinculacion || '✅ Sistema vinculado correctamente con Google/Google Workspace',
-          {
-            duration: 10000, // Mostrar por más tiempo para que el usuario vea la confirmación
-          }
-        )
-      } else if (requiereAppPasswordFlag) {
-        // Mostrar advertencia si requiere App Password
-        toast.warning(
-          resultado.mensaje_vinculacion || '⚠️ Configuración guardada pero requiere App Password',
-          {
-            duration: 15000, // Mostrar por más tiempo para que el usuario vea las instrucciones
-          }
-        )
+      // Mostrar mensaje de éxito
+      if (resultado?.vinculacion_confirmada) {
+        toast.success(resultado.mensaje_vinculacion || '✅ Sistema vinculado correctamente con Google', { duration: 10000 })
+      } else if (resultado?.requiere_app_password) {
+        toast.warning(resultado.mensaje_vinculacion || '⚠️ Configuración guardada pero requiere App Password', { duration: 15000 })
       } else {
-        toast.success('Configuración de email guardada exitosamente')
+        toast.success('Configuración guardada exitosamente')
       }
       
       await cargarConfiguracion()
     } catch (error: any) {
-      console.error('❌ [EmailConfig] Error guardando configuración:', error)
-      console.error('❌ [EmailConfig] Detalles del error:', {
-        message: error?.message,
-        response: error?.response?.data,
-        status: error?.response?.status,
-        statusText: error?.response?.statusText
-      })
+      console.error('Error guardando configuración:', error)
       
-      // Limpiar estado de vinculación si hay error (Google rechazó la conexión)
       setVinculacionConfirmada(false)
       setMensajeVinculacion(null)
       setRequiereAppPassword(false)
       
-      // Extraer mensaje de error específico del backend
-      let mensajeError = 'Error guardando configuración'
-      if (error?.response?.data?.detail) {
-        mensajeError = error.response.data.detail
-      } else if (error?.response?.data?.message) {
-        mensajeError = error.response.data.message
-      } else if (error?.message) {
-        mensajeError = error.message
-      }
-      
-      // Mostrar error con formato mejorado (preservar saltos de línea si existen)
-      toast.error(mensajeError, {
-        duration: 10000, // Mostrar por más tiempo si es un error largo
-      })
-      
-      // También mostrar el error en el área de error visual
+      const mensajeError = error?.response?.data?.detail || error?.message || 'Error guardando configuración'
       setErrorValidacion(mensajeError)
+      toast.error(mensajeError, { duration: 10000 })
     } finally {
       setGuardando(false)
     }
   }
 
+  // Probar envío de email
   const handleProbar = async () => {
+    if (modoPruebas === 'true' && !emailPruebas?.trim()) {
+      toast.error('En modo Pruebas, debes configurar un Email de Pruebas')
+      return
+    }
+    
+    if (emailPruebaDestino && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailPruebaDestino.trim())) {
+      toast.error('Por favor ingresa un email válido')
+      return
+    }
+    
     try {
       setProbando(true)
       setResultadoPrueba(null)
-      
-      // Validar que si está en modo pruebas, tenga email de pruebas configurado
-      if (modoPruebas === 'true' && (!emailPruebas || emailPruebas.trim().length === 0)) {
-        toast.error('En modo Pruebas, debes configurar un Email de Pruebas antes de enviar un email de prueba.')
-        setProbando(false)
-        return
-      }
-      
-      // Validar formato de email de pruebas si está configurado
-      if (emailPruebas && emailPruebas.trim().length > 0) {
-        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailPattern.test(emailPruebas.trim())) {
-          toast.error('El Email de Pruebas tiene un formato inválido. Por favor, corrígelo antes de enviar.')
-          setProbando(false)
-          return
-        }
-      }
-      
-      // Validar email de destino si se proporcionó
-      if (emailPruebaDestino && emailPruebaDestino.trim()) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailRegex.test(emailPruebaDestino.trim())) {
-          toast.error('Por favor ingresa un email válido')
-          setProbando(false)
-          return
-        }
-      }
       
       const resultado = await emailConfigService.probarConfiguracionEmail(
         emailPruebaDestino.trim() || undefined,
         subjectPrueba.trim() || undefined,
         mensajePrueba.trim() || undefined
       )
+      
       setResultadoPrueba(resultado)
       
       if (resultado.mensaje?.includes('enviado')) {
@@ -498,9 +289,11 @@ export function EmailConfig() {
     }
   }
 
+  const esGmail = config.smtp_host?.toLowerCase().includes('gmail.com')
+
   return (
     <div className="space-y-6">
-      {/* Información */}
+      {/* Información inicial */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-2">
           <Mail className="h-5 w-5 text-blue-600" />
@@ -523,68 +316,67 @@ export function EmailConfig() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Banner de Estado de Vinculación con Google */}
-          {config.smtp_host.toLowerCase().includes('gmail.com') && (
+          {/* Banners de estado */}
+          {esGmail && (
             <>
-              {vinculacionConfirmada ? (
-                <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4 shadow-sm">
+              {vinculacionConfirmada && (
+                <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     <CheckCircle className="h-6 w-6 text-green-600 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
-                      <p className="font-bold text-green-900 mb-1 text-base">
+                      <p className="font-bold text-green-900 mb-1">
                         ✅ Sistema Vinculado Correctamente con Google/Google Workspace
                       </p>
-                      <p className="text-sm text-green-800 mb-2">
+                      <p className="text-sm text-green-800">
                         {mensajeVinculacion || 'Google aceptó tu configuración. El sistema está autorizado para enviar emails.'}
-                      </p>
-                      <p className="text-xs text-green-700 font-medium">
-                        📧 Puedes enviar notificaciones por email a tus clientes
                       </p>
                     </div>
                   </div>
                 </div>
-              ) : requiereAppPassword ? (
-                <div className="bg-amber-50 border-2 border-amber-400 rounded-lg p-4 shadow-sm">
+              )}
+              
+              {requiereAppPassword && (
+                <div className="bg-amber-50 border-2 border-amber-400 rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="h-6 w-6 text-amber-600 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
-                      <p className="font-bold text-amber-900 mb-2 text-base">
+                      <p className="font-bold text-amber-900 mb-2">
                         ⚠️ Configuración Guardada - Requiere App Password
                       </p>
                       <p className="text-sm text-amber-800 mb-3 whitespace-pre-line">
                         {mensajeVinculacion || 'Google requiere una Contraseña de Aplicación (App Password) para enviar emails.'}
                       </p>
-                      <div className="bg-amber-100 border border-amber-300 rounded p-3 mt-2">
+                      <div className="bg-amber-100 border border-amber-300 rounded p-3">
                         <p className="text-xs font-semibold text-amber-900 mb-2">Pasos para corregir:</p>
                         <ol className="text-xs text-amber-800 space-y-1 list-decimal list-inside">
-                          <li>Activa 2FA en tu cuenta de Google: <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="underline font-medium">https://myaccount.google.com/security</a></li>
-                          <li>Genera una App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline font-medium">https://myaccount.google.com/apppasswords</a></li>
+                          <li>Activa 2FA: <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="underline">https://myaccount.google.com/security</a></li>
+                          <li>Genera App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline">https://myaccount.google.com/apppasswords</a></li>
                           <li>Actualiza el campo "Contraseña de Aplicación" con la nueva contraseña de 16 caracteres</li>
                         </ol>
                       </div>
                     </div>
                   </div>
                 </div>
-              ) : config.smtp_user && config.smtp_password ? (
+              )}
+              
+              {config.smtp_user && config.smtp_password && !vinculacionConfirmada && !requiereAppPassword && (
                 <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     <Clock className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
-                      <p className="font-semibold text-yellow-900 mb-1">
-                        ⏳ Vinculación Pendiente
-                      </p>
+                      <p className="font-semibold text-yellow-900 mb-1">⏳ Vinculación Pendiente</p>
                       <p className="text-sm text-yellow-800">
                         Guarda la configuración para verificar la conexión con Google. El sistema probará automáticamente si Google acepta tus credenciales.
                       </p>
                     </div>
                   </div>
                 </div>
-              ) : null}
+              )}
             </>
           )}
 
-          {/* Advertencia sobre requisitos de Gmail/Google Workspace */}
-          {config.smtp_host.toLowerCase().includes('gmail.com') && (
+          {/* Advertencia de requisitos Gmail */}
+          {esGmail && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
@@ -594,12 +386,14 @@ export function EmailConfig() {
                     <li><strong>Autenticación de 2 factores (2FA) debe estar ACTIVADA</strong> en tu cuenta de Google</li>
                     <li>Debes usar una <strong>Contraseña de Aplicación</strong> (16 caracteres), NO tu contraseña normal</li>
                     <li>Puerto recomendado: <strong>587 con TLS</strong> (o 465 con SSL)</li>
-                    <li>Soporta cuentas de <strong>Gmail (@gmail.com)</strong> y <strong>Google Workspace</strong> (dominios personalizados como @rapicreditca.com)</li>
+                    <li>Soporta cuentas de <strong>Gmail (@gmail.com)</strong> y <strong>Google Workspace</strong> (dominios personalizados)</li>
                   </ul>
                 </div>
               </div>
             </div>
           )}
+
+          {/* Campos de configuración */}
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="text-sm font-medium block mb-2">Servidor SMTP</label>
@@ -684,7 +478,7 @@ export function EmailConfig() {
             <label className="text-sm font-medium">Usar TLS (Recomendado para Gmail / Google Workspace)</label>
           </div>
 
-          {/* Selector de Ambiente */}
+          {/* Selector de ambiente */}
           <div className="border-t pt-4 mt-4">
             <div className="mb-4">
               <label className="text-sm font-medium block mb-2">Ambiente de Envío</label>
@@ -716,29 +510,26 @@ export function EmailConfig() {
 
             {modoPruebas === 'true' && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="mb-3">
-                  <label className="text-sm font-medium block mb-2">
-                    Email de Pruebas <span className="text-gray-500 text-xs">(Opcional - Requerido solo para enviar emails de prueba)</span>
-                  </label>
-                  <Input
-                    type="email"
-                    value={emailPruebas}
-                    onChange={(e) => setEmailPruebas(e.target.value)}
-                    placeholder="pruebas@ejemplo.com"
-                    className="max-w-md"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    En modo pruebas, todos los emails se enviarán a esta dirección en lugar de a los clientes reales. 
-                    Puedes guardar la configuración SMTP sin este campo y configurarlo después.
-                  </p>
-                </div>
+                <label className="text-sm font-medium block mb-2">
+                  Email de Pruebas <span className="text-gray-500 text-xs">(Opcional)</span>
+                </label>
+                <Input
+                  type="email"
+                  value={emailPruebas}
+                  onChange={(e) => setEmailPruebas(e.target.value)}
+                  placeholder="pruebas@ejemplo.com"
+                  className="max-w-md"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  En modo pruebas, todos los emails se enviarán a esta dirección en lugar de a los clientes reales.
+                </p>
               </div>
             )}
           </div>
 
-          {/* Mensaje de error de validación */}
+          {/* Error de validación */}
           {errorValidacion && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
@@ -749,53 +540,26 @@ export function EmailConfig() {
             </div>
           )}
 
-          {/* Botones de Acción */}
+          {/* Botones */}
           <div className="flex gap-2 pt-4 border-t mt-4">
             <Button
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                
-                // Si el botón está deshabilitado, mostrar mensaje específico
-                if (!puedeGuardar && !guardando) {
-                  const camposFaltantes = obtenerCamposFaltantes()
-                  const mensaje = camposFaltantes.length > 0 
-                    ? `Completa los siguientes campos: ${camposFaltantes.join(', ')}`
-                    : 'Completa todos los campos obligatorios para guardar la configuración'
-                  
-                  console.warn('⚠️ [EmailConfig] Intento de guardar con campos incompletos:', camposFaltantes)
-                  setErrorValidacion(mensaje)
-                  toast.error(mensaje, {
-                    duration: 6000,
-                  })
-                  return
-                }
-                
-                handleGuardar()
-              }}
+              onClick={handleGuardar}
               disabled={guardando || !puedeGuardar}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              type="button"
             >
               <Save className="h-4 w-4" />
               {guardando ? 'Guardando...' : 'Guardar Configuración'}
             </Button>
-            {!puedeGuardar && !guardando && (() => {
-              const camposFaltantes = obtenerCamposFaltantes()
-              return (
-                <p className="text-xs text-amber-600 self-center font-medium">
-                  {camposFaltantes.length > 0 
-                    ? `Completa: ${camposFaltantes.join(', ')}`
-                    : 'Completa los campos obligatorios para habilitar el botón'
-                  }
-                </p>
-              )
-            })()}
+            {!puedeGuardar && !guardando && (
+              <p className="text-xs text-amber-600 self-center font-medium">
+                Completa: {obtenerCamposFaltantes().join(', ')}
+              </p>
+            )}
           </div>
 
-          {/* Ambiente de Prueba - Envío de Email de Prueba */}
+          {/* Prueba de envío */}
           <div className="border-t pt-4 mt-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
                 <TestTube className="h-5 w-5" />
                 Envío de Email de Prueba
@@ -803,25 +567,21 @@ export function EmailConfig() {
               <p className="text-sm text-blue-700 mb-4">
                 Envía un correo de prueba personalizado para verificar que la configuración SMTP funciona correctamente.
               </p>
+              
               {modoPruebas === 'false' && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-                  <p className="text-sm text-green-800 font-semibold mb-1">
-                    ✅ Modo Producción activo
-                  </p>
+                  <p className="text-sm text-green-800 font-semibold mb-1">✅ Modo Producción activo</p>
                   <p className="text-xs text-green-700">
-                    El email de prueba se enviará <strong>REALMENTE</strong> al destinatario especificado. 
-                    Si recibes el correo, es prueba de que el servicio está bien configurado y funcionando correctamente.
+                    El email de prueba se enviará <strong>REALMENTE</strong> al destinatario especificado.
                   </p>
                 </div>
               )}
+              
               {modoPruebas === 'true' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                  <p className="text-sm text-yellow-800 font-semibold mb-1">
-                    ⚠️ Modo Pruebas activo
-                  </p>
+                  <p className="text-sm text-yellow-800 font-semibold mb-1">⚠️ Modo Pruebas activo</p>
                   <p className="text-xs text-yellow-700">
-                    El email se redirigirá a la dirección de pruebas configurada ({emailPruebas || 'no configurada'}), 
-                    no al destinatario especificado.
+                    El email se redirigirá a {emailPruebas || 'la dirección de pruebas configurada'}.
                   </p>
                 </div>
               )}
@@ -838,9 +598,6 @@ export function EmailConfig() {
                     placeholder={config.smtp_user || "ejemplo@email.com"}
                     className="max-w-md"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Si no especificas un email, se enviará a tu correo de usuario ({config.smtp_user || 'no configurado'})
-                  </p>
                 </div>
 
                 <div>
@@ -854,9 +611,6 @@ export function EmailConfig() {
                     placeholder="Prueba de configuración - RapiCredit"
                     className="max-w-md"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Si no especificas un asunto, se usará el asunto predeterminado
-                  </p>
                 </div>
 
                 <div>
@@ -870,9 +624,6 @@ export function EmailConfig() {
                     rows={6}
                     className="max-w-md resize-y"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Si no especificas un mensaje, se usará el mensaje predeterminado
-                  </p>
                 </div>
                 
                 <Button
@@ -887,7 +638,7 @@ export function EmailConfig() {
             </div>
           </div>
 
-          {/* Resultado de la prueba */}
+          {/* Resultado de prueba */}
           {resultadoPrueba && (
             <div className={`p-4 rounded-lg border ${
               resultadoPrueba.mensaje?.includes('enviado') 
@@ -916,7 +667,7 @@ export function EmailConfig() {
         </CardContent>
       </Card>
 
-      {/* Verificación de Envíos Reales */}
+      {/* Envíos recientes */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -929,9 +680,7 @@ export function EmailConfig() {
         </CardHeader>
         <CardContent>
           <div className="flex justify-between items-center mb-4">
-            <div className="text-sm text-gray-600">
-              Últimos 10 envíos de notificaciones
-            </div>
+            <div className="text-sm text-gray-600">Últimos 10 envíos de notificaciones</div>
             <Button
               variant="outline"
               size="sm"
@@ -953,22 +702,17 @@ export function EmailConfig() {
           ) : (
             <div className="space-y-3">
               {enviosRecientes.map((envio) => (
-                <div
-                  key={envio.id}
-                  className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
-                >
+                <div key={envio.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <Badge
-                          className={
-                            envio.estado === 'ENVIADA'
-                              ? 'bg-green-100 text-green-800'
-                              : envio.estado === 'FALLIDA'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }
-                        >
+                        <Badge className={
+                          envio.estado === 'ENVIADA'
+                            ? 'bg-green-100 text-green-800'
+                            : envio.estado === 'FALLIDA'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                        }>
                           {envio.estado}
                         </Badge>
                         <span className="text-sm font-medium text-gray-700">
@@ -984,11 +728,6 @@ export function EmailConfig() {
                             ? new Date(envio.fecha_creacion).toLocaleString('es-ES')
                             : 'Sin fecha'}
                         </div>
-                        {envio.tipo && (
-                          <div className="text-xs text-gray-600">
-                            Tipo: {envio.tipo}
-                          </div>
-                        )}
                         {envio.error_mensaje && (
                           <div className="text-xs text-red-600 flex items-start gap-1">
                             <XCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
@@ -1004,79 +743,7 @@ export function EmailConfig() {
           )}
         </CardContent>
       </Card>
-
-      {/* Instrucciones */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-amber-600" />
-            Instrucciones para Gmail (Requisitos Obligatorios)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm">
-          {/* Paso 1: Activar 2FA */}
-          <div className="bg-red-50 border-l-4 border-red-500 pl-4 py-3 rounded">
-            <p className="font-bold text-red-900 mb-2">PASO 1: Activar Autenticación de 2 Factores (OBLIGATORIO)</p>
-            <ol className="list-decimal ml-5 space-y-1 text-red-800">
-              <li>Ve a tu cuenta de Google: <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">https://myaccount.google.com/security</a></li>
-              <li>Selecciona <strong>Seguridad</strong> en el menú lateral</li>
-              <li>Busca la sección <strong>"Verificación en 2 pasos"</strong></li>
-              <li>Haz clic en <strong>"Activar"</strong> y sigue los pasos para configurarlo</li>
-              <li><strong className="text-red-900">⚠️ Sin 2FA activado, NO podrás generar Contraseñas de Aplicación</strong></li>
-            </ol>
-          </div>
-
-          {/* Paso 2: Generar App Password */}
-          <div className="bg-blue-50 border-l-4 border-blue-500 pl-4 py-3 rounded">
-            <p className="font-bold text-blue-900 mb-2">PASO 2: Generar Contraseña de Aplicación</p>
-            <ol className="list-decimal ml-5 space-y-1 text-blue-800">
-              <li>Una vez que tengas 2FA activado, vuelve a <strong>Seguridad</strong></li>
-              <li>Busca la sección <strong>"Contraseñas de aplicaciones"</strong> (aparece solo si 2FA está activo)</li>
-              <li>Si no la ves, ve directamente a: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">https://myaccount.google.com/apppasswords</a></li>
-              <li>Selecciona <strong>"Correo"</strong> como aplicación</li>
-              <li>Selecciona el dispositivo (puedes elegir "Otro" y escribir "RapiCredit")</li>
-              <li>Haz clic en <strong>"Generar"</strong></li>
-              <li>Google te mostrará una contraseña de <strong>16 caracteres</strong> (sin espacios)</li>
-              <li><strong className="text-blue-900">Copia TODA la contraseña de 16 caracteres</strong> (ejemplo: abcd efgh ijkl mnop)</li>
-              <li>Pégala en el campo "Contraseña de Aplicación" de este formulario</li>
-            </ol>
-            <div className="mt-3 p-3 bg-white rounded border border-blue-200">
-              <p className="font-semibold text-red-700 mb-1">⚠️ IMPORTANTE:</p>
-              <ul className="list-disc ml-5 space-y-1 text-red-800">
-                <li>La Contraseña de Aplicación tiene <strong>16 caracteres</strong> (puede tener espacios, pero se eliminan automáticamente)</li>
-                <li><strong>NO es tu contraseña normal de Gmail</strong></li>
-                <li>Solo puedes verla una vez al generarla - guárdala en un lugar seguro</li>
-                <li>Si la pierdes, deberás generar una nueva</li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Configuración recomendada */}
-          <div className="bg-green-50 border-l-4 border-green-500 pl-4 py-3 rounded">
-            <p className="font-bold text-green-900 mb-2">✓ Configuración Recomendada para Gmail:</p>
-            <ul className="list-disc ml-5 space-y-1 text-green-800">
-              <li><strong>Servidor SMTP:</strong> smtp.gmail.com</li>
-              <li><strong>Puerto:</strong> 587 (recomendado) o 465</li>
-              <li><strong>TLS:</strong> Activado (obligatorio para puerto 587)</li>
-              <li><strong>Email:</strong> Tu email de Gmail completo (ejemplo: tu-email@gmail.com)</li>
-              <li><strong>Contraseña:</strong> La Contraseña de Aplicación de 16 caracteres</li>
-            </ul>
-          </div>
-
-          {/* Solución de problemas */}
-          <div className="bg-gray-50 border-l-4 border-gray-400 pl-4 py-3 rounded">
-            <p className="font-bold text-gray-900 mb-2">🔧 Si tienes problemas:</p>
-            <ul className="list-disc ml-5 space-y-1 text-gray-700">
-              <li><strong>Error "Usuario o contraseña incorrectos":</strong> Verifica que estés usando la Contraseña de Aplicación, NO tu contraseña normal</li>
-              <li><strong>No aparece "Contraseñas de aplicaciones":</strong> Asegúrate de que 2FA esté activado y que hayas iniciado sesión recientemente</li>
-              <li><strong>Error de conexión:</strong> Verifica que el puerto sea 587 y TLS esté activado</li>
-              <li><strong>Gmail bloquea el acceso:</strong> Puede requerir "Permitir aplicaciones menos seguras" o usar OAuth2 (más avanzado)</li>
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }
-
 
