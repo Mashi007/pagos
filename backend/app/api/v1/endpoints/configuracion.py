@@ -1071,17 +1071,17 @@ def actualizar_configuracion_email(
         es_gmail = "gmail.com" in config_data.get("smtp_host", "").lower()
         validacion_exitosa = es_valida and es_gmail  # Solo exitosa si es Gmail Y la validación pasó
 
-        # Verificar si hay advertencia de App Password requerida o cualquier error de autenticación
-        # Esto incluye tanto "Application-specific password required" como "username and password not accepted"
+        # ✅ Verificar si el error es específicamente "Application-specific password required"
+        # NO marcar como requiere_app_password si es "username and password not accepted"
+        # porque eso puede significar que la App Password es incorrecta, no que falte
         requiere_app_password = (
             not es_valida
             and mensaje_error
             and (
                 "application-specific password required" in mensaje_error.lower()
                 or "requiere una contraseña de aplicación" in mensaje_error.lower()
-                or "username and password not accepted" in mensaje_error.lower()
-                or "error de autenticación" in mensaje_error.lower()
             )
+            # NO incluir "username and password not accepted" porque puede ser App Password incorrecta
         )
 
         logger.info(f"✅ Configuración de email actualizada por {current_user.email}")
@@ -1103,24 +1103,28 @@ def actualizar_configuracion_email(
                 "La configuración fue aceptada y puedes enviar emails."
             )
         elif requiere_app_password:
-            # Mensaje más genérico que cubre tanto App Password como otros errores de autenticación
-            if mensaje_error and "application-specific password required" in mensaje_error.lower():
-                mensaje_vinculacion = (
-                    "⚠️ Configuración guardada, pero Google requiere una Contraseña de Aplicación (App Password).\n\n"
-                    "Para poder enviar emails:\n"
-                    "1. Activa 2FA en tu cuenta de Google\n"
-                    "2. Genera una App Password en https://myaccount.google.com/apppasswords\n"
-                    "3. Actualiza el campo 'Contraseña de Aplicación' con la nueva contraseña de 16 caracteres"
-                )
-            else:
-                mensaje_vinculacion = (
-                    "⚠️ Configuración guardada, pero hay un error de autenticación con Gmail/Google Workspace.\n\n"
-                    "Para poder enviar emails:\n"
-                    "1. Verifica que tengas 2FA activado en tu cuenta de Google\n"
-                    "2. Genera una App Password en https://myaccount.google.com/apppasswords\n"
-                    "3. Actualiza el campo 'Contraseña de Aplicación' con la contraseña de 16 caracteres\n"
-                    "4. Asegúrate de NO usar tu contraseña normal de Gmail"
-                )
+            # ✅ Solo mostrar mensaje de App Password si el error es específicamente "application-specific password required"
+            mensaje_vinculacion = (
+                "⚠️ Configuración guardada, pero Google requiere una Contraseña de Aplicación (App Password).\n\n"
+                "Para poder enviar emails:\n"
+                "1. Activa 2FA en tu cuenta de Google\n"
+                "2. Genera una App Password en https://myaccount.google.com/apppasswords\n"
+                "3. Actualiza el campo 'Contraseña de Aplicación' con la nueva contraseña de 16 caracteres"
+            )
+        elif not es_valida and mensaje_error:
+            # ✅ Si hay error pero NO es específicamente "requiere App Password", mostrar mensaje de error genérico
+            mensaje_vinculacion = (
+                f"⚠️ Configuración guardada, pero hay un error de autenticación con Gmail/Google Workspace.\n\n"
+                f"Error: {mensaje_error}\n\n"
+                f"Posibles causas:\n"
+                f"1. La App Password es incorrecta o fue revocada\n"
+                f"2. No tienes 2FA activado en tu cuenta de Google\n"
+                f"3. Estás usando tu contraseña normal en lugar de App Password\n\n"
+                f"SOLUCIÓN:\n"
+                f"1. Verifica que tengas 2FA activado: https://myaccount.google.com/security\n"
+                f"2. Genera una nueva App Password: https://myaccount.google.com/apppasswords\n"
+                f"3. Asegúrate de usar la contraseña de 16 caracteres (sin espacios)"
+            )
         else:
             mensaje_vinculacion = "Configuración guardada. La conexión se validará al enviar emails."
 
