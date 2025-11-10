@@ -88,7 +88,13 @@ class EmailService:
         logger.debug("📧 Usando configuración de email por defecto desde settings")
 
     def send_email(
-        self, to_emails: List[str], subject: str, body: str, is_html: bool = False, bcc_emails: Optional[List[str]] = None, forzar_envio_real: bool = False
+        self,
+        to_emails: List[str],
+        subject: str,
+        body: str,
+        is_html: bool = False,
+        bcc_emails: Optional[List[str]] = None,
+        forzar_envio_real: bool = False,
     ) -> Dict[str, Any]:
         """
         Enviar email
