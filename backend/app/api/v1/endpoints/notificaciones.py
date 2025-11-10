@@ -415,7 +415,7 @@ def listar_notificaciones(
         # Verificar qué columnas existen usando inspect (más seguro, no aborta transacciones)
         # Usar cache para evitar verificar en cada request
         global _columnas_notificaciones_cache
-        
+
         if _columnas_notificaciones_cache is None:
             canal_exists = False
             leida_exists = False
@@ -438,12 +438,11 @@ def listar_notificaciones(
                     logger.info("ℹ️ Columna 'leida' no existe en BD. Usando query sin leida.")
                 if not created_at_exists:
                     logger.info("ℹ️ Columna 'created_at' no existe en BD. Usando 'id' para ordenar.")
-                
                 # Cachear resultado
                 _columnas_notificaciones_cache = {
                     "canal": canal_exists,
                     "leida": leida_exists,
-                    "created_at": created_at_exists
+                    "created_at": created_at_exists,
                 }
             except Exception as e:
                 # Si falla la inspección, asumir que no existen y continuar
@@ -451,11 +450,7 @@ def listar_notificaciones(
                 canal_exists = False
                 leida_exists = False
                 created_at_exists = False
-                _columnas_notificaciones_cache = {
-                    "canal": False,
-                    "leida": False,
-                    "created_at": False
-                }
+                _columnas_notificaciones_cache = {"canal": False, "leida": False, "created_at": False}
         else:
             # Usar valores cacheados
             canal_exists = _columnas_notificaciones_cache["canal"]
