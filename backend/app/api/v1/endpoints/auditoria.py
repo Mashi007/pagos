@@ -225,9 +225,13 @@ def listar_auditoria(
         inspector = inspect(db.bind)
         tablas = inspector.get_table_names()
         tabla_auditoria_existe = "auditoria" in tablas
+        tabla_prestamos_auditoria_existe = "prestamos_auditoria" in tablas
+        tabla_pagos_auditoria_existe = "pagos_auditoria" in tablas
 
-        if not tabla_auditoria_existe:
-            logger.warning("Tabla 'auditoria' no existe en BD. Retornando lista vacía.")
+        logger.info(f"Tablas de auditoría - auditoria: {tabla_auditoria_existe}, prestamos_auditoria: {tabla_prestamos_auditoria_existe}, pagos_auditoria: {tabla_pagos_auditoria_existe}")
+
+        if not tabla_auditoria_existe and not tabla_prestamos_auditoria_existe and not tabla_pagos_auditoria_existe:
+            logger.warning("Ninguna tabla de auditoría existe en BD. Retornando lista vacía.")
             return {
                 "items": [],
                 "total": 0,
@@ -252,38 +256,54 @@ def listar_auditoria(
         # Ejecutar consultas con límite optimizado
         try:
             registros_general = query.limit(max_to_load).all()
-        except ProgrammingError:
-            logger.warning("Error consultando tabla auditoria, usando lista vacía")
+            logger.info(f"Registros de auditoría general cargados: {len(registros_general)}")
+        except ProgrammingError as e:
+            logger.warning(f"Error consultando tabla auditoria: {e}, usando lista vacía")
             registros_general = []
 
         # Optimizar queries de préstamos y pagos con límite y orden
         try:
-            query_prestamos = db.query(PrestamoAuditoria).order_by(PrestamoAuditoria.fecha_cambio.desc())
-            if fecha_desde:
-                query_prestamos = query_prestamos.filter(PrestamoAuditoria.fecha_cambio >= fecha_desde)
-            if fecha_hasta:
-                query_prestamos = query_prestamos.filter(PrestamoAuditoria.fecha_cambio <= fecha_hasta)
-            registros_prestamos = query_prestamos.limit(max_to_load).all()
-        except ProgrammingError:
-            logger.warning("Error consultando tabla prestamo_auditoria, usando lista vacía")
+            if tabla_prestamos_auditoria_existe:
+                query_prestamos = db.query(PrestamoAuditoria).order_by(PrestamoAuditoria.fecha_cambio.desc())
+                if fecha_desde:
+                    query_prestamos = query_prestamos.filter(PrestamoAuditoria.fecha_cambio >= fecha_desde)
+                if fecha_hasta:
+                    query_prestamos = query_prestamos.filter(PrestamoAuditoria.fecha_cambio <= fecha_hasta)
+                registros_prestamos = query_prestamos.limit(max_to_load).all()
+                logger.info(f"Registros de prestamos_auditoria cargados: {len(registros_prestamos)}")
+            else:
+                registros_prestamos = []
+                logger.info("Tabla prestamos_auditoria no existe, omitiendo")
+        except ProgrammingError as e:
+            logger.warning(f"Error consultando tabla prestamo_auditoria: {e}, usando lista vacía")
             registros_prestamos = []
 
         try:
-            query_pagos = db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc())
-            if fecha_desde:
-                query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio >= fecha_desde)
-            if fecha_hasta:
-                query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio <= fecha_hasta)
-            registros_pagos = query_pagos.limit(max_to_load).all()
-        except ProgrammingError:
-            logger.warning("Error consultando tabla pago_auditoria, usando lista vacía")
+            if tabla_pagos_auditoria_existe:
+                query_pagos = db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc())
+                if fecha_desde:
+                    query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio >= fecha_desde)
+                if fecha_hasta:
+                    query_pagos = query_pagos.filter(PagoAuditoria.fecha_cambio <= fecha_hasta)
+                registros_pagos = query_pagos.limit(max_to_load).all()
+                logger.info(f"Registros de pagos_auditoria cargados: {len(registros_pagos)}")
+            else:
+                registros_pagos = []
+                logger.info("Tabla pagos_auditoria no existe, omitiendo")
+        except ProgrammingError as e:
+            logger.warning(f"Error consultando tabla pago_auditoria: {e}, usando lista vacía")
             registros_pagos = []
 
         unified = _unificar_registros_auditoria_listado(registros_general, registros_prestamos, registros_pagos)
+        logger.info(f"Registros unificados antes de filtros: {len(unified)}")
+        
         unified = _aplicar_filtros_memoria(unified, usuario_email, modulo, accion, fecha_desde, fecha_hasta)
+        logger.info(f"Registros unificados después de filtros: {len(unified)}")
+        
         unified = _aplicar_ordenamiento_memoria(unified, ordenar_por, orden)
 
         paged, total, total_pages, current_page = _aplicar_paginacion_listado(unified, skip, limit)
+        logger.info(f"Registros paginados: {len(paged)} de {total} total")
 
         items = [AuditoriaResponse.model_validate(i) for i in paged]
 

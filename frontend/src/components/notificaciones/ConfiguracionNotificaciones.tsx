@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Settings, Zap, Copy, X, Bell, Calendar, AlertTriangle, Shield, ChevronUp, ChevronDown } from 'lucide-react'
 import { emailConfigService } from '@/services/notificacionService'
@@ -292,9 +292,7 @@ export function ConfiguracionNotificaciones() {
               
               // Ordenar tipos según el criterio seleccionado para esta pestaña
               const ordenActual = ordenamiento[pestaña] || 'default'
-              const tiposOrdenados = useMemo(() => {
-                return ordenarTipos(tipos, ordenActual, pestaña)
-              }, [tipos, ordenActual, configEnvios, pestaña])
+              const tiposOrdenados = ordenarTipos(tipos, ordenActual, pestaña)
               
               return (
                 <TabsContent key={pestaña} value={pestaña} className="space-y-4 mt-6">

@@ -515,7 +515,7 @@ def _procesar_distribucion_rango_monto(
             try:
                 # ✅ DIAGNÓSTICO: Verificar query_base antes de obtener IDs
                 try:
-                    count_antes_ids = query_base.count()
+                    count_antes_ids = query_base.with_entities(Prestamo.id).count()
                     logger.info(f"📊 [financiamiento-por-rangos] query_base.count() antes de obtener IDs: {count_antes_ids}")
                 except Exception as e:
                     logger.warning(f"⚠️ [financiamiento-por-rangos] No se pudo contar query_base antes de IDs: {e}")
@@ -549,6 +549,13 @@ def _procesar_distribucion_rango_monto(
 
                 # Query SQL optimizada con GROUP BY usando división entera
                 # Calcular el rango usando: FLOOR(total_financiamiento / paso_rango) * paso_rango
+                logger.info(
+                    f"📊 [financiamiento-por-rangos] Ejecutando query SQL optimizada con {len(prestamo_ids)} IDs, "
+                    f"paso_rango={paso_rango}, max_rango={max_rango_val if max_rango_val else 50000.0}"
+                )
+                
+                # ✅ MEJORA: Usar sintaxis más robusta para PostgreSQL con array
+                # Usar CAST para asegurar que PostgreSQL entienda que es un array
                 query_sql = text(
                     """
                     WITH rangos_calculados AS (
@@ -563,7 +570,7 @@ def _procesar_distribucion_rango_monto(
                             END as rango_max,
                             total_financiamiento
                         FROM prestamos
-                        WHERE id = ANY(:ids)
+                        WHERE id = ANY(CAST(:ids AS INTEGER[]))
                           AND total_financiamiento IS NOT NULL
                           AND total_financiamiento > 0
                     )
@@ -578,33 +585,84 @@ def _procesar_distribucion_rango_monto(
                 """
                 )
 
-                result = db.execute(
-                    query_sql,
-                    {
-                        "ids": prestamo_ids,
-                        "paso_rango": float(paso_rango),
-                        "max_rango": float(max_rango_val) if max_rango_val else 50000.0,
-                    },
-                )
+                try:
+                    result = db.execute(
+                        query_sql,
+                        {
+                            "ids": prestamo_ids,
+                            "paso_rango": float(paso_rango),
+                            "max_rango": float(max_rango_val) if max_rango_val else 50000.0,
+                        },
+                    )
 
-                # Crear diccionario con resultados de SQL
-                distribucion_dict = {}
-                for row in result:
-                    rango_min = float(row.rango_min) if row.rango_min else 0
-                    rango_max = float(row.rango_max) if row.rango_max else None
+                    # Crear diccionario con resultados de SQL
+                    distribucion_dict = {}
+                    rows_processed = 0
+                    for row in result:
+                        rows_processed += 1
+                        rango_min = float(row.rango_min) if row.rango_min else 0
+                        rango_max = float(row.rango_max) if row.rango_max else None
 
-                    # Formatear categoría
-                    if rango_max is None:
-                        categoria = f"${int(rango_min):,}+".replace(",", "")
-                    else:
-                        categoria = f"${int(rango_min):,} - ${int(rango_max):,}".replace(",", "")
+                        # Formatear categoría
+                        if rango_max is None:
+                            categoria = f"${int(rango_min):,}+".replace(",", "")
+                        else:
+                            categoria = f"${int(rango_min):,} - ${int(rango_max):,}".replace(",", "")
 
-                    distribucion_dict[categoria] = {
-                        "cantidad": int(row.cantidad_prestamos),
-                        "monto_total": float(row.monto_total),
-                    }
+                        distribucion_dict[categoria] = {
+                            "cantidad": int(row.cantidad_prestamos),
+                            "monto_total": float(row.monto_total),
+                        }
+                        logger.debug(
+                            f"📊 [financiamiento-por-rangos] Rango procesado: {categoria} = "
+                            f"{distribucion_dict[categoria]['cantidad']} préstamos, "
+                            f"${distribucion_dict[categoria]['monto_total']:,.2f}"
+                        )
 
-                logger.info(f"📊 [financiamiento-por-rangos] Procesados {len(distribucion_dict)} rangos con GROUP BY SQL")
+                    logger.info(
+                        f"📊 [financiamiento-por-rangos] Query SQL retornó {rows_processed} grupos, "
+                        f"mapeados a {len(distribucion_dict)} categorías únicas"
+                    )
+                    
+                    # ✅ DIAGNÓSTICO: Log de categorías generadas vs categorías esperadas
+                    categorias_generadas = set(distribucion_dict.keys())
+                    categorias_esperadas = set(cat for _, _, cat in rangos)
+                    categorias_no_encontradas = categorias_esperadas - categorias_generadas
+                    categorias_extra = categorias_generadas - categorias_esperadas
+                    
+                    if categorias_no_encontradas:
+                        logger.warning(
+                            f"⚠️ [financiamiento-por-rangos] Categorías esperadas pero no encontradas en resultados SQL: {categorias_no_encontradas}"
+                        )
+                    if categorias_extra:
+                        logger.warning(
+                            f"⚠️ [financiamiento-por-rangos] Categorías generadas por SQL que no están en rangos esperados: {categorias_extra}"
+                        )
+                    
+                    # ✅ VERIFICACIÓN: Si la query SQL no retornó resultados pero hay préstamos, usar fallback
+                    if rows_processed == 0 and len(prestamo_ids) > 0:
+                        logger.warning(
+                            f"⚠️ [financiamiento-por-rangos] Query SQL optimizada no retornó resultados "
+                            f"pero hay {len(prestamo_ids)} préstamos. Usando método fallback."
+                        )
+                        return _procesar_distribucion_rango_monto_fallback(query_base, rangos, total_prestamos, total_monto, db)
+                    
+                    # ✅ VERIFICACIÓN: Si hay resultados pero ninguna categoría coincide con los rangos esperados, usar fallback
+                    if rows_processed > 0 and len(categorias_generadas.intersection(categorias_esperadas)) == 0:
+                        logger.warning(
+                            f"⚠️ [financiamiento-por-rangos] Query SQL retornó {rows_processed} grupos pero ninguna categoría coincide "
+                            f"con los rangos esperados. Categorías generadas: {categorias_generadas}, "
+                            f"Categorías esperadas: {categorias_esperadas}. Usando método fallback."
+                        )
+                        return _procesar_distribucion_rango_monto_fallback(query_base, rangos, total_prestamos, total_monto, db)
+                        
+                except Exception as e:
+                    logger.error(
+                        f"❌ [financiamiento-por-rangos] Error ejecutando query SQL optimizada: {e}",
+                        exc_info=True
+                    )
+                    logger.warning("⚠️ [financiamiento-por-rangos] Usando método fallback debido a error en query SQL")
+                    return _procesar_distribucion_rango_monto_fallback(query_base, rangos, total_prestamos, total_monto, db)
 
                 # Construir respuesta manteniendo el orden de los rangos originales
                 distribucion_data = []
@@ -662,7 +720,10 @@ def _procesar_distribucion_rango_monto_fallback(
     Método fallback para procesar distribución por rango de monto
     Usa el método original de procesamiento en Python
     """
+    logger.info("🔄 [financiamiento-por-rangos] Usando método fallback para procesar distribución")
+    
     if not rangos:
+        logger.warning("⚠️ [financiamiento-por-rangos] No hay rangos para procesar en fallback")
         return []
 
     try:
@@ -671,11 +732,14 @@ def _procesar_distribucion_rango_monto_fallback(
         if db is not None:
             # Obtener IDs primero
             try:
+                logger.info("📊 [financiamiento-por-rangos] Obteniendo IDs de préstamos en método fallback")
                 prestamo_ids_query = query_base.with_entities(Prestamo.id)
                 prestamo_ids_result = prestamo_ids_query.all()
                 prestamo_ids = [row[0] for row in prestamo_ids_result]
+                logger.info(f"📊 [financiamiento-por-rangos] Obtenidos {len(prestamo_ids)} IDs en método fallback")
 
                 if not prestamo_ids:
+                    logger.warning("⚠️ [financiamiento-por-rangos] No se encontraron IDs en método fallback")
                     distribucion_data = []
                     for min_val, max_val, categoria in rangos:
                         distribucion_data.append(
@@ -690,30 +754,41 @@ def _procesar_distribucion_rango_monto_fallback(
                     return distribucion_data
 
                 # Query SQL directa
-                query_sql = text("SELECT id, total_financiamiento FROM prestamos WHERE id = ANY(:ids)")
+                logger.info(f"📊 [financiamiento-por-rangos] Ejecutando query SQL directa con {len(prestamo_ids)} IDs")
+                # ✅ MEJORA: Usar sintaxis más robusta para PostgreSQL con array
+                query_sql = text("SELECT id, total_financiamiento FROM prestamos WHERE id = ANY(CAST(:ids AS INTEGER[]))")
                 result = db.execute(query_sql, {"ids": prestamo_ids})
                 prestamos_data = [(row.id, row.total_financiamiento) for row in result]
+                logger.info(f"📊 [financiamiento-por-rangos] Obtenidos {len(prestamos_data)} préstamos de la BD")
             except Exception as e:
-                logger.error(f"Error obteniendo préstamos en fallback: {e}", exc_info=True)
+                logger.error(f"❌ [financiamiento-por-rangos] Error obteniendo préstamos en fallback: {e}", exc_info=True)
                 return []
         else:
             try:
+                logger.info("📊 [financiamiento-por-rangos] Obteniendo préstamos directamente de query_base")
                 prestamos_data = query_base.with_entities(Prestamo.id, Prestamo.total_financiamiento).all()
+                logger.info(f"📊 [financiamiento-por-rangos] Obtenidos {len(prestamos_data)} préstamos de query_base")
             except Exception as e:
-                logger.error(f"Error obteniendo préstamos con query_base: {e}", exc_info=True)
+                logger.error(f"❌ [financiamiento-por-rangos] Error obteniendo préstamos con query_base: {e}", exc_info=True)
                 return []
 
         # Procesar en Python (método original)
+        logger.info(f"📊 [financiamiento-por-rangos] Procesando {len(prestamos_data)} préstamos en Python")
         distribucion_dict = {}
+        prestamos_procesados = 0
+        prestamos_omitidos = 0
+        
         for prestamo_id, monto in prestamos_data:
             if monto is None or monto <= 0:
+                prestamos_omitidos += 1
                 continue
 
+            prestamos_procesados += 1
             monto_decimal = Decimal(str(monto)) if not isinstance(monto, Decimal) else monto
             monto_float = float(monto_decimal)
 
             # Buscar rango
-            categoria = "Otro"
+            categoria = None
             for min_val, max_val, cat in rangos:
                 if max_val is None:
                     if monto_float >= min_val:
@@ -724,10 +799,21 @@ def _procesar_distribucion_rango_monto_fallback(
                         categoria = cat
                         break
 
+            # Si no se encontró rango, usar "Otro" (aunque no debería pasar con rangos bien definidos)
+            if categoria is None:
+                logger.warning(f"⚠️ [financiamiento-por-rangos] Préstamo {prestamo_id} con monto ${monto_float:,.2f} no encaja en ningún rango")
+                categoria = "Otro"
+
             if categoria not in distribucion_dict:
                 distribucion_dict[categoria] = {"cantidad": 0, "monto_total": Decimal("0")}
             distribucion_dict[categoria]["cantidad"] += 1
             distribucion_dict[categoria]["monto_total"] += monto_decimal
+
+        logger.info(
+            f"📊 [financiamiento-por-rangos] Procesamiento fallback completado: "
+            f"{prestamos_procesados} procesados, {prestamos_omitidos} omitidos, "
+            f"{len(distribucion_dict)} categorías con datos"
+        )
 
         # Convertir Decimal a float
         for cat in distribucion_dict:
@@ -2110,7 +2196,7 @@ def resumen_general(
     try:
         # Estadísticas básicas
         total_clientes = db.query(Cliente).filter(Cliente.activo).count()
-        total_prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
+        total_prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").with_entities(Prestamo.id).count()
 
         # Cartera total (desde préstamos, Cliente NO tiene total_financiamiento)
         cartera_total = (
@@ -3210,7 +3296,10 @@ def obtener_financiamiento_por_rangos(
 
     try:
         # ✅ DIAGNÓSTICO: Contar préstamos aprobados sin filtros
-        total_prestamos_aprobados_sin_filtros = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
+        # ✅ CORRECCIÓN: Usar with_entities para evitar error si valor_activo no existe en BD
+        total_prestamos_aprobados_sin_filtros = (
+            db.query(Prestamo).filter(Prestamo.estado == "APROBADO").with_entities(Prestamo.id).count()
+        )
         logger.info(
             f"📊 [financiamiento-por-rangos] Total préstamos APROBADOS (sin filtros): {total_prestamos_aprobados_sin_filtros}"
         )
@@ -3230,9 +3319,10 @@ def obtener_financiamiento_por_rangos(
         query_base = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
 
         # ✅ DIAGNÓSTICO: Contar préstamos ANTES de aplicar filtros
+        # ✅ CORRECCIÓN: Usar with_entities para evitar error si valor_activo no existe en BD
         total_antes_filtros = 0
         try:
-            total_antes_filtros = query_base.count()
+            total_antes_filtros = query_base.with_entities(Prestamo.id).count()
             logger.info(f"📊 [financiamiento-por-rangos] Total préstamos APROBADOS (sin filtros): {total_antes_filtros}")
         except Exception as e:
             logger.error(f"Error contando préstamos antes de filtros: {e}", exc_info=True)
@@ -3245,8 +3335,9 @@ def obtener_financiamiento_por_rangos(
         )
 
         # ✅ DIAGNÓSTICO: Contar préstamos después de aplicar TODOS los filtros (antes de filtrar NULL)
+        # ✅ CORRECCIÓN: Usar with_entities para evitar error si valor_activo no existe en BD
         try:
-            total_prestamos_despues_filtros = query_base.count()
+            total_prestamos_despues_filtros = query_base.with_entities(Prestamo.id).count()
             logger.info(
                 f"📊 [financiamiento-por-rangos] Total préstamos DESPUÉS de todos los filtros: {total_prestamos_despues_filtros}"
             )
@@ -3259,10 +3350,15 @@ def obtener_financiamiento_por_rangos(
             logger.error(f"Error contando préstamos después de filtros: {e}", exc_info=True)
 
         # ✅ Verificar préstamos con total_financiamiento NULL o <= 0 (antes de filtrar)
+        # ✅ CORRECCIÓN: Usar with_entities para evitar error si valor_activo no existe en BD
         try:
-            prestamos_invalidos = query_base.filter(
-                or_(Prestamo.total_financiamiento.is_(None), Prestamo.total_financiamiento <= 0)
-            ).count()
+            prestamos_invalidos = (
+                query_base.filter(
+                    or_(Prestamo.total_financiamiento.is_(None), Prestamo.total_financiamiento <= 0)
+                )
+                .with_entities(Prestamo.id)
+                .count()
+            )
             if prestamos_invalidos > 0:
                 logger.warning(
                     f"⚠️ Se encontraron {prestamos_invalidos} préstamos aprobados con total_financiamiento NULL o <= 0. "
@@ -3276,8 +3372,9 @@ def obtener_financiamiento_por_rangos(
         query_base = query_base.filter(and_(Prestamo.total_financiamiento.isnot(None), Prestamo.total_financiamiento > 0))
 
         # ✅ DIAGNÓSTICO: Contar préstamos válidos (con total_financiamiento > 0)
+        # ✅ CORRECCIÓN: Usar with_entities para evitar error si valor_activo no existe en BD
         try:
-            total_prestamos_validos = query_base.count()
+            total_prestamos_validos = query_base.with_entities(Prestamo.id).count()
             logger.info(
                 f"📊 [financiamiento-por-rangos] Total préstamos válidos (con total_financiamiento > 0): {total_prestamos_validos}"
             )
@@ -3314,7 +3411,8 @@ def obtener_financiamiento_por_rangos(
                     query_diagnostico = query_diagnostico.filter(
                         and_(Prestamo.total_financiamiento.isnot(None), Prestamo.total_financiamiento > 0)
                     )
-                    total_sin_filtro_fecha = query_diagnostico.count()
+                    # ✅ CORRECCIÓN: Usar with_entities para evitar error si valor_activo no existe en BD
+                    total_sin_filtro_fecha = query_diagnostico.with_entities(Prestamo.id).count()
                     logger.info(
                         f"📊 [financiamiento-por-rangos] Total préstamos VÁLIDOS (con monto > 0) sin filtro de fecha: {total_sin_filtro_fecha}"
                     )
@@ -3344,8 +3442,9 @@ def obtener_financiamiento_por_rangos(
                             total_monto = float(totales_alternativa.total_monto or Decimal("0"))
 
                             # ✅ VERIFICACIÓN: Contar query_base después de actualizar para confirmar
+                            # ✅ CORRECCIÓN: Usar with_entities para evitar error si valor_activo no existe en BD
                             try:
-                                count_verificacion = query_base.count()
+                                count_verificacion = query_base.with_entities(Prestamo.id).count()
                                 logger.info(
                                     f"✅ [financiamiento-por-rangos] Fallback activado: Usando {total_prestamos} préstamos sin filtros de fecha. "
                                     f"query_base actualizada, total_monto=${total_monto:,.2f}, "
@@ -3394,8 +3493,9 @@ def obtener_financiamiento_por_rangos(
 
         # ✅ DIAGNÓSTICO: Verificar estado antes de procesar distribución
         # Verificar cuántos préstamos tiene query_base antes de procesar
+        # ✅ CORRECCIÓN: Usar with_entities para evitar error si valor_activo no existe en BD
         try:
-            count_query_base = query_base.count()
+            count_query_base = query_base.with_entities(Prestamo.id).count()
             logger.info(
                 f"📊 [financiamiento-por-rangos] Estado antes de procesar distribución: "
                 f"total_prestamos={total_prestamos}, total_monto={total_monto:,.2f}, "
@@ -4038,7 +4138,7 @@ def obtener_distribucion_prestamos(
             query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
 
-        total_prestamos = query_base.count()
+        total_prestamos = query_base.with_entities(Prestamo.id).count()
         total_monto = float(query_base.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
 
         distribucion_data = []
