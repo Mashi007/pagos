@@ -143,12 +143,12 @@ try:
         redis_client = None
         try:
             redis_client = redis.from_url(
-                redis_url, 
-                decode_responses=False, 
+                redis_url,
+                decode_responses=False,
                 socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
                 socket_connect_timeout=settings.REDIS_SOCKET_TIMEOUT,
                 retry_on_timeout=True,
-                health_check_interval=30
+                health_check_interval=30,
             )
             # Test de conexión inmediato
             redis_client.ping()
@@ -156,9 +156,12 @@ try:
         except (redis.AuthenticationError, redis.ResponseError) as auth_err:
             # Si falla por autenticación, intentar con password si está disponible
             error_msg = str(auth_err)
-            if ("NOAUTH" in error_msg or "Authentication" in error_msg or 
-                "authentication" in error_msg.lower() or 
-                isinstance(auth_err, redis.AuthenticationError)):
+            if (
+                "NOAUTH" in error_msg
+                or "Authentication" in error_msg
+                or "authentication" in error_msg.lower()
+                or isinstance(auth_err, redis.AuthenticationError)
+            ):
                 if settings.REDIS_PASSWORD and "@" not in redis_url:
                     logger.warning(f"⚠️ Error de autenticación Redis: {auth_err}")
                     logger.info("   Intentando con password desde REDIS_PASSWORD...")
@@ -175,7 +178,7 @@ try:
                                 redis_url_with_pass,
                                 decode_responses=False,
                                 socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
-                                socket_connect_timeout=settings.REDIS_SOCKET_TIMEOUT
+                                socket_connect_timeout=settings.REDIS_SOCKET_TIMEOUT,
                             )
                             redis_client.ping()
                             logger.info("✅ Conexión a Redis exitosa con password")
@@ -192,7 +195,7 @@ try:
         except Exception as conn_err:
             # Si falla la conexión inicial, lanzar para capturar en except general
             raise
-        
+
         # Si llegamos aquí, redis_client está definido y funcionando
     else:
         # Usar componentes individuales

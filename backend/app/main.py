@@ -161,7 +161,7 @@ class PerformanceLoggingMiddleware(BaseHTTPMiddleware):
                 log_level = logging.WARNING
                 emoji_severity = "🐌"
                 severity = "LENTO"
-            
+
             logger.log(
                 log_level,
                 f"{emoji_severity} [SLOW REQUEST - {severity}] {request.method} {request.url.path} - "
@@ -170,7 +170,7 @@ class PerformanceLoggingMiddleware(BaseHTTPMiddleware):
                 f"status={response.status_code} - "
                 f'requestID="{request_id}" - '
                 f'queryParams="{request.url.query}" - '
-                f"💡 Considerar optimizar queries o agregar índices"
+                f"💡 Considerar optimizar queries o agregar índices",
             )
 
         # ✅ DIAGNÓSTICO: Detectar respuestas muy pequeñas que podrían indicar errores o datos vacíos
@@ -187,7 +187,7 @@ class PerformanceLoggingMiddleware(BaseHTTPMiddleware):
                     "/api/v1/prestamos",
                 ]
                 es_endpoint_con_datos = any(request.url.path.startswith(ep) for ep in endpoints_con_datos)
-                
+
                 if es_endpoint_con_datos:
                     logger.warning(
                         f"⚠️ [SMALL RESPONSE] {request.method} {request.url.path} - "

@@ -472,7 +472,7 @@ def obtener_estadisticas_notificaciones(
             "no_leidas": no_leidas,
             "tasa_exito": round((enviadas / total * 100) if total > 0 else 0.0, 2),
         }
-        
+
         # ✅ LOGGING: Registrar si no hay datos (puede indicar problema)
         if total == 0:
             logger.info("📊 [estadisticas_notificaciones] No hay notificaciones en la base de datos")
@@ -482,7 +482,7 @@ def obtener_estadisticas_notificaciones(
                 f"Enviadas: {enviadas}, Pendientes: {pendientes}, "
                 f"Fallidas: {fallidas}, No leídas: {no_leidas}"
             )
-        
+
         return resultado
 
     except Exception as e:
