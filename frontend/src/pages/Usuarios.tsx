@@ -186,13 +186,23 @@ export function Usuarios() {
         // Actualizar usuario existente - construir UserUpdate correctamente
         // IMPORTANTE: Incluir todos los campos que queremos actualizar, incluso si no cambiaron
         // El backend usa exclude_unset=True, así que necesitamos enviar valores explícitos
+        // ✅ CRÍTICO: Siempre incluir is_admin explícitamente, incluso si es False
         const updateData: any = {
           email: formData.email,
           nombre: formData.nombre,
           apellido: formData.apellido,
-          is_admin: formData.is_admin,
+          is_admin: Boolean(formData.is_admin), // ✅ Forzar conversión a booleano explícito
           is_active: formData.is_active,
         }
+        
+        // Logging para debug
+        console.log('📤 [Usuarios] Enviando actualización:', {
+          userId: editingUsuario.id,
+          is_admin: updateData.is_admin,
+          is_admin_type: typeof updateData.is_admin,
+          formData_is_admin: formData.is_admin,
+          formData_is_admin_type: typeof formData.is_admin
+        })
         
         // Incluir cargo del formulario (valor que el usuario está editando)
         // Si el cargo está vacío o solo tiene espacios, enviar null para limpiar el campo

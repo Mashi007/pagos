@@ -189,10 +189,12 @@ def _actualizar_password(user, password: str):
 
 def _actualizar_is_admin(user, value: bool):
     """Actualiza is_admin y rol relacionado"""
-    setattr(user, "is_admin", value)
-    nuevo_rol = "ADMIN" if value else "USER"
+    # ✅ Asegurar que value sea un booleano explícito
+    is_admin_value = bool(value) if value is not None else False
+    setattr(user, "is_admin", is_admin_value)
+    nuevo_rol = "ADMIN" if is_admin_value else "USER"
     setattr(user, "rol", nuevo_rol)
-    logger.debug(f"Actualizado is_admin={value}, rol={nuevo_rol}")
+    logger.info(f"✅ Actualizado is_admin: {user.is_admin} -> {is_admin_value}, rol: {user.rol} -> {nuevo_rol}")
 
 
 def _actualizar_campo_simple(user, field: str, value):
@@ -223,6 +225,9 @@ def _aplicar_actualizaciones(user, update_data: dict):
             _actualizar_password(user, value)
             continue
         elif field == "is_admin":
+            # ✅ Asegurar que siempre se actualice is_admin, incluso si es False
+            # Esto es crítico porque exclude_unset=True podría omitir False si no se envía explícitamente
+            logger.info(f"Actualizando is_admin para usuario {user.id}: {user.is_admin} -> {value}")
             _actualizar_is_admin(user, value)
             continue
         elif field == "rol":
@@ -278,7 +283,17 @@ def update_user(
 
         _validar_permisos_actualizacion(current_user, user_id)
 
+        # ✅ Usar exclude_none=False para asegurar que False se incluya
+        # exclude_unset=True excluye campos no establecidos, pero incluye False
+        # Sin embargo, para estar seguros, verificamos explícitamente is_admin
         update_data = user_data.model_dump(exclude_unset=True)
+        
+        # ✅ CRÍTICO: Si is_admin está presente en el request (incluso si es False),
+        # asegurarnos de que se incluya en update_data
+        # Pydantic con exclude_unset=True puede excluir False si no se envía explícitamente
+        if hasattr(user_data, 'is_admin') and user_data.is_admin is not None:
+            # Si is_admin está definido en el modelo (incluso si es False), incluirlo explícitamente
+            update_data['is_admin'] = user_data.is_admin
 
         # Verificar que hay datos para actualizar
         if not update_data:
@@ -288,6 +303,8 @@ def update_user(
             _validar_email_unico(db, update_data["email"], user_id)
 
         logger.info(f"Actualizando usuario {user_id} con campos: {list(update_data.keys())}")
+        logger.info(f"Valores recibidos en update_data: {update_data}")
+        logger.info(f"is_admin en update_data: {update_data.get('is_admin', 'NO ENVIADO')}")
 
         # Guardar valores anteriores para logging
         valores_anteriores = {
