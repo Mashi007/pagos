@@ -317,6 +317,16 @@ export function EmailConfig() {
       })
       
       const resultado = await emailConfigService.actualizarConfiguracionEmail(configCompleta)
+      
+      // Verificar si la respuesta indica un error (aunque no se haya lanzado excepción)
+      if (resultado && typeof resultado === 'object' && 'detail' in resultado) {
+        // Si hay un campo 'detail', probablemente es un error
+        const errorDetail = (resultado as any).detail
+        if (errorDetail && typeof errorDetail === 'string' && errorDetail.toLowerCase().includes('no se pudieron validar')) {
+          throw new Error(errorDetail)
+        }
+      }
+      
       console.log('✅ [EmailConfig] Configuración guardada exitosamente:', resultado)
       
       // Guardar estado de vinculación para mostrar banner permanente
