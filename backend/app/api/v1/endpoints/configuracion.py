@@ -785,7 +785,7 @@ def _procesar_configuraciones_email(configs: list) -> Dict[str, Any]:
 
                 # Normalizar valores booleanos a strings para el frontend
                 # El frontend espera strings 'true'/'false' para campos como smtp_use_tls
-                if config.clave in ("smtp_use_tls", "modo_pruebas"):
+                if config.clave in ("smtp_use_tls", "modo_pruebas", "email_activo"):
                     if isinstance(valor, bool):
                         valor = "true" if valor else "false"
                     elif isinstance(valor, str):
@@ -799,8 +799,13 @@ def _procesar_configuraciones_email(configs: list) -> Dict[str, Any]:
                             # Si no es reconocible, mantener el valor original
                             pass
                     else:
-                        # Si es None o otro tipo, usar 'false' por defecto
-                        valor = "false" if config.clave == "smtp_use_tls" else "true"
+                        # Si es None o otro tipo, usar valores por defecto
+                        if config.clave == "smtp_use_tls":
+                            valor = "false"
+                        elif config.clave == "email_activo":
+                            valor = "true"  # Por defecto activo
+                        else:
+                            valor = "true"
 
                 config_dict[config.clave] = valor
                 logger.debug(f"📝 Configuración: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
