@@ -4,9 +4,10 @@ Servicio de email
 
 import logging
 import smtplib
+import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -421,6 +422,201 @@ class EmailService:
         """
 
         return self.send_email([email], subject, body, is_html=True)
+
+    def send_bulk_emails(
+        self,
+        emails_data: List[Dict[str, Any]],
+        subject: str,
+        body_template: str,
+        is_html: bool = False,
+        batch_size: int = 10,
+        delay_between_emails: float = 1.0,
+        delay_between_batches: float = 5.0,
+        max_retries: int = 3,
+        retry_delay: float = 2.0,
+    ) -> Dict[str, Any]:
+        """
+        ✅ Algoritmo optimizado para envíos masivos de emails
+        
+        Características:
+        - Rate limiting para evitar bloqueos de Gmail
+        - Batching (enviar en lotes pequeños)
+        - Delays entre envíos y lotes
+        - Retry con backoff exponencial
+        - Manejo de errores individual por email
+        - Reutilización de conexión SMTP
+        - Logging detallado de progreso
+        
+        Args:
+            emails_data: Lista de diccionarios con datos de cada email
+                        Cada dict debe tener: {'email': str, 'variables': dict (opcional)}
+            subject: Asunto del email (puede contener variables {nombre}, {email}, etc.)
+            body_template: Plantilla del cuerpo (puede contener variables)
+            is_html: Si el cuerpo es HTML
+            batch_size: Tamaño de cada lote (default: 10 emails por lote)
+            delay_between_emails: Segundos de espera entre cada email (default: 1.0)
+            delay_between_batches: Segundos de espera entre lotes (default: 5.0)
+            max_retries: Intentos máximos por email si falla (default: 3)
+            retry_delay: Segundos base de espera antes de reintentar (default: 2.0)
+        
+        Returns:
+            Dict con estadísticas de envío:
+            {
+                'total': int,
+                'enviados': int,
+                'fallidos': int,
+                'errores': List[Dict],
+                'tiempo_total': float,
+                'emails_por_segundo': float,
+                'tasa_exito': float
+            }
+        """
+        start_time = time.time()
+        total_emails = len(emails_data)
+        enviados = 0
+        fallidos = 0
+        errores = []
+        
+        logger.info(f"📧 Iniciando envío masivo de {total_emails} emails")
+        logger.info(f"⚙️ Configuración: batch_size={batch_size}, delay_emails={delay_between_emails}s, delay_batches={delay_between_batches}s")
+        
+        # ✅ Habilitar reutilización de conexión para envíos masivos
+        self.reuse_connection = True
+        
+        try:
+            # Dividir emails en lotes
+            batches = [emails_data[i:i + batch_size] for i in range(0, total_emails, batch_size)]
+            total_batches = len(batches)
+            
+            logger.info(f"📦 Dividido en {total_batches} lotes de máximo {batch_size} emails cada uno")
+            
+            for batch_num, batch in enumerate(batches, 1):
+                logger.info(f"📦 Procesando lote {batch_num}/{total_batches} ({len(batch)} emails)")
+                
+                for idx, email_data in enumerate(batch, 1):
+                    email_destino = email_data.get('email', '')
+                    variables = email_data.get('variables', {})
+                    
+                    if not email_destino:
+                        logger.warning(f"⚠️ Email vacío en índice {idx}, saltando...")
+                        fallidos += 1
+                        errores.append({
+                            'email': email_destino or 'N/A',
+                            'error': 'Email vacío',
+                            'intentos': 0
+                        })
+                        continue
+                    
+                    # Reemplazar variables en subject y body
+                    try:
+                        subject_final = subject.format(**variables) if variables else subject
+                        body_final = body_template.format(**variables) if variables else body_template
+                    except KeyError as e:
+                        logger.warning(f"⚠️ Variable faltante en email {email_destino}: {e}")
+                        subject_final = subject
+                        body_final = body_template
+                    
+                    # ✅ Intentar enviar con retry
+                    intento = 0
+                    exito = False
+                    
+                    while intento < max_retries and not exito:
+                        intento += 1
+                        try:
+                            resultado = self.send_email(
+                                to_emails=[email_destino],
+                                subject=subject_final,
+                                body=body_final,
+                                is_html=is_html,
+                                forzar_envio_real=True,  # En envíos masivos, siempre enviar real
+                            )
+                            
+                            if resultado.get('success'):
+                                enviados += 1
+                                exito = True
+                                if intento > 1:
+                                    logger.info(f"✅ Email {email_destino} enviado en intento {intento}")
+                            else:
+                                raise Exception(resultado.get('message', 'Error desconocido'))
+                                
+                        except smtplib.SMTPRecipientsRefused as e:
+                            # Email rechazado por el servidor (email inválido)
+                            logger.warning(f"⚠️ Email rechazado: {email_destino} - {str(e)}")
+                            fallidos += 1
+                            errores.append({
+                                'email': email_destino,
+                                'error': f'Email rechazado: {str(e)}',
+                                'intentos': intento
+                            })
+                            exito = True  # No reintentar emails inválidos
+                            
+                        except smtplib.SMTPDataError as e:
+                            # Error de datos (posible rate limit)
+                            error_msg = str(e).lower()
+                            if 'rate limit' in error_msg or 'too many' in error_msg or '550' in str(e):
+                                wait_time = retry_delay * (2 ** intento)  # Backoff exponencial
+                                logger.warning(f"⚠️ Rate limit detectado, esperando {wait_time}s...")
+                                if intento < max_retries:
+                                    time.sleep(wait_time)
+                                    continue  # Reintentar
+                            fallidos += 1
+                            errores.append({
+                                'email': email_destino,
+                                'error': f'Error SMTP: {str(e)}',
+                                'intentos': intento
+                            })
+                            exito = True
+                            
+                        except (smtplib.SMTPException, Exception) as e:
+                            # Otros errores SMTP
+                            if intento < max_retries:
+                                wait_time = retry_delay * (2 ** intento)  # Backoff exponencial
+                                logger.warning(f"⚠️ Error enviando a {email_destino} (intento {intento}/{max_retries}): {str(e)}")
+                                logger.info(f"⏳ Esperando {wait_time}s antes de reintentar...")
+                                time.sleep(wait_time)
+                            else:
+                                logger.error(f"❌ Falló después de {max_retries} intentos: {email_destino} - {str(e)}")
+                                fallidos += 1
+                                errores.append({
+                                    'email': email_destino,
+                                    'error': f'Error después de {max_retries} intentos: {str(e)}',
+                                    'intentos': intento
+                                })
+                                exito = True
+                    
+                    # ✅ Delay entre emails (excepto el último del lote)
+                    if idx < len(batch):
+                        time.sleep(delay_between_emails)
+                
+                # ✅ Delay entre lotes (excepto el último lote)
+                if batch_num < total_batches:
+                    logger.info(f"⏸️ Pausa de {delay_between_batches}s entre lotes para evitar rate limiting...")
+                    time.sleep(delay_between_batches)
+            
+        finally:
+            # ✅ Cerrar conexión SMTP al finalizar
+            self.close_connection()
+        
+        tiempo_total = time.time() - start_time
+        emails_por_segundo = enviados / tiempo_total if tiempo_total > 0 else 0
+        
+        resultado = {
+            'total': total_emails,
+            'enviados': enviados,
+            'fallidos': fallidos,
+            'errores': errores,
+            'tiempo_total': round(tiempo_total, 2),
+            'emails_por_segundo': round(emails_por_segundo, 2),
+            'tasa_exito': round((enviados / total_emails * 100) if total_emails > 0 else 0, 2)
+        }
+        
+        logger.info(f"✅ Envío masivo completado: {enviados}/{total_emails} enviados ({resultado['tasa_exito']}%)")
+        logger.info(f"⏱️ Tiempo total: {tiempo_total:.2f}s | Velocidad: {emails_por_segundo:.2f} emails/segundo")
+        
+        if fallidos > 0:
+            logger.warning(f"⚠️ {fallidos} emails fallaron. Revisa los errores para más detalles.")
+        
+        return resultado
 
     def close_connection(self):
         """Cerrar conexión SMTP reutilizada si existe"""
