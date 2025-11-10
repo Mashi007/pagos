@@ -782,26 +782,26 @@ def _procesar_configuraciones_email(configs: list) -> Dict[str, Any]:
         try:
             if hasattr(config, "clave") and config.clave:
                 valor = config.valor if hasattr(config, "valor") and config.valor is not None else ""
-                
+
                 # Normalizar valores booleanos a strings para el frontend
                 # El frontend espera strings 'true'/'false' para campos como smtp_use_tls
-                if config.clave in ('smtp_use_tls', 'modo_pruebas'):
+                if config.clave in ("smtp_use_tls", "modo_pruebas"):
                     if isinstance(valor, bool):
-                        valor = 'true' if valor else 'false'
+                        valor = "true" if valor else "false"
                     elif isinstance(valor, str):
                         # Normalizar strings: 'True', 'TRUE', '1', 'yes' -> 'true'
                         valor_lower = valor.lower().strip()
-                        if valor_lower in ('true', '1', 'yes', 'on'):
-                            valor = 'true'
-                        elif valor_lower in ('false', '0', 'no', 'off', ''):
-                            valor = 'false'
+                        if valor_lower in ("true", "1", "yes", "on"):
+                            valor = "true"
+                        elif valor_lower in ("false", "0", "no", "off", ""):
+                            valor = "false"
                         else:
                             # Si no es reconocible, mantener el valor original
                             pass
                     else:
                         # Si es None o otro tipo, usar 'false' por defecto
-                        valor = 'false' if config.clave == 'smtp_use_tls' else 'true'
-                
+                        valor = "false" if config.clave == "smtp_use_tls" else "true"
+
                 config_dict[config.clave] = valor
                 logger.debug(f"📝 Configuración: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
             else:
@@ -1344,8 +1344,7 @@ def verificar_estado_configuracion_email(
         email_pruebas = config_dict.get("email_pruebas", "").strip()
         if modo_pruebas and not email_pruebas:
             problemas.append(
-                "⚠️ MODO PRUEBAS activo pero email_pruebas no está configurado. "
-                "Los emails fallarán si se intentan enviar."
+                "⚠️ MODO PRUEBAS activo pero email_pruebas no está configurado. " "Los emails fallarán si se intentan enviar."
             )
 
         # Preparar respuesta con valores ocultos para seguridad
@@ -1368,7 +1367,9 @@ def verificar_estado_configuracion_email(
 
         return {
             "configurada": len(problemas) == 0,
-            "mensaje": "Configuración completa y válida" if len(problemas) == 0 else f"Se encontraron {len(problemas)} problema(s)",
+            "mensaje": (
+                "Configuración completa y válida" if len(problemas) == 0 else f"Se encontraron {len(problemas)} problema(s)"
+            ),
             "configuraciones": configuraciones_visibles,
             "problemas": problemas,
             "conexion_smtp": conexion_smtp,
