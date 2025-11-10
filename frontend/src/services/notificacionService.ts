@@ -233,6 +233,18 @@ class EmailConfigService {
   async actualizarConfiguracionEnvios(config: Record<string, { habilitado: boolean, cco: string[] }>): Promise<any> {
     return await apiClient.put(`${this.baseUrl}/notificaciones/envios`, config)
   }
+
+  async verificarEstadoConfiguracionEmail(): Promise<{
+    configurada: boolean
+    mensaje: string
+    configuraciones: Record<string, any>
+    problemas: string[]
+    conexion_smtp?: { success: boolean, message?: string }
+    modo_pruebas: boolean
+    email_pruebas?: string | null
+  }> {
+    return await apiClient.get(`${this.baseUrl}/email/estado`)
+  }
 }
 
 export interface WhatsAppConfig {

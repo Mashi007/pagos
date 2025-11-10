@@ -43,10 +43,17 @@ export function EmailConfig() {
   const [mensajePrueba, setMensajePrueba] = useState('')
   const [errorValidacion, setErrorValidacion] = useState<string | null>(null)
 
-  // Estado de vinculación
+  // Estado de vinculación y monitoreo
   const [vinculacionConfirmada, setVinculacionConfirmada] = useState<boolean>(false)
   const [mensajeVinculacion, setMensajeVinculacion] = useState<string | null>(null)
   const [requiereAppPassword, setRequiereAppPassword] = useState<boolean>(false)
+  const [estadoConfiguracion, setEstadoConfiguracion] = useState<{
+    configurada: boolean
+    mensaje: string
+    problemas: string[]
+    conexion_smtp?: { success: boolean, message?: string }
+  } | null>(null)
+  const [verificandoEstado, setVerificandoEstado] = useState<boolean>(false)
 
   // Estado de envíos
   const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
@@ -57,7 +64,43 @@ export function EmailConfig() {
   useEffect(() => {
     cargarConfiguracion()
     cargarEnviosRecientes()
+    verificarEstadoGoogle() // ✅ Verificar estado de Google/Gmail al cargar
   }, [])
+
+  // ✅ Verificar estado de configuración con Google/Gmail
+  const verificarEstadoGoogle = async () => {
+    try {
+      setVerificandoEstado(true)
+      const estado = await emailConfigService.verificarEstadoConfiguracionEmail()
+      setEstadoConfiguracion(estado)
+      
+      // Actualizar estado de vinculación basado en la verificación
+      if (estado.configurada && estado.conexion_smtp?.success) {
+        setVinculacionConfirmada(true)
+        setMensajeVinculacion('✅ Sistema vinculado correctamente con Google/Google Workspace')
+        setRequiereAppPassword(false)
+      } else if (estado.problemas.length > 0) {
+        setVinculacionConfirmada(false)
+        // Verificar si el problema es específico de App Password
+        const requiereAppPass = estado.problemas.some(p => 
+          p.toLowerCase().includes('app password') || 
+          p.toLowerCase().includes('contraseña de aplicación') ||
+          p.toLowerCase().includes('application-specific password')
+        )
+        setRequiereAppPassword(requiereAppPass)
+        setMensajeVinculacion(estado.mensaje || '⚠️ Configuración incompleta o con problemas')
+      }
+    } catch (error) {
+      console.error('Error verificando estado de Google:', error)
+      setEstadoConfiguracion({
+        configurada: false,
+        mensaje: 'Error al verificar estado de configuración',
+        problemas: ['No se pudo verificar el estado con Google']
+      })
+    } finally {
+      setVerificandoEstado(false)
+    }
+  }
 
   // Cargar configuración desde backend
   const cargarConfiguracion = async () => {
@@ -376,10 +419,11 @@ export function EmailConfig() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Banners de estado */}
+          {/* Banners de estado y monitoreo de Google */}
           {esGmail && (
             <>
-              {vinculacionConfirmada && (
+              {/* ✅ Estado: Configurado y vinculado correctamente */}
+              {vinculacionConfirmada && estadoConfiguracion?.configurada && (
                 <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     <CheckCircle className="h-6 w-6 text-green-600 mt-0.5 flex-shrink-0" />
@@ -387,9 +431,46 @@ export function EmailConfig() {
                       <p className="font-bold text-green-900 mb-1">
                         ✅ Sistema Vinculado Correctamente con Google/Google Workspace
                       </p>
-                      <p className="text-sm text-green-800">
+                      <p className="text-sm text-green-800 mb-2">
                         {mensajeVinculacion || 'Google aceptó tu configuración. El sistema está autorizado para enviar emails.'}
                       </p>
+                      {estadoConfiguracion.conexion_smtp?.success && (
+                        <p className="text-xs text-green-700">
+                          🔗 Conexión SMTP verificada: {estadoConfiguracion.conexion_smtp.message || 'Conexión exitosa'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ❌ Estado: No configurado o con problemas */}
+              {!vinculacionConfirmada && estadoConfiguracion && !estadoConfiguracion.configurada && (
+                <div className="bg-red-50 border-2 border-red-500 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-6 w-6 text-red-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-bold text-red-900 mb-2">
+                        ❌ Sistema NO Configurado o con Problemas
+                      </p>
+                      <p className="text-sm text-red-800 mb-2">
+                        {estadoConfiguracion.mensaje || 'La configuración de Google/Gmail no está completa o tiene problemas.'}
+                      </p>
+                      {estadoConfiguracion.problemas.length > 0 && (
+                        <div className="bg-red-100 border border-red-300 rounded p-3 mt-2">
+                          <p className="text-xs font-semibold text-red-900 mb-1">Problemas detectados:</p>
+                          <ul className="text-xs text-red-800 space-y-1 list-disc list-inside">
+                            {estadoConfiguracion.problemas.map((problema, idx) => (
+                              <li key={idx}>{problema}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {estadoConfiguracion.conexion_smtp && !estadoConfiguracion.conexion_smtp.success && (
+                        <p className="text-xs text-red-700 mt-2">
+                          🔗 Error de conexión SMTP: {estadoConfiguracion.conexion_smtp.message || 'No se pudo conectar con Google'}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -419,17 +500,44 @@ export function EmailConfig() {
                 </div>
               )}
               
-              {config.smtp_user && config.smtp_password && !vinculacionConfirmada && !requiereAppPassword && (
+              {/* ⏳ Estado: Pendiente de verificación (solo si no hay estado verificado) */}
+              {!estadoConfiguracion && config.smtp_user && config.smtp_password && !vinculacionConfirmada && !requiereAppPassword && (
                 <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     <Clock className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
                       <p className="font-semibold text-yellow-900 mb-1">⏳ Vinculación Pendiente</p>
-                      <p className="text-sm text-yellow-800">
+                      <p className="text-sm text-yellow-800 mb-2">
                         Guarda la configuración para verificar la conexión con Google. El sistema probará automáticamente si Google acepta tus credenciales.
                       </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={verificarEstadoGoogle}
+                        disabled={verificandoEstado}
+                        className="text-xs"
+                      >
+                        {verificandoEstado ? 'Verificando...' : '🔍 Verificar Estado Ahora'}
+                      </Button>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* 🔄 Botón para verificar estado manualmente */}
+              {estadoConfiguracion && (
+                <div className="flex justify-end mb-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={verificarEstadoGoogle}
+                    disabled={verificandoEstado}
+                    className="text-xs"
+                  >
+                    {verificandoEstado ? '🔄 Verificando...' : '🔄 Actualizar Estado'}
+                  </Button>
                 </div>
               )}
             </>
