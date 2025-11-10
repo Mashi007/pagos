@@ -186,17 +186,17 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       return location.pathname === '/' || location.pathname === '/dashboard'
     }
     
-    // ✅ Para rutas con query parameters, comparar URL completa
+    // ✅ Para rutas con query parameters, comparar URL completa (EXACTA)
     if (href.includes('?')) {
-      // Si el href tiene query params, comparar URL completa
+      // Si el href tiene query params, comparar URL completa EXACTAMENTE
       const currentUrl = `${location.pathname}${location.search}`
       return currentUrl === href
     }
     
-    // ✅ Para rutas sin query params, verificar que sea exacta o que no haya query params en la URL actual
+    // ✅ Para rutas sin query params, verificar que sea exacta Y que no haya query params en la URL actual
     // Esto evita que /configuracion resalte cuando estás en /configuracion?tab=email
     if (location.search) {
-      // Si la URL actual tiene query params pero el href no, no resaltar
+      // Si la URL actual tiene query params pero el href no, NO resaltar
       return false
     }
     
@@ -434,10 +434,10 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                       onClose()
                                     }
                                   }}
-                                  className={({ isActive }) =>
+                                  className={() =>
                                     cn(
                                       "flex items-center rounded-lg text-sm font-medium transition-all duration-200",
-                                      isActive || isActiveRoute(child.href!)
+                                      isActiveRoute(child.href!)
                                         ? "bg-blue-600 text-white shadow-md shadow-blue-500/30"
                                         : "text-slate-600 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm",
                                       isCompact ? "justify-center px-2 py-2" : "space-x-3 px-3 py-2"
@@ -477,10 +477,10 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                             onClose()
                           }
                         }}
-                        className={({ isActive }) =>
+                        className={() =>
                           cn(
                             "flex items-center rounded-lg text-sm font-medium transition-all duration-200",
-                            isActive || isActiveRoute(item.href!)
+                            isActiveRoute(item.href!)
                               ? "bg-blue-600 text-white shadow-md shadow-blue-500/30"
                               : "text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm",
                             isCompact ? "justify-center px-2 py-2" : "justify-between px-3 py-2"
