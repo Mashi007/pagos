@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Script de prueba para verificar conexión REAL con Gmail/Google Workspace
 Este script demuestra que el sistema se conecta realmente a los servidores de Google
@@ -6,7 +7,14 @@ Este script demuestra que el sistema se conecta realmente a los servidores de Go
 
 import smtplib
 import sys
+import os
 from typing import Tuple, Optional
+
+# Configurar codificación UTF-8 para Windows
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 def probar_conexion_gmail(
     smtp_user: str,

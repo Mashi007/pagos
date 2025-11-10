@@ -474,8 +474,8 @@ except Exception as e:
         cors_env_backup = os.environ.pop("CORS_ORIGINS", None)
         try:
             settings = Settings()
-            logger.warning(
-                "⚠️ CORS_ORIGINS no pudo ser parseado desde variable de entorno. "
+            logger.info(
+                "ℹ️ CORS_ORIGINS no pudo ser parseado desde variable de entorno. " 
                 "Usando valores por defecto que se filtrarán automáticamente."
             )
         except Exception:

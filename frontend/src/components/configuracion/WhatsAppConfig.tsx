@@ -30,6 +30,8 @@ export function WhatsAppConfig() {
   const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
   const [cargandoEnvios, setCargandoEnvios] = useState(false)
   const [errorValidacion, setErrorValidacion] = useState<string | null>(null)
+  const [ejecutandoTestCompleto, setEjecutandoTestCompleto] = useState(false)
+  const [resultadoTestCompleto, setResultadoTestCompleto] = useState<any>(null)
 
   useEffect(() => {
     cargarConfiguracion()
@@ -149,6 +151,31 @@ export function WhatsAppConfig() {
       setResultadoPrueba({ error: mensajeError })
     } finally {
       setProbando(false)
+    }
+  }
+
+  const handleTestCompleto = async () => {
+    try {
+      setEjecutandoTestCompleto(true)
+      setResultadoTestCompleto(null)
+      toast.info('Ejecutando test completo de WhatsApp...')
+      
+      const resultado = await whatsappConfigService.testCompletoWhatsApp()
+      setResultadoTestCompleto(resultado)
+      
+      const resumen = resultado.resumen || {}
+      if (resumen.fallidos === 0) {
+        toast.success(`✅ Test completo: ${resumen.exitosos}/${resumen.total} tests exitosos`)
+      } else {
+        toast.warning(`⚠️ Test completo: ${resumen.exitosos}/${resumen.total} exitosos, ${resumen.fallidos} fallidos`)
+      }
+    } catch (error: any) {
+      console.error('Error ejecutando test completo:', error)
+      const mensajeError = error?.response?.data?.detail || error?.message || 'Error desconocido'
+      toast.error(`Error ejecutando test completo: ${mensajeError}`)
+      setResultadoTestCompleto({ error: mensajeError })
+    } finally {
+      setEjecutandoTestCompleto(false)
     }
   }
 
@@ -328,7 +355,90 @@ export function WhatsAppConfig() {
               <Save className="h-4 w-4" />
               {guardando ? 'Guardando...' : 'Guardar Configuración'}
             </Button>
+            <Button
+              onClick={handleTestCompleto}
+              disabled={ejecutandoTestCompleto}
+              variant="outline"
+              className="flex items-center gap-2 border-blue-600 text-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              type="button"
+            >
+              <RefreshCw className={`h-4 w-4 ${ejecutandoTestCompleto ? 'animate-spin' : ''}`} />
+              {ejecutandoTestCompleto ? 'Ejecutando Test...' : 'Test Completo'}
+            </Button>
           </div>
+
+          {/* Resultados del Test Completo */}
+          {resultadoTestCompleto && (
+            <div className="border-t pt-4 mt-4">
+              <div className={`rounded-lg p-4 ${
+                resultadoTestCompleto.resumen?.fallidos === 0
+                  ? 'bg-green-50 border border-green-200'
+                  : 'bg-yellow-50 border border-yellow-200'
+              }`}>
+                <div className="flex items-start gap-2 mb-4">
+                  {resultadoTestCompleto.resumen?.fallidos === 0 ? (
+                    <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  )}
+                  <div className="flex-1">
+                    <h3 className="font-semibold mb-2">
+                      {resultadoTestCompleto.resumen?.estado_general || 'Resultado del Test'}
+                    </h3>
+                    {resultadoTestCompleto.resumen && (
+                      <div className="text-sm space-y-1 mb-3">
+                        <p>✅ Exitosos: {resultadoTestCompleto.resumen.exitosos}</p>
+                        <p>❌ Fallidos: {resultadoTestCompleto.resumen.fallidos}</p>
+                        {resultadoTestCompleto.resumen.advertencias > 0 && (
+                          <p>⚠️ Advertencias: {resultadoTestCompleto.resumen.advertencias}</p>
+                        )}
+                      </div>
+                    )}
+                    {resultadoTestCompleto.tests && (
+                      <div className="space-y-2 mt-4">
+                        {Object.entries(resultadoTestCompleto.tests).map(([key, test]: [string, any]) => (
+                          <div key={key} className="bg-white rounded p-3 border">
+                            <div className="flex items-center gap-2 mb-1">
+                              {test.exito ? (
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <XCircle className="h-4 w-4 text-red-600" />
+                              )}
+                              <span className="font-medium text-sm">{test.nombre}</span>
+                            </div>
+                            {test.mensaje && (
+                              <p className="text-xs text-gray-600 ml-6">{test.mensaje}</p>
+                            )}
+                            {test.error && (
+                              <p className="text-xs text-red-600 ml-6">{test.error}</p>
+                            )}
+                            {test.detalles && Object.keys(test.detalles).length > 0 && (
+                              <details className="ml-6 mt-2">
+                                <summary className="text-xs text-gray-500 cursor-pointer">Ver detalles</summary>
+                                <pre className="text-xs mt-2 p-2 bg-gray-50 rounded overflow-auto max-h-40">
+                                  {JSON.stringify(test.detalles, null, 2)}
+                                </pre>
+                              </details>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {resultadoTestCompleto.resumen?.recomendaciones && resultadoTestCompleto.resumen.recomendaciones.length > 0 && (
+                      <div className="mt-4">
+                        <p className="font-semibold text-sm mb-2">Recomendaciones:</p>
+                        <ul className="text-sm space-y-1 list-disc list-inside">
+                          {resultadoTestCompleto.resumen.recomendaciones.map((rec: string, idx: number) => (
+                            <li key={idx} className="text-gray-700">{rec}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Ambiente de Prueba - Envío de Mensaje de Prueba */}
           <div className="border-t pt-4 mt-4">

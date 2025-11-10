@@ -270,6 +270,10 @@ class WhatsAppConfigService {
     if (mensaje) params.mensaje = mensaje
     return await apiClient.post(`${this.baseUrl}/whatsapp/probar`, params)
   }
+
+  async testCompletoWhatsApp(): Promise<any> {
+    return await apiClient.get(`${this.baseUrl}/whatsapp/test-completo`)
+  }
 }
 
 export const notificacionService = new NotificacionService()

@@ -430,6 +430,7 @@ try {
   }
 
   server = app.listen(PORT, '0.0.0.0', () => {
+    // Logs de inicio consolidados (sin duplicación)
     console.log('🚀 ==========================================');
     console.log('🚀 Servidor SPA rapicredit-frontend iniciado');
     console.log('🚀 ==========================================');
@@ -437,7 +438,6 @@ try {
     console.log(`📁 Directorio: ${distPath}`);
     console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔗 API URL: ${API_URL || 'No configurado'}`);
-    console.log(`✅ Servidor escuchando en 0.0.0.0:${PORT}`);
     console.log(`✅ Health check disponible en: http://0.0.0.0:${PORT}/health`);
     console.log('✅ Servidor listo para recibir requests');
   });
@@ -453,15 +453,13 @@ try {
     process.exit(1);
   });
 
-  // Health check para Render - confirmar que el servidor está escuchando
+  // Health check para Render - solo loguear si hay problema
   server.on('listening', () => {
     const address = server.address();
-    if (address) {
-      console.log(`✅ Servidor escuchando correctamente en puerto ${address.port}`);
-      console.log(`✅ Health check endpoint: http://0.0.0.0:${address.port}/health`);
-    } else {
+    if (!address) {
       console.warn('⚠️  No se pudo obtener la dirección del servidor');
     }
+    // No duplicar logs de inicio - ya se loguearon en el callback de listen()
   });
 
   // Manejar cierre graceful del servidor

@@ -631,9 +631,19 @@ def _procesar_distribucion_rango_monto(
                     categorias_extra = categorias_generadas - categorias_esperadas
 
                     if categorias_no_encontradas:
-                        logger.warning(
-                            f"⚠️ [financiamiento-por-rangos] Categorías esperadas pero no encontradas en resultados SQL: {categorias_no_encontradas}"
-                        )
+                        # Limitar la cantidad de categorías mostradas para evitar logs excesivamente largos
+                        total_no_encontradas = len(categorias_no_encontradas)
+                        categorias_muestra = list(categorias_no_encontradas)[:10]  # Mostrar solo las primeras 10
+                        if total_no_encontradas > 10:
+                            logger.debug(
+                                f"📊 [financiamiento-por-rangos] {total_no_encontradas} categorías esperadas sin datos "
+                                f"(muestra: {categorias_muestra}...). Esto es normal si no hay préstamos en esos rangos."
+                            )
+                        else:
+                            logger.debug(
+                                f"📊 [financiamiento-por-rangos] {total_no_encontradas} categorías esperadas sin datos: "
+                                f"{categorias_no_encontradas}. Esto es normal si no hay préstamos en esos rangos."
+                            )
                     if categorias_extra:
                         logger.warning(
                             f"⚠️ [financiamiento-por-rangos] Categorías generadas por SQL que no están en rangos esperados: {categorias_extra}"

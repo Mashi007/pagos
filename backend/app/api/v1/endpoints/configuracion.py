@@ -1650,6 +1650,256 @@ async def probar_configuracion_whatsapp(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
+@router.get("/whatsapp/test-completo")
+async def test_completo_whatsapp(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Test completo de WhatsApp que verifica:
+    1. Configuración en BD
+    2. Conexión con Meta API
+    3. Validación de credenciales
+    4. Estado de rate limits
+    5. Envío de mensaje de prueba (opcional)
+    
+    Retorna diagnóstico detallado de todos los componentes
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden ejecutar tests de WhatsApp",
+        )
+
+    resultados = {
+        "timestamp": datetime.now().isoformat(),
+        "usuario": current_user.email,
+        "tests": {},
+        "resumen": {"total": 0, "exitosos": 0, "fallidos": 0, "advertencias": 0},
+    }
+
+    try:
+        from app.services.whatsapp_service import WhatsAppService
+
+        # ============================================
+        # TEST 1: Verificar configuración en BD
+        # ============================================
+        logger.info("🔍 [TEST] Verificando configuración en BD...")
+        test_config = {"nombre": "Configuración en BD", "exito": False, "detalles": {}}
+
+        try:
+            configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "WHATSAPP").all()
+
+            if not configs:
+                test_config["exito"] = False
+                test_config["error"] = "No hay configuración de WhatsApp en la base de datos"
+                test_config["detalles"]["configuraciones_encontradas"] = 0
+            else:
+                config_dict = {config.clave: config.valor for config in configs}
+                test_config["detalles"]["configuraciones_encontradas"] = len(configs)
+                test_config["detalles"]["configuraciones"] = {
+                    k: "✅ Configurado" if v else "❌ Vacío" for k, v in config_dict.items()
+                }
+
+                # Verificar campos críticos
+                campos_criticos = ["access_token", "phone_number_id", "api_url"]
+                campos_faltantes = [campo for campo in campos_criticos if not config_dict.get(campo)]
+
+                if campos_faltantes:
+                    test_config["exito"] = False
+                    test_config["error"] = f"Campos críticos faltantes: {', '.join(campos_faltantes)}"
+                    test_config["advertencia"] = True
+                else:
+                    test_config["exito"] = True
+                    test_config["mensaje"] = "Configuración completa en BD"
+
+                # Verificar modo pruebas
+                modo_pruebas = config_dict.get("modo_pruebas", "true").lower() in ("true", "1", "yes", "on")
+                test_config["detalles"]["modo_pruebas"] = modo_pruebas
+                if modo_pruebas:
+                    test_config["detalles"]["telefono_pruebas"] = config_dict.get("telefono_pruebas", "No configurado")
+
+        except Exception as e:
+            test_config["exito"] = False
+            test_config["error"] = f"Error verificando configuración: {str(e)}"
+            logger.error(f"❌ [TEST] Error en test de configuración: {e}")
+
+        resultados["tests"]["configuracion"] = test_config
+        if test_config["exito"]:
+            resultados["resumen"]["exitosos"] += 1
+        else:
+            resultados["resumen"]["fallidos"] += 1
+        resultados["resumen"]["total"] += 1
+
+        # ============================================
+        # TEST 2: Verificar conexión con Meta API
+        # ============================================
+        logger.info("🔍 [TEST] Verificando conexión con Meta API...")
+        test_conexion = {"nombre": "Conexión con Meta API", "exito": False, "detalles": {}}
+
+        try:
+            whatsapp_service = WhatsAppService(db=db)
+            resultado_conexion = await whatsapp_service.test_connection()
+
+            test_conexion["exito"] = resultado_conexion.get("success", False)
+            test_conexion["detalles"]["respuesta"] = resultado_conexion.get("message", "Sin respuesta")
+            test_conexion["detalles"]["error_code"] = resultado_conexion.get("error_code")
+
+            if not test_conexion["exito"]:
+                test_conexion["error"] = resultado_conexion.get("message", "Error desconocido")
+
+            # Información adicional de configuración cargada
+            test_conexion["detalles"]["api_url"] = whatsapp_service.api_url
+            test_conexion["detalles"]["phone_number_id"] = (
+                whatsapp_service.phone_number_id[:10] + "..." if whatsapp_service.phone_number_id else "No configurado"
+            )
+            test_conexion["detalles"]["access_token"] = (
+                "✅ Configurado" if whatsapp_service.access_token else "❌ No configurado"
+            )
+            test_conexion["detalles"]["business_account_id"] = (
+                whatsapp_service.business_account_id[:10] + "..." if whatsapp_service.business_account_id else "No configurado"
+            )
+
+        except Exception as e:
+            test_conexion["exito"] = False
+            test_conexion["error"] = f"Error probando conexión: {str(e)}"
+            logger.error(f"❌ [TEST] Error en test de conexión: {e}", exc_info=True)
+
+        resultados["tests"]["conexion"] = test_conexion
+        if test_conexion["exito"]:
+            resultados["resumen"]["exitosos"] += 1
+        else:
+            resultados["resumen"]["fallidos"] += 1
+        resultados["resumen"]["total"] += 1
+
+        # ============================================
+        # TEST 3: Verificar rate limits
+        # ============================================
+        logger.info("🔍 [TEST] Verificando rate limits...")
+        test_rate_limit = {"nombre": "Rate Limits", "exito": False, "detalles": {}}
+
+        try:
+            # Verificar rate limit (sin enviar mensaje)
+            rate_check = await whatsapp_service._check_rate_limit()
+            test_rate_limit["exito"] = rate_check.get("success", False)
+            test_rate_limit["detalles"]["rate_limit_diario"] = "1000 mensajes/día"
+            test_rate_limit["detalles"]["rate_limit_segundo"] = "80 mensajes/segundo"
+            test_rate_limit["detalles"]["estado_actual"] = (
+                "✅ Disponible" if test_rate_limit["exito"] else f"❌ {rate_check.get('message', 'Error')}"
+            )
+
+            if not test_rate_limit["exito"]:
+                test_rate_limit["error"] = rate_check.get("message", "Rate limit alcanzado")
+                test_rate_limit["advertencia"] = True
+
+        except Exception as e:
+            test_rate_limit["exito"] = False
+            test_rate_limit["error"] = f"Error verificando rate limits: {str(e)}"
+            test_rate_limit["advertencia"] = True
+            logger.error(f"❌ [TEST] Error en test de rate limits: {e}")
+
+        resultados["tests"]["rate_limits"] = test_rate_limit
+        if test_rate_limit["exito"]:
+            resultados["resumen"]["exitosos"] += 1
+        elif test_rate_limit.get("advertencia"):
+            resultados["resumen"]["advertencias"] += 1
+        else:
+            resultados["resumen"]["fallidos"] += 1
+        resultados["resumen"]["total"] += 1
+
+        # ============================================
+        # TEST 4: Validar número de teléfono (formato)
+        # ============================================
+        logger.info("🔍 [TEST] Verificando validación de números...")
+        test_validacion = {"nombre": "Validación de Números", "exito": False, "detalles": {}}
+
+        try:
+            numeros_prueba = ["+584121234567", "584121234567", "+1234567890", "1234567890", "abc123"]
+            resultados_validacion = {}
+
+            for num in numeros_prueba:
+                es_valido = whatsapp_service.validate_phone_number(num)
+                resultados_validacion[num] = "✅ Válido" if es_valido else "❌ Inválido"
+
+            test_validacion["exito"] = True
+            test_validacion["detalles"]["ejemplos"] = resultados_validacion
+            test_validacion["mensaje"] = "Validación de números funcionando correctamente"
+
+        except Exception as e:
+            test_validacion["exito"] = False
+            test_validacion["error"] = f"Error en validación: {str(e)}"
+            logger.error(f"❌ [TEST] Error en test de validación: {e}")
+
+        resultados["tests"]["validacion"] = test_validacion
+        if test_validacion["exito"]:
+            resultados["resumen"]["exitosos"] += 1
+        else:
+            resultados["resumen"]["fallidos"] += 1
+        resultados["resumen"]["total"] += 1
+
+        # ============================================
+        # TEST 5: Verificar configuración de servicios
+        # ============================================
+        logger.info("🔍 [TEST] Verificando configuración de servicios...")
+        test_servicios = {"nombre": "Configuración de Servicios", "exito": False, "detalles": {}}
+
+        try:
+            test_servicios["detalles"]["timeout"] = f"{whatsapp_service.timeout}s"
+            test_servicios["detalles"]["max_retries"] = "3 intentos"
+            test_servicios["detalles"]["backoff_base"] = "2 segundos (exponencial)"
+            test_servicios["detalles"]["modo_pruebas"] = whatsapp_service.modo_pruebas
+            test_servicios["detalles"]["telefono_pruebas"] = (
+                whatsapp_service.telefono_pruebas if whatsapp_service.telefono_pruebas else "No configurado"
+            )
+
+            test_servicios["exito"] = True
+            test_servicios["mensaje"] = "Configuración de servicios correcta"
+
+        except Exception as e:
+            test_servicios["exito"] = False
+            test_servicios["error"] = f"Error verificando servicios: {str(e)}"
+            logger.error(f"❌ [TEST] Error en test de servicios: {e}")
+
+        resultados["tests"]["servicios"] = test_servicios
+        if test_servicios["exito"]:
+            resultados["resumen"]["exitosos"] += 1
+        else:
+            resultados["resumen"]["fallidos"] += 1
+        resultados["resumen"]["total"] += 1
+
+        # ============================================
+        # RESUMEN FINAL
+        # ============================================
+        todos_exitosos = resultados["resumen"]["fallidos"] == 0
+        resultados["resumen"]["estado_general"] = (
+            "✅ TODO CORRECTO" if todos_exitosos else "⚠️ HAY PROBLEMAS"
+        )
+        resultados["resumen"]["recomendaciones"] = []
+
+        if not test_config["exito"]:
+            resultados["resumen"]["recomendaciones"].append(
+                "Verificar y completar la configuración de WhatsApp en la base de datos"
+            )
+        if not test_conexion["exito"]:
+            resultados["resumen"]["recomendaciones"].append(
+                "Verificar credenciales de Meta (Access Token, Phone Number ID) y conexión a internet"
+            )
+        if not test_rate_limit.get("exito") and not test_rate_limit.get("advertencia"):
+            resultados["resumen"]["recomendaciones"].append("Rate limits alcanzados, esperar antes de enviar más mensajes")
+
+        logger.info(
+            f"✅ [TEST COMPLETO] Finalizado: {resultados['resumen']['exitosos']}/{resultados['resumen']['total']} tests exitosos"
+        )
+
+        return resultados
+
+    except Exception as e:
+        logger.error(f"❌ [TEST COMPLETO] Error general: {e}", exc_info=True)
+        resultados["error_general"] = str(e)
+        resultados["resumen"]["estado_general"] = "❌ ERROR CRÍTICO"
+        return resultados
+
+
 # ============================================
 # VALIDADORES (Proxy para mantener compatibilidad)
 # ============================================

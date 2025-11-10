@@ -36,6 +36,9 @@ from app.services.whatsapp_service import WhatsAppService
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Cache para verificación de columnas (evita verificar en cada request)
+_columnas_notificaciones_cache: Optional[dict] = None
+
 
 def ejecutar_async_en_background(coroutine):
     """
@@ -408,31 +411,54 @@ def listar_notificaciones(
         skip, limit = calculate_pagination_params(page=page, per_page=per_page, max_per_page=100)
 
         # Verificar qué columnas existen usando inspect (más seguro, no aborta transacciones)
-        canal_exists = False
-        leida_exists = False
-        created_at_exists = False
-        try:
-            from sqlalchemy import inspect as sql_inspect
-
-            # Obtener el engine de forma compatible con SQLAlchemy 1.x y 2.x
-            engine = db.bind if hasattr(db, "bind") else db.get_bind()
-            inspector = sql_inspect(engine)
-            columns = [col["name"] for col in inspector.get_columns("notificaciones")]
-            canal_exists = "canal" in columns
-            leida_exists = "leida" in columns
-            created_at_exists = "created_at" in columns
-            if not canal_exists:
-                logger.warning("Columna 'canal' no existe en BD. Usando query sin canal.")
-            if not leida_exists:
-                logger.warning("Columna 'leida' no existe en BD. Usando query sin leida.")
-            if not created_at_exists:
-                logger.warning("Columna 'created_at' no existe en BD. Usando 'id' para ordenar.")
-        except Exception as e:
-            # Si falla la inspección, asumir que no existen y continuar
-            logger.warning(f"No se pudo verificar columnas: {e}. Usando query básica.")
+        # Usar cache para evitar verificar en cada request
+        global _columnas_notificaciones_cache
+        
+        if _columnas_notificaciones_cache is None:
             canal_exists = False
             leida_exists = False
             created_at_exists = False
+            try:
+                from sqlalchemy import inspect as sql_inspect
+
+                # Obtener el engine de forma compatible con SQLAlchemy 1.x y 2.x
+                engine = db.bind if hasattr(db, "bind") else db.get_bind()
+                inspector = sql_inspect(engine)
+                columns = [col["name"] for col in inspector.get_columns("notificaciones")]
+                canal_exists = "canal" in columns
+                leida_exists = "leida" in columns
+                created_at_exists = "created_at" in columns
+                
+                # Solo mostrar warnings la primera vez
+                if not canal_exists:
+                    logger.warning("Columna 'canal' no existe en BD. Usando query sin canal.")
+                if not leida_exists:
+                    logger.warning("Columna 'leida' no existe en BD. Usando query sin leida.")
+                if not created_at_exists:
+                    logger.warning("Columna 'created_at' no existe en BD. Usando 'id' para ordenar.")
+                
+                # Cachear resultado
+                _columnas_notificaciones_cache = {
+                    "canal": canal_exists,
+                    "leida": leida_exists,
+                    "created_at": created_at_exists
+                }
+            except Exception as e:
+                # Si falla la inspección, asumir que no existen y continuar
+                logger.warning(f"No se pudo verificar columnas: {e}. Usando query básica.")
+                canal_exists = False
+                leida_exists = False
+                created_at_exists = False
+                _columnas_notificaciones_cache = {
+                    "canal": False,
+                    "leida": False,
+                    "created_at": False
+                }
+        else:
+            # Usar valores cacheados
+            canal_exists = _columnas_notificaciones_cache["canal"]
+            leida_exists = _columnas_notificaciones_cache["leida"]
+            created_at_exists = _columnas_notificaciones_cache["created_at"]
 
         # Construir query según si canal existe
         if canal_exists:
