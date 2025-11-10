@@ -1007,7 +1007,10 @@ def actualizar_configuracion_email(
         # Para TODOS los errores de autenticación, permitir guardar pero advertir
         # El usuario puede corregir la configuración después de guardarla
         if mensaje_error:
-            if "application-specific password required" in mensaje_error.lower() or "requiere una contraseña de aplicación" in mensaje_error.lower():
+            if (
+                "application-specific password required" in mensaje_error.lower()
+                or "requiere una contraseña de aplicación" in mensaje_error.lower()
+            ):
                 logger.warning(
                     f"⚠️ Google requiere App Password para {config_data.get('smtp_user', 'N/A')}. "
                     f"Se permitirá guardar la configuración pero no se podrá enviar emails hasta corregir la contraseña."
@@ -1385,7 +1388,7 @@ def verificar_estado_configuracion_email(
             try:
                 email_service = EmailService(db=db)
                 conexion_smtp = email_service.test_connection()
-                
+
                 # ✅ Si la conexión SMTP falla, agregar el mensaje a problemas
                 if not conexion_smtp.get("success", False):
                     error_msg = conexion_smtp.get("message", "Error desconocido en conexión SMTP")
@@ -1403,13 +1406,13 @@ def verificar_estado_configuracion_email(
         # ✅ configurada = True solo si NO hay problemas Y la conexión SMTP fue exitosa
         # Esto confirma que Gmail ACEPTÓ la conexión
         configurada = len(problemas) == 0 and conexion_smtp is not None and conexion_smtp.get("success", False) is True
-        
+
         mensaje = (
-            "✅ Configuración correcta: Gmail aceptó la conexión" if configurada 
-            else f"❌ Se encontraron {len(problemas)} problema(s)" if len(problemas) > 0
-            else "⚠️ Configuración incompleta"
+            "✅ Configuración correcta: Gmail aceptó la conexión"
+            if configurada
+            else f"❌ Se encontraron {len(problemas)} problema(s)" if len(problemas) > 0 else "⚠️ Configuración incompleta"
         )
-        
+
         return {
             "configurada": configurada,
             "mensaje": mensaje,
