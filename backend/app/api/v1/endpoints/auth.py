@@ -127,18 +127,35 @@ async def login(
         from datetime import datetime
 
         try:
-            user.last_login = datetime.utcnow()
+            # Obtener fecha actual
+            now = datetime.utcnow()
+            logger.info(f"🔄 Actualizando last_login para usuario {user_id} a {now}")
+            
+            # Asegurar que el usuario esté en la sesión
+            db.add(user)
+            user.last_login = now
+            
+            # Flush para aplicar cambios antes del commit
+            db.flush()
+            logger.debug(f"✅ Flush exitoso para last_login")
+            
+            # Commit explícito
             db.commit()
+            logger.info(f"✅ Commit exitoso para last_login")
+            
+            # Refresh para obtener el valor actualizado de la BD
             db.refresh(user)
-            logger.debug(f"✅ last_login actualizado para usuario {user_id}: {user.last_login}")
+            logger.info(f"✅ last_login actualizado correctamente para usuario {user_id}: {user.last_login}")
+            
         except Exception as update_error:
             # Si falla la actualización de last_login, hacer rollback pero continuar con el login
             # No queremos que un error en last_login impida el login del usuario
             try:
                 db.rollback()
-            except Exception:
-                pass
-            logger.warning(f"⚠️ No se pudo actualizar last_login para usuario {user_id}: {update_error}")
+                logger.warning(f"⚠️ Rollback realizado después de error en last_login")
+            except Exception as rollback_error:
+                logger.error(f"❌ Error al hacer rollback: {rollback_error}")
+            logger.error(f"❌ No se pudo actualizar last_login para usuario {user_id}: {update_error}", exc_info=True)
             # Continuar con el login aunque last_login no se actualizó
 
         logger.info(f"Login exitoso para: {login_data.email}")
