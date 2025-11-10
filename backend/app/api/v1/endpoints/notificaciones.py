@@ -197,7 +197,9 @@ async def enviar_notificacion(
                                     notif.estado = "ENVIADA"
                                     notif.enviada_en = datetime.utcnow()
                                     # Usar respuesta_servicio si está disponible (incluye message_id), sino usar message
-                                    notif.respuesta_servicio = resultado.get("respuesta_servicio") or resultado.get("message", "Mensaje enviado exitosamente")
+                                    notif.respuesta_servicio = resultado.get("respuesta_servicio") or resultado.get(
+                                        "message", "Mensaje enviado exitosamente"
+                                    )
                                     logger.info(
                                         f"✅ Notificación WhatsApp {notif_id} enviada exitosamente a {telefono_cliente}"
                                     )

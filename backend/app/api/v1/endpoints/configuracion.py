@@ -912,7 +912,7 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
     except smtplib.SMTPAuthenticationError as e:
         error_msg = str(e).lower()
         error_code = str(e)
-        
+
         # Detectar error específico de "Application-specific password required"
         if "application-specific password required" in error_msg or "534" in error_code or "5.7.9" in error_code:
             return False, (
@@ -930,7 +930,7 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
                 "   NO uses tu contraseña normal de Gmail\n\n"
                 "NOTA: Para Google Workspace, verifica que tu administrador haya habilitado App Passwords"
             )
-        
+
         # Detectar otros errores de autenticación
         if "username and password not accepted" in error_msg or "535" in error_code:
             return False, (
@@ -947,7 +947,7 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
                 "  • Google Workspace: https://myaccount.google.com/apppasswords (si está habilitado)\n"
                 "- Usa esa contraseña de 16 caracteres (NO tu contraseña normal)"
             )
-        
+
         return False, f"Error de autenticación SMTP: {str(e)}"
     except smtplib.SMTPException as e:
         return False, f"Error de conexión SMTP: {str(e)}"
@@ -973,13 +973,15 @@ def actualizar_configuracion_email(
     # Validar configuración de Gmail antes de guardar
     # Esta validación prueba la conexión SMTP con Google y confirma que acepta las credenciales
     es_valida, mensaje_error = _validar_configuracion_gmail_smtp(config_data)
-    
+
     # Si la validación falla, verificar si es un error que permite guardar con advertencia
     if not es_valida:
         # Para errores de "Application-specific password required", permitir guardar pero advertir
         # Esto permite que el usuario guarde la configuración y luego corrija la App Password
-        if mensaje_error and ("application-specific password required" in mensaje_error.lower() or 
-                               "requiere una contraseña de aplicación" in mensaje_error.lower()):
+        if mensaje_error and (
+            "application-specific password required" in mensaje_error.lower()
+            or "requiere una contraseña de aplicación" in mensaje_error.lower()
+        ):
             logger.warning(
                 f"⚠️ Google requiere App Password para {config_data.get('smtp_user', 'N/A')}. "
                 f"Se permitirá guardar la configuración pero no se podrá enviar emails hasta corregir la contraseña."
@@ -1035,11 +1037,15 @@ def actualizar_configuracion_email(
         # Si es Gmail, la validación ya probó la conexión y Google la aceptó
         es_gmail = "gmail.com" in config_data.get("smtp_host", "").lower()
         validacion_exitosa = es_valida and es_gmail  # Solo exitosa si es Gmail Y la validación pasó
-        
+
         # Verificar si hay advertencia de App Password requerida
-        requiere_app_password = not es_valida and mensaje_error and (
-            "application-specific password required" in mensaje_error.lower() or 
-            "requiere una contraseña de aplicación" in mensaje_error.lower()
+        requiere_app_password = (
+            not es_valida
+            and mensaje_error
+            and (
+                "application-specific password required" in mensaje_error.lower()
+                or "requiere una contraseña de aplicación" in mensaje_error.lower()
+            )
         )
 
         logger.info(f"✅ Configuración de email actualizada por {current_user.email}")
