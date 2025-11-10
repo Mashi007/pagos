@@ -432,16 +432,11 @@ export function EmailConfig() {
                     <CheckCircle className="h-6 w-6 text-green-600 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
                       <p className="font-bold text-green-900 mb-1">
-                        ✅ Sistema Vinculado Correctamente con Google/Google Workspace
+                        ✅ Gmail/Google Workspace aceptó la conexión
                       </p>
-                      <p className="text-sm text-green-800 mb-2">
-                        {mensajeVinculacion || 'Google aceptó tu configuración. El sistema está autorizado para enviar emails.'}
+                      <p className="text-sm text-green-800">
+                        El sistema está autorizado para enviar emails.
                       </p>
-                      {estadoConfiguracion.conexion_smtp?.success && (
-                        <p className="text-xs text-green-700">
-                          🔗 Conexión SMTP verificada: {estadoConfiguracion.conexion_smtp.message || 'Conexión exitosa'}
-                        </p>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -484,18 +479,14 @@ export function EmailConfig() {
                   <div className="flex items-start gap-3">
                     <AlertCircle className="h-6 w-6 text-amber-600 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
-                      <p className="font-bold text-amber-900 mb-2">
-                        ⚠️ Configuración Guardada - Requiere App Password
-                      </p>
-                      <p className="text-sm text-amber-800 mb-3 whitespace-pre-line">
-                        {mensajeVinculacion || 'Google requiere una Contraseña de Aplicación (App Password) para enviar emails.'}
+                      <p className="font-bold text-amber-900 mb-3">
+                        ⚠️ Requiere Contraseña de Aplicación (App Password)
                       </p>
                       <div className="bg-amber-100 border border-amber-300 rounded p-3">
-                        <p className="text-xs font-semibold text-amber-900 mb-2">Pasos para corregir:</p>
-                        <ol className="text-xs text-amber-800 space-y-1 list-decimal list-inside">
-                          <li>Activa 2FA: <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="underline">https://myaccount.google.com/security</a></li>
-                          <li>Genera App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline">https://myaccount.google.com/apppasswords</a></li>
-                          <li>Actualiza el campo "Contraseña de Aplicación" con la nueva contraseña de 16 caracteres</li>
+                        <ol className="text-sm text-amber-800 space-y-2 list-decimal list-inside">
+                          <li>Activa 2FA: <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="underline font-medium">myaccount.google.com/security</a></li>
+                          <li>Genera App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline font-medium">myaccount.google.com/apppasswords</a></li>
+                          <li>Pega la contraseña de 16 caracteres en el campo "Contraseña de Aplicación" y guarda</li>
                         </ol>
                       </div>
                     </div>
