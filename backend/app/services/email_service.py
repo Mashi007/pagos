@@ -41,7 +41,7 @@ class EmailService:
         self.from_email = settings.FROM_EMAIL
         self.from_name = settings.FROM_NAME
         self.smtp_use_tls = settings.SMTP_USE_TLS
-        self.modo_pruebas = False
+        self.modo_pruebas = True  # Por defecto: Pruebas (más seguro, evita envíos accidentales)
         self.email_pruebas = ""
 
         # Si hay sesión de BD, intentar cargar configuración desde BD
@@ -88,7 +88,7 @@ class EmailService:
         logger.debug("📧 Usando configuración de email por defecto desde settings")
 
     def send_email(
-        self, to_emails: List[str], subject: str, body: str, is_html: bool = False, bcc_emails: Optional[List[str]] = None
+        self, to_emails: List[str], subject: str, body: str, is_html: bool = False, bcc_emails: Optional[List[str]] = None, forzar_envio_real: bool = False
     ) -> Dict[str, Any]:
         """
         Enviar email
@@ -98,6 +98,9 @@ class EmailService:
             subject: Asunto del email
             body: Cuerpo del email
             is_html: Si el cuerpo es HTML
+            bcc_emails: Lista opcional de emails en CCO (BCC)
+            forzar_envio_real: Si True, ignora modo_pruebas y envía al destinatario real.
+                              Útil para pruebas de configuración en modo Producción.
 
         Returns:
             Dict con resultado del envío
@@ -107,8 +110,9 @@ class EmailService:
             self._cargar_configuracion()
 
             # Si está en modo pruebas, redirigir todos los emails a email_pruebas
+            # (excepto si se fuerza envío real, útil para pruebas de configuración)
             emails_destinatarios = to_emails.copy()
-            if self.modo_pruebas and self.email_pruebas:
+            if self.modo_pruebas and self.email_pruebas and not forzar_envio_real:
                 emails_originales = ", ".join(to_emails)
                 # Agregar información de destinatarios originales al asunto y cuerpo
                 subject = f"[PRUEBAS - Originalmente para: {emails_originales}] {subject}"

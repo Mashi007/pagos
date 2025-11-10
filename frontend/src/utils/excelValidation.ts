@@ -1,6 +1,6 @@
 /**
  * Utilidades de validación para archivos Excel
- * Mitiga riesgos de seguridad relacionados con la vulnerabilidad de xlsx
+ * Validaciones de seguridad para archivos Excel procesados con ExcelJS
  */
 
 // Límites de seguridad

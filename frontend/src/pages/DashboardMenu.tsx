@@ -457,12 +457,11 @@ export function DashboardMenu() {
     setShowExportDialog(false)
     
     try {
-      // Importar dinámicamente xlsx
-      const { importXLSX } = await import('@/types/xlsx')
-      const XLSX = await importXLSX()
+      // Importar dinámicamente exceljs
+      const { createMultiSheetExcel } = await import('@/types/exceljs')
       
-      // Crear workbook
-      const wb = XLSX.utils.book_new()
+      // Preparar hojas para el workbook
+      const sheets: Array<{ name: string; data: Record<string, any>[] }> = []
       
       // Construir parámetros de filtro para las consultas de exportación
       const filtrosExport: DashboardFiltros = {
@@ -568,8 +567,7 @@ export function DashboardMenu() {
           )
         }
         
-        const wsKpis = XLSX.utils.json_to_sheet(kpisData)
-        XLSX.utils.book_append_sheet(wb, wsKpis, 'KPIs Principales')
+        sheets.push({ name: 'KPIs Principales', data: kpisData })
       }
       
       // Hoja 2: Datos Financieros
@@ -579,8 +577,7 @@ export function DashboardMenu() {
           { 'Concepto': 'Total Cobrado', 'Valor': datosExportDashboard.financieros.totalCobrado || 0 },
           { 'Concepto': 'Morosidad Total', 'Valor': datosExportKPIs?.total_morosidad_usd?.valor_actual || 0 },
         ]
-        const wsFinancieros = XLSX.utils.json_to_sheet(financierosData)
-        XLSX.utils.book_append_sheet(wb, wsFinancieros, 'Datos Financieros')
+        sheets.push({ name: 'Datos Financieros', data: financierosData })
       }
       
       // Hoja 3: Préstamos por Concesionario
@@ -590,8 +587,7 @@ export function DashboardMenu() {
           'Total Préstamos': c.total_prestamos || 0,
           'Porcentaje': `${c.porcentaje || 0}%`
         }))
-        const wsConcesionarios = XLSX.utils.json_to_sheet(concesionariosData)
-        XLSX.utils.book_append_sheet(wb, wsConcesionarios, 'Préstamos por Concesionario')
+        sheets.push({ name: 'Préstamos por Concesionario', data: concesionariosData })
       }
       
       // Hoja 4: Préstamos por Modelo
@@ -601,8 +597,7 @@ export function DashboardMenu() {
           'Total Préstamos': m.total_prestamos || 0,
           'Porcentaje': `${m.porcentaje || 0}%`
         }))
-        const wsModelos = XLSX.utils.json_to_sheet(modelosData)
-        XLSX.utils.book_append_sheet(wb, wsModelos, 'Préstamos por Modelo')
+        sheets.push({ name: 'Préstamos por Modelo', data: modelosData })
       }
       
       // Hoja 5: Financiamiento por Rangos
@@ -614,8 +609,7 @@ export function DashboardMenu() {
           'Porcentaje Cantidad': `${r.porcentaje_cantidad || 0}%`,
           'Porcentaje Monto': `${r.porcentaje_monto || 0}%`
         }))
-        const wsRangos = XLSX.utils.json_to_sheet(rangosData)
-        XLSX.utils.book_append_sheet(wb, wsRangos, 'Financiamiento por Rangos')
+        sheets.push({ name: 'Financiamiento por Rangos', data: rangosData })
       }
       
       // Hoja 6: Evolución Mensual
@@ -627,8 +621,7 @@ export function DashboardMenu() {
           'Pagos Recibidos': e.monto_pagado || 0,
           'Morosidad Mensual': e.morosidad_mensual || 0
         }))
-        const wsEvolucion = XLSX.utils.json_to_sheet(evolucionData)
-        XLSX.utils.book_append_sheet(wb, wsEvolucion, 'Evolución Mensual')
+        sheets.push({ name: 'Evolución Mensual', data: evolucionData })
       }
       
       // Hoja 7: Morosidad por Analista
@@ -638,8 +631,7 @@ export function DashboardMenu() {
           'Total Morosidad': a.total_morosidad || 0,
           'Cantidad Clientes': a.cantidad_clientes || 0
         }))
-        const wsMorosidad = XLSX.utils.json_to_sheet(morosidadData)
-        XLSX.utils.book_append_sheet(wb, wsMorosidad, 'Morosidad por Analista')
+        sheets.push({ name: 'Morosidad por Analista', data: morosidadData })
       }
       
       // Hoja 8: Cobranzas Mensuales
@@ -650,8 +642,7 @@ export function DashboardMenu() {
           'Pagos Reales': m.pagos_reales || 0,
           'Meta Mensual': m.meta_mensual || 0
         }))
-        const wsCobranzas = XLSX.utils.json_to_sheet(cobranzasData)
-        XLSX.utils.book_append_sheet(wb, wsCobranzas, 'Cobranzas Mensuales')
+        sheets.push({ name: 'Cobranzas Mensuales', data: cobranzasData })
       }
       
       // Generar nombre de archivo con fecha
@@ -663,8 +654,10 @@ export function DashboardMenu() {
         nombreArchivo = `Dashboard_${fechaExportDesde}.xlsx`
       }
       
-      // Descargar
-      XLSX.writeFile(wb, nombreArchivo)
+      // Descargar usando exceljs
+      if (sheets.length > 0) {
+        await createMultiSheetExcel(sheets, nombreArchivo)
+      }
       
       // Mostrar mensaje de éxito
       toast.success('Dashboard exportado exitosamente')

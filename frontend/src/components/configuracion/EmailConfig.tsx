@@ -35,7 +35,7 @@ export function EmailConfig() {
   const [guardando, setGuardando] = useState(false)
   const [probando, setProbando] = useState(false)
   const [resultadoPrueba, setResultadoPrueba] = useState<any>(null)
-  const [modoPruebas, setModoPruebas] = useState<string>('false')
+  const [modoPruebas, setModoPruebas] = useState<string>('true') // Por defecto: Pruebas (más seguro)
   const [emailPruebas, setEmailPruebas] = useState('')
   const [emailPruebaDestino, setEmailPruebaDestino] = useState('') // Email para prueba de envío
   const [subjectPrueba, setSubjectPrueba] = useState('') // Subject para prueba de envío
@@ -52,7 +52,7 @@ export function EmailConfig() {
     try {
       const data = await emailConfigService.obtenerConfiguracionEmail()
       setConfig(data)
-      setModoPruebas(data.modo_pruebas || 'false')
+      setModoPruebas(data.modo_pruebas || 'true') // Por defecto: Pruebas si no hay configuración
       setEmailPruebas(data.email_pruebas || '')
     } catch (error) {
       console.error('Error cargando configuración de email:', error)
@@ -76,11 +76,67 @@ export function EmailConfig() {
     setConfig(prev => ({ ...prev, [campo]: valor }))
   }
 
+  const validarConfiguracionGmail = (): string | null => {
+    // Validar que si es Gmail, cumpla con los requisitos
+    if (config.smtp_host.toLowerCase().includes('gmail.com')) {
+      // Validar puerto correcto para Gmail
+      const puerto = parseInt(config.smtp_port)
+      if (puerto !== 587 && puerto !== 465) {
+        return 'Gmail requiere puerto 587 (TLS) o 465 (SSL). El puerto 587 es recomendado.'
+      }
+      
+      // Validar que TLS esté habilitado para puerto 587
+      if (puerto === 587 && config.smtp_use_tls !== 'true') {
+        return 'Para puerto 587, TLS debe estar habilitado (requerido por Gmail).'
+      }
+      
+      // Validar que el email sea de Gmail
+      if (config.smtp_user && !config.smtp_user.toLowerCase().includes('@gmail.com') && !config.smtp_user.toLowerCase().includes('@googlemail.com')) {
+        return 'El email debe ser de Gmail (@gmail.com o @googlemail.com) cuando uses smtp.gmail.com'
+      }
+      
+      // Validar que el email del remitente sea de Gmail
+      if (config.from_email && !config.from_email.toLowerCase().includes('@gmail.com') && !config.from_email.toLowerCase().includes('@googlemail.com')) {
+        return 'El email del remitente debe ser de Gmail (@gmail.com o @googlemail.com)'
+      }
+      
+      // Validar que tenga contraseña de aplicación
+      if (!config.smtp_password || config.smtp_password.trim().length === 0) {
+        return 'Debes ingresar una Contraseña de Aplicación de Gmail (no tu contraseña normal). Requiere 2FA activado.'
+      }
+      
+      // Validar formato de contraseña de aplicación (16 caracteres sin espacios)
+      // Gmail puede mostrar la contraseña con espacios (ej: "abcd efgh ijkl mnop"), pero al usarla se eliminan
+      const passwordSinEspacios = config.smtp_password.replace(/\s/g, '')
+      if (passwordSinEspacios.length !== 16) {
+        return 'La Contraseña de Aplicación de Gmail debe tener exactamente 16 caracteres (los espacios se eliminan automáticamente).'
+      }
+    }
+    
+    // Validaciones generales
+    if (!config.smtp_host || !config.smtp_port || !config.smtp_user || !config.from_email) {
+      return 'Por favor completa todos los campos requeridos.'
+    }
+    
+    return null
+  }
+
   const handleGuardar = async () => {
+    // Validar configuración antes de guardar
+    const errorValidacion = validarConfiguracionGmail()
+    if (errorValidacion) {
+      toast.error(errorValidacion)
+      return
+    }
+    
     try {
       setGuardando(true)
+      // Limpiar espacios de la contraseña de aplicación (Gmail puede mostrarla con espacios)
+      const passwordLimpia = config.smtp_password ? config.smtp_password.replace(/\s/g, '') : ''
+      
       const configCompleta = {
         ...config,
+        smtp_password: passwordLimpia,
         modo_pruebas: modoPruebas,
         email_pruebas: modoPruebas === 'true' ? emailPruebas : ''
       }
@@ -157,6 +213,23 @@ export function EmailConfig() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Advertencia sobre requisitos de Gmail */}
+          {config.smtp_host.toLowerCase().includes('gmail.com') && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="font-semibold text-amber-900 mb-1">Requisitos obligatorios para Gmail:</p>
+                  <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
+                    <li><strong>Autenticación de 2 factores (2FA) debe estar ACTIVADA</strong> en tu cuenta de Google</li>
+                    <li>Debes usar una <strong>Contraseña de Aplicación</strong> (16 caracteres), NO tu contraseña normal</li>
+                    <li>Puerto recomendado: <strong>587 con TLS</strong> (o 465 con SSL)</li>
+                    <li>El email debe ser de Gmail (@gmail.com o @googlemail.com)</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="text-sm font-medium block mb-2">Servidor SMTP</label>
@@ -205,7 +278,8 @@ export function EmailConfig() {
                 </button>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Genera una App Password en tu cuenta de Google
+                <strong>IMPORTANTE:</strong> Requiere 2FA activado. Genera una App Password (16 caracteres) en tu cuenta de Google. 
+                <strong className="text-red-600"> NO uses tu contraseña normal de Gmail.</strong>
               </p>
             </div>
           </div>
@@ -291,6 +365,18 @@ export function EmailConfig() {
             )}
           </div>
 
+          {/* Botones de Acción */}
+          <div className="flex gap-2 pt-4 border-t mt-4">
+            <Button
+              onClick={handleGuardar}
+              disabled={guardando}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+            >
+              <Save className="h-4 w-4" />
+              {guardando ? 'Guardando...' : 'Guardar Configuración'}
+            </Button>
+          </div>
+
           {/* Ambiente de Prueba - Envío de Email de Prueba */}
           <div className="border-t pt-4 mt-4">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
@@ -301,6 +387,28 @@ export function EmailConfig() {
               <p className="text-sm text-blue-700 mb-4">
                 Envía un correo de prueba personalizado para verificar que la configuración SMTP funciona correctamente.
               </p>
+              {modoPruebas === 'false' && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-green-800 font-semibold mb-1">
+                    ✅ Modo Producción activo
+                  </p>
+                  <p className="text-xs text-green-700">
+                    El email de prueba se enviará <strong>REALMENTE</strong> al destinatario especificado. 
+                    Si recibes el correo, es prueba de que el servicio está bien configurado y funcionando correctamente.
+                  </p>
+                </div>
+              )}
+              {modoPruebas === 'true' && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-yellow-800 font-semibold mb-1">
+                    ⚠️ Modo Pruebas activo
+                  </p>
+                  <p className="text-xs text-yellow-700">
+                    El email se redirigirá a la dirección de pruebas configurada ({emailPruebas || 'no configurada'}), 
+                    no al destinatario especificado.
+                  </p>
+                </div>
+              )}
               
               <div className="space-y-4">
                 <div>
@@ -361,18 +469,6 @@ export function EmailConfig() {
                 </Button>
               </div>
             </div>
-          </div>
-
-          {/* Botones */}
-          <div className="flex gap-2 pt-4">
-            <Button
-              onClick={handleGuardar}
-              disabled={guardando}
-              className="flex items-center gap-2"
-            >
-              <Save className="h-4 w-4" />
-              {guardando ? 'Guardando...' : 'Guardar Configuración'}
-            </Button>
           </div>
 
           {/* Resultado de la prueba */}
@@ -496,20 +592,70 @@ export function EmailConfig() {
       {/* Instrucciones */}
       <Card>
         <CardHeader>
-          <CardTitle>📝 Instrucciones para Gmail</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-amber-600" />
+            Instrucciones para Gmail (Requisitos Obligatorios)
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <div className="border-l-4 border-blue-500 pl-4">
-            <p className="font-semibold mb-2">Para obtener una Contraseña de Aplicación:</p>
-            <ol className="list-decimal ml-5 space-y-1">
-              <li>Ve a tu cuenta de Google: https://myaccount.google.com/</li>
-              <li>Selecciona <strong>Seguridad</strong></li>
-              <li>Activa la <strong>Verificación en 2 pasos</strong> si no está activada</li>
-              <li>Busca <strong>Contraseñas de aplicaciones</strong></li>
-              <li>Selecciona <strong>Correo</strong> y el dispositivo</li>
-              <li>Genera y copia la contraseña de 16 caracteres</li>
-              <li>Pégala en el campo "Contraseña de Aplicación"</li>
+        <CardContent className="space-y-4 text-sm">
+          {/* Paso 1: Activar 2FA */}
+          <div className="bg-red-50 border-l-4 border-red-500 pl-4 py-3 rounded">
+            <p className="font-bold text-red-900 mb-2">PASO 1: Activar Autenticación de 2 Factores (OBLIGATORIO)</p>
+            <ol className="list-decimal ml-5 space-y-1 text-red-800">
+              <li>Ve a tu cuenta de Google: <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">https://myaccount.google.com/security</a></li>
+              <li>Selecciona <strong>Seguridad</strong> en el menú lateral</li>
+              <li>Busca la sección <strong>"Verificación en 2 pasos"</strong></li>
+              <li>Haz clic en <strong>"Activar"</strong> y sigue los pasos para configurarlo</li>
+              <li><strong className="text-red-900">⚠️ Sin 2FA activado, NO podrás generar Contraseñas de Aplicación</strong></li>
             </ol>
+          </div>
+
+          {/* Paso 2: Generar App Password */}
+          <div className="bg-blue-50 border-l-4 border-blue-500 pl-4 py-3 rounded">
+            <p className="font-bold text-blue-900 mb-2">PASO 2: Generar Contraseña de Aplicación</p>
+            <ol className="list-decimal ml-5 space-y-1 text-blue-800">
+              <li>Una vez que tengas 2FA activado, vuelve a <strong>Seguridad</strong></li>
+              <li>Busca la sección <strong>"Contraseñas de aplicaciones"</strong> (aparece solo si 2FA está activo)</li>
+              <li>Si no la ves, ve directamente a: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">https://myaccount.google.com/apppasswords</a></li>
+              <li>Selecciona <strong>"Correo"</strong> como aplicación</li>
+              <li>Selecciona el dispositivo (puedes elegir "Otro" y escribir "RapiCredit")</li>
+              <li>Haz clic en <strong>"Generar"</strong></li>
+              <li>Google te mostrará una contraseña de <strong>16 caracteres</strong> (sin espacios)</li>
+              <li><strong className="text-blue-900">Copia TODA la contraseña de 16 caracteres</strong> (ejemplo: abcd efgh ijkl mnop)</li>
+              <li>Pégala en el campo "Contraseña de Aplicación" de este formulario</li>
+            </ol>
+            <div className="mt-3 p-3 bg-white rounded border border-blue-200">
+              <p className="font-semibold text-red-700 mb-1">⚠️ IMPORTANTE:</p>
+              <ul className="list-disc ml-5 space-y-1 text-red-800">
+                <li>La Contraseña de Aplicación tiene <strong>16 caracteres</strong> (puede tener espacios, pero se eliminan automáticamente)</li>
+                <li><strong>NO es tu contraseña normal de Gmail</strong></li>
+                <li>Solo puedes verla una vez al generarla - guárdala en un lugar seguro</li>
+                <li>Si la pierdes, deberás generar una nueva</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Configuración recomendada */}
+          <div className="bg-green-50 border-l-4 border-green-500 pl-4 py-3 rounded">
+            <p className="font-bold text-green-900 mb-2">✓ Configuración Recomendada para Gmail:</p>
+            <ul className="list-disc ml-5 space-y-1 text-green-800">
+              <li><strong>Servidor SMTP:</strong> smtp.gmail.com</li>
+              <li><strong>Puerto:</strong> 587 (recomendado) o 465</li>
+              <li><strong>TLS:</strong> Activado (obligatorio para puerto 587)</li>
+              <li><strong>Email:</strong> Tu email de Gmail completo (ejemplo: tu-email@gmail.com)</li>
+              <li><strong>Contraseña:</strong> La Contraseña de Aplicación de 16 caracteres</li>
+            </ul>
+          </div>
+
+          {/* Solución de problemas */}
+          <div className="bg-gray-50 border-l-4 border-gray-400 pl-4 py-3 rounded">
+            <p className="font-bold text-gray-900 mb-2">🔧 Si tienes problemas:</p>
+            <ul className="list-disc ml-5 space-y-1 text-gray-700">
+              <li><strong>Error "Usuario o contraseña incorrectos":</strong> Verifica que estés usando la Contraseña de Aplicación, NO tu contraseña normal</li>
+              <li><strong>No aparece "Contraseñas de aplicaciones":</strong> Asegúrate de que 2FA esté activado y que hayas iniciado sesión recientemente</li>
+              <li><strong>Error de conexión:</strong> Verifica que el puerto sea 587 y TLS esté activado</li>
+              <li><strong>Gmail bloquea el acceso:</strong> Puede requerir "Permitir aplicaciones menos seguras" o usar OAuth2 (más avanzado)</li>
+            </ul>
           </div>
         </CardContent>
       </Card>

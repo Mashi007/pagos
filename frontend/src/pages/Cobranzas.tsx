@@ -159,9 +159,8 @@ export function Cobranzas() {
     }
 
     try {
-      // Importar dinámicamente xlsx
-      const { importXLSX } = await import('@/types/xlsx')
-      const XLSX = await importXLSX()
+      // Importar dinámicamente exceljs
+      const { createAndDownloadExcel } = await import('@/types/exceljs')
       
       // Obtener columnas del primer objeto si no se especifican
       const keys = columnas || Object.keys(data[0])
@@ -175,17 +174,12 @@ export function Cobranzas() {
         return row
       })
 
-      // Crear workbook y worksheet
-      const ws = XLSX.utils.json_to_sheet(datosExcel)
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Datos')
-
       // Generar fecha para nombre de archivo
       const fecha = new Date().toISOString().split('T')[0]
       const nombreArchivo = `${nombre}_${fecha}.xlsx`
 
-      // Descargar
-      XLSX.writeFile(wb, nombreArchivo)
+      // Descargar usando exceljs
+      await createAndDownloadExcel(datosExcel, 'Datos', nombreArchivo)
     } catch (error) {
       console.error('Error exportando a Excel:', error)
       alert('Error al exportar a Excel')

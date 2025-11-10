@@ -51,8 +51,8 @@ export default defineConfig({
             }
             
             // Librerías pesadas de exportación - cargar solo cuando se necesiten
-            if (id.includes('xlsx')) {
-              return 'xlsx'
+            if (id.includes('exceljs')) {
+              return 'exceljs'
             }
             if (id.includes('jspdf') || id.includes('html2canvas')) {
               return 'pdf-export'

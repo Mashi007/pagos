@@ -105,10 +105,6 @@ declare module 'lucide-react' {
   export const LayoutDashboard: any
 }
 
-declare module 'xlsx' {
-  export const read: any
-  export const utils: any
-}
 
 declare module '@tanstack/react-query' {
   export const useQueryClient: any

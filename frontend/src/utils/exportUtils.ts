@@ -27,10 +27,8 @@ export interface PrestamoInfo {
  */
 export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
   try {
-    // Importar dinámicamente xlsx
-    const XLSXModule = await import('xlsx')
-    // @ts-ignore - xlsx es un CommonJS module, necesitamos usar 'as any'
-    const XLSX: any = XLSXModule
+    // Importar dinámicamente exceljs
+    const { createAndDownloadExcel } = await import('@/types/exceljs')
     
     // Crear datos para Excel
     const datos = cuotas.map(cuota => ({
@@ -49,23 +47,17 @@ export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) =>
     const totalGeneral = cuotas.reduce((sum, c) => sum + c.monto_cuota, 0)
 
     const resumen = [
-      {},
       { 'Cuota': 'RESUMEN', 'Fecha Vencimiento': '', 'Capital': '', 'Interés': '', 'Total': '', 'Saldo Pendiente': '', 'Estado': '' },
       { 'Cuota': '', 'Fecha Vencimiento': '', 'Capital': totalCapital, 'Interés': totalInteres, 'Total': totalGeneral, 'Saldo Pendiente': '', 'Estado': '' },
     ]
 
     const todosLosDatos = [...datos, ...resumen]
 
-    // Crear libro y hoja
-    const ws = XLSX.utils.json_to_sheet(todosLosDatos)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Tabla de Amortización')
-
     // Generar nombre del archivo
     const nombreArchivo = `Tabla_Amortizacion_${prestamo.cedula}_${prestamo.id}.xlsx`
 
-    // Descargar
-    XLSX.writeFile(wb, nombreArchivo)
+    // Descargar usando exceljs
+    await createAndDownloadExcel(todosLosDatos, 'Tabla de Amortización', nombreArchivo)
   } catch (error) {
     console.error('Error al exportar a Excel:', error)
     alert('Error al exportar a Excel')

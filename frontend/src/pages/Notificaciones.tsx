@@ -19,7 +19,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react'
-// XLSX se importa dinámicamente cuando se necesita
+// ExcelJS se importa dinámicamente cuando se necesita
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -270,9 +270,8 @@ export function Notificaciones() {
         return
       }
 
-      // Importar XLSX dinámicamente
-      const { importXLSX } = await import('@/types/xlsx')
-      const XLSX = await importXLSX()
+      // Importar exceljs dinámicamente
+      const { createAndDownloadExcel } = await import('@/types/exceljs')
 
       // Preparar los datos para Excel
       const datosExcel = notificacionesFiltradas.map(notif => {
@@ -313,47 +312,16 @@ export function Notificaciones() {
         }
       })
 
-      // Crear el workbook y worksheet
-      const wb = XLSX.utils.book_new()
-      const ws = XLSX.utils.json_to_sheet(datosExcel) as any
-
-      // Ajustar el ancho de las columnas
-      const colWidths = activeTab === 'previa'
-        ? [
-            { wch: 30 }, // Nombre
-            { wch: 15 }, // Cédula
-            { wch: 20 }, // Modelo
-            { wch: 30 }, // Correo
-            { wch: 15 }, // Teléfono
-            { wch: 10 }, // Días
-            { wch: 15 }, // Fecha vencimiento
-            { wch: 8 },  // Cuota #
-            { wch: 12 }, // Monto
-            { wch: 12 }, // Préstamo ID
-            { wch: 12 }  // Estado
-          ]
-        : [
-            { wch: 30 }, // Asunto
-            { wch: 50 }, // Mensaje
-            { wch: 20 }, // Tipo
-            { wch: 12 }, // Canal
-            { wch: 12 }, // Estado
-            { wch: 12 }, // Cliente ID
-            { wch: 20 }, // Fecha Creación
-            { wch: 20 }, // Fecha Envío
-            { wch: 50 }  // Error
-          ]
-      ws['!cols'] = colWidths
-
-      // Agregar el worksheet al workbook
-      XLSX.utils.book_append_sheet(wb, ws, estado === 'PENDIENTE' ? 'Pendientes' : 'Fallidas')
-
       // Generar el nombre del archivo
       const fecha = new Date().toISOString().split('T')[0]
       const nombreArchivo = `Notificaciones_${estado === 'PENDIENTE' ? 'Pendientes' : 'Fallidas'}_${fecha}.xlsx`
 
-      // Descargar el archivo
-      XLSX.writeFile(wb, nombreArchivo)
+      // Descargar el archivo usando exceljs
+      await createAndDownloadExcel(
+        datosExcel,
+        estado === 'PENDIENTE' ? 'Pendientes' : 'Fallidas',
+        nombreArchivo
+      )
       
       toast.success(`Archivo Excel descargado: ${nombreArchivo}`)
     } catch (error) {

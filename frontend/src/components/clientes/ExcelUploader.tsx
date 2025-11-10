@@ -17,9 +17,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { SearchableSelect } from '@/components/ui/searchable-select'
-// xlsx se importa dinámicamente para reducir el bundle inicial
+// exceljs se importa dinámicamente para reducir el bundle inicial
 import { clienteService } from '@/services/clienteService'
 import { useQueryClient } from '@tanstack/react-query'
+import { readExcelToJSON } from '@/types/exceljs'
 
 interface ExcelData {
   cedula: string
@@ -823,27 +824,18 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         console.warn('Nombre de archivo sanitizado:', sanitizedFileName)
       }
       
-      // ✅ Importar xlsx dinámicamente para reducir bundle inicial
-      const XLSXModule = await import('xlsx')
-      // xlsx puede exportarse como default o como named export
-      const XLSX = (XLSXModule.default || XLSXModule) as typeof import('xlsx')
-      
+      // ✅ Importar exceljs dinámicamente para reducir bundle inicial
       const data = await file.arrayBuffer()
-      const workbook = XLSX.read(data, { type: 'array' })
       
-      // ✅ VALIDACIÓN DE SEGURIDAD: Validar estructura del workbook
-      const structureValidation = validateWorkbookStructure(workbook)
-      if (!structureValidation.isValid) {
-        alert(`Error en estructura del archivo: ${structureValidation.error}`)
+      // ✅ VALIDACIÓN DE SEGURIDAD: Validar tamaño del archivo antes de procesar
+      if (data.byteLength > 10 * 1024 * 1024) {
+        alert('El archivo es demasiado grande. Tamaño máximo: 10 MB')
         setIsProcessing(false)
         return
       }
       
-      const sheetName = workbook.SheetNames[0]
-      const worksheet = workbook.Sheets[sheetName]
-      
-      // Convertir a JSON
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+      // Leer archivo Excel usando exceljs
+      const jsonData = await readExcelToJSON(data)
       
       // ✅ VALIDACIÓN DE SEGURIDAD: Validar datos extraídos
       const dataValidation = validateExcelData(jsonData)

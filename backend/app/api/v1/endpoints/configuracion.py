@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -833,6 +833,84 @@ def obtener_configuracion_email(db: Session = Depends(get_db), current_user: Use
         return _obtener_valores_email_por_defecto()
 
 
+def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    """
+    Validar configuración de Gmail SMTP y probar conexión
+    
+    Returns:
+        (es_valida, mensaje_error)
+    """
+    import smtplib
+    
+    smtp_host = config_data.get("smtp_host", "").lower()
+    
+    # Solo validar si es Gmail
+    if "gmail.com" not in smtp_host:
+        return True, None
+    
+    smtp_port = config_data.get("smtp_port", "587")
+    smtp_user = config_data.get("smtp_user", "")
+    smtp_password = config_data.get("smtp_password", "")
+    smtp_use_tls = config_data.get("smtp_use_tls", "true").lower() in ("true", "1", "yes", "on")
+    
+    # Validaciones básicas
+    if not smtp_user or not smtp_password:
+        return False, "Email y Contraseña de Aplicación son requeridos para Gmail"
+    
+    # Validar que el email sea de Gmail
+    if "@gmail.com" not in smtp_user.lower() and "@googlemail.com" not in smtp_user.lower():
+        return False, "El email debe ser de Gmail (@gmail.com o @googlemail.com) cuando uses smtp.gmail.com"
+    
+    # Validar puerto
+    try:
+        puerto = int(smtp_port)
+        if puerto not in (587, 465):
+            return False, "Gmail requiere puerto 587 (TLS) o 465 (SSL). El puerto 587 es recomendado."
+        if puerto == 587 and not smtp_use_tls:
+            return False, "Para puerto 587, TLS debe estar habilitado (requerido por Gmail)."
+    except (ValueError, TypeError):
+        return False, "Puerto SMTP inválido"
+    
+    # Validar formato de contraseña de aplicación (16 caracteres sin espacios)
+    password_sin_espacios = smtp_password.replace(" ", "").replace("\t", "")
+    if len(password_sin_espacios) != 16:
+        return False, "La Contraseña de Aplicación de Gmail debe tener exactamente 16 caracteres (los espacios se eliminan automáticamente)."
+    
+    # Probar conexión SMTP para verificar credenciales
+    try:
+        server = smtplib.SMTP(smtp_host, puerto, timeout=10)
+        
+        if smtp_use_tls:
+            server.starttls()
+        
+        # Intentar login - aquí es donde Gmail rechazará si no hay 2FA o si se usa contraseña normal
+        server.login(smtp_user, password_sin_espacios)
+        server.quit()
+        
+        return True, None
+        
+    except smtplib.SMTPAuthenticationError as e:
+        error_msg = str(e).lower()
+        if "username and password not accepted" in error_msg or "535" in str(e):
+            return False, (
+                "❌ Error de autenticación con Gmail. Posibles causas:\n"
+                "1. ⚠️ NO tienes Autenticación de 2 Factores (2FA) activada en tu cuenta de Google\n"
+                "2. ⚠️ Estás usando tu contraseña normal de Gmail en lugar de una Contraseña de Aplicación\n"
+                "3. ⚠️ La Contraseña de Aplicación es incorrecta o fue revocada\n\n"
+                "SOLUCIÓN:\n"
+                "- Activa 2FA en: https://myaccount.google.com/security\n"
+                "- Genera una Contraseña de Aplicación en: https://myaccount.google.com/apppasswords\n"
+                "- Usa esa contraseña de 16 caracteres (NO tu contraseña normal)"
+            )
+        return False, f"Error de autenticación SMTP: {str(e)}"
+    except smtplib.SMTPException as e:
+        return False, f"Error de conexión SMTP: {str(e)}"
+    except Exception as e:
+        # No bloquear guardado por errores de conexión temporales, solo advertir
+        logger.warning(f"⚠️ No se pudo validar conexión SMTP al guardar (puede ser temporal): {str(e)}")
+        return True, None  # Permitir guardar pero advertir
+
+
 @router.put("/email/configuracion")
 def actualizar_configuracion_email(
     config_data: Dict[str, Any],
@@ -844,6 +922,14 @@ def actualizar_configuracion_email(
         raise HTTPException(
             status_code=403,
             detail="Solo administradores pueden actualizar configuración",
+        )
+
+    # Validar configuración de Gmail antes de guardar
+    es_valida, mensaje_error = _validar_configuracion_gmail_smtp(config_data)
+    if not es_valida:
+        raise HTTPException(
+            status_code=400,
+            detail=mensaje_error or "Configuración de email inválida"
         )
 
     try:
@@ -883,6 +969,8 @@ def actualizar_configuracion_email(
             "configuraciones_actualizadas": len(configuraciones),
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error actualizando configuración de email: {e}")
@@ -1182,15 +1270,30 @@ def probar_configuracion_email(
             </html>
             """
 
+        # Verificar modo de envío (Producción o Pruebas)
+        config_dict = {config.clave: config.valor for config in configs}
+        modo_pruebas = config_dict.get("modo_pruebas", "true").lower() in ("true", "1", "yes", "on")  # Por defecto: Pruebas
+        
+        # En modo Producción, el email de prueba debe enviarse REALMENTE al destinatario especificado
+        # para verificar que la configuración funciona correctamente.
+        # Si el email llega, es prueba de que el servicio está bien configurado y funciona.
+        # En modo Pruebas, se respeta el comportamiento normal (redirige a email_pruebas)
+        
         # Enviar email de prueba
         from app.services.email_service import EmailService
 
         email_service = EmailService(db=db)
+        
+        # Si estamos en modo Producción, forzar envío real para verificar que funciona
+        # Si estamos en modo Pruebas, respetar el comportamiento normal
+        forzar_real = not modo_pruebas
+        
         result = email_service.send_email(
             to_emails=[email_a_enviar],
             subject=subject_email,
             body=cuerpo_email,
             is_html=True,
+            forzar_envio_real=forzar_real,
         )
 
         if result.get("success"):
