@@ -93,10 +93,10 @@ export function EmailConfig() {
           p.toLowerCase().includes('contraseña de aplicación') ||
           p.toLowerCase().includes('application-specific password') ||
           p.toLowerCase().includes('requiere una contraseña de aplicación')
-        ) || estado.conexion_smtp?.message?.toLowerCase().includes('app password') ||
-           estado.conexion_smtp?.message?.toLowerCase().includes('contraseña de aplicación')
+        ) || (estado.conexion_smtp?.message?.toLowerCase().includes('app password') ?? false) ||
+           (estado.conexion_smtp?.message?.toLowerCase().includes('contraseña de aplicación') ?? false)
         
-        setRequiereAppPassword(requiereAppPass)
+        setRequiereAppPassword(Boolean(requiereAppPass))
         setMensajeVinculacion(estado.mensaje || '⚠️ Gmail rechazó la conexión. Verifica tus credenciales.')
         
         if (process.env.NODE_ENV === 'development') {
