@@ -88,31 +88,22 @@ _cache_logs_shown = False
 # Intentar inicializar Redis, usar MemoryCache como fallback
 cache_backend: CacheBackend = MemoryCache()
 
-logger.info("=" * 80)
-logger.info("🔍 INICIANDO DIAGNÓSTICO DE REDIS")
-logger.info("=" * 80)
-
+# Logs de diagnóstico más concisos - solo mostrar resumen en producción
 try:
-    logger.info("📦 Paso 1: Intentando importar módulo redis...")
+    logger.debug("🔍 Iniciando diagnóstico de Redis...")
     import redis
-    logger.info(f"✅ Paso 1: Módulo redis importado correctamente. Versión: {redis.__version__ if hasattr(redis, '__version__') else 'N/A'}")
+    logger.debug(f"✅ Módulo redis importado. Versión: {redis.__version__ if hasattr(redis, '__version__') else 'N/A'}")
 
-    logger.info("📦 Paso 2: Importando settings...")
     from app.core.config import settings
-    logger.info("✅ Paso 2: Settings importado correctamente")
-
-    logger.info("📦 Paso 3: Verificando configuración de Redis...")
-    logger.info(f"   - REDIS_URL: {settings.REDIS_URL if settings.REDIS_URL else 'NO CONFIGURADA'}")
-    logger.info(f"   - REDIS_HOST: {settings.REDIS_HOST}")
-    logger.info(f"   - REDIS_PORT: {settings.REDIS_PORT}")
-    logger.info(f"   - REDIS_DB: {settings.REDIS_DB}")
-    logger.info(f"   - REDIS_PASSWORD: {'CONFIGURADA' if settings.REDIS_PASSWORD else 'NO CONFIGURADA'}")
-    logger.info(f"   - REDIS_SOCKET_TIMEOUT: {settings.REDIS_SOCKET_TIMEOUT}")
+    logger.debug("✅ Settings importado")
+    
+    # Solo mostrar configuración detallada en modo debug
+    logger.debug(f"Redis config - URL: {bool(settings.REDIS_URL)}, Host: {settings.REDIS_HOST}, Port: {settings.REDIS_PORT}, DB: {settings.REDIS_DB}")
 
     # ✅ CONFIGURACIÓN DESDE VARIABLES DE ENTORNO
     # Prioridad: REDIS_URL > REDIS_HOST/REDIS_PORT/REDIS_DB
     if settings.REDIS_URL:
-        logger.info("📦 Paso 4: Usando REDIS_URL para conexión...")
+        logger.debug("Usando REDIS_URL para conexión...")
         # Usar URL completa si está disponible
         redis_url = settings.REDIS_URL
 
@@ -136,7 +127,7 @@ try:
                 # Construir URL con password: redis://default:password@host:port/db
                 # Render.com usa 'default' como usuario
                 redis_url = f"redis://default:{settings.REDIS_PASSWORD}@{host_port}/{db}"
-                logger.info("🔗 Configurando Redis con password desde REDIS_PASSWORD")
+                logger.debug("Configurando Redis con password desde REDIS_PASSWORD")
             else:
                 # Si no es formato redis://, intentar agregar password de otra forma
                 logger.warning(f"⚠️ Formato de REDIS_URL no reconocido: {redis_url[:20]}...")
@@ -146,27 +137,19 @@ try:
             if not redis_url.endswith("/0") and "/" not in redis_url.replace("redis://", ""):
                 if not redis_url.endswith("/"):
                     redis_url = f"{redis_url}/0"
-            logger.info("🔗 Conectando a Redis sin autenticación (sin usuario/password)")
+            logger.debug("Conectando a Redis sin autenticación")
 
-        # Log de URL (sin mostrar password completo)
+        # Log de URL (sin mostrar password completo) - solo en debug
         if "@" in redis_url:
-            # Ocultar password en logs
             safe_url = redis_url.split("@")[0].split(":")[0] + ":***@" + redis_url.split("@")[1]
-            logger.info(f"🔗 Conectando a Redis: {safe_url}")
+            logger.debug(f"Conectando a Redis: {safe_url}")
         else:
-            logger.info(f"🔗 Conectando a Redis: {redis_url}")
+            logger.debug(f"Conectando a Redis: {redis_url}")
 
         # ✅ Intentar conexión con mejor manejo de errores y reintentos
         redis_client = None
-        logger.info("📦 Paso 5: Intentando crear cliente Redis...")
-        # Crear URL segura para logs
-        if "@" in redis_url:
-            safe_url_log = redis_url.split("@")[0].split(":")[0] + ":***@" + redis_url.split("@")[1]
-        else:
-            safe_url_log = redis_url
-        logger.info(f"   - URL final (segura): {safe_url_log}")
+        logger.debug("Creando cliente Redis...")
         try:
-            logger.info("   - Llamando a redis.from_url()...")
             redis_client = redis.from_url(
                 redis_url,
                 decode_responses=False,
@@ -175,17 +158,12 @@ try:
                 retry_on_timeout=True,
                 health_check_interval=30,
             )
-            logger.info("   ✅ Cliente Redis creado")
+            logger.debug("Cliente Redis creado")
             
-            logger.info("📦 Paso 6: Haciendo test de conexión (ping)...")
             # Test de conexión inmediato
             redis_client.ping()
-            logger.info("✅ Test de conexión a Redis exitoso")
+            logger.debug("Test de conexión a Redis exitoso")
         except (redis.AuthenticationError, redis.ResponseError) as auth_err:
-            logger.error(f"❌ Paso 6 FALLÓ: Error de autenticación/respuesta Redis")
-            logger.error(f"   - Tipo de error: {type(auth_err).__name__}")
-            logger.error(f"   - Mensaje: {str(auth_err)}")
-            
             # Si falla por autenticación, intentar con password si está disponible
             error_msg = str(auth_err)
             if (
@@ -194,10 +172,10 @@ try:
                 or "authentication" in error_msg.lower()
                 or isinstance(auth_err, redis.AuthenticationError)
             ):
-                logger.info("📦 Paso 7: Intentando reconectar con password...")
+                logger.debug("Intentando reconectar con password...")
                 if settings.REDIS_PASSWORD and "@" not in redis_url:
                     logger.warning(f"⚠️ Error de autenticación Redis: {auth_err}")
-                    logger.info("   Intentando con password desde REDIS_PASSWORD...")
+                    logger.debug("Intentando con password desde REDIS_PASSWORD...")
                     # Reconstruir URL con password
                     if redis_url.startswith("redis://"):
                         url_parts = redis_url.replace("redis://", "").split(":")
@@ -214,7 +192,7 @@ try:
                                 socket_connect_timeout=settings.REDIS_SOCKET_TIMEOUT,
                             )
                             redis_client.ping()
-                            logger.info("✅ Conexión a Redis exitosa con password")
+                            logger.debug("Conexión a Redis exitosa con password")
                         else:
                             raise
                     else:
@@ -226,23 +204,16 @@ try:
                 # Otro tipo de error, lanzar para capturar en except general
                 raise
         except Exception as conn_err:
-            logger.error(f"❌ Paso 5-6 FALLÓ: Error de conexión Redis")
-            logger.error(f"   - Tipo de error: {type(conn_err).__name__}")
-            logger.error(f"   - Mensaje: {str(conn_err)}")
-            logger.error(f"   - Args: {conn_err.args if hasattr(conn_err, 'args') else 'N/A'}")
+            logger.error(f"❌ Error de conexión Redis: {type(conn_err).__name__}: {str(conn_err)[:100]}")
             # Si falla la conexión inicial, lanzar para capturar en except general
             raise
 
         # Si llegamos aquí, redis_client está definido y funcionando
     else:
-        logger.info("📦 Paso 4: Usando componentes individuales (REDIS_HOST/PORT/DB) para conexión...")
+        logger.debug("Usando componentes individuales (REDIS_HOST/PORT/DB) para conexión...")
         # Usar componentes individuales
-        logger.info(f"   - Host: {settings.REDIS_HOST}")
-        logger.info(f"   - Port: {settings.REDIS_PORT}")
-        logger.info(f"   - DB: {settings.REDIS_DB}")
-        logger.info(f"   - Password: {'CONFIGURADA' if settings.REDIS_PASSWORD else 'NO CONFIGURADA'}")
+        logger.debug(f"Host: {settings.REDIS_HOST}, Port: {settings.REDIS_PORT}, DB: {settings.REDIS_DB}")
         
-        logger.info("📦 Paso 5: Creando cliente Redis con componentes individuales...")
         redis_client = redis.Redis(
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,
@@ -251,14 +222,13 @@ try:
             decode_responses=False,
             socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
         )
-        logger.info("   ✅ Cliente Redis creado")
+        logger.debug("Cliente Redis creado")
 
     # Test de conexión ya se hizo arriba si usamos REDIS_URL
     # Solo hacer ping si usamos componentes individuales
     if not settings.REDIS_URL:
-        logger.info("📦 Paso 6: Haciendo test de conexión (ping) con componentes individuales...")
         redis_client.ping()
-        logger.info("✅ Test de conexión a Redis exitoso")
+        logger.debug("Test de conexión a Redis exitoso")
 
     class RedisCache(CacheBackend):
         """Implementación de cache usando Redis"""
@@ -307,35 +277,22 @@ try:
                 logger.error(f"Error limpiando cache: {e}")
                 return False
 
-    logger.info("📦 Paso 7: Creando instancia de RedisCache...")
     cache_backend = RedisCache(redis_client)
-    logger.info("✅ Paso 7: RedisCache creado")
     
     if not _cache_logs_shown:
-        logger.info("=" * 80)
-        logger.info("✅ REDIS CACHE INICIALIZADO CORRECTAMENTE")
-        logger.info("=" * 80)
+        logger.info("✅ Redis cache inicializado correctamente")
         _cache_logs_shown = True
+    else:
+        logger.debug("Redis cache inicializado")
 
 except ImportError as import_err:
-    logger.error("=" * 80)
-    logger.error("❌ ERROR: MÓDULO REDIS NO INSTALADO")
-    logger.error("=" * 80)
-    logger.error(f"   - Error: {str(import_err)}")
-    logger.error(f"   - Tipo: {type(import_err).__name__}")
-    logger.error(f"   - Módulo faltante: {import_err.name if hasattr(import_err, 'name') else 'redis'}")
+    # Logs concisos cuando Redis no está instalado (caso común)
     if not _cache_logs_shown:
-        # Los logs de MemoryCache ya se mostraron en __init__, solo mostrar info adicional
-        logger.info("   Para usar Redis en producción, instala: pip install 'redis>=5.0.0,<6.0.0'")
-        logger.info("   Verificar requirements.txt y render.yaml")
-        logger.info("=" * 80)
-        logger.info("📋 RESUMEN DEL DIAGNÓSTICO:")
-        logger.info("=" * 80)
-        logger.info("   - Redis instalado: NO (ImportError)")
-        logger.info("   - Causa: El módulo 'redis' no está instalado")
-        logger.info("   - Solución: Agregar 'redis>=5.0.0,<6.0.0' a requirements.txt")
-        logger.info("=" * 80)
+        logger.warning("⚠️ Redis no instalado - Usando MemoryCache (no recomendado para producción con múltiples workers)")
+        logger.info("💡 Para usar Redis: pip install 'redis>=5.0.0,<6.0.0'")
         _cache_logs_shown = True
+    else:
+        logger.debug("Redis no instalado - usando MemoryCache")
 except Exception as e:
     logger.error("=" * 80)
     logger.error("❌ ERROR: NO SE PUDO INICIALIZAR REDIS")
