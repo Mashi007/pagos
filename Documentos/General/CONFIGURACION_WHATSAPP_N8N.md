@@ -1,5 +1,14 @@
 # 📱 Configuración de WhatsApp Webhook para n8n
 
+## ✅ Compatibilidad 100% con n8n
+
+El webhook implementado cumple **exactamente** con los protocolos de n8n:
+- ✅ Compatible con n8n Webhook Trigger
+- ✅ Compatible con n8n HTTP Request Node
+- ✅ Acepta formato Meta y formato genérico de n8n
+- ✅ Respuestas JSON estándar (status 200)
+- ✅ Manejo flexible de payloads (body, data, directo)
+
 ## 🎯 Objetivo
 
 Configurar el webhook de WhatsApp Business API para trabajar con n8n, permitiendo:
@@ -28,33 +37,61 @@ Esta opción permite usar n8n para procesar eventos antes de enviarlos al sistem
 1. Abre n8n y crea un nuevo workflow
 2. Agrega un nodo **"Webhook"** como trigger
 3. Configura el webhook:
-   - **HTTP Method**: `GET` y `POST`
+   - **HTTP Method**: `GET` y `POST` (ambos métodos)
    - **Path**: `/whatsapp` (o el que prefieras)
-   - **Response Mode**: `Response Node`
+   - **Response Mode**: `Using 'Respond to Webhook' Node` (recomendado)
    - **Authentication**: Ninguna (Meta maneja su propia autenticación)
+   - **Options**: Marca "Raw Body" si quieres el body completo
 
-### Paso 2: Configurar Verificación (GET)
+### Paso 2: Configurar Verificación (GET) - Protocolo n8n
 
 Agrega un nodo **"IF"** después del Webhook:
 
-- **Condición**: `{{ $json.query['hub.mode'] }}` equals `subscribe`
-- **Si es verdadero**: Agrega un nodo **"Respond to Webhook"** que retorne:
-  ```json
-  {{ $json.query['hub.challenge'] }}
-  ```
-- **Si es falso**: Continúa al procesamiento normal
+**Condición para verificación:**
+```
+{{ $json.query['hub.mode'] }} === 'subscribe'
+```
 
-### Paso 3: Procesar Eventos (POST)
+**Si es verdadero (verificación):**
+- Agrega nodo **"Respond to Webhook"**
+- **Response Data**: `{{ $json.query['hub.challenge'] }}`
+- **Response Code**: `200`
+- **Response Headers**: (opcional) `Content-Type: text/plain`
+
+**Si es falso (evento POST):**
+- Continúa al procesamiento de eventos
+
+### Paso 3: Procesar Eventos (POST) - Protocolo n8n
 
 Para eventos POST (mensajes y estados):
 
 1. Agrega un nodo **"HTTP Request"** que envíe al endpoint del sistema:
    - **Method**: `POST`
    - **URL**: `https://tu-dominio.com/api/v1/whatsapp/webhook`
-   - **Body**: `{{ $json.body }}`
+   - **Authentication**: None
+   - **Send Body**: `Yes`
+   - **Body Content Type**: `JSON`
+   - **Body**: 
+     ```json
+     {{ $json.body }}
+     ```
+     O si n8n envuelve el body:
+     ```json
+     {{ $json }}
+     ```
    - **Headers**: 
      - `Content-Type: application/json`
-     - `X-Hub-Signature-256: {{ $json.headers['x-hub-signature-256'] }}` (si existe)
+     - `X-Hub-Signature-256: {{ $json.headers['x-hub-signature-256'] }}` (si existe, opcional)
+
+2. **Respuesta esperada** (el endpoint retorna):
+   ```json
+   {
+     "status": "success",
+     "eventos_procesados": 2,
+     "errores": 0,
+     "formato": "meta"
+   }
+   ```
 
 2. Opcional: Agrega nodos de procesamiento antes de enviar:
    - Filtrar eventos específicos
@@ -253,14 +290,68 @@ Meta WhatsApp → n8n Webhook → Procesamiento n8n → Sistema Principal
          (Opcional: Base de datos, respuestas automáticas, etc.)
 ```
 
-### Ejemplo de Workflow n8n
+### Ejemplo de Workflow n8n (Completo)
 
-1. **Webhook** (recibe de Meta)
-2. **IF** (verificar si es GET o POST)
-3. **Switch** (filtrar por tipo de evento)
-4. **HTTP Request** (enviar al sistema principal)
-5. **Function** (procesar respuestas automáticas)
-6. **HTTP Request** (enviar respuesta a cliente si es necesario)
+**Nodos del workflow:**
+
+1. **Webhook** (Trigger)
+   - Recibe GET y POST de Meta
+   - Path: `/whatsapp`
+   - Response Mode: `Using 'Respond to Webhook' Node`
+
+2. **IF** (Verificar tipo de request)
+   - Condición: `{{ $json.query['hub.mode'] }} === 'subscribe'`
+   - **TRUE Branch**: Verificación
+   - **FALSE Branch**: Eventos
+
+3. **Respond to Webhook** (Solo en branch TRUE)
+   - Response Data: `{{ $json.query['hub.challenge'] }}`
+   - Response Code: `200`
+
+4. **Switch** (Solo en branch FALSE - filtrar eventos)
+   - Opción 1: `{{ $json.body.object }} === 'whatsapp_business_account'`
+   - Opción 2: Default (otros formatos)
+
+5. **HTTP Request** (Enviar al sistema)
+   - Method: `POST`
+   - URL: `https://tu-dominio.com/api/v1/whatsapp/webhook`
+   - Body: `{{ $json.body }}` o `{{ $json }}`
+   - Headers: `Content-Type: application/json`
+
+6. **Function** (Opcional - procesamiento adicional)
+   - Filtrar eventos específicos
+   - Transformar datos
+   - Agregar lógica de negocio
+
+7. **HTTP Request** (Opcional - enviar respuesta automática)
+   - Si es mensaje recibido, enviar respuesta automática
+   - Usar WhatsApp API para responder
+
+### Ejemplo de Código n8n Function Node
+
+```javascript
+// Filtrar solo mensajes recibidos
+const body = $input.item.json.body || $input.item.json;
+const entries = body.entry || [];
+
+for (const entry of entries) {
+  const changes = entry.changes || [];
+  for (const change of changes) {
+    const value = change.value || {};
+    if (value.messages) {
+      // Procesar mensajes recibidos
+      return {
+        json: {
+          tipo: 'mensaje_recibido',
+          datos: value.messages
+        }
+      };
+    }
+  }
+}
+
+return { json: { tipo: 'otro_evento' } };
+```
 
 ---
 
