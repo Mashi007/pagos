@@ -110,12 +110,38 @@ class ApiClient {
         if (!isAuthEndpoint) {
           // Obtener token de forma segura
           const rememberMe = safeGetItem('remember_me', false)
-          const token = rememberMe 
+          let token = rememberMe 
             ? safeGetItem('access_token', '') 
             : safeGetSessionItem('access_token', '')
           
-          // ✅ Verificar si el token está expirado ANTES de enviar el request
+          // ✅ Limpiar token: remover espacios, saltos de línea, y prefijo "Bearer " si existe
           if (token) {
+            token = token.trim()
+            // Remover prefijo "Bearer " si está presente
+            if (token.startsWith('Bearer ')) {
+              token = token.substring(7).trim()
+            }
+            
+            // Verificar que el token tenga el formato correcto (3 segmentos separados por puntos)
+            const parts = token.split('.')
+            if (parts.length !== 3) {
+              // Token malformado - limpiar y redirigir
+              console.error('❌ Token malformado (no tiene 3 segmentos). Limpiando almacenamiento...')
+              this.refreshTokenExpired = true
+              this.cancelAllPendingRequests()
+              clearAuthStorage()
+              
+              if (window.location.pathname !== '/login' && !this.isRedirectingToLogin) {
+                this.isRedirectingToLogin = true
+                window.location.replace('/login')
+              }
+              
+              const error = new Error('Token inválido. Por favor, inicia sesión nuevamente.')
+              ;(error as any).isCancelled = true
+              return Promise.reject(error)
+            }
+            
+            // ✅ Verificar si el token está expirado ANTES de enviar el request
             if (isTokenExpired(token)) {
               // Token expirado - marcar flag, cancelar requests pendientes y redirigir
               this.refreshTokenExpired = true
