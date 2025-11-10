@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Settings, Zap, Copy, X, Bell, Calendar, AlertTriangle, Shield, ArrowUpDown } from 'lucide-react'
+import { Settings, Zap, Copy, X, Bell, Calendar, AlertTriangle, Shield, ArrowUp, ArrowDown } from 'lucide-react'
 import { emailConfigService } from '@/services/notificacionService'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -302,7 +302,10 @@ export function ConfiguracionNotificaciones() {
                   {tipos.length > 1 && (
                     <div className="flex justify-end mb-4">
                       <div className="flex items-center gap-2">
-                        <ArrowUpDown className="h-4 w-4 text-gray-500" />
+                        <div className="flex flex-col -space-y-1">
+                          <ArrowUp className="h-3 w-3 text-gray-400" />
+                          <ArrowDown className="h-3 w-3 text-gray-400" />
+                        </div>
                         <Select 
                           value={ordenActual} 
                           onValueChange={(value) => {
