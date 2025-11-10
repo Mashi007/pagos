@@ -835,7 +835,8 @@ def obtener_configuracion_email(db: Session = Depends(get_db), current_user: Use
 
 def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     """
-    Validar configuración de Gmail SMTP y probar conexión
+    Validar configuración de Gmail/Google Workspace SMTP y probar conexión
+    Soporta tanto cuentas de Gmail (@gmail.com) como Google Workspace (dominios personalizados)
 
     Returns:
         (es_valida, mensaje_error)
@@ -844,7 +845,7 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
 
     smtp_host = config_data.get("smtp_host", "").lower()
 
-    # Solo validar si es Gmail
+    # Solo validar si es Gmail/Google Workspace
     if "gmail.com" not in smtp_host:
         return True, None
 
@@ -855,19 +856,19 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
 
     # Validaciones básicas
     if not smtp_user or not smtp_password:
-        return False, "Email y Contraseña de Aplicación son requeridos para Gmail"
+        return False, "Email y Contraseña de Aplicación son requeridos para Gmail/Google Workspace"
 
-    # Validar que el email sea de Gmail
-    if "@gmail.com" not in smtp_user.lower() and "@googlemail.com" not in smtp_user.lower():
-        return False, "El email debe ser de Gmail (@gmail.com o @googlemail.com) cuando uses smtp.gmail.com"
+    # NOTA: Ya no validamos que el email sea @gmail.com o @googlemail.com
+    # Google Workspace permite usar smtp.gmail.com con dominios personalizados
+    # La validación real se hace al probar la conexión SMTP
 
     # Validar puerto
     try:
         puerto = int(smtp_port)
         if puerto not in (587, 465):
-            return False, "Gmail requiere puerto 587 (TLS) o 465 (SSL). El puerto 587 es recomendado."
+            return False, "Gmail/Google Workspace requiere puerto 587 (TLS) o 465 (SSL). El puerto 587 es recomendado."
         if puerto == 587 and not smtp_use_tls:
-            return False, "Para puerto 587, TLS debe estar habilitado (requerido por Gmail)."
+            return False, "Para puerto 587, TLS debe estar habilitado (requerido por Gmail/Google Workspace)."
     except (ValueError, TypeError):
         return False, "Puerto SMTP inválido"
 
@@ -876,7 +877,7 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
     if len(password_sin_espacios) != 16:
         return (
             False,
-            "La Contraseña de Aplicación de Gmail debe tener exactamente 16 caracteres (los espacios se eliminan automáticamente).",
+            "La Contraseña de Aplicación de Gmail/Google Workspace debe tener exactamente 16 caracteres (los espacios se eliminan automáticamente).",
         )
 
     # Probar conexión SMTP para verificar credenciales
@@ -886,7 +887,8 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
         if smtp_use_tls:
             server.starttls()
 
-        # Intentar login - aquí es donde Gmail rechazará si no hay 2FA o si se usa contraseña normal
+        # Intentar login - aquí es donde Gmail/Google Workspace rechazará si no hay 2FA o si se usa contraseña normal
+        # Esto funciona tanto para @gmail.com como para dominios de Google Workspace
         server.login(smtp_user, password_sin_espacios)
         server.quit()
 
@@ -896,13 +898,17 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
         error_msg = str(e).lower()
         if "username and password not accepted" in error_msg or "535" in str(e):
             return False, (
-                "❌ Error de autenticación con Gmail. Posibles causas:\n"
+                "❌ Error de autenticación con Gmail/Google Workspace. Posibles causas:\n"
                 "1. ⚠️ NO tienes Autenticación de 2 Factores (2FA) activada en tu cuenta de Google\n"
-                "2. ⚠️ Estás usando tu contraseña normal de Gmail en lugar de una Contraseña de Aplicación\n"
-                "3. ⚠️ La Contraseña de Aplicación es incorrecta o fue revocada\n\n"
+                "2. ⚠️ Estás usando tu contraseña normal en lugar de una Contraseña de Aplicación\n"
+                "3. ⚠️ La Contraseña de Aplicación es incorrecta o fue revocada\n"
+                "4. ⚠️ Para Google Workspace: El dominio no está configurado correctamente\n\n"
                 "SOLUCIÓN:\n"
-                "- Activa 2FA en: https://myaccount.google.com/security\n"
-                "- Genera una Contraseña de Aplicación en: https://myaccount.google.com/apppasswords\n"
+                "- Para Gmail: Activa 2FA en https://myaccount.google.com/security\n"
+                "- Para Google Workspace: Activa 2FA en tu cuenta de administrador\n"
+                "- Genera una Contraseña de Aplicación:\n"
+                "  • Gmail: https://myaccount.google.com/apppasswords\n"
+                "  • Google Workspace: https://myaccount.google.com/apppasswords (si está habilitado)\n"
                 "- Usa esa contraseña de 16 caracteres (NO tu contraseña normal)"
             )
         return False, f"Error de autenticación SMTP: {str(e)}"

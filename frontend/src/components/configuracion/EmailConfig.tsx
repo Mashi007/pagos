@@ -77,45 +77,39 @@ export function EmailConfig() {
   }
 
   const validarConfiguracionGmail = (): string | null => {
-    // Validar que si es Gmail, cumpla con los requisitos
+    // Validaciones generales primero
+    if (!config.smtp_host || !config.smtp_port || !config.smtp_user || !config.from_email) {
+      return 'Por favor completa todos los campos requeridos.'
+    }
+    
+    // Validar que si es Gmail/Google Workspace, cumpla con los requisitos
     if (config.smtp_host.toLowerCase().includes('gmail.com')) {
-      // Validar puerto correcto para Gmail
+      // NOTA: Ya no validamos que el email sea @gmail.com o @googlemail.com
+      // Google Workspace permite usar smtp.gmail.com con dominios personalizados
+      // La validación real se hace al probar la conexión SMTP en el backend
+      
+      // Validar puerto correcto para Gmail/Google Workspace
       const puerto = parseInt(config.smtp_port)
       if (puerto !== 587 && puerto !== 465) {
-        return 'Gmail requiere puerto 587 (TLS) o 465 (SSL). El puerto 587 es recomendado.'
+        return 'Gmail/Google Workspace requiere puerto 587 (TLS) o 465 (SSL). El puerto 587 es recomendado.'
       }
       
       // Validar que TLS esté habilitado para puerto 587
       if (puerto === 587 && config.smtp_use_tls !== 'true') {
-        return 'Para puerto 587, TLS debe estar habilitado (requerido por Gmail).'
-      }
-      
-      // Validar que el email sea de Gmail
-      if (config.smtp_user && !config.smtp_user.toLowerCase().includes('@gmail.com') && !config.smtp_user.toLowerCase().includes('@googlemail.com')) {
-        return 'El email debe ser de Gmail (@gmail.com o @googlemail.com) cuando uses smtp.gmail.com'
-      }
-      
-      // Validar que el email del remitente sea de Gmail
-      if (config.from_email && !config.from_email.toLowerCase().includes('@gmail.com') && !config.from_email.toLowerCase().includes('@googlemail.com')) {
-        return 'El email del remitente debe ser de Gmail (@gmail.com o @googlemail.com)'
+        return 'Para puerto 587, TLS debe estar habilitado (requerido por Gmail/Google Workspace).'
       }
       
       // Validar que tenga contraseña de aplicación
       if (!config.smtp_password || config.smtp_password.trim().length === 0) {
-        return 'Debes ingresar una Contraseña de Aplicación de Gmail (no tu contraseña normal). Requiere 2FA activado.'
+        return 'Debes ingresar una Contraseña de Aplicación de Gmail/Google Workspace (no tu contraseña normal). Requiere 2FA activado.'
       }
       
       // Validar formato de contraseña de aplicación (16 caracteres sin espacios)
-      // Gmail puede mostrar la contraseña con espacios (ej: "abcd efgh ijkl mnop"), pero al usarla se eliminan
+      // Gmail/Google Workspace puede mostrar la contraseña con espacios (ej: "abcd efgh ijkl mnop"), pero al usarla se eliminan
       const passwordSinEspacios = config.smtp_password.replace(/\s/g, '')
       if (passwordSinEspacios.length !== 16) {
-        return 'La Contraseña de Aplicación de Gmail debe tener exactamente 16 caracteres (los espacios se eliminan automáticamente).'
+        return 'La Contraseña de Aplicación de Gmail/Google Workspace debe tener exactamente 16 caracteres (los espacios se eliminan automáticamente).'
       }
-    }
-    
-    // Validaciones generales
-    if (!config.smtp_host || !config.smtp_port || !config.smtp_user || !config.from_email) {
-      return 'Por favor completa todos los campos requeridos.'
     }
     
     return null
@@ -143,9 +137,23 @@ export function EmailConfig() {
       await emailConfigService.actualizarConfiguracionEmail(configCompleta)
       toast.success('Configuración de email guardada exitosamente')
       await cargarConfiguracion()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error guardando configuración:', error)
-      toast.error('Error guardando configuración')
+      
+      // Extraer mensaje de error específico del backend
+      let mensajeError = 'Error guardando configuración'
+      if (error?.response?.data?.detail) {
+        mensajeError = error.response.data.detail
+      } else if (error?.response?.data?.message) {
+        mensajeError = error.response.data.message
+      } else if (error?.message) {
+        mensajeError = error.message
+      }
+      
+      // Mostrar error con formato mejorado (preservar saltos de línea si existen)
+      toast.error(mensajeError, {
+        duration: 10000, // Mostrar por más tiempo si es un error largo
+      })
     } finally {
       setGuardando(false)
     }
@@ -206,25 +214,25 @@ export function EmailConfig() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5 text-blue-600" />
-            Configuración SMTP (Gmail)
+            Configuración SMTP (Gmail / Google Workspace)
           </CardTitle>
           <CardDescription>
-            Ingresa tus credenciales de Gmail para enviar notificaciones
+            Ingresa tus credenciales de Gmail o Google Workspace para enviar notificaciones
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Advertencia sobre requisitos de Gmail */}
+          {/* Advertencia sobre requisitos de Gmail/Google Workspace */}
           {config.smtp_host.toLowerCase().includes('gmail.com') && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
-                  <p className="font-semibold text-amber-900 mb-1">Requisitos obligatorios para Gmail:</p>
+                  <p className="font-semibold text-amber-900 mb-1">Requisitos obligatorios para Gmail / Google Workspace:</p>
                   <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
                     <li><strong>Autenticación de 2 factores (2FA) debe estar ACTIVADA</strong> en tu cuenta de Google</li>
                     <li>Debes usar una <strong>Contraseña de Aplicación</strong> (16 caracteres), NO tu contraseña normal</li>
                     <li>Puerto recomendado: <strong>587 con TLS</strong> (o 465 con SSL)</li>
-                    <li>El email debe ser de Gmail (@gmail.com o @googlemail.com)</li>
+                    <li>Soporta cuentas de <strong>Gmail (@gmail.com)</strong> y <strong>Google Workspace</strong> (dominios personalizados como @rapicreditca.com)</li>
                   </ul>
                 </div>
               </div>
@@ -251,12 +259,12 @@ export function EmailConfig() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="text-sm font-medium block mb-2">Email (Usuario Gmail)</label>
+              <label className="text-sm font-medium block mb-2">Email (Usuario Gmail / Google Workspace)</label>
               <Input
                 type="email"
                 value={config.smtp_user}
                 onChange={(e) => handleChange('smtp_user', e.target.value)}
-                placeholder="tu-email@gmail.com"
+                placeholder="tu-email@gmail.com o usuario@tudominio.com"
               />
             </div>
             <div>
@@ -279,7 +287,7 @@ export function EmailConfig() {
               </div>
               <p className="text-xs text-gray-500 mt-1">
                 <strong>IMPORTANTE:</strong> Requiere 2FA activado. Genera una App Password (16 caracteres) en tu cuenta de Google. 
-                <strong className="text-red-600"> NO uses tu contraseña normal de Gmail.</strong>
+                <strong className="text-red-600"> NO uses tu contraseña normal.</strong> Funciona para Gmail y Google Workspace.
               </p>
             </div>
           </div>
@@ -291,7 +299,7 @@ export function EmailConfig() {
                 type="email"
                 value={config.from_email}
                 onChange={(e) => handleChange('from_email', e.target.value)}
-                placeholder="tu-email@gmail.com"
+                placeholder="tu-email@gmail.com o usuario@tudominio.com"
               />
             </div>
             <div>
@@ -311,7 +319,7 @@ export function EmailConfig() {
               onChange={(e) => handleChange('smtp_use_tls', e.target.checked ? 'true' : 'false')}
               className="rounded"
             />
-            <label className="text-sm font-medium">Usar TLS (Recomendado para Gmail)</label>
+            <label className="text-sm font-medium">Usar TLS (Recomendado para Gmail / Google Workspace)</label>
           </div>
 
           {/* Selector de Ambiente */}
