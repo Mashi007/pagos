@@ -214,12 +214,14 @@ class NotificacionAutomaticaService:
                 if resultado_email.get("success"):
                     nueva_notif_email.estado = "ENVIADA"
                     nueva_notif_email.enviada_en = datetime.now(CARACAS_TZ)
+                    nueva_notif_email.respuesta_servicio = resultado_email.get("message", "Email enviado exitosamente")
                     self.db.commit()
                     logger.info(f"Notificación EMAIL enviada a {cliente.email}")
                     envio_exitoso = True
                 else:
                     nueva_notif_email.estado = "FALLIDA"
                     nueva_notif_email.error_mensaje = resultado_email.get("message", "Error desconocido")
+                    nueva_notif_email.intentos = (nueva_notif_email.intentos or 0) + 1
                     self.db.commit()
                     logger.error(f"Error enviando email: {resultado_email.get('message')}")
                     errores.append(f"Email: {resultado_email.get('message')}")
@@ -266,12 +268,14 @@ class NotificacionAutomaticaService:
                 if resultado_whatsapp.get("success"):
                     nueva_notif_whatsapp.estado = "ENVIADA"
                     nueva_notif_whatsapp.enviada_en = datetime.now(CARACAS_TZ)
+                    nueva_notif_whatsapp.respuesta_servicio = resultado_whatsapp.get("message", "Mensaje enviado exitosamente")
                     self.db.commit()
                     logger.info(f"Notificación WHATSAPP enviada a {cliente.telefono}")
                     envio_exitoso = True
                 else:
                     nueva_notif_whatsapp.estado = "FALLIDA"
                     nueva_notif_whatsapp.error_mensaje = resultado_whatsapp.get("message", "Error desconocido")
+                    nueva_notif_whatsapp.intentos = (nueva_notif_whatsapp.intentos or 0) + 1
                     self.db.commit()
                     logger.error(f"Error enviando WhatsApp: {resultado_whatsapp.get('message')}")
                     errores.append(f"WhatsApp: {resultado_whatsapp.get('message')}")

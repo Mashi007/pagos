@@ -43,6 +43,8 @@ export function EmailConfig() {
   const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
   const [cargandoEnvios, setCargandoEnvios] = useState(false)
   const [errorValidacion, setErrorValidacion] = useState<string | null>(null)
+  const [vinculacionConfirmada, setVinculacionConfirmada] = useState<boolean>(false)
+  const [mensajeVinculacion, setMensajeVinculacion] = useState<string | null>(null)
 
   useEffect(() => {
     cargarConfiguracion()
@@ -106,39 +108,76 @@ export function EmailConfig() {
     }
   }
 
+  // Función para obtener mensaje de campos faltantes (para mostrar al usuario)
+  const obtenerCamposFaltantes = (): string[] => {
+    const camposFaltantes: string[] = []
+    if (!config.smtp_host) camposFaltantes.push('Servidor SMTP')
+    if (!config.smtp_port) camposFaltantes.push('Puerto SMTP')
+    if (!config.smtp_user) camposFaltantes.push('Email de Usuario')
+    if (!config.from_email) camposFaltantes.push('Email del Remitente')
+    
+    const puerto = parseInt(config.smtp_port || '0')
+    if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
+      camposFaltantes.push('Puerto SMTP válido')
+    }
+    
+    if (config.smtp_host?.toLowerCase().includes('gmail.com')) {
+      if (!config.smtp_password || config.smtp_password.trim().length === 0) {
+        camposFaltantes.push('Contraseña de Aplicación')
+      }
+      if (puerto === 587 && config.smtp_use_tls !== 'true') {
+        camposFaltantes.push('TLS habilitado (requerido para puerto 587)')
+      }
+    }
+    
+    return camposFaltantes
+  }
+
   // Función para determinar si el botón debe estar habilitado
+  // NOTA: Solo valida campos OBLIGATORIOS para guardar. El email de pruebas NO es obligatorio.
   const puedeGuardar = (): boolean => {
+    console.log('🔍 [EmailConfig] Verificando si puede guardar:', {
+      smtp_host: config.smtp_host,
+      smtp_port: config.smtp_port,
+      smtp_user: config.smtp_user,
+      from_email: config.from_email,
+      tiene_password: !!config.smtp_password,
+      password_length: config.smtp_password?.length || 0,
+      smtp_use_tls: config.smtp_use_tls,
+      es_gmail: config.smtp_host?.toLowerCase().includes('gmail.com')
+    })
+    
     // Campos obligatorios básicos
     if (!config.smtp_host || !config.smtp_port || !config.smtp_user || !config.from_email) {
+      console.log('❌ [EmailConfig] Faltan campos obligatorios básicos')
       return false
     }
     
     // Validar puerto numérico
     const puerto = parseInt(config.smtp_port)
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
+      console.log('❌ [EmailConfig] Puerto inválido:', config.smtp_port)
       return false
     }
     
     // Si es Gmail/Google Workspace, requiere contraseña
     if (config.smtp_host.toLowerCase().includes('gmail.com')) {
       if (!config.smtp_password || config.smtp_password.trim().length === 0) {
+        console.log('❌ [EmailConfig] Gmail requiere contraseña')
         return false
       }
       
       // Validar TLS para puerto 587
       if (puerto === 587 && config.smtp_use_tls !== 'true') {
+        console.log('❌ [EmailConfig] Puerto 587 requiere TLS')
         return false
       }
     }
     
-    // Validar formato de email de pruebas solo si está configurado
-    if (emailPruebas && emailPruebas.trim().length > 0) {
-      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-      if (!emailPattern.test(emailPruebas.trim())) {
-        return false
-      }
-    }
+    // NOTA: NO validamos el email de pruebas aquí porque NO es obligatorio para guardar
+    // El email de pruebas solo se valida cuando se intenta enviar un email de prueba
     
+    console.log('✅ [EmailConfig] Puede guardar - todos los campos obligatorios están completos')
     return true
   }
 
@@ -255,12 +294,17 @@ export function EmailConfig() {
       const resultado = await emailConfigService.actualizarConfiguracionEmail(configCompleta)
       console.log('✅ [EmailConfig] Configuración guardada exitosamente:', resultado)
       
+      // Guardar estado de vinculación para mostrar banner permanente
+      const confirmada = resultado?.vinculacion_confirmada === true
+      setVinculacionConfirmada(confirmada)
+      setMensajeVinculacion(resultado?.mensaje_vinculacion || null)
+      
       // Mostrar mensaje de éxito con información de vinculación si está disponible
-      if (resultado?.vinculacion_confirmada) {
+      if (confirmada) {
         toast.success(
           resultado.mensaje_vinculacion || '✅ Sistema vinculado correctamente con Google/Google Workspace',
           {
-            duration: 8000, // Mostrar por más tiempo para que el usuario vea la confirmación
+            duration: 10000, // Mostrar por más tiempo para que el usuario vea la confirmación
           }
         )
       } else {
@@ -277,6 +321,10 @@ export function EmailConfig() {
         statusText: error?.response?.statusText
       })
       
+      // Limpiar estado de vinculación si hay error (Google rechazó la conexión)
+      setVinculacionConfirmada(false)
+      setMensajeVinculacion(null)
+      
       // Extraer mensaje de error específico del backend
       let mensajeError = 'Error guardando configuración'
       if (error?.response?.data?.detail) {
@@ -291,6 +339,9 @@ export function EmailConfig() {
       toast.error(mensajeError, {
         duration: 10000, // Mostrar por más tiempo si es un error largo
       })
+      
+      // También mostrar el error en el área de error visual
+      setErrorValidacion(mensajeError)
     } finally {
       setGuardando(false)
     }
@@ -375,6 +426,44 @@ export function EmailConfig() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Banner de Estado de Vinculación con Google */}
+          {config.smtp_host.toLowerCase().includes('gmail.com') && (
+            <>
+              {vinculacionConfirmada ? (
+                <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="h-6 w-6 text-green-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-bold text-green-900 mb-1 text-base">
+                        ✅ Sistema Vinculado Correctamente con Google/Google Workspace
+                      </p>
+                      <p className="text-sm text-green-800 mb-2">
+                        {mensajeVinculacion || 'Google aceptó tu configuración. El sistema está autorizado para enviar emails.'}
+                      </p>
+                      <p className="text-xs text-green-700 font-medium">
+                        📧 Puedes enviar notificaciones por email a tus clientes
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : config.smtp_user && config.smtp_password ? (
+                <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <Clock className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-yellow-900 mb-1">
+                        ⏳ Vinculación Pendiente
+                      </p>
+                      <p className="text-sm text-yellow-800">
+                        Guarda la configuración para verificar la conexión con Google. El sistema probará automáticamente si Google acepta tus credenciales.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
+
           {/* Advertencia sobre requisitos de Gmail/Google Workspace */}
           {config.smtp_host.toLowerCase().includes('gmail.com') && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
@@ -547,7 +636,23 @@ export function EmailConfig() {
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                console.log('🖱️ [EmailConfig] Botón clickeado')
+                console.log('🖱️ [EmailConfig] Botón clickeado', { puedeGuardar: puedeGuardar(), guardando })
+                
+                // Si el botón está deshabilitado, mostrar mensaje específico
+                if (!puedeGuardar() && !guardando) {
+                  const camposFaltantes = obtenerCamposFaltantes()
+                  const mensaje = camposFaltantes.length > 0 
+                    ? `Completa los siguientes campos: ${camposFaltantes.join(', ')}`
+                    : 'Completa todos los campos obligatorios para guardar la configuración'
+                  
+                  console.warn('⚠️ [EmailConfig] Intento de guardar con campos incompletos:', camposFaltantes)
+                  setErrorValidacion(mensaje)
+                  toast.error(mensaje, {
+                    duration: 6000,
+                  })
+                  return
+                }
+                
                 handleGuardar()
               }}
               disabled={guardando || !puedeGuardar()}
@@ -557,11 +662,17 @@ export function EmailConfig() {
               <Save className="h-4 w-4" />
               {guardando ? 'Guardando...' : 'Guardar Configuración'}
             </Button>
-            {!puedeGuardar() && !guardando && (
-              <p className="text-xs text-gray-500 self-center">
-                Completa los campos obligatorios para habilitar el botón
-              </p>
-            )}
+            {!puedeGuardar() && !guardando && (() => {
+              const camposFaltantes = obtenerCamposFaltantes()
+              return (
+                <p className="text-xs text-amber-600 self-center font-medium">
+                  {camposFaltantes.length > 0 
+                    ? `Completa: ${camposFaltantes.join(', ')}`
+                    : 'Completa los campos obligatorios para habilitar el botón'
+                  }
+                </p>
+              )
+            })()}
           </div>
 
           {/* Ambiente de Prueba - Envío de Email de Prueba */}

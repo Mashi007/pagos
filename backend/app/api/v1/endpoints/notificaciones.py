@@ -120,12 +120,55 @@ async def enviar_notificacion(
         # Enviar según canal
         if notificacion.canal == "EMAIL":
             email_service = EmailService(db=db)
-            background_tasks.add_task(
-                email_service.send_email,
-                to_emails=[str(cliente.email)],
-                subject=notificacion.asunto or "Notificación",
-                body=notificacion.mensaje,
-            )
+            notif_id = nueva_notif.id
+            email_cliente = str(cliente.email)
+            asunto_cliente = notificacion.asunto or "Notificación"
+            mensaje_cliente = notificacion.mensaje
+
+            # Función sync wrapper para background task (igual que WhatsApp)
+            def enviar_email_sync():
+                """Envía email y actualiza estado de notificación"""
+                from app.db.session import SessionLocal
+
+                db_local = SessionLocal()
+                try:
+                    resultado = email_service.send_email(
+                        to_emails=[email_cliente],
+                        subject=asunto_cliente,
+                        body=mensaje_cliente,
+                        is_html=True,
+                    )
+                    # Actualizar estado de notificación
+                    notif = db_local.query(Notificacion).filter(Notificacion.id == notif_id).first()
+                    if notif:
+                        if resultado.get("success"):
+                            notif.estado = "ENVIADA"
+                            notif.enviada_en = datetime.utcnow()
+                            notif.respuesta_servicio = resultado.get("message", "Email enviado exitosamente")
+                            logger.info(f"✅ Notificación Email {notif_id} enviada exitosamente a {email_cliente}")
+                        else:
+                            notif.estado = "FALLIDA"
+                            notif.error_mensaje = resultado.get("message", "Error desconocido")
+                            notif.intentos = (notif.intentos or 0) + 1
+                            logger.error(f"❌ Error enviando notificación Email {notif_id}: {resultado.get('message')}")
+                        db_local.commit()
+                except Exception as e:
+                    db_local.rollback()
+                    logger.error(f"Error enviando email o actualizando estado: {e}")
+                    # Intentar marcar como fallida
+                    try:
+                        notif = db_local.query(Notificacion).filter(Notificacion.id == notif_id).first()
+                        if notif:
+                            notif.estado = "FALLIDA"
+                            notif.error_mensaje = str(e)
+                            notif.intentos = (notif.intentos or 0) + 1
+                            db_local.commit()
+                    except Exception:
+                        pass
+                finally:
+                    db_local.close()
+
+            background_tasks.add_task(enviar_email_sync)
         elif notificacion.canal == "WHATSAPP":
             whatsapp_service = WhatsAppService(db=db)
             notif_id = nueva_notif.id
@@ -232,12 +275,54 @@ async def envio_masivo(
 
             if request.canal == "EMAIL":
                 email_service = EmailService(db=db)
-                background_tasks.add_task(
-                    email_service.send_email,
-                    to_emails=[str(cliente.email)],
-                    subject="Notificación Importante",
-                    body=request.template,
-                )
+                notif_id = notif.id
+                email_cliente = str(cliente.email)
+                mensaje_template = request.template
+
+                # Función sync wrapper para background task (igual que WhatsApp)
+                def enviar_email_masivo_sync():
+                    """Envía email masivo y actualiza estado de notificación"""
+                    from app.db.session import SessionLocal
+
+                    db_local = SessionLocal()
+                    try:
+                        resultado = email_service.send_email(
+                            to_emails=[email_cliente],
+                            subject="Notificación Importante",
+                            body=mensaje_template,
+                            is_html=True,
+                        )
+                        # Actualizar estado de notificación
+                        notif_local = db_local.query(Notificacion).filter(Notificacion.id == notif_id).first()
+                        if notif_local:
+                            if resultado.get("success"):
+                                notif_local.estado = "ENVIADA"
+                                notif_local.enviada_en = datetime.utcnow()
+                                notif_local.respuesta_servicio = resultado.get("message", "Email enviado exitosamente")
+                                logger.info(f"✅ Notificación Email masiva {notif_id} enviada exitosamente a {email_cliente}")
+                            else:
+                                notif_local.estado = "FALLIDA"
+                                notif_local.error_mensaje = resultado.get("message", "Error desconocido")
+                                notif_local.intentos = (notif_local.intentos or 0) + 1
+                                logger.error(f"❌ Error enviando notificación Email masiva {notif_id}: {resultado.get('message')}")
+                            db_local.commit()
+                    except Exception as e:
+                        db_local.rollback()
+                        logger.error(f"Error enviando email masivo o actualizando estado: {e}")
+                        # Intentar marcar como fallida
+                        try:
+                            notif_local = db_local.query(Notificacion).filter(Notificacion.id == notif_id).first()
+                            if notif_local:
+                                notif_local.estado = "FALLIDA"
+                                notif_local.error_mensaje = str(e)
+                                notif_local.intentos = (notif_local.intentos or 0) + 1
+                                db_local.commit()
+                        except Exception:
+                            pass
+                    finally:
+                        db_local.close()
+
+                background_tasks.add_task(enviar_email_masivo_sync)
             elif request.canal == "WHATSAPP":
                 whatsapp_service = WhatsAppService(db=db)
                 notif_id = notif.id
