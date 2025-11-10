@@ -37,7 +37,7 @@ services:
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
-        value: 20.11.0
+        value: 20.19.0
       - key: NODE_ENV
         value: production
       - key: VITE_API_URL
