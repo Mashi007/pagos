@@ -133,11 +133,18 @@ def get_db() -> Generator:
     finally:
         if db:
             try:
-                # Intentar commit antes de cerrar (si la transacción está activa)
-                # Si hay un error, hacer rollback y cerrar
+                # ✅ NO hacer commit automático aquí - los endpoints manejan sus propios commits
+                # Solo hacer rollback si hay una transacción activa con errores
+                # y cerrar la sesión
                 try:
-                    db.commit()
+                    # Verificar si hay una transacción activa que necesita rollback
+                    # Si la sesión está en estado "dirty" o hay errores, hacer rollback
+                    if db.in_transaction():
+                        # Solo hacer rollback si no se hizo commit explícitamente
+                        # Los endpoints ya manejan commits y rollbacks
+                        pass  # Dejar que los endpoints manejen sus propios commits/rollbacks
                 except Exception:
+                    # Si hay error verificando el estado, intentar rollback preventivo
                     try:
                         db.rollback()
                     except Exception:
