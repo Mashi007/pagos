@@ -204,7 +204,12 @@ class EmailConfigService {
     })
     
     try {
-      const resultado = await apiClient.put(`${this.baseUrl}/email/configuracion`, config)
+      // Usar timeout extendido para validación SMTP (puede tardar hasta 10-15 segundos)
+      const resultado = await apiClient.put(
+        `${this.baseUrl}/email/configuracion`, 
+        config,
+        { timeout: 60000 } // 60 segundos para permitir validación SMTP
+      )
       console.log('✅ [EmailConfigService] Respuesta exitosa:', resultado)
       return resultado
     } catch (error) {

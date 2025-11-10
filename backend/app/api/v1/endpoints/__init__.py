@@ -29,6 +29,7 @@ from . import (
     solicitudes,
     users,
     validadores,
+    whatsapp_webhook,
 )
 
 __all__ = [
@@ -56,4 +57,5 @@ __all__ = [
     "scheduler_notificaciones",
     "validadores",
     "cobranzas",
+    "whatsapp_webhook",
 ]

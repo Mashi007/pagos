@@ -397,6 +397,9 @@ class WhatsAppService:
                     f"(ID: {message_id}, Tiempo: {elapsed_time:.2f}s)"
                 )
 
+                # Construir mensaje de respuesta que incluya el message_id para búsqueda posterior
+                respuesta_servicio = f"Mensaje enviado exitosamente. Message ID: {message_id}" if message_id else mensaje_exito
+
                 return {
                     "success": True,
                     "message": mensaje_exito,
@@ -405,6 +408,7 @@ class WhatsAppService:
                     "original_recipient": to_number if self.modo_pruebas and not forzar_envio_real else None,
                     "modo_pruebas": self.modo_pruebas,
                     "elapsed_time": elapsed_time,
+                    "respuesta_servicio": respuesta_servicio,  # Incluir para búsqueda en webhooks
                 }
             else:
                 # Manejar error específico de Meta

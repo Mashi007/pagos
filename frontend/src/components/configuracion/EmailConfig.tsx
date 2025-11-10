@@ -45,6 +45,7 @@ export function EmailConfig() {
   const [errorValidacion, setErrorValidacion] = useState<string | null>(null)
   const [vinculacionConfirmada, setVinculacionConfirmada] = useState<boolean>(false)
   const [mensajeVinculacion, setMensajeVinculacion] = useState<string | null>(null)
+  const [requiereAppPassword, setRequiereAppPassword] = useState<boolean>(false)
 
   useEffect(() => {
     cargarConfiguracion()
@@ -310,8 +311,10 @@ export function EmailConfig() {
       
       // Guardar estado de vinculación para mostrar banner permanente
       const confirmada = resultado?.vinculacion_confirmada === true
+      const requiereAppPasswordFlag = resultado?.requiere_app_password === true
       setVinculacionConfirmada(confirmada)
       setMensajeVinculacion(resultado?.mensaje_vinculacion || null)
+      setRequiereAppPassword(requiereAppPasswordFlag)
       
       // Mostrar mensaje de éxito con información de vinculación si está disponible
       if (confirmada) {
@@ -319,6 +322,14 @@ export function EmailConfig() {
           resultado.mensaje_vinculacion || '✅ Sistema vinculado correctamente con Google/Google Workspace',
           {
             duration: 10000, // Mostrar por más tiempo para que el usuario vea la confirmación
+          }
+        )
+      } else if (requiereAppPasswordFlag) {
+        // Mostrar advertencia si requiere App Password
+        toast.warning(
+          resultado.mensaje_vinculacion || '⚠️ Configuración guardada pero requiere App Password',
+          {
+            duration: 15000, // Mostrar por más tiempo para que el usuario vea las instrucciones
           }
         )
       } else {
@@ -338,6 +349,7 @@ export function EmailConfig() {
       // Limpiar estado de vinculación si hay error (Google rechazó la conexión)
       setVinculacionConfirmada(false)
       setMensajeVinculacion(null)
+      setRequiereAppPassword(false)
       
       // Extraer mensaje de error específico del backend
       let mensajeError = 'Error guardando configuración'
@@ -457,6 +469,28 @@ export function EmailConfig() {
                       <p className="text-xs text-green-700 font-medium">
                         📧 Puedes enviar notificaciones por email a tus clientes
                       </p>
+                    </div>
+                  </div>
+                </div>
+              ) : requiereAppPassword ? (
+                <div className="bg-amber-50 border-2 border-amber-400 rounded-lg p-4 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-6 w-6 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-bold text-amber-900 mb-2 text-base">
+                        ⚠️ Configuración Guardada - Requiere App Password
+                      </p>
+                      <p className="text-sm text-amber-800 mb-3 whitespace-pre-line">
+                        {mensajeVinculacion || 'Google requiere una Contraseña de Aplicación (App Password) para enviar emails.'}
+                      </p>
+                      <div className="bg-amber-100 border border-amber-300 rounded p-3 mt-2">
+                        <p className="text-xs font-semibold text-amber-900 mb-2">Pasos para corregir:</p>
+                        <ol className="text-xs text-amber-800 space-y-1 list-decimal list-inside">
+                          <li>Activa 2FA en tu cuenta de Google: <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="underline font-medium">https://myaccount.google.com/security</a></li>
+                          <li>Genera una App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline font-medium">https://myaccount.google.com/apppasswords</a></li>
+                          <li>Actualiza el campo "Contraseña de Aplicación" con la nueva contraseña de 16 caracteres</li>
+                        </ol>
+                      </div>
                     </div>
                   </div>
                 </div>

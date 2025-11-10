@@ -450,8 +450,24 @@ class ApiClient {
   }
 
   async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.post(url, data, config)
-    return response.data
+    try {
+      const response: AxiosResponse<T> = await this.client.post(url, data, config)
+      
+      // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
+      if (response.status >= 400 && response.status < 500) {
+        console.error('❌ [ApiClient] POST recibió error 4xx:', { url, status: response.status, data: response.data })
+        // Crear un error de Axios para que se maneje correctamente
+        const error = new Error(`Request failed with status ${response.status}`) as any
+        error.response = response
+        error.isAxiosError = true
+        throw error
+      }
+      
+      return response.data
+    } catch (error) {
+      console.error('❌ [ApiClient] POST error:', { url, error })
+      throw error
+    }
   }
 
   async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
@@ -459,6 +475,17 @@ class ApiClient {
     try {
       const response: AxiosResponse<T> = await this.client.put(url, data, config)
       console.log('✅ [ApiClient] PUT response:', { url, status: response.status, data: response.data })
+      
+      // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
+      if (response.status >= 400 && response.status < 500) {
+        console.error('❌ [ApiClient] PUT recibió error 4xx:', { url, status: response.status, data: response.data })
+        // Crear un error de Axios para que se maneje correctamente
+        const error = new Error(`Request failed with status ${response.status}`) as any
+        error.response = response
+        error.isAxiosError = true
+        throw error
+      }
+      
       return response.data
     } catch (error) {
       console.error('❌ [ApiClient] PUT error:', { url, error })

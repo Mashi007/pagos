@@ -196,7 +196,8 @@ async def enviar_notificacion(
                                 if resultado.get("success"):
                                     notif.estado = "ENVIADA"
                                     notif.enviada_en = datetime.utcnow()
-                                    notif.respuesta_servicio = resultado.get("message", "Mensaje enviado exitosamente")
+                                    # Usar respuesta_servicio si está disponible (incluye message_id), sino usar message
+                                    notif.respuesta_servicio = resultado.get("respuesta_servicio") or resultado.get("message", "Mensaje enviado exitosamente")
                                     logger.info(
                                         f"✅ Notificación WhatsApp {notif_id} enviada exitosamente a {telefono_cliente}"
                                     )
@@ -352,7 +353,8 @@ async def envio_masivo(
                                     if resultado.get("success"):
                                         notif_local.estado = "ENVIADA"
                                         notif_local.enviada_en = datetime.utcnow()
-                                        notif_local.respuesta_servicio = resultado.get(
+                                        # Usar respuesta_servicio si está disponible (incluye message_id), sino usar message
+                                        notif_local.respuesta_servicio = resultado.get("respuesta_servicio") or resultado.get(
                                             "message", "Mensaje enviado exitosamente"
                                         )
                                         logger.info(

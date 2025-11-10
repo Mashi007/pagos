@@ -64,6 +64,7 @@ from app.api.v1.endpoints import (  # noqa: E402; aprobaciones,  # MODULO APROBA
     solicitudes,
     users,
     validadores,
+    whatsapp_webhook,
 )
 
 # Forzar inicialización de cache DESPUÉS de configurar logging
@@ -189,13 +190,14 @@ class PerformanceLoggingMiddleware(BaseHTTPMiddleware):
                 es_endpoint_con_datos = any(request.url.path.startswith(ep) for ep in endpoints_con_datos)
 
                 if es_endpoint_con_datos:
-                    logger.warning(
-                        f"⚠️ [SMALL RESPONSE] {request.method} {request.url.path} - "
+                    # Cambiar a INFO en lugar de WARNING - respuestas pequeñas pueden ser válidas (sin datos)
+                    logger.info(
+                        f"ℹ️ [SMALL RESPONSE] {request.method} {request.url.path} - "
                         f"responseBytes={response_bytes} - "
                         f"responseTimeMS={response_time_ms}ms - "
                         f'requestID="{request_id}" - '
                         f'queryParams="{request.url.query}" - '
-                        f"⚠️ Posible respuesta vacía o datos incompletos - Revisar lógica del endpoint"
+                        f"ℹ️ Respuesta pequeña (posiblemente sin datos) - Comportamiento normal si no hay registros"
                     )
                 else:
                     logger.debug(
@@ -382,6 +384,7 @@ app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboar
 app.include_router(kpis.router, prefix="/api/v1/kpis", tags=["kpis"])
 app.include_router(auditoria.router, prefix="/api/v1", tags=["auditoria"])
 app.include_router(configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"])
+app.include_router(whatsapp_webhook.router, prefix="/api/v1", tags=["whatsapp-webhook"])
 # IMPORTANTE: Registrar estos routers ANTES de otros para evitar conflictos de rutas
 # Orden: modelos_vehiculos → analistas → concesionarios
 app.include_router(
