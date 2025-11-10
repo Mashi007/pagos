@@ -18,8 +18,8 @@ from app.models.notificacion import Notificacion
 from app.models.notificacion_plantilla import NotificacionPlantilla
 from app.models.prestamo import Prestamo
 from app.services.email_service import EmailService
-from app.services.whatsapp_service import WhatsAppService
 from app.services.variables_notificacion_service import VariablesNotificacionService
+from app.services.whatsapp_service import WhatsAppService
 
 logger = logging.getLogger(__name__)
 
