@@ -88,7 +88,7 @@ export function EmailConfig() {
     
     // Validaciones generales primero
     if (!config.smtp_host || !config.smtp_port || !config.smtp_user || !config.from_email) {
-      const camposFaltantes = []
+      const camposFaltantes: string[] = []
       if (!config.smtp_host) camposFaltantes.push('Servidor SMTP')
       if (!config.smtp_port) camposFaltantes.push('Puerto SMTP')
       if (!config.smtp_user) camposFaltantes.push('Email de Usuario')
