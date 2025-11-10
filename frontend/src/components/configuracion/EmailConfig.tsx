@@ -341,16 +341,21 @@ export function EmailConfig() {
       
       const resultado = await emailConfigService.actualizarConfiguracionEmail(configCompleta)
       
-      // Actualizar estado de vinculación
-      setVinculacionConfirmada(resultado?.vinculacion_confirmada === true)
-      setMensajeVinculacion(resultado?.mensaje_vinculacion || null)
-      setRequiereAppPassword(resultado?.requiere_app_password === true)
+      // ✅ Actualizar estado de vinculación INMEDIATAMENTE con la respuesta del guardado
+      // Esto asegura que las banderas se actualicen de inmediato
+      const nuevaVinculacion = resultado?.vinculacion_confirmada === true
+      const nuevoMensaje = resultado?.mensaje_vinculacion || null
+      const nuevoRequiereAppPassword = resultado?.requiere_app_password === true
+      
+      setVinculacionConfirmada(nuevaVinculacion)
+      setMensajeVinculacion(nuevoMensaje)
+      setRequiereAppPassword(nuevoRequiereAppPassword)
       
       // Mostrar mensaje de éxito
-      if (resultado?.vinculacion_confirmada) {
-        toast.success(resultado.mensaje_vinculacion || '✅ Sistema vinculado correctamente con Google', { duration: 10000 })
-      } else if (resultado?.requiere_app_password) {
-        toast.warning(resultado.mensaje_vinculacion || '⚠️ Configuración guardada pero requiere App Password', { duration: 15000 })
+      if (nuevaVinculacion) {
+        toast.success(nuevoMensaje || '✅ Sistema vinculado correctamente con Google', { duration: 10000 })
+      } else if (nuevoRequiereAppPassword) {
+        toast.warning(nuevoMensaje || '⚠️ Configuración guardada pero requiere App Password', { duration: 15000 })
       } else {
         toast.success('Configuración guardada exitosamente')
       }
@@ -358,8 +363,24 @@ export function EmailConfig() {
       await cargarConfiguracion()
       
       // ✅ Verificar estado de Google después de guardar (prueba conexión SMTP real con Gmail)
-      // Esto actualiza automáticamente los semáforos según la respuesta de Gmail
+      // IMPORTANTE: Preservar los estados de requiereAppPassword y vinculacionConfirmada
+      // que vienen de la respuesta del guardado, ya que son más precisos
+      const requiereAppPasswordAntes = nuevoRequiereAppPassword
+      const vinculacionAntes = nuevaVinculacion
+      
       await verificarEstadoGoogle()
+      
+      // ✅ Si el guardado indicó que requiere App Password, mantener ese estado
+      // incluso si la verificación posterior muestra otro resultado
+      if (requiereAppPasswordAntes) {
+        setRequiereAppPassword(true)
+        setMensajeVinculacion(nuevoMensaje)
+        setVinculacionConfirmada(false)
+      } else if (vinculacionAntes) {
+        // Si el guardado fue exitoso, mantener el estado de éxito
+        setVinculacionConfirmada(true)
+        setRequiereAppPassword(false)
+      }
     } catch (error: any) {
       console.error('Error guardando configuración:', error)
       
@@ -466,36 +487,8 @@ export function EmailConfig() {
                 </div>
               )}
 
-              {/* ❌ Estado: No configurado o con problemas */}
-              {!vinculacionConfirmada && estadoConfiguracion && !estadoConfiguracion.configurada && (
-                <div className="bg-white border-2 border-red-500 rounded-lg p-4">
-                  <div className="flex items-center gap-3">
-                    {/* Semáforo Rojo */}
-                    <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
-                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
-                      <div className="w-4 h-4 bg-red-500 rounded-full shadow-lg"></div>
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-gray-900">
-                        Error de conexión
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        {estadoConfiguracion.mensaje || 'No se pudo conectar. Verifica tus credenciales.'}
-                      </p>
-                      {estadoConfiguracion.problemas.length > 0 && (
-                        <ul className="text-xs text-gray-600 space-y-1 mt-2 list-disc list-inside">
-                          {estadoConfiguracion.problemas.map((problema, idx) => (
-                            <li key={idx}>{problema}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {requiereAppPassword && (
+              {/* ⚠️ Estado: Requiere App Password (prioridad sobre otros estados) */}
+              {requiereAppPassword && !vinculacionConfirmada && (
                 <div className="bg-white border-2 border-amber-400 rounded-lg p-4">
                   <div className="flex items-center gap-3">
                     {/* Semáforo Amarillo */}
@@ -513,6 +506,40 @@ export function EmailConfig() {
                         <p>2. Genera App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">myaccount.google.com/apppasswords</a></p>
                         <p>3. Pega la contraseña de 16 caracteres y guarda</p>
                       </div>
+                      {mensajeVinculacion && (
+                        <p className="text-xs text-gray-500 mt-2 italic">
+                          {mensajeVinculacion}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ❌ Estado: No configurado o con problemas (solo si no requiere App Password) */}
+              {!vinculacionConfirmada && !requiereAppPassword && estadoConfiguracion && !estadoConfiguracion.configurada && (
+                <div className="bg-white border-2 border-red-500 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    {/* Semáforo Rojo */}
+                    <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                      <div className="w-4 h-4 bg-red-500 rounded-full shadow-lg"></div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900">
+                        Error de conexión
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {estadoConfiguracion.mensaje || mensajeVinculacion || 'No se pudo conectar. Verifica tus credenciales.'}
+                      </p>
+                      {estadoConfiguracion.problemas && estadoConfiguracion.problemas.length > 0 && (
+                        <ul className="text-xs text-gray-600 space-y-1 mt-2 list-disc list-inside">
+                          {estadoConfiguracion.problemas.map((problema, idx) => (
+                            <li key={idx}>{problema}</li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   </div>
                 </div>

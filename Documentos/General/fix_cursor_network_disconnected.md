@@ -36,10 +36,11 @@ New-NetFirewallRule -DisplayName "Cursor" -Direction Outbound -Program "C:\Progr
 - Verificar que no haya VPN activa que pueda interferir
 - Verificar que el firewall corporativo no bloquee conexiones websocket
 
-### 6. **Script de Diagnóstico Automático** ✅ COMPLETADO
-- Se creó script: `fix_cursor_dns_streaming.ps1`
-- Ejecutar: `powershell -ExecutionPolicy Bypass -File fix_cursor_dns_streaming.ps1`
+### 6. **Script de Diagnóstico Automático** ✅ COMPLETADO (ARCHIVADO)
+- Se creó script: `fix_cursor_dns_streaming.ps1` (ahora en `scripts/obsolete/cursor/`)
+- Ejecutar: `powershell -ExecutionPolicy Bypass -File scripts\obsolete\cursor\fix_cursor_dns_streaming.ps1`
 - El script verifica DNS, conectividad, firewall y procesos
+- **Nota**: Este script fue archivado porque es temporal y no forma parte del proyecto
 
 ### 7. **Solución Temporal**
 - Cerrar Cursor completamente
