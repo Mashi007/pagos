@@ -126,9 +126,20 @@ async def login(
         # ✅ Actualizar último acceso del usuario
         from datetime import datetime
 
-        user.last_login = datetime.utcnow()
-        db.commit()
-        db.refresh(user)
+        try:
+            user.last_login = datetime.utcnow()
+            db.commit()
+            db.refresh(user)
+            logger.debug(f"✅ last_login actualizado para usuario {user_id}: {user.last_login}")
+        except Exception as update_error:
+            # Si falla la actualización de last_login, hacer rollback pero continuar con el login
+            # No queremos que un error en last_login impida el login del usuario
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            logger.warning(f"⚠️ No se pudo actualizar last_login para usuario {user_id}: {update_error}")
+            # Continuar con el login aunque last_login no se actualizó
 
         logger.info(f"Login exitoso para: {login_data.email}")
         _registrar_auditoria_login(db, request, user_id, True, user_id)
