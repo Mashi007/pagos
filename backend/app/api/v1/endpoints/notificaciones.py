@@ -42,7 +42,7 @@ def ejecutar_async_en_background(coroutine):
     Helper para ejecutar funciones async en background tasks de FastAPI
     """
     import asyncio
-    
+
     try:
         # Intentar obtener el loop existente
         loop = asyncio.get_event_loop()
@@ -131,7 +131,7 @@ async def enviar_notificacion(
             notif_id = nueva_notif.id
             telefono_cliente = str(cliente.telefono)
             mensaje_cliente = notificacion.mensaje
-            
+
             # Función sync wrapper para background task
             def enviar_whatsapp_sync():
                 async def enviar_whatsapp_async():
@@ -142,6 +142,7 @@ async def enviar_notificacion(
                         )
                         # Actualizar estado de notificación
                         from app.db.session import SessionLocal
+
                         db_local = SessionLocal()
                         try:
                             notif = db_local.query(Notificacion).filter(Notificacion.id == notif_id).first()
@@ -150,12 +151,16 @@ async def enviar_notificacion(
                                     notif.estado = "ENVIADA"
                                     notif.enviada_en = datetime.utcnow()
                                     notif.respuesta_servicio = resultado.get("message", "Mensaje enviado exitosamente")
-                                    logger.info(f"✅ Notificación WhatsApp {notif_id} enviada exitosamente a {telefono_cliente}")
+                                    logger.info(
+                                        f"✅ Notificación WhatsApp {notif_id} enviada exitosamente a {telefono_cliente}"
+                                    )
                                 else:
                                     notif.estado = "FALLIDA"
                                     notif.error_mensaje = resultado.get("message", "Error desconocido")
                                     notif.intentos = (notif.intentos or 0) + 1
-                                    logger.error(f"❌ Error enviando notificación WhatsApp {notif_id}: {resultado.get('message')}")
+                                    logger.error(
+                                        f"❌ Error enviando notificación WhatsApp {notif_id}: {resultado.get('message')}"
+                                    )
                                 db_local.commit()
                         except Exception as e:
                             db_local.rollback()
@@ -164,9 +169,9 @@ async def enviar_notificacion(
                             db_local.close()
                     except Exception as e:
                         logger.error(f"Error enviando WhatsApp: {e}")
-                
+
                 ejecutar_async_en_background(enviar_whatsapp_async())
-            
+
             background_tasks.add_task(enviar_whatsapp_sync)
 
         logger.info(f"Notificación programada para cliente {cliente.id}")
@@ -238,7 +243,7 @@ async def envio_masivo(
                 notif_id = notif.id
                 telefono_cliente = str(cliente.telefono)
                 mensaje_template = request.template
-                
+
                 # Función sync wrapper para background task
                 def enviar_whatsapp_masivo_sync():
                     async def enviar_whatsapp_masivo_async():
@@ -249,6 +254,7 @@ async def envio_masivo(
                             )
                             # Actualizar estado de notificación
                             from app.db.session import SessionLocal
+
                             db_local = SessionLocal()
                             try:
                                 notif_local = db_local.query(Notificacion).filter(Notificacion.id == notif_id).first()
@@ -256,13 +262,19 @@ async def envio_masivo(
                                     if resultado.get("success"):
                                         notif_local.estado = "ENVIADA"
                                         notif_local.enviada_en = datetime.utcnow()
-                                        notif_local.respuesta_servicio = resultado.get("message", "Mensaje enviado exitosamente")
-                                        logger.info(f"✅ Notificación WhatsApp masiva {notif_id} enviada exitosamente a {telefono_cliente}")
+                                        notif_local.respuesta_servicio = resultado.get(
+                                            "message", "Mensaje enviado exitosamente"
+                                        )
+                                        logger.info(
+                                            f"✅ Notificación WhatsApp masiva {notif_id} enviada exitosamente a {telefono_cliente}"
+                                        )
                                     else:
                                         notif_local.estado = "FALLIDA"
                                         notif_local.error_mensaje = resultado.get("message", "Error desconocido")
                                         notif_local.intentos = (notif_local.intentos or 0) + 1
-                                        logger.error(f"❌ Error enviando notificación WhatsApp masiva {notif_id}: {resultado.get('message')}")
+                                        logger.error(
+                                            f"❌ Error enviando notificación WhatsApp masiva {notif_id}: {resultado.get('message')}"
+                                        )
                                     db_local.commit()
                             except Exception as e:
                                 db_local.rollback()
@@ -271,9 +283,9 @@ async def envio_masivo(
                                 db_local.close()
                         except Exception as e:
                             logger.error(f"Error enviando WhatsApp: {e}")
-                    
+
                     ejecutar_async_en_background(enviar_whatsapp_masivo_async())
-                
+
                 background_tasks.add_task(enviar_whatsapp_masivo_sync)
 
         logger.info(f"Enviadas {len(notificaciones_creadas)} notificaciones masivas")

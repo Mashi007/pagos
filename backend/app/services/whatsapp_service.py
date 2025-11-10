@@ -70,7 +70,9 @@ class WhatsAppService:
                     return
 
             except Exception as e:
-                logger.warning(f"⚠️ No se pudo cargar configuración de WhatsApp desde BD: {str(e)}. Usando valores por defecto.")
+                logger.warning(
+                    f"⚠️ No se pudo cargar configuración de WhatsApp desde BD: {str(e)}. Usando valores por defecto."
+                )
 
         logger.debug("📱 Usando configuración de WhatsApp por defecto desde settings")
 

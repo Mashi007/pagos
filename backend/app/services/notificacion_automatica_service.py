@@ -18,8 +18,8 @@ from app.models.notificacion import Notificacion
 from app.models.notificacion_plantilla import NotificacionPlantilla
 from app.models.prestamo import Prestamo
 from app.services.email_service import EmailService
-from app.services.whatsapp_service import WhatsAppService
 from app.services.variables_notificacion_service import VariablesNotificacionService
+from app.services.whatsapp_service import WhatsAppService
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +228,7 @@ class NotificacionAutomaticaService:
             if tiene_telefono:
                 # Convertir cuerpo HTML a texto plano para WhatsApp (básico)
                 import re
+
                 cuerpo_texto = re.sub(r"<[^>]+>", "", cuerpo)  # Remover HTML tags
                 cuerpo_texto = re.sub(r"\n\s*\n", "\n\n", cuerpo_texto)  # Limpiar espacios
                 cuerpo_texto = cuerpo_texto.strip()
