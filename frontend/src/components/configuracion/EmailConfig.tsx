@@ -500,10 +500,7 @@ export function EmailConfig() {
                   <div className="flex items-start gap-3">
                     <Clock className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
-                      <p className="font-semibold text-yellow-900 mb-1">⏳ Vinculación Pendiente</p>
-                      <p className="text-sm text-yellow-800 mb-2">
-                        Guarda la configuración para verificar la conexión con Google. El sistema probará automáticamente si Google acepta tus credenciales.
-                      </p>
+                      <p className="font-semibold text-yellow-900 mb-2">⏳ Guarda la configuración para verificar la conexión</p>
                       <Button
                         type="button"
                         variant="outline"
@@ -512,7 +509,7 @@ export function EmailConfig() {
                         disabled={verificandoEstado}
                         className="text-xs"
                       >
-                        {verificandoEstado ? 'Verificando...' : '🔍 Verificar Estado Ahora'}
+                        {verificandoEstado ? 'Verificando...' : '🔍 Verificar Ahora'}
                       </Button>
                     </div>
                   </div>
