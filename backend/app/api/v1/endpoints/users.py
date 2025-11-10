@@ -287,13 +287,13 @@ def update_user(
         # exclude_unset=True excluye campos no establecidos, pero incluye False
         # Sin embargo, para estar seguros, verificamos explícitamente is_admin
         update_data = user_data.model_dump(exclude_unset=True)
-        
+
         # ✅ CRÍTICO: Si is_admin está presente en el request (incluso si es False),
         # asegurarnos de que se incluya en update_data
         # Pydantic con exclude_unset=True puede excluir False si no se envía explícitamente
-        if hasattr(user_data, 'is_admin') and user_data.is_admin is not None:
+        if hasattr(user_data, "is_admin") and user_data.is_admin is not None:
             # Si is_admin está definido en el modelo (incluso si es False), incluirlo explícitamente
-            update_data['is_admin'] = user_data.is_admin
+            update_data["is_admin"] = user_data.is_admin
 
         # Verificar que hay datos para actualizar
         if not update_data:
