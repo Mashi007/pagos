@@ -957,7 +957,7 @@ def actualizar_configuracion_email(
             f"Razón: {mensaje_error}"
         )
         raise HTTPException(status_code=400, detail=mensaje_error or "Configuración de email inválida")
-    
+
     # Si llegamos aquí y es Gmail, significa que Google aceptó la conexión
     es_gmail = "gmail.com" in config_data.get("smtp_host", "").lower()
     if es_gmail:
@@ -1000,7 +1000,7 @@ def actualizar_configuracion_email(
         # Si es Gmail, la validación ya probó la conexión y Google la aceptó
         es_gmail = "gmail.com" in config_data.get("smtp_host", "").lower()
         validacion_exitosa = es_gmail  # Si es Gmail, la validación ya probó la conexión
-        
+
         logger.info(f"✅ Configuración de email actualizada por {current_user.email}")
         if es_gmail:
             logger.info(
