@@ -337,11 +337,13 @@ except Exception as e:
 
         logger.warning("   ⚠️ Usando MemoryCache como fallback - NO recomendado para producción con múltiples workers")
         logger.info("   💡 Para resolver: Verificar configuración de Redis en Render Dashboard")
-        
+
         logger.info("=" * 80)
         logger.info("📋 RESUMEN DEL DIAGNÓSTICO:")
         logger.info("=" * 80)
-        logger.info(f"   - Redis instalado: {'Sí' if 'redis' in str(e) or 'ImportError' not in str(type(e)) else 'No (ImportError)'}")
+        logger.info(
+            f"   - Redis instalado: {'Sí' if 'redis' in str(e) or 'ImportError' not in str(type(e)) else 'No (ImportError)'}"
+        )
         logger.info(f"   - REDIS_URL configurada: {'Sí' if settings.REDIS_URL else 'No'}")
         logger.info(f"   - REDIS_PASSWORD configurada: {'Sí' if settings.REDIS_PASSWORD else 'No'}")
         logger.info(f"   - Error final: {type(e).__name__}: {str(e)[:200]}")
