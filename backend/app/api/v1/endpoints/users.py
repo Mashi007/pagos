@@ -352,10 +352,13 @@ def delete_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Eliminar usuario (solo ADMIN)
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar usuarios")
+    """Eliminar usuario (solo ADMIN)"""
     try:
+        # Verificar permisos
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar usuarios")
+        
+        # Buscar usuario
         user = db.query(User).filter(User.id == user_id).first()
 
         if not user:
@@ -363,21 +366,52 @@ def delete_user(
 
         # No permitir eliminar el último admin
         if user.is_admin:
-            admin_count = db.query(User).filter(User.is_admin).count()
+            admin_count = db.query(User).filter(User.is_admin, User.is_active == True).count()
             if admin_count <= 1:
                 raise HTTPException(
                     status_code=400,
-                    detail="No se puede eliminar el último administrador",
+                    detail="No se puede eliminar el último administrador activo del sistema",
                 )
 
+        # Verificar relaciones antes de eliminar
+        # Contar registros relacionados para diagnóstico
+        from app.models.auditoria import Auditoria
+        from app.models.notificacion import Notificacion
+        from app.models.aprobacion import Aprobacion
+        
+        auditoria_count = db.query(Auditoria).filter(Auditoria.usuario_id == user_id).count()
+        notificaciones_count = db.query(Notificacion).filter(Notificacion.user_id == user_id).count()
+        aprobaciones_solicitadas = db.query(Aprobacion).filter(Aprobacion.solicitante_id == user_id).count()
+        aprobaciones_revisadas = db.query(Aprobacion).filter(Aprobacion.revisor_id == user_id).count()
+        
+        logger.info(
+            f"Eliminando usuario {user_id} (email: {user.email}) por admin {current_user.id}. "
+            f"Relaciones: auditoria={auditoria_count}, notificaciones={notificaciones_count}, "
+            f"aprobaciones_solicitadas={aprobaciones_solicitadas}, aprobaciones_revisadas={aprobaciones_revisadas}"
+        )
+        
+        # Intentar eliminar - si hay foreign key constraints, la BD lanzará error
         db.delete(user)
         db.commit()
 
+        logger.info(f"Usuario {user_id} eliminado exitosamente")
         return {"message": "Usuario eliminado exitosamente"}
 
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error eliminando usuario: {e}")
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+        error_detail = f"Error eliminando usuario {user_id}: {str(e)}"
+        logger.error(error_detail, exc_info=True)
+        logger.error(f"Traceback completo:\n{traceback.format_exc()}")
+        
+        # Proporcionar mensaje de error más descriptivo
+        error_message = "Error interno del servidor"
+        error_str = str(e).lower()
+        
+        if "foreign key" in error_str or "constraint" in error_str:
+            error_message = "No se puede eliminar el usuario porque tiene registros asociados (préstamos, pagos, etc.)"
+        elif "integrity" in error_str:
+            error_message = "Error de integridad de datos al eliminar el usuario"
+        
+        raise HTTPException(status_code=500, detail=error_message)
