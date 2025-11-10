@@ -87,6 +87,14 @@ export default defineConfig({
             return 'vendor'
           }
           
+          // ✅ NO separar hooks y servicios - incluir en chunks principales para evitar 404
+          // Los hooks y servicios deben estar disponibles cuando se necesiten
+          if (id.includes('/hooks/useConcesionarios') || 
+              id.includes('/hooks/useAnalistas') ||
+              id.includes('/services/notificacionService')) {
+            return undefined // undefined = chunk principal
+          }
+          
           // NO separar DashboardMenu - incluir en chunk principal para evitar problemas de carga
           // Los componentes UI que usa (Radix UI) necesitan React disponible
           // if (id.includes('/pages/DashboardMenu')) {
