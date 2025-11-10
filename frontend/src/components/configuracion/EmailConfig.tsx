@@ -42,6 +42,7 @@ export function EmailConfig() {
   const [mensajePrueba, setMensajePrueba] = useState('') // Mensaje para prueba de envío
   const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
   const [cargandoEnvios, setCargandoEnvios] = useState(false)
+  const [errorValidacion, setErrorValidacion] = useState<string | null>(null)
 
   useEffect(() => {
     cargarConfiguracion()
@@ -74,6 +75,10 @@ export function EmailConfig() {
 
   const handleChange = (campo: keyof EmailConfigData, valor: string) => {
     setConfig(prev => ({ ...prev, [campo]: valor }))
+    // Limpiar error de validación cuando el usuario modifica los campos
+    if (errorValidacion) {
+      setErrorValidacion(null)
+    }
   }
 
   const validarConfiguracionGmail = (): string | null => {
@@ -86,7 +91,7 @@ export function EmailConfig() {
       password_length: config.smtp_password?.length || 0
     })
     
-    // Validaciones generales primero
+    // Validaciones generales primero - solo campos obligatorios
     if (!config.smtp_host || !config.smtp_port || !config.smtp_user || !config.from_email) {
       const camposFaltantes: string[] = []
       if (!config.smtp_host) camposFaltantes.push('Servidor SMTP')
@@ -98,22 +103,19 @@ export function EmailConfig() {
       return `Por favor completa todos los campos requeridos. Faltan: ${camposFaltantes.join(', ')}`
     }
     
-    // Validar que si es Gmail/Google Workspace, cumpla con los requisitos
+    // Validar puerto numérico válido
+    const puerto = parseInt(config.smtp_port)
+    if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
+      console.warn('⚠️ [EmailConfig] Puerto inválido:', config.smtp_port)
+      return 'El puerto SMTP debe ser un número válido entre 1 y 65535.'
+    }
+    
+    // Validar que si es Gmail/Google Workspace, tenga configuración básica correcta
     if (config.smtp_host.toLowerCase().includes('gmail.com')) {
-      // NOTA: Ya no validamos que el email sea @gmail.com o @googlemail.com
-      // Google Workspace permite usar smtp.gmail.com con dominios personalizados
-      // La validación real se hace al probar la conexión SMTP en el backend
-      
-      // Validar puerto correcto para Gmail/Google Workspace
-      const puerto = parseInt(config.smtp_port)
-      if (isNaN(puerto)) {
-        console.warn('⚠️ [EmailConfig] Puerto inválido:', config.smtp_port)
-        return 'El puerto SMTP debe ser un número válido.'
-      }
-      
+      // Validar puerto recomendado para Gmail/Google Workspace
       if (puerto !== 587 && puerto !== 465) {
-        console.warn('⚠️ [EmailConfig] Puerto no válido para Gmail:', puerto)
-        return 'Gmail/Google Workspace requiere puerto 587 (TLS) o 465 (SSL). El puerto 587 es recomendado.'
+        console.warn('⚠️ [EmailConfig] Puerto no estándar para Gmail:', puerto)
+        // Solo advertir, no bloquear - permitir otros puertos
       }
       
       // Validar que TLS esté habilitado para puerto 587
@@ -122,19 +124,16 @@ export function EmailConfig() {
         return 'Para puerto 587, TLS debe estar habilitado (requerido por Gmail/Google Workspace).'
       }
       
-      // Validar que tenga contraseña de aplicación
+      // Validar que tenga contraseña (pero no validar longitud estricta)
+      // La validación real se hará en el backend al intentar enviar emails
       if (!config.smtp_password || config.smtp_password.trim().length === 0) {
-        console.warn('⚠️ [EmailConfig] Contraseña de aplicación faltante')
-        return 'Debes ingresar una Contraseña de Aplicación de Gmail/Google Workspace (no tu contraseña normal). Requiere 2FA activado.'
+        console.warn('⚠️ [EmailConfig] Contraseña faltante')
+        return 'Debes ingresar una contraseña para autenticarte con Gmail/Google Workspace.'
       }
       
-      // Validar formato de contraseña de aplicación (16 caracteres sin espacios)
-      // Gmail/Google Workspace puede mostrar la contraseña con espacios (ej: "abcd efgh ijkl mnop"), pero al usarla se eliminan
-      const passwordSinEspacios = config.smtp_password.replace(/\s/g, '')
-      if (passwordSinEspacios.length !== 16) {
-        console.warn('⚠️ [EmailConfig] Contraseña de aplicación con longitud incorrecta:', passwordSinEspacios.length)
-        return `La Contraseña de Aplicación de Gmail/Google Workspace debe tener exactamente 16 caracteres (los espacios se eliminan automáticamente). Longitud actual: ${passwordSinEspacios.length} caracteres.`
-      }
+      // NOTA: Ya no validamos la longitud de la contraseña estrictamente
+      // El backend probará la conexión y mostrará el error real si la contraseña no es válida
+      // Esto permite usar OAuth2 tokens u otros métodos de autenticación si están disponibles
     }
     
     console.log('✅ [EmailConfig] Validación exitosa')
@@ -148,9 +147,15 @@ export function EmailConfig() {
     const errorValidacion = validarConfiguracionGmail()
     if (errorValidacion) {
       console.warn('⚠️ [EmailConfig] Validación falló:', errorValidacion)
-      toast.error(errorValidacion)
+      setErrorValidacion(errorValidacion)
+      toast.error(errorValidacion, {
+        duration: 8000, // Mostrar por más tiempo
+      })
       return
     }
+    
+    // Limpiar error de validación si pasa
+    setErrorValidacion(null)
     
     try {
       setGuardando(true)
@@ -418,12 +423,31 @@ export function EmailConfig() {
             )}
           </div>
 
+          {/* Mensaje de error de validación */}
+          {errorValidacion && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="font-semibold text-red-900 mb-1">Error de validación:</p>
+                  <p className="text-sm text-red-800 whitespace-pre-line">{errorValidacion}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Botones de Acción */}
           <div className="flex gap-2 pt-4 border-t mt-4">
             <Button
-              onClick={handleGuardar}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                console.log('🖱️ [EmailConfig] Botón clickeado')
+                handleGuardar()
+              }}
               disabled={guardando}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              type="button"
             >
               <Save className="h-4 w-4" />
               {guardando ? 'Guardando...' : 'Guardar Configuración'}

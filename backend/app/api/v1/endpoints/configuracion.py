@@ -872,12 +872,19 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
     except (ValueError, TypeError):
         return False, "Puerto SMTP inválido"
 
-    # Validar formato de contraseña de aplicación (16 caracteres sin espacios)
+    # NOTA: Ya no validamos estrictamente la longitud de la contraseña
+    # Google Workspace puede usar diferentes métodos de autenticación:
+    # - Contraseñas de Aplicación (16 caracteres)
+    # - OAuth2 tokens
+    # - Otras formas de autenticación según la configuración del dominio
+    # La validación real se hace al probar la conexión SMTP
     password_sin_espacios = smtp_password.replace(" ", "").replace("\t", "")
-    if len(password_sin_espacios) != 16:
-        return (
-            False,
-            "La Contraseña de Aplicación de Gmail/Google Workspace debe tener exactamente 16 caracteres (los espacios se eliminan automáticamente).",
+    
+    # Solo advertir si la contraseña es muy corta (probablemente no es una App Password)
+    if len(password_sin_espacios) < 10:
+        logger.warning(
+            f"⚠️ Contraseña muy corta ({len(password_sin_espacios)} caracteres). "
+            "Para Gmail/Google Workspace, normalmente se requiere una Contraseña de Aplicación de 16 caracteres."
         )
 
     # Probar conexión SMTP para verificar credenciales
