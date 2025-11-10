@@ -31,9 +31,21 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // Separar node_modules en chunks más específicos
+          // ✅ CRÍTICO: React DEBE estar en el chunk principal y cargarse primero
+          // Verificar React ANTES de cualquier otra lógica
           if (id.includes('node_modules')) {
-            // React Router - debe ir primero para evitar conflictos
+            // React core - DEBE estar en chunk principal (undefined = chunk principal)
+            // Esto asegura que React esté disponible antes que cualquier otro chunk
+            if ((id.includes('/react/') || id.includes('/react-dom/') || 
+                 id.includes('\\react\\') || id.includes('\\react-dom\\')) &&
+                !id.includes('react-router') && 
+                !id.includes('react-hook-form') && 
+                !id.includes('@tanstack/react-query') &&
+                !id.includes('react-hot-toast')) {
+              return undefined // undefined = chunk principal (index.js)
+            }
+            
+            // React Router
             if (id.includes('react-router')) {
               return 'router'
             }
@@ -66,29 +78,20 @@ export default defineConfig({
               return 'form-libs'
             }
             
-            // Radix UI components
+            // Radix UI components - estos dependen de React, así que deben cargarse después
             if (id.includes('@radix-ui')) {
               return 'radix-ui'
-            }
-            
-            // React core - INCLUIR en chunk principal para asegurar disponibilidad
-            // Esto resuelve el error "can't access property Children, _e is undefined"
-            // Algunos componentes UI usan "import * as React" que requiere React como namespace
-            if (id.includes('react') && !id.includes('react-router') && 
-                !id.includes('react-hook-form') && !id.includes('@tanstack/react-query')) {
-              // Devolver undefined hace que se incluya en el chunk principal (index.js)
-              // Esto asegura que React esté siempre disponible cuando se necesite
-              return undefined
             }
             
             // Otras dependencias comunes
             return 'vendor'
           }
           
-          // Separar componentes grandes del dashboard
-          if (id.includes('/pages/DashboardMenu')) {
-            return 'dashboard-menu'
-          }
+          // NO separar DashboardMenu - incluir en chunk principal para evitar problemas de carga
+          // Los componentes UI que usa (Radix UI) necesitan React disponible
+          // if (id.includes('/pages/DashboardMenu')) {
+          //   return 'dashboard-menu'
+          // }
         },
       },
       onwarn(warning, warn) {

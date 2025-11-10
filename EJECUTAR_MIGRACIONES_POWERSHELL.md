@@ -64,3 +64,4 @@ py -m alembic downgrade 20251104_critical_indexes
 Si obtienes errores de variables de entorno, asegúrate de tener configurado tu archivo `.env` en el directorio `backend` con `DATABASE_URL`.
 
 
+

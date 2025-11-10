@@ -37,6 +37,35 @@ const SLOW_ENDPOINT_TIMEOUT_MS = 60000 // Para endpoints que pueden tardar más
 // Configuración base de Axios
 const API_BASE_URL = env.API_URL
 
+// ✅ Función para decodificar JWT y verificar expiración
+function isTokenExpired(token: string): boolean {
+  try {
+    // JWT tiene formato: header.payload.signature
+    const parts = token.split('.')
+    if (parts.length !== 3) return true
+    
+    // Decodificar payload (base64url)
+    const payload = parts[1]
+    // Reemplazar caracteres base64url y agregar padding si es necesario
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
+    const decoded = JSON.parse(atob(padded))
+    
+    // Verificar expiración (exp está en segundos Unix timestamp)
+    if (decoded.exp) {
+      const expirationTime = decoded.exp * 1000 // Convertir a milisegundos
+      const now = Date.now()
+      // Considerar expirado si falta menos de 5 segundos (margen de seguridad)
+      return now >= (expirationTime - 5000)
+    }
+    
+    return false // Si no tiene exp, asumir que no expira
+  } catch (error) {
+    // Si hay error al decodificar, asumir que está expirado
+    return true
+  }
+}
+
 class ApiClient {
   private client: AxiosInstance
   private isRefreshing = false
@@ -85,10 +114,35 @@ class ApiClient {
             ? safeGetItem('access_token', '') 
             : safeGetSessionItem('access_token', '')
           
+          // ✅ Verificar si el token está expirado ANTES de enviar el request
           if (token) {
+            if (isTokenExpired(token)) {
+              // Token expirado - marcar flag, cancelar requests pendientes y redirigir
+              this.refreshTokenExpired = true
+              this.cancelAllPendingRequests()
+              clearAuthStorage()
+              
+              // Redirigir inmediatamente si no estamos ya en login
+              if (window.location.pathname !== '/login' && !this.isRedirectingToLogin) {
+                this.isRedirectingToLogin = true
+                window.location.replace('/login')
+              }
+              
+              const error = new Error('Token expirado. Redirigiendo al login...')
+              ;(error as any).isCancelled = true
+              return Promise.reject(error)
+            }
             config.headers.Authorization = `Bearer ${token}`
           }
         }
+        
+        // ✅ Crear AbortController para este request y rastrearlo
+        const controller = new AbortController()
+        const requestId = `${config.method}-${config.url}-${Date.now()}`
+        config.signal = controller.signal
+        ;(config as any).__requestId = requestId // Guardar ID para limpiar después
+        this.requestCancellers.set(requestId, controller)
+        
         return config
       },
       (error) => {
@@ -98,12 +152,27 @@ class ApiClient {
 
     // Response interceptor - manejar errores globalmente
     this.client.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        // ✅ Limpiar AbortController cuando el request completa exitosamente
+        const requestId = (response.config as any).__requestId
+        if (requestId) {
+          this.requestCancellers.delete(requestId)
+        }
+        return response
+      },
       async (error) => {
         const originalRequest = error.config
+        
+        // ✅ Limpiar AbortController cuando el request falla
+        if (originalRequest) {
+          const requestId = (originalRequest as any).__requestId
+          if (requestId) {
+            this.requestCancellers.delete(requestId)
+          }
+        }
 
         // Auto-refresh de tokens con protección contra loops infinitos y race conditions
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        if (error.response?.status === 401 && !originalRequest?._retry) {
           // No intentar refresh en endpoints de autenticación
           const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh']
           const isAuthEndpoint = authEndpoints.some(endpoint => originalRequest.url?.includes(endpoint))

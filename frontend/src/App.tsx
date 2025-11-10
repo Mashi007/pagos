@@ -24,8 +24,9 @@ const BORDER_WIDTH = 2
 // Pages - Lazy loading para optimización
 const Welcome = lazy(() => import('@/pages/Welcome').then(module => ({ default: module.Welcome })))
 const Login = lazy(() => import('@/pages/Login').then(module => ({ default: module.Login })))
-// Componente Dashboard antiguo eliminado - Usar DashboardMenu en su lugar
-const DashboardMenu = lazy(() => import('@/pages/DashboardMenu').then(module => ({ default: module.DashboardMenu })))
+// ✅ DashboardMenu importado normalmente (no lazy) para asegurar que React esté disponible
+// Los componentes UI que usa (Radix UI) requieren React como namespace y fallan con lazy loading
+import { DashboardMenu } from '@/pages/DashboardMenu'
 const Clientes = lazy(() => import('@/pages/Clientes').then(module => ({ default: module.Clientes })))
 const Prestamos = lazy(() => import('@/pages/Prestamos').then(module => ({ default: module.Prestamos })))
 const Amortizacion = lazy(() => import('@/pages/Amortizacion').then(module => ({ default: module.Amortizacion })))
