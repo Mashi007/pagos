@@ -1,8 +1,9 @@
 """
 Endpoints de Webhook para WhatsApp Business API
-Compatibles con Meta WhatsApp Business API y n8n
+100% Compatible con Meta WhatsApp Business API y n8n Webhook Trigger
 """
 
+import json
 import logging
 from typing import Any, Dict, Optional
 
@@ -27,17 +28,17 @@ async def verify_webhook(
     db: Session = Depends(get_db),
 ):
     """
-    Endpoint de verificación de webhook para Meta WhatsApp Business API
-    Compatible 100% con n8n Webhook Trigger
+    Endpoint de verificación de webhook - 100% compatible con Meta y n8n
     
     Protocolo Meta:
     - GET request con: hub.mode=subscribe, hub.verify_token=TOKEN, hub.challenge=STRING
     - Debe retornar: hub.challenge como texto plano (status 200)
     
     Protocolo n8n:
-    - n8n puede usar este endpoint directamente o como intermediario
-    - n8n espera respuesta 200 con el challenge en el body
+    - n8n Webhook Trigger puede usar este endpoint directamente
+    - n8n espera respuesta 200 con el challenge en el body (texto plano)
     - Compatible con "Response Mode: Using 'Respond to Webhook' Node"
+    - Compatible con "Response Mode: Last Node"
     
     Returns:
         PlainTextResponse con hub.challenge si el token es válido (status 200)
@@ -52,10 +53,11 @@ async def verify_webhook(
         if not expected_token:
             logger.warning("⚠️ Webhook verify token no configurado. Permitiendo verificación sin token.")
             if hub_challenge:
-                return PlainTextResponse(content=hub_challenge)
-            return PlainTextResponse(content="OK")
+                return PlainTextResponse(content=hub_challenge, status_code=200)
+            return PlainTextResponse(content="OK", status_code=200)
 
         # Verificar que el modo sea "subscribe" (protocolo Meta)
+        # n8n también puede enviar este modo cuando actúa como intermediario
         if hub_mode and hub_mode != "subscribe":
             logger.warning(f"⚠️ Webhook verification: modo inválido '{hub_mode}'")
             raise HTTPException(status_code=403, detail="Modo inválido")
@@ -78,6 +80,7 @@ async def verify_webhook(
         
         # Retornar el challenge como texto plano (requerido por Meta y n8n)
         # n8n espera status 200 con el challenge en el body
+        # Meta también requiere status 200
         return PlainTextResponse(content=hub_challenge or "OK", status_code=200)
 
     except HTTPException:
@@ -94,8 +97,7 @@ async def receive_webhook(
     x_hub_signature_256: Optional[str] = Header(None, alias="X-Hub-Signature-256"),
 ):
     """
-    Endpoint para recibir eventos de WhatsApp Business API
-    Compatible 100% con n8n Webhook y Meta WhatsApp API
+    Endpoint para recibir eventos - 100% compatible con Meta y n8n
     
     Protocolo Meta:
     - POST request con JSON en body
@@ -104,8 +106,10 @@ async def receive_webhook(
     
     Protocolo n8n:
     - n8n puede reenviar eventos desde Meta a este endpoint
+    - n8n puede enviar eventos en formato personalizado
     - n8n espera respuesta JSON con status 200
     - Compatible con nodo "HTTP Request" de n8n
+    - Acepta payloads en diferentes formatos (Meta directo, n8n wrapper, genérico)
     
     Headers esperados:
         X-Hub-Signature-256: Firma HMAC SHA256 del payload (opcional, para validación)
@@ -129,20 +133,31 @@ async def receive_webhook(
     
     Body (n8n formato - también aceptado):
         Cualquier JSON válido que n8n envíe será procesado
+        n8n puede enviar el payload de Meta dentro de un wrapper como:
+        {
+            "body": {...},  // Payload original de Meta
+            "data": {...},  // O en campo data
+            // O directamente el payload de Meta
+        }
     """
     try:
-        # Obtener payload como JSON
+        # Obtener payload como JSON (compatible con n8n y Meta)
         try:
             payload = await request.json()
         except Exception as json_error:
             # Si no es JSON válido, intentar leer como texto (para compatibilidad con n8n)
             body_bytes = await request.body()
             try:
-                import json
                 payload = json.loads(body_bytes.decode('utf-8'))
             except Exception:
                 logger.error(f"❌ Error parseando payload: {json_error}")
-                return {"status": "error", "message": "Invalid JSON payload", "status_code": 400}
+                # Retornar 200 con error en JSON (n8n y Meta esperan 200 para evitar reintentos)
+                return {
+                    "status": "error",
+                    "message": "Invalid JSON payload",
+                    "eventos_procesados": 0,
+                    "errores": 1,
+                }
         
         logger.info(f"📨 Webhook POST recibido: {payload.get('object', 'unknown')}")
         
@@ -161,13 +176,16 @@ async def receive_webhook(
                     # n8n puede enviar el body original en un campo "body"
                     inner_payload = payload.get("body", {})
                     if isinstance(inner_payload, str):
-                        import json
                         inner_payload = json.loads(inner_payload)
                     payload = inner_payload
                     es_meta_format = payload.get("object") == "whatsapp_business_account"
                 elif "data" in payload:
                     # n8n puede enviar datos en campo "data"
                     payload = payload.get("data", payload)
+                    es_meta_format = payload.get("object") == "whatsapp_business_account"
+                elif "json" in payload:
+                    # n8n puede enviar en campo "json"
+                    payload = payload.get("json", payload)
                     es_meta_format = payload.get("object") == "whatsapp_business_account"
         
         # Procesar eventos según formato
@@ -207,6 +225,7 @@ async def receive_webhook(
         
         # Retornar respuesta JSON compatible con n8n y Meta
         # n8n espera status 200 con JSON
+        # Meta también espera status 200
         return {
             "status": "success",
             "eventos_procesados": eventos_procesados,
@@ -228,7 +247,7 @@ async def receive_webhook(
 async def _procesar_estados(statuses: list, db: Session) -> int:
     """
     Procesar actualizaciones de estado de mensajes
-    
+
     Actualiza el estado de las notificaciones según los webhooks de Meta:
     - sent: Mensaje enviado
     - delivered: Mensaje entregado
@@ -236,17 +255,17 @@ async def _procesar_estados(statuses: list, db: Session) -> int:
     - failed: Mensaje fallido
     """
     eventos_procesados = 0
-    
+
     try:
         for status in statuses:
             message_id = status.get("id")
             status_value = status.get("status")  # sent, delivered, read, failed
             recipient_id = status.get("recipient_id")
             timestamp = status.get("timestamp")
-            
+
             if not message_id:
                 continue
-            
+
             # Buscar notificación por message_id
             # El message_id se guarda en respuesta_servicio cuando se envía el mensaje
             notificacion = None
@@ -262,13 +281,13 @@ async def _procesar_estados(statuses: list, db: Session) -> int:
                     .limit(100)  # Buscar en las últimas 100 notificaciones
                     .all()
                 )
-                
+
                 # Buscar el message_id en respuesta_servicio
                 for notif in notificaciones_whatsapp:
                     if notif.respuesta_servicio and message_id in notif.respuesta_servicio:
                         notificacion = notif
                         break
-            
+
             if notificacion:
                 # Actualizar estado según el status de Meta
                 if status_value == "sent":
@@ -286,35 +305,35 @@ async def _procesar_estados(statuses: list, db: Session) -> int:
                     if error_info:
                         notificacion.error_mensaje = str(error_info[0].get("message", "Error desconocido"))
                     logger.error(f"❌ Mensaje {message_id} falló: {error_info}")
-                
+
                 db.commit()
                 eventos_procesados += 1
             else:
                 logger.debug(f"⚠️ No se encontró notificación para message_id: {message_id}")
-    
+
     except Exception as e:
         logger.error(f"❌ Error procesando estados: {e}", exc_info=True)
         db.rollback()
-    
+
     return eventos_procesados
 
 
 async def _procesar_mensajes_recibidos(messages: list, db: Session) -> int:
     """
     Procesar mensajes recibidos de clientes
-    
+
     Esto permite recibir mensajes de clientes y responder automáticamente.
     Por ahora solo registramos los mensajes recibidos.
     """
     eventos_procesados = 0
-    
+
     try:
         for message in messages:
             from_number = message.get("from")
             message_id = message.get("id")
             message_type = message.get("type")
             timestamp = message.get("timestamp")
-            
+
             # Extraer contenido según el tipo
             if message_type == "text":
                 body = message.get("text", {}).get("body", "")
@@ -324,23 +343,20 @@ async def _procesar_mensajes_recibidos(messages: list, db: Session) -> int:
                 body = "[Documento recibido]"
             else:
                 body = f"[Mensaje tipo: {message_type}]"
-            
-            logger.info(
-                f"📨 Mensaje recibido de {from_number}: {body[:50]}... "
-                f"(ID: {message_id}, Tipo: {message_type})"
-            )
-            
+
+            logger.info(f"📨 Mensaje recibido de {from_number}: {body[:50]}... (ID: {message_id}, Tipo: {message_type})")
+
             # Aquí podrías:
             # 1. Guardar el mensaje en una tabla de mensajes recibidos
             # 2. Procesar comandos automáticos
             # 3. Enviar respuestas automáticas
             # 4. Actualizar última interacción del cliente (para ventana de 24h)
-            
+
             eventos_procesados += 1
-    
+
     except Exception as e:
         logger.error(f"❌ Error procesando mensajes recibidos: {e}", exc_info=True)
-    
+
     return eventos_procesados
 
 
@@ -362,39 +378,43 @@ async def webhook_info(db: Session = Depends(get_db)):
         # Construir URL del webhook
         from app.core.config import settings
         
-        # Obtener URL base desde settings o request
+        # Obtener URL base desde settings o environment
         base_url = getattr(settings, "BASE_URL", None)
         if not base_url:
-            # Intentar obtener desde environment o usar placeholder
             import os
             base_url = os.getenv("BASE_URL", "https://tu-dominio.com")
         
         webhook_url = f"{base_url}/api/v1/whatsapp/webhook"
-        
+
         return {
             "webhook_url": webhook_url,
             "verify_token_configured": bool(whatsapp_service.webhook_verify_token),
             "verify_token_preview": (
-                whatsapp_service.webhook_verify_token[:10] + "..." if whatsapp_service.webhook_verify_token else "No configurado"
+                whatsapp_service.webhook_verify_token[:10] + "..."
+                if whatsapp_service.webhook_verify_token
+                else "No configurado"
             ),
             "protocolo": {
                 "verificacion": {
                     "metodo": "GET",
                     "parametros": ["hub.mode=subscribe", "hub.verify_token=TOKEN", "hub.challenge=STRING"],
                     "respuesta": "Texto plano con hub.challenge (status 200)",
+                    "compatible_n8n": "✅ Sí - n8n Webhook Trigger acepta GET requests",
                 },
                 "eventos": {
                     "metodo": "POST",
                     "content_type": "application/json",
                     "headers_opcionales": ["X-Hub-Signature-256"],
                     "respuesta": "JSON con status 200",
+                    "compatible_n8n": "✅ Sí - n8n HTTP Request puede enviar POST",
                 },
             },
             "compatibilidad": {
                 "meta_whatsapp_api": "✅ 100% compatible",
-                "n8n_webhook_trigger": "✅ 100% compatible",
-                "n8n_http_request": "✅ 100% compatible",
-                "formato_respuesta": "JSON estándar",
+                "n8n_webhook_trigger": "✅ 100% compatible - GET y POST",
+                "n8n_http_request": "✅ 100% compatible - POST con JSON",
+                "n8n_response_modes": "✅ Compatible con 'Last Node' y 'Respond to Webhook'",
+                "formato_respuesta": "JSON estándar (POST) / Texto plano (GET)",
             },
             "instrucciones": {
                 "meta_directo": {
@@ -425,17 +445,22 @@ async def webhook_info(db: Session = Depends(get_db)):
             },
             "ejemplo_n8n_workflow": {
                 "nodos": [
-                    "1. Webhook (Trigger)",
+                    "1. Webhook (Trigger) - Método: GET y POST",
                     "2. IF (hub.mode == 'subscribe'?)",
-                    "3. Respond to Webhook (retornar challenge)",
+                    "3. Respond to Webhook (retornar hub.challenge)",
                     "4. HTTP Request (POST a este endpoint)",
                     "5. Function (procesamiento opcional)",
                 ],
                 "nota": "El endpoint acepta tanto formato Meta como formato genérico de n8n",
+                "formato_aceptado": [
+                    "Formato Meta estándar (object: whatsapp_business_account)",
+                    "Formato n8n wrapper (body: {...})",
+                    "Formato n8n wrapper (data: {...})",
+                    "Formato genérico JSON",
+                ],
             },
         }
-    
+
     except Exception as e:
         logger.error(f"❌ Error obteniendo info de webhook: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
-
