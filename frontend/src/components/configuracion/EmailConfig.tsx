@@ -136,7 +136,7 @@ export function EmailConfig() {
 
   // Validar si se puede guardar
   const puedeGuardar = useMemo((): boolean => {
-    // Campos obligatorios básicos
+    // ✅ CONDICIÓN 1: Campos obligatorios básicos (siempre requeridos)
     const tieneHost = config.smtp_host?.trim() || ''
     const tienePort = config.smtp_port?.trim() || ''
     const tieneUser = config.smtp_user?.trim() || ''
@@ -146,19 +146,27 @@ export function EmailConfig() {
       return false
     }
     
-    // Puerto válido
+    // ✅ CONDICIÓN 2: Puerto válido (número entre 1 y 65535)
     const puerto = parseInt(config.smtp_port || '0')
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
       return false
     }
     
-    // Si es Gmail, requiere contraseña y TLS para puerto 587
+    // ✅ CONDICIÓN 3: Validaciones específicas para Gmail/Google Workspace
     const esGmail = config.smtp_host?.toLowerCase().includes('gmail.com') || false
     if (esGmail) {
+      // ✅ 3.1: Gmail requiere contraseña siempre
       const tienePassword = config.smtp_password?.trim() || ''
       if (!tienePassword) {
         return false
       }
+      
+      // ✅ 3.2: Gmail solo acepta puertos 587 (TLS) o 465 (SSL)
+      if (puerto !== 587 && puerto !== 465) {
+        return false
+      }
+      
+      // ✅ 3.3: Puerto 587 requiere TLS habilitado
       if (puerto === 587 && config.smtp_use_tls !== 'true') {
         return false
       }
@@ -177,22 +185,33 @@ export function EmailConfig() {
   // Obtener campos faltantes para mensaje
   const obtenerCamposFaltantes = (): string[] => {
     const faltantes: string[] = []
+    
+    // Campos obligatorios básicos
     if (!config.smtp_host?.trim()) faltantes.push('Servidor SMTP')
     if (!config.smtp_port?.trim()) faltantes.push('Puerto SMTP')
     if (!config.smtp_user?.trim()) faltantes.push('Email de Usuario')
     if (!config.from_email?.trim()) faltantes.push('Email del Remitente')
     
+    // Validar puerto numérico
     const puerto = parseInt(config.smtp_port || '0')
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
-      faltantes.push('Puerto SMTP válido')
+      faltantes.push('Puerto SMTP válido (1-65535)')
     }
     
+    // Validaciones específicas para Gmail
     if (config.smtp_host?.toLowerCase().includes('gmail.com')) {
       if (!config.smtp_password?.trim()) {
         faltantes.push('Contraseña de Aplicación')
       }
+      
+      // Gmail solo acepta puertos 587 o 465
+      if (puerto !== 587 && puerto !== 465) {
+        faltantes.push('Puerto 587 (TLS) o 465 (SSL) para Gmail')
+      }
+      
+      // Puerto 587 requiere TLS
       if (puerto === 587 && config.smtp_use_tls !== 'true') {
-        faltantes.push('TLS habilitado')
+        faltantes.push('TLS habilitado (requerido para puerto 587)')
       }
     }
     
@@ -201,22 +220,34 @@ export function EmailConfig() {
 
   // Validar configuración antes de guardar
   const validarConfiguracion = (): string | null => {
+    // ✅ Validación 1: Campos obligatorios básicos
     const camposFaltantes = obtenerCamposFaltantes()
     if (camposFaltantes.length > 0) {
       return `Completa los siguientes campos: ${camposFaltantes.join(', ')}`
     }
     
-    const puerto = parseInt(config.smtp_port)
+    // ✅ Validación 2: Puerto válido
+    const puerto = parseInt(config.smtp_port || '0')
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
       return 'El puerto SMTP debe ser un número válido entre 1 y 65535'
     }
     
-    if (config.smtp_host.toLowerCase().includes('gmail.com')) {
-      if (puerto === 587 && config.smtp_use_tls !== 'true') {
-        return 'Para puerto 587, TLS debe estar habilitado (requerido por Gmail)'
-      }
+    // ✅ Validación 3: Reglas específicas para Gmail/Google Workspace
+    const esGmail = config.smtp_host?.toLowerCase().includes('gmail.com')
+    if (esGmail) {
+      // 3.1: Gmail requiere contraseña
       if (!config.smtp_password?.trim()) {
         return 'Debes ingresar una contraseña para autenticarte con Gmail/Google Workspace'
+      }
+      
+      // 3.2: Gmail solo acepta puertos 587 o 465
+      if (puerto !== 587 && puerto !== 465) {
+        return 'Gmail/Google Workspace requiere puerto 587 (TLS) o 465 (SSL). El puerto 587 es recomendado.'
+      }
+      
+      // 3.3: Puerto 587 requiere TLS habilitado
+      if (puerto === 587 && config.smtp_use_tls !== 'true') {
+        return 'Para puerto 587, TLS debe estar habilitado (requerido por Gmail/Google Workspace)'
       }
     }
     
