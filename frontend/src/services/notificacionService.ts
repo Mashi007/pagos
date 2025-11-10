@@ -97,11 +97,12 @@ class NotificacionService {
   }
 
   // Notificaciones
-  async listarNotificaciones(page = 1, per_page = 20, estado?: string): Promise<{ items: Notificacion[], total: number, page: number, page_size: number, total_pages: number }> {
+  async listarNotificaciones(page = 1, per_page = 20, estado?: string, canal?: string): Promise<{ items: Notificacion[], total: number, page: number, page_size: number, total_pages: number }> {
     const params = new URLSearchParams()
     params.append('page', String(page))
     params.append('per_page', String(per_page))
     if (estado) params.append('estado', estado)
+    if (canal) params.append('canal', canal)
     
     return await apiClient.get<{ items: Notificacion[], total: number, page: number, page_size: number, total_pages: number }>(`${this.baseUrl}/?${params}`)
   }
@@ -229,6 +230,49 @@ class EmailConfigService {
   }
 }
 
+export interface WhatsAppConfig {
+  api_url: string
+  access_token: string
+  phone_number_id: string
+  business_account_id: string
+  webhook_verify_token: string
+  modo_pruebas?: string
+  telefono_pruebas?: string
+}
+
+class WhatsAppConfigService {
+  private baseUrl = '/api/v1/configuracion'
+
+  async obtenerConfiguracionWhatsApp(): Promise<WhatsAppConfig> {
+    return await apiClient.get<WhatsAppConfig>(`${this.baseUrl}/whatsapp/configuracion`)
+  }
+
+  async actualizarConfiguracionWhatsApp(config: Partial<WhatsAppConfig>): Promise<any> {
+    console.log('📤 [WhatsAppConfigService] Enviando PUT a:', `${this.baseUrl}/whatsapp/configuracion`)
+    console.log('📤 [WhatsAppConfigService] Datos a enviar:', {
+      ...config,
+      access_token: config.access_token ? '***' : '(vacío)'
+    })
+    
+    try {
+      const resultado = await apiClient.put(`${this.baseUrl}/whatsapp/configuracion`, config)
+      console.log('✅ [WhatsAppConfigService] Respuesta exitosa:', resultado)
+      return resultado
+    } catch (error) {
+      console.error('❌ [WhatsAppConfigService] Error en PUT:', error)
+      throw error
+    }
+  }
+
+  async probarConfiguracionWhatsApp(telefonoDestino?: string, mensaje?: string): Promise<any> {
+    const params: any = {}
+    if (telefonoDestino) params.telefono_destino = telefonoDestino
+    if (mensaje) params.mensaje = mensaje
+    return await apiClient.post(`${this.baseUrl}/whatsapp/probar`, params)
+  }
+}
+
 export const notificacionService = new NotificacionService()
 export const emailConfigService = new EmailConfigService()
+export const whatsappConfigService = new WhatsAppConfigService()
 

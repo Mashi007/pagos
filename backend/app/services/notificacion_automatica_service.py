@@ -18,6 +18,7 @@ from app.models.notificacion import Notificacion
 from app.models.notificacion_plantilla import NotificacionPlantilla
 from app.models.prestamo import Prestamo
 from app.services.email_service import EmailService
+from app.services.whatsapp_service import WhatsAppService
 from app.services.variables_notificacion_service import VariablesNotificacionService
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class NotificacionAutomaticaService:
     def __init__(self, db: Session):
         self.db = db
         self.email_service = EmailService(db=db)
+        self.whatsapp_service = WhatsAppService(db=db)
         self.variables_service = VariablesNotificacionService(db=db)
         self._plantillas_cache: Dict[str, Optional[NotificacionPlantilla]] = {}
 
@@ -177,43 +179,103 @@ class NotificacionAutomaticaService:
             # NOTA: La verificación de notificaciones existentes ya se hace en batch
             # en procesar_notificaciones_automaticas() para evitar queries N+1
 
-            # Crear registro de notificación
-            nueva_notif = Notificacion(
-                cliente_id=cliente.id,
-                tipo=plantilla.tipo,
-                canal="EMAIL",
-                asunto=asunto,
-                mensaje=cuerpo,
-                estado="PENDIENTE",
-            )
-            self.db.add(nueva_notif)
-            self.db.commit()
+            # Determinar canales disponibles
+            tiene_email = bool(cliente.email)
+            tiene_telefono = bool(cliente.telefono)
 
-            # Enviar email si el cliente tiene email
-            if cliente.email:
-                resultado = self.email_service.send_email(
+            if not tiene_email and not tiene_telefono:
+                logger.warning(f"Cliente {cliente.id} no tiene email ni teléfono configurado")
+                return False
+
+            # Enviar por los canales disponibles
+            envio_exitoso = False
+            errores = []
+
+            # Enviar por EMAIL si está disponible
+            if tiene_email:
+                nueva_notif_email = Notificacion(
+                    cliente_id=cliente.id,
+                    tipo=plantilla.tipo,
+                    canal="EMAIL",
+                    asunto=asunto,
+                    mensaje=cuerpo,
+                    estado="PENDIENTE",
+                )
+                self.db.add(nueva_notif_email)
+                self.db.commit()
+
+                resultado_email = self.email_service.send_email(
                     to_emails=[cliente.email],
                     subject=asunto,
                     body=cuerpo,
                     is_html=True,
                 )
 
-                if resultado.get("success"):
-                    # Marcar como enviada
-                    nueva_notif.estado = "ENVIADA"
-                    nueva_notif.enviada_en = datetime.now(CARACAS_TZ)
+                if resultado_email.get("success"):
+                    nueva_notif_email.estado = "ENVIADA"
+                    nueva_notif_email.enviada_en = datetime.now(CARACAS_TZ)
                     self.db.commit()
-                    logger.info(f"Notificación enviada a {cliente.email}")
-                    return True
+                    logger.info(f"Notificación EMAIL enviada a {cliente.email}")
+                    envio_exitoso = True
                 else:
-                    nueva_notif.estado = "FALLIDA"
-                    nueva_notif.error_mensaje = resultado.get("message", "Error desconocido")
+                    nueva_notif_email.estado = "FALLIDA"
+                    nueva_notif_email.error_mensaje = resultado_email.get("message", "Error desconocido")
                     self.db.commit()
-                    logger.error(f"Error enviando email: {resultado.get('message')}")
-                    return False
+                    logger.error(f"Error enviando email: {resultado_email.get('message')}")
+                    errores.append(f"Email: {resultado_email.get('message')}")
 
-            logger.warning(f"Cliente {cliente.id} no tiene email configurado")
-            return False
+            # Enviar por WHATSAPP si está disponible
+            if tiene_telefono:
+                # Convertir cuerpo HTML a texto plano para WhatsApp (básico)
+                import re
+                cuerpo_texto = re.sub(r"<[^>]+>", "", cuerpo)  # Remover HTML tags
+                cuerpo_texto = re.sub(r"\n\s*\n", "\n\n", cuerpo_texto)  # Limpiar espacios
+                cuerpo_texto = cuerpo_texto.strip()
+
+                nueva_notif_whatsapp = Notificacion(
+                    cliente_id=cliente.id,
+                    tipo=plantilla.tipo,
+                    canal="WHATSAPP",
+                    asunto=asunto,
+                    mensaje=cuerpo_texto,
+                    estado="PENDIENTE",
+                )
+                self.db.add(nueva_notif_whatsapp)
+                self.db.commit()
+
+                # WhatsApp requiere async, pero estamos en contexto sync
+                # Usar asyncio para ejecutar la función async
+                import asyncio
+
+                try:
+                    # Intentar obtener el loop existente
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    # Si no hay loop, crear uno nuevo
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+
+                resultado_whatsapp = loop.run_until_complete(
+                    self.whatsapp_service.send_message(
+                        to_number=str(cliente.telefono),
+                        message=cuerpo_texto,
+                    )
+                )
+
+                if resultado_whatsapp.get("success"):
+                    nueva_notif_whatsapp.estado = "ENVIADA"
+                    nueva_notif_whatsapp.enviada_en = datetime.now(CARACAS_TZ)
+                    self.db.commit()
+                    logger.info(f"Notificación WHATSAPP enviada a {cliente.telefono}")
+                    envio_exitoso = True
+                else:
+                    nueva_notif_whatsapp.estado = "FALLIDA"
+                    nueva_notif_whatsapp.error_mensaje = resultado_whatsapp.get("message", "Error desconocido")
+                    self.db.commit()
+                    logger.error(f"Error enviando WhatsApp: {resultado_whatsapp.get('message')}")
+                    errores.append(f"WhatsApp: {resultado_whatsapp.get('message')}")
+
+            return envio_exitoso
 
         except Exception as e:
             self.db.rollback()

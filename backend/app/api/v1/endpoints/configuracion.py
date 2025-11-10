@@ -1351,6 +1351,264 @@ def actualizar_configuracion_general(
 
 
 # ============================================
+# CONFIGURACIÓN DE WHATSAPP
+# ============================================
+
+
+def _obtener_valores_whatsapp_por_defecto() -> Dict[str, str]:
+    """Retorna valores por defecto para configuración de WhatsApp"""
+    return {
+        "api_url": "https://graph.facebook.com/v18.0",
+        "access_token": "",
+        "phone_number_id": "",
+        "business_account_id": "",
+        "webhook_verify_token": "",
+        "modo_pruebas": "true",
+        "telefono_pruebas": "",
+    }
+
+
+def _consultar_configuracion_whatsapp(db: Session) -> Optional[Any]:
+    """Intenta consultar configuración de WhatsApp desde BD"""
+    try:
+        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "WHATSAPP").all()
+        logger.info(f"📊 Configuraciones WhatsApp encontradas: {len(configs)}")
+        return configs
+    except Exception as query_error:
+        logger.error(f"❌ Error ejecutando consulta de configuración de WhatsApp: {str(query_error)}", exc_info=True)
+        try:
+            config_dict = ConfiguracionSistema.obtener_categoria(db, "WHATSAPP")
+            if config_dict:
+                logger.info(f"✅ Configuración WhatsApp obtenida usando método alternativo: {len(config_dict)} configuraciones")
+                return config_dict
+        except Exception as alt_error:
+            logger.error(f"❌ Error en método alternativo también falló: {str(alt_error)}", exc_info=True)
+        return None
+
+
+def _procesar_configuraciones_whatsapp(configs: list) -> Dict[str, Any]:
+    """Procesa una lista de configuraciones y retorna un diccionario"""
+    config_dict = {}
+    for config in configs:
+        try:
+            if hasattr(config, "clave") and config.clave:
+                valor = config.valor if hasattr(config, "valor") and config.valor is not None else ""
+                config_dict[config.clave] = valor
+                logger.debug(f"📝 Configuración WhatsApp: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
+            else:
+                logger.warning(f"⚠️ Configuración WhatsApp sin clave válida: {config}")
+        except Exception as config_error:
+            logger.error(f"❌ Error procesando configuración WhatsApp individual: {config_error}", exc_info=True)
+            continue
+    return config_dict
+
+
+@router.get("/whatsapp/configuracion")
+def obtener_configuracion_whatsapp(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Obtener configuración de WhatsApp"""
+    try:
+        logger.info(f"📱 Obteniendo configuración de WhatsApp - Usuario: {getattr(current_user, 'email', 'N/A')}")
+
+        if not getattr(current_user, "is_admin", False):
+            logger.warning(
+                f"⚠️ Usuario no autorizado intentando acceder a configuración de WhatsApp: {getattr(current_user, 'email', 'N/A')}"
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="Solo administradores pueden ver configuración de WhatsApp",
+            )
+
+        logger.info("🔍 Consultando configuración de WhatsApp desde BD...")
+        configs = _consultar_configuracion_whatsapp(db)
+
+        if configs is None:
+            logger.warning("⚠️ No se pudo obtener configuración de BD, retornando valores por defecto")
+            return _obtener_valores_whatsapp_por_defecto()
+
+        if isinstance(configs, dict):
+            return configs
+
+        if not configs:
+            logger.info("📝 Retornando valores por defecto de WhatsApp (no hay configuraciones en BD)")
+            return _obtener_valores_whatsapp_por_defecto()
+
+        config_dict = _procesar_configuraciones_whatsapp(configs)
+        logger.info(f"✅ Configuración de WhatsApp obtenida exitosamente: {len(config_dict)} configuraciones")
+        return config_dict
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error obteniendo configuración de WhatsApp: {str(e)}", exc_info=True)
+        logger.warning("⚠️ Retornando valores por defecto debido a error")
+        return _obtener_valores_whatsapp_por_defecto()
+
+
+@router.put("/whatsapp/configuracion")
+def actualizar_configuracion_whatsapp(
+    config_data: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Actualizar configuración de WhatsApp"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden actualizar configuración",
+        )
+
+    try:
+        configuraciones = []
+        for clave, valor in config_data.items():
+            config = (
+                db.query(ConfiguracionSistema)
+                .filter(
+                    ConfiguracionSistema.categoria == "WHATSAPP",
+                    ConfiguracionSistema.clave == clave,
+                )
+                .first()
+            )
+
+            if config:
+                config.valor = str(valor)  # type: ignore[assignment]
+                configuraciones.append(config)  # type: ignore[arg-type]
+            else:
+                nueva_config = ConfiguracionSistema(
+                    categoria="WHATSAPP",
+                    clave=clave,
+                    valor=str(valor),
+                    tipo_dato="STRING",
+                    visible_frontend=True,
+                )
+                db.add(nueva_config)
+                configuraciones.append(nueva_config)
+
+        db.commit()
+
+        logger.info(f"Configuración de WhatsApp actualizada por {current_user.email}")
+
+        return {
+            "mensaje": "Configuración de WhatsApp actualizada exitosamente",
+            "configuraciones_actualizadas": len(configuraciones),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando configuración de WhatsApp: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+class ProbarWhatsAppRequest(BaseModel):
+    telefono_destino: Optional[str] = None
+    mensaje: Optional[str] = None
+
+
+@router.post("/whatsapp/probar")
+async def probar_configuracion_whatsapp(
+    request: Optional[ProbarWhatsAppRequest] = Body(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Probar configuración de WhatsApp enviando un mensaje de prueba
+
+    Args:
+        request: Objeto con telefono_destino opcional. Si no se proporciona, se usa el teléfono de pruebas.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden probar configuración de WhatsApp",
+        )
+
+    try:
+        # Obtener configuración
+        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "WHATSAPP").all()
+
+        if not configs:
+            raise HTTPException(status_code=400, detail="No hay configuración de WhatsApp")
+
+        config_dict = {config.clave: config.valor for config in configs}
+        modo_pruebas = config_dict.get("modo_pruebas", "true").lower() in ("true", "1", "yes", "on")
+
+        # Determinar teléfono destino
+        telefono_destino_val = None
+        if request:
+            if isinstance(request, dict):
+                telefono_destino_val = request.get("telefono_destino")
+            elif hasattr(request, "telefono_destino"):
+                telefono_destino_val = request.telefono_destino
+
+        # Si se proporcionó un teléfono, usarlo; si no, usar el teléfono de pruebas o requerirlo
+        if telefono_destino_val and telefono_destino_val.strip():
+            telefono_a_enviar = telefono_destino_val.strip()
+        elif modo_pruebas and config_dict.get("telefono_pruebas"):
+            telefono_a_enviar = config_dict["telefono_pruebas"]
+        else:
+            raise HTTPException(status_code=400, detail="Debe proporcionar un número de teléfono de destino")
+
+        # Validar formato de teléfono (básico)
+        import re
+
+        # Limpiar número (quitar espacios, guiones, paréntesis)
+        telefono_limpio = re.sub(r"[\s\-\(\)]", "", telefono_a_enviar)
+        # Debe empezar con + y tener al menos 10 dígitos
+        if not re.match(r"^\+?[1-9]\d{9,14}$", telefono_limpio):
+            raise HTTPException(status_code=400, detail="Número de teléfono inválido. Debe incluir código de país (ej: +584121234567)")
+
+        # Obtener mensaje personalizado si se proporcionó
+        mensaje_personalizado = None
+        if request:
+            if isinstance(request, dict):
+                mensaje_personalizado = request.get("mensaje")
+            elif hasattr(request, "mensaje"):
+                mensaje_personalizado = request.mensaje
+
+        # Usar mensaje personalizado o el predeterminado
+        mensaje_whatsapp = (
+            mensaje_personalizado.strip()
+            if mensaje_personalizado and mensaje_personalizado.strip()
+            else "✅ Prueba de configuración - RapiCredit\n\nEste es un mensaje de prueba para verificar que la configuración de WhatsApp está funcionando correctamente.\n\nSi recibes este mensaje, significa que:\n✅ La configuración es correcta\n✅ Las credenciales son válidas\n✅ El sistema puede enviar mensajes normalmente"
+        )
+
+        # Enviar mensaje de prueba
+        from app.services.whatsapp_service import WhatsAppService
+
+        whatsapp_service = WhatsAppService(db=db)
+
+        # Si estamos en modo Producción, forzar envío real para verificar que funciona
+        # Si estamos en modo Pruebas, respetar el comportamiento normal
+        forzar_real = not modo_pruebas
+
+        result = await whatsapp_service.send_message(
+            to_number=telefono_limpio,
+            message=mensaje_whatsapp,
+            forzar_envio_real=forzar_real,
+        )
+
+        if result.get("success"):
+            return {
+                "mensaje": f"Mensaje de prueba enviado exitosamente a {telefono_limpio}",
+                "telefono_destino": telefono_limpio,
+                "detalle": result,
+            }
+        else:
+            return {
+                "mensaje": "Error enviando mensaje de prueba",
+                "error": result.get("message"),
+                "telefono_destino": telefono_limpio,
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error probando configuración de WhatsApp: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+# ============================================
 # VALIDADORES (Proxy para mantener compatibilidad)
 # ============================================
 

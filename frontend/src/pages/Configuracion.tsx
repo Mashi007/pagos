@@ -8,6 +8,7 @@ import {
   RefreshCw,
   Bell,
   Mail,
+  MessageSquare,
   Shield,
   Database,
   Globe,
@@ -40,6 +41,7 @@ import { ConcesionariosConfig } from '@/components/configuracion/ConcesionariosC
 import { AnalistasConfig } from '@/components/configuracion/AnalistasConfig'
 import { ModelosVehiculosConfig } from '@/components/configuracion/ModelosVehiculosConfig'
 import { EmailConfig } from '@/components/configuracion/EmailConfig'
+import { WhatsAppConfig } from '@/components/configuracion/WhatsAppConfig'
 import { configuracionGeneralService, ConfiguracionGeneral } from '@/services/configuracionGeneralService'
 import { apiClient } from '@/services/api'
 import { toast } from 'sonner'
@@ -214,6 +216,7 @@ export function Configuracion() {
       items: [
         { id: 'notificaciones', nombre: 'Notificaciones', icono: Bell },
         { id: 'emailConfig', nombre: 'Configuración Email', icono: Mail },
+        { id: 'whatsappConfig', nombre: 'Configuración WhatsApp', icono: MessageSquare },
         { id: 'programador', nombre: 'Programador', icono: Calendar },
         { id: 'auditoria', nombre: 'Auditoría', icono: FileText },
       ]
@@ -1315,6 +1318,7 @@ export function Configuracion() {
       case 'general': return renderSeccionGeneral()
       case 'notificaciones': return renderSeccionNotificaciones()
       case 'emailConfig': return <EmailConfig />
+      case 'whatsappConfig': return <WhatsAppConfig />
       case 'programador': return renderSeccionProgramador()
       case 'auditoria': return renderSeccionAuditoria()
       // case 'seguridad': return renderSeccionSeguridad() // OCULTO

@@ -37,6 +37,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def ejecutar_async_en_background(coroutine):
+    """
+    Helper para ejecutar funciones async en background tasks de FastAPI
+    """
+    import asyncio
+    
+    try:
+        # Intentar obtener el loop existente
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Si hay un loop corriendo, crear una tarea
+            asyncio.create_task(coroutine)
+        else:
+            # Si no hay loop, ejecutar directamente
+            loop.run_until_complete(coroutine)
+    except RuntimeError:
+        # Si no hay loop, crear uno nuevo
+        asyncio.run(coroutine)
+
+
 # Schemas
 class NotificacionCreate(BaseModel):
     cliente_id: int
@@ -107,12 +127,47 @@ async def enviar_notificacion(
                 body=notificacion.mensaje,
             )
         elif notificacion.canal == "WHATSAPP":
-            whatsapp_service = WhatsAppService()
-            background_tasks.add_task(
-                whatsapp_service.send_message,
-                to_number=str(cliente.telefono),
-                message=notificacion.mensaje,
-            )
+            whatsapp_service = WhatsAppService(db=db)
+            notif_id = nueva_notif.id
+            telefono_cliente = str(cliente.telefono)
+            mensaje_cliente = notificacion.mensaje
+            
+            # Función sync wrapper para background task
+            def enviar_whatsapp_sync():
+                async def enviar_whatsapp_async():
+                    try:
+                        resultado = await whatsapp_service.send_message(
+                            to_number=telefono_cliente,
+                            message=mensaje_cliente,
+                        )
+                        # Actualizar estado de notificación
+                        from app.db.session import SessionLocal
+                        db_local = SessionLocal()
+                        try:
+                            notif = db_local.query(Notificacion).filter(Notificacion.id == notif_id).first()
+                            if notif:
+                                if resultado.get("success"):
+                                    notif.estado = "ENVIADA"
+                                    notif.enviada_en = datetime.utcnow()
+                                    notif.respuesta_servicio = resultado.get("message", "Mensaje enviado exitosamente")
+                                    logger.info(f"✅ Notificación WhatsApp {notif_id} enviada exitosamente a {telefono_cliente}")
+                                else:
+                                    notif.estado = "FALLIDA"
+                                    notif.error_mensaje = resultado.get("message", "Error desconocido")
+                                    notif.intentos = (notif.intentos or 0) + 1
+                                    logger.error(f"❌ Error enviando notificación WhatsApp {notif_id}: {resultado.get('message')}")
+                                db_local.commit()
+                        except Exception as e:
+                            db_local.rollback()
+                            logger.error(f"Error actualizando estado de notificación: {e}")
+                        finally:
+                            db_local.close()
+                    except Exception as e:
+                        logger.error(f"Error enviando WhatsApp: {e}")
+                
+                ejecutar_async_en_background(enviar_whatsapp_async())
+            
+            background_tasks.add_task(enviar_whatsapp_sync)
 
         logger.info(f"Notificación programada para cliente {cliente.id}")
         return nueva_notif
@@ -179,12 +234,47 @@ async def envio_masivo(
                     body=request.template,
                 )
             elif request.canal == "WHATSAPP":
-                whatsapp_service = WhatsAppService()
-                background_tasks.add_task(
-                    whatsapp_service.send_message,
-                    to_number=str(cliente.telefono),
-                    message=request.template,
-                )
+                whatsapp_service = WhatsAppService(db=db)
+                notif_id = notif.id
+                telefono_cliente = str(cliente.telefono)
+                mensaje_template = request.template
+                
+                # Función sync wrapper para background task
+                def enviar_whatsapp_masivo_sync():
+                    async def enviar_whatsapp_masivo_async():
+                        try:
+                            resultado = await whatsapp_service.send_message(
+                                to_number=telefono_cliente,
+                                message=mensaje_template,
+                            )
+                            # Actualizar estado de notificación
+                            from app.db.session import SessionLocal
+                            db_local = SessionLocal()
+                            try:
+                                notif_local = db_local.query(Notificacion).filter(Notificacion.id == notif_id).first()
+                                if notif_local:
+                                    if resultado.get("success"):
+                                        notif_local.estado = "ENVIADA"
+                                        notif_local.enviada_en = datetime.utcnow()
+                                        notif_local.respuesta_servicio = resultado.get("message", "Mensaje enviado exitosamente")
+                                        logger.info(f"✅ Notificación WhatsApp masiva {notif_id} enviada exitosamente a {telefono_cliente}")
+                                    else:
+                                        notif_local.estado = "FALLIDA"
+                                        notif_local.error_mensaje = resultado.get("message", "Error desconocido")
+                                        notif_local.intentos = (notif_local.intentos or 0) + 1
+                                        logger.error(f"❌ Error enviando notificación WhatsApp masiva {notif_id}: {resultado.get('message')}")
+                                    db_local.commit()
+                            except Exception as e:
+                                db_local.rollback()
+                                logger.error(f"Error actualizando estado de notificación: {e}")
+                            finally:
+                                db_local.close()
+                        except Exception as e:
+                            logger.error(f"Error enviando WhatsApp: {e}")
+                    
+                    ejecutar_async_en_background(enviar_whatsapp_masivo_async())
+                
+                background_tasks.add_task(enviar_whatsapp_masivo_sync)
 
         logger.info(f"Enviadas {len(notificaciones_creadas)} notificaciones masivas")
 
@@ -204,6 +294,7 @@ def listar_notificaciones(
     page: int = Query(1, ge=1, description="Número de página"),
     per_page: int = Query(20, ge=1, le=100, description="Registros por página"),
     estado: Optional[str] = Query(None, description="Filtrar por estado"),
+    canal: Optional[str] = Query(None, description="Filtrar por canal (EMAIL, WHATSAPP)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -266,6 +357,8 @@ def listar_notificaciones(
                 "respuesta_servicio",
                 "error_mensaje",
             ]
+            if canal_exists:
+                select_columns.insert(select_columns.index("tipo") + 1, "canal")
             if leida_exists:
                 select_columns.insert(select_columns.index("enviada_en") + 1, "leida")
             if created_at_exists:
@@ -274,27 +367,37 @@ def listar_notificaciones(
             columns_str = ", ".join(select_columns)
             # Usar created_at si existe, sino usar id para ordenar
             order_by = "created_at DESC" if created_at_exists else "id DESC"
+            # Construir WHERE dinámicamente
+            where_clauses = ["(:estado IS NULL OR estado = :estado)"]
+            if canal_exists and canal:
+                where_clauses.append("canal = :canal")
+            where_str = " AND ".join(where_clauses)
+
             base_query = sql_text(
                 f"""
                 SELECT {columns_str}
                 FROM notificaciones
-                WHERE (:estado IS NULL OR estado = :estado)
+                WHERE {where_str}
                 ORDER BY {order_by}
                 LIMIT :limit OFFSET :skip
             """
             )
 
-            result = db.execute(base_query, {"estado": estado, "limit": limit, "skip": skip})
+            query_params = {"estado": estado, "limit": limit, "skip": skip}
+            if canal_exists and canal:
+                query_params["canal"] = canal
+
+            result = db.execute(base_query, query_params)
             rows = result.fetchall()
 
             # Contar total (usando parámetros seguros)
             count_query = sql_text(
-                """
+                f"""
                 SELECT COUNT(*) FROM notificaciones
-                WHERE (:estado IS NULL OR estado = :estado)
+                WHERE {where_str}
             """
             )
-            total = db.execute(count_query, {"estado": estado}).scalar() or 0
+            total = db.execute(count_query, query_params).scalar() or 0
 
             # Serializar resultados - mapear índices dinámicamente según columnas disponibles
             items = []
@@ -310,6 +413,10 @@ def listar_notificaciones(
                     col_idx += 1
                     tipo = row[col_idx] if len(row) > col_idx else None
                     col_idx += 1  # tipo
+                    canal_row = None
+                    if canal_exists:
+                        canal_row = row[col_idx] if len(row) > col_idx else None
+                        col_idx += 1  # canal
                     asunto = row[col_idx] if len(row) > col_idx else None
                     col_idx += 1  # asunto
                     mensaje = row[col_idx] if len(row) > col_idx else None
@@ -346,7 +453,7 @@ def listar_notificaciones(
                         "id": row_id,
                         "cliente_id": cliente_id,
                         "tipo": tipo or "",
-                        "canal": None,  # No existe en BD cuando canal_exists = False
+                        "canal": canal_row if canal_exists else None,
                         "mensaje": mensaje or "",
                         "asunto": asunto,
                         "estado": estado_row or "PENDIENTE",
@@ -363,6 +470,8 @@ def listar_notificaciones(
         # Si canal existe, usar query normal
         if estado:
             query = query.filter(Notificacion.estado == estado)
+        if canal:
+            query = query.filter(Notificacion.canal == canal)
 
         # Contar total
         try:

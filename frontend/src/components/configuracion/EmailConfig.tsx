@@ -88,7 +88,9 @@ export function EmailConfig() {
       smtp_user: config.smtp_user,
       from_email: config.from_email,
       tiene_password: !!config.smtp_password,
-      password_length: config.smtp_password?.length || 0
+      password_length: config.smtp_password?.length || 0,
+      modo_pruebas: modoPruebas,
+      email_pruebas: emailPruebas
     })
     
     // Validaciones generales primero - solo campos obligatorios
@@ -101,6 +103,19 @@ export function EmailConfig() {
       
       console.warn('⚠️ [EmailConfig] Campos faltantes:', camposFaltantes)
       return `Por favor completa todos los campos requeridos. Faltan: ${camposFaltantes.join(', ')}`
+    }
+    
+    // NOTA: El email de pruebas NO es obligatorio para guardar la configuración
+    // Solo se validará cuando se intente enviar un email de prueba en modo pruebas
+    // Esto permite guardar la configuración SMTP primero y luego configurar las pruebas
+    
+    // Validar formato de email de pruebas solo si está configurado (opcional)
+    if (emailPruebas && emailPruebas.trim().length > 0) {
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailPattern.test(emailPruebas.trim())) {
+        console.warn('⚠️ [EmailConfig] Email de pruebas con formato inválido')
+        return 'El Email de Pruebas debe tener un formato válido (ejemplo: pruebas@ejemplo.com).'
+      }
     }
     
     // Validar puerto numérico válido
@@ -214,7 +229,24 @@ export function EmailConfig() {
       setProbando(true)
       setResultadoPrueba(null)
       
-      // Validar email si se proporcionó
+      // Validar que si está en modo pruebas, tenga email de pruebas configurado
+      if (modoPruebas === 'true' && (!emailPruebas || emailPruebas.trim().length === 0)) {
+        toast.error('En modo Pruebas, debes configurar un Email de Pruebas antes de enviar un email de prueba.')
+        setProbando(false)
+        return
+      }
+      
+      // Validar formato de email de pruebas si está configurado
+      if (emailPruebas && emailPruebas.trim().length > 0) {
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailPattern.test(emailPruebas.trim())) {
+          toast.error('El Email de Pruebas tiene un formato inválido. Por favor, corrígelo antes de enviar.')
+          setProbando(false)
+          return
+        }
+      }
+      
+      // Validar email de destino si se proporcionó
       if (emailPruebaDestino && emailPruebaDestino.trim()) {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         if (!emailRegex.test(emailPruebaDestino.trim())) {
@@ -406,7 +438,7 @@ export function EmailConfig() {
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <div className="mb-3">
                   <label className="text-sm font-medium block mb-2">
-                    Email de Pruebas <span className="text-red-500">*</span>
+                    Email de Pruebas <span className="text-gray-500 text-xs">(Opcional - Requerido solo para enviar emails de prueba)</span>
                   </label>
                   <Input
                     type="email"
@@ -416,7 +448,8 @@ export function EmailConfig() {
                     className="max-w-md"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    En modo pruebas, todos los emails se enviarán a esta dirección en lugar de a los clientes reales.
+                    En modo pruebas, todos los emails se enviarán a esta dirección en lugar de a los clientes reales. 
+                    Puedes guardar la configuración SMTP sin este campo y configurarlo después.
                   </p>
                 </div>
               </div>
