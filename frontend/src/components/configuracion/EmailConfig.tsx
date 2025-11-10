@@ -449,17 +449,6 @@ export function EmailConfig() {
 
   return (
     <div className="space-y-6">
-      {/* Información inicial */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Mail className="h-5 w-5 text-blue-600" />
-          <h3 className="font-semibold text-blue-900">Configuración de Email</h3>
-        </div>
-        <p className="text-sm text-blue-700">
-          Configura el servidor SMTP para enviar notificaciones por email a los clientes.
-        </p>
-      </div>
-
       {/* Configuración SMTP */}
       <Card>
         <CardHeader>
