@@ -152,11 +152,22 @@ class EmailService:
                 logger.warning(f"🧪 MODO PRUEBAS: Redirigiendo email de {', '.join(to_emails)} a {self.email_pruebas}")
 
             # Crear mensaje
-            msg = MIMEMultipart()
+            from email.utils import formatdate, make_msgid
+            from datetime import datetime
+            
+            msg = MIMEMultipart("alternative")  # ✅ multipart/alternative para HTML + texto plano
             msg["From"] = f"{self.from_name} <{self.from_email}>"
             msg["To"] = ", ".join(emails_destinatarios)
             msg["Subject"] = subject
-
+            msg["Date"] = formatdate(localtime=True)
+            msg["Message-ID"] = make_msgid(domain=self.from_email.split("@")[1] if "@" in self.from_email else "rapicredit.com")
+            msg["Reply-To"] = self.from_email  # ✅ Reply-To para mejor deliverability
+            msg["X-Mailer"] = "RapiCredit Email System"  # ✅ Identificación del sistema
+            
+            # ✅ Agregar headers adicionales para evitar spam
+            msg["X-Priority"] = "3"  # Prioridad normal
+            msg["MIME-Version"] = "1.0"
+            
             # Agregar CCO (BCC) si se proporciona
             emails_cco = []
             if bcc_emails:
@@ -166,11 +177,20 @@ class EmailService:
                     msg["Bcc"] = ", ".join(emails_cco)
                     logger.info(f"📧 Agregando {len(emails_cco)} correo(s) en CCO: {', '.join(emails_cco)}")
 
-            # Agregar cuerpo
+            # ✅ Agregar versión de texto plano Y HTML para mejor deliverability
+            # Los filtros spam prefieren emails con ambas versiones
             if is_html:
-                msg.attach(MIMEText(body, "html"))
+                # Extraer texto plano del HTML (simple, sin tags)
+                import re
+                texto_plano = re.sub(r'<[^>]+>', '', body).strip()
+                texto_plano = re.sub(r'\s+', ' ', texto_plano)  # Normalizar espacios
+                
+                # Agregar texto plano primero (los clientes de email lo prefieren)
+                msg.attach(MIMEText(texto_plano, "plain", "utf-8"))
+                # Luego agregar HTML
+                msg.attach(MIMEText(body, "html", "utf-8"))
             else:
-                msg.attach(MIMEText(body, "plain"))
+                msg.attach(MIMEText(body, "plain", "utf-8"))
 
             # Enviar email - reutilizar conexión si está habilitado
             if self.reuse_connection and self._smtp_server_connection:
