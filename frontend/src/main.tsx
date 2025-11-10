@@ -35,7 +35,10 @@ const queryClient = new QueryClient({
   },
 })
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root')!
+
+// Renderizar la aplicación
+ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -67,3 +70,27 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>,
 )
+
+// Marcar que los estilos están cargados después de que React renderice
+// Usar requestAnimationFrame para asegurar que el render esté completo
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    // Verificar que las variables CSS estén disponibles (indica que Tailwind está cargado)
+    const root = document.getElementById('root')
+    if (root) {
+      const computedStyle = window.getComputedStyle(root)
+      // Si las variables CSS están disponibles, mostrar contenido
+      if (computedStyle && computedStyle.fontFamily) {
+        root.classList.add('styles-loaded')
+      } else {
+        // Si aún no están, esperar un poco más
+        setTimeout(() => {
+          const rootEl = document.getElementById('root')
+          if (rootEl) {
+            rootEl.classList.add('styles-loaded')
+          }
+        }, 100)
+      }
+    }
+  })
+})

@@ -10,6 +10,26 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>RAPICREDIT - Sistema de Préstamos y Cobranza</title>
+    <!-- Estilos críticos inline para prevenir FOUC (Flash of Unstyled Content) -->
+    <style>
+      /* Ocultar contenido hasta que los estilos estén cargados */
+      #root:not(.styles-loaded) {
+        visibility: hidden;
+        opacity: 0;
+      }
+      /* Estilos básicos para evitar layout shift */
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      #root {
+        min-height: 100vh;
+        transition: opacity 0.2s ease-in;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
@@ -96,6 +116,48 @@
           reloadPage();
         }
       });
+    </script>
+    <!-- Script para prevenir FOUC: mostrar contenido cuando los estilos estén listos -->
+    <script>
+      // Función para verificar que los estilos estén cargados
+      function checkStylesLoaded() {
+        // Verificar que el CSS principal esté cargado
+        // Buscar enlaces de estilos o verificar que las variables CSS estén disponibles
+        const root = document.getElementById('root');
+        if (root) {
+          // Esperar a que React renderice y los estilos estén aplicados
+          // Usar requestAnimationFrame para asegurar que el render esté completo
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              // Verificar que las variables CSS de Tailwind estén disponibles
+              const computedStyle = window.getComputedStyle(root);
+              // Si hay estilos aplicados (no es el estilo por defecto), mostrar contenido
+              if (computedStyle && computedStyle.fontFamily) {
+                root.classList.add('styles-loaded');
+              } else {
+                // Si aún no hay estilos, intentar de nuevo después de un breve delay
+                setTimeout(checkStylesLoaded, 50);
+              }
+            });
+          });
+        }
+      }
+      
+      // Iniciar verificación cuando el DOM esté listo
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', checkStylesLoaded);
+      } else {
+        // DOM ya está listo
+        checkStylesLoaded();
+      }
+      
+      // Fallback: mostrar contenido después de un timeout máximo (evitar bloqueo infinito)
+      setTimeout(() => {
+        const root = document.getElementById('root');
+        if (root) {
+          root.classList.add('styles-loaded');
+        }
+      }, 2000); // Máximo 2 segundos
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
