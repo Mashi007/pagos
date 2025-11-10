@@ -338,6 +338,9 @@ export function EmailConfig() {
       }
       
       await cargarConfiguracion()
+      
+      // ✅ Verificar estado de Google después de guardar
+      await verificarEstadoGoogle()
     } catch (error: any) {
       console.error('Error guardando configuración:', error)
       
