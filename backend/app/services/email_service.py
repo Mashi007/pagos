@@ -177,33 +177,33 @@ class EmailService:
             import html as html_module
 
             msg = MIMEMultipart("alternative")  # ✅ multipart/alternative para HTML + texto plano
-            
+
             # ✅ Mejorar formato del From (RFC-compliant)
             if self.from_name and self.from_name.strip():
                 msg["From"] = formataddr((self.from_name, self.from_email))
             else:
                 msg["From"] = self.from_email
-            
+
             msg["To"] = ", ".join(emails_destinatarios)
             msg["Subject"] = subject
             msg["Date"] = formatdate(localtime=True)
-            
+
             # ✅ Message-ID único y RFC-compliant
             domain = self.from_email.split("@")[1] if "@" in self.from_email else "rapicredit.com"
             unique_id = str(uuid.uuid4()).replace("-", "")
             msg["Message-ID"] = f"<{unique_id}@{domain}>"
-            
+
             # ✅ Headers estándar para mejor deliverability
             msg["Reply-To"] = self.from_email
             msg["Return-Path"] = self.from_email  # Para bounces
             msg["MIME-Version"] = "1.0"
-            
+
             # ✅ Headers para evitar spam
             msg["X-Mailer"] = "RapiCredit Email System v1.0"
             msg["X-Priority"] = "3"  # Prioridad normal (1=alta, 3=normal, 5=baja)
             msg["Precedence"] = "bulk"  # Para emails transaccionales/notificaciones
             msg["Auto-Submitted"] = "auto-generated"  # Indica email automático del sistema
-            
+
             # ✅ Headers de identificación (mejora reputación)
             msg["X-Entity-Ref-ID"] = unique_id  # ID único para tracking
             msg["X-Source"] = "RapiCredit-System"
@@ -235,7 +235,7 @@ class EmailService:
                 texto_plano = texto_plano.strip()
                 # Reemplazar saltos de línea múltiples por uno solo
                 texto_plano = re.sub(r"\n\s*\n", "\n\n", texto_plano)
-                
+
                 # Si el texto plano está vacío, usar un mensaje por defecto
                 if not texto_plano or len(texto_plano.strip()) < 10:
                     texto_plano = "Este es un email HTML. Si no puedes ver el contenido, por favor abre este email en un cliente de correo que soporte HTML."
@@ -245,7 +245,7 @@ class EmailService:
                 texto_plano_part = MIMEText(texto_plano, "plain", "utf-8")
                 texto_plano_part.set_charset("utf-8")
                 msg.attach(texto_plano_part)
-                
+
                 # ✅ Agregar HTML con charset explícito
                 html_part = MIMEText(body, "html", "utf-8")
                 html_part.set_charset("utf-8")
@@ -306,8 +306,9 @@ class EmailService:
                 logger.warning(f"⚠️ Error formateando mensaje, usando método alternativo: {e}")
                 # Método alternativo si as_string() falla
                 from email import policy
+
                 text = msg.as_string(policy=policy.SMTP)
-            
+
             # Incluir CCO en la lista de destinatarios para sendmail
             todos_destinatarios = emails_destinatarios + emails_cco
 
@@ -324,11 +325,7 @@ class EmailService:
 
             # ✅ Enviar usando sendmail con parámetros explícitos
             # Esto asegura mejor manejo de errores y mejor deliverability
-            server.sendmail(
-                self.from_email,  # from_addr
-                todos_destinatarios,  # to_addrs
-                text  # msg
-            )
+            server.sendmail(self.from_email, todos_destinatarios, text)  # from_addr  # to_addrs  # msg
 
             # Solo cerrar conexión si no se reutiliza
             if not self.reuse_connection:
