@@ -836,31 +836,31 @@ def obtener_configuracion_email(db: Session = Depends(get_db), current_user: Use
 def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     """
     Validar configuración de Gmail SMTP y probar conexión
-    
+
     Returns:
         (es_valida, mensaje_error)
     """
     import smtplib
-    
+
     smtp_host = config_data.get("smtp_host", "").lower()
-    
+
     # Solo validar si es Gmail
     if "gmail.com" not in smtp_host:
         return True, None
-    
+
     smtp_port = config_data.get("smtp_port", "587")
     smtp_user = config_data.get("smtp_user", "")
     smtp_password = config_data.get("smtp_password", "")
     smtp_use_tls = config_data.get("smtp_use_tls", "true").lower() in ("true", "1", "yes", "on")
-    
+
     # Validaciones básicas
     if not smtp_user or not smtp_password:
         return False, "Email y Contraseña de Aplicación son requeridos para Gmail"
-    
+
     # Validar que el email sea de Gmail
     if "@gmail.com" not in smtp_user.lower() and "@googlemail.com" not in smtp_user.lower():
         return False, "El email debe ser de Gmail (@gmail.com o @googlemail.com) cuando uses smtp.gmail.com"
-    
+
     # Validar puerto
     try:
         puerto = int(smtp_port)
@@ -870,25 +870,28 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
             return False, "Para puerto 587, TLS debe estar habilitado (requerido por Gmail)."
     except (ValueError, TypeError):
         return False, "Puerto SMTP inválido"
-    
+
     # Validar formato de contraseña de aplicación (16 caracteres sin espacios)
     password_sin_espacios = smtp_password.replace(" ", "").replace("\t", "")
     if len(password_sin_espacios) != 16:
-        return False, "La Contraseña de Aplicación de Gmail debe tener exactamente 16 caracteres (los espacios se eliminan automáticamente)."
-    
+        return (
+            False,
+            "La Contraseña de Aplicación de Gmail debe tener exactamente 16 caracteres (los espacios se eliminan automáticamente).",
+        )
+
     # Probar conexión SMTP para verificar credenciales
     try:
         server = smtplib.SMTP(smtp_host, puerto, timeout=10)
-        
+
         if smtp_use_tls:
             server.starttls()
-        
+
         # Intentar login - aquí es donde Gmail rechazará si no hay 2FA o si se usa contraseña normal
         server.login(smtp_user, password_sin_espacios)
         server.quit()
-        
+
         return True, None
-        
+
     except smtplib.SMTPAuthenticationError as e:
         error_msg = str(e).lower()
         if "username and password not accepted" in error_msg or "535" in str(e):
@@ -927,10 +930,7 @@ def actualizar_configuracion_email(
     # Validar configuración de Gmail antes de guardar
     es_valida, mensaje_error = _validar_configuracion_gmail_smtp(config_data)
     if not es_valida:
-        raise HTTPException(
-            status_code=400,
-            detail=mensaje_error or "Configuración de email inválida"
-        )
+        raise HTTPException(status_code=400, detail=mensaje_error or "Configuración de email inválida")
 
     try:
         configuraciones = []
@@ -1273,21 +1273,21 @@ def probar_configuracion_email(
         # Verificar modo de envío (Producción o Pruebas)
         config_dict = {config.clave: config.valor for config in configs}
         modo_pruebas = config_dict.get("modo_pruebas", "true").lower() in ("true", "1", "yes", "on")  # Por defecto: Pruebas
-        
+
         # En modo Producción, el email de prueba debe enviarse REALMENTE al destinatario especificado
         # para verificar que la configuración funciona correctamente.
         # Si el email llega, es prueba de que el servicio está bien configurado y funciona.
         # En modo Pruebas, se respeta el comportamiento normal (redirige a email_pruebas)
-        
+
         # Enviar email de prueba
         from app.services.email_service import EmailService
 
         email_service = EmailService(db=db)
-        
+
         # Si estamos en modo Producción, forzar envío real para verificar que funciona
         # Si estamos en modo Pruebas, respetar el comportamiento normal
         forzar_real = not modo_pruebas
-        
+
         result = email_service.send_email(
             to_emails=[email_a_enviar],
             subject=subject_email,
