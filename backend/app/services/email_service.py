@@ -217,6 +217,17 @@ class EmailService:
             text = msg.as_string()
             # Incluir CCO en la lista de destinatarios para sendmail
             todos_destinatarios = emails_destinatarios + emails_cco
+            
+            # ✅ Logging detallado antes de enviar
+            logger.info(
+                f"📧 Enviando email - "
+                f"De: {self.from_email}, "
+                f"Para: {', '.join(emails_destinatarios)}, "
+                f"Modo Pruebas: {self.modo_pruebas}, "
+                f"Forzar Envío Real: {forzar_envio_real}, "
+                f"Destinatarios originales: {', '.join(to_emails) if self.modo_pruebas else 'N/A'}"
+            )
+            
             server.sendmail(self.from_email, todos_destinatarios, text)
 
             # Solo cerrar conexión si no se reutiliza
@@ -224,14 +235,15 @@ class EmailService:
                 server.quit()
 
             mensaje_exito = "Email enviado exitosamente"
-            if self.modo_pruebas:
+            if self.modo_pruebas and not forzar_envio_real:
                 mensaje_exito = f"Email enviado exitosamente (MODO PRUEBAS: originalmente para {', '.join(to_emails)})"
             if emails_cco:
                 mensaje_exito += f" (CCO: {', '.join(emails_cco)})"
 
             logger.info(
-                f"Email enviado exitosamente a: {', '.join(emails_destinatarios)}"
+                f"✅ Email enviado exitosamente a: {', '.join(emails_destinatarios)}"
                 + (f" (CCO: {', '.join(emails_cco)})" if emails_cco else "")
+                + (f" | Originalmente para: {', '.join(to_emails)}" if self.modo_pruebas and not forzar_envio_real else "")
             )
             return {
                 "success": True,
