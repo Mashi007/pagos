@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Settings, Zap, Copy, X, Bell, Calendar, AlertTriangle, Shield } from 'lucide-react'
+import { Settings, Zap, Copy, X, Bell, Calendar, AlertTriangle, Shield, ArrowUpDown } from 'lucide-react'
 import { emailConfigService } from '@/services/notificacionService'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 
 export function ConfiguracionNotificaciones() {
@@ -14,6 +15,12 @@ export function ConfiguracionNotificaciones() {
   const [guardandoEnvios, setGuardandoEnvios] = useState(false)
   const [cargando, setCargando] = useState(true)
   const [activeTab, setActiveTab] = useState<string>('previa')
+  const [ordenamiento, setOrdenamiento] = useState<Record<string, string>>({
+    'previa': 'default',
+    'dia-pago': 'default',
+    'retrasada': 'default',
+    'prejudicial': 'default'
+  })
 
   // Mapeo de tipos a casos con colores por categoría
   const mapeoTipos = {
@@ -55,12 +62,80 @@ export function ConfiguracionNotificaciones() {
     }
   }
 
-  // Organización por pestañas
+  // Organización por pestañas (orden de la imagen 1)
   const tiposPorPestaña: Record<string, string[]> = {
     'previa': ['PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES'],
     'dia-pago': ['PAGO_DIA_0'],
     'retrasada': ['PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO'],
     'prejudicial': ['PREJUDICIAL']
+  }
+
+  // Función para extraer número de días del caso
+  const extraerDias = (caso: string): number => {
+    const match = caso.match(/(\d+)\s*d[ií]a/)
+    return match ? parseInt(match[1]) : 0
+  }
+
+  // Función para ordenar tipos según el criterio seleccionado
+  const ordenarTipos = (tipos: string[], orden: string, pestaña: string): string[] => {
+    const tiposConDatos = tipos.map(tipo => ({
+      tipo,
+      mapeo: mapeoTipos[tipo as keyof typeof mapeoTipos],
+      config: configEnvios[tipo] || { habilitado: true, cco: [] }
+    }))
+
+    switch (orden) {
+      case 'default':
+        // Orden por defecto según pestañas (5, 3, 1 para previas; 1, 3, 5 para retrasadas)
+        return tiposConDatos.sort((a, b) => {
+          const diasA = extraerDias(a.mapeo?.caso || '')
+          const diasB = extraerDias(b.mapeo?.caso || '')
+          // Para previas: descendente (5, 3, 1)
+          // Para retrasadas: ascendente (1, 3, 5)
+          if (pestaña === 'previa') {
+            return diasB - diasA
+          } else if (pestaña === 'retrasada') {
+            return diasA - diasB
+          }
+          return 0
+        }).map(t => t.tipo)
+
+      case 'dias-asc':
+        return tiposConDatos.sort((a, b) => {
+          const diasA = extraerDias(a.mapeo?.caso || '')
+          const diasB = extraerDias(b.mapeo?.caso || '')
+          return diasA - diasB
+        }).map(t => t.tipo)
+
+      case 'dias-desc':
+        return tiposConDatos.sort((a, b) => {
+          const diasA = extraerDias(a.mapeo?.caso || '')
+          const diasB = extraerDias(b.mapeo?.caso || '')
+          return diasB - diasA
+        }).map(t => t.tipo)
+
+      case 'nombre-asc':
+        return tiposConDatos.sort((a, b) => {
+          const nombreA = a.mapeo?.caso || ''
+          const nombreB = b.mapeo?.caso || ''
+          return nombreA.localeCompare(nombreB, 'es')
+        }).map(t => t.tipo)
+
+      case 'estado-activas':
+        return tiposConDatos.sort((a, b) => {
+          if (a.config.habilitado === b.config.habilitado) return 0
+          return a.config.habilitado ? -1 : 1
+        }).map(t => t.tipo)
+
+      case 'estado-inactivas':
+        return tiposConDatos.sort((a, b) => {
+          if (a.config.habilitado === b.config.habilitado) return 0
+          return a.config.habilitado ? 1 : -1
+        }).map(t => t.tipo)
+
+      default:
+        return tipos
+    }
   }
 
   useEffect(() => {
@@ -215,10 +290,46 @@ export function ConfiguracionNotificaciones() {
               const colorCategoria = primeraTarjeta?.color || 'blue'
               const colores = coloresCategoria[colorCategoria as keyof typeof coloresCategoria]
               
+              // Ordenar tipos según el criterio seleccionado para esta pestaña
+              const ordenActual = ordenamiento[pestaña] || 'default'
+              const tiposOrdenados = useMemo(() => {
+                return ordenarTipos(tipos, ordenActual, pestaña)
+              }, [tipos, ordenActual, configEnvios, pestaña])
+              
               return (
                 <TabsContent key={pestaña} value={pestaña} className="space-y-4 mt-6">
-                  <div className={`grid grid-cols-1 ${tipos.length === 1 ? 'md:grid-cols-1 max-w-2xl mx-auto' : tipos.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'} gap-5`}>
-                    {tipos.map(tipo => {
+                  {/* Menú de ordenamiento */}
+                  {tipos.length > 1 && (
+                    <div className="flex justify-end mb-4">
+                      <div className="flex items-center gap-2">
+                        <ArrowUpDown className="h-4 w-4 text-gray-500" />
+                        <Select 
+                          value={ordenActual} 
+                          onValueChange={(value) => {
+                            setOrdenamiento(prev => ({
+                              ...prev,
+                              [pestaña]: value
+                            }))
+                          }}
+                        >
+                          <SelectTrigger className="w-[220px] h-9">
+                            <SelectValue placeholder="Ordenar por..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">Orden por defecto</SelectItem>
+                            <SelectItem value="dias-asc">Días (menor a mayor)</SelectItem>
+                            <SelectItem value="dias-desc">Días (mayor a menor)</SelectItem>
+                            <SelectItem value="nombre-asc">Nombre (A-Z)</SelectItem>
+                            <SelectItem value="estado-activas">Activas primero</SelectItem>
+                            <SelectItem value="estado-inactivas">Inactivas primero</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className={`grid grid-cols-1 ${tiposOrdenados.length === 1 ? 'md:grid-cols-1 max-w-2xl mx-auto' : tiposOrdenados.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'} gap-5`}>
+                    {tiposOrdenados.map(tipo => {
                       const mapeo = mapeoTipos[tipo as keyof typeof mapeoTipos]
                       const config = configEnvios[tipo] || { habilitado: true, cco: [] }
                       const habilitado = config.habilitado
