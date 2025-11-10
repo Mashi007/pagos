@@ -307,7 +307,9 @@ async def envio_masivo(
                                 notif_local.estado = "FALLIDA"
                                 notif_local.error_mensaje = resultado.get("message", "Error desconocido")
                                 notif_local.intentos = (notif_local.intentos or 0) + 1
-                                logger.error(f"❌ Error enviando notificación Email masiva {notif_id}: {resultado.get('message')}")
+                                logger.error(
+                                    f"❌ Error enviando notificación Email masiva {notif_id}: {resultado.get('message')}"
+                                )
                             db_local.commit()
                     except Exception as e:
                         db_local.rollback()

@@ -245,7 +245,7 @@ class WhatsAppService:
                         return response
 
                     # Calcular backoff exponencial
-                    backoff_time = META_RETRY_BACKOFF_BASE ** attempt
+                    backoff_time = META_RETRY_BACKOFF_BASE**attempt
                     if "retry_after" in error_result:
                         backoff_time = error_result["retry_after"]
 
@@ -256,13 +256,13 @@ class WhatsAppService:
             except httpx.TimeoutException:
                 if attempt >= max_retries:
                     raise
-                backoff_time = META_RETRY_BACKOFF_BASE ** attempt
+                backoff_time = META_RETRY_BACKOFF_BASE**attempt
                 logger.warning(f"⏱️ Timeout. Reintentando en {backoff_time}s")
                 await asyncio.sleep(backoff_time)
             except Exception as e:
                 if attempt >= max_retries:
                     raise
-                backoff_time = META_RETRY_BACKOFF_BASE ** attempt
+                backoff_time = META_RETRY_BACKOFF_BASE**attempt
                 logger.warning(f"⚠️ Error de conexión: {str(e)}. Reintentando en {backoff_time}s")
                 await asyncio.sleep(backoff_time)
                 last_error = {"message": str(e)}
@@ -436,7 +436,9 @@ class WhatsAppService:
             }
         except Exception as e:
             elapsed_time = time.time() - start_time
-            logger.error(f"❌ [COMPLIANCE] Error enviando mensaje WhatsApp a {to_number}: {str(e)} (Tiempo: {elapsed_time:.2f}s)")
+            logger.error(
+                f"❌ [COMPLIANCE] Error enviando mensaje WhatsApp a {to_number}: {str(e)} (Tiempo: {elapsed_time:.2f}s)"
+            )
             return {
                 "success": False,
                 "message": f"Error enviando mensaje: {str(e)}",
