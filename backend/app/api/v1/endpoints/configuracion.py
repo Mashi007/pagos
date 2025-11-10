@@ -910,7 +910,7 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
     # Probar conexión SMTP para verificar credenciales
     try:
         logger.info(f"🔗 Probando conexión SMTP con Google: {smtp_user}@{smtp_host}:{puerto}")
-        
+
         # ✅ Puerto 465 requiere SSL (SMTP_SSL), puerto 587 requiere TLS (SMTP + starttls)
         if puerto == 465:
             # Puerto 465: Usar SSL directamente (no TLS)
