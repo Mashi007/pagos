@@ -105,41 +105,41 @@ def puede_cambiar_estado(prestamo: Prestamo, nuevo_estado: str, current_user: Us
 def aplicar_cambios_prestamo(prestamo: Prestamo, prestamo_data: PrestamoUpdate):
     """Aplica los cambios del prestamo_data al prestamo"""
     if prestamo_data.valor_activo is not None:
-        prestamo.valor_activo = prestamo_data.valor_activo
+        prestamo.valor_activo = prestamo_data.valor_activo  # type: ignore[assignment]
 
     if prestamo_data.total_financiamiento is not None:
         actualizar_monto_y_cuotas(prestamo, prestamo_data.total_financiamiento)
 
     if prestamo_data.modalidad_pago is not None:
-        prestamo.modalidad_pago = prestamo_data.modalidad_pago
-        prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(
+        prestamo.modalidad_pago = prestamo_data.modalidad_pago  # type: ignore[assignment]
+        prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(  # type: ignore[assignment]
             prestamo.total_financiamiento, prestamo.modalidad_pago
         )
 
     # Aplicar cambios directos de numero_cuotas y cuota_periodo si se proporcionan
     if prestamo_data.numero_cuotas is not None:
-        prestamo.numero_cuotas = prestamo_data.numero_cuotas
+        prestamo.numero_cuotas = prestamo_data.numero_cuotas  # type: ignore[assignment]
 
     if prestamo_data.cuota_periodo is not None:
-        prestamo.cuota_periodo = prestamo_data.cuota_periodo
+        prestamo.cuota_periodo = prestamo_data.cuota_periodo  # type: ignore[assignment]
 
     if prestamo_data.tasa_interes is not None:
-        prestamo.tasa_interes = prestamo_data.tasa_interes
+        prestamo.tasa_interes = prestamo_data.tasa_interes  # type: ignore[assignment]
 
     if prestamo_data.fecha_base_calculo is not None:
-        prestamo.fecha_base_calculo = prestamo_data.fecha_base_calculo
+        prestamo.fecha_base_calculo = prestamo_data.fecha_base_calculo  # type: ignore[assignment]
 
     if prestamo_data.fecha_requerimiento is not None:
-        prestamo.fecha_requerimiento = prestamo_data.fecha_requerimiento
+        prestamo.fecha_requerimiento = prestamo_data.fecha_requerimiento  # type: ignore[assignment]
 
     if prestamo_data.observaciones is not None:
-        prestamo.observaciones = prestamo_data.observaciones
+        prestamo.observaciones = prestamo_data.observaciones  # type: ignore[assignment]
 
 
 def actualizar_monto_y_cuotas(prestamo: Prestamo, monto: Decimal):
     """Actualiza monto y recalcula cuotas"""
-    prestamo.total_financiamiento = monto
-    prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(prestamo.total_financiamiento, prestamo.modalidad_pago)
+    prestamo.total_financiamiento = monto  # type: ignore[assignment]
+    prestamo.numero_cuotas, prestamo.cuota_periodo = calcular_cuotas(prestamo.total_financiamiento, prestamo.modalidad_pago)  # type: ignore[assignment]
 
 
 def procesar_cambio_estado(
@@ -149,15 +149,15 @@ def procesar_cambio_estado(
     db: Session,
     plazo_maximo_meses: Optional[int] = None,
     tasa_interes: Optional[Decimal] = None,
-    fecha_base_calculo: Optional = None,
+    fecha_base_calculo: Optional[date] = None,
 ):
     """Procesa el cambio de estado del préstamo"""
     estado_anterior = prestamo.estado
-    prestamo.estado = nuevo_estado
+    prestamo.estado = nuevo_estado  # type: ignore[assignment]
 
     if nuevo_estado == "APROBADO":
-        prestamo.usuario_aprobador = current_user.email
-        prestamo.fecha_aprobacion = datetime.now()
+        prestamo.usuario_aprobador = current_user.email  # type: ignore[assignment]
+        prestamo.fecha_aprobacion = datetime.now()  # type: ignore[assignment]
 
         # Aplicar condiciones desde evaluación de riesgo (FASE 2)
         if plazo_maximo_meses:
@@ -166,11 +166,11 @@ def procesar_cambio_estado(
 
         # Aplicar tasa de interés desde evaluación
         if tasa_interes:
-            prestamo.tasa_interes = tasa_interes
+            prestamo.tasa_interes = tasa_interes  # type: ignore[assignment]
 
         # Aplicar fecha base de cálculo
         if fecha_base_calculo:
-            prestamo.fecha_base_calculo = fecha_base_calculo
+            prestamo.fecha_base_calculo = fecha_base_calculo  # type: ignore[assignment]
 
         # Si se aprueba y tiene fecha_base_calculo, generar tabla de amortización
         if prestamo.fecha_base_calculo:
@@ -1000,8 +1000,8 @@ def actualizar_cuotas_segun_plazo_maximo(
     numero_cuotas, cuota_periodo = calcular_cuotas(prestamo.total_financiamiento, prestamo.modalidad_pago, plazo_maximo_meses)
 
     # Actualizar préstamo
-    prestamo.numero_cuotas = numero_cuotas
-    prestamo.cuota_periodo = cuota_periodo
+    prestamo.numero_cuotas = numero_cuotas  # type: ignore[assignment]
+    prestamo.cuota_periodo = cuota_periodo  # type: ignore[assignment]
 
     logger.info(
         f"Cuotas recalculadas para préstamo {prestamo.id}: "
@@ -1069,7 +1069,7 @@ def _preparar_datos_evaluacion(prestamo: Prestamo, datos_evaluacion: dict, db: S
 def _actualizar_estado_evaluado(prestamo: Prestamo, prestamo_id: int, db: Session) -> None:
     """Actualiza el estado del préstamo a EVALUADO si está en DRAFT o EN_REVISION"""
     if prestamo.estado in ["DRAFT", "EN_REVISION"]:
-        prestamo.estado = "EVALUADO"
+        prestamo.estado = "EVALUADO"  # type: ignore[assignment]
         db.commit()
         logger.info(f"Préstamo {prestamo_id} cambiado a estado EVALUADO después de evaluación de riesgo")
 
@@ -1259,16 +1259,16 @@ def aplicar_condiciones_aprobacion(
 
         # Aplicar tasa de interés (SI VIENE)
         if "tasa_interes" in condiciones:
-            prestamo.tasa_interes = Decimal(str(condiciones["tasa_interes"]))
+            prestamo.tasa_interes = Decimal(str(condiciones["tasa_interes"]))  # type: ignore[assignment]
 
         # Aplicar fecha base de cálculo (SI VIENE)
         if "fecha_base_calculo" in condiciones:
             fecha_str = condiciones["fecha_base_calculo"]
-            prestamo.fecha_base_calculo = date_parse(fecha_str).date()
+            prestamo.fecha_base_calculo = date_parse(fecha_str).date()  # type: ignore[assignment]
 
         # Aplicar observaciones
         if "observaciones" in condiciones:
-            prestamo.observaciones = condiciones["observaciones"]
+            prestamo.observaciones = condiciones["observaciones"]  # type: ignore[assignment]
 
         # Cambiar estado si se especifica
         nuevo_estado = condiciones.get("estado")

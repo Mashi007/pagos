@@ -363,7 +363,14 @@ def reporte_pagos(
             ).bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt)
         ).fetchall()
 
-        pagos_por_metodo = [{"metodo": row[0], "cantidad": row[1], "monto": float(row[2])} for row in pagos_por_metodo_raw]
+        pagos_por_metodo = [
+            {
+                "metodo": row[0] if row[0] is not None else "",
+                "cantidad": row[1] if row[1] is not None else 0,
+                "monto": float(row[2]) if row[2] is not None else 0.0,
+            }
+            for row in pagos_por_metodo_raw
+        ]
 
         # ✅ Usar tabla pagos con institucion_bancaria
 
@@ -390,7 +397,11 @@ def reporte_pagos(
         ).fetchall()
 
         pagos_por_dia = [
-            {"fecha": row[0].isoformat() if row[0] else None, "cantidad": row[1], "monto": float(row[2])}
+            {
+                "fecha": row[0].isoformat() if row[0] is not None else None,
+                "cantidad": row[1] if row[1] is not None else 0,
+                "monto": float(row[2]) if row[2] is not None else 0.0,
+            }
             for row in pagos_por_dia_raw
         ]
 
@@ -493,11 +504,11 @@ def reporte_morosidad(
         )
         distribucion_por_rango = [
             {
-                "rango": row[0],
-                "cantidad_prestamos": row[1],
-                "cantidad_clientes": row[2],
-                "cantidad_cuotas": row[3],
-                "monto_total": float(row[4]),
+                "rango": row[0] if row[0] is not None else "",
+                "cantidad_prestamos": row[1] if row[1] is not None else 0,
+                "cantidad_clientes": row[2] if row[2] is not None else 0,
+                "cantidad_cuotas": row[3] if row[3] is not None else 0,
+                "monto_total": float(row[4]) if row[4] is not None else 0.0,
             }
             for row in distribucion_query.fetchall()
         ]
@@ -526,11 +537,11 @@ def reporte_morosidad(
         )
         morosidad_por_analista = [
             {
-                "analista": row[0],
-                "cantidad_prestamos": row[1],
-                "cantidad_clientes": row[2],
-                "monto_total_mora": float(row[3]),
-                "promedio_dias_mora": float(row[4] or 0),
+                "analista": row[0] if row[0] is not None else "",
+                "cantidad_prestamos": row[1] if row[1] is not None else 0,
+                "cantidad_clientes": row[2] if row[2] is not None else 0,
+                "monto_total_mora": float(row[3]) if row[3] is not None else 0.0,
+                "promedio_dias_mora": float(row[4] or 0) if row[4] is not None else 0.0,
             }
             for row in analistas_query.fetchall()
         ]
@@ -564,16 +575,16 @@ def reporte_morosidad(
         )
         detalle_prestamos = [
             {
-                "prestamo_id": row[0],
-                "cedula": row[1],
-                "nombres": row[2],
-                "total_financiamiento": float(row[3]),
-                "analista": row[4],
-                "concesionario": row[5],
-                "cuotas_en_mora": row[6],
-                "monto_total_mora": float(row[7]),
-                "max_dias_mora": row[8],
-                "primera_cuota_vencida": row[9].isoformat() if row[9] else None,
+                "prestamo_id": row[0] if row[0] is not None else 0,
+                "cedula": row[1] if row[1] is not None else "",
+                "nombres": row[2] if row[2] is not None else "",
+                "total_financiamiento": float(row[3]) if row[3] is not None else 0.0,
+                "analista": row[4] if row[4] is not None else "",
+                "concesionario": row[5] if row[5] is not None else "",
+                "cuotas_en_mora": row[6] if row[6] is not None else 0,
+                "monto_total_mora": float(row[7]) if row[7] is not None else 0.0,
+                "max_dias_mora": row[8] if row[8] is not None else 0,
+                "primera_cuota_vencida": row[9].isoformat() if row[9] is not None else None,
             }
             for row in detalle_query.fetchall()
         ]

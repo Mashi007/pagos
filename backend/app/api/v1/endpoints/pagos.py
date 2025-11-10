@@ -996,23 +996,23 @@ def _actualizar_morosidad_cuota(cuota, fecha_hoy: date) -> None:
         if cuota.fecha_pago:
             # Si está pagada: calcular días entre fecha_pago y fecha_vencimiento (si fecha_pago > fecha_vencimiento)
             if cuota.fecha_pago > cuota.fecha_vencimiento:
-                cuota.dias_morosidad = (cuota.fecha_pago - cuota.fecha_vencimiento).days
+                cuota.dias_morosidad = (cuota.fecha_pago - cuota.fecha_vencimiento).days  # type: ignore[assignment]
             else:
                 # Pagada a tiempo o adelantada: 0 días de morosidad
-                cuota.dias_morosidad = 0
+                cuota.dias_morosidad = 0  # type: ignore[assignment]
         else:
             # Si no está pagada: calcular días desde fecha_vencimiento hasta hoy
             if cuota.fecha_vencimiento < fecha_hoy:
-                cuota.dias_morosidad = (fecha_hoy - cuota.fecha_vencimiento).days
+                cuota.dias_morosidad = (fecha_hoy - cuota.fecha_vencimiento).days  # type: ignore[assignment]
             else:
                 # No vencida aún: 0 días de morosidad
-                cuota.dias_morosidad = 0
+                cuota.dias_morosidad = 0  # type: ignore[assignment]
     else:
-        cuota.dias_morosidad = 0
+        cuota.dias_morosidad = 0  # type: ignore[assignment]
 
     # 2. Calcular monto_morosidad (monto_cuota - total_pagado)
     monto_pendiente = cuota.monto_cuota - (cuota.total_pagado or Decimal("0.00"))
-    cuota.monto_morosidad = max(Decimal("0.00"), monto_pendiente)
+    cuota.monto_morosidad = max(Decimal("0.00"), monto_pendiente)  # type: ignore[assignment]
 
     logger.debug(
         f"📊 [actualizar_morosidad_cuota] Cuota #{cuota.numero_cuota} (Préstamo {cuota.prestamo_id}): "
@@ -1046,29 +1046,29 @@ def _actualizar_estado_cuota(cuota, fecha_hoy: date, db: Session = None, es_exce
     if cuota.total_pagado >= cuota.monto_cuota:
         # ✅ Cuota completa: PAGADO solo si está conciliado, sino PENDIENTE
         if todos_conciliados:
-            cuota.estado = "PAGADO"
+            cuota.estado = "PAGADO"  # type: ignore[assignment]
             if not estado_previo_completo:
                 estado_completado = True
         else:
             # Pagada pero no conciliada → PENDIENTE
-            cuota.estado = "PENDIENTE"
+            cuota.estado = "PENDIENTE"  # type: ignore[assignment]
     elif cuota.total_pagado > Decimal("0.00"):
         # ✅ Pago parcial
         if cuota.fecha_vencimiento and cuota.fecha_vencimiento < fecha_hoy:
             # Cuota vencida con pago parcial → PARCIAL
-            cuota.estado = "PARCIAL"
+            cuota.estado = "PARCIAL"  # type: ignore[assignment]
         else:
             # Cuota no vencida con pago parcial
             if es_exceso:
-                cuota.estado = "ADELANTADO"
+                cuota.estado = "ADELANTADO"  # type: ignore[assignment]
             else:
-                cuota.estado = "PENDIENTE"
+                cuota.estado = "PENDIENTE"  # type: ignore[assignment]
     else:
         # ✅ Sin pagos
         if cuota.fecha_vencimiento and cuota.fecha_vencimiento < fecha_hoy:
-            cuota.estado = "ATRASADO"
+            cuota.estado = "ATRASADO"  # type: ignore[assignment]
         else:
-            cuota.estado = "PENDIENTE"
+            cuota.estado = "PENDIENTE"  # type: ignore[assignment]
 
     # ✅ ACTUALIZAR AUTOMÁTICAMENTE columnas de morosidad
     _actualizar_morosidad_cuota(cuota, fecha_hoy)
@@ -1097,14 +1097,14 @@ def _aplicar_monto_a_cuota(
 
     capital_aplicar, interes_aplicar = _calcular_proporcion_capital_interes(cuota, monto_aplicar)
 
-    cuota.capital_pagado += capital_aplicar
-    cuota.interes_pagado += interes_aplicar
-    cuota.total_pagado += monto_aplicar
-    cuota.capital_pendiente = max(Decimal("0.00"), cuota.capital_pendiente - capital_aplicar)
-    cuota.interes_pendiente = max(Decimal("0.00"), cuota.interes_pendiente - interes_aplicar)
+    cuota.capital_pagado += capital_aplicar  # type: ignore[assignment]
+    cuota.interes_pagado += interes_aplicar  # type: ignore[assignment]
+    cuota.total_pagado += monto_aplicar  # type: ignore[assignment]
+    cuota.capital_pendiente = max(Decimal("0.00"), cuota.capital_pendiente - capital_aplicar)  # type: ignore[assignment]
+    cuota.interes_pendiente = max(Decimal("0.00"), cuota.interes_pendiente - interes_aplicar)  # type: ignore[assignment]
 
     if monto_aplicar > Decimal("0.00"):
-        cuota.fecha_pago = fecha_pago
+        cuota.fecha_pago = fecha_pago  # type: ignore[assignment]
 
         # ✅ UNIFICAR EN FECHA DE PAGO: Si fecha_pago > fecha_vencimiento, calcular mora automáticamente
         if cuota.fecha_vencimiento and fecha_pago > cuota.fecha_vencimiento:
@@ -1320,14 +1320,14 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User) -> int:
         # El estado solo se actualiza DESPUÉS de conciliar y aplicar a cuotas
         if cuotas_completadas > 0:
             # Si completó al menos una cuota completamente → estado "PAGADO"
-            pago.estado = "PAGADO"
+            pago.estado = "PAGADO"  # type: ignore[assignment]
             logger.info(
                 f"✅ [aplicar_pago_a_cuotas] Pago ID {pago.id}: Estado actualizado a 'PAGADO' "
                 f"(completó {cuotas_completadas} cuota(s))"
             )
         elif pago.prestamo_id:
             # Si tiene préstamo pero no completó ninguna cuota completamente → estado "PARCIAL"
-            pago.estado = "PARCIAL"
+            pago.estado = "PARCIAL"  # type: ignore[assignment]
             logger.info(
                 f"ℹ️ [aplicar_pago_a_cuotas] Pago ID {pago.id}: Estado actualizado a 'PARCIAL' "
                 f"(no completó ninguna cuota completamente)"
@@ -1503,8 +1503,8 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
         clientes_con_cuotas = 0
         clientes_en_mora = 0
     else:
-        clientes_con_cuotas = clientes_result[0] or 0
-        clientes_en_mora = clientes_result[1] or 0
+        clientes_con_cuotas = clientes_result[0] if clientes_result[0] is not None else 0
+        clientes_en_mora = clientes_result[1] if clientes_result[1] is not None else 0
     clientes_al_dia = max(0, clientes_con_cuotas - clientes_en_mora)
     tiempo_clientes = int((time.time() - start_clientes) * 1000)
     logger.debug(

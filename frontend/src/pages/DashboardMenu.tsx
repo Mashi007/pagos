@@ -22,12 +22,16 @@ import {
   XCircle,
   X,
   Settings,
+  Download,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { formatCurrency } from '@/utils'
 import { apiClient } from '@/services/api'
+import toast from 'react-hot-toast'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Input } from '@/components/ui/input'
 import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
 import { DashboardFiltrosPanel } from '@/components/dashboard/DashboardFiltrosPanel'
 import { KpiCardLarge } from '@/components/dashboard/KpiCardLarge'
@@ -426,10 +430,251 @@ export function DashboardMenu() {
   })
 
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [showExportDialog, setShowExportDialog] = useState(false)
+  const [fechaExportDesde, setFechaExportDesde] = useState<string>('')
+  const [fechaExportHasta, setFechaExportHasta] = useState<string>('')
   
   // NOTA: No necesitamos invalidar queries manualmente aquí
   // React Query detecta automáticamente los cambios en queryKey (que incluye JSON.stringify(filtros))
   // y refetch automáticamente cuando cambian los filtros o el período
+
+  // Función para exportar dashboard a Excel
+  const exportarDashboardExcel = async () => {
+    if (isExporting) return
+    
+    // Validar fechas si se proporcionaron
+    if (fechaExportDesde && fechaExportHasta) {
+      const desde = new Date(fechaExportDesde)
+      const hasta = new Date(fechaExportHasta)
+      if (desde > hasta) {
+        toast.error('La fecha "Desde" debe ser anterior a la fecha "Hasta"')
+        return
+      }
+    }
+    
+    setIsExporting(true)
+    setShowExportDialog(false)
+    
+    try {
+      // Importar dinámicamente xlsx
+      const { importXLSX } = await import('@/types/xlsx')
+      const XLSX = await importXLSX()
+      
+      // Crear workbook
+      const wb = XLSX.utils.book_new()
+      
+      // Construir parámetros de filtro para las consultas de exportación
+      const filtrosExport: DashboardFiltros = {
+        ...filtros,
+        fecha_inicio: fechaExportDesde || filtros.fecha_inicio,
+        fecha_fin: fechaExportHasta || filtros.fecha_fin,
+      }
+      
+      // Construir objeto de filtros para las consultas
+      const paramsExport = construirFiltrosObject(periodo)
+      if (fechaExportDesde) paramsExport.fecha_inicio = fechaExportDesde
+      if (fechaExportHasta) paramsExport.fecha_fin = fechaExportHasta
+      
+      // Construir query params para las consultas
+      const queryParamsExport = new URLSearchParams()
+      Object.entries(paramsExport).forEach(([key, value]) => {
+        if (value) queryParamsExport.append(key, value.toString())
+      })
+      
+      // Realizar consultas con los filtros de fecha para obtener datos actualizados
+      let datosExportKPIs = kpisPrincipales
+      let datosExportDashboard = datosDashboard
+      let datosExportConcesionarios = datosConcesionarios
+      let datosExportModelos = datosModelos
+      let datosExportFinanciamientoRangos = datosFinanciamientoRangos
+      let datosExportEvolucionMensual = evolucionMensual
+      let datosExportMorosidadAnalista = datosMorosidadAnalista
+      let datosExportCobranzas = datosCobranzas
+      
+      // Si hay fechas personalizadas, hacer consultas con esos filtros
+      if (fechaExportDesde || fechaExportHasta) {
+        try {
+          // Consultar KPIs con filtros de fecha
+          const kpisResponse = await apiClient.get(
+            `/api/v1/dashboard/kpis-principales?${queryParamsExport.toString()}`
+          ) as typeof kpisPrincipales
+          datosExportKPIs = kpisResponse
+          
+          // Consultar dashboard admin con filtros de fecha
+          const dashboardResponse = await apiClient.get(
+            `/api/v1/dashboard/admin?${queryParamsExport.toString()}`
+          ) as typeof datosDashboard
+          datosExportDashboard = dashboardResponse
+          
+          // Consultar concesionarios con filtros de fecha
+          const concesionariosResponse = await apiClient.get(
+            `/api/v1/dashboard/prestamos-por-concesionario?${queryParamsExport.toString()}`
+          ) as { concesionarios: typeof datosConcesionarios }
+          datosExportConcesionarios = concesionariosResponse.concesionarios?.slice(0, 10) || []
+          
+          // Consultar modelos con filtros de fecha
+          const modelosResponse = await apiClient.get(
+            `/api/v1/dashboard/prestamos-por-modelo?${queryParamsExport.toString()}`
+          ) as { modelos: typeof datosModelos }
+          datosExportModelos = modelosResponse.modelos?.slice(0, 10) || []
+          
+          // Consultar financiamiento por rangos con filtros de fecha
+          const rangosResponse = await apiClient.get(
+            `/api/v1/dashboard/financiamiento-por-rangos?${queryParamsExport.toString()}`,
+            { timeout: 60000 }
+          ) as typeof datosFinanciamientoRangos
+          datosExportFinanciamientoRangos = rangosResponse
+          
+          // Consultar evolución mensual con filtros de fecha
+          const evolucionResponse = await apiClient.get(
+            `/api/v1/dashboard/financiamiento-tendencia-mensual?${queryParamsExport.toString()}`,
+            { timeout: 60000 }
+          ) as { meses: typeof evolucionMensual }
+          datosExportEvolucionMensual = evolucionResponse.meses || []
+          
+          // Consultar morosidad por analista con filtros de fecha
+          const morosidadResponse = await apiClient.get(
+            `/api/v1/dashboard/morosidad-por-analista?${queryParamsExport.toString()}`
+          ) as { analistas: typeof datosMorosidadAnalista }
+          datosExportMorosidadAnalista = morosidadResponse.analistas?.slice(0, 10) || []
+          
+          // Consultar cobranzas mensuales con filtros de fecha
+          const cobranzasResponse = await apiClient.get(
+            `/api/v1/dashboard/cobranzas-mensuales?${queryParamsExport.toString()}`,
+            { timeout: 60000 }
+          ) as typeof datosCobranzas
+          datosExportCobranzas = cobranzasResponse
+        } catch (error) {
+          console.error('Error consultando datos con filtros de fecha:', error)
+          toast.warning('Algunos datos pueden no estar filtrados por fecha')
+        }
+      }
+      
+      // Hoja 1: KPIs Principales
+      if (datosExportKPIs) {
+        const kpisData = [
+          { 'Métrica': 'Total Préstamos', 'Valor Actual': datosExportKPIs.total_prestamos?.valor_actual || 0, 'Variación %': `${datosExportKPIs.total_prestamos?.variacion_porcentual || 0}%` },
+          { 'Métrica': 'Créditos Nuevos Mes', 'Valor Actual': datosExportKPIs.creditos_nuevos_mes?.valor_actual || 0, 'Variación %': `${datosExportKPIs.creditos_nuevos_mes?.variacion_porcentual || 0}%` },
+          { 'Métrica': 'Total Clientes', 'Valor Actual': datosExportKPIs.total_clientes?.valor_actual || 0, 'Variación %': `${datosExportKPIs.total_clientes?.variacion_porcentual || 0}%` },
+          { 'Métrica': 'Total Morosidad USD', 'Valor Actual': datosExportKPIs.total_morosidad_usd?.valor_actual || 0, 'Variación %': `${datosExportKPIs.total_morosidad_usd?.variacion_porcentual || 0}%` },
+        ]
+        
+        if (datosExportKPIs.clientes_por_estado) {
+          kpisData.push(
+            { 'Métrica': 'Clientes Activos', 'Valor Actual': datosExportKPIs.clientes_por_estado.activos?.valor_actual || 0, 'Variación %': `${datosExportKPIs.clientes_por_estado.activos?.variacion_porcentual || 0}%` },
+            { 'Métrica': 'Clientes Inactivos', 'Valor Actual': datosExportKPIs.clientes_por_estado.inactivos?.valor_actual || 0, 'Variación %': `${datosExportKPIs.clientes_por_estado.inactivos?.variacion_porcentual || 0}%` },
+            { 'Métrica': 'Clientes Finalizados', 'Valor Actual': datosExportKPIs.clientes_por_estado.finalizados?.valor_actual || 0, 'Variación %': `${datosExportKPIs.clientes_por_estado.finalizados?.variacion_porcentual || 0}%` }
+          )
+        }
+        
+        const wsKpis = XLSX.utils.json_to_sheet(kpisData)
+        XLSX.utils.book_append_sheet(wb, wsKpis, 'KPIs Principales')
+      }
+      
+      // Hoja 2: Datos Financieros
+      if (datosExportDashboard?.financieros) {
+        const financierosData = [
+          { 'Concepto': 'Ingresos Capital', 'Valor': datosExportDashboard.financieros.ingresosCapital || 0 },
+          { 'Concepto': 'Total Cobrado', 'Valor': datosExportDashboard.financieros.totalCobrado || 0 },
+          { 'Concepto': 'Morosidad Total', 'Valor': datosExportKPIs?.total_morosidad_usd?.valor_actual || 0 },
+        ]
+        const wsFinancieros = XLSX.utils.json_to_sheet(financierosData)
+        XLSX.utils.book_append_sheet(wb, wsFinancieros, 'Datos Financieros')
+      }
+      
+      // Hoja 3: Préstamos por Concesionario
+      if (datosExportConcesionarios && datosExportConcesionarios.length > 0) {
+        const concesionariosData = datosExportConcesionarios.map(c => ({
+          'Concesionario': c.concesionario || 'N/A',
+          'Total Préstamos': c.total_prestamos || 0,
+          'Porcentaje': `${c.porcentaje || 0}%`
+        }))
+        const wsConcesionarios = XLSX.utils.json_to_sheet(concesionariosData)
+        XLSX.utils.book_append_sheet(wb, wsConcesionarios, 'Préstamos por Concesionario')
+      }
+      
+      // Hoja 4: Préstamos por Modelo
+      if (datosExportModelos && datosExportModelos.length > 0) {
+        const modelosData = datosExportModelos.map(m => ({
+          'Modelo': m.modelo || 'N/A',
+          'Total Préstamos': m.total_prestamos || 0,
+          'Porcentaje': `${m.porcentaje || 0}%`
+        }))
+        const wsModelos = XLSX.utils.json_to_sheet(modelosData)
+        XLSX.utils.book_append_sheet(wb, wsModelos, 'Préstamos por Modelo')
+      }
+      
+      // Hoja 5: Financiamiento por Rangos
+      if (datosExportFinanciamientoRangos?.rangos && datosExportFinanciamientoRangos.rangos.length > 0) {
+        const rangosData = datosExportFinanciamientoRangos.rangos.map(r => ({
+          'Categoría': r.categoria || 'N/A',
+          'Cantidad Préstamos': r.cantidad_prestamos || 0,
+          'Monto Total': r.monto_total || 0,
+          'Porcentaje Cantidad': `${r.porcentaje_cantidad || 0}%`,
+          'Porcentaje Monto': `${r.porcentaje_monto || 0}%`
+        }))
+        const wsRangos = XLSX.utils.json_to_sheet(rangosData)
+        XLSX.utils.book_append_sheet(wb, wsRangos, 'Financiamiento por Rangos')
+      }
+      
+      // Hoja 6: Evolución Mensual
+      if (datosExportEvolucionMensual && datosExportEvolucionMensual.length > 0) {
+        const evolucionData = datosExportEvolucionMensual.map(e => ({
+          'Mes': e.mes || 'N/A',
+          'Nuevos Financiamientos': e.monto_nuevos || 0,
+          'Cuotas Programadas': e.monto_cuotas_programadas || 0,
+          'Pagos Recibidos': e.monto_pagado || 0,
+          'Morosidad Mensual': e.morosidad_mensual || 0
+        }))
+        const wsEvolucion = XLSX.utils.json_to_sheet(evolucionData)
+        XLSX.utils.book_append_sheet(wb, wsEvolucion, 'Evolución Mensual')
+      }
+      
+      // Hoja 7: Morosidad por Analista
+      if (datosExportMorosidadAnalista && datosExportMorosidadAnalista.length > 0) {
+        const morosidadData = datosExportMorosidadAnalista.map(a => ({
+          'Analista': a.analista || 'N/A',
+          'Total Morosidad': a.total_morosidad || 0,
+          'Cantidad Clientes': a.cantidad_clientes || 0
+        }))
+        const wsMorosidad = XLSX.utils.json_to_sheet(morosidadData)
+        XLSX.utils.book_append_sheet(wb, wsMorosidad, 'Morosidad por Analista')
+      }
+      
+      // Hoja 8: Cobranzas Mensuales
+      if (datosExportCobranzas?.meses && datosExportCobranzas.meses.length > 0) {
+        const cobranzasData = datosExportCobranzas.meses.map(m => ({
+          'Mes': m.nombre_mes || m.mes || 'N/A',
+          'Cobranzas Planificadas': m.cobranzas_planificadas || 0,
+          'Pagos Reales': m.pagos_reales || 0,
+          'Meta Mensual': m.meta_mensual || 0
+        }))
+        const wsCobranzas = XLSX.utils.json_to_sheet(cobranzasData)
+        XLSX.utils.book_append_sheet(wb, wsCobranzas, 'Cobranzas Mensuales')
+      }
+      
+      // Generar nombre de archivo con fecha
+      const fecha = new Date().toISOString().split('T')[0]
+      let nombreArchivo = `Dashboard_${fecha}.xlsx`
+      if (fechaExportDesde && fechaExportHasta) {
+        nombreArchivo = `Dashboard_${fechaExportDesde}_${fechaExportHasta}.xlsx`
+      } else if (fechaExportDesde) {
+        nombreArchivo = `Dashboard_${fechaExportDesde}.xlsx`
+      }
+      
+      // Descargar
+      XLSX.writeFile(wb, nombreArchivo)
+      
+      // Mostrar mensaje de éxito
+      toast.success('Dashboard exportado exitosamente')
+    } catch (error) {
+      console.error('Error exportando dashboard:', error)
+      toast.error('Error al exportar dashboard')
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -545,6 +790,78 @@ export function DashboardMenu() {
                     loadingOpcionesFiltros={loadingOpcionesFiltros}
                     errorOpcionesFiltros={errorOpcionesFiltros}
                   />
+                  {/* Botón de exportar Excel - Solo para administradores */}
+                  {user?.is_admin && (
+                    <Popover open={showExportDialog} onOpenChange={setShowExportDialog}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          disabled={isExporting}
+                          variant="outline"
+                          className="flex items-center gap-2 border-cyan-600 text-cyan-600 hover:bg-cyan-50"
+                        >
+                          <Download className="h-4 w-4" />
+                          {isExporting ? 'Exportando...' : 'Exportar Excel'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80" align="end">
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="font-semibold mb-3">Rango de Fechas para Exportación</h4>
+                            <p className="text-sm text-gray-600 mb-4">
+                              Selecciona el rango de fechas para filtrar los datos exportados. 
+                              Si no seleccionas fechas, se exportarán todos los datos visibles en el dashboard.
+                            </p>
+                          </div>
+                          <div className="space-y-3">
+                            <div>
+                              <label htmlFor="fecha-desde" className="text-sm font-medium block mb-1">
+                                Fecha Desde
+                              </label>
+                              <Input
+                                id="fecha-desde"
+                                type="date"
+                                value={fechaExportDesde}
+                                onChange={(e) => setFechaExportDesde(e.target.value)}
+                                className="mt-1"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="fecha-hasta" className="text-sm font-medium block mb-1">
+                                Fecha Hasta
+                              </label>
+                              <Input
+                                id="fecha-hasta"
+                                type="date"
+                                value={fechaExportHasta}
+                                onChange={(e) => setFechaExportHasta(e.target.value)}
+                                className="mt-1"
+                                min={fechaExportDesde}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex gap-2 pt-2">
+                            <Button
+                              onClick={exportarDashboardExcel}
+                              disabled={isExporting}
+                              className="flex-1"
+                            >
+                              {isExporting ? 'Exportando...' : 'Exportar'}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                setFechaExportDesde('')
+                                setFechaExportHasta('')
+                              }}
+                              disabled={isExporting}
+                            >
+                              Limpiar
+                            </Button>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
                 </div>
                 {/* Botones de navegación rápida - Eliminados */}
               </div>

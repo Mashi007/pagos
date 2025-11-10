@@ -1878,17 +1878,17 @@ def dashboard_administrador(
             for mes_info in meses_rango:
                 año_mes = int(mes_info["fecha"].year)
                 num_mes = int(mes_info["fecha"].month)
-                mes_key: tuple[int, int] = (año_mes, num_mes)
+                mes_key_evol: tuple[int, int] = (año_mes, num_mes)
 
                 # Cartera acumulada hasta el fin del mes (de datos pre-calculados)
-                cartera_mes = float(cartera_acumulada.get(mes_key, Decimal("0")))
+                cartera_mes = float(cartera_acumulada.get(mes_key_evol, Decimal("0")))
 
                 # Cobrado del mes (de datos pre-calculados)
-                cobrado_mes = pagos_por_mes.get(mes_key, Decimal("0"))
+                cobrado_mes = pagos_por_mes.get(mes_key_evol, Decimal("0"))
 
                 # Cuotas vencidas y pagadas (de datos pre-calculados)
-                cuotas_vencidas_mes = cuotas_vencidas_por_mes.get(mes_key, 0)
-                cuotas_pagadas_mes = cuotas_pagadas_por_mes.get(mes_key, 0)
+                cuotas_vencidas_mes = cuotas_vencidas_por_mes.get(mes_key_evol, 0)
+                cuotas_pagadas_mes = cuotas_pagadas_por_mes.get(mes_key_evol, 0)
                 total_cuotas_mes = cuotas_vencidas_mes + cuotas_pagadas_mes
                 morosidad_mes = (cuotas_vencidas_mes / total_cuotas_mes * 100) if total_cuotas_mes > 0 else 0
 
@@ -3497,7 +3497,8 @@ def obtener_financiamiento_por_rangos(
                 rangos.append((min_val, max_val, categoria))
 
             # Agregar rango final para montos mayores a $50,000 (al inicio para que quede primero)
-            rangos.insert(0, (max_rango, None, f"${max_rango:,.0f}+".replace(",", "")))
+            # Usar max_rango como max_val para cumplir con el tipo tuple[int, int, str]
+            rangos.insert(0, (max_rango, max_rango, f"${max_rango:,.0f}+".replace(",", "")))
 
             # Invertir lista para que quede de mayor a menor (efecto pirámide)
             rangos.reverse()
@@ -3505,7 +3506,7 @@ def obtener_financiamiento_por_rangos(
             logger.info(f"📊 [financiamiento-por-rangos] Generados {len(rangos)} rangos")
         except Exception as e:
             logger.error(f"Error generando rangos: {e}", exc_info=True)
-            rangos = [(0, None, "$0+")]  # Rango por defecto si falla
+            rangos = [(0, 0, "$0+")]  # Rango por defecto si falla
 
         # ✅ DIAGNÓSTICO: Verificar estado antes de procesar distribución
         # Verificar cuántos préstamos tiene query_base antes de procesar
@@ -4651,8 +4652,8 @@ def obtener_financiamiento_tendencia_mensual(
                 # y causa el problema de rendimiento. Si total_pagado está actualizado en cuotas,
                 # no necesitamos recalcularlo. Si no está actualizado, es mejor aceptar 0
                 # que hacer queries adicionales que tardan 19+ segundos.
-                mes_key: tuple[int, int] = (año_mes, num_mes)
-                pagos_por_mes[mes_key] = monto_total_pagado
+                mes_key_pagos: tuple[int, int] = (año_mes, num_mes)
+                pagos_por_mes[mes_key_pagos] = monto_total_pagado
 
             pagos_time = int((time.time() - start_pagos) * 1000)
 
@@ -4723,16 +4724,16 @@ def obtener_financiamiento_tendencia_mensual(
             fecha_mes_fin = _obtener_fechas_mes_siguiente(num_mes, año_mes)
 
             # Obtener datos del mes (o valores por defecto si no hay)
-            mes_key: tuple[int, int] = (año_mes, num_mes)
-            datos_mes = nuevos_por_mes.get(mes_key, {"cantidad": 0, "monto": Decimal("0")})
+            mes_key_financiamiento: tuple[int, int] = (año_mes, num_mes)
+            datos_mes = nuevos_por_mes.get(mes_key_financiamiento, {"cantidad": 0, "monto": Decimal("0")})
             cantidad_nuevos = datos_mes["cantidad"]
             monto_nuevos = datos_mes["monto"]
 
             # Obtener suma de cuotas programadas del mes (monto a pagar programado)
-            monto_cuotas_programadas = cuotas_por_mes.get(mes_key, 0.0)
+            monto_cuotas_programadas = cuotas_por_mes.get(mes_key_financiamiento, 0.0)
 
             # Obtener suma de monto_pagado de tabla pagos del mes (monto pagado)
-            monto_pagado_mes = pagos_por_mes.get(mes_key, 0.0)
+            monto_pagado_mes = pagos_por_mes.get(mes_key_financiamiento, 0.0)
 
             # ✅ CÁLCULO SIMPLIFICADO: Morosidad mensual = MAX(0, Programado - Pagado)
             # Esta es la lógica exacta del script SQL: morosidad_mensual = MAX(0, monto_programado - monto_pagado)
@@ -4958,8 +4959,8 @@ def obtener_cobranzas_semanales(
             result_cobranzas = db.execute(query_cobranzas_sql)
             cobranzas_por_semana = {}
             for row in result_cobranzas:
-                semana_inicio = row[0]
-                cobranzas = float(row[3] or Decimal("0"))
+                semana_inicio = row[0] if row[0] is not None else None
+                cobranzas = float(row[3] or Decimal("0")) if row[3] is not None else 0.0
                 cobranzas_por_semana[semana_inicio] = cobranzas
                 if cobranzas > 0:
                     logger.debug(f"📊 [cobranzas-semanales] Semana {semana_inicio}: ${cobranzas:,.2f}")
@@ -5002,8 +5003,8 @@ def obtener_cobranzas_semanales(
             result_pagos = db.execute(query_pagos_sql)
             pagos_por_semana = {}
             for row in result_pagos:
-                semana_inicio = row[0]
-                pagos = float(row[1] or Decimal("0"))
+                semana_inicio = row[0] if row[0] is not None else None
+                pagos = float(row[1] or Decimal("0")) if row[1] is not None else 0.0
                 pagos_por_semana[semana_inicio] = pagos
                 if pagos > 0:
                     logger.debug(f"📊 [cobranzas-semanales] Semana {semana_inicio}: ${pagos:,.2f} en pagos")
@@ -5146,7 +5147,7 @@ def obtener_cobros_por_analista(
                 )
             )
             resultados_raw = query_cobros.fetchall()
-            resultados = [
+            resultados_cobros = [
                 {
                     "analista": str(row[0] or "Sin Analista"),
                     "total_cobrado": float(row[1] or Decimal("0")),
@@ -5156,10 +5157,10 @@ def obtener_cobros_por_analista(
             ]
         except Exception as e:
             logger.warning(f"⚠️ [obtener_cobros_por_analista] Error obteniendo cobros: {e}")
-            resultados: list[dict[str, Any]] = []
+            resultados_cobros: list[dict[str, Any]] = []
 
         analistas_data = []
-        for row in resultados:
+        for row in resultados_cobros:
             analistas_data.append(
                 {
                     "analista": row.get("analista", "Sin Analista"),
@@ -5213,7 +5214,7 @@ def obtener_evolucion_morosidad(
         fecha_inicio_query = date(año_inicio, mes_inicio, 1)
 
     # Intentar usar tabla oficial si existe, sino usar fallback directamente
-    morosidad_por_mes = {}
+    morosidad_por_mes_final: dict[tuple[int, int], float] = {}
     query_time = 0
 
     try:
@@ -5256,7 +5257,7 @@ def obtener_evolucion_morosidad(
                 f"📊 [evolucion-morosidad] Query tabla oficial completada en {query_time}ms, {len(resultados)} registros"
             )
 
-            morosidad_por_mes = {(r.año, r.mes): float(r.morosidad_total or Decimal("0")) for r in resultados}
+            morosidad_por_mes_final = {(r.año, r.mes): float(r.morosidad_total or Decimal("0")) for r in resultados}
         else:
             # Tabla no existe, usar fallback
             logger.warning("Tabla dashboard_morosidad_mensual no existe, usando fallback")
@@ -5285,15 +5286,14 @@ def obtener_evolucion_morosidad(
             """
             ).bindparams(fecha_inicio=fecha_inicio_query, fecha_fin_total=hoy)
             result = db.execute(query_sql)
-            morosidad_por_mes: dict[tuple[int, int], float] = {}
             for row in result:
                 año = int(row[0]) if row[0] is not None else 0
                 mes = int(row[1]) if row[1] is not None else 0
                 morosidad = float(row[2] or Decimal("0"))
-                morosidad_por_mes[(año, mes)] = morosidad
+                morosidad_por_mes_final[(año, mes)] = morosidad
             query_time = int((time.time() - start_fallback) * 1000)
             logger.info(
-                f"📊 [evolucion-morosidad] Query fallback completada en {query_time}ms, {len(morosidad_por_mes)} registros"
+                f"📊 [evolucion-morosidad] Query fallback completada en {query_time}ms, {len(morosidad_por_mes_final)} registros"
             )
         except Exception as fallback_error:
             logger.error(f"Error en fallback: {fallback_error}", exc_info=True)
@@ -5307,8 +5307,8 @@ def obtener_evolucion_morosidad(
     while current_date <= hoy:
         año_mes = int(current_date.year)
         num_mes = int(current_date.month)
-        mes_key: tuple[int, int] = (año_mes, num_mes)
-        morosidad_mes = morosidad_por_mes.get(mes_key, 0.0)
+        mes_key_morosidad: tuple[int, int] = (año_mes, num_mes)
+        morosidad_mes = morosidad_por_mes_final.get(mes_key_morosidad, 0.0)
 
         meses_data.append(
             {
@@ -5426,12 +5426,12 @@ def obtener_evolucion_pagos(
         # ✅ CORRECCIÓN: Usar acceso por índice en lugar de atributo para compatibilidad con Row
         pagos_por_mes: dict[tuple[int, int], dict[str, Any]] = {}
         for row in resultados:
-            año = int(row[0])
-            mes = int(row[1])
-            mes_key: tuple[int, int] = (año, mes)
-            pagos_por_mes[mes_key] = {
-                "cantidad": int(row[2]),
-                "monto": float(row[3] or Decimal("0")),
+            año = int(row[0]) if row[0] is not None else 0
+            mes = int(row[1]) if row[1] is not None else 0
+            mes_key_pagos_evol: tuple[int, int] = (año, mes)
+            pagos_por_mes[mes_key_pagos_evol] = {
+                "cantidad": int(row[2]) if row[2] is not None else 0,
+                "monto": float(row[3] or Decimal("0")) if row[3] is not None else 0.0,
             }
 
         # Generar datos mensuales (incluir todos los meses en el rango, incluso sin pagos)
@@ -5445,8 +5445,8 @@ def obtener_evolucion_pagos(
             fecha_mes_fin = _obtener_fechas_mes_siguiente(num_mes, año_mes)
 
             # Obtener datos del mes (o valores por defecto si no hay pagos)
-            mes_key: tuple[int, int] = (año_mes, num_mes)
-            datos_mes = pagos_por_mes.get(mes_key, {"cantidad": 0, "monto": 0.0})
+            mes_key_pagos_final: tuple[int, int] = (año_mes, num_mes)
+            datos_mes = pagos_por_mes.get(mes_key_pagos_final, {"cantidad": 0, "monto": 0.0})
 
             meses_data.append(
                 {

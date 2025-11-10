@@ -653,7 +653,10 @@ def estadisticas_auditoria(
         # Calcular acciones por módulo usando GROUP BY (más eficiente)
         try:
             acciones_por_modulo_rows = db.query(Auditoria.entidad, func.count(Auditoria.id)).group_by(Auditoria.entidad).all()
-            acciones_por_modulo = {row[0] or "DESCONOCIDO": row[1] for row in acciones_por_modulo_rows}
+            acciones_por_modulo = {
+                (row[0] if row[0] is not None else "DESCONOCIDO"): (row[1] if row[1] is not None else 0)
+                for row in acciones_por_modulo_rows
+            }
         except (ProgrammingError, Exception) as e:
             logger.warning(f"Error consultando acciones por módulo de auditoria: {e}")
             acciones_por_modulo = {}
@@ -691,7 +694,10 @@ def estadisticas_auditoria(
                 .group_by(User.email)
                 .all()
             )
-            acciones_por_usuario = {row[0]: row[1] for row in acciones_por_usuario_rows}
+            acciones_por_usuario = {
+                (row[0] if row[0] is not None else ""): (row[1] if row[1] is not None else 0)
+                for row in acciones_por_usuario_rows
+            }
         except (ProgrammingError, Exception) as e:
             logger.warning(f"Error consultando acciones por usuario de auditoria: {e}")
             acciones_por_usuario = {}
