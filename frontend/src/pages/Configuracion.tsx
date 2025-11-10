@@ -1370,19 +1370,25 @@ export function Configuracion() {
                 </CardDescription>
               </div>
               <div className="flex space-x-2">
-                {cambiosPendientes && (
-                  <Badge variant="warning" className="animate-pulse">
-                    Cambios pendientes
-                  </Badge>
+                {/* ✅ Ocultar botón "Guardar" en secciones que tienen su propio botón de guardar */}
+                {/* emailConfig y whatsappConfig tienen sus propios botones de guardar */}
+                {seccionActiva !== 'emailConfig' && seccionActiva !== 'whatsappConfig' && (
+                  <>
+                    {cambiosPendientes && (
+                      <Badge variant="warning" className="animate-pulse">
+                        Cambios pendientes
+                      </Badge>
+                    )}
+                    <Button
+                      onClick={handleGuardar}
+                      disabled={!cambiosPendientes}
+                      className={cambiosPendientes ? 'animate-pulse' : ''}
+                    >
+                      <Save className="mr-2 h-4 w-4" />
+                      Guardar
+                    </Button>
+                  </>
                 )}
-                <Button
-                  onClick={handleGuardar}
-                  disabled={!cambiosPendientes}
-                  className={cambiosPendientes ? 'animate-pulse' : ''}
-                >
-                  <Save className="mr-2 h-4 w-4" />
-                  Guardar
-                </Button>
               </div>
             </div>
           </CardHeader>
