@@ -497,18 +497,24 @@ class EmailService:
 
         # ✅ Recargar configuración para verificar email_activo
         self._cargar_configuracion()
-        
+
         # ✅ Verificar si el email está activado
         if not self.email_activo:
             logger.warning("📧 Email desactivado - No se enviarán emails masivos (proceso no interrumpido)")
             return {
-                'total': total_emails,
-                'enviados': 0,
-                'fallidos': total_emails,
-                'errores': [{'email': 'all', 'error': 'El envío de emails está desactivado. Activa el servicio en Configuración de Email.', 'intentos': 0}],
-                'tiempo_total': 0,
-                'emails_por_segundo': 0,
-                'tasa_exito': 0
+                "total": total_emails,
+                "enviados": 0,
+                "fallidos": total_emails,
+                "errores": [
+                    {
+                        "email": "all",
+                        "error": "El envío de emails está desactivado. Activa el servicio en Configuración de Email.",
+                        "intentos": 0,
+                    }
+                ],
+                "tiempo_total": 0,
+                "emails_por_segundo": 0,
+                "tasa_exito": 0,
             }
 
         logger.info(f"📧 Iniciando envío masivo de {total_emails} emails")
