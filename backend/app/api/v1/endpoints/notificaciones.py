@@ -431,13 +431,13 @@ def listar_notificaciones(
                 leida_exists = "leida" in columns
                 created_at_exists = "created_at" in columns
                 
-                # Solo mostrar warnings la primera vez
+                # Solo mostrar info la primera vez (no es un error, es un comportamiento esperado)
                 if not canal_exists:
-                    logger.warning("Columna 'canal' no existe en BD. Usando query sin canal.")
+                    logger.info("ℹ️ Columna 'canal' no existe en BD. Usando query sin canal.")
                 if not leida_exists:
-                    logger.warning("Columna 'leida' no existe en BD. Usando query sin leida.")
+                    logger.info("ℹ️ Columna 'leida' no existe en BD. Usando query sin leida.")
                 if not created_at_exists:
-                    logger.warning("Columna 'created_at' no existe en BD. Usando 'id' para ordenar.")
+                    logger.info("ℹ️ Columna 'created_at' no existe en BD. Usando 'id' para ordenar.")
                 
                 # Cachear resultado
                 _columnas_notificaciones_cache = {

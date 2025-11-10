@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Clock, XCircle, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -135,41 +135,53 @@ export function EmailConfig() {
 
   // Función para determinar si el botón debe estar habilitado
   // NOTA: Solo valida campos OBLIGATORIOS para guardar. El email de pruebas NO es obligatorio.
-  const puedeGuardar = (): boolean => {
-    console.log('🔍 [EmailConfig] Verificando si puede guardar:', {
-      smtp_host: config.smtp_host,
-      smtp_port: config.smtp_port,
-      smtp_user: config.smtp_user,
-      from_email: config.from_email,
-      tiene_password: !!config.smtp_password,
-      password_length: config.smtp_password?.length || 0,
-      smtp_use_tls: config.smtp_use_tls,
-      es_gmail: config.smtp_host?.toLowerCase().includes('gmail.com')
-    })
+  // Usa useMemo para evitar recalcular en cada render
+  const puedeGuardar = useMemo((): boolean => {
+    // Solo loguear en modo debug (desarrollo)
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('🔍 [EmailConfig] Verificando si puede guardar:', {
+        smtp_host: config.smtp_host,
+        smtp_port: config.smtp_port,
+        smtp_user: config.smtp_user,
+        from_email: config.from_email,
+        tiene_password: !!config.smtp_password,
+        password_length: config.smtp_password?.length || 0,
+        smtp_use_tls: config.smtp_use_tls,
+        es_gmail: config.smtp_host?.toLowerCase().includes('gmail.com')
+      })
+    }
     
     // Campos obligatorios básicos
     if (!config.smtp_host || !config.smtp_port || !config.smtp_user || !config.from_email) {
-      console.log('❌ [EmailConfig] Faltan campos obligatorios básicos')
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('❌ [EmailConfig] Faltan campos obligatorios básicos')
+      }
       return false
     }
     
     // Validar puerto numérico
     const puerto = parseInt(config.smtp_port)
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
-      console.log('❌ [EmailConfig] Puerto inválido:', config.smtp_port)
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('❌ [EmailConfig] Puerto inválido:', config.smtp_port)
+      }
       return false
     }
     
     // Si es Gmail/Google Workspace, requiere contraseña
     if (config.smtp_host.toLowerCase().includes('gmail.com')) {
       if (!config.smtp_password || config.smtp_password.trim().length === 0) {
-        console.log('❌ [EmailConfig] Gmail requiere contraseña')
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('❌ [EmailConfig] Gmail requiere contraseña')
+        }
         return false
       }
       
       // Validar TLS para puerto 587
       if (puerto === 587 && config.smtp_use_tls !== 'true') {
-        console.log('❌ [EmailConfig] Puerto 587 requiere TLS')
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('❌ [EmailConfig] Puerto 587 requiere TLS')
+        }
         return false
       }
     }
@@ -177,9 +189,11 @@ export function EmailConfig() {
     // NOTA: NO validamos el email de pruebas aquí porque NO es obligatorio para guardar
     // El email de pruebas solo se valida cuando se intenta enviar un email de prueba
     
-    console.log('✅ [EmailConfig] Puede guardar - todos los campos obligatorios están completos')
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('✅ [EmailConfig] Puede guardar - todos los campos obligatorios están completos')
+    }
     return true
-  }
+  }, [config.smtp_host, config.smtp_port, config.smtp_user, config.from_email, config.smtp_password, config.smtp_use_tls])
 
   const validarConfiguracionGmail = (): string | null => {
     console.log('🔍 [EmailConfig] Validando configuración:', {
@@ -636,10 +650,9 @@ export function EmailConfig() {
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                console.log('🖱️ [EmailConfig] Botón clickeado', { puedeGuardar: puedeGuardar(), guardando })
                 
                 // Si el botón está deshabilitado, mostrar mensaje específico
-                if (!puedeGuardar() && !guardando) {
+                if (!puedeGuardar && !guardando) {
                   const camposFaltantes = obtenerCamposFaltantes()
                   const mensaje = camposFaltantes.length > 0 
                     ? `Completa los siguientes campos: ${camposFaltantes.join(', ')}`
@@ -655,14 +668,14 @@ export function EmailConfig() {
                 
                 handleGuardar()
               }}
-              disabled={guardando || !puedeGuardar()}
+              disabled={guardando || !puedeGuardar}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               type="button"
             >
               <Save className="h-4 w-4" />
               {guardando ? 'Guardando...' : 'Guardar Configuración'}
             </Button>
-            {!puedeGuardar() && !guardando && (() => {
+            {!puedeGuardar && !guardando && (() => {
               const camposFaltantes = obtenerCamposFaltantes()
               return (
                 <p className="text-xs text-amber-600 self-center font-medium">
