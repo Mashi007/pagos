@@ -152,8 +152,8 @@ class EmailService:
                 logger.warning(f"🧪 MODO PRUEBAS: Redirigiendo email de {', '.join(to_emails)} a {self.email_pruebas}")
 
             # Crear mensaje
-            from email.utils import formatdate, make_msgid
             from datetime import datetime
+            from email.utils import formatdate, make_msgid
 
             msg = MIMEMultipart("alternative")  # ✅ multipart/alternative para HTML + texto plano
             msg["From"] = f"{self.from_name} <{self.from_email}>"
