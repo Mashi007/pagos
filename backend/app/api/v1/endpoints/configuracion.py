@@ -879,7 +879,7 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
     # - Otras formas de autenticación según la configuración del dominio
     # La validación real se hace al probar la conexión SMTP
     password_sin_espacios = smtp_password.replace(" ", "").replace("\t", "")
-    
+
     # Solo advertir si la contraseña es muy corta (probablemente no es una App Password)
     if len(password_sin_espacios) < 10:
         logger.warning(
