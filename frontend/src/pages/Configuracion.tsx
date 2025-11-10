@@ -129,6 +129,8 @@ export function Configuracion() {
     const tab = searchParams.get('tab')
     if (tab === 'email') {
       setSeccionActiva('emailConfig')
+    } else if (tab === 'whatsapp') {
+      setSeccionActiva('whatsappConfig')
     }
   }, [searchParams])
   const [mostrarPassword, setMostrarPassword] = useState(false)
