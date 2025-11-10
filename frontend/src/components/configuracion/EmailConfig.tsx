@@ -74,28 +74,46 @@ export function EmailConfig() {
       const estado = await emailConfigService.verificarEstadoConfiguracionEmail()
       setEstadoConfiguracion(estado)
       
-      // Actualizar estado de vinculación basado en la verificación
-      if (estado.configurada && estado.conexion_smtp?.success) {
+      // ✅ Actualizar estado de vinculación basado en la verificación REAL de Gmail
+      // La conexión SMTP exitosa significa que Gmail ACEPTÓ las credenciales
+      if (estado.configurada && estado.conexion_smtp?.success === true) {
         setVinculacionConfirmada(true)
         setMensajeVinculacion('✅ Sistema vinculado correctamente con Google/Google Workspace')
         setRequiereAppPassword(false)
-      } else if (estado.problemas.length > 0) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Gmail confirmó: Configuración correcta y conexión aceptada')
+        }
+      } else {
+        // Si hay problemas o la conexión SMTP falló, Gmail RECHAZÓ la conexión
         setVinculacionConfirmada(false)
+        
         // Verificar si el problema es específico de App Password
         const requiereAppPass = estado.problemas.some(p => 
           p.toLowerCase().includes('app password') || 
           p.toLowerCase().includes('contraseña de aplicación') ||
-          p.toLowerCase().includes('application-specific password')
-        )
+          p.toLowerCase().includes('application-specific password') ||
+          p.toLowerCase().includes('requiere una contraseña de aplicación')
+        ) || estado.conexion_smtp?.message?.toLowerCase().includes('app password') ||
+           estado.conexion_smtp?.message?.toLowerCase().includes('contraseña de aplicación')
+        
         setRequiereAppPassword(requiereAppPass)
-        setMensajeVinculacion(estado.mensaje || '⚠️ Configuración incompleta o con problemas')
+        setMensajeVinculacion(estado.mensaje || '⚠️ Gmail rechazó la conexión. Verifica tus credenciales.')
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('❌ Gmail rechazó:', {
+            problemas: estado.problemas,
+            conexion_smtp: estado.conexion_smtp,
+            requiereAppPassword: requiereAppPass
+          })
+        }
       }
     } catch (error) {
       console.error('Error verificando estado de Google:', error)
       setEstadoConfiguracion({
         configurada: false,
         mensaje: 'Error al verificar estado de configuración',
-        problemas: ['No se pudo verificar el estado con Google']
+        problemas: ['No se pudo verificar el estado con Google'],
+        conexion_smtp: { success: false, message: 'Error al conectar con Gmail' }
       })
     } finally {
       setVerificandoEstado(false)
@@ -339,7 +357,8 @@ export function EmailConfig() {
       
       await cargarConfiguracion()
       
-      // ✅ Verificar estado de Google después de guardar
+      // ✅ Verificar estado de Google después de guardar (prueba conexión SMTP real con Gmail)
+      // Esto actualiza automáticamente los semáforos según la respuesta de Gmail
       await verificarEstadoGoogle()
     } catch (error: any) {
       console.error('Error guardando configuración:', error)
@@ -427,15 +446,20 @@ export function EmailConfig() {
             <>
               {/* ✅ Estado: Configurado y vinculado correctamente */}
               {vinculacionConfirmada && estadoConfiguracion?.configurada && (
-                <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <CheckCircle className="h-6 w-6 text-green-600 mt-0.5 flex-shrink-0" />
+                <div className="bg-white border-2 border-green-500 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    {/* Semáforo Verde */}
+                    <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                      <div className="w-4 h-4 bg-green-500 rounded-full shadow-lg"></div>
+                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                    </div>
                     <div className="flex-1">
-                      <p className="font-bold text-green-900 mb-1">
-                        ✅ Gmail/Google Workspace aceptó la conexión
+                      <p className="font-semibold text-gray-900">
+                        Configuración correcta
                       </p>
-                      <p className="text-sm text-green-800">
-                        El sistema está autorizado para enviar emails.
+                      <p className="text-sm text-gray-600">
+                        Gmail aceptó la conexión. Puedes enviar emails.
                       </p>
                     </div>
                   </div>
@@ -444,24 +468,27 @@ export function EmailConfig() {
 
               {/* ❌ Estado: No configurado o con problemas */}
               {!vinculacionConfirmada && estadoConfiguracion && !estadoConfiguracion.configurada && (
-                <div className="bg-red-50 border-2 border-red-500 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="h-6 w-6 text-red-600 mt-0.5 flex-shrink-0" />
+                <div className="bg-white border-2 border-red-500 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    {/* Semáforo Rojo */}
+                    <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                      <div className="w-4 h-4 bg-red-500 rounded-full shadow-lg"></div>
+                    </div>
                     <div className="flex-1">
-                      <p className="font-bold text-red-900 mb-2">
-                        ❌ Error de conexión con Gmail/Google Workspace
+                      <p className="font-semibold text-gray-900">
+                        Error de conexión
                       </p>
-                      <p className="text-sm text-red-800 mb-2">
+                      <p className="text-sm text-gray-600">
                         {estadoConfiguracion.mensaje || 'No se pudo conectar. Verifica tus credenciales.'}
                       </p>
                       {estadoConfiguracion.problemas.length > 0 && (
-                        <div className="bg-red-100 border border-red-300 rounded p-3 mt-2">
-                          <ul className="text-sm text-red-800 space-y-1 list-disc list-inside">
-                            {estadoConfiguracion.problemas.map((problema, idx) => (
-                              <li key={idx}>{problema}</li>
-                            ))}
-                          </ul>
-                        </div>
+                        <ul className="text-xs text-gray-600 space-y-1 mt-2 list-disc list-inside">
+                          {estadoConfiguracion.problemas.map((problema, idx) => (
+                            <li key={idx}>{problema}</li>
+                          ))}
+                        </ul>
                       )}
                     </div>
                   </div>
@@ -469,19 +496,22 @@ export function EmailConfig() {
               )}
               
               {requiereAppPassword && (
-                <div className="bg-amber-50 border-2 border-amber-400 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="h-6 w-6 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div className="bg-white border-2 border-amber-400 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    {/* Semáforo Amarillo */}
+                    <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                      <div className="w-4 h-4 bg-amber-500 rounded-full shadow-lg"></div>
+                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                    </div>
                     <div className="flex-1">
-                      <p className="font-bold text-amber-900 mb-3">
-                        ⚠️ Requiere Contraseña de Aplicación (App Password)
+                      <p className="font-semibold text-gray-900 mb-2">
+                        Requiere App Password
                       </p>
-                      <div className="bg-amber-100 border border-amber-300 rounded p-3">
-                        <ol className="text-sm text-amber-800 space-y-2 list-decimal list-inside">
-                          <li>Activa 2FA: <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="underline font-medium">myaccount.google.com/security</a></li>
-                          <li>Genera App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline font-medium">myaccount.google.com/apppasswords</a></li>
-                          <li>Pega la contraseña de 16 caracteres en el campo "Contraseña de Aplicación" y guarda</li>
-                        </ol>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <p>1. Activa 2FA: <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">myaccount.google.com/security</a></p>
+                        <p>2. Genera App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">myaccount.google.com/apppasswords</a></p>
+                        <p>3. Pega la contraseña de 16 caracteres y guarda</p>
                       </div>
                     </div>
                   </div>
@@ -490,61 +520,23 @@ export function EmailConfig() {
               
               {/* ⏳ Estado: Pendiente de verificación (solo si no hay estado verificado) */}
               {!estadoConfiguracion && config.smtp_user && config.smtp_password && !vinculacionConfirmada && !requiereAppPassword && (
-                <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <Clock className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                <div className="bg-white border border-gray-300 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    {/* Semáforo Amarillo (pendiente) */}
+                    <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                      <div className="w-4 h-4 bg-amber-500 rounded-full shadow-lg"></div>
+                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                    </div>
                     <div className="flex-1">
-                      <p className="font-semibold text-yellow-900 mb-2">⏳ Guarda la configuración para verificar la conexión</p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={verificarEstadoGoogle}
-                        disabled={verificandoEstado}
-                        className="text-xs"
-                      >
-                        {verificandoEstado ? 'Verificando...' : '🔍 Verificar Ahora'}
-                      </Button>
+                      <p className="font-semibold text-gray-900">Guarda la configuración para verificar la conexión con Gmail</p>
                     </div>
                   </div>
-                </div>
-              )}
-
-              {/* 🔄 Botón para verificar estado manualmente */}
-              {estadoConfiguracion && (
-                <div className="flex justify-end mb-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={verificarEstadoGoogle}
-                    disabled={verificandoEstado}
-                    className="text-xs"
-                  >
-                    {verificandoEstado ? '🔄 Verificando...' : '🔄 Actualizar Estado'}
-                  </Button>
                 </div>
               )}
             </>
           )}
 
-          {/* Advertencia de requisitos Gmail */}
-          {esGmail && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="font-semibold text-amber-900 mb-1">Requisitos obligatorios para Gmail / Google Workspace:</p>
-                  <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
-                    <li><strong>Autenticación de 2 factores (2FA) debe estar ACTIVADA</strong> en tu cuenta de Google</li>
-                    <li>Debes usar una <strong>Contraseña de Aplicación</strong> (16 caracteres), NO tu contraseña normal</li>
-                    <li>Puerto recomendado: <strong>587 con TLS</strong> (o 465 con SSL)</li>
-                    <li>Soporta cuentas de <strong>Gmail (@gmail.com)</strong> y <strong>Google Workspace</strong> (dominios personalizados)</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Campos de configuración */}
           <div className="grid gap-4 md:grid-cols-2">

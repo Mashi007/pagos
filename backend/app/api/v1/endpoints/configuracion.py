@@ -1001,26 +1001,23 @@ def actualizar_configuracion_email(
     # Esta validación prueba la conexión SMTP con Google y confirma que acepta las credenciales
     es_valida, mensaje_error = _validar_configuracion_gmail_smtp(config_data)
 
-    # Si la validación falla, verificar si es un error que permite guardar con advertencia
+    # ✅ Si la validación falla, permitir guardar pero advertir al usuario
+    # Esto permite que el usuario guarde la configuración y luego corrija los problemas
     if not es_valida:
-        # Para errores de "Application-specific password required", permitir guardar pero advertir
-        # Esto permite que el usuario guarde la configuración y luego corrija la App Password
-        if mensaje_error and (
-            "application-specific password required" in mensaje_error.lower()
-            or "requiere una contraseña de aplicación" in mensaje_error.lower()
-        ):
-            logger.warning(
-                f"⚠️ Google requiere App Password para {config_data.get('smtp_user', 'N/A')}. "
-                f"Se permitirá guardar la configuración pero no se podrá enviar emails hasta corregir la contraseña."
-            )
-            # NO lanzar excepción, permitir guardar con advertencia
-        else:
-            # Para otros errores de autenticación, bloquear el guardado
-            logger.warning(
-                f"❌ Google/Google Workspace rechazó la conexión SMTP para {config_data.get('smtp_user', 'N/A')}. "
-                f"Razón: {mensaje_error}"
-            )
-            raise HTTPException(status_code=400, detail=mensaje_error or "Configuración de email inválida")
+        # Para TODOS los errores de autenticación, permitir guardar pero advertir
+        # El usuario puede corregir la configuración después de guardarla
+        if mensaje_error:
+            if "application-specific password required" in mensaje_error.lower() or "requiere una contraseña de aplicación" in mensaje_error.lower():
+                logger.warning(
+                    f"⚠️ Google requiere App Password para {config_data.get('smtp_user', 'N/A')}. "
+                    f"Se permitirá guardar la configuración pero no se podrá enviar emails hasta corregir la contraseña."
+                )
+            else:
+                logger.warning(
+                    f"⚠️ Google/Google Workspace rechazó la conexión SMTP para {config_data.get('smtp_user', 'N/A')}. "
+                    f"Razón: {mensaje_error}. Se permitirá guardar la configuración pero requiere corrección."
+                )
+        # NO lanzar excepción - permitir guardar con advertencia para que el usuario pueda corregir después
 
     # Si llegamos aquí y es Gmail, significa que Google aceptó la conexión
     es_gmail = "gmail.com" in config_data.get("smtp_host", "").lower()
@@ -1071,13 +1068,16 @@ def actualizar_configuracion_email(
         es_gmail = "gmail.com" in config_data.get("smtp_host", "").lower()
         validacion_exitosa = es_valida and es_gmail  # Solo exitosa si es Gmail Y la validación pasó
 
-        # Verificar si hay advertencia de App Password requerida
+        # Verificar si hay advertencia de App Password requerida o cualquier error de autenticación
+        # Esto incluye tanto "Application-specific password required" como "username and password not accepted"
         requiere_app_password = (
             not es_valida
             and mensaje_error
             and (
                 "application-specific password required" in mensaje_error.lower()
                 or "requiere una contraseña de aplicación" in mensaje_error.lower()
+                or "username and password not accepted" in mensaje_error.lower()
+                or "error de autenticación" in mensaje_error.lower()
             )
         )
 
@@ -1100,13 +1100,24 @@ def actualizar_configuracion_email(
                 "La configuración fue aceptada y puedes enviar emails."
             )
         elif requiere_app_password:
-            mensaje_vinculacion = (
-                "⚠️ Configuración guardada, pero Google requiere una Contraseña de Aplicación (App Password).\n\n"
-                "Para poder enviar emails:\n"
-                "1. Activa 2FA en tu cuenta de Google\n"
-                "2. Genera una App Password en https://myaccount.google.com/apppasswords\n"
-                "3. Actualiza el campo 'Contraseña de Aplicación' con la nueva contraseña de 16 caracteres"
-            )
+            # Mensaje más genérico que cubre tanto App Password como otros errores de autenticación
+            if mensaje_error and "application-specific password required" in mensaje_error.lower():
+                mensaje_vinculacion = (
+                    "⚠️ Configuración guardada, pero Google requiere una Contraseña de Aplicación (App Password).\n\n"
+                    "Para poder enviar emails:\n"
+                    "1. Activa 2FA en tu cuenta de Google\n"
+                    "2. Genera una App Password en https://myaccount.google.com/apppasswords\n"
+                    "3. Actualiza el campo 'Contraseña de Aplicación' con la nueva contraseña de 16 caracteres"
+                )
+            else:
+                mensaje_vinculacion = (
+                    "⚠️ Configuración guardada, pero hay un error de autenticación con Gmail/Google Workspace.\n\n"
+                    "Para poder enviar emails:\n"
+                    "1. Verifica que tengas 2FA activado en tu cuenta de Google\n"
+                    "2. Genera una App Password en https://myaccount.google.com/apppasswords\n"
+                    "3. Actualiza el campo 'Contraseña de Aplicación' con la contraseña de 16 caracteres\n"
+                    "4. Asegúrate de NO usar tu contraseña normal de Gmail"
+                )
         else:
             mensaje_vinculacion = "Configuración guardada. La conexión se validará al enviar emails."
 
@@ -1374,15 +1385,34 @@ def verificar_estado_configuracion_email(
             try:
                 email_service = EmailService(db=db)
                 conexion_smtp = email_service.test_connection()
+                
+                # ✅ Si la conexión SMTP falla, agregar el mensaje a problemas
+                if not conexion_smtp.get("success", False):
+                    error_msg = conexion_smtp.get("message", "Error desconocido en conexión SMTP")
+                    problemas.append(error_msg)
+                    logger.warning(f"⚠️ Conexión SMTP falló: {error_msg}")
+                else:
+                    # ✅ Si la conexión fue exitosa, confirmar que Gmail aceptó
+                    logger.info(f"✅ Conexión SMTP exitosa con Gmail/Google Workspace")
             except Exception as e:
-                problemas.append(f"Error probando conexión SMTP: {str(e)}")
-                conexion_smtp = {"success": False, "message": str(e)}
+                error_msg = f"Error probando conexión SMTP: {str(e)}"
+                problemas.append(error_msg)
+                conexion_smtp = {"success": False, "message": error_msg}
+                logger.error(f"❌ Excepción al probar conexión SMTP: {error_msg}", exc_info=True)
 
+        # ✅ configurada = True solo si NO hay problemas Y la conexión SMTP fue exitosa
+        # Esto confirma que Gmail ACEPTÓ la conexión
+        configurada = len(problemas) == 0 and conexion_smtp is not None and conexion_smtp.get("success", False) is True
+        
+        mensaje = (
+            "✅ Configuración correcta: Gmail aceptó la conexión" if configurada 
+            else f"❌ Se encontraron {len(problemas)} problema(s)" if len(problemas) > 0
+            else "⚠️ Configuración incompleta"
+        )
+        
         return {
-            "configurada": len(problemas) == 0,
-            "mensaje": (
-                "Configuración completa y válida" if len(problemas) == 0 else f"Se encontraron {len(problemas)} problema(s)"
-            ),
+            "configurada": configurada,
+            "mensaje": mensaje,
             "configuraciones": configuraciones_visibles,
             "problemas": problemas,
             "conexion_smtp": conexion_smtp,
