@@ -64,8 +64,14 @@ export function EmailConfig() {
     try {
       const data = await emailConfigService.obtenerConfiguracionEmail()
       
-      // Sincronizar from_email con smtp_user si está vacío
+      // ✅ CRÍTICO: Sincronizar from_email con smtp_user si está vacío
+      // Esto asegura que el botón se habilite correctamente
       if ((!data.from_email || data.from_email.trim() === '') && data.smtp_user?.trim()) {
+        data.from_email = data.smtp_user
+      }
+      
+      // ✅ Asegurar que from_email tenga un valor por defecto si smtp_user existe
+      if (!data.from_email && data.smtp_user) {
         data.from_email = data.smtp_user
       }
       
@@ -77,6 +83,11 @@ export function EmailConfig() {
       } else if (typeof data.smtp_use_tls === 'string') {
         data.smtp_use_tls = (data.smtp_use_tls.toLowerCase() === 'true' || data.smtp_use_tls === '1') ? 'true' : 'false'
       }
+      
+      // ✅ Asegurar valores por defecto para campos requeridos
+      if (!data.smtp_host) data.smtp_host = 'smtp.gmail.com'
+      if (!data.smtp_port) data.smtp_port = '587'
+      if (!data.from_name) data.from_name = 'RapiCredit'
       
       setConfig(data)
       setModoPruebas(data.modo_pruebas || 'true')
@@ -105,14 +116,19 @@ export function EmailConfig() {
     setConfig(prev => {
       const nuevo = { ...prev, [campo]: valor }
       
-      // Sincronizar from_email con smtp_user si está vacío o igual al anterior
-      if (campo === 'smtp_user' && (!prev.from_email || prev.from_email === prev.smtp_user)) {
-        nuevo.from_email = valor
+      // ✅ Sincronizar from_email con smtp_user automáticamente
+      // Esto asegura que siempre tengan el mismo valor si from_email está vacío o igual al anterior
+      if (campo === 'smtp_user') {
+        // Si from_email está vacío o es igual al smtp_user anterior, sincronizar
+        if (!prev.from_email?.trim() || prev.from_email === prev.smtp_user) {
+          nuevo.from_email = valor
+        }
       }
       
       return nuevo
     })
     
+    // Limpiar error de validación cuando el usuario edita
     if (errorValidacion) {
       setErrorValidacion(null)
     }
@@ -120,21 +136,27 @@ export function EmailConfig() {
 
   // Validar si se puede guardar
   const puedeGuardar = useMemo((): boolean => {
-    // Campos obligatorios
-    if (!config.smtp_host?.trim() || !config.smtp_port?.trim() || 
-        !config.smtp_user?.trim() || !config.from_email?.trim()) {
+    // Campos obligatorios básicos
+    const tieneHost = config.smtp_host?.trim() || ''
+    const tienePort = config.smtp_port?.trim() || ''
+    const tieneUser = config.smtp_user?.trim() || ''
+    const tieneFromEmail = config.from_email?.trim() || ''
+    
+    if (!tieneHost || !tienePort || !tieneUser || !tieneFromEmail) {
       return false
     }
     
     // Puerto válido
-    const puerto = parseInt(config.smtp_port)
+    const puerto = parseInt(config.smtp_port || '0')
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
       return false
     }
     
     // Si es Gmail, requiere contraseña y TLS para puerto 587
-    if (config.smtp_host.toLowerCase().includes('gmail.com')) {
-      if (!config.smtp_password?.trim()) {
+    const esGmail = config.smtp_host?.toLowerCase().includes('gmail.com') || false
+    if (esGmail) {
+      const tienePassword = config.smtp_password?.trim() || ''
+      if (!tienePassword) {
         return false
       }
       if (puerto === 587 && config.smtp_use_tls !== 'true') {
@@ -143,7 +165,14 @@ export function EmailConfig() {
     }
     
     return true
-  }, [config])
+  }, [
+    config.smtp_host,
+    config.smtp_port,
+    config.smtp_user,
+    config.from_email,
+    config.smtp_password,
+    config.smtp_use_tls
+  ])
 
   // Obtener campos faltantes para mensaje
   const obtenerCamposFaltantes = (): string[] => {
@@ -543,6 +572,7 @@ export function EmailConfig() {
           {/* Botones */}
           <div className="flex gap-2 pt-4 border-t mt-4">
             <Button
+              type="button"
               onClick={handleGuardar}
               disabled={guardando || !puedeGuardar}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
