@@ -1,2 +1,5 @@
 # This file includes all production dependencies
 -r requirements/prod.txt
+
+# Redis para cache (agregado explícitamente para asegurar instalación en Render)
+redis>=5.0.0,<6.0.0
