@@ -276,11 +276,20 @@ def update_user(
 ):
     """Actualizar usuario"""
     try:
+        # ✅ CRÍTICO: Validar que el user_id sea un entero válido
+        if not isinstance(user_id, int) or user_id <= 0:
+            raise HTTPException(status_code=400, detail=f"ID de usuario inválido: {user_id}")
+        
+        # ✅ CRÍTICO: Obtener el usuario específico por ID y verificar que existe
         user = db.query(User).filter(User.id == user_id).first()
 
         if not user:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
+            raise HTTPException(status_code=404, detail=f"Usuario con ID {user_id} no encontrado")
+        
+        # ✅ CRÍTICO: Logging explícito del usuario que se va a actualizar
+        logger.info(f"🔍 [UPDATE_USER] Iniciando actualización - user_id={user_id}, email={user.email}, nombre={user.nombre} {user.apellido}")
+        
+        # ✅ CRÍTICO: Validar permisos ANTES de aplicar cambios
         _validar_permisos_actualizacion(current_user, user_id)
 
         # ✅ Usar exclude_none=False para asegurar que False se incluya
@@ -302,9 +311,17 @@ def update_user(
         if "email" in update_data and update_data["email"] != user.email:
             _validar_email_unico(db, update_data["email"], user_id)
 
-        logger.info(f"Actualizando usuario {user_id} con campos: {list(update_data.keys())}")
-        logger.info(f"Valores recibidos en update_data: {update_data}")
-        logger.info(f"is_admin en update_data: {update_data.get('is_admin', 'NO ENVIADO')}")
+        # ✅ CRÍTICO: Verificar nuevamente que estamos actualizando el usuario correcto
+        logger.info(f"🔍 [UPDATE_USER] Verificación de usuario - user_id={user_id}, user.id={user.id}, user.email={user.email}")
+        
+        # ✅ CRÍTICO: Validar que el ID del objeto user coincide con el user_id del path
+        if user.id != user_id:
+            logger.error(f"❌ [UPDATE_USER] ERROR CRÍTICO: user.id ({user.id}) != user_id ({user_id})")
+            raise HTTPException(status_code=500, detail="Error: ID de usuario no coincide")
+        
+        logger.info(f"✅ [UPDATE_USER] Actualizando usuario {user_id} ({user.email}) con campos: {list(update_data.keys())}")
+        logger.info(f"📋 [UPDATE_USER] Valores recibidos en update_data: {update_data}")
+        logger.info(f"👤 [UPDATE_USER] is_admin en update_data: {update_data.get('is_admin', 'NO ENVIADO')}")
 
         # Guardar valores anteriores para logging
         valores_anteriores = {
@@ -315,18 +332,41 @@ def update_user(
             "is_active": user.is_active,
         }
 
+        # ✅ CRÍTICO: Verificar una vez más antes de aplicar cambios
+        if user.id != user_id:
+            logger.error(f"❌ [UPDATE_USER] ERROR: user.id ({user.id}) != user_id ({user_id}) antes de aplicar cambios")
+            raise HTTPException(status_code=500, detail="Error: ID de usuario no coincide antes de aplicar cambios")
+        
         _aplicar_actualizaciones(user, update_data)
 
         # ✅ Actualizar updated_at manualmente si no se actualiza automáticamente
         from datetime import datetime
 
         user.updated_at = datetime.utcnow()
+        
+        # ✅ CRÍTICO: Verificar después de aplicar cambios pero antes del commit
+        if user.id != user_id:
+            logger.error(f"❌ [UPDATE_USER] ERROR: user.id ({user.id}) != user_id ({user_id}) después de aplicar cambios")
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Error: ID de usuario no coincide después de aplicar cambios")
 
         try:
             # Flush para asegurar que los cambios se apliquen antes del commit
             db.flush()
+            
+            # ✅ CRÍTICO: Verificar una última vez antes del commit
+            if user.id != user_id:
+                logger.error(f"❌ [UPDATE_USER] ERROR: user.id ({user.id}) != user_id ({user_id}) antes del commit")
+                db.rollback()
+                raise HTTPException(status_code=500, detail="Error: ID de usuario no coincide antes del commit")
+            
             db.commit()
             db.refresh(user)
+            
+            # ✅ CRÍTICO: Verificar después del refresh
+            if user.id != user_id:
+                logger.error(f"❌ [UPDATE_USER] ERROR: user.id ({user.id}) != user_id ({user_id}) después del refresh")
+                raise HTTPException(status_code=500, detail="Error: ID de usuario no coincide después del refresh")
 
             # Verificar que los cambios se aplicaron
             cambios_aplicados = []

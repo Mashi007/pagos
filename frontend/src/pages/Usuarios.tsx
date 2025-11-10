@@ -195,13 +195,24 @@ export function Usuarios() {
           is_active: formData.is_active,
         }
         
-        // Logging para debug
+        // ✅ CRÍTICO: Validar que editingUsuario.id existe y es válido
+        if (!editingUsuario || !editingUsuario.id) {
+          console.error('❌ [Usuarios] ERROR: editingUsuario o editingUsuario.id es inválido:', editingUsuario)
+          toast.error('Error: Usuario a editar no válido')
+          return
+        }
+        
+        // ✅ CRÍTICO: Logging detallado del usuario que se está actualizando
         console.log('📤 [Usuarios] Enviando actualización:', {
           userId: editingUsuario.id,
+          email: editingUsuario.email,
+          nombre: editingUsuario.nombre,
+          apellido: editingUsuario.apellido,
           is_admin: updateData.is_admin,
           is_admin_type: typeof updateData.is_admin,
           formData_is_admin: formData.is_admin,
-          formData_is_admin_type: typeof formData.is_admin
+          formData_is_admin_type: typeof formData.is_admin,
+          endpoint: `/api/v1/usuarios/${editingUsuario.id}`
         })
         
         // Incluir cargo del formulario (valor que el usuario está editando)

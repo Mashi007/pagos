@@ -54,7 +54,16 @@ export const userService = {
 
   // Actualizar usuario
   actualizarUsuario: async (userId: number, userData: UserUpdate): Promise<User> => {
-    return await api.put<User>(`/api/v1/usuarios/${userId}`, userData)
+    // ✅ CRÍTICO: Validar que userId sea válido
+    if (!userId || userId <= 0 || !Number.isInteger(userId)) {
+      throw new Error(`ID de usuario inválido: ${userId}`)
+    }
+    
+    // ✅ CRÍTICO: Logging del endpoint que se está llamando
+    const endpoint = `/api/v1/usuarios/${userId}`
+    console.log(`📤 [userService] Actualizando usuario - userId: ${userId}, endpoint: ${endpoint}`)
+    
+    return await api.put<User>(endpoint, userData)
   },
 
   // Eliminar usuario
