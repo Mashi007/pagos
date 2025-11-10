@@ -228,7 +228,9 @@ def listar_auditoria(
         tabla_prestamos_auditoria_existe = "prestamos_auditoria" in tablas
         tabla_pagos_auditoria_existe = "pagos_auditoria" in tablas
 
-        logger.info(f"Tablas de auditoría - auditoria: {tabla_auditoria_existe}, prestamos_auditoria: {tabla_prestamos_auditoria_existe}, pagos_auditoria: {tabla_pagos_auditoria_existe}")
+        logger.info(
+            f"Tablas de auditoría - auditoria: {tabla_auditoria_existe}, prestamos_auditoria: {tabla_prestamos_auditoria_existe}, pagos_auditoria: {tabla_pagos_auditoria_existe}"
+        )
 
         if not tabla_auditoria_existe and not tabla_prestamos_auditoria_existe and not tabla_pagos_auditoria_existe:
             logger.warning("Ninguna tabla de auditoría existe en BD. Retornando lista vacía.")
@@ -296,10 +298,10 @@ def listar_auditoria(
 
         unified = _unificar_registros_auditoria_listado(registros_general, registros_prestamos, registros_pagos)
         logger.info(f"Registros unificados antes de filtros: {len(unified)}")
-        
+
         unified = _aplicar_filtros_memoria(unified, usuario_email, modulo, accion, fecha_desde, fecha_hasta)
         logger.info(f"Registros unificados después de filtros: {len(unified)}")
-        
+
         unified = _aplicar_ordenamiento_memoria(unified, ordenar_por, orden)
 
         paged, total, total_pages, current_page = _aplicar_paginacion_listado(unified, skip, limit)

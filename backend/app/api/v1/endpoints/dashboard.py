@@ -553,7 +553,7 @@ def _procesar_distribucion_rango_monto(
                     f"📊 [financiamiento-por-rangos] Ejecutando query SQL optimizada con {len(prestamo_ids)} IDs, "
                     f"paso_rango={paso_rango}, max_rango={max_rango_val if max_rango_val else 50000.0}"
                 )
-                
+
                 # ✅ MEJORA: Usar sintaxis más robusta para PostgreSQL con array
                 # Usar CAST para asegurar que PostgreSQL entienda que es un array
                 query_sql = text(
@@ -623,13 +623,13 @@ def _procesar_distribucion_rango_monto(
                         f"📊 [financiamiento-por-rangos] Query SQL retornó {rows_processed} grupos, "
                         f"mapeados a {len(distribucion_dict)} categorías únicas"
                     )
-                    
+
                     # ✅ DIAGNÓSTICO: Log de categorías generadas vs categorías esperadas
                     categorias_generadas = set(distribucion_dict.keys())
                     categorias_esperadas = set(cat for _, _, cat in rangos)
                     categorias_no_encontradas = categorias_esperadas - categorias_generadas
                     categorias_extra = categorias_generadas - categorias_esperadas
-                    
+
                     if categorias_no_encontradas:
                         logger.warning(
                             f"⚠️ [financiamiento-por-rangos] Categorías esperadas pero no encontradas en resultados SQL: {categorias_no_encontradas}"
@@ -638,15 +638,17 @@ def _procesar_distribucion_rango_monto(
                         logger.warning(
                             f"⚠️ [financiamiento-por-rangos] Categorías generadas por SQL que no están en rangos esperados: {categorias_extra}"
                         )
-                    
+
                     # ✅ VERIFICACIÓN: Si la query SQL no retornó resultados pero hay préstamos, usar fallback
                     if rows_processed == 0 and len(prestamo_ids) > 0:
                         logger.warning(
                             f"⚠️ [financiamiento-por-rangos] Query SQL optimizada no retornó resultados "
                             f"pero hay {len(prestamo_ids)} préstamos. Usando método fallback."
                         )
-                        return _procesar_distribucion_rango_monto_fallback(query_base, rangos, total_prestamos, total_monto, db)
-                    
+                        return _procesar_distribucion_rango_monto_fallback(
+                            query_base, rangos, total_prestamos, total_monto, db
+                        )
+
                     # ✅ VERIFICACIÓN: Si hay resultados pero ninguna categoría coincide con los rangos esperados, usar fallback
                     if rows_processed > 0 and len(categorias_generadas.intersection(categorias_esperadas)) == 0:
                         logger.warning(
@@ -654,13 +656,12 @@ def _procesar_distribucion_rango_monto(
                             f"con los rangos esperados. Categorías generadas: {categorias_generadas}, "
                             f"Categorías esperadas: {categorias_esperadas}. Usando método fallback."
                         )
-                        return _procesar_distribucion_rango_monto_fallback(query_base, rangos, total_prestamos, total_monto, db)
-                        
+                        return _procesar_distribucion_rango_monto_fallback(
+                            query_base, rangos, total_prestamos, total_monto, db
+                        )
+
                 except Exception as e:
-                    logger.error(
-                        f"❌ [financiamiento-por-rangos] Error ejecutando query SQL optimizada: {e}",
-                        exc_info=True
-                    )
+                    logger.error(f"❌ [financiamiento-por-rangos] Error ejecutando query SQL optimizada: {e}", exc_info=True)
                     logger.warning("⚠️ [financiamiento-por-rangos] Usando método fallback debido a error en query SQL")
                     return _procesar_distribucion_rango_monto_fallback(query_base, rangos, total_prestamos, total_monto, db)
 
@@ -721,7 +722,7 @@ def _procesar_distribucion_rango_monto_fallback(
     Usa el método original de procesamiento en Python
     """
     logger.info("🔄 [financiamiento-por-rangos] Usando método fallback para procesar distribución")
-    
+
     if not rangos:
         logger.warning("⚠️ [financiamiento-por-rangos] No hay rangos para procesar en fallback")
         return []
@@ -777,7 +778,7 @@ def _procesar_distribucion_rango_monto_fallback(
         distribucion_dict = {}
         prestamos_procesados = 0
         prestamos_omitidos = 0
-        
+
         for prestamo_id, monto in prestamos_data:
             if monto is None or monto <= 0:
                 prestamos_omitidos += 1
@@ -801,7 +802,9 @@ def _procesar_distribucion_rango_monto_fallback(
 
             # Si no se encontró rango, usar "Otro" (aunque no debería pasar con rangos bien definidos)
             if categoria is None:
-                logger.warning(f"⚠️ [financiamiento-por-rangos] Préstamo {prestamo_id} con monto ${monto_float:,.2f} no encaja en ningún rango")
+                logger.warning(
+                    f"⚠️ [financiamiento-por-rangos] Préstamo {prestamo_id} con monto ${monto_float:,.2f} no encaja en ningún rango"
+                )
                 categoria = "Otro"
 
             if categoria not in distribucion_dict:
@@ -3353,9 +3356,7 @@ def obtener_financiamiento_por_rangos(
         # ✅ CORRECCIÓN: Usar with_entities para evitar error si valor_activo no existe en BD
         try:
             prestamos_invalidos = (
-                query_base.filter(
-                    or_(Prestamo.total_financiamiento.is_(None), Prestamo.total_financiamiento <= 0)
-                )
+                query_base.filter(or_(Prestamo.total_financiamiento.is_(None), Prestamo.total_financiamiento <= 0))
                 .with_entities(Prestamo.id)
                 .count()
             )
