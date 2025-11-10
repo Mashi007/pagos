@@ -52,6 +52,13 @@ export function EmailConfig() {
   const cargarConfiguracion = async () => {
     try {
       const data = await emailConfigService.obtenerConfiguracionEmail()
+      
+      // ESCENARIO 1: Si from_email está vacío pero smtp_user tiene valor, usar smtp_user como from_email por defecto
+      // Esto asegura que en la primera carga, ambos campos tengan el mismo valor si from_email no está configurado
+      if ((!data.from_email || data.from_email.trim() === '') && data.smtp_user && data.smtp_user.trim() !== '') {
+        data.from_email = data.smtp_user
+      }
+      
       setConfig(data)
       setModoPruebas(data.modo_pruebas || 'true') // Por defecto: Pruebas si no hay configuración
       setEmailPruebas(data.email_pruebas || '')
@@ -74,11 +81,65 @@ export function EmailConfig() {
   }
 
   const handleChange = (campo: keyof EmailConfigData, valor: string) => {
-    setConfig(prev => ({ ...prev, [campo]: valor }))
+    setConfig(prev => {
+      const nuevoConfig = { ...prev, [campo]: valor }
+      
+      // ESCENARIO 1: Si se cambia smtp_user y from_email está vacío o es igual al valor anterior de smtp_user,
+      // actualizar from_email automáticamente con el nuevo valor
+      if (campo === 'smtp_user') {
+        const fromEmailVacio = !prev.from_email || prev.from_email.trim() === ''
+        const fromEmailIgualAlAnterior = prev.from_email === prev.smtp_user
+        
+        // Si from_email está vacío O si from_email es igual al smtp_user anterior (estaba sincronizado),
+        // entonces sincronizar con el nuevo smtp_user
+        if (fromEmailVacio || fromEmailIgualAlAnterior) {
+          nuevoConfig.from_email = valor
+        }
+      }
+      
+      return nuevoConfig
+    })
+    
     // Limpiar error de validación cuando el usuario modifica los campos
     if (errorValidacion) {
       setErrorValidacion(null)
     }
+  }
+
+  // Función para determinar si el botón debe estar habilitado
+  const puedeGuardar = (): boolean => {
+    // Campos obligatorios básicos
+    if (!config.smtp_host || !config.smtp_port || !config.smtp_user || !config.from_email) {
+      return false
+    }
+    
+    // Validar puerto numérico
+    const puerto = parseInt(config.smtp_port)
+    if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
+      return false
+    }
+    
+    // Si es Gmail/Google Workspace, requiere contraseña
+    if (config.smtp_host.toLowerCase().includes('gmail.com')) {
+      if (!config.smtp_password || config.smtp_password.trim().length === 0) {
+        return false
+      }
+      
+      // Validar TLS para puerto 587
+      if (puerto === 587 && config.smtp_use_tls !== 'true') {
+        return false
+      }
+    }
+    
+    // Validar formato de email de pruebas solo si está configurado
+    if (emailPruebas && emailPruebas.trim().length > 0) {
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailPattern.test(emailPruebas.trim())) {
+        return false
+      }
+    }
+    
+    return true
   }
 
   const validarConfiguracionGmail = (): string | null => {
@@ -194,7 +255,18 @@ export function EmailConfig() {
       const resultado = await emailConfigService.actualizarConfiguracionEmail(configCompleta)
       console.log('✅ [EmailConfig] Configuración guardada exitosamente:', resultado)
       
-      toast.success('Configuración de email guardada exitosamente')
+      // Mostrar mensaje de éxito con información de vinculación si está disponible
+      if (resultado?.vinculacion_confirmada) {
+        toast.success(
+          resultado.mensaje_vinculacion || '✅ Sistema vinculado correctamente con Google/Google Workspace',
+          {
+            duration: 8000, // Mostrar por más tiempo para que el usuario vea la confirmación
+          }
+        )
+      } else {
+        toast.success('Configuración de email guardada exitosamente')
+      }
+      
       await cargarConfiguracion()
     } catch (error: any) {
       console.error('❌ [EmailConfig] Error guardando configuración:', error)
@@ -478,13 +550,18 @@ export function EmailConfig() {
                 console.log('🖱️ [EmailConfig] Botón clickeado')
                 handleGuardar()
               }}
-              disabled={guardando}
+              disabled={guardando || !puedeGuardar()}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               type="button"
             >
               <Save className="h-4 w-4" />
               {guardando ? 'Guardando...' : 'Guardar Configuración'}
             </Button>
+            {!puedeGuardar() && !guardando && (
+              <p className="text-xs text-gray-500 self-center">
+                Completa los campos obligatorios para habilitar el botón
+              </p>
+            )}
           </div>
 
           {/* Ambiente de Prueba - Envío de Email de Prueba */}

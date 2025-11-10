@@ -889,15 +889,23 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
 
     # Probar conexión SMTP para verificar credenciales
     try:
+        logger.info(f"🔗 Probando conexión SMTP con Google: {smtp_user}@{smtp_host}:{puerto}")
         server = smtplib.SMTP(smtp_host, puerto, timeout=10)
 
         if smtp_use_tls:
             server.starttls()
+            logger.debug("✅ TLS iniciado correctamente")
 
         # Intentar login - aquí es donde Gmail/Google Workspace rechazará si no hay 2FA o si se usa contraseña normal
         # Esto funciona tanto para @gmail.com como para dominios de Google Workspace
         server.login(smtp_user, password_sin_espacios)
         server.quit()
+
+        # ✅ CONFIRMACIÓN: Google aceptó la conexión - el sistema está vinculado correctamente
+        logger.info(
+            f"✅ CONFIRMADO: Google/Google Workspace aceptó la conexión SMTP para {smtp_user}. "
+            f"El sistema está vinculado correctamente y puede enviar emails."
+        )
 
         return True, None
 
@@ -941,9 +949,22 @@ def actualizar_configuracion_email(
         )
 
     # Validar configuración de Gmail antes de guardar
+    # Esta validación prueba la conexión SMTP con Google y confirma que acepta las credenciales
     es_valida, mensaje_error = _validar_configuracion_gmail_smtp(config_data)
     if not es_valida:
+        logger.warning(
+            f"❌ Google/Google Workspace rechazó la conexión SMTP para {config_data.get('smtp_user', 'N/A')}. "
+            f"Razón: {mensaje_error}"
+        )
         raise HTTPException(status_code=400, detail=mensaje_error or "Configuración de email inválida")
+    
+    # Si llegamos aquí y es Gmail, significa que Google aceptó la conexión
+    es_gmail = "gmail.com" in config_data.get("smtp_host", "").lower()
+    if es_gmail:
+        logger.info(
+            f"✅ CONFIRMACIÓN DE VINCULACIÓN: Google aceptó las credenciales para {config_data.get('smtp_user', 'N/A')}. "
+            f"El sistema está vinculado y autorizado para enviar emails."
+        )
 
     try:
         configuraciones = []
@@ -975,11 +996,28 @@ def actualizar_configuracion_email(
 
         db.commit()
 
-        logger.info(f"Configuración de email actualizada por {current_user.email}")
+        # Determinar si la validación SMTP fue exitosa (Google aceptó)
+        # Si es Gmail, la validación ya probó la conexión y Google la aceptó
+        es_gmail = "gmail.com" in config_data.get("smtp_host", "").lower()
+        validacion_exitosa = es_gmail  # Si es Gmail, la validación ya probó la conexión
+        
+        logger.info(f"✅ Configuración de email actualizada por {current_user.email}")
+        if es_gmail:
+            logger.info(
+                f"✅ Sistema vinculado correctamente con Google/Google Workspace. "
+                f"La cuenta {config_data.get('smtp_user', 'N/A')} está autorizada para enviar emails."
+            )
 
         return {
             "mensaje": "Configuración de email actualizada exitosamente",
             "configuraciones_actualizadas": len(configuraciones),
+            "vinculacion_confirmada": validacion_exitosa,
+            "mensaje_vinculacion": (
+                "✅ Sistema vinculado correctamente con Google/Google Workspace. "
+                "La configuración fue aceptada y puedes enviar emails."
+                if validacion_exitosa
+                else "Configuración guardada. La conexión se validará al enviar emails."
+            ),
         }
 
     except HTTPException:
