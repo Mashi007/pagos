@@ -449,25 +449,19 @@ export function EmailConfig() {
                     <AlertCircle className="h-6 w-6 text-red-600 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
                       <p className="font-bold text-red-900 mb-2">
-                        ❌ Sistema NO Configurado o con Problemas
+                        ❌ Error de conexión con Gmail/Google Workspace
                       </p>
                       <p className="text-sm text-red-800 mb-2">
-                        {estadoConfiguracion.mensaje || 'La configuración de Google/Gmail no está completa o tiene problemas.'}
+                        {estadoConfiguracion.mensaje || 'No se pudo conectar. Verifica tus credenciales.'}
                       </p>
                       {estadoConfiguracion.problemas.length > 0 && (
                         <div className="bg-red-100 border border-red-300 rounded p-3 mt-2">
-                          <p className="text-xs font-semibold text-red-900 mb-1">Problemas detectados:</p>
-                          <ul className="text-xs text-red-800 space-y-1 list-disc list-inside">
+                          <ul className="text-sm text-red-800 space-y-1 list-disc list-inside">
                             {estadoConfiguracion.problemas.map((problema, idx) => (
                               <li key={idx}>{problema}</li>
                             ))}
                           </ul>
                         </div>
-                      )}
-                      {estadoConfiguracion.conexion_smtp && !estadoConfiguracion.conexion_smtp.success && (
-                        <p className="text-xs text-red-700 mt-2">
-                          🔗 Error de conexión SMTP: {estadoConfiguracion.conexion_smtp.message || 'No se pudo conectar con Google'}
-                        </p>
                       )}
                     </div>
                   </div>
