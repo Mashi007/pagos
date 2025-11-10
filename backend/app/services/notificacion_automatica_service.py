@@ -228,6 +228,7 @@ class NotificacionAutomaticaService:
             if tiene_telefono:
                 # Convertir cuerpo HTML a texto plano para WhatsApp (básico)
                 import re
+
                 cuerpo_texto = re.sub(r"<[^>]+>", "", cuerpo)  # Remover HTML tags
                 cuerpo_texto = re.sub(r"\n\s*\n", "\n\n", cuerpo_texto)  # Limpiar espacios
                 cuerpo_texto = cuerpo_texto.strip()

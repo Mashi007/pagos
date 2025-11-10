@@ -1379,7 +1379,9 @@ def _consultar_configuracion_whatsapp(db: Session) -> Optional[Any]:
         try:
             config_dict = ConfiguracionSistema.obtener_categoria(db, "WHATSAPP")
             if config_dict:
-                logger.info(f"✅ Configuración WhatsApp obtenida usando método alternativo: {len(config_dict)} configuraciones")
+                logger.info(
+                    f"✅ Configuración WhatsApp obtenida usando método alternativo: {len(config_dict)} configuraciones"
+                )
                 return config_dict
         except Exception as alt_error:
             logger.error(f"❌ Error en método alternativo también falló: {str(alt_error)}", exc_info=True)
@@ -1556,7 +1558,9 @@ async def probar_configuracion_whatsapp(
         telefono_limpio = re.sub(r"[\s\-\(\)]", "", telefono_a_enviar)
         # Debe empezar con + y tener al menos 10 dígitos
         if not re.match(r"^\+?[1-9]\d{9,14}$", telefono_limpio):
-            raise HTTPException(status_code=400, detail="Número de teléfono inválido. Debe incluir código de país (ej: +584121234567)")
+            raise HTTPException(
+                status_code=400, detail="Número de teléfono inválido. Debe incluir código de país (ej: +584121234567)"
+            )
 
         # Obtener mensaje personalizado si se proporcionó
         mensaje_personalizado = None
