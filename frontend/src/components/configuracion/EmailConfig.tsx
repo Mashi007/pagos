@@ -59,6 +59,7 @@ export function EmailConfig() {
   const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
   const [cargandoEnvios, setCargandoEnvios] = useState(false)
   const [resultadoPrueba, setResultadoPrueba] = useState<any>(null)
+  const [emailEnviadoExitoso, setEmailEnviadoExitoso] = useState(false) // ✅ Estado para cambio de color del botón
 
   // Cargar configuración al montar
   useEffect(() => {
@@ -411,6 +412,7 @@ export function EmailConfig() {
     try {
       setProbando(true)
       setResultadoPrueba(null)
+      setEmailEnviadoExitoso(false) // ✅ Resetear estado de éxito
       
       const resultado = await emailConfigService.probarConfiguracionEmail(
         emailPruebaDestino.trim() || undefined,
@@ -422,14 +424,22 @@ export function EmailConfig() {
       
       if (resultado.mensaje?.includes('enviado')) {
         toast.success(`Email de prueba enviado exitosamente a ${resultado.email_destino || 'tu correo'}`)
+        setEmailEnviadoExitoso(true) // ✅ Marcar como enviado exitosamente
+        
+        // ✅ Reactivar botón después de 3 segundos
+        setTimeout(() => {
+          setEmailEnviadoExitoso(false)
+        }, 3000)
       } else {
         toast.error('Error enviando email de prueba')
+        setEmailEnviadoExitoso(false)
       }
     } catch (error: any) {
       console.error('Error probando configuración:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error desconocido'
       toast.error(`Error probando configuración: ${mensajeError}`)
       setResultadoPrueba({ error: mensajeError })
+      setEmailEnviadoExitoso(false)
     } finally {
       setProbando(false)
     }
@@ -800,12 +810,21 @@ export function EmailConfig() {
                 </div>
                 
                 <Button
+                  type="button"
                   onClick={handleProbar}
                   disabled={probando || !config.smtp_user}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+                  className={`flex items-center gap-2 transition-colors duration-300 ${
+                    emailEnviadoExitoso
+                      ? 'bg-green-600 hover:bg-green-700' // ✅ Verde cuando fue enviado exitosamente
+                      : 'bg-blue-600 hover:bg-blue-700' // Azul normal
+                  }`}
                 >
                   <TestTube className="h-4 w-4" />
-                  {probando ? 'Enviando Email de Prueba...' : 'Enviar Email de Prueba'}
+                  {probando 
+                    ? 'Enviando Email de Prueba...' 
+                    : emailEnviadoExitoso 
+                      ? '✅ Email Enviado' 
+                      : 'Enviar Email de Prueba'}
                 </Button>
               </div>
             </div>
