@@ -95,10 +95,14 @@ logger.info("=" * 80)
 try:
     logger.info("📦 Paso 1: Intentando importar módulo redis...")
     import redis
-    logger.info(f"✅ Paso 1: Módulo redis importado correctamente. Versión: {redis.__version__ if hasattr(redis, '__version__') else 'N/A'}")
+
+    logger.info(
+        f"✅ Paso 1: Módulo redis importado correctamente. Versión: {redis.__version__ if hasattr(redis, '__version__') else 'N/A'}"
+    )
 
     logger.info("📦 Paso 2: Importando settings...")
     from app.core.config import settings
+
     logger.info("✅ Paso 2: Settings importado correctamente")
 
     logger.info("📦 Paso 3: Verificando configuración de Redis...")
@@ -176,7 +180,7 @@ try:
                 health_check_interval=30,
             )
             logger.info("   ✅ Cliente Redis creado")
-            
+
             logger.info("📦 Paso 6: Haciendo test de conexión (ping)...")
             # Test de conexión inmediato
             redis_client.ping()
@@ -185,7 +189,7 @@ try:
             logger.error(f"❌ Paso 6 FALLÓ: Error de autenticación/respuesta Redis")
             logger.error(f"   - Tipo de error: {type(auth_err).__name__}")
             logger.error(f"   - Mensaje: {str(auth_err)}")
-            
+
             # Si falla por autenticación, intentar con password si está disponible
             error_msg = str(auth_err)
             if (
@@ -241,7 +245,7 @@ try:
         logger.info(f"   - Port: {settings.REDIS_PORT}")
         logger.info(f"   - DB: {settings.REDIS_DB}")
         logger.info(f"   - Password: {'CONFIGURADA' if settings.REDIS_PASSWORD else 'NO CONFIGURADA'}")
-        
+
         logger.info("📦 Paso 5: Creando cliente Redis con componentes individuales...")
         redis_client = redis.Redis(
             host=settings.REDIS_HOST,
@@ -310,7 +314,7 @@ try:
     logger.info("📦 Paso 7: Creando instancia de RedisCache...")
     cache_backend = RedisCache(redis_client)
     logger.info("✅ Paso 7: RedisCache creado")
-    
+
     if not _cache_logs_shown:
         logger.info("=" * 80)
         logger.info("✅ REDIS CACHE INICIALIZADO CORRECTAMENTE")
@@ -380,11 +384,13 @@ except Exception as e:
 
         logger.warning("   ⚠️ Usando MemoryCache como fallback - NO recomendado para producción con múltiples workers")
         logger.info("   💡 Para resolver: Verificar configuración de Redis en Render Dashboard")
-        
+
         logger.info("=" * 80)
         logger.info("📋 RESUMEN DEL DIAGNÓSTICO:")
         logger.info("=" * 80)
-        logger.info(f"   - Redis instalado: {'Sí' if 'redis' in str(e) or 'ImportError' not in str(type(e)) else 'No (ImportError)'}")
+        logger.info(
+            f"   - Redis instalado: {'Sí' if 'redis' in str(e) or 'ImportError' not in str(type(e)) else 'No (ImportError)'}"
+        )
         logger.info(f"   - REDIS_URL configurada: {'Sí' if settings.REDIS_URL else 'No'}")
         logger.info(f"   - REDIS_PASSWORD configurada: {'Sí' if settings.REDIS_PASSWORD else 'No'}")
         logger.info(f"   - Error final: {type(e).__name__}: {str(e)[:200]}")

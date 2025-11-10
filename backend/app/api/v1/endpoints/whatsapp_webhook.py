@@ -29,17 +29,17 @@ async def verify_webhook(
 ):
     """
     Endpoint de verificación de webhook - 100% compatible con Meta y n8n
-    
+
     Protocolo Meta:
     - GET request con: hub.mode=subscribe, hub.verify_token=TOKEN, hub.challenge=STRING
     - Debe retornar: hub.challenge como texto plano (status 200)
-    
+
     Protocolo n8n:
     - n8n Webhook Trigger puede usar este endpoint directamente
     - n8n espera respuesta 200 con el challenge en el body (texto plano)
     - Compatible con "Response Mode: Using 'Respond to Webhook' Node"
     - Compatible con "Response Mode: Last Node"
-    
+
     Returns:
         PlainTextResponse con hub.challenge si el token es válido (status 200)
         HTTPException 403 si el token es inválido
@@ -77,7 +77,7 @@ async def verify_webhook(
 
         # Si llegamos aquí, el token es válido
         logger.info(f"✅ Webhook verificado exitosamente. Challenge: {hub_challenge}")
-        
+
         # Retornar el challenge como texto plano (requerido por Meta y n8n)
         # n8n espera status 200 con el challenge en el body
         # Meta también requiere status 200
@@ -98,23 +98,23 @@ async def receive_webhook(
 ):
     """
     Endpoint para recibir eventos - 100% compatible con Meta y n8n
-    
+
     Protocolo Meta:
     - POST request con JSON en body
     - Header opcional: X-Hub-Signature-256 (firma HMAC)
     - Debe retornar: JSON con status 200
-    
+
     Protocolo n8n:
     - n8n puede reenviar eventos desde Meta a este endpoint
     - n8n puede enviar eventos en formato personalizado
     - n8n espera respuesta JSON con status 200
     - Compatible con nodo "HTTP Request" de n8n
     - Acepta payloads en diferentes formatos (Meta directo, n8n wrapper, genérico)
-    
+
     Headers esperados:
         X-Hub-Signature-256: Firma HMAC SHA256 del payload (opcional, para validación)
         Content-Type: application/json
-    
+
     Body (Meta formato):
         {
             "object": "whatsapp_business_account",
@@ -130,7 +130,7 @@ async def receive_webhook(
                 }]
             }]
         }
-    
+
     Body (n8n formato - también aceptado):
         Cualquier JSON válido que n8n envíe será procesado
         n8n puede enviar el payload de Meta dentro de un wrapper como:
@@ -148,7 +148,7 @@ async def receive_webhook(
             # Si no es JSON válido, intentar leer como texto (para compatibilidad con n8n)
             body_bytes = await request.body()
             try:
-                payload = json.loads(body_bytes.decode('utf-8'))
+                payload = json.loads(body_bytes.decode("utf-8"))
             except Exception:
                 logger.error(f"❌ Error parseando payload: {json_error}")
                 # Retornar 200 con error en JSON (n8n y Meta esperan 200 para evitar reintentos)
@@ -158,16 +158,16 @@ async def receive_webhook(
                     "eventos_procesados": 0,
                     "errores": 1,
                 }
-        
+
         logger.info(f"📨 Webhook POST recibido: {payload.get('object', 'unknown')}")
-        
+
         # Detectar si viene de Meta o de n8n/intermediario
         es_meta_format = payload.get("object") == "whatsapp_business_account"
-        
+
         if not es_meta_format:
             # Formato de n8n o personalizado - procesar de manera flexible
             logger.info("📨 Webhook recibido en formato no-Meta (posiblemente desde n8n)")
-            
+
             # Intentar extraer datos en formato n8n
             # n8n puede enviar el payload de Meta dentro de un wrapper
             if isinstance(payload, dict):
@@ -187,29 +187,29 @@ async def receive_webhook(
                     # n8n puede enviar en campo "json"
                     payload = payload.get("json", payload)
                     es_meta_format = payload.get("object") == "whatsapp_business_account"
-        
+
         # Procesar eventos según formato
         eventos_procesados = 0
         errores = []
-        
+
         if es_meta_format:
             # Formato estándar de Meta
             entries = payload.get("entry", [])
-            
+
             for entry in entries:
                 changes = entry.get("changes", [])
-                
+
                 for change in changes:
                     value = change.get("value", {})
-                    
+
                     # Procesar actualizaciones de estado
                     if "statuses" in value:
                         eventos_procesados += await _procesar_estados(value["statuses"], db)
-                    
+
                     # Procesar mensajes recibidos
                     if "messages" in value:
                         eventos_procesados += await _procesar_mensajes_recibidos(value["messages"], db)
-                    
+
                     # Procesar errores
                     if "errors" in value:
                         errores.extend(value["errors"])
@@ -222,7 +222,7 @@ async def receive_webhook(
             logger.debug(f"📋 Payload recibido: {str(payload)[:200]}...")
 
         logger.info(f"✅ Webhook procesado: {eventos_procesados} eventos procesados")
-        
+
         # Retornar respuesta JSON compatible con n8n y Meta
         # n8n espera status 200 con JSON
         # Meta también espera status 200
@@ -364,26 +364,27 @@ async def _procesar_mensajes_recibidos(messages: list, db: Session) -> int:
 async def webhook_info(db: Session = Depends(get_db)):
     """
     Obtener información del webhook para configuración en Meta y n8n
-    
+
     Retorna información completa para configurar el webhook en:
     - Meta Developers (directo)
     - n8n como intermediario
     - n8n como receptor final
-    
+
     Compatible con protocolos estándar de n8n Webhook Trigger
     """
     try:
         whatsapp_service = WhatsAppService(db=db)
-        
+
         # Construir URL del webhook
         from app.core.config import settings
-        
+
         # Obtener URL base desde settings o environment
         base_url = getattr(settings, "BASE_URL", None)
         if not base_url:
             import os
+
             base_url = os.getenv("BASE_URL", "https://tu-dominio.com")
-        
+
         webhook_url = f"{base_url}/api/v1/whatsapp/webhook"
 
         return {
