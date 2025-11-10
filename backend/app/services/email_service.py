@@ -171,10 +171,10 @@ class EmailService:
                 logger.warning(f"🧪 MODO PRUEBAS: Redirigiendo email de {', '.join(to_emails)} a {self.email_pruebas}")
 
             # Crear mensaje
-            from datetime import datetime
-            from email.utils import formatdate, make_msgid, formataddr
-            import uuid
             import html as html_module
+            import uuid
+            from datetime import datetime
+            from email.utils import formataddr, formatdate, make_msgid
 
             msg = MIMEMultipart("alternative")  # ✅ multipart/alternative para HTML + texto plano
 
@@ -222,8 +222,8 @@ class EmailService:
             # Los filtros spam prefieren emails con ambas versiones
             if is_html:
                 # Extraer texto plano del HTML (mejorado para mejor formato)
-                import re
                 import html as html_module
+                import re
 
                 # Decodificar entidades HTML (&nbsp;, &amp;, etc.)
                 texto_plano = html_module.unescape(body)
