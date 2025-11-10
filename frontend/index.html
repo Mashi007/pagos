@@ -42,24 +42,42 @@
         // Suprimir warnings específicos de CSS relacionados con selectores malformados
         // Incluye variaciones en español e inglés
         if (
+          // Patrones generales de selectores malformados
           message.includes('juego de reglas ignoradas') ||
           message.includes('reglas ignoradas') ||
           message.includes('ignored due to bad selector') ||
+          message.includes('ignored debido a un mal selector') ||
           message.includes('ignored due to malformed selector') ||
           message.includes('mal selector') ||
           message.includes('bad selector') ||
           message.includes('malformed selector') ||
+          // Patrones de propiedades CSS problemáticas
           message.includes('webkit-text-size-adjust') ||
           message.includes('moz-text-size-adjust') ||
           message.includes('text-size-adjust') ||
+          // Patrones de errores de parsing CSS
           message.includes('css parsing error') ||
           message.includes('error de análisis css') ||
           // Patrones específicos de Tailwind con corchetes escapados
           message.includes('after\\:left-\\[') ||
           message.includes('after\\:top-\\[') ||
-          message.includes('placeholder\\:text-')
+          message.includes('placeholder\\:text-') ||
+          // Patrones de archivos CSS generados (build artifacts)
+          (message.includes('.css:') && (
+            message.includes('ignored') ||
+            message.includes('ignoradas') ||
+            message.includes('bad selector') ||
+            message.includes('mal selector')
+          )) ||
+          // Patrones adicionales de selectores problemáticos
+          message.includes('ruleset ignored') ||
+          message.includes('regla ignorada') ||
+          message.includes('selector inválido') ||
+          message.includes('invalid selector')
         ) {
           // Silenciar estos warnings específicos (son cosméticos y no afectan funcionalidad)
+          // Estos warnings ocurren cuando Tailwind genera selectores complejos que algunos
+          // navegadores no pueden parsear correctamente, pero el CSS sigue funcionando
           return;
         }
         // Mostrar otros warnings normalmente
