@@ -199,8 +199,11 @@ class EmailConfigService {
     return await apiClient.put(`${this.baseUrl}/email/configuracion`, config)
   }
 
-  async probarConfiguracionEmail(emailDestino?: string): Promise<any> {
-    const params = emailDestino ? { email_destino: emailDestino } : {}
+  async probarConfiguracionEmail(emailDestino?: string, subject?: string, mensaje?: string): Promise<any> {
+    const params: any = {}
+    if (emailDestino) params.email_destino = emailDestino
+    if (subject) params.subject = subject
+    if (mensaje) params.mensaje = mensaje
     return await apiClient.post(`${this.baseUrl}/email/probar`, params)
   }
 

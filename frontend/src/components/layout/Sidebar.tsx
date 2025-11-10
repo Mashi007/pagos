@@ -134,6 +134,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       icon: FileText,
     },
     {
+      title: 'Auditoría',
+      href: '/auditoria',
+      icon: Shield,
+    },
+    {
       title: 'Notificaciones',
       href: '/notificaciones',
       icon: Bell,
@@ -147,7 +152,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         // Solo Admin: Plantillas de notificaciones
         ...(user?.is_admin ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: Mail }] : []),
         { title: 'Programador', href: '/scheduler', icon: Calendar },
-        { title: 'Auditoría', href: '/auditoria', icon: Shield },
       ],
     },
     {

@@ -1499,8 +1499,12 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
         ).bindparams(hoy=hoy)
     )
     clientes_result = clientes_query.fetchone()
-    clientes_con_cuotas = clientes_result[0] or 0
-    clientes_en_mora = clientes_result[1] or 0
+    if clientes_result is None:
+        clientes_con_cuotas = 0
+        clientes_en_mora = 0
+    else:
+        clientes_con_cuotas = clientes_result[0] or 0
+        clientes_en_mora = clientes_result[1] or 0
     clientes_al_dia = max(0, clientes_con_cuotas - clientes_en_mora)
     tiempo_clientes = int((time.time() - start_clientes) * 1000)
     logger.debug(

@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import asc, desc, func
+from sqlalchemy import asc, desc, func, text
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user, get_db
@@ -242,28 +242,53 @@ def listar_auditoria(
                 "total_pages": 0,
             }
 
-        # Construir query base (auditoría general)
-        query = db.query(Auditoria).options(joinedload(Auditoria.usuario))
-
-        # Aplicar filtros
-        query = _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta)
-
-        # Aplicar ordenamiento
-        query = _aplicar_ordenamiento_auditoria(query, ordenar_por, orden)
-
-        # OPTIMIZACIÓN: Aplicar límite ANTES de cargar para evitar cargar todos los registros
-        # Cargar solo lo necesario para la paginación solicitada + un buffer para unificación
+        # Construir query base (auditoría general) - solo si la tabla existe
+        registros_general = []
         max_to_load = min(skip + limit + 500, 5000)  # Máximo 5000 registros por tipo
+        
+        if tabla_auditoria_existe:
+            try:
+                query = db.query(Auditoria).options(joinedload(Auditoria.usuario))
 
-        # Ejecutar consultas con límite optimizado
-        try:
-            registros_general = query.limit(max_to_load).all()
-            logger.info(f"Registros de auditoría general cargados: {len(registros_general)}")
-        except ProgrammingError as e:
-            logger.warning(f"Error consultando tabla auditoria: {e}, usando lista vacía")
-            registros_general = []
+                # Aplicar filtros
+                query = _aplicar_filtros_auditoria(query, usuario_email, modulo, accion, fecha_desde, fecha_hasta)
+
+                # Aplicar ordenamiento
+                query = _aplicar_ordenamiento_auditoria(query, ordenar_por, orden)
+
+                # OPTIMIZACIÓN: Aplicar límite ANTES de cargar para evitar cargar todos los registros
+                # Cargar solo lo necesario para la paginación solicitada + un buffer para unificación
+
+                # Ejecutar consultas con límite optimizado
+                registros_general = query.limit(max_to_load).all()
+                logger.info(f"Registros de auditoría general cargados: {len(registros_general)}")
+            except (ProgrammingError, Exception) as e:
+                logger.warning(f"Error consultando tabla auditoria: {e}, usando lista vacía")
+                try:
+                    db.rollback()  # ✅ Rollback para restaurar transacción después de error
+                except Exception:
+                    pass
+                registros_general = []
+        else:
+            logger.info("Tabla auditoria no existe, omitiendo consulta")
 
         # Optimizar queries de préstamos y pagos con límite y orden
+        # ✅ IMPORTANTE: Hacer rollback explícito antes de continuar si hubo error anterior
+        try:
+            # Verificar si la transacción está abortada y hacer rollback preventivo
+            try:
+                db.execute(text("SELECT 1"))
+            except Exception as test_error:
+                error_str = str(test_error)
+                if "aborted" in error_str.lower() or "InFailedSqlTransaction" in error_str:
+                    logger.warning("Transacción abortada detectada, haciendo rollback preventivo")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        
         try:
             if tabla_prestamos_auditoria_existe:
                 query_prestamos = db.query(PrestamoAuditoria).order_by(PrestamoAuditoria.fecha_cambio.desc())
@@ -276,10 +301,29 @@ def listar_auditoria(
             else:
                 registros_prestamos = []
                 logger.info("Tabla prestamos_auditoria no existe, omitiendo")
-        except ProgrammingError as e:
+        except (ProgrammingError, Exception) as e:
             logger.warning(f"Error consultando tabla prestamo_auditoria: {e}, usando lista vacía")
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
             registros_prestamos = []
 
+        # ✅ IMPORTANTE: Verificar transacción antes de consultar pagos
+        try:
+            try:
+                db.execute(text("SELECT 1"))
+            except Exception as test_error:
+                error_str = str(test_error)
+                if "aborted" in error_str.lower() or "InFailedSqlTransaction" in error_str:
+                    logger.warning("Transacción abortada detectada antes de consultar pagos, haciendo rollback preventivo")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        
         try:
             if tabla_pagos_auditoria_existe:
                 query_pagos = db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc())
@@ -292,8 +336,12 @@ def listar_auditoria(
             else:
                 registros_pagos = []
                 logger.info("Tabla pagos_auditoria no existe, omitiendo")
-        except ProgrammingError as e:
+        except (ProgrammingError, Exception) as e:
             logger.warning(f"Error consultando tabla pago_auditoria: {e}, usando lista vacía")
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
             registros_pagos = []
 
         unified = _unificar_registros_auditoria_listado(registros_general, registros_prestamos, registros_pagos)
@@ -318,7 +366,11 @@ def listar_auditoria(
         }
 
     except Exception as e:
-        logger.error(f"Error listando auditoría: {e}")
+        logger.error(f"Error listando auditoría: {e}", exc_info=True)
+        try:
+            db.rollback()  # ✅ Rollback para restaurar transacción después de error
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
@@ -568,19 +620,31 @@ def estadisticas_auditoria(
         # Totales (sumando fuentes detalladas)
         try:
             total_auditoria = db.query(func.count(Auditoria.id)).scalar() or 0
-        except ProgrammingError:
+        except (ProgrammingError, Exception) as e:
             total_auditoria = 0
-            logger.warning("Error consultando tabla auditoria, usando 0")
+            logger.warning(f"Error consultando tabla auditoria: {e}, usando 0")
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         try:
             total_prestamos = db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
-        except ProgrammingError:
+        except (ProgrammingError, Exception) as e:
             total_prestamos = 0
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         try:
             total_pagos = db.query(func.count(PagoAuditoria.id)).scalar() or 0
-        except ProgrammingError:
+        except (ProgrammingError, Exception) as e:
             total_pagos = 0
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         total_acciones = total_auditoria + total_prestamos + total_pagos
 
@@ -590,24 +654,34 @@ def estadisticas_auditoria(
         try:
             acciones_por_modulo_rows = db.query(Auditoria.entidad, func.count(Auditoria.id)).group_by(Auditoria.entidad).all()
             acciones_por_modulo = {row[0] or "DESCONOCIDO": row[1] for row in acciones_por_modulo_rows}
-        except ProgrammingError:
-            logger.warning("Error consultando acciones por módulo de auditoria")
+        except (ProgrammingError, Exception) as e:
+            logger.warning(f"Error consultando acciones por módulo de auditoria: {e}")
             acciones_por_modulo = {}
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         # Agregar acciones de préstamos y pagos
         try:
             acciones_por_modulo["PRESTAMOS"] = acciones_por_modulo.get("PRESTAMOS", 0) + (
                 db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
             )
-        except ProgrammingError:
-            pass
+        except (ProgrammingError, Exception) as e:
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         try:
             acciones_por_modulo["PAGOS"] = acciones_por_modulo.get("PAGOS", 0) + (
                 db.query(func.count(PagoAuditoria.id)).scalar() or 0
             )
-        except ProgrammingError:
-            pass
+        except (ProgrammingError, Exception) as e:
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         # Acciones por usuario (email)
         try:
@@ -618,9 +692,13 @@ def estadisticas_auditoria(
                 .all()
             )
             acciones_por_usuario = {row[0]: row[1] for row in acciones_por_usuario_rows}
-        except ProgrammingError:
-            logger.warning("Error consultando acciones por usuario de auditoria")
+        except (ProgrammingError, Exception) as e:
+            logger.warning(f"Error consultando acciones por usuario de auditoria: {e}")
             acciones_por_usuario = {}
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         # Hoy / semana / mes
         from datetime import datetime, timedelta
@@ -633,65 +711,101 @@ def estadisticas_auditoria(
         # Calcular acciones por período de forma segura
         try:
             acciones_hoy_aud = db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_hoy).scalar() or 0
-        except ProgrammingError:
+        except (ProgrammingError, Exception) as e:
             acciones_hoy_aud = 0
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         try:
             acciones_hoy_prest = (
                 db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0
             )
-        except ProgrammingError:
+        except (ProgrammingError, Exception) as e:
             acciones_hoy_prest = 0
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         try:
             acciones_hoy_pagos = (
                 db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0
             )
-        except ProgrammingError:
+        except (ProgrammingError, Exception) as e:
             acciones_hoy_pagos = 0
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         acciones_hoy = acciones_hoy_aud + acciones_hoy_prest + acciones_hoy_pagos
 
         try:
             acciones_semana_aud = db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_semana).scalar() or 0
-        except ProgrammingError:
+        except (ProgrammingError, Exception) as e:
             acciones_semana_aud = 0
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         try:
             acciones_semana_prest = (
                 db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_semana).scalar()
                 or 0
             )
-        except ProgrammingError:
+        except (ProgrammingError, Exception) as e:
             acciones_semana_prest = 0
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         try:
             acciones_semana_pagos = (
                 db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_semana).scalar() or 0
             )
-        except ProgrammingError:
+        except (ProgrammingError, Exception) as e:
             acciones_semana_pagos = 0
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         acciones_esta_semana = acciones_semana_aud + acciones_semana_prest + acciones_semana_pagos
 
         try:
             acciones_mes_aud = db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_mes).scalar() or 0
-        except ProgrammingError:
+        except (ProgrammingError, Exception) as e:
             acciones_mes_aud = 0
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         try:
             acciones_mes_prest = (
                 db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0
             )
-        except ProgrammingError:
+        except (ProgrammingError, Exception) as e:
             acciones_mes_prest = 0
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         try:
             acciones_mes_pagos = (
                 db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0
             )
-        except ProgrammingError:
+        except (ProgrammingError, Exception) as e:
             acciones_mes_pagos = 0
+            try:
+                db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            except Exception:
+                pass
 
         acciones_este_mes = acciones_mes_aud + acciones_mes_prest + acciones_mes_pagos
 
@@ -705,6 +819,10 @@ def estadisticas_auditoria(
         )
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas de auditoría: {e}", exc_info=True)
+        try:
+            db.rollback()  # ✅ Rollback para restaurar transacción después de error
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 

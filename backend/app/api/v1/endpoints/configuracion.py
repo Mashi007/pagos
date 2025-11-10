@@ -1054,6 +1054,8 @@ def actualizar_configuracion_envios(
 
 class ProbarEmailRequest(BaseModel):
     email_destino: Optional[str] = None
+    subject: Optional[str] = None
+    mensaje: Optional[str] = None
 
 
 @router.post("/email/probar")
@@ -1100,14 +1102,51 @@ def probar_configuracion_email(
         if not re.match(email_pattern, email_a_enviar):
             raise HTTPException(status_code=400, detail="Email de destino inválido")
 
-        # Enviar email de prueba
-        from app.services.email_service import EmailService
+        # Obtener subject y mensaje personalizados si se proporcionaron
+        subject_personalizado = None
+        mensaje_personalizado = None
+        if request:
+            if isinstance(request, dict):
+                subject_personalizado = request.get("subject")
+                mensaje_personalizado = request.get("mensaje")
+            elif hasattr(request, "subject"):
+                subject_personalizado = request.subject
+                mensaje_personalizado = request.mensaje
 
-        email_service = EmailService(db=db)
-        result = email_service.send_email(
-            to_emails=[email_a_enviar],
-            subject="✅ Prueba de configuración - RapiCredit",
-            body=f"""
+        # Usar subject personalizado o el predeterminado
+        subject_email = subject_personalizado.strip() if subject_personalizado and subject_personalizado.strip() else "✅ Prueba de configuración - RapiCredit"
+        
+        # Construir el cuerpo del email
+        if mensaje_personalizado and mensaje_personalizado.strip():
+            # Si hay mensaje personalizado, usarlo
+            cuerpo_email = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                    <div style="background-color: #4CAF50; color: white; padding: 15px; border-radius: 5px 5px 0 0; margin: -20px -20px 20px -20px;">
+                        <h2 style="margin: 0;">✅ Email de Prueba</h2>
+                    </div>
+
+                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0; white-space: pre-wrap;">
+                        {mensaje_personalizado.strip()}
+                    </div>
+
+                    <div style="background-color: #e8f4f8; padding: 15px; border-radius: 5px; margin: 20px 0; font-size: 12px; color: #666;">
+                        <p style="margin: 0;"><strong>📧 Destinatario:</strong> {email_a_enviar}</p>
+                        <p style="margin: 5px 0;"><strong>📅 Fecha y Hora:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                        <p style="margin: 5px 0;"><strong>👤 Usuario:</strong> {current_user.email}</p>
+                    </div>
+
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 12px;">
+                        <p>Este es un email automático del sistema RapiCredit</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+        else:
+            # Mensaje predeterminado
+            cuerpo_email = f"""
             <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
@@ -1137,7 +1176,16 @@ def probar_configuracion_email(
                 </div>
             </body>
             </html>
-            """,
+            """
+
+        # Enviar email de prueba
+        from app.services.email_service import EmailService
+
+        email_service = EmailService(db=db)
+        result = email_service.send_email(
+            to_emails=[email_a_enviar],
+            subject=subject_email,
+            body=cuerpo_email,
             is_html=True,
         )
 

@@ -3,6 +3,7 @@ import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Clock, XCi
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { emailConfigService, notificacionService, type Notificacion } from '@/services/notificacionService'
@@ -37,6 +38,8 @@ export function EmailConfig() {
   const [modoPruebas, setModoPruebas] = useState<string>('false')
   const [emailPruebas, setEmailPruebas] = useState('')
   const [emailPruebaDestino, setEmailPruebaDestino] = useState('') // Email para prueba de envío
+  const [subjectPrueba, setSubjectPrueba] = useState('') // Subject para prueba de envío
+  const [mensajePrueba, setMensajePrueba] = useState('') // Mensaje para prueba de envío
   const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
   const [cargandoEnvios, setCargandoEnvios] = useState(false)
 
@@ -108,7 +111,9 @@ export function EmailConfig() {
       }
       
       const resultado = await emailConfigService.probarConfiguracionEmail(
-        emailPruebaDestino.trim() || undefined
+        emailPruebaDestino.trim() || undefined,
+        subjectPrueba.trim() || undefined,
+        mensajePrueba.trim() || undefined
       )
       setResultadoPrueba(resultado)
       
@@ -291,16 +296,16 @@ export function EmailConfig() {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
                 <TestTube className="h-5 w-5" />
-                Ambiente de Prueba - Envío de Email
+                Envío de Email de Prueba
               </h3>
               <p className="text-sm text-blue-700 mb-4">
-                Envía un correo de prueba a un email específico para verificar que la configuración SMTP funciona correctamente.
+                Envía un correo de prueba personalizado para verificar que la configuración SMTP funciona correctamente.
               </p>
               
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium block mb-2">
-                    Email de Destino para Prueba <span className="text-gray-500">(opcional)</span>
+                    Email de Destino <span className="text-gray-500">(opcional)</span>
                   </label>
                   <Input
                     type="email"
@@ -311,6 +316,38 @@ export function EmailConfig() {
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Si no especificas un email, se enviará a tu correo de usuario ({config.smtp_user || 'no configurado'})
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium block mb-2">
+                    Asunto <span className="text-gray-500">(opcional)</span>
+                  </label>
+                  <Input
+                    type="text"
+                    value={subjectPrueba}
+                    onChange={(e) => setSubjectPrueba(e.target.value)}
+                    placeholder="Prueba de configuración - RapiCredit"
+                    className="max-w-md"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Si no especificas un asunto, se usará el asunto predeterminado
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium block mb-2">
+                    Mensaje de Prueba <span className="text-gray-500">(opcional)</span>
+                  </label>
+                  <Textarea
+                    value={mensajePrueba}
+                    onChange={(e) => setMensajePrueba(e.target.value)}
+                    placeholder="Escribe aquí tu mensaje de prueba..."
+                    rows={6}
+                    className="max-w-md resize-y"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Si no especificas un mensaje, se usará el mensaje predeterminado
                   </p>
                 </div>
                 

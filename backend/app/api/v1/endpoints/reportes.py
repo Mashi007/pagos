@@ -445,10 +445,16 @@ def reporte_morosidad(
             )
         )
         resumen = resumen_query.first()
-        total_prestamos_mora = resumen[0] or 0
-        total_clientes_mora = resumen[1] or 0
-        monto_total_mora = Decimal(str(resumen[2] or 0))
-        promedio_dias_mora = float(resumen[4] or 0)
+        if resumen is None:
+            total_prestamos_mora = 0
+            total_clientes_mora = 0
+            monto_total_mora = Decimal("0")
+            promedio_dias_mora = 0.0
+        else:
+            total_prestamos_mora = resumen[0] or 0
+            total_clientes_mora = resumen[1] or 0
+            monto_total_mora = Decimal(str(resumen[2] or 0))
+            promedio_dias_mora = float(resumen[4] or 0)
 
         # 2. Distribución por Rango de Días
         distribucion_query = db.execute(
@@ -622,11 +628,18 @@ def reporte_financiero(
             )
         )
         resumen = resumen_query.first()
-        total_ingresos = Decimal(str(resumen[0] or 0))
-        cantidad_pagos = resumen[1] or 0
-        cartera_total = Decimal(str(resumen[2] or 0))
-        cartera_pendiente = Decimal(str(resumen[3] or 0))
-        morosidad_total = Decimal(str(resumen[4] or 0))
+        if resumen is None:
+            total_ingresos = Decimal("0")
+            cantidad_pagos = 0
+            cartera_total = Decimal("0")
+            cartera_pendiente = Decimal("0")
+            morosidad_total = Decimal("0")
+        else:
+            total_ingresos = Decimal(str(resumen[0] or 0))
+            cantidad_pagos = resumen[1] or 0
+            cartera_total = Decimal(str(resumen[2] or 0))
+            cartera_pendiente = Decimal(str(resumen[3] or 0))
+            morosidad_total = Decimal(str(resumen[4] or 0))
         saldo_pendiente = cartera_total - total_ingresos
         porcentaje_cobrado = float((total_ingresos / cartera_total * 100) if cartera_total > 0 else 0)
 

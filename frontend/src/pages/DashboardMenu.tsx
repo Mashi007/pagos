@@ -1211,7 +1211,7 @@ export function DashboardMenu() {
                           stroke="#6b7280"
                           style={{ fontSize: '12px', fontWeight: 500 }}
                           tick={{ fill: '#6b7280' }}
-                          label={{ value: 'Porcentaje (%)', angle: -90, position: 'insideLeft' }}
+                          label={{ value: 'Porcentaje (%)', angle: -90, position: 'left', offset: 10 }}
                           tickFormatter={(value) => `${value}%`}
                         />
                             <Tooltip 
@@ -1462,15 +1462,35 @@ export function DashboardMenu() {
                       </div>
                     ) : datosFinanciamientoRangos?.rangos && Array.isArray(datosFinanciamientoRangos.rangos) && datosFinanciamientoRangos.rangos.length > 0 ? (
                       (() => {
+                        // ✅ Función auxiliar para extraer el valor mínimo del rango
+                        const getMinValue = (categoria: string) => {
+                          // Limpiar formato: remover puntos y comas
+                          const cleanCategoria = categoria.replace(/[.,]/g, '')
+                          if (cleanCategoria.includes('+')) {
+                            // Formato: $50000+
+                            const match = cleanCategoria.match(/\$(\d+)\+/)
+                            return match ? parseInt(match[1]) : 999999
+                          }
+                          // Formato: $6000 - $6500
+                          const match = cleanCategoria.match(/\$(\d+)\s*-\s*\$\d+/)
+                          return match ? parseInt(match[1]) : 0
+                        }
+                        
                         // ✅ Filtrar solo rangos con datos (cantidad_prestamos > 0)
                         const rangosConDatos = datosFinanciamientoRangos.rangos.filter(r => (r.cantidad_prestamos || 0) > 0)
                         
+                        // ✅ Filtrar rangos entre $1000 y $2400 (escala del eje Y)
+                        const rangosFiltrados = rangosConDatos.filter(r => {
+                          const minValue = getMinValue(r.categoria)
+                          return minValue >= 1000 && minValue < 2400
+                        })
+                        
                         // ✅ Calcular suma de todos los rangos mostrados
-                        const sumaRangosMostrados = rangosConDatos.reduce((sum, r) => sum + (r.cantidad_prestamos || 0), 0)
+                        const sumaRangosMostrados = rangosFiltrados.reduce((sum, r) => sum + (r.cantidad_prestamos || 0), 0)
                         const totalBackend = datosFinanciamientoRangos.total_prestamos || 0
                         const diferencia = totalBackend - sumaRangosMostrados
                         
-                        if (rangosConDatos.length === 0) {
+                        if (rangosFiltrados.length === 0) {
                           const filtrosAplicados = construirFiltrosObject(periodo)
                           const filtrosInfo: string[] = []
                           if (filtrosAplicados.analista) filtrosInfo.push(`Analista: ${filtrosAplicados.analista}`)
@@ -1558,30 +1578,17 @@ export function DashboardMenu() {
                         }
                         
                         // ✅ Calcular el máximo dinámicamente basado en los datos reales
-                        // Encontrar el valor máximo de cantidad_prestamos en los rangos con datos
+                        // Encontrar el valor máximo de cantidad_prestamos en los rangos filtrados
                         // ✅ BUGFIX: Validar que haya datos antes de calcular max
-                        const maxCantidad = rangosConDatos.length > 0 
-                          ? Math.max(...rangosConDatos.map(r => r.cantidad_prestamos || 0))
+                        const maxCantidad = rangosFiltrados.length > 0 
+                          ? Math.max(...rangosFiltrados.map(r => r.cantidad_prestamos || 0))
                           : 0
                         // Agregar un 10% de margen para mejor visualización
                         const dominioMin = 0
                         const dominioMax = maxCantidad > 0 ? Math.ceil(maxCantidad * 1.1) : 100
                         
                         // Ordenar rangos por valor numérico del rango (de menor a mayor - invertido)
-                        const rangosOrdenados = [...rangosConDatos].sort((a, b) => {
-                          // Extraer el valor mínimo del rango para ordenar
-                          const getMinValue = (categoria: string) => {
-                            // Limpiar formato: remover puntos y comas
-                            const cleanCategoria = categoria.replace(/[.,]/g, '')
-                            if (cleanCategoria.includes('+')) {
-                              // Formato: $50000+
-                              const match = cleanCategoria.match(/\$(\d+)\+/)
-                              return match ? parseInt(match[1]) : 999999
-                            }
-                            // Formato: $6000 - $6500
-                            const match = cleanCategoria.match(/\$(\d+)\s*-\s*\$\d+/)
-                            return match ? parseInt(match[1]) : 0
-                          }
+                        const rangosOrdenados = [...rangosFiltrados].sort((a, b) => {
                           return getMinValue(a.categoria) - getMinValue(b.categoria)
                         })
                         
