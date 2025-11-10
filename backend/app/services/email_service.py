@@ -447,16 +447,18 @@ class EmailService:
             return {"success": True, "message": "Conexión SMTP exitosa"}
 
         except smtplib.SMTPAuthenticationError as e:
-            error_msg = str(e)
+            error_msg = str(e).lower()
+            error_code = str(e)
             # ✅ Detectar mensajes específicos de Gmail/Google Workspace
-            if "application-specific password required" in error_msg.lower() or "535" in error_msg:
+            # Código 534 o 5.7.9 = Application-specific password required
+            if "application-specific password required" in error_msg or "534" in error_code or "5.7.9" in error_code:
                 mensaje = "Gmail/Google Workspace requiere una Contraseña de Aplicación (App Password). Activa 2FA y genera una App Password en https://myaccount.google.com/apppasswords"
                 logger.warning(f"⚠️ {mensaje}")
-            elif "username and password not accepted" in error_msg.lower() or "535" in error_msg:
+            elif "username and password not accepted" in error_msg or "535" in error_code:
                 mensaje = "Gmail/Google Workspace rechazó las credenciales. Verifica que uses una App Password (no tu contraseña normal) y que tengas 2FA activado."
                 logger.warning(f"⚠️ {mensaje}")
             else:
-                mensaje = f"Error de autenticación con Gmail/Google Workspace: {error_msg}"
+                mensaje = f"Error de autenticación con Gmail/Google Workspace: {str(e)}"
                 logger.warning(f"⚠️ {mensaje}")
             return {"success": False, "message": mensaje, "error_type": "AUTHENTICATION_ERROR", "gmail_error": True}
         except smtplib.SMTPConnectError as e:

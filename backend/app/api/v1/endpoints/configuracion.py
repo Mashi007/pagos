@@ -941,6 +941,8 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
         error_code = str(e)
 
         # Detectar error específico de "Application-specific password required"
+        # Código 534 o 5.7.9 = Application-specific password required
+        # Código 535 = Username and password not accepted (puede ser App Password incorrecta)
         if "application-specific password required" in error_msg or "534" in error_code or "5.7.9" in error_code:
             return False, (
                 "❌ Google requiere una Contraseña de Aplicación (App Password)\n\n"
@@ -1022,9 +1024,9 @@ def actualizar_configuracion_email(
                 )
         # NO lanzar excepción - permitir guardar con advertencia para que el usuario pueda corregir después
 
-    # Si llegamos aquí y es Gmail, significa que Google aceptó la conexión
+    # ✅ Solo mostrar confirmación de vinculación si la validación fue exitosa
     es_gmail = "gmail.com" in config_data.get("smtp_host", "").lower()
-    if es_gmail:
+    if es_gmail and es_valida:
         logger.info(
             f"✅ CONFIRMACIÓN DE VINCULACIÓN: Google aceptó las credenciales para {config_data.get('smtp_user', 'N/A')}. "
             f"El sistema está vinculado y autorizado para enviar emails."
