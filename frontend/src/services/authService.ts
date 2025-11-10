@@ -57,6 +57,9 @@ export class AuthService {
           safeSetSessionItem('refresh_token', response.refresh_token)
           safeSetSessionItem('user', response.user)
         }
+        
+        // ✅ Resetear el flag de refresh token expirado después de login exitoso
+        apiClient.resetRefreshTokenExpired()
       }
       
       return response

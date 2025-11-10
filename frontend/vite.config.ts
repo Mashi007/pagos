@@ -4,11 +4,18 @@ import path from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react({
+      // Asegurar que React esté disponible correctamente
+      jsxRuntime: 'automatic',
+    }),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    // Asegurar que React se resuelva correctamente
+    dedupe: ['react', 'react-dom'],
   },
   server: {
     port: 3000,
@@ -26,6 +33,11 @@ export default defineConfig({
         manualChunks: (id) => {
           // Separar node_modules en chunks más específicos
           if (id.includes('node_modules')) {
+            // React Router - debe ir primero para evitar conflictos
+            if (id.includes('react-router')) {
+              return 'router'
+            }
+            
             // Librerías pesadas de exportación - cargar solo cuando se necesiten
             if (id.includes('xlsx')) {
               return 'xlsx'
@@ -37,16 +49,6 @@ export default defineConfig({
             // Recharts - separar en chunk propio para lazy loading
             if (id.includes('recharts')) {
               return 'recharts'
-            }
-            
-            // React core
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'react-vendor'
-            }
-            
-            // React Router
-            if (id.includes('react-router')) {
-              return 'router'
             }
             
             // UI libraries
@@ -67,6 +69,16 @@ export default defineConfig({
             // Radix UI components
             if (id.includes('@radix-ui')) {
               return 'radix-ui'
+            }
+            
+            // React core - INCLUIR en chunk principal para asegurar disponibilidad
+            // Esto resuelve el error "can't access property Children, _e is undefined"
+            // Algunos componentes UI usan "import * as React" que requiere React como namespace
+            if (id.includes('react') && !id.includes('react-router') && 
+                !id.includes('react-hook-form') && !id.includes('@tanstack/react-query')) {
+              // Devolver undefined hace que se incluya en el chunk principal (index.js)
+              // Esto asegura que React esté siempre disponible cuando se necesite
+              return undefined
             }
             
             // Otras dependencias comunes

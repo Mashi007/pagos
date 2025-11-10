@@ -41,10 +41,12 @@ class ApiClient {
   private client: AxiosInstance
   private isRefreshing = false
   private isRedirectingToLogin = false
+  private refreshTokenExpired = false // ✅ Flag para evitar requests cuando el refresh token está expirado
   private failedQueue: Array<{
     resolve: (value?: any) => void
     reject: (reason?: any) => void
   }> = []
+  private requestCancellers: Map<string, AbortController> = new Map() // ✅ Para cancelar requests pendientes
 
   constructor() {
     this.client = axios.create({
@@ -65,6 +67,13 @@ class ApiClient {
     // Request interceptor - agregar token de autenticación
     this.client.interceptors.request.use(
       (config) => {
+        // ✅ Si el refresh token está expirado, cancelar el request inmediatamente
+        if (this.refreshTokenExpired && !config.url?.includes('/auth/login')) {
+          const error = new Error('Sesión expirada. Por favor, inicia sesión nuevamente.')
+          ;(error as any).isCancelled = true
+          return Promise.reject(error)
+        }
+
         // NO agregar token a endpoints de autenticación
         const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh']
         const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint))
@@ -183,6 +192,12 @@ class ApiClient {
             originalRequest.headers.Authorization = `Bearer ${access_token}`
             return this.client(originalRequest)
           } catch (refreshError: any) {
+            // ✅ Marcar que el refresh token está expirado para cancelar requests futuros
+            this.refreshTokenExpired = true
+            
+            // ✅ Cancelar todos los requests pendientes
+            this.cancelAllPendingRequests()
+            
             // Si no se puede renovar el token, limpiar datos y redirigir al login
             this.processQueue(refreshError, null)
             clearAuthStorage()
@@ -198,11 +213,8 @@ class ApiClient {
                 console.warn('🔄 Refresh token falló. Redirigiendo al login...', refreshError)
               }
               
-              // Pequeño delay para asegurar que el storage se limpie y todas las peticiones fallen
-              setTimeout(() => {
-                // Usar replace para evitar que el usuario pueda volver atrás
-                window.location.replace('/login')
-              }, 100)
+              // ✅ Redirigir inmediatamente sin delay para evitar más requests
+              window.location.replace('/login')
             }
             
             return Promise.reject(refreshError)
@@ -231,6 +243,24 @@ class ApiClient {
       }
     })
     this.failedQueue = []
+  }
+
+  // ✅ Cancelar todos los requests pendientes cuando el refresh token expira
+  private cancelAllPendingRequests() {
+    this.requestCancellers.forEach((controller, url) => {
+      try {
+        controller.abort()
+      } catch (error) {
+        // Ignorar errores al cancelar
+      }
+    })
+    this.requestCancellers.clear()
+  }
+
+  // ✅ Resetear el flag cuando el usuario hace login exitosamente
+  resetRefreshTokenExpired() {
+    this.refreshTokenExpired = false
+    this.isRedirectingToLogin = false
   }
 
   private handleError(error: unknown) {
