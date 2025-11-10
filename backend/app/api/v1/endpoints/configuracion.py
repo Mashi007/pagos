@@ -910,11 +910,18 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
     # Probar conexión SMTP para verificar credenciales
     try:
         logger.info(f"🔗 Probando conexión SMTP con Google: {smtp_user}@{smtp_host}:{puerto}")
-        server = smtplib.SMTP(smtp_host, puerto, timeout=10)
-
-        if smtp_use_tls:
-            server.starttls()
-            logger.debug("✅ TLS iniciado correctamente")
+        
+        # ✅ Puerto 465 requiere SSL (SMTP_SSL), puerto 587 requiere TLS (SMTP + starttls)
+        if puerto == 465:
+            # Puerto 465: Usar SSL directamente (no TLS)
+            server = smtplib.SMTP_SSL(smtp_host, puerto, timeout=10)
+            logger.debug("✅ Conexión SSL establecida para puerto 465")
+        else:
+            # Puerto 587 u otros: Usar SMTP normal con TLS opcional
+            server = smtplib.SMTP(smtp_host, puerto, timeout=10)
+            if smtp_use_tls:
+                server.starttls()
+                logger.debug("✅ TLS iniciado correctamente")
 
         # Intentar login - aquí es donde Gmail/Google Workspace rechazará si no hay 2FA o si se usa contraseña normal
         # Esto funciona tanto para @gmail.com como para dominios de Google Workspace

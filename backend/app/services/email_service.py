@@ -189,10 +189,17 @@ class EmailService:
 
             if not server:
                 # Crear nueva conexión
-                server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30)
-
-                if self.smtp_use_tls:
-                    server.starttls()
+                # ✅ Puerto 465 requiere SSL (SMTP_SSL), puerto 587 requiere TLS (SMTP + starttls)
+                if self.smtp_port == 465:
+                    # Puerto 465: Usar SSL directamente (no TLS)
+                    server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=30)
+                    logger.debug("✅ Conexión SSL establecida para puerto 465")
+                else:
+                    # Puerto 587 u otros: Usar SMTP normal con TLS opcional
+                    server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30)
+                    if self.smtp_use_tls:
+                        server.starttls()
+                        logger.debug("✅ TLS iniciado correctamente")
 
                 # Validar credenciales antes de intentar login
                 if self.smtp_username and self.smtp_password:
@@ -414,10 +421,17 @@ class EmailService:
                     "error_type": "CONFIGURATION_ERROR",
                 }
 
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30)
-
-            if self.smtp_use_tls:
-                server.starttls()
+            # ✅ Puerto 465 requiere SSL (SMTP_SSL), puerto 587 requiere TLS (SMTP + starttls)
+            if self.smtp_port == 465:
+                # Puerto 465: Usar SSL directamente (no TLS)
+                server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=30)
+                logger.debug("✅ Conexión SSL establecida para puerto 465")
+            else:
+                # Puerto 587 u otros: Usar SMTP normal con TLS opcional
+                server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30)
+                if self.smtp_use_tls:
+                    server.starttls()
+                    logger.debug("✅ TLS iniciado correctamente")
 
             if self.smtp_username and self.smtp_password:
                 if not self.smtp_username.strip() or not self.smtp_password.strip():
