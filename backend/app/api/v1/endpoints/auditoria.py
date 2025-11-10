@@ -245,7 +245,7 @@ def listar_auditoria(
         # Construir query base (auditoría general) - solo si la tabla existe
         registros_general = []
         max_to_load = min(skip + limit + 500, 5000)  # Máximo 5000 registros por tipo
-        
+
         if tabla_auditoria_existe:
             try:
                 query = db.query(Auditoria).options(joinedload(Auditoria.usuario))
@@ -288,7 +288,7 @@ def listar_auditoria(
                         pass
         except Exception:
             pass
-        
+
         try:
             if tabla_prestamos_auditoria_existe:
                 query_prestamos = db.query(PrestamoAuditoria).order_by(PrestamoAuditoria.fecha_cambio.desc())
@@ -323,7 +323,7 @@ def listar_auditoria(
                         pass
         except Exception:
             pass
-        
+
         try:
             if tabla_pagos_auditoria_existe:
                 query_pagos = db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc())

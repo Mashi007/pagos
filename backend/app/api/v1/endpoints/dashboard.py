@@ -5147,7 +5147,12 @@ def obtener_cobros_por_analista(
             )
             resultados_raw = query_cobros.fetchall()
             resultados = [
-                {"analista": str(row[0] or "Sin Analista"), "total_cobrado": float(row[1] or Decimal("0")), "cantidad_pagos": int(row[2] or 0)} for row in resultados_raw
+                {
+                    "analista": str(row[0] or "Sin Analista"),
+                    "total_cobrado": float(row[1] or Decimal("0")),
+                    "cantidad_pagos": int(row[2] or 0),
+                }
+                for row in resultados_raw
             ]
         except Exception as e:
             logger.warning(f"⚠️ [obtener_cobros_por_analista] Error obteniendo cobros: {e}")

@@ -1114,8 +1114,12 @@ def probar_configuracion_email(
                 mensaje_personalizado = request.mensaje
 
         # Usar subject personalizado o el predeterminado
-        subject_email = subject_personalizado.strip() if subject_personalizado and subject_personalizado.strip() else "✅ Prueba de configuración - RapiCredit"
-        
+        subject_email = (
+            subject_personalizado.strip()
+            if subject_personalizado and subject_personalizado.strip()
+            else "✅ Prueba de configuración - RapiCredit"
+        )
+
         # Construir el cuerpo del email
         if mensaje_personalizado and mensaje_personalizado.strip():
             # Si hay mensaje personalizado, usarlo
