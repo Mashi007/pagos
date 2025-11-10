@@ -44,6 +44,7 @@ class EmailService:
         self.smtp_use_tls = settings.SMTP_USE_TLS
         self.modo_pruebas = True  # Por defecto: Pruebas (más seguro, evita envíos accidentales)
         self.email_pruebas = ""
+        self.email_activo = True  # ✅ Por defecto: activo
 
         # Si hay sesión de BD, intentar cargar configuración desde BD
         if self.db:
@@ -77,6 +78,12 @@ class EmailService:
                         self.modo_pruebas = config_dict["modo_pruebas"].lower() in ("true", "1", "yes", "on")
                     if config_dict.get("email_pruebas"):
                         self.email_pruebas = config_dict["email_pruebas"]
+                    # ✅ Cargar estado activo/inactivo
+                    if config_dict.get("email_activo"):
+                        self.email_activo = config_dict["email_activo"].lower() in ("true", "1", "yes", "on")
+                    else:
+                        # Si no existe, por defecto está activo
+                        self.email_activo = True
 
                     logger.info("✅ Configuración de email cargada desde base de datos")
                     if self.modo_pruebas:
@@ -118,8 +125,19 @@ class EmailService:
             Dict con resultado del envío
         """
         try:
-            # Recargar configuración para obtener modo_pruebas actualizado
+            # Recargar configuración para obtener modo_pruebas y email_activo actualizado
             self._cargar_configuracion()
+
+            # ✅ Verificar si el email está activado
+            if not self.email_activo:
+                logger.info("📧 Email desactivado - No se enviará el email (proceso no interrumpido)")
+                return {
+                    "success": False,
+                    "message": "⚠️ El envío de emails está desactivado. Activa el servicio en Configuración de Email.",
+                    "error_type": "EMAIL_DISABLED",
+                    "recipients": to_emails,
+                    "email_activo": False,
+                }
 
             # Validar configuración antes de enviar
             if not self.smtp_server:

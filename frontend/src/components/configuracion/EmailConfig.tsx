@@ -18,6 +18,7 @@ interface EmailConfigData {
   smtp_use_tls: string
   modo_pruebas?: string
   email_pruebas?: string
+  email_activo?: string // ✅ Estado activo/inactivo
 }
 
 export function EmailConfig() {
@@ -38,6 +39,7 @@ export function EmailConfig() {
   const [probando, setProbando] = useState(false)
   const [modoPruebas, setModoPruebas] = useState<string>('true')
   const [emailPruebas, setEmailPruebas] = useState('')
+  const [emailActivo, setEmailActivo] = useState<boolean>(true) // ✅ Estado activo/inactivo
   const [emailPruebaDestino, setEmailPruebaDestino] = useState('')
   const [subjectPrueba, setSubjectPrueba] = useState('')
   const [mensajePrueba, setMensajePrueba] = useState('')
@@ -154,6 +156,11 @@ export function EmailConfig() {
       setConfig(data)
       setModoPruebas(data.modo_pruebas || 'true')
       setEmailPruebas(data.email_pruebas || '')
+      // ✅ Cargar estado activo/inactivo
+      const emailActivoValue = data.email_activo === undefined || data.email_activo === null 
+        ? true 
+        : (data.email_activo === 'true' || data.email_activo === true || data.email_activo === '1')
+      setEmailActivo(emailActivoValue)
     } catch (error) {
       console.error('Error cargando configuración:', error)
       toast.error('Error cargando configuración')
@@ -333,12 +340,13 @@ export function EmailConfig() {
       // Limpiar espacios de la contraseña
       const passwordLimpia = config.smtp_password?.replace(/\s/g, '') || ''
       
-      const configCompleta = {
-        ...config,
-        smtp_password: passwordLimpia,
-        modo_pruebas: modoPruebas,
-        email_pruebas: modoPruebas === 'true' ? emailPruebas : ''
-      }
+          const configCompleta = {
+            ...config,
+            smtp_password: passwordLimpia,
+            modo_pruebas: modoPruebas,
+            email_pruebas: modoPruebas === 'true' ? emailPruebas : '',
+            email_activo: emailActivo ? 'true' : 'false' // ✅ Incluir estado activo/inactivo
+          }
       
       const resultado = await emailConfigService.actualizarConfiguracionEmail(configCompleta)
       
@@ -461,6 +469,37 @@ export function EmailConfig() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* ✅ Toggle Activar/Desactivar Email */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <label className="text-sm font-semibold text-gray-900 block mb-1">
+                  Servicio de Email
+                </label>
+                <p className="text-xs text-gray-600">
+                  {emailActivo 
+                    ? '✅ El sistema está enviando emails automáticamente' 
+                    : '⚠️ El sistema NO enviará emails. Activa el servicio para habilitar envíos.'}
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={emailActivo}
+                  onChange={(e) => {
+                    setEmailActivo(e.target.checked)
+                    toast.info(e.target.checked ? 'Email activado - Los envíos se habilitarán al guardar' : 'Email desactivado - Los envíos se deshabilitarán al guardar')
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+                <span className="ml-3 text-sm font-medium text-gray-700">
+                  {emailActivo ? 'Activo' : 'Inactivo'}
+                </span>
+              </label>
+            </div>
+          </div>
+
           {/* Banners de estado y monitoreo de Google */}
           {esGmail && (
             <>
