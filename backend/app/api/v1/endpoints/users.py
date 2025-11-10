@@ -357,7 +357,7 @@ def delete_user(
         # Verificar permisos
         if not current_user.is_admin:
             raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar usuarios")
-        
+
         # Buscar usuario
         user = db.query(User).filter(User.id == user_id).first()
 
@@ -378,18 +378,18 @@ def delete_user(
         from app.models.auditoria import Auditoria
         from app.models.notificacion import Notificacion
         from app.models.aprobacion import Aprobacion
-        
+
         auditoria_count = db.query(Auditoria).filter(Auditoria.usuario_id == user_id).count()
         notificaciones_count = db.query(Notificacion).filter(Notificacion.user_id == user_id).count()
         aprobaciones_solicitadas = db.query(Aprobacion).filter(Aprobacion.solicitante_id == user_id).count()
         aprobaciones_revisadas = db.query(Aprobacion).filter(Aprobacion.revisor_id == user_id).count()
-        
+
         logger.info(
             f"Eliminando usuario {user_id} (email: {user.email}) por admin {current_user.id}. "
             f"Relaciones: auditoria={auditoria_count}, notificaciones={notificaciones_count}, "
             f"aprobaciones_solicitadas={aprobaciones_solicitadas}, aprobaciones_revisadas={aprobaciones_revisadas}"
         )
-        
+
         # Intentar eliminar - si hay foreign key constraints, la BD lanzará error
         db.delete(user)
         db.commit()
@@ -404,14 +404,14 @@ def delete_user(
         error_detail = f"Error eliminando usuario {user_id}: {str(e)}"
         logger.error(error_detail, exc_info=True)
         logger.error(f"Traceback completo:\n{traceback.format_exc()}")
-        
+
         # Proporcionar mensaje de error más descriptivo
         error_message = "Error interno del servidor"
         error_str = str(e).lower()
-        
+
         if "foreign key" in error_str or "constraint" in error_str:
             error_message = "No se puede eliminar el usuario porque tiene registros asociados (préstamos, pagos, etc.)"
         elif "integrity" in error_str:
             error_message = "Error de integridad de datos al eliminar el usuario"
-        
+
         raise HTTPException(status_code=500, detail=error_message)
