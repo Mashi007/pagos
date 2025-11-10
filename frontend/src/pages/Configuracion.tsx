@@ -1344,9 +1344,6 @@ export function Configuracion() {
       transition={{ duration: 0.3 }}
       className="space-y-6"
     >
-      <h1 className="text-3xl font-bold text-gray-900">Configuración del Sistema</h1>
-      <p className="text-gray-600">Gestiona la configuración general del sistema RAPICREDIT.</p>
-
       <div className="grid gap-6">
         {/* Contenido de la Sección */}
         <Card>
@@ -1365,9 +1362,6 @@ export function Configuracion() {
                     )
                   })()}
                 </CardTitle>
-                <CardDescription>
-                  Configuración de la sección {secciones.find(s => s.id === seccionActiva)?.nombre?.toLowerCase() || 'General'}
-                </CardDescription>
               </div>
               <div className="flex space-x-2">
                 {/* ✅ Ocultar botón "Guardar" en secciones que tienen su propio botón de guardar */}
