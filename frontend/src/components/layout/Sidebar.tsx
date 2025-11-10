@@ -181,10 +181,27 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   })
 
   const isActiveRoute = (href: string) => {
+    // ✅ Manejar dashboard especial
     if (href === '/dashboard') {
       return location.pathname === '/' || location.pathname === '/dashboard'
     }
-    return location.pathname.startsWith(href)
+    
+    // ✅ Para rutas con query parameters, comparar URL completa
+    if (href.includes('?')) {
+      // Si el href tiene query params, comparar URL completa
+      const currentUrl = `${location.pathname}${location.search}`
+      return currentUrl === href
+    }
+    
+    // ✅ Para rutas sin query params, verificar que sea exacta o que no haya query params en la URL actual
+    // Esto evita que /configuracion resalte cuando estás en /configuracion?tab=email
+    if (location.search) {
+      // Si la URL actual tiene query params pero el href no, no resaltar
+      return false
+    }
+    
+    // ✅ Comparación exacta de pathname para rutas sin query params
+    return location.pathname === href
   }
 
   const sidebarVariants = {
