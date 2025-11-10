@@ -430,7 +430,7 @@ def listar_notificaciones(
                 canal_exists = "canal" in columns
                 leida_exists = "leida" in columns
                 created_at_exists = "created_at" in columns
-                
+
                 # Solo mostrar info la primera vez (no es un error, es un comportamiento esperado)
                 if not canal_exists:
                     logger.info("ℹ️ Columna 'canal' no existe en BD. Usando query sin canal.")
