@@ -848,6 +848,7 @@ def obtener_resumen_cobranzas(
                 Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
                 or_(User.is_admin.is_(False), User.is_admin.is_(None)),
+            )
         )
         clientes_unicos = clientes_query.scalar() or 0
 
