@@ -107,13 +107,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Clientes', href: '/clientes', icon: Users },
         { title: 'Venta Servicios', href: '/crm/embudo-clientes', icon: Target },
         { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
-        { title: 'Seguimiento Concesionarios', href: '/crm/embudo-concesionarios', icon: Building },
         { 
           title: 'Notificaciones', 
           href: '/notificaciones', 
           icon: Bell,
           badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
         },
+        { title: 'Seguimiento Concesionarios', href: '/crm/embudo-concesionarios', icon: Building },
       ],
     },
     {
