@@ -1380,10 +1380,12 @@ def listar_variables(
         try:
             inspector = inspect(db.bind)
             if "notificacion_variables" not in inspector.get_table_names():
-                logger.warning("Tabla 'notificacion_variables' no existe, retornando lista vacía")
+                # ✅ Cambiar a debug para reducir verbosidad - es un comportamiento esperado
+                logger.debug("Tabla 'notificacion_variables' no existe, retornando lista vacía (comportamiento esperado)")
                 return []
         except Exception as inspect_error:
-            logger.warning(f"Error verificando existencia de tabla: {inspect_error}, retornando lista vacía")
+            # ✅ Cambiar a debug para reducir verbosidad - es un comportamiento esperado
+            logger.debug(f"Error verificando existencia de tabla: {inspect_error}, retornando lista vacía (comportamiento esperado)")
             return []
 
         query = db.query(NotificacionVariable)
@@ -1400,7 +1402,8 @@ def listar_variables(
         return [v.to_dict() for v in variables]
 
     except ProgrammingError as e:
-        logger.warning(f"Error de base de datos (tabla puede no existir): {e}, retornando lista vacía")
+        # ✅ Cambiar a debug para reducir verbosidad - es un comportamiento esperado
+        logger.debug(f"Error de base de datos (tabla puede no existir): {e}, retornando lista vacía (comportamiento esperado)")
         return []
     except Exception as e:
         logger.error(f"Error listando variables: {e}", exc_info=True)
