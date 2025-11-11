@@ -2503,8 +2503,8 @@ def listar_documentos_ai(
         # Capturar tanto errores de psycopg2 como errores genéricos de SQLAlchemy
         # El error de PostgreSQL es: (psycopg2.errors.UndefinedTable) relation "documentos_ai" does not exist
         is_table_missing = (
-            "does not exist" in error_msg.lower() 
-            or "no such table" in error_msg.lower() 
+            "does not exist" in error_msg.lower()
+            or "no such table" in error_msg.lower()
             or ("relation" in error_msg.lower() and "does not exist" in error_msg.lower())
             or "UndefinedTable" in error_type
             or "UndefinedTable" in error_repr
@@ -2678,8 +2678,8 @@ def obtener_metricas_ai(
             # ✅ Si la tabla no existe, retornar valores por defecto
             # El error de PostgreSQL es: (psycopg2.errors.UndefinedTable) relation "documentos_ai" does not exist
             is_table_missing = (
-                "does not exist" in error_msg.lower() 
-                or "no such table" in error_msg.lower() 
+                "does not exist" in error_msg.lower()
+                or "no such table" in error_msg.lower()
                 or ("relation" in error_msg.lower() and "does not exist" in error_msg.lower())
                 or "UndefinedTable" in error_type
                 or "UndefinedTable" in error_repr
