@@ -233,7 +233,8 @@ def listar_auditoria(
         )
 
         if not tabla_auditoria_existe and not tabla_prestamos_auditoria_existe and not tabla_pagos_auditoria_existe:
-            logger.warning("Ninguna tabla de auditoría existe en BD. Retornando lista vacía.")
+            # ✅ Cambiar a debug para reducir verbosidad - es un comportamiento esperado
+            logger.debug("Ninguna tabla de auditoría existe en BD. Retornando lista vacía (comportamiento esperado).")
             return {
                 "items": [],
                 "total": 0,
@@ -607,7 +608,8 @@ def estadisticas_auditoria(
         tabla_auditoria_existe = "auditoria" in tablas
 
         if not tabla_auditoria_existe:
-            logger.warning("Tabla 'auditoria' no existe en BD. Retornando estadísticas vacías.")
+            # ✅ Cambiar a debug para reducir verbosidad - es un comportamiento esperado
+            logger.debug("Tabla 'auditoria' no existe en BD. Retornando estadísticas vacías (comportamiento esperado).")
             return AuditoriaStatsResponse(
                 total_acciones=0,
                 acciones_por_modulo={},
