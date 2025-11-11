@@ -2497,9 +2497,8 @@ def listar_documentos_ai(
         error_msg = str(e)
         error_type = type(e).__name__
         error_repr = repr(e)
-        logger.error(f"Error listando documentos AI: {e}", exc_info=True)
-
-        # ✅ Verificar si el error es porque la tabla no existe
+        
+        # ✅ Verificar primero si el error es porque la tabla no existe
         # Capturar tanto errores de psycopg2 como errores genéricos de SQLAlchemy
         # El error de PostgreSQL es: (psycopg2.errors.UndefinedTable) relation "documentos_ai" does not exist
         is_table_missing = (
@@ -2519,7 +2518,9 @@ def listar_documentos_ai(
                 "documentos": [],
                 "mensaje": "La tabla de documentos AI no está disponible. Por favor, ejecuta las migraciones de base de datos.",
             }
-
+        
+        # ✅ Solo loguear como error si NO es un error de tabla faltante
+        logger.error(f"Error listando documentos AI: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
