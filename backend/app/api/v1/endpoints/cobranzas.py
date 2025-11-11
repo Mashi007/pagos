@@ -340,34 +340,7 @@ def obtener_clientes_atrasados(
             .join(Prestamo, Prestamo.cedula == Cliente.cedula)
             .join(cuotas_vencidas_subq, cuotas_vencidas_subq.c.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
-<<<<<<< Updated upstream
             .filter(*query_filters)
-=======
-            .filter(
-                Prestamo.estado == "APROBADO",  # Solo préstamos aprobados
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
-            )
-            .filter(
-                or_(
-                    Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
-                    Prestamo.usuario_proponente.is_(None),
-                )
-            )
-            .filter(
-                or_(
-                    User.is_admin.is_(False),
-                    User.is_admin.is_(None),
-                    User.email.is_(None),
-                )
-            )
-            .group_by(
-                Cliente.cedula,
-                Cliente.nombres,
-                Prestamo.usuario_proponente,
-                Prestamo.id,
-            )
->>>>>>> Stashed changes
         )
 
         # Aplicar filtro de User.is_admin solo si incluir_admin=False
@@ -741,7 +714,6 @@ def obtener_resumen_cobranzas(
         )
         logger.info(f"🔍 [resumen_cobranzas] Total cuotas vencidas SIN filtro estado: {total_cuotas_sin_filtro}")
 
-<<<<<<< Updated upstream
         # DIAGNÓSTICO ADICIONAL: Cuotas vencidas por estado de préstamo
         cuotas_por_estado = {}
         for estado_row in estados_prestamos:
@@ -829,72 +801,12 @@ def obtener_resumen_cobranzas(
                     Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
                 ]
             )
-
-=======
-        # DIAGNÓSTICO: Verificar cuotas vencidas con préstamos APROBADO
-        total_cuotas_aprobado = (
-            db.query(func.count(Cuota.id))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
-            )
-            .scalar() or 0
-        )
-        logger.info(f"🔍 [resumen_cobranzas] Total cuotas vencidas con préstamos APROBADO: {total_cuotas_aprobado}")
-
-        # DIAGNÓSTICO: Verificar cuotas vencidas con préstamos APROBADO sin filtro admin
-        total_cuotas_aprobado_sin_admin = (
-            db.query(func.count(Cuota.id))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
-            )
-            .filter(
-                or_(
-                    Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
-                    Prestamo.usuario_proponente.is_(None),
-                )
-            )
-            .scalar() or 0
-        )
-        logger.info(f"🔍 [resumen_cobranzas] Total cuotas vencidas APROBADO sin admin: {total_cuotas_aprobado_sin_admin}")
-
-        # Base query con joins necesarios y filtros
-        # Solo préstamos APROBADO (estado válido para cobranzas)
-        # Remover filtro de admin del usuario_proponente si causa problemas
->>>>>>> Stashed changes
         base_query = (
             db.query(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .join(Cliente, Prestamo.cedula == Cliente.cedula)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
-<<<<<<< Updated upstream
             .filter(*base_filters)
-=======
-            .filter(
-                Prestamo.estado == "APROBADO",  # Solo préstamos aprobados
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
-            )
-            # Excluir admin solo si el usuario tiene is_admin=True
-            .filter(
-                or_(
-                    Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
-                    Prestamo.usuario_proponente.is_(None),
-                )
-            )
-            .filter(
-                or_(
-                    User.is_admin.is_(False),
-                    User.is_admin.is_(None),
-                    User.email.is_(None),  # Si no existe en User, no es admin
-                )
-            )
->>>>>>> Stashed changes
         )
 
         # Aplicar filtro de User.is_admin solo si incluir_admin=False
@@ -918,28 +830,7 @@ def obtener_resumen_cobranzas(
             db.query(func.sum(Cuota.monto_cuota))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
-<<<<<<< Updated upstream
             .filter(*monto_filters)
-=======
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADO",
-            )
-            .filter(
-                or_(
-                    Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
-                    Prestamo.usuario_proponente.is_(None),
-                )
-            )
-            .filter(
-                or_(
-                    User.is_admin.is_(False),
-                    User.is_admin.is_(None),
-                    User.email.is_(None),
-                )
-            )
->>>>>>> Stashed changes
         )
 
         if not incluir_admin:
@@ -954,27 +845,9 @@ def obtener_resumen_cobranzas(
             .filter(
                 Prestamo.estado == "APROBADO",
                 Cuota.fecha_vencimiento < hoy,
-<<<<<<< Updated upstream
                 Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
                 or_(User.is_admin.is_(False), User.is_admin.is_(None)),
-=======
-                Cuota.estado != "PAGADO",
-            )
-            .filter(
-                or_(
-                    Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
-                    Prestamo.usuario_proponente.is_(None),
-                )
-            )
-            .filter(
-                or_(
-                    User.is_admin.is_(False),
-                    User.is_admin.is_(None),
-                    User.email.is_(None),
-                )
->>>>>>> Stashed changes
-            )
         )
         clientes_unicos = clientes_query.scalar() or 0
 
@@ -1016,9 +889,9 @@ def obtener_resumen_cobranzas(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
-# ============================================
+# ==
 # NOTIFICACIONES DE ATRASO (VINCULACIÓN COBRANZAS)
-# ============================================
+# ==
 
 
 @router.post("/notificaciones/atrasos")
@@ -1047,9 +920,9 @@ def disparar_notificaciones_atrasos(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
-# ============================================
+# ==
 # INFORME 1: Clientes Atrasados Completo
-# ============================================
+# ==
 
 
 def _construir_query_clientes_atrasados(db: Session, hoy: date, analista: Optional[str]):
@@ -1084,26 +957,9 @@ def _construir_query_clientes_atrasados(db: Session, hoy: date, analista: Option
         .filter(
             Prestamo.estado == "APROBADO",  # Solo préstamos aprobados
             Cuota.fecha_vencimiento < hoy,
-<<<<<<< Updated upstream
             Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
             Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
             or_(User.is_admin.is_(False), User.is_admin.is_(None)),
-=======
-            Cuota.estado != "PAGADO",
-        )
-        .filter(
-            or_(
-                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
-                Prestamo.usuario_proponente.is_(None),
-            )
-        )
-        .filter(
-            or_(
-                User.is_admin.is_(False),
-                User.is_admin.is_(None),
-                User.email.is_(None),
-            )
->>>>>>> Stashed changes
         )
     )
 
@@ -1198,9 +1054,9 @@ def informe_clientes_atrasados(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
-# ============================================
+# ==
 # INFORME 2: Rendimiento por Analista
-# ============================================
+# ==
 
 
 @router.get("/informes/rendimiento-analista")
@@ -1281,9 +1137,9 @@ def informe_rendimiento_analista(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
-# ============================================
+# ==
 # INFORME 3: Montos Vencidos por Período
-# ============================================
+# ==
 
 
 @router.get("/informes/montos-vencidos-periodo")
@@ -1357,9 +1213,9 @@ def informe_montos_vencidos_periodo(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
-# ============================================
+# ==
 # INFORME 4: Antigüedad de Saldos
-# ============================================
+# ==
 
 
 def _determinar_categoria_dias(dias_diferencia: int) -> Optional[str]:
@@ -1712,9 +1568,9 @@ def informe_antiguedad_saldos(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
-# ============================================
+# ==
 # INFORME 5: Resumen Ejecutivo
-# ============================================
+# ==
 
 
 @router.get("/informes/resumen-ejecutivo")
@@ -1882,9 +1738,9 @@ def informe_resumen_ejecutivo(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
-# ============================================
+# ==
 # FUNCIONES AUXILIARES PARA GENERACIÓN EXCEL
-# ============================================
+# ==
 
 
 def _generar_excel_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
@@ -2168,9 +2024,9 @@ def _generar_excel_resumen_ejecutivo(datos: Dict) -> StreamingResponse:
     )
 
 
-# ============================================
+# ==
 # FUNCIONES AUXILIARES PARA GENERACIÓN PDF
-# ============================================
+# ==
 
 
 def _generar_pdf_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
