@@ -3,7 +3,7 @@ Modelo de Documento AI
 Almacena documentos para contexto de respuestas con ChatGPT
 """
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, Boolean
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.sql import func
 
 from app.db.session import Base
