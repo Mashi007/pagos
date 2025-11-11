@@ -2497,17 +2497,18 @@ def listar_documentos_ai(
         error_msg = str(e)
         error_type = type(e).__name__
         logger.error(f"Error listando documentos AI: {e}", exc_info=True)
-        
+
         # ✅ Verificar si el error es porque la tabla no existe
         # Capturar tanto errores de psycopg2 como errores genéricos de SQLAlchemy
         is_table_missing = (
-            "does not exist" in error_msg.lower() 
-            or "no such table" in error_msg.lower() 
+            "does not exist" in error_msg.lower()
+            or "no such table" in error_msg.lower()
             or "relation" in error_msg.lower()
             or "UndefinedTable" in error_type
-            or "documentos_ai" in error_msg and "does not exist" in error_msg.lower()
+            or "documentos_ai" in error_msg
+            and "does not exist" in error_msg.lower()
         )
-        
+
         if is_table_missing:
             logger.warning("⚠️ Tabla documentos_ai no existe. Se requiere migración de base de datos.")
             return {
@@ -2515,7 +2516,7 @@ def listar_documentos_ai(
                 "documentos": [],
                 "mensaje": "La tabla de documentos AI no está disponible. Por favor, ejecuta las migraciones de base de datos.",
             }
-        
+
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -2666,19 +2667,21 @@ def obtener_metricas_ai(
 
             # Calcular tamaño total
             from sqlalchemy import func
+
             tamaño_total = db.query(func.sum(DocumentoAI.tamaño_bytes)).scalar() or 0
         except Exception as db_error:
             error_msg = str(db_error)
             error_type = type(db_error).__name__
             # ✅ Si la tabla no existe, retornar valores por defecto
             is_table_missing = (
-                "does not exist" in error_msg.lower() 
-                or "no such table" in error_msg.lower() 
+                "does not exist" in error_msg.lower()
+                or "no such table" in error_msg.lower()
                 or "relation" in error_msg.lower()
                 or "UndefinedTable" in error_type
-                or "documentos_ai" in error_msg and "does not exist" in error_msg.lower()
+                or "documentos_ai" in error_msg
+                and "does not exist" in error_msg.lower()
             )
-            
+
             if is_table_missing:
                 logger.warning("⚠️ Tabla documentos_ai no existe. Retornando métricas por defecto.")
                 total_documentos = 0
