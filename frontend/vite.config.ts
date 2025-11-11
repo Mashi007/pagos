@@ -1,6 +1,21 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import type { Plugin } from 'vite'
+
+// Plugin para eliminar modulepreload de chunks pesados (lazy loading)
+function removeHeavyChunksPreload(): Plugin {
+  return {
+    name: 'remove-heavy-chunks-preload',
+    transformIndexHtml(html) {
+      // Eliminar modulepreload para exceljs y pdf-export (carga bajo demanda)
+      return html.replace(
+        /<link rel="modulepreload"[^>]*(exceljs|pdf-export)[^>]*>/gi,
+        ''
+      )
+    },
+  }
+}
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -9,6 +24,7 @@ export default defineConfig({
       // Asegurar que React esté disponible correctamente
       jsxRuntime: 'automatic',
     }),
+    removeHeavyChunksPreload(), // ✅ Eliminar preload de chunks pesados
   ],
   resolve: {
     alias: {
@@ -50,12 +66,13 @@ export default defineConfig({
               return 'router'
             }
             
-            // Librerías pesadas de exportación - cargar solo cuando se necesiten
+            // Librerías pesadas de exportación - LAZY LOADING (cargar solo cuando se necesiten)
+            // Estas librerías NO se incluyen en el bundle inicial, solo se cargan bajo demanda
             if (id.includes('exceljs')) {
-              return 'exceljs'
+              return 'exceljs' // Chunk separado, se carga solo al exportar Excel
             }
-            if (id.includes('jspdf') || id.includes('html2canvas')) {
-              return 'pdf-export'
+            if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('jspdf-autotable')) {
+              return 'pdf-export' // Chunk separado, se carga solo al exportar PDF
             }
             
             // Recharts - separar en chunk propio para lazy loading

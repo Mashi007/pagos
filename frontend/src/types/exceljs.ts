@@ -1,16 +1,19 @@
 /**
  * Tipos y helpers para exceljs (alternativa segura a xlsx)
  * ExcelJS es una librería moderna y segura para trabajar con archivos Excel
+ * 
+ * ✅ OPTIMIZACIÓN: Todos los imports son dinámicos para reducir el bundle inicial
+ * Las librerías se cargan solo cuando se necesitan (lazy loading)
  */
 
-import ExcelJS from 'exceljs'
-
-// Tipo para el módulo exceljs completo
-export interface ExcelJSModule {
-  Workbook: typeof ExcelJS.Workbook
+// Tipo para el módulo exceljs completo (sin import estático)
+// Usamos 'any' para evitar importar el tipo estáticamente y mantener lazy loading
+export type ExcelJSModule = {
+  Workbook: any // El tipo real se infiere en tiempo de ejecución
 }
 
-// Helper para importar exceljs de forma type-safe
+// Helper para importar exceljs de forma type-safe (LAZY LOADING)
+// ✅ CRÍTICO: Este import dinámico asegura que exceljs NO se incluya en el bundle inicial
 export async function importExcelJS(): Promise<ExcelJSModule> {
   const module = await import('exceljs')
   return {
