@@ -2512,7 +2512,8 @@ def listar_documentos_ai(
         )
 
         if is_table_missing:
-            logger.warning("⚠️ Tabla documentos_ai no existe. Se requiere migración de base de datos.")
+            # ✅ Cambiar a debug para reducir verbosidad - es un comportamiento esperado
+            logger.debug("⚠️ Tabla documentos_ai no existe. Se requiere migración de base de datos (comportamiento esperado).")
             return {
                 "total": 0,
                 "documentos": [],
@@ -2687,7 +2688,8 @@ def obtener_metricas_ai(
             )
 
             if is_table_missing:
-                logger.warning("⚠️ Tabla documentos_ai no existe. Retornando métricas por defecto.")
+                # ✅ Cambiar a debug para reducir verbosidad - es un comportamiento esperado
+                logger.debug("⚠️ Tabla documentos_ai no existe. Retornando métricas por defecto (comportamiento esperado).")
                 total_documentos = 0
                 documentos_activos = 0
                 documentos_procesados = 0
