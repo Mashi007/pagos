@@ -33,7 +33,6 @@ import {
   Menu,
   Briefcase,
   Target,
-  FileText,
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
