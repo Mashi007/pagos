@@ -766,6 +766,23 @@ def _consultar_configuracion_email(db: Session) -> Optional[Any]:
         logger.info(f"📊 Configuraciones encontradas: {len(configs)}")
         return configs
     except Exception as query_error:
+        error_str = str(query_error)
+        error_type = type(query_error).__name__
+        # ✅ Verificar si es un error de transacción abortada
+        is_transaction_aborted = (
+            "aborted" in error_str.lower() 
+            or "InFailedSqlTransaction" in error_type
+            or "current transaction is aborted" in error_str.lower()
+        )
+        
+        if is_transaction_aborted:
+            # ✅ Hacer rollback antes de intentar método alternativo
+            try:
+                db.rollback()
+                logger.debug("✅ Rollback realizado antes de método alternativo (transacción abortada)")
+            except Exception as rollback_error:
+                logger.warning(f"⚠️ Error al hacer rollback: {rollback_error}")
+        
         logger.error(f"❌ Error ejecutando consulta de configuración de email: {str(query_error)}", exc_info=True)
         try:
             config_dict = ConfiguracionSistema.obtener_categoria(db, "EMAIL")
@@ -773,7 +790,20 @@ def _consultar_configuracion_email(db: Session) -> Optional[Any]:
                 logger.info(f"✅ Configuración obtenida usando método alternativo: {len(config_dict)} configuraciones")
                 return config_dict
         except Exception as alt_error:
-            logger.error(f"❌ Error en método alternativo también falló: {str(alt_error)}", exc_info=True)
+            # ✅ Si el método alternativo también falla, verificar si es transacción abortada
+            alt_error_str = str(alt_error)
+            alt_error_type = type(alt_error).__name__
+            is_alt_transaction_aborted = (
+                "aborted" in alt_error_str.lower() 
+                or "InFailedSqlTransaction" in alt_error_type
+                or "current transaction is aborted" in alt_error_str.lower()
+            )
+            
+            if is_alt_transaction_aborted:
+                # ✅ Cambiar a debug - es un comportamiento esperado cuando la transacción está abortada
+                logger.debug(f"⚠️ Método alternativo falló por transacción abortada (comportamiento esperado): {str(alt_error)}")
+            else:
+                logger.error(f"❌ Error en método alternativo también falló: {str(alt_error)}", exc_info=True)
         return None
 
 
@@ -1657,6 +1687,23 @@ def _consultar_configuracion_whatsapp(db: Session) -> Optional[Any]:
         logger.info(f"📊 Configuraciones WhatsApp encontradas: {len(configs)}")
         return configs
     except Exception as query_error:
+        error_str = str(query_error)
+        error_type = type(query_error).__name__
+        # ✅ Verificar si es un error de transacción abortada
+        is_transaction_aborted = (
+            "aborted" in error_str.lower() 
+            or "InFailedSqlTransaction" in error_type
+            or "current transaction is aborted" in error_str.lower()
+        )
+        
+        if is_transaction_aborted:
+            # ✅ Hacer rollback antes de intentar método alternativo
+            try:
+                db.rollback()
+                logger.debug("✅ Rollback realizado antes de método alternativo (transacción abortada)")
+            except Exception as rollback_error:
+                logger.warning(f"⚠️ Error al hacer rollback: {rollback_error}")
+        
         logger.error(f"❌ Error ejecutando consulta de configuración de WhatsApp: {str(query_error)}", exc_info=True)
         try:
             config_dict = ConfiguracionSistema.obtener_categoria(db, "WHATSAPP")
@@ -1666,7 +1713,20 @@ def _consultar_configuracion_whatsapp(db: Session) -> Optional[Any]:
                 )
                 return config_dict
         except Exception as alt_error:
-            logger.error(f"❌ Error en método alternativo también falló: {str(alt_error)}", exc_info=True)
+            # ✅ Si el método alternativo también falla, verificar si es transacción abortada
+            alt_error_str = str(alt_error)
+            alt_error_type = type(alt_error).__name__
+            is_alt_transaction_aborted = (
+                "aborted" in alt_error_str.lower() 
+                or "InFailedSqlTransaction" in alt_error_type
+                or "current transaction is aborted" in alt_error_str.lower()
+            )
+            
+            if is_alt_transaction_aborted:
+                # ✅ Cambiar a debug - es un comportamiento esperado cuando la transacción está abortada
+                logger.debug(f"⚠️ Método alternativo falló por transacción abortada (comportamiento esperado): {str(alt_error)}")
+            else:
+                logger.error(f"❌ Error en método alternativo también falló: {str(alt_error)}", exc_info=True)
         return None
 
 
@@ -2344,6 +2404,23 @@ def _consultar_configuracion_ai(db: Session) -> Optional[Any]:
         logger.info(f"📊 Configuraciones AI encontradas: {len(configs)}")
         return configs
     except Exception as query_error:
+        error_str = str(query_error)
+        error_type = type(query_error).__name__
+        # ✅ Verificar si es un error de transacción abortada
+        is_transaction_aborted = (
+            "aborted" in error_str.lower() 
+            or "InFailedSqlTransaction" in error_type
+            or "current transaction is aborted" in error_str.lower()
+        )
+        
+        if is_transaction_aborted:
+            # ✅ Hacer rollback antes de intentar método alternativo
+            try:
+                db.rollback()
+                logger.debug("✅ Rollback realizado antes de método alternativo (transacción abortada)")
+            except Exception as rollback_error:
+                logger.warning(f"⚠️ Error al hacer rollback: {rollback_error}")
+        
         logger.error(f"❌ Error ejecutando consulta de configuración de AI: {str(query_error)}", exc_info=True)
         try:
             config_dict = ConfiguracionSistema.obtener_categoria(db, "AI")
@@ -2351,7 +2428,20 @@ def _consultar_configuracion_ai(db: Session) -> Optional[Any]:
                 logger.info(f"✅ Configuración AI obtenida usando método alternativo: {len(config_dict)} configuraciones")
                 return config_dict
         except Exception as alt_error:
-            logger.error(f"❌ Error en método alternativo también falló: {str(alt_error)}", exc_info=True)
+            # ✅ Si el método alternativo también falla, verificar si es transacción abortada
+            alt_error_str = str(alt_error)
+            alt_error_type = type(alt_error).__name__
+            is_alt_transaction_aborted = (
+                "aborted" in alt_error_str.lower() 
+                or "InFailedSqlTransaction" in alt_error_type
+                or "current transaction is aborted" in alt_error_str.lower()
+            )
+            
+            if is_alt_transaction_aborted:
+                # ✅ Cambiar a debug - es un comportamiento esperado cuando la transacción está abortada
+                logger.debug(f"⚠️ Método alternativo falló por transacción abortada (comportamiento esperado): {str(alt_error)}")
+            else:
+                logger.error(f"❌ Error en método alternativo también falló: {str(alt_error)}", exc_info=True)
         return None
 
 
