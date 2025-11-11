@@ -47,6 +47,9 @@ const Concesionarios = lazy(() => import('@/pages/Concesionarios').then(module =
 const ModelosVehiculos = lazy(() => import('@/pages/ModelosVehiculos').then(module => ({ default: module.ModelosVehiculos })))
 const Usuarios = lazy(() => import('@/pages/Usuarios').then(module => ({ default: module.Usuarios })))
 const Solicitudes = lazy(() => import('@/pages/Solicitudes').then(module => ({ default: module.Solicitudes })))
+const EmbudoClientes = lazy(() => import('@/pages/EmbudoClientes').then(module => ({ default: module.EmbudoClientes })))
+const TicketsAtencion = lazy(() => import('@/pages/TicketsAtencion').then(module => ({ default: module.TicketsAtencion })))
+const EmbudoConcesionarios = lazy(() => import('@/pages/EmbudoConcesionarios').then(module => ({ default: module.EmbudoConcesionarios })))
 
 // Todas las páginas ahora están importadas desde archivos reales
 
@@ -285,6 +288,11 @@ function App() {
               </SimpleProtectedRoute>
             }
           />
+
+          {/* CRM */}
+          <Route path="crm/embudo-clientes" element={<EmbudoClientes />} />
+          <Route path="crm/tickets" element={<TicketsAtencion />} />
+          <Route path="crm/embudo-concesionarios" element={<EmbudoConcesionarios />} />
 
           {/* 404 para rutas no encontradas */}
           <Route path="*" element={<NotFound />} />

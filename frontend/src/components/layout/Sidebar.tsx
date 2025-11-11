@@ -31,6 +31,9 @@ import {
   User,
   LogOut,
   Menu,
+  Briefcase,
+  GitBranch,
+  Ticket,
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -146,6 +149,16 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
     },
     {
+      title: 'CRM',
+      icon: Briefcase,
+      isSubmenu: true,
+      children: [
+        { title: 'Embudo Clientes', href: '/crm/embudo-clientes', icon: GitBranch },
+        { title: 'Tickets Atención', href: '/crm/tickets', icon: Ticket },
+        { title: 'Embudo Concesionarios', href: '/crm/embudo-concesionarios', icon: Building },
+      ],
+    },
+    {
       title: 'Herramientas',
       icon: Wrench,
       isSubmenu: true,
@@ -172,6 +185,30 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       ],
     },
   ]
+
+  // Abrir automáticamente el submenú si alguna de sus rutas está activa
+  useEffect(() => {
+    const pathname = location.pathname
+    menuItems.forEach((item) => {
+      if (item.isSubmenu && item.children) {
+        const hasActiveChild = item.children.some((child) => {
+          if (!child.href) return false
+          if (child.href.includes('?')) {
+            return `${pathname}${location.search}` === child.href
+          }
+          return pathname === child.href || (pathname.startsWith(child.href) && child.href !== '/')
+        })
+        if (hasActiveChild) {
+          setOpenSubmenus((prev) => {
+            if (!prev.includes(item.title)) {
+              return [...prev, item.title]
+            }
+            return prev
+          })
+        }
+      }
+    })
+  }, [location.pathname, location.search])
 
   // TEMPORAL: Mostrar todos los elementos del menú sin filtros de permisos
   const filteredMenuItems = menuItems.filter((item) => {
