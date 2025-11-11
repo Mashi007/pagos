@@ -119,10 +119,15 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       icon: Briefcase,
       isSubmenu: true,
       children: [
-        { title: 'Embudo Clientes', href: '/crm/embudo-clientes', icon: Target },
+        { title: 'Venta Servicios', href: '/crm/embudo-clientes', icon: Target },
         { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
-        { title: 'Embudo Concesionarios', href: '/crm/embudo-concesionarios', icon: Building },
-        { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
+        { title: 'Seguimiento Concesionarios', href: '/crm/embudo-concesionarios', icon: Building },
+        { 
+          title: 'Notificaciones', 
+          href: '/notificaciones', 
+          icon: Bell,
+          badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
+        },
       ],
     },
     {
@@ -151,12 +156,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       title: 'Auditoría',
       href: '/auditoria',
       icon: Shield,
-    },
-    {
-      title: 'Notificaciones',
-      href: '/notificaciones',
-      icon: Bell,
-      badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
     },
     {
       title: 'Herramientas',

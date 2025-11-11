@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Search,
-  Filter,
   Plus,
   Eye,
   Edit,
@@ -22,10 +22,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { formatCurrency, formatDate } from '@/utils'
 import { useClientes, useSearchClientes } from '@/hooks/useClientes'
+import { usePrestamos } from '@/hooks/usePrestamos'
 import { Cliente } from '@/types'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 
@@ -96,6 +96,7 @@ const mapearEstadoEmbudo = (cliente: Cliente): string => {
 }
 
 export function EmbudoClientes() {
+  const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [searchCliente, setSearchCliente] = useState('')
@@ -108,12 +109,17 @@ export function EmbudoClientes() {
     1000 // Obtener muchos clientes para el embudo
   )
 
+  // Obtener préstamos para vincular concesionarios
+  const { data: prestamosData } = usePrestamos(undefined, 1, 1000)
+
   // Búsqueda de clientes para agregar
   const { data: clientesBuscados = [], isLoading: isLoadingSearch } = useSearchClientes(searchCliente)
 
   // Convertir clientes a formato del embudo
   const clientesEmbudo = useMemo(() => {
     if (!clientesData?.data) return []
+    
+    const prestamos = prestamosData?.data || []
     
     // Combinar clientes de la API con clientes agregados manualmente
     const todosClientes = [...clientesData.data]
@@ -123,18 +129,24 @@ export function EmbudoClientes() {
       }
     })
 
-    return todosClientes.map(cliente => ({
-      id: cliente.id,
-      nombre: `${cliente.nombres} ${cliente.apellidos}`,
-      cedula: cliente.cedula,
-      telefono: cliente.telefono || 'N/A',
-      estado: mapearEstadoEmbudo(cliente),
-      montoSolicitado: cliente.total_financiamiento || cliente.monto_financiado || 0,
-      fechaIngreso: new Date(cliente.fecha_registro),
-      concesionario: 'N/A', // TODO: Obtener del préstamo si existe
-      cliente: cliente, // Guardar referencia al cliente completo
-    }))
-  }, [clientesData, clientesEnEmbudo])
+    return todosClientes.map(cliente => {
+      // Buscar préstamo del cliente para obtener concesionario
+      const prestamoCliente = prestamos.find(p => p.cliente_id === cliente.id)
+      const concesionario = prestamoCliente?.concesionario || 'N/A'
+      
+      return {
+        id: cliente.id,
+        nombre: `${cliente.nombres} ${cliente.apellidos}`,
+        cedula: cliente.cedula,
+        telefono: cliente.telefono || 'N/A',
+        estado: mapearEstadoEmbudo(cliente),
+        montoSolicitado: prestamoCliente?.total_financiamiento || cliente.total_financiamiento || cliente.monto_financiado || 0,
+        fechaIngreso: new Date(cliente.fecha_registro),
+        concesionario: concesionario,
+        cliente: cliente, // Guardar referencia al cliente completo
+      }
+    })
+  }, [clientesData, clientesEnEmbudo, prestamosData])
 
   const clientesFiltrados = clientesEmbudo.filter(cliente => {
     const matchSearch =
@@ -186,12 +198,17 @@ export function EmbudoClientes() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
             <Target className="h-8 w-8 text-blue-600" />
-            Embudo de Clientes
+            Venta Servicios
           </h1>
           <p className="text-gray-600 mt-1">
-            Seguimiento de personas que requieren préstamos
+            Gestión de ventas y servicios
           </p>
         </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/clientes')}>
+            <Users className="h-4 w-4 mr-2" />
+            Ver Todos los Clientes
+          </Button>
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
           <DialogTrigger asChild>
             <Button>
@@ -359,6 +376,7 @@ export function EmbudoClientes() {
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             whileHover={{ scale: 1.02 }}
+                            onClick={() => navigate(`/clientes/${cliente.id}`)}
                             className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer"
                           >
                             <div className="space-y-3">
@@ -372,7 +390,11 @@ export function EmbudoClientes() {
                                     variant="ghost" 
                                     size="icon" 
                                     className="h-7 w-7"
-                                    onClick={() => window.open(`/clientes/${cliente.id}`, '_blank')}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      navigate(`/clientes/${cliente.id}`)
+                                    }}
+                                    title="Ver detalles del cliente"
                                   >
                                     <Eye className="h-3.5 w-3.5" />
                                   </Button>
@@ -380,7 +402,11 @@ export function EmbudoClientes() {
                                     variant="ghost" 
                                     size="icon" 
                                     className="h-7 w-7"
-                                    onClick={() => window.open(`/clientes/${cliente.id}`, '_blank')}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      navigate(`/clientes/${cliente.id}?edit=true`)
+                                    }}
+                                    title="Editar cliente"
                                   >
                                     <Edit className="h-3.5 w-3.5" />
                                   </Button>
@@ -389,7 +415,11 @@ export function EmbudoClientes() {
                                       variant="ghost" 
                                       size="icon" 
                                       className="h-7 w-7 text-red-600 hover:text-red-700"
-                                      onClick={() => handleEliminarCliente(cliente.id)}
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleEliminarCliente(cliente.id)
+                                      }}
+                                      title="Remover del embudo"
                                     >
                                       <X className="h-3.5 w-3.5" />
                                     </Button>
