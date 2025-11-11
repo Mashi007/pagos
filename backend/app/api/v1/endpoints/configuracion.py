@@ -2494,7 +2494,18 @@ def listar_documentos_ai(
             "documentos": [doc.to_dict() for doc in documentos],
         }
     except Exception as e:
-        logger.error(f"Error listando documentos AI: {e}")
+        error_msg = str(e)
+        logger.error(f"Error listando documentos AI: {e}", exc_info=True)
+        
+        # ✅ Verificar si el error es porque la tabla no existe
+        if "does not exist" in error_msg.lower() or "no such table" in error_msg.lower() or "relation" in error_msg.lower():
+            logger.warning("⚠️ Tabla documentos_ai no existe. Se requiere migración de base de datos.")
+            return {
+                "total": 0,
+                "documentos": [],
+                "mensaje": "La tabla de documentos AI no está disponible. Por favor, ejecuta las migraciones de base de datos.",
+            }
+        
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -2637,15 +2648,27 @@ def obtener_metricas_ai(
         raise HTTPException(status_code=403, detail="Solo administradores pueden ver métricas de AI")
 
     try:
-        # Contar documentos
-        total_documentos = db.query(DocumentoAI).count()
-        documentos_activos = db.query(DocumentoAI).filter(DocumentoAI.activo == True).count()
-        documentos_procesados = db.query(DocumentoAI).filter(DocumentoAI.contenido_procesado == True).count()
+        # ✅ Intentar contar documentos con manejo de errores
+        try:
+            total_documentos = db.query(DocumentoAI).count()
+            documentos_activos = db.query(DocumentoAI).filter(DocumentoAI.activo == True).count()
+            documentos_procesados = db.query(DocumentoAI).filter(DocumentoAI.contenido_procesado == True).count()
 
-        # Calcular tamaño total
-        from sqlalchemy import func
-
-        tamaño_total = db.query(func.sum(DocumentoAI.tamaño_bytes)).scalar() or 0
+            # Calcular tamaño total
+            from sqlalchemy import func
+            tamaño_total = db.query(func.sum(DocumentoAI.tamaño_bytes)).scalar() or 0
+        except Exception as db_error:
+            error_msg = str(db_error)
+            # ✅ Si la tabla no existe, retornar valores por defecto
+            if "does not exist" in error_msg.lower() or "no such table" in error_msg.lower() or "relation" in error_msg.lower():
+                logger.warning("⚠️ Tabla documentos_ai no existe. Retornando métricas por defecto.")
+                total_documentos = 0
+                documentos_activos = 0
+                documentos_procesados = 0
+                tamaño_total = 0
+            else:
+                # Re-lanzar si es otro tipo de error
+                raise
 
         # Verificar configuración
         config_ai = _consultar_configuracion_ai(db)
@@ -2676,8 +2699,10 @@ def obtener_metricas_ai(
             "fecha_consulta": datetime.now().isoformat(),
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error obteniendo métricas AI: {e}")
+        logger.error(f"Error obteniendo métricas AI: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
