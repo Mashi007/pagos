@@ -625,6 +625,31 @@ def calcular_notificaciones_prejudiciales_job():
         clientes_procesados = set()
         tipo_notificacion = "PREJUDICIAL"
 
+        # ✅ Verificar plantilla UNA VEZ al inicio (más eficiente)
+        plantilla = (
+            db.query(NotificacionPlantilla)
+            .filter(NotificacionPlantilla.tipo == tipo_notificacion, NotificacionPlantilla.activa.is_(True))
+            .first()
+        )
+
+        if not plantilla:
+            logger.warning(
+                f"⚠️ No hay plantilla activa para tipo {tipo_notificacion}. "
+                f"Se encontraron {len(resultados)} clientes elegibles, pero no se enviarán notificaciones. "
+                f"Por favor, crea y activa una plantilla para {tipo_notificacion} en la configuración de notificaciones."
+            )
+            db.close()
+            return
+
+        # ✅ Verificar si el envío está habilitado UNA VEZ al inicio
+        if not _verificar_envio_habilitado(db, tipo_notificacion):
+            logger.info(
+                f"⏸️ Envío de {tipo_notificacion} está deshabilitado. "
+                f"Se encontraron {len(resultados)} clientes elegibles, pero no se enviarán notificaciones."
+            )
+            db.close()
+            return
+
         # Procesar con delays para evitar colisiones
         total_resultados = len(resultados)
         import time
@@ -648,27 +673,10 @@ def calcular_notificaciones_prejudiciales_job():
                     f"📊 Progreso: {indice}/{total_resultados} emails procesados ({enviadas} enviadas, {fallidas} fallidas)"
                 )
 
-            # Verificar si el envío está habilitado
-            if not _verificar_envio_habilitado(db, tipo_notificacion):
-                logger.info(f"⏸️ Envío de {tipo_notificacion} está deshabilitado, saltando cliente {cliente_id}...")
-                continue
-
             # Verificar que el cliente tenga email
             if not correo_cliente:
-                logger.warning(f"⚠️ Cliente {cliente_id} no tiene email registrado, saltando...")
+                # ✅ Solo contar, no loguear cada uno (reducir verbosidad)
                 sin_email += 1
-                continue
-
-            # Buscar plantilla activa para este tipo
-            plantilla = (
-                db.query(NotificacionPlantilla)
-                .filter(NotificacionPlantilla.tipo == tipo_notificacion, NotificacionPlantilla.activa.is_(True))
-                .first()
-            )
-
-            if not plantilla:
-                logger.warning(f"⚠️ No hay plantilla activa para tipo {tipo_notificacion}, saltando cliente {cliente_id}...")
-                sin_plantilla += 1
                 continue
 
             # Construir variables desde el resultado
@@ -731,7 +739,7 @@ def calcular_notificaciones_prejudiciales_job():
 
         logger.info(
             f"✅ [Scheduler] Prejudiciales completado: "
-            f"{enviadas} enviadas, {fallidas} fallidas, {sin_plantilla} sin plantilla, {sin_email} sin email"
+            f"{enviadas} enviadas, {fallidas} fallidas, {sin_email} sin email"
         )
 
     except Exception as e:
