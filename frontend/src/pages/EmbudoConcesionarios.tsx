@@ -2,32 +2,25 @@ import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import {
   Search,
-  Filter,
   Plus,
   Eye,
   Edit,
   Building,
   Users,
-  TrendingUp,
   Clock,
   CheckCircle,
   XCircle,
   AlertCircle,
   Car,
   DollarSign,
-  Phone,
-  Mail,
-  X,
   Link,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { formatCurrency, formatDate } from '@/utils'
-import { useConcesionarios, useConcesionariosActivos } from '@/hooks/useConcesionarios'
+import { useConcesionarios } from '@/hooks/useConcesionarios'
 import { usePrestamos } from '@/hooks/usePrestamos'
 import { useClientes } from '@/hooks/useClientes'
 import { Concesionario } from '@/services/concesionarioService'
@@ -96,12 +89,9 @@ export function EmbudoConcesionarios() {
   const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
   const [concesionarioSeleccionado, setConcesionarioSeleccionado] = useState<number | null>(null)
-  const [showAddDialog, setShowAddDialog] = useState(false)
-  const [searchConcesionario, setSearchConcesionario] = useState('')
 
   // Obtener concesionarios reales
   const { data: concesionariosData, isLoading: isLoadingConcesionarios } = useConcesionarios({ limit: 1000 })
-  const { data: concesionariosActivos = [] } = useConcesionariosActivos()
 
   // Obtener todos los préstamos para calcular estadísticas
   const { data: prestamosData, isLoading: isLoadingPrestamos } = usePrestamos(
@@ -212,20 +202,6 @@ export function EmbudoConcesionarios() {
 
     return Array.from(clientesMap.values())
   }, [concesionarioDetalle, clientes])
-
-  // Filtrar concesionarios para el diálogo de agregar
-  const concesionariosParaAgregar = useMemo(() => {
-    if (!searchConcesionario) return []
-    return concesionariosActivos.filter(c =>
-      c.nombre.toLowerCase().includes(searchConcesionario.toLowerCase())
-    )
-  }, [concesionariosActivos, searchConcesionario])
-
-  const handleAgregarConcesionario = (concesionario: Concesionario) => {
-    // El concesionario ya está en la lista, solo cerrar el diálogo
-    setShowAddDialog(false)
-    setSearchConcesionario('')
-  }
 
   if (isLoadingConcesionarios || isLoadingPrestamos) {
     return (
