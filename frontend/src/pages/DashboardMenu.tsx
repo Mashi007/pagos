@@ -1276,6 +1276,7 @@ export function DashboardMenu() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">
+<<<<<<< Updated upstream
                     {(loadingEvolucionMorosidad || loadingEvolucionPagos) ? (
                       <div className="h-[450px] flex items-center justify-center">
                         <div className="animate-pulse text-gray-400">Cargando...</div>
@@ -1379,6 +1380,49 @@ export function DashboardMenu() {
                           />
                         </RechartsLineChart>
                       </ResponsiveContainer>
+=======
+                    {loadingConcesionarios ? (
+                      <div className="h-[400px] flex items-center justify-center">
+                        <div className="animate-pulse text-gray-400">Cargando...</div>
+                      </div>
+                    ) : datosConcesionarios && datosConcesionarios.length > 0 ? (
+                      <div className="relative">
+                        <ResponsiveContainer width="100%" height={400}>
+                          <RechartsPieChart>
+                            <Pie
+                              data={datosConcesionarios.map((c) => ({
+                                name: c.concesionario.length > 20 ? c.concesionario.substring(0, 20) + '...' : c.concesionario,
+                                value: c.porcentaje,
+                                total: c.total_prestamos,
+                                fullName: c.concesionario,
+                              }))}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={true}
+                              label={({ name, percent }) => {
+                                const labelText = `${name}: ${(percent * 100).toFixed(1)}%`
+                                return labelText
+                              }}
+                              outerRadius={120}
+                              innerRadius={70}
+                              fill="#8884d8"
+                              dataKey="value"
+                              paddingAngle={2}
+                            >
+                              {datosConcesionarios.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip 
+                              formatter={(value: number, name: string, props: any) => {
+                                const fullName = props.payload?.fullName || props.payload?.name || name
+                                return [`${fullName}: ${(value as number).toFixed(1)}%`, 'Porcentaje']
+                              }}
+                            />
+                          </RechartsPieChart>
+                        </ResponsiveContainer>
+                      </div>
+>>>>>>> Stashed changes
                     ) : (
                       <div className="h-[450px] flex items-center justify-center text-gray-400">
                         No hay datos disponibles
@@ -2167,7 +2211,11 @@ export function DashboardMenu() {
                         </div>
                       </div>
                     ) : (
+<<<<<<< Updated upstream
                       <div className="h-[450px] flex items-center justify-center text-gray-400">
+=======
+                      <div className="h-[350px] flex items-center justify-center text-gray-400">
+>>>>>>> Stashed changes
                         No hay datos disponibles
                       </div>
                     )}

@@ -164,6 +164,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Validadores', href: '/validadores', icon: CheckCircle },
         { title: 'Configuración Email', href: '/configuracion?tab=email', icon: Mail },
         { title: 'Configuración WhatsApp', href: '/configuracion?tab=whatsapp', icon: MessageSquare },
+        { title: 'Configuración AI', href: '/configuracion?tab=ai', icon: Brain },
         { title: 'Analistas', href: '/analistas', icon: Users },
         { title: 'Concesionarios', href: '/concesionarios', icon: Building },
         { title: 'Modelos de Vehículos', href: '/modelos-vehiculos', icon: Car },

@@ -1,15 +1,17 @@
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.configuracion_sistema import ConfiguracionSistema
+from app.models.documento_ai import DocumentoAI
 from app.models.prestamo import Prestamo
 from app.models.user import User
 
@@ -2317,3 +2319,527 @@ def obtener_estadisticas_sistema(db: Session = Depends(get_db), current_user: Us
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
+
+# ============================================
+# CONFIGURACIÓN DE AI (CHATGPT)
+# ============================================
+
+
+def _obtener_valores_ai_por_defecto() -> Dict[str, str]:
+    """Retorna valores por defecto para configuración de AI"""
+    return {
+        "openai_api_key": "",
+        "modelo": "gpt-3.5-turbo",
+        "temperatura": "0.7",
+        "max_tokens": "1000",
+        "activo": "false",
+    }
+
+
+def _consultar_configuracion_ai(db: Session) -> Optional[Any]:
+    """Intenta consultar configuración de AI desde BD"""
+    try:
+        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "AI").all()
+        logger.info(f"📊 Configuraciones AI encontradas: {len(configs)}")
+        return configs
+    except Exception as query_error:
+        logger.error(f"❌ Error ejecutando consulta de configuración de AI: {str(query_error)}", exc_info=True)
+        try:
+            config_dict = ConfiguracionSistema.obtener_categoria(db, "AI")
+            if config_dict:
+                logger.info(f"✅ Configuración AI obtenida usando método alternativo: {len(config_dict)} configuraciones")
+                return config_dict
+        except Exception as alt_error:
+            logger.error(f"❌ Error en método alternativo también falló: {str(alt_error)}", exc_info=True)
+        return None
+
+
+def _procesar_configuraciones_ai(configs: list) -> Dict[str, Any]:
+    """Procesa una lista de configuraciones AI y retorna un diccionario"""
+    config_dict = {}
+    for config in configs:
+        try:
+            if hasattr(config, "clave") and config.clave:
+                valor = config.valor if hasattr(config, "valor") and config.valor is not None else ""
+                config_dict[config.clave] = valor
+                logger.debug(f"📝 Configuración AI: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
+            else:
+                logger.warning(f"⚠️ Configuración AI sin clave válida: {config}")
+        except Exception as config_error:
+            logger.error(f"❌ Error procesando configuración AI individual: {config_error}", exc_info=True)
+            continue
+    return config_dict
+
+
+@router.get("/ai/configuracion")
+def obtener_configuracion_ai(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Obtener configuración de AI"""
+    try:
+        logger.info(f"🤖 Obteniendo configuración de AI - Usuario: {getattr(current_user, 'email', 'N/A')}")
+
+        if not getattr(current_user, "is_admin", False):
+            logger.warning(
+                f"⚠️ Usuario no autorizado intentando acceder a configuración de AI: {getattr(current_user, 'email', 'N/A')}"
+            )
+            raise HTTPException(status_code=403, detail="Solo administradores pueden ver configuración de AI")
+
+        logger.info("🔍 Consultando configuración de AI desde BD...")
+        configs = _consultar_configuracion_ai(db)
+
+        if configs is None:
+            logger.warning("⚠️ No se pudo obtener configuración de BD, retornando valores por defecto")
+            return _obtener_valores_ai_por_defecto()
+
+        if isinstance(configs, dict):
+            return configs
+
+        if not configs:
+            logger.info("📝 Retornando valores por defecto de AI (no hay configuraciones en BD)")
+            return _obtener_valores_ai_por_defecto()
+
+        config_dict = _procesar_configuraciones_ai(configs)
+        logger.info(f"✅ Configuración de AI obtenida exitosamente: {len(config_dict)} configuraciones")
+        return config_dict
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error obteniendo configuración de AI: {str(e)}", exc_info=True)
+        logger.warning("⚠️ Retornando valores por defecto debido a error")
+        return _obtener_valores_ai_por_defecto()
+
+
+@router.put("/ai/configuracion")
+def actualizar_configuracion_ai(
+    config_data: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Actualizar configuración de AI"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden actualizar configuración",
+        )
+
+    try:
+        configuraciones = []
+        for clave, valor in config_data.items():
+            config = (
+                db.query(ConfiguracionSistema)
+                .filter(
+                    ConfiguracionSistema.categoria == "AI",
+                    ConfiguracionSistema.clave == clave,
+                )
+                .first()
+            )
+
+            if config:
+                config.valor = str(valor)  # type: ignore[assignment]
+                configuraciones.append(config)  # type: ignore[arg-type]
+            else:
+                nueva_config = ConfiguracionSistema(
+                    categoria="AI",
+                    clave=clave,
+                    valor=str(valor),
+                    tipo_dato="STRING" if clave != "activo" else "BOOLEAN",
+                    visible_frontend=True,
+                )
+                db.add(nueva_config)
+                configuraciones.append(nueva_config)
+
+        db.commit()
+
+        logger.info(f"Configuración de AI actualizada por {current_user.email}")
+
+        return {
+            "mensaje": "Configuración de AI actualizada exitosamente",
+            "configuraciones_actualizadas": len(configuraciones),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando configuración de AI: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+# ============================================
+# GESTIÓN DE DOCUMENTOS AI
+# ============================================
+
+
+@router.get("/ai/documentos")
+def listar_documentos_ai(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    activo: Optional[bool] = None,
+):
+    """Listar todos los documentos AI"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden ver documentos AI")
+
+    try:
+        query = db.query(DocumentoAI)
+        
+        if activo is not None:
+            query = query.filter(DocumentoAI.activo == activo)
+        
+        documentos = query.order_by(DocumentoAI.creado_en.desc()).all()
+        
+        return {
+            "total": len(documentos),
+            "documentos": [doc.to_dict() for doc in documentos],
+        }
+    except Exception as e:
+        logger.error(f"Error listando documentos AI: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.post("/ai/documentos")
+async def crear_documento_ai(
+    titulo: str = Form(...),
+    descripcion: Optional[str] = Form(None),
+    archivo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Crear nuevo documento AI"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden crear documentos AI")
+
+    try:
+        import os
+        from pathlib import Path
+
+        # Validar tipo de archivo
+        tipos_permitidos = ["application/pdf", "text/plain", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+        extensiones_permitidas = {".pdf": "pdf", ".txt": "txt", ".docx": "docx"}
+        
+        tipo_archivo = archivo.content_type
+        if tipo_archivo not in tipos_permitidos:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tipo de archivo no permitido. Tipos permitidos: PDF, TXT, DOCX",
+            )
+
+        # Obtener extensión
+        nombre_archivo_original = archivo.filename or "documento"
+        extension = Path(nombre_archivo_original).suffix.lower()
+        if extension not in extensiones_permitidas:
+            raise HTTPException(status_code=400, detail=f"Extensión de archivo no permitida: {extension}")
+
+        tipo_archivo_db = extensiones_permitidas[extension]
+
+        # Crear directorio de almacenamiento si no existe
+        upload_dir = Path("uploads/documentos_ai")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generar nombre único para el archivo
+        import uuid
+        nombre_unico = f"{uuid.uuid4()}{extension}"
+        ruta_archivo = upload_dir / nombre_unico
+
+        # Guardar archivo
+        contenido = await archivo.read()
+        tamaño_bytes = len(contenido)
+        
+        with open(ruta_archivo, "wb") as f:
+            f.write(contenido)
+
+        # Crear registro en BD
+        nuevo_documento = DocumentoAI(
+            titulo=titulo,
+            descripcion=descripcion,
+            nombre_archivo=nombre_archivo_original,
+            tipo_archivo=tipo_archivo_db,
+            ruta_archivo=str(ruta_archivo),
+            tamaño_bytes=tamaño_bytes,
+            contenido_procesado=False,
+            activo=True,
+        )
+
+        db.add(nuevo_documento)
+        db.commit()
+        db.refresh(nuevo_documento)
+
+        logger.info(f"✅ Documento AI creado: {titulo} ({nombre_archivo_original})")
+
+        return {
+            "mensaje": "Documento creado exitosamente",
+            "documento": nuevo_documento.to_dict(),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creando documento AI: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.delete("/ai/documentos/{documento_id}")
+def eliminar_documento_ai(
+    documento_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Eliminar documento AI"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar documentos AI")
+
+    try:
+        documento = db.query(DocumentoAI).filter(DocumentoAI.id == documento_id).first()
+        
+        if not documento:
+            raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+        # Eliminar archivo físico
+        import os
+        from pathlib import Path
+        
+        if documento.ruta_archivo and Path(documento.ruta_archivo).exists():
+            try:
+                os.remove(documento.ruta_archivo)
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo eliminar archivo físico: {e}")
+
+        # Eliminar de BD
+        db.delete(documento)
+        db.commit()
+
+        logger.info(f"✅ Documento AI eliminado: {documento.titulo}")
+
+        return {"mensaje": "Documento eliminado exitosamente"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error eliminando documento AI: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/ai/metricas")
+def obtener_metricas_ai(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener métricas de uso de AI"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden ver métricas de AI")
+
+    try:
+        # Contar documentos
+        total_documentos = db.query(DocumentoAI).count()
+        documentos_activos = db.query(DocumentoAI).filter(DocumentoAI.activo == True).count()
+        documentos_procesados = db.query(DocumentoAI).filter(DocumentoAI.contenido_procesado == True).count()
+        
+        # Calcular tamaño total
+        from sqlalchemy import func
+        tamaño_total = db.query(func.sum(DocumentoAI.tamaño_bytes)).scalar() or 0
+        
+        # Verificar configuración
+        config_ai = _consultar_configuracion_ai(db)
+        config_dict = _procesar_configuraciones_ai(config_ai) if config_ai and not isinstance(config_ai, dict) else (config_ai if isinstance(config_ai, dict) else {})
+        
+        ai_activo = config_dict.get("activo", "false").lower() in ("true", "1", "yes", "on")
+        modelo_configurado = config_dict.get("modelo", "")
+        tiene_token = bool(config_dict.get("openai_api_key", ""))
+
+        return {
+            "documentos": {
+                "total": total_documentos,
+                "activos": documentos_activos,
+                "procesados": documentos_procesados,
+                "pendientes": total_documentos - documentos_procesados,
+                "tamaño_total_bytes": tamaño_total,
+                "tamaño_total_mb": round(tamaño_total / (1024 * 1024), 2),
+            },
+            "configuracion": {
+                "ai_activo": ai_activo,
+                "modelo": modelo_configurado,
+                "tiene_token": tiene_token,
+            },
+            "fecha_consulta": datetime.now().isoformat(),
+        }
+
+    except Exception as e:
+        logger.error(f"Error obteniendo métricas AI: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+class ProbarAIRequest(BaseModel):
+    pregunta: Optional[str] = None
+    usar_documentos: Optional[bool] = True
+
+
+@router.post("/ai/probar")
+async def probar_configuracion_ai(
+    request: Optional[ProbarAIRequest] = Body(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Probar configuración de AI enviando una pregunta a ChatGPT
+    
+    Args:
+        request: Objeto con pregunta opcional. Si no se proporciona, se usa una pregunta por defecto.
+        usar_documentos: Si True, busca contexto en documentos cargados
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden probar configuración de AI",
+        )
+
+    try:
+        # Obtener configuración
+        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "AI").all()
+
+        if not configs:
+            raise HTTPException(status_code=400, detail="No hay configuración de AI")
+
+        config_dict = {config.clave: config.valor for config in configs}
+        
+        # Verificar que haya token configurado
+        openai_api_key = config_dict.get("openai_api_key", "")
+        if not openai_api_key:
+            raise HTTPException(status_code=400, detail="OpenAI API Key no configurado")
+
+        # Obtener pregunta
+        pregunta = None
+        usar_documentos = True
+        if request:
+            if isinstance(request, dict):
+                pregunta = request.get("pregunta")
+                usar_documentos = request.get("usar_documentos", True)
+            elif hasattr(request, "pregunta"):
+                pregunta = request.pregunta
+                usar_documentos = getattr(request, "usar_documentos", True)
+
+        # Pregunta por defecto si no se proporciona
+        if not pregunta or not pregunta.strip():
+            pregunta = "Hola, ¿puedes ayudarme con información sobre préstamos?"
+
+        # Obtener modelo y parámetros
+        modelo = config_dict.get("modelo", "gpt-3.5-turbo")
+        temperatura = float(config_dict.get("temperatura", "0.7"))
+        max_tokens = int(config_dict.get("max_tokens", "1000"))
+
+        # Buscar contexto en documentos si está habilitado
+        contexto_documentos = ""
+        if usar_documentos:
+            documentos_activos = (
+                db.query(DocumentoAI)
+                .filter(DocumentoAI.activo == True, DocumentoAI.contenido_procesado == True)
+                .limit(5)
+                .all()
+            )
+            
+            if documentos_activos:
+                # Por ahora, solo usar títulos y descripciones
+                # En el futuro, se implementará búsqueda semántica con embeddings
+                contextos = []
+                for doc in documentos_activos:
+                    if doc.titulo:
+                        contextos.append(f"- {doc.titulo}")
+                    if doc.descripcion:
+                        contextos.append(f"  {doc.descripcion}")
+                
+                if contextos:
+                    contexto_documentos = "\n\nDocumentos disponibles:\n" + "\n".join(contextos[:3])  # Limitar a 3 documentos
+
+        # Construir prompt con contexto
+        prompt = pregunta
+        if contexto_documentos:
+            prompt = f"{pregunta}\n\n{contexto_documentos}\n\nResponde basándote en la información disponible."
+
+        # Llamar a OpenAI API
+        import httpx
+        
+        start_time = time.time()
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {openai_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": modelo,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "Eres un asistente útil que responde preguntas sobre préstamos y servicios financieros. Responde de manera clara y profesional."
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        "temperature": temperatura,
+                        "max_tokens": max_tokens,
+                    },
+                )
+
+                elapsed_time = time.time() - start_time
+
+                if response.status_code == 200:
+                    result = response.json()
+                    respuesta_ai = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    tokens_usados = result.get("usage", {}).get("total_tokens", 0)
+
+                    logger.info(f"✅ Prueba de AI exitosa: {tokens_usados} tokens usados en {elapsed_time:.2f}s")
+
+                    return {
+                        "success": True,
+                        "mensaje": "Respuesta generada exitosamente",
+                        "pregunta": pregunta,
+                        "respuesta": respuesta_ai,
+                        "tokens_usados": tokens_usados,
+                        "modelo_usado": modelo,
+                        "tiempo_respuesta": round(elapsed_time, 2),
+                        "usar_documentos": usar_documentos,
+                        "documentos_consultados": len(documentos_activos) if usar_documentos else 0,
+                    }
+                else:
+                    error_data = response.json() if response.content else {}
+                    error_message = error_data.get("error", {}).get("message", "Error desconocido")
+                    
+                    logger.error(f"❌ Error en prueba de AI: {error_message}")
+                    
+                    return {
+                        "success": False,
+                        "mensaje": f"Error de OpenAI: {error_message}",
+                        "error_code": error_data.get("error", {}).get("code", "UNKNOWN"),
+                        "pregunta": pregunta,
+                    }
+
+        except httpx.TimeoutException:
+            elapsed_time = time.time() - start_time
+            logger.error(f"⏱️ Timeout en prueba de AI (Tiempo: {elapsed_time:.2f}s)")
+            return {
+                "success": False,
+                "mensaje": f"Timeout al conectar con OpenAI (límite: 30s)",
+                "error_code": "TIMEOUT",
+                "pregunta": pregunta,
+            }
+        except Exception as e:
+            elapsed_time = time.time() - start_time
+            logger.error(f"❌ Error en prueba de AI: {str(e)} (Tiempo: {elapsed_time:.2f}s)")
+            return {
+                "success": False,
+                "mensaje": f"Error: {str(e)}",
+                "error_code": "EXCEPTION",
+                "pregunta": pregunta,
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en prueba de AI: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")

@@ -10,7 +10,11 @@ from io import BytesIO
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query  # type: ignore[import-untyped]
+<<<<<<< Updated upstream
 from fastapi.responses import StreamingResponse  # type: ignore[import-untyped]
+=======
+from fastapi.responses import StreamingResponse
+>>>>>>> Stashed changes
 from openpyxl import Workbook  # type: ignore[import-untyped]
 from openpyxl.styles import Alignment, Font, PatternFill  # type: ignore[import-untyped]
 from sqlalchemy import func, or_, text  # type: ignore[import-untyped]

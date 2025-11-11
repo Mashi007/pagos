@@ -8,6 +8,7 @@ from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
 from app.models.concesionario import Concesionario
 from app.models.configuracion_sistema import ConfiguracionSistema
+from app.models.documento_ai import DocumentoAI
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.notificacion import Notificacion
 from app.models.notificacion_plantilla import NotificacionPlantilla
@@ -30,6 +31,7 @@ __all__ = [
     "Cuota",
     "Aprobacion",
     "ConfiguracionSistema",
+    "DocumentoAI",
     "Auditoria",
     "Notificacion",
     "NotificacionPlantilla",

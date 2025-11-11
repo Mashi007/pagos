@@ -42,6 +42,7 @@ import { AnalistasConfig } from '@/components/configuracion/AnalistasConfig'
 import { ModelosVehiculosConfig } from '@/components/configuracion/ModelosVehiculosConfig'
 import { EmailConfig } from '@/components/configuracion/EmailConfig'
 import { WhatsAppConfig } from '@/components/configuracion/WhatsAppConfig'
+import { AIConfig } from '@/components/configuracion/AIConfig'
 import { configuracionGeneralService, ConfiguracionGeneral } from '@/services/configuracionGeneralService'
 import { apiClient } from '@/services/api'
 import { toast } from 'sonner'
@@ -131,6 +132,8 @@ export function Configuracion() {
       setSeccionActiva('emailConfig')
     } else if (tab === 'whatsapp') {
       setSeccionActiva('whatsappConfig')
+    } else if (tab === 'ai') {
+      setSeccionActiva('aiConfig')
     }
   }, [searchParams])
   const [mostrarPassword, setMostrarPassword] = useState(false)
@@ -1321,6 +1324,7 @@ export function Configuracion() {
       case 'notificaciones': return renderSeccionNotificaciones()
       case 'emailConfig': return <EmailConfig />
       case 'whatsappConfig': return <WhatsAppConfig />
+      case 'aiConfig': return <AIConfig />
       case 'programador': return renderSeccionProgramador()
       case 'auditoria': return renderSeccionAuditoria()
       // case 'seguridad': return renderSeccionSeguridad() // OCULTO
@@ -1366,7 +1370,7 @@ export function Configuracion() {
               <div className="flex space-x-2">
                 {/* ✅ Ocultar botón "Guardar" en secciones que tienen su propio botón de guardar */}
                 {/* emailConfig y whatsappConfig tienen sus propios botones de guardar */}
-                {seccionActiva !== 'emailConfig' && seccionActiva !== 'whatsappConfig' && (
+                {seccionActiva !== 'emailConfig' && seccionActiva !== 'whatsappConfig' && seccionActiva !== 'aiConfig' && (
                   <>
                     {cambiosPendientes && (
                       <Badge variant="warning" className="animate-pulse">

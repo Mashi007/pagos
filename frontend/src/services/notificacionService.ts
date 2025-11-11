@@ -46,6 +46,7 @@ export interface EmailConfig {
   smtp_use_tls: string
   modo_pruebas?: string
   email_pruebas?: string
+  email_activo?: string | boolean // ✅ Estado activo/inactivo
 }
 
 export interface NotificacionVariable {

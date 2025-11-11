@@ -194,16 +194,7 @@ export function WhatsAppConfig() {
 
       {/* Configuración Meta API */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-green-600" />
-            Configuración Meta WhatsApp Business API
-          </CardTitle>
-          <CardDescription>
-            Ingresa tus credenciales de Meta Developers para enviar notificaciones por WhatsApp
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-6">
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
             <div className="flex items-start gap-2">
               <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
