@@ -18,7 +18,7 @@ import {
   Phone,
   Mail,
   X,
-  ExternalLink,
+  Link,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -496,7 +496,7 @@ export function EmbudoConcesionarios() {
                         className="h-7 w-7"
                         onClick={() => window.open(`/clientes/${cliente.id}`, '_blank')}
                       >
-                        <ExternalLink className="h-3.5 w-3.5" />
+                        <Link className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                     
