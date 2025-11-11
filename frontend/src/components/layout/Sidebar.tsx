@@ -115,6 +115,17 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       icon: Users,
     },
     {
+      title: 'CRM',
+      icon: Briefcase,
+      isSubmenu: true,
+      children: [
+        { title: 'Embudo Clientes', href: '/crm/embudo-clientes', icon: Target },
+        { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
+        { title: 'Embudo Concesionarios', href: '/crm/embudo-concesionarios', icon: Building },
+        { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
+      ],
+    },
+    {
       title: 'Préstamos',
       href: '/prestamos',
       icon: CreditCard,
@@ -146,16 +157,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       href: '/notificaciones',
       icon: Bell,
       badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
-    },
-    {
-      title: 'CRM',
-      icon: Briefcase,
-      isSubmenu: true,
-      children: [
-        { title: 'Embudo Clientes', href: '/crm/embudo-clientes', icon: Target },
-        { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
-        { title: 'Embudo Concesionarios', href: '/crm/embudo-concesionarios', icon: Building },
-      ],
     },
     {
       title: 'Herramientas',
