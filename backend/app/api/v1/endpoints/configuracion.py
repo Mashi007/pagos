@@ -2496,16 +2496,19 @@ def listar_documentos_ai(
     except Exception as e:
         error_msg = str(e)
         error_type = type(e).__name__
+        error_repr = repr(e)
         logger.error(f"Error listando documentos AI: {e}", exc_info=True)
         
         # ✅ Verificar si el error es porque la tabla no existe
         # Capturar tanto errores de psycopg2 como errores genéricos de SQLAlchemy
+        # El error de PostgreSQL es: (psycopg2.errors.UndefinedTable) relation "documentos_ai" does not exist
         is_table_missing = (
             "does not exist" in error_msg.lower() 
             or "no such table" in error_msg.lower() 
-            or "relation" in error_msg.lower()
+            or ("relation" in error_msg.lower() and "does not exist" in error_msg.lower())
             or "UndefinedTable" in error_type
-            or "documentos_ai" in error_msg and "does not exist" in error_msg.lower()
+            or "UndefinedTable" in error_repr
+            or ("documentos_ai" in error_msg.lower() and "does not exist" in error_msg.lower())
         )
         
         if is_table_missing:
@@ -2670,13 +2673,16 @@ def obtener_metricas_ai(
         except Exception as db_error:
             error_msg = str(db_error)
             error_type = type(db_error).__name__
+            error_repr = repr(db_error)
             # ✅ Si la tabla no existe, retornar valores por defecto
+            # El error de PostgreSQL es: (psycopg2.errors.UndefinedTable) relation "documentos_ai" does not exist
             is_table_missing = (
                 "does not exist" in error_msg.lower() 
                 or "no such table" in error_msg.lower() 
-                or "relation" in error_msg.lower()
+                or ("relation" in error_msg.lower() and "does not exist" in error_msg.lower())
                 or "UndefinedTable" in error_type
-                or "documentos_ai" in error_msg and "does not exist" in error_msg.lower()
+                or "UndefinedTable" in error_repr
+                or ("documentos_ai" in error_msg.lower() and "does not exist" in error_msg.lower())
             )
             
             if is_table_missing:
