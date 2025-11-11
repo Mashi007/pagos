@@ -1385,7 +1385,9 @@ def listar_variables(
                 return []
         except Exception as inspect_error:
             # ✅ Cambiar a debug para reducir verbosidad - es un comportamiento esperado
-            logger.debug(f"Error verificando existencia de tabla: {inspect_error}, retornando lista vacía (comportamiento esperado)")
+            logger.debug(
+                f"Error verificando existencia de tabla: {inspect_error}, retornando lista vacía (comportamiento esperado)"
+            )
             return []
 
         query = db.query(NotificacionVariable)
