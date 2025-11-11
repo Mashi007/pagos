@@ -350,25 +350,25 @@ class ClienteResponse(ClienteBase):
         """Limpiar nombre: remover caracteres especiales, truncar si excede 7 palabras"""
         if not nombre:
             return nombre
-        
+
         # Remover caracteres especiales comunes: ($ / BS.) y otros símbolos
         # Mantener letras (incluyendo acentos), espacios, guiones y apostrofes
         # Usar [^\p{L}\s\-\'] para Unicode o [a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s\-\'] para español
-        nombre_limpio = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s\-\']', '', nombre)
-        
+        nombre_limpio = re.sub(r"[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s\-\']", "", nombre)
+
         # Normalizar espacios múltiples
-        nombre_limpio = re.sub(r'\s+', ' ', nombre_limpio).strip()
-        
+        nombre_limpio = re.sub(r"\s+", " ", nombre_limpio).strip()
+
         # Dividir en palabras y filtrar vacías
         words = [word for word in nombre_limpio.split() if word]
-        
+
         if len(words) < 1:
             return nombre  # Si después de limpiar queda vacío, devolver original
-        
+
         # Si tiene más de 7 palabras, truncar a las primeras 7
         if len(words) > 7:
             words = words[:7]
-        
+
         return " ".join(words)
 
     # Sobrescribir validador de nombres para permitir datos históricos
@@ -379,14 +379,14 @@ class ClienteResponse(ClienteBase):
         """Validación flexible para respuestas: limpia y trunca nombres con más de 7 palabras"""
         if not v:
             return v
-        
+
         # Limpiar el nombre: remover caracteres especiales y truncar si es necesario
         nombre_limpio = cls._limpiar_nombre(v)
-        
+
         # Validar que después de limpiar no quede vacío
         words = nombre_limpio.strip().split()
         words = [word for word in words if word]
-        
+
         if len(words) < 1:
             # Si después de limpiar queda vacío, devolver el original truncado a 7 palabras
             words_original = v.strip().split()
@@ -394,7 +394,7 @@ class ClienteResponse(ClienteBase):
             if len(words_original) > 7:
                 words_original = words_original[:7]
             return " ".join(words_original)
-        
+
         return nombre_limpio
 
     model_config = ConfigDict(from_attributes=True)
