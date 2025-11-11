@@ -738,8 +738,7 @@ def calcular_notificaciones_prejudiciales_job():
                 logger.error(f"❌ Excepción enviando email a {correo_cliente}: {e}", exc_info=True)
 
         logger.info(
-            f"✅ [Scheduler] Prejudiciales completado: "
-            f"{enviadas} enviadas, {fallidas} fallidas, {sin_email} sin email"
+            f"✅ [Scheduler] Prejudiciales completado: " f"{enviadas} enviadas, {fallidas} fallidas, {sin_email} sin email"
         )
 
     except Exception as e:
