@@ -271,6 +271,7 @@ export function EmbudoClientes() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </motion.div>
 
       {/* Estadísticas */}
