@@ -32,7 +32,7 @@ import { useNavigate } from 'react-router-dom'
 const ESTADOS_EMBUDO = [
   { 
     id: 'activo', 
-    label: 'Activo', 
+    label: 'Venta asignada', 
     color: 'bg-green-50 border-green-200', 
     headerColor: 'bg-green-100 text-green-800',
     icon: CheckCircle,
@@ -40,7 +40,7 @@ const ESTADOS_EMBUDO = [
   },
   { 
     id: 'pendiente', 
-    label: 'Pendiente', 
+    label: 'Pendiente requisitos', 
     color: 'bg-yellow-50 border-yellow-200', 
     headerColor: 'bg-yellow-100 text-yellow-800',
     icon: Clock,
@@ -48,7 +48,7 @@ const ESTADOS_EMBUDO = [
   },
   { 
     id: 'inactivo', 
-    label: 'Inactivo', 
+    label: 'Agregar embudo (agregar otro)', 
     color: 'bg-gray-50 border-gray-200', 
     headerColor: 'bg-gray-100 text-gray-800',
     icon: XCircle,
@@ -90,20 +90,41 @@ export function EmbudoConcesionarios() {
   const [searchTerm, setSearchTerm] = useState('')
   const [concesionarioSeleccionado, setConcesionarioSeleccionado] = useState<number | null>(null)
 
-  // Obtener concesionarios reales
-  const { data: concesionariosData, isLoading: isLoadingConcesionarios } = useConcesionarios({ limit: 1000 })
+  // Obtener concesionarios reales desde configuración/concesionarios
+  const { 
+    data: concesionariosData, 
+    isLoading: isLoadingConcesionarios,
+    error: errorConcesionarios,
+    refetch: refetchConcesionarios
+  } = useConcesionarios({ limit: 1000 })
 
   // Obtener todos los préstamos para calcular estadísticas
-  const { data: prestamosData, isLoading: isLoadingPrestamos } = usePrestamos(
+  const { 
+    data: prestamosData, 
+    isLoading: isLoadingPrestamos,
+    error: errorPrestamos
+  } = usePrestamos(
     undefined,
     1,
     1000 // Obtener muchos préstamos para análisis
   )
 
   // Obtener todos los clientes para vincular con préstamos
-  const { data: clientesData } = useClientes(undefined, 1, 1000)
+  const { 
+    data: clientesData,
+    error: errorClientes
+  } = useClientes(undefined, 1, 1000)
 
-  const concesionarios = concesionariosData?.items || []
+  // Extraer concesionarios de la respuesta
+  const concesionarios = useMemo(() => {
+    if (!concesionariosData) return []
+    // El servicio puede devolver items directamente o dentro de una propiedad items
+    if (Array.isArray(concesionariosData)) {
+      return concesionariosData
+    }
+    return concesionariosData.items || []
+  }, [concesionariosData])
+
   const prestamos = prestamosData?.data || []
   const clientes = clientesData?.data || []
 
@@ -203,6 +224,24 @@ export function EmbudoConcesionarios() {
     return Array.from(clientesMap.values())
   }, [concesionarioDetalle, clientes])
 
+  // Mostrar errores si existen
+  if (errorConcesionarios) {
+    return (
+      <div className="flex flex-col justify-center items-center min-h-[400px] space-y-4">
+        <AlertCircle className="h-12 w-12 text-red-500" />
+        <div className="text-center">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Error al cargar concesionarios</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            {errorConcesionarios instanceof Error ? errorConcesionarios.message : 'Error desconocido'}
+          </p>
+          <Button onClick={() => refetchConcesionarios()}>
+            Reintentar
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   if (isLoadingConcesionarios || isLoadingPrestamos) {
     return (
       <div className="flex justify-center items-center min-h-[400px]">
@@ -251,19 +290,19 @@ export function EmbudoConcesionarios() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-green-600">{estadisticas.activos}</div>
-            <p className="text-xs text-gray-600 mt-1">Activos</p>
+            <p className="text-xs text-gray-600 mt-1">Venta asignada</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-yellow-600">{estadisticas.pendientes}</div>
-            <p className="text-xs text-gray-600 mt-1">Pendientes</p>
+            <p className="text-xs text-gray-600 mt-1">Pendiente requisitos</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-gray-600">{estadisticas.inactivos}</div>
-            <p className="text-xs text-gray-600 mt-1">Inactivos</p>
+            <p className="text-xs text-gray-600 mt-1">Agregar embudo</p>
           </CardContent>
         </Card>
         <Card>
@@ -305,11 +344,29 @@ export function EmbudoConcesionarios() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Kanban Board - Embudo Visual */}
-        <div className="lg:col-span-2 overflow-x-auto pb-4">
-          <div className="flex gap-4 min-w-max">
-            {concesionariosPorEstado.map((columna) => {
+      {/* Mensaje si no hay concesionarios */}
+      {concesionarios.length === 0 ? (
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <Building className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay concesionarios</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                No se encontraron concesionarios en el sistema. Puedes crear uno nuevo desde la configuración.
+              </p>
+              <Button onClick={() => navigate('/concesionarios')}>
+                <Plus className="h-4 w-4 mr-2" />
+                Crear Concesionario
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Kanban Board - Embudo Visual */}
+          <div className="lg:col-span-2 overflow-x-auto pb-4">
+            <div className="flex gap-4 min-w-max">
+              {concesionariosPorEstado.map((columna) => {
               const EstadoIcon = columna.icon
               return (
                 <motion.div
@@ -335,7 +392,7 @@ export function EmbudoConcesionarios() {
                       {columna.concesionarios.length === 0 ? (
                         <div className="text-center py-8 text-gray-400">
                           <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p className="text-xs">No hay concesionarios</p>
+                          <p className="text-xs">No hay concesionarios en este estado</p>
                         </div>
                       ) : (
                         columna.concesionarios.map((concesionario) => (
@@ -358,7 +415,7 @@ export function EmbudoConcesionarios() {
                                 <div className="flex-1">
                                   <h3 className="font-semibold text-gray-900 text-sm">{concesionario.nombre}</h3>
                                   <p className="text-xs text-gray-500 mt-1">
-                                    {concesionario.activo ? 'Activo' : 'Inactivo'}
+                                    {concesionario.activo ? 'Venta asignada' : 'Inactivo'}
                                   </p>
                                 </div>
                                 <div className="flex gap-1">
@@ -549,7 +606,8 @@ export function EmbudoConcesionarios() {
             </CardContent>
           </Card>
         </div>
-      </div>
+        </div>
+      )}
     </div>
   )
 }

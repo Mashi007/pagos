@@ -24,7 +24,6 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -476,12 +475,12 @@ export function TicketsAtencion() {
         </CardContent>
       </Card>
 
-      {/* Tabla de Tickets */}
+      {/* Timeline de Tickets */}
       <Card>
         <CardHeader>
           <CardTitle>Tickets de Atención</CardTitle>
           <CardDescription>
-            Lista de incidencias y actividades que requieren seguimiento
+            Línea de tiempo de incidencias y actividades ordenadas por ID
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -491,94 +490,133 @@ export function TicketsAtencion() {
               <p>No se encontraron tickets con los filtros aplicados</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Título</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Prioridad</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Asignado a</TableHead>
-                    <TableHead>Fecha Creación</TableHead>
-                    <TableHead>Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ticketsFiltrados.map((ticket) => {
+            <div className="relative">
+              {/* Línea vertical de la timeline */}
+              <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-200 via-blue-300 to-blue-200" />
+              
+              {/* Lista de tickets en timeline */}
+              <div className="space-y-6">
+                {ticketsFiltrados
+                  .sort((a, b) => a.id - b.id) // Ordenar por ID
+                  .map((ticket, index) => {
                     const estadoInfo = getEstadoInfo(ticket.estado)
                     const prioridadInfo = getPrioridadInfo(ticket.prioridad)
                     const EstadoIcon = estadoInfo.icon
+                    const isLast = index === ticketsFiltrados.length - 1
+                    
                     return (
-                      <TableRow key={ticket.id}>
-                        <TableCell className="font-medium">#{ticket.id}</TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{ticket.titulo}</div>
-                            <div className="text-sm text-gray-500 truncate max-w-xs">
-                              {ticket.descripcion}
-                            </div>
+                      <motion.div
+                        key={ticket.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className="relative flex items-start gap-6"
+                      >
+                        {/* Punto en la línea de tiempo */}
+                        <div className="relative z-10 flex-shrink-0">
+                          <div className={`w-16 h-16 rounded-full flex items-center justify-center border-4 border-white shadow-lg ${
+                            ticket.estado === 'resuelto' ? 'bg-green-500' :
+                            ticket.estado === 'cerrado' ? 'bg-gray-500' :
+                            ticket.estado === 'en_proceso' ? 'bg-yellow-500' :
+                            'bg-blue-500'
+                          }`}>
+                            <span className="text-white font-bold text-sm">#{ticket.id}</span>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          {ticket.clienteData ? (
-                            <div>
-                              <div className="font-medium">{ticket.cliente}</div>
-                              <div className="text-xs text-gray-500">Cédula: {ticket.clienteData.cedula}</div>
-                              {ticket.clienteId && (
-                                <Button
-                                  variant="link"
-                                  size="sm"
-                                  className="h-auto p-0 text-xs"
-                                  onClick={() => window.open(`/clientes/${ticket.clienteId}`, '_blank')}
-                                >
-                                  Ver cliente
-                                </Button>
-                              )}
-                            </div>
-                          ) : (
-                            ticket.cliente
+                          {!isLast && (
+                            <div className="absolute left-1/2 top-16 w-0.5 h-6 bg-gradient-to-b from-blue-300 to-blue-200 transform -translate-x-1/2" />
                           )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={estadoInfo.color}>
-                            <EstadoIcon className="h-3 w-3 mr-1" />
-                            {estadoInfo.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={prioridadInfo.color}>
-                            {prioridadInfo.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{ticket.tipo}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-gray-400" />
-                            {ticket.asignadoA}
-                          </div>
-                        </TableCell>
-                        <TableCell>{formatDate(ticket.fechaCreacion)}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button variant="ghost" size="icon">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon">
-                              <MessageSquare className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                        </div>
+
+                        {/* Contenido del ticket */}
+                        <div className="flex-1 min-w-0">
+                          <motion.div
+                            whileHover={{ scale: 1.01 }}
+                            className="bg-white rounded-lg border-2 border-gray-200 shadow-md hover:shadow-lg transition-all duration-200 p-6"
+                          >
+                            {/* Header del ticket */}
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">
+                                  {ticket.titulo}
+                                </h3>
+                                <p className="text-sm text-gray-600 line-clamp-2">
+                                  {ticket.descripcion}
+                                </p>
+                              </div>
+                              <div className="flex gap-2 ml-4">
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MessageSquare className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+
+                            {/* Información del ticket */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                              {/* Cliente */}
+                              <div className="flex items-start gap-3">
+                                <User className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="text-xs text-gray-500 mb-1">Cliente</p>
+                                  {ticket.clienteData ? (
+                                    <div>
+                                      <p className="font-semibold text-sm text-gray-900">{ticket.cliente}</p>
+                                      <p className="text-xs text-gray-500">Cédula: {ticket.clienteData.cedula}</p>
+                                      {ticket.clienteId && (
+                                        <Button
+                                          variant="link"
+                                          size="sm"
+                                          className="h-auto p-0 text-xs mt-1"
+                                          onClick={() => window.open(`/clientes/${ticket.clienteId}`, '_blank')}
+                                        >
+                                          Ver cliente →
+                                        </Button>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <p className="font-semibold text-sm text-gray-900">{ticket.cliente || 'N/A'}</p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Asignado a */}
+                              <div className="flex items-start gap-3">
+                                <User className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="text-xs text-gray-500 mb-1">Asignado a</p>
+                                  <p className="font-semibold text-sm text-gray-900">{ticket.asignadoA}</p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Badges y metadata */}
+                            <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-gray-200">
+                              <Badge className={`${estadoInfo.color} flex items-center gap-1`}>
+                                <EstadoIcon className="h-3 w-3" />
+                                {estadoInfo.label}
+                              </Badge>
+                              <Badge className={prioridadInfo.color}>
+                                {prioridadInfo.label}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {ticket.tipo}
+                              </Badge>
+                              <div className="flex items-center gap-1 text-xs text-gray-500 ml-auto">
+                                <Calendar className="h-3 w-3" />
+                                <span>{formatDate(ticket.fechaCreacion)}</span>
+                              </div>
+                            </div>
+                          </motion.div>
+                        </div>
+                      </motion.div>
                     )
                   })}
-                </TableBody>
-              </Table>
+              </div>
             </div>
           )}
         </CardContent>

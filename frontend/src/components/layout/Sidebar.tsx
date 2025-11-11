@@ -110,15 +110,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       icon: LayoutDashboard,
     },
     {
-      title: 'Clientes',
-      href: '/clientes',
-      icon: Users,
-    },
-    {
       title: 'CRM',
       icon: Briefcase,
       isSubmenu: true,
       children: [
+        { title: 'Clientes', href: '/clientes', icon: Users },
         { title: 'Venta Servicios', href: '/crm/embudo-clientes', icon: Target },
         { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
         { title: 'Seguimiento Concesionarios', href: '/crm/embudo-concesionarios', icon: Building },

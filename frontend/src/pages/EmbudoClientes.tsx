@@ -8,7 +8,6 @@ import {
   Edit,
   Target,
   Users,
-  TrendingUp,
   Clock,
   CheckCircle,
   XCircle,
@@ -17,6 +16,7 @@ import {
   DollarSign,
   Building,
   X,
+  GripVertical,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { formatCurrency, formatDate } from '@/utils'
-import { useClientes, useSearchClientes } from '@/hooks/useClientes'
+import { useClientes, useSearchClientes, useCambiarEstadoCliente } from '@/hooks/useClientes'
 import { usePrestamos } from '@/hooks/usePrestamos'
 import { Cliente } from '@/types'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
@@ -64,22 +64,23 @@ const ESTADOS_EMBUDO = [
     count: 0
   },
   { 
-    id: 'prestamo_activo', 
-    label: 'Préstamo Activo', 
+    id: 'agregar_otro', 
+    label: 'Agregar embudo (agregar otro)', 
     color: 'bg-purple-50 border-purple-200', 
     headerColor: 'bg-purple-100 text-purple-800',
-    icon: TrendingUp,
+    icon: Plus,
     count: 0
   },
 ]
 
 // Mapear estado de Cliente a estado del embudo
-const mapearEstadoEmbudo = (cliente: Cliente): string => {
-  // Si tiene préstamo activo
-  if (cliente.estado === 'ACTIVO' && cliente.total_financiamiento && cliente.total_financiamiento > 0) {
-    return 'prestamo_activo'
-  }
-  // Si está en mora, podría estar en evaluación
+const mapearEstadoEmbudo = (
+  cliente: Cliente, 
+  tienePrestamos: boolean,
+  prestamosAlDia: boolean,
+  prestamosCliente: any[] = []
+): string => {
+  // Si está en mora, está en evaluación
   if (cliente.estado === 'MORA') {
     return 'evaluacion'
   }
@@ -91,8 +92,32 @@ const mapearEstadoEmbudo = (cliente: Cliente): string => {
   if (cliente.estado === 'INACTIVO') {
     return 'rechazado'
   }
-  // Por defecto, prospecto
-  return 'prospecto'
+  
+  // Verificar si tiene préstamos en aprobación de riesgo (EN_REVISION o DRAFT)
+  const prestamosEnAprobacionRiesgo = prestamosCliente.filter(p => 
+    p.estado === 'EN_REVISION' || p.estado === 'DRAFT'
+  )
+  
+  // Si tiene préstamos en aprobación de riesgo, está en evaluación
+  if (prestamosEnAprobacionRiesgo.length > 0) {
+    return 'evaluacion'
+  }
+  
+  // Si tiene préstamo activo, lo tratamos como en evaluación
+  if (cliente.estado === 'ACTIVO' && cliente.total_financiamiento && cliente.total_financiamiento > 0) {
+    return 'evaluacion'
+  }
+  
+  // Para "Prospecto": solo clientes con préstamos al día (sin mora y nunca han tenido pagos tardíos)
+  // Un cliente es "prospecto" si:
+  // 1. Tiene préstamos
+  // 2. Está al día (dias_mora === 0 y estado === 'ACTIVO')
+  // 3. Los préstamos están al día (prestamosAlDia === true)
+  if (tienePrestamos && prestamosAlDia && cliente.dias_mora === 0 && cliente.estado === 'ACTIVO') {
+    return 'prospecto'
+  }
+  // Por defecto, no es prospecto si no cumple los criterios
+  return 'evaluacion'
 }
 
 export function EmbudoClientes() {
@@ -101,6 +126,12 @@ export function EmbudoClientes() {
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [searchCliente, setSearchCliente] = useState('')
   const [clientesEnEmbudo, setClientesEnEmbudo] = useState<Map<number, Cliente>>(new Map())
+  const [estadosManuales, setEstadosManuales] = useState<Map<number, string>>(new Map()) // Guardar estados manuales del embudo
+  const [clienteArrastrando, setClienteArrastrando] = useState<number | null>(null)
+  const [columnaDestino, setColumnaDestino] = useState<string | null>(null)
+  
+  // Hook para actualizar estado del cliente en la BD
+  const cambiarEstadoMutation = useCambiarEstadoCliente()
 
   // Obtener todos los clientes para el embudo
   const { data: clientesData, isLoading: isLoadingClientes } = useClientes(
@@ -122,7 +153,13 @@ export function EmbudoClientes() {
     const prestamos = prestamosData?.data || []
     
     // Combinar clientes de la API con clientes agregados manualmente
-    const todosClientes = [...clientesData.data]
+    // Si un cliente está en clientesEnEmbudo, usar esa versión (tiene estado actualizado)
+    const todosClientes = clientesData.data.map(cliente => {
+      const clienteActualizado = clientesEnEmbudo.get(cliente.id)
+      return clienteActualizado || cliente
+    })
+    
+    // Agregar clientes que no están en la API pero sí en clientesEnEmbudo
     clientesEnEmbudo.forEach((cliente) => {
       if (!todosClientes.find(c => c.id === cliente.id)) {
         todosClientes.push(cliente)
@@ -130,23 +167,41 @@ export function EmbudoClientes() {
     })
 
     return todosClientes.map(cliente => {
-      // Buscar préstamo del cliente para obtener concesionario
-      const prestamoCliente = prestamos.find(p => p.cliente_id === cliente.id)
+      // Buscar préstamos del cliente
+      const prestamosCliente = prestamos.filter(p => p.cliente_id === cliente.id)
+      const tienePrestamos = prestamosCliente.length > 0
+      
+      // Verificar si los préstamos están al día:
+      // - El cliente debe estar ACTIVO
+      // - No debe tener días de mora (dias_mora === 0)
+      // - Los préstamos deben estar APROBADOS (no en revisión o rechazados)
+      const prestamosAlDia = tienePrestamos && 
+        cliente.estado === 'ACTIVO' && 
+        cliente.dias_mora === 0 &&
+        prestamosCliente.every(p => p.estado === 'APROBADO')
+      
+      const prestamoCliente = prestamosCliente[0] || null
       const concesionario = prestamoCliente?.concesionario || 'N/A'
+      
+      // Priorizar estado manual si existe, sino usar el estado calculado
+      const estadoCalculado = mapearEstadoEmbudo(cliente, tienePrestamos, prestamosAlDia, prestamosCliente)
+      const estadoFinal = estadosManuales.has(cliente.id) 
+        ? estadosManuales.get(cliente.id)! 
+        : estadoCalculado
       
       return {
         id: cliente.id,
         nombre: `${cliente.nombres} ${cliente.apellidos}`,
         cedula: cliente.cedula,
         telefono: cliente.telefono || 'N/A',
-        estado: mapearEstadoEmbudo(cliente),
+        estado: estadoFinal,
         montoSolicitado: prestamoCliente?.total_financiamiento || cliente.total_financiamiento || cliente.monto_financiado || 0,
         fechaIngreso: new Date(cliente.fecha_registro),
         concesionario: concesionario,
         cliente: cliente, // Guardar referencia al cliente completo
       }
     })
-  }, [clientesData, clientesEnEmbudo, prestamosData])
+  }, [clientesData, clientesEnEmbudo, prestamosData, estadosManuales])
 
   const clientesFiltrados = clientesEmbudo.filter(cliente => {
     const matchSearch =
@@ -170,11 +225,17 @@ export function EmbudoClientes() {
     evaluacion: clientesEmbudo.filter(c => c.estado === 'evaluacion').length,
     aprobados: clientesEmbudo.filter(c => c.estado === 'aprobado').length,
     rechazados: clientesEmbudo.filter(c => c.estado === 'rechazado').length,
-    activos: clientesEmbudo.filter(c => c.estado === 'prestamo_activo').length,
+    agregarOtro: clientesEmbudo.filter(c => c.estado === 'agregar_otro').length,
   }
 
   const handleAgregarCliente = (cliente: Cliente) => {
     setClientesEnEmbudo(prev => new Map(prev).set(cliente.id, cliente))
+    // Asignar automáticamente al embudo "agregar_otro"
+    setEstadosManuales(prev => {
+      const nuevo = new Map(prev)
+      nuevo.set(cliente.id, 'agregar_otro')
+      return nuevo
+    })
     setSearchCliente('')
     setShowAddDialog(false)
   }
@@ -185,6 +246,129 @@ export function EmbudoClientes() {
       nuevo.delete(clienteId)
       return nuevo
     })
+  }
+
+  // Funciones para drag and drop
+  const handleDragStart = (clienteId: number) => {
+    setClienteArrastrando(clienteId)
+  }
+
+  const handleDragOver = (e: React.DragEvent, estadoId: string) => {
+    e.preventDefault()
+    setColumnaDestino(estadoId)
+  }
+
+  const handleDragLeave = () => {
+    setColumnaDestino(null)
+  }
+
+  // Función auxiliar para mapear estado del embudo al estado del cliente en BD
+  // Retorna el nuevo estado o null si no debe cambiar
+  const mapearEstadoEmbudoACliente = (
+    estadoEmbudo: string, 
+    cliente: Cliente,
+    prestamosCliente: any[] = []
+  ): Cliente['estado'] | null => {
+    switch (estadoEmbudo) {
+      case 'prospecto':
+        return 'ACTIVO'
+      case 'evaluacion':
+        // Si el cliente tiene préstamos en aprobación de riesgo, mantener ACTIVO
+        // Solo cambiar a MORA si realmente está en mora
+        const tienePrestamosEnRiesgo = prestamosCliente.some(p => 
+          p.estado === 'EN_REVISION' || p.estado === 'DRAFT'
+        )
+        if (tienePrestamosEnRiesgo) {
+          // Mantener ACTIVO si está en aprobación de riesgo
+          return cliente.estado === 'ACTIVO' ? null : 'ACTIVO'
+        }
+        // Si no está en aprobación de riesgo, puede ser MORA
+        return 'MORA'
+      case 'aprobado':
+        return 'FINALIZADO'
+      case 'rechazado':
+        return 'INACTIVO'
+      case 'agregar_otro':
+        // No cambiar el estado para "agregar otro"
+        return null
+      default:
+        return null
+    }
+  }
+
+  const handleDrop = async (e: React.DragEvent, estadoDestino: string) => {
+    e.preventDefault()
+    if (clienteArrastrando && estadoDestino) {
+      // Buscar el cliente en la lista de clientes del embudo
+      const cliente = clientesEmbudo.find(c => c.id === clienteArrastrando)
+      if (cliente && cliente.cliente) {
+        // Obtener préstamos del cliente para la lógica de mapeo
+        const prestamos = prestamosData?.data || []
+        const prestamosCliente = prestamos.filter(p => p.cliente_id === cliente.id)
+        
+        // Guardar el estado manual del embudo (esto tiene prioridad sobre el cálculo automático)
+        setEstadosManuales(prev => {
+          const nuevo = new Map(prev)
+          nuevo.set(cliente.id, estadoDestino)
+          return nuevo
+        })
+        
+        // Mapear el estado del embudo al estado del cliente en BD
+        const nuevoEstadoCliente = mapearEstadoEmbudoACliente(
+          estadoDestino, 
+          cliente.cliente,
+          prestamosCliente
+        )
+        
+        // Si hay un nuevo estado válido y es diferente al actual, actualizar en BD
+        if (nuevoEstadoCliente && nuevoEstadoCliente !== cliente.cliente.estado) {
+          try {
+            // Actualizar estado en la base de datos
+            await cambiarEstadoMutation.mutateAsync({
+              id: String(cliente.id),
+              estado: nuevoEstadoCliente
+            })
+            
+            // Actualizar el estado del cliente en el objeto Cliente local
+            const clienteActualizado: Cliente = {
+              ...cliente.cliente,
+              estado: nuevoEstadoCliente,
+            }
+            
+            // Actualizar en el Map de clientesEnEmbudo
+            setClientesEnEmbudo(prev => {
+              const nuevo = new Map(prev)
+              nuevo.set(cliente.id, clienteActualizado)
+              return nuevo
+            })
+          } catch (error) {
+            // Si hay error, revertir el cambio en estadosManuales
+            setEstadosManuales(prev => {
+              const nuevo = new Map(prev)
+              nuevo.delete(cliente.id)
+              return nuevo
+            })
+            console.error('Error al actualizar estado del cliente:', error)
+          }
+        } else {
+          // Si no hay cambio de estado o es null, solo actualizar el estado manual del embudo
+          // (ya se hizo arriba con setEstadosManuales)
+          // Actualizar también en clientesEnEmbudo para mantener consistencia
+          setClientesEnEmbudo(prev => {
+            const nuevo = new Map(prev)
+            nuevo.set(cliente.id, cliente.cliente)
+            return nuevo
+          })
+        }
+      }
+    }
+    setClienteArrastrando(null)
+    setColumnaDestino(null)
+  }
+
+  const handleDragEnd = () => {
+    setClienteArrastrando(null)
+    setColumnaDestino(null)
   }
 
   return (
@@ -306,12 +490,6 @@ export function EmbudoClientes() {
             <p className="text-xs text-gray-600 mt-1">Rechazados</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-purple-600">{estadisticas.activos}</div>
-            <p className="text-xs text-gray-600 mt-1">Préstamos Activos</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Filtros */}
@@ -351,8 +529,13 @@ export function EmbudoClientes() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
                   className="flex-shrink-0 w-80"
+                  onDragOver={(e) => handleDragOver(e, columna.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, columna.id)}
                 >
-                  <Card className={`h-full ${columna.color} border-2`}>
+                  <Card className={`h-full ${columna.color} border-2 ${
+                    columnaDestino === columna.id ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+                  } transition-all`}>
                     <CardHeader className={`${columna.headerColor} pb-3`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -365,26 +548,144 @@ export function EmbudoClientes() {
                       </div>
                     </CardHeader>
                     <CardContent className="p-3 space-y-3 max-h-[calc(100vh-400px)] overflow-y-auto">
-                      {columna.clientes.length === 0 ? (
-                        <div className="text-center py-8 text-gray-400">
+                      {columna.id === 'agregar_otro' ? (
+                        <div className="text-center py-8">
+                          <Button
+                            variant="outline"
+                            className="w-full border-2 border-dashed border-purple-300 hover:border-purple-400 hover:bg-purple-50"
+                            onClick={() => setShowAddDialog(true)}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Agregar Cliente
+                          </Button>
+                          {columna.clientes.length > 0 && (
+                            <div className="mt-3 space-y-3">
+                              {columna.clientes.map((cliente) => (
+                                <motion.div
+                                  key={cliente.id}
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ 
+                                    opacity: clienteArrastrando === cliente.id ? 0.5 : 1, 
+                                    scale: clienteArrastrando === cliente.id ? 0.95 : 1 
+                                  }}
+                                  whileHover={{ scale: clienteArrastrando === cliente.id ? 0.95 : 1.02 }}
+                                  draggable
+                                  onDragStart={() => handleDragStart(cliente.id)}
+                                  onDragEnd={handleDragEnd}
+                                  onClick={() => navigate(`/clientes/${cliente.id}`)}
+                                  className={`bg-white rounded-lg p-4 shadow-sm border-2 border-gray-200 hover:border-purple-300 hover:shadow-md transition-all cursor-move ${
+                                    clienteArrastrando === cliente.id ? 'opacity-50 cursor-grabbing scale-95' : 'cursor-grab'
+                                  }`}
+                                >
+                                  <div className="space-y-3">
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex items-start gap-2 flex-1">
+                                        <GripVertical className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                          <h3 className="font-semibold text-gray-900 text-sm">{cliente.nombre}</h3>
+                                          <p className="text-xs text-gray-500 mt-1">Cédula: {cliente.cedula}</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex gap-1">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-7 w-7"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            navigate(`/clientes/${cliente.id}`)
+                                          }}
+                                          title="Ver detalles del cliente"
+                                        >
+                                          <Eye className="h-3.5 w-3.5" />
+                                        </Button>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-7 w-7"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            navigate(`/clientes/${cliente.id}?edit=true`)
+                                          }}
+                                          title="Editar cliente"
+                                        >
+                                          <Edit className="h-3.5 w-3.5" />
+                                        </Button>
+                                        {clientesEnEmbudo.has(cliente.id) && (
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-7 w-7 text-red-600 hover:text-red-700"
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              handleEliminarCliente(cliente.id)
+                                            }}
+                                            title="Remover del embudo"
+                                          >
+                                            <X className="h-3.5 w-3.5" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                                        <Phone className="h-3.5 w-3.5" />
+                                        <span>{cliente.telefono}</span>
+                                      </div>
+                                      {cliente.montoSolicitado > 0 && (
+                                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                                          <DollarSign className="h-3.5 w-3.5" />
+                                          <span className="font-medium">{formatCurrency(cliente.montoSolicitado)}</span>
+                                        </div>
+                                      )}
+                                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                                        <Building className="h-3.5 w-3.5" />
+                                        <span className="truncate">{cliente.concesionario}</span>
+                                      </div>
+                                      <div className="text-xs text-gray-500 pt-1">
+                                        Ingreso: {formatDate(cliente.fechaIngreso)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : columna.clientes.length === 0 ? (
+                        <div className={`text-center py-8 text-gray-400 border-2 border-dashed rounded-lg ${
+                          columnaDestino === columna.id ? 'border-blue-400 bg-blue-50/50' : 'border-gray-300'
+                        } transition-all`}>
                           <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p className="text-xs">No hay clientes</p>
+                          <p className="text-xs">Suelta aquí para mover</p>
                         </div>
                       ) : (
                         columna.clientes.map((cliente) => (
                           <motion.div
                             key={cliente.id}
                             initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            whileHover={{ scale: 1.02 }}
+                            animate={{ 
+                              opacity: clienteArrastrando === cliente.id ? 0.5 : 1, 
+                              scale: clienteArrastrando === cliente.id ? 0.95 : 1 
+                            }}
+                            whileHover={{ scale: clienteArrastrando === cliente.id ? 0.95 : 1.02 }}
+                            draggable
+                            onDragStart={() => handleDragStart(cliente.id)}
+                            onDragEnd={handleDragEnd}
                             onClick={() => navigate(`/clientes/${cliente.id}`)}
-                            className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer"
+                            className={`bg-white rounded-lg p-4 shadow-sm border-2 border-gray-200 hover:border-blue-300 hover:shadow-md transition-all cursor-move ${
+                              clienteArrastrando === cliente.id ? 'opacity-50 cursor-grabbing scale-95' : 'cursor-grab'
+                            }`}
                           >
                             <div className="space-y-3">
                               <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <h3 className="font-semibold text-gray-900 text-sm">{cliente.nombre}</h3>
-                                  <p className="text-xs text-gray-500 mt-1">Cédula: {cliente.cedula}</p>
+                                <div className="flex items-start gap-2 flex-1">
+                                  <GripVertical className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <h3 className="font-semibold text-gray-900 text-sm">{cliente.nombre}</h3>
+                                    <p className="text-xs text-gray-500 mt-1">Cédula: {cliente.cedula}</p>
+                                  </div>
                                 </div>
                                 <div className="flex gap-1">
                                   <Button 
