@@ -77,6 +77,7 @@ export function AIConfig() {
   const [preguntaPrueba, setPreguntaPrueba] = useState('')
   const [usarDocumentos, setUsarDocumentos] = useState(true)
   const [resultadoPrueba, setResultadoPrueba] = useState<any>(null)
+  const [activeTab, setActiveTab] = useState('configuracion')
 
   useEffect(() => {
     cargarConfiguracion()
@@ -233,7 +234,18 @@ export function AIConfig() {
     setResultadoPrueba(null)
     
     try {
-      const resultado = await apiClient.post('/api/v1/configuracion/ai/probar', {
+      const resultado = await apiClient.post<{
+        success: boolean
+        mensaje: string
+        pregunta?: string
+        respuesta?: string
+        tokens_usados?: number
+        modelo_usado?: string
+        tiempo_respuesta?: number
+        usar_documentos?: boolean
+        documentos_consultados?: number
+        error_code?: string
+      }>('/api/v1/configuracion/ai/probar', {
         pregunta: preguntaPrueba.trim() || undefined,
         usar_documentos: usarDocumentos,
       })
@@ -269,7 +281,7 @@ export function AIConfig() {
       </div>
 
       {/* Tabs con 3 pestañas */}
-      <Tabs defaultValue="configuracion" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="configuracion">Configuración</TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>

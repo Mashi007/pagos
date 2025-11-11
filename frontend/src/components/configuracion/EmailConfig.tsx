@@ -153,13 +153,24 @@ export function EmailConfig() {
       if (!data.smtp_port) data.smtp_port = '587'
       if (!data.from_name) data.from_name = 'RapiCredit'
       
-      setConfig(data)
+      // Normalizar email_activo a string
+      if (data.email_activo !== undefined && data.email_activo !== null) {
+        if (typeof data.email_activo === 'boolean') {
+          data.email_activo = data.email_activo ? 'true' : 'false'
+        } else if (typeof data.email_activo === 'string') {
+          // Ya es string, mantenerlo
+        } else {
+          data.email_activo = String(data.email_activo)
+        }
+      }
+      
+      setConfig(data as EmailConfigData)
       setModoPruebas(data.modo_pruebas || 'true')
       setEmailPruebas(data.email_pruebas || '')
       // ✅ Cargar estado activo/inactivo
       const emailActivoValue = data.email_activo === undefined || data.email_activo === null 
         ? true 
-        : (data.email_activo === 'true' || data.email_activo === true || data.email_activo === '1')
+        : (data.email_activo === 'true' || data.email_activo === '1')
       setEmailActivo(emailActivoValue)
     } catch (error) {
       console.error('Error cargando configuración:', error)
