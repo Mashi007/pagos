@@ -2495,10 +2495,20 @@ def listar_documentos_ai(
         }
     except Exception as e:
         error_msg = str(e)
+        error_type = type(e).__name__
         logger.error(f"Error listando documentos AI: {e}", exc_info=True)
         
         # ✅ Verificar si el error es porque la tabla no existe
-        if "does not exist" in error_msg.lower() or "no such table" in error_msg.lower() or "relation" in error_msg.lower():
+        # Capturar tanto errores de psycopg2 como errores genéricos de SQLAlchemy
+        is_table_missing = (
+            "does not exist" in error_msg.lower() 
+            or "no such table" in error_msg.lower() 
+            or "relation" in error_msg.lower()
+            or "UndefinedTable" in error_type
+            or "documentos_ai" in error_msg and "does not exist" in error_msg.lower()
+        )
+        
+        if is_table_missing:
             logger.warning("⚠️ Tabla documentos_ai no existe. Se requiere migración de base de datos.")
             return {
                 "total": 0,
@@ -2659,8 +2669,17 @@ def obtener_metricas_ai(
             tamaño_total = db.query(func.sum(DocumentoAI.tamaño_bytes)).scalar() or 0
         except Exception as db_error:
             error_msg = str(db_error)
+            error_type = type(db_error).__name__
             # ✅ Si la tabla no existe, retornar valores por defecto
-            if "does not exist" in error_msg.lower() or "no such table" in error_msg.lower() or "relation" in error_msg.lower():
+            is_table_missing = (
+                "does not exist" in error_msg.lower() 
+                or "no such table" in error_msg.lower() 
+                or "relation" in error_msg.lower()
+                or "UndefinedTable" in error_type
+                or "documentos_ai" in error_msg and "does not exist" in error_msg.lower()
+            )
+            
+            if is_table_missing:
                 logger.warning("⚠️ Tabla documentos_ai no existe. Retornando métricas por defecto.")
                 total_documentos = 0
                 documentos_activos = 0
