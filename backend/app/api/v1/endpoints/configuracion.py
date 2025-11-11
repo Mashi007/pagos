@@ -2483,12 +2483,12 @@ def listar_documentos_ai(
 
     try:
         query = db.query(DocumentoAI)
-        
+
         if activo is not None:
             query = query.filter(DocumentoAI.activo == activo)
-        
+
         documentos = query.order_by(DocumentoAI.creado_en.desc()).all()
-        
+
         return {
             "total": len(documentos),
             "documentos": [doc.to_dict() for doc in documentos],
@@ -2515,9 +2515,13 @@ async def crear_documento_ai(
         from pathlib import Path
 
         # Validar tipo de archivo
-        tipos_permitidos = ["application/pdf", "text/plain", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+        tipos_permitidos = [
+            "application/pdf",
+            "text/plain",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ]
         extensiones_permitidas = {".pdf": "pdf", ".txt": "txt", ".docx": "docx"}
-        
+
         tipo_archivo = archivo.content_type
         if tipo_archivo not in tipos_permitidos:
             raise HTTPException(
@@ -2539,13 +2543,14 @@ async def crear_documento_ai(
 
         # Generar nombre único para el archivo
         import uuid
+
         nombre_unico = f"{uuid.uuid4()}{extension}"
         ruta_archivo = upload_dir / nombre_unico
 
         # Guardar archivo
         contenido = await archivo.read()
         tamaño_bytes = len(contenido)
-        
+
         with open(ruta_archivo, "wb") as f:
             f.write(contenido)
 
@@ -2592,14 +2597,14 @@ def eliminar_documento_ai(
 
     try:
         documento = db.query(DocumentoAI).filter(DocumentoAI.id == documento_id).first()
-        
+
         if not documento:
             raise HTTPException(status_code=404, detail="Documento no encontrado")
 
         # Eliminar archivo físico
         import os
         from pathlib import Path
-        
+
         if documento.ruta_archivo and Path(documento.ruta_archivo).exists():
             try:
                 os.remove(documento.ruta_archivo)
@@ -2636,15 +2641,20 @@ def obtener_metricas_ai(
         total_documentos = db.query(DocumentoAI).count()
         documentos_activos = db.query(DocumentoAI).filter(DocumentoAI.activo == True).count()
         documentos_procesados = db.query(DocumentoAI).filter(DocumentoAI.contenido_procesado == True).count()
-        
+
         # Calcular tamaño total
         from sqlalchemy import func
+
         tamaño_total = db.query(func.sum(DocumentoAI.tamaño_bytes)).scalar() or 0
-        
+
         # Verificar configuración
         config_ai = _consultar_configuracion_ai(db)
-        config_dict = _procesar_configuraciones_ai(config_ai) if config_ai and not isinstance(config_ai, dict) else (config_ai if isinstance(config_ai, dict) else {})
-        
+        config_dict = (
+            _procesar_configuraciones_ai(config_ai)
+            if config_ai and not isinstance(config_ai, dict)
+            else (config_ai if isinstance(config_ai, dict) else {})
+        )
+
         ai_activo = config_dict.get("activo", "false").lower() in ("true", "1", "yes", "on")
         modelo_configurado = config_dict.get("modelo", "")
         tiene_token = bool(config_dict.get("openai_api_key", ""))
@@ -2684,7 +2694,7 @@ async def probar_configuracion_ai(
 ):
     """
     Probar configuración de AI enviando una pregunta a ChatGPT
-    
+
     Args:
         request: Objeto con pregunta opcional. Si no se proporciona, se usa una pregunta por defecto.
         usar_documentos: Si True, busca contexto en documentos cargados
@@ -2703,7 +2713,7 @@ async def probar_configuracion_ai(
             raise HTTPException(status_code=400, detail="No hay configuración de AI")
 
         config_dict = {config.clave: config.valor for config in configs}
-        
+
         # Verificar que haya token configurado
         openai_api_key = config_dict.get("openai_api_key", "")
         if not openai_api_key:
@@ -2738,7 +2748,7 @@ async def probar_configuracion_ai(
                 .limit(5)
                 .all()
             )
-            
+
             if documentos_activos:
                 # Por ahora, solo usar títulos y descripciones
                 # En el futuro, se implementará búsqueda semántica con embeddings
@@ -2748,7 +2758,7 @@ async def probar_configuracion_ai(
                         contextos.append(f"- {doc.titulo}")
                     if doc.descripcion:
                         contextos.append(f"  {doc.descripcion}")
-                
+
                 if contextos:
                     contexto_documentos = "\n\nDocumentos disponibles:\n" + "\n".join(contextos[:3])  # Limitar a 3 documentos
 
@@ -2759,7 +2769,7 @@ async def probar_configuracion_ai(
 
         # Llamar a OpenAI API
         import httpx
-        
+
         start_time = time.time()
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -2774,12 +2784,9 @@ async def probar_configuracion_ai(
                         "messages": [
                             {
                                 "role": "system",
-                                "content": "Eres un asistente útil que responde preguntas sobre préstamos y servicios financieros. Responde de manera clara y profesional."
+                                "content": "Eres un asistente útil que responde preguntas sobre préstamos y servicios financieros. Responde de manera clara y profesional.",
                             },
-                            {
-                                "role": "user",
-                                "content": prompt
-                            }
+                            {"role": "user", "content": prompt},
                         ],
                         "temperature": temperatura,
                         "max_tokens": max_tokens,
@@ -2809,9 +2816,9 @@ async def probar_configuracion_ai(
                 else:
                     error_data = response.json() if response.content else {}
                     error_message = error_data.get("error", {}).get("message", "Error desconocido")
-                    
+
                     logger.error(f"❌ Error en prueba de AI: {error_message}")
-                    
+
                     return {
                         "success": False,
                         "mensaje": f"Error de OpenAI: {error_message}",

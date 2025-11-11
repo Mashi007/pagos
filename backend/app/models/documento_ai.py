@@ -19,23 +19,23 @@ class DocumentoAI(Base):
     id = Column(Integer, primary_key=True, index=True)
     titulo = Column(String(255), nullable=False)
     descripcion = Column(Text, nullable=True)
-    
+
     # Información del archivo
     nombre_archivo = Column(String(255), nullable=False)
     tipo_archivo = Column(String(50), nullable=False)  # pdf, txt, docx, etc.
     ruta_archivo = Column(String(500), nullable=False)  # Ruta donde se almacena el archivo
     tamaño_bytes = Column(Integer, nullable=True)
-    
+
     # Contenido procesado
     contenido_texto = Column(Text, nullable=True)  # Texto extraído del documento
     contenido_procesado = Column(Boolean, default=False)  # Si ya se procesó el contenido
-    
+
     # Embeddings (opcional, para búsqueda semántica avanzada)
     # Se puede almacenar como JSON o en tabla separada
-    
+
     # Estado
     activo = Column(Boolean, default=True)
-    
+
     # Auditoría
     creado_en = Column(DateTime, server_default=func.now())
     actualizado_en = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -57,4 +57,3 @@ class DocumentoAI(Base):
             "creado_en": self.creado_en.isoformat() if self.creado_en else None,
             "actualizado_en": self.actualizado_en.isoformat() if self.actualizado_en else None,
         }
-
