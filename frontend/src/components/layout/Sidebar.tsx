@@ -32,8 +32,8 @@ import {
   LogOut,
   Menu,
   Briefcase,
-  GitBranch,
-  Ticket,
+  Target,
+  FileText,
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -153,8 +153,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       icon: Briefcase,
       isSubmenu: true,
       children: [
-        { title: 'Embudo Clientes', href: '/crm/embudo-clientes', icon: GitBranch },
-        { title: 'Tickets Atención', href: '/crm/tickets', icon: Ticket },
+        { title: 'Embudo Clientes', href: '/crm/embudo-clientes', icon: Target },
+        { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
         { title: 'Embudo Concesionarios', href: '/crm/embudo-concesionarios', icon: Building },
       ],
     },

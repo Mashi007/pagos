@@ -6,7 +6,7 @@ import {
   Plus,
   Eye,
   Edit,
-  GitBranch,
+  Target,
   Users,
   TrendingUp,
   Clock,
@@ -102,7 +102,7 @@ export function EmbudoClientes() {
       >
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <GitBranch className="h-8 w-8 text-blue-600" />
+            <Target className="h-8 w-8 text-blue-600" />
             Embudo de Clientes
           </h1>
           <p className="text-gray-600 mt-1">
