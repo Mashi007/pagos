@@ -5,16 +5,10 @@ import {
   LayoutDashboard,
   Users,
   CreditCard,
-  Calculator,
-  Building2,
   FileText,
-  BarChart3,
   Settings,
   Bell,
-  Search,
-  Upload,
   Brain,
-  UserCheck,
   Calendar,
   Shield,
   X,
@@ -89,10 +83,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   const handleLogout = async () => {
     await logout()
     setShowUserMenu(false)
-  }
-
-  const getRoleColor = (isAdmin: boolean) => {
-    return isAdmin ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-blue-100 text-blue-800 border border-blue-200'
   }
 
   const toggleSubmenu = (title: string) => {
