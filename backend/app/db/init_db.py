@@ -20,13 +20,14 @@ logger = logging.getLogger(__name__)
 def run_migrations() -> None:
     """Ejecutar migraciones de Alembic automáticamente."""
     try:
+        from pathlib import Path
+
         from alembic import command
         from alembic.config import Config
-        from pathlib import Path
 
         # Obtener ruta del archivo alembic.ini
         alembic_ini_path = Path(__file__).parent.parent.parent / "alembic.ini"
-        
+
         if not alembic_ini_path.exists():
             logger.warning("⚠️ alembic.ini no encontrado, omitiendo migraciones automáticas")
             return
