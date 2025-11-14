@@ -10,6 +10,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func
+from sqlalchemy.exc import ProgrammingError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -109,6 +110,34 @@ class PredecirRiesgoRequest(BaseModel):
 # ============================================
 
 
+def _handle_database_error(e: Exception, operation: str) -> HTTPException:
+    """Manejar errores de base de datos y retornar mensajes claros"""
+    error_str = str(e).lower()
+    
+    # Detectar errores de tablas no encontradas
+    if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+        logger.error(f"Tablas de AI training no encontradas. Error: {e}")
+        return HTTPException(
+            status_code=503,
+            detail=(
+                "Las tablas de entrenamiento AI no están creadas. "
+                "Ejecuta las migraciones de Alembic: alembic upgrade head"
+            ),
+        )
+    
+    # Otros errores de base de datos
+    if isinstance(e, (ProgrammingError, OperationalError)):
+        logger.error(f"Error de base de datos en {operation}: {e}", exc_info=True)
+        return HTTPException(
+            status_code=500,
+            detail=f"Error de base de datos en {operation}: {str(e)}",
+        )
+    
+    # Error genérico
+    logger.error(f"Error en {operation}: {e}", exc_info=True)
+    return HTTPException(status_code=500, detail=f"Error en {operation}: {str(e)}")
+
+
 def _obtener_openai_api_key(db: Session) -> str:
     """Obtener API key de OpenAI desde configuración"""
     from app.models.configuracion_sistema import ConfiguracionSistema
@@ -171,9 +200,10 @@ async def listar_conversaciones(
             "total_pages": (total + per_page - 1) // per_page,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error listando conversaciones: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error listando conversaciones: {str(e)}")
+        raise _handle_database_error(e, "listando conversaciones")
 
 
 @router.post("/conversaciones")
@@ -363,9 +393,10 @@ async def listar_fine_tuning_jobs(
 
         return {"jobs": [job.to_dict() for job in jobs]}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error listando jobs: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error listando jobs: {str(e)}")
+        raise _handle_database_error(e, "listando jobs")
 
 
 @router.get("/fine-tuning/jobs/{job_id}")
@@ -487,9 +518,10 @@ async def obtener_estado_embeddings(
             "ultima_actualizacion": ultima_actualizacion.isoformat() if ultima_actualizacion else None,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error obteniendo estado de embeddings: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error obteniendo estado: {str(e)}")
+        raise _handle_database_error(e, "obteniendo estado de embeddings")
 
 
 @router.post("/rag/generar-embeddings")
@@ -677,9 +709,10 @@ async def listar_modelos_riesgo(
         modelos = db.query(ModeloRiesgo).order_by(ModeloRiesgo.entrenado_en.desc()).all()
         return {"modelos": [m.to_dict() for m in modelos]}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error listando modelos: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error listando modelos: {str(e)}")
+        raise _handle_database_error(e, "listando modelos")
 
 
 @router.get("/ml-riesgo/modelo-activo")
@@ -696,9 +729,10 @@ async def obtener_modelo_riesgo_activo(
 
         return {"modelo": modelo.to_dict()}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error obteniendo modelo activo: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error obteniendo modelo activo: {str(e)}")
+        raise _handle_database_error(e, "obteniendo modelo activo")
 
 
 @router.post("/ml-riesgo/entrenar")
@@ -1067,6 +1101,7 @@ async def obtener_metricas_entrenamiento(
             },
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error obteniendo métricas: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error obteniendo métricas: {str(e)}")
+        raise _handle_database_error(e, "obteniendo métricas")
