@@ -12,7 +12,33 @@ Este es un **error interno de Cursor**, no un problema con tu código. Ocurre cu
 
 ## ✅ Soluciones
 
-### Solución 1: Usar el Script de PowerShell (Recomendado)
+### Solución 1: Usar el Script Helper de Python (NUEVO - Recomendado)
+
+He creado un script helper que ejecuta Alembic correctamente desde cualquier directorio:
+
+```powershell
+# Desde la raíz del proyecto o desde backend/
+cd backend
+python scripts/alembic_helper.py current
+python scripts/alembic_helper.py heads
+python scripts/alembic_helper.py upgrade head
+```
+
+**Ventajas:**
+- ✅ No requiere cambiar de directorio manualmente
+- ✅ Evita problemas de serialización
+- ✅ Funciona desde cualquier ubicación
+
+**Comandos disponibles:**
+```powershell
+python scripts/alembic_helper.py current      # Ver migración actual
+python scripts/alembic_helper.py heads        # Ver migraciones disponibles
+python scripts/alembic_helper.py history     # Ver historial
+python scripts/alembic_helper.py upgrade head # Ejecutar migraciones
+python scripts/alembic_helper.py downgrade -1 # Revertir última migración
+```
+
+### Solución 2: Usar el Script de PowerShell (Alternativa)
 
 He creado un script que ejecuta las migraciones directamente sin depender de Cursor:
 

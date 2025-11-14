@@ -34,13 +34,18 @@ try:
     from app.db.base import Base
 
     # Importar todos los modelos para que Alembic los detecte
+    # Importación optimizada: solo importar cuando sea necesario para evitar problemas de serialización
     # Esto asegura que todos los modelos estén registrados en Base.metadata
-    import app.models  # noqa: F401
+    if not Base.metadata.tables:
+        # Solo importar si los metadatos están vacíos (primera vez)
+        import app.models  # noqa: F401
 except Exception as e:
-    print(f"❌ Error al importar configuración o modelos: {e}")
-    print(f"📁 Directorio actual: {os.getcwd()}")
-    print(f"📁 Path del script: {Path(__file__).parent.parent}")
-    print(f"🔍 DATABASE_URL en env: {os.getenv('DATABASE_URL', 'NO CONFIGURADA')[:50] if os.getenv('DATABASE_URL') else 'NO CONFIGURADA'}...")
+    # Mensajes de error más concisos para evitar problemas de serialización
+    error_msg = str(e)[:200]  # Limitar longitud del mensaje
+    print(f"❌ Error al importar: {error_msg}")
+    print(f"📁 Dir: {os.getcwd()}")
+    db_url_preview = os.getenv('DATABASE_URL', 'NO CONFIGURADA')[:30] if os.getenv('DATABASE_URL') else 'NO CONFIGURADA'
+    print(f"🔍 DB: {db_url_preview}...")
     raise
 
 # Configurar logging
