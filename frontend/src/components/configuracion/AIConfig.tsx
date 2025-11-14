@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, BookOpen, RotateCcw, Copy } from 'lucide-react'
+import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, BookOpen, RotateCcw, Copy, Sparkles } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { apiClient } from '@/services/api'
+import { TrainingDashboard } from './TrainingDashboard'
+import { FineTuningTab } from './FineTuningTab'
+import { RAGTab } from './RAGTab'
+import { MLRiesgoTab } from './MLRiesgoTab'
 
 interface AIConfig {
   openai_api_key: string
@@ -922,11 +926,15 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
       {/* Tabs con 4 pestañas */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="configuracion">Configuración</TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="entrenamiento">Entrenamiento</TabsTrigger>
           <TabsTrigger value="metricas">Métricas</TabsTrigger>
+          <TabsTrigger value="sistema-hibrido">
+            <Sparkles className="h-4 w-4 mr-1" />
+            Sistema Híbrido
+          </TabsTrigger>
         </TabsList>
 
         {/* Pestaña 1: Configuración */}
@@ -1716,6 +1724,46 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Pestaña 5: Sistema Híbrido */}
+        <TabsContent value="sistema-hibrido" className="space-y-4">
+          <Tabs defaultValue="dashboard" className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="dashboard">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Dashboard
+              </TabsTrigger>
+              <TabsTrigger value="fine-tuning">
+                <Brain className="h-4 w-4 mr-2" />
+                Fine-tuning
+              </TabsTrigger>
+              <TabsTrigger value="rag">
+                <Sparkles className="h-4 w-4 mr-2" />
+                RAG
+              </TabsTrigger>
+              <TabsTrigger value="ml-riesgo">
+                <Brain className="h-4 w-4 mr-2" />
+                ML Riesgo
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="dashboard" className="mt-6">
+              <TrainingDashboard />
+            </TabsContent>
+
+            <TabsContent value="fine-tuning" className="mt-6">
+              <FineTuningTab />
+            </TabsContent>
+
+            <TabsContent value="rag" className="mt-6">
+              <RAGTab />
+            </TabsContent>
+
+            <TabsContent value="ml-riesgo" className="mt-6">
+              <MLRiesgoTab />
+            </TabsContent>
+          </Tabs>
         </TabsContent>
       </Tabs>
     </div>
