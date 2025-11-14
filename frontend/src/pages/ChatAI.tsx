@@ -45,18 +45,25 @@ export function ChatAI() {
         openai_api_key?: string
         activo?: string
       }>('/api/v1/configuracion/ai/configuracion')
-      const tieneToken = !!(config?.openai_api_key && config.openai_api_key.trim())
+      const tieneToken = !!(config?.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-'))
       const estaActivo = config?.activo?.toLowerCase() === 'true'
-      setAiConfigurado(tieneToken && estaActivo)
+      const configuradoCorrectamente = tieneToken && estaActivo
       
-      if (!tieneToken) {
-        toast.error('OpenAI API Key no configurado. Configúralo en Configuración > Inteligencia Artificial')
-      } else if (!estaActivo) {
-        toast.warning('AI está inactivo. Actívalo en Configuración > Inteligencia Artificial')
+      setAiConfigurado(configuradoCorrectamente)
+      
+      // Solo mostrar toasts si NO está configurado correctamente
+      if (!configuradoCorrectamente) {
+        if (!tieneToken) {
+          toast.error('OpenAI API Key no configurado. Configúralo en Configuración > Inteligencia Artificial')
+        } else if (!estaActivo) {
+          toast.warning('AI está inactivo. Actívalo en Configuración > Inteligencia Artificial')
+        }
       }
     } catch (error) {
       console.error('Error verificando configuración AI:', error)
       setAiConfigurado(false)
+      // Solo mostrar error si realmente hay un problema de conexión
+      toast.error('Error al verificar configuración de AI')
     } finally {
       setVerificando(false)
     }
