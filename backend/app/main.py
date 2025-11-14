@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 # Routers
 # Imports después de logging por diseño - ver comentario arriba
-from app.api.v1.endpoints import (  # noqa: E402; aprobaciones,  # MODULO APROBACIONES DESHABILITADO
+from app.api.v1.endpoints import (  # noqa: E402; aprobaciones deshabilitado - ver __init__.py
     amortizacion,
     analistas,
     auditoria,

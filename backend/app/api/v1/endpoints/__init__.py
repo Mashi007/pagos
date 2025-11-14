@@ -5,7 +5,7 @@
 from . import (
     amortizacion,
     analistas,
-    aprobaciones,
+    # aprobaciones,  # MODULO DESHABILITADO - Ver main.py
     auditoria,
     auth,
     carga_masiva,
@@ -18,6 +18,7 @@ from . import (
     health,
     kpis,
     modelos_vehiculos,
+    monitoring,
     notificaciones,
     notificaciones_previas,
     pagos,
@@ -46,13 +47,14 @@ __all__ = [
     "kpis",
     "notificaciones",
     "notificaciones_previas",
-    "aprobaciones",
+    # "aprobaciones",  # MODULO DESHABILITADO
     "auditoria",
     "configuracion",
     "dashboard",
     "analistas",
     "carga_masiva",
     "modelos_vehiculos",
+    "monitoring",
     "solicitudes",
     "scheduler_notificaciones",
     "validadores",

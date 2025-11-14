@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -2615,7 +2615,7 @@ def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
                             texto = f.read()
                             logger.info(f"✅ Texto leído con codificación {encoding}")
                             break
-                    except:
+                    except Exception:
                         continue
 
         elif tipo_archivo.lower() == "pdf":
@@ -2631,7 +2631,7 @@ def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
                         logger.warning("⚠️ PDF está encriptado. Intentando desencriptar sin contraseña...")
                         try:
                             pdf_reader.decrypt("")
-                        except:
+                        except Exception:
                             logger.error("❌ PDF requiere contraseña para desencriptar.")
                             return ""
 
@@ -2866,7 +2866,7 @@ async def crear_documento_ai(
             try:
                 if ruta_archivo.exists():
                     os.remove(ruta_archivo)
-            except:
+            except Exception:
                 pass
 
             error_msg = str(db_error)
@@ -3172,6 +3172,148 @@ def activar_desactivar_documento_ai(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
+@router.get("/ai/prompt")
+def obtener_prompt_ai(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener el prompt personalizado del AI"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden ver el prompt de AI",
+        )
+    
+    try:
+        config = (
+            db.query(ConfiguracionSistema)
+            .filter(
+                ConfiguracionSistema.categoria == "AI",
+                ConfiguracionSistema.clave == "system_prompt_personalizado",
+            )
+            .first()
+        )
+        
+        prompt_personalizado = config.valor if config else ""
+        tiene_prompt_personalizado = bool(prompt_personalizado and prompt_personalizado.strip())
+        
+        return {
+            "prompt_personalizado": prompt_personalizado or "",
+            "tiene_prompt_personalizado": tiene_prompt_personalizado,
+            "usando_prompt_default": not tiene_prompt_personalizado,
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo prompt de AI: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.put("/ai/prompt")
+def actualizar_prompt_ai(
+    prompt_data: Dict[str, str] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Actualizar el prompt personalizado del AI"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden actualizar el prompt de AI",
+        )
+    
+    try:
+        prompt_texto = prompt_data.get("prompt", "").strip()
+        
+        # Validar que el prompt tenga los placeholders necesarios
+        placeholders_requeridos = ["{resumen_bd}", "{info_cliente_buscado}", "{datos_adicionales}", "{info_esquema}", "{contexto_documentos}"]
+        placeholders_faltantes = [p for p in placeholders_requeridos if p not in prompt_texto]
+        
+        if prompt_texto and placeholders_faltantes:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El prompt personalizado debe incluir los siguientes placeholders: {', '.join(placeholders_faltantes)}. Estos se reemplazarán automáticamente con los datos del sistema."
+            )
+        
+        config = (
+            db.query(ConfiguracionSistema)
+            .filter(
+                ConfiguracionSistema.categoria == "AI",
+                ConfiguracionSistema.clave == "system_prompt_personalizado",
+            )
+            .first()
+        )
+        
+        if config:
+            if prompt_texto:
+                config.valor = prompt_texto
+                config.tipo_dato = "TEXT"
+                mensaje = "Prompt personalizado actualizado exitosamente"
+            else:
+                # Si se envía vacío, eliminar el prompt personalizado (usar default)
+                db.delete(config)
+                mensaje = "Prompt personalizado eliminado. Se usará el prompt por defecto."
+        else:
+            if prompt_texto:
+                nueva_config = ConfiguracionSistema(
+                    categoria="AI",
+                    clave="system_prompt_personalizado",
+                    valor=prompt_texto,
+                    tipo_dato="TEXT",
+                    visible_frontend=False,  # No mostrar en la UI general
+                    descripcion="Prompt personalizado para el Chat AI. Incluye placeholders: {resumen_bd}, {info_cliente_buscado}, {datos_adicionales}, {info_esquema}, {contexto_documentos}",
+                )
+                db.add(nueva_config)
+                mensaje = "Prompt personalizado guardado exitosamente"
+            else:
+                mensaje = "No hay prompt personalizado para eliminar"
+        
+        db.commit()
+        logger.info(f"Prompt de AI actualizado por {current_user.email}")
+        
+        return {
+            "mensaje": mensaje,
+            "tiene_prompt_personalizado": bool(prompt_texto),
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando prompt de AI: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/ai/prompt/default")
+def obtener_prompt_default_ai(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener el prompt por defecto del AI (para referencia)"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden ver el prompt de AI",
+        )
+    
+    # Retornar el prompt por defecto como referencia
+    # Nota: Este es un ejemplo, el prompt real se construye dinámicamente
+    prompt_default = """Eres un ANALISTA ESPECIALIZADO en préstamos y cobranzas...
+
+[Este es el prompt por defecto. Puedes personalizarlo en la sección de Entrenamiento de Prompt]
+
+Placeholders disponibles:
+- {resumen_bd}: Resumen de la base de datos
+- {info_cliente_buscado}: Información del cliente si se busca por cédula
+- {datos_adicionales}: Cálculos y análisis adicionales
+- {info_esquema}: Esquema completo de la base de datos
+- {contexto_documentos}: Documentos de contexto adicionales
+"""
+    
+    return {
+        "prompt_default": prompt_default,
+        "nota": "Este es solo un ejemplo. El prompt real se construye dinámicamente con los datos actuales del sistema."
+    }
+
+
 @router.get("/ai/metricas")
 def obtener_metricas_ai(
     db: Session = Depends(get_db),
@@ -3185,8 +3327,8 @@ def obtener_metricas_ai(
         # ✅ Intentar contar documentos con manejo de errores
         try:
             total_documentos = db.query(DocumentoAI).count()
-            documentos_activos = db.query(DocumentoAI).filter(DocumentoAI.activo == True).count()
-            documentos_procesados = db.query(DocumentoAI).filter(DocumentoAI.contenido_procesado == True).count()
+            documentos_activos = db.query(DocumentoAI).filter(DocumentoAI.activo.is_(True)).count()
+            documentos_procesados = db.query(DocumentoAI).filter(DocumentoAI.contenido_procesado.is_(True)).count()
 
             # Calcular tamaño total
             from sqlalchemy import func
@@ -3331,7 +3473,7 @@ async def probar_configuracion_ai(
             try:
                 documentos_activos = (
                     db.query(DocumentoAI)
-                    .filter(DocumentoAI.activo == True, DocumentoAI.contenido_procesado == True)
+                    .filter(DocumentoAI.activo.is_(True), DocumentoAI.contenido_procesado.is_(True))
                     .limit(5)
                     .all()
                 )
@@ -3606,7 +3748,7 @@ def _calcular_metricas_periodo(db: Session, fecha_inicio: date, fecha_fin: date)
         # Total de pagos en el período
         total_pagos = db.query(func.sum(Pago.monto_pagado)).filter(
             and_(
-                Pago.activo == True,
+                Pago.activo.is_(True),
                 Pago.fecha_pago >= fecha_inicio,
                 Pago.fecha_pago <= fecha_fin
             )
@@ -4049,7 +4191,7 @@ def _obtener_estadisticas_tablas(db: Session) -> str:
                     fecha_result = db.execute(query_fecha).fetchone()
                     if fecha_result and fecha_result[0]:
                         fecha_info = f" | Rango fechas: {fecha_result[0]} a {fecha_result[1]}"
-                except:
+                except Exception:
                     pass
                 
                 estadisticas.append(f"{tabla}: {total} registros{fecha_info}")
@@ -4668,7 +4810,7 @@ def _obtener_resumen_bd(db: Session) -> str:
         # Clientes
         total_clientes = _ejecutar_consulta_segura(lambda: db.query(Cliente).count(), "consulta de total clientes")
         clientes_activos = _ejecutar_consulta_segura(
-            lambda: db.query(Cliente).filter(Cliente.activo == True).count(), "consulta de clientes activos"
+            lambda: db.query(Cliente).filter(Cliente.activo.is_(True)).count(), "consulta de clientes activos"
         )
         if total_clientes is not None and clientes_activos is not None:
             resumen.append(f"Clientes: {total_clientes} totales, {clientes_activos} activos")
@@ -4694,7 +4836,7 @@ def _obtener_resumen_bd(db: Session) -> str:
         # Pagos
         total_pagos = _ejecutar_consulta_segura(lambda: db.query(Pago).count(), "consulta de total pagos")
         pagos_activos = _ejecutar_consulta_segura(
-            lambda: db.query(Pago).filter(Pago.activo == True).count(), "consulta de pagos activos"
+            lambda: db.query(Pago).filter(Pago.activo.is_(True)).count(), "consulta de pagos activos"
         )
         if total_pagos is not None and pagos_activos is not None:
             resumen.append(f"Pagos: {total_pagos} totales, {pagos_activos} activos")
@@ -4808,7 +4950,7 @@ def _obtener_resumen_bd(db: Session) -> str:
             resumen.append(f"Monto total de préstamos activos: {monto_total_prestamos:,.2f}")
 
         monto_total_pagos = _ejecutar_consulta_segura(
-            lambda: db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo == True).scalar() or 0,
+            lambda: db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo.is_(True)).scalar() or 0,
             "consulta de monto total pagos",
         )
         if monto_total_pagos is not None:
@@ -4820,7 +4962,7 @@ def _obtener_resumen_bd(db: Session) -> str:
         # Intentar rollback si hay error
         try:
             db.rollback()
-        except:
+        except Exception:
             pass
         return "No se pudo obtener resumen de la base de datos"
 
@@ -4898,6 +5040,7 @@ async def chat_ai(
         # Validar que la pregunta sea sobre la base de datos
         # Palabras clave que indican preguntas sobre BD
         palabras_clave_bd = [
+            # Entidades principales
             "cliente",
             "clientes",
             "préstamo",
@@ -4912,6 +5055,36 @@ async def chat_ai(
             "morosidad",
             "pendiente",
             "pagada",
+            # Identificación y búsqueda
+            "cedula",
+            "cédula",
+            "cedula:",
+            "cédula:",
+            "documento",
+            "documentos",
+            "dni",
+            "ci",
+            "identificación",
+            "identificacion",
+            "numero",
+            "número",
+            "numero:",
+            "número:",
+            # Consultas de búsqueda
+            "quien tiene",
+            "quién tiene",
+            "quien tiene el",
+            "quién tiene el",
+            "como se llama",
+            "cómo se llama",
+            "cual es el nombre",
+            "cuál es el nombre",
+            "buscar por",
+            "buscar cliente",
+            "encontrar cliente",
+            "datos del cliente",
+            "información del cliente",
+            # Base de datos y datos
             "base de datos",
             "datos",
             "estadística",
@@ -4934,6 +5107,7 @@ async def chat_ai(
             "sistema",
             "registro",
             "registros",
+            # Fechas y tiempo
             "fecha actual",
             "día de hoy",
             "qué día",
@@ -5013,15 +5187,50 @@ async def chat_ai(
             "modelo predictivo",
             "riesgo",
             "factores de riesgo",
+            # Términos adicionales para mayor flexibilidad (solo si están en contexto de BD)
+            "estado",
+            "estados",
+            "información",
+            "consulta",
+            "mostrar",
+            "listar",
+            "buscar",
+            "encontrar",
+            "filtrar",
+            "ordenar",
+            "agrupar",
+            "sumar",
+            "contar",
+            "promedio",
+            "máximo",
+            "mínimo",
+            "último",
+            "reciente",
+            "actual",
+            "hoy",
+            "ayer",
+            "semana",
+            "mes",
+            "año",
+            # Términos de consulta comunes
+            "cuántos hay",
+            "cuántas hay",
+            "cuántos son",
+            "cuántas son",
+            "cuál es",
+            "cuáles son",
+            "qué hay",
+            "qué son",
         ]
 
-        pregunta_lower = pregunta.lower()
+        pregunta_lower = pregunta.lower().strip()
         es_pregunta_bd = any(palabra in pregunta_lower for palabra in palabras_clave_bd)
 
         if not es_pregunta_bd:
+            logger.warning(f"⚠️ Pregunta rechazada por no contener palabras clave de BD: '{pregunta[:100]}...'")
             raise HTTPException(
                 status_code=400,
-                detail="El Chat AI solo responde preguntas sobre la base de datos del sistema (clientes, préstamos, pagos, cuotas, estadísticas, etc.). Para preguntas generales, usa el Chat de Prueba en la configuración de AI.",
+                detail="El Chat AI solo responde preguntas sobre la base de datos del sistema. Tu pregunta debe incluir términos relacionados con: clientes, préstamos, pagos, cuotas, morosidad, estadísticas, datos, análisis, fechas, montos, o cualquier consulta sobre la información almacenada en el sistema. Para preguntas generales, usa el Chat de Prueba en la configuración de AI.",
             )
 
         # Obtener modelo y parámetros
@@ -5062,7 +5271,7 @@ async def chat_ai(
         try:
             documentos_activos = (
                 db.query(DocumentoAI)
-                .filter(DocumentoAI.activo == True, DocumentoAI.contenido_procesado == True)
+                .filter(DocumentoAI.activo.is_(True), DocumentoAI.contenido_procesado.is_(True))
                 .limit(3)
                 .all()
             )
@@ -5085,7 +5294,7 @@ async def chat_ai(
                     # Reintentar la consulta
                     documentos_activos = (
                         db.query(DocumentoAI)
-                        .filter(DocumentoAI.activo == True, DocumentoAI.contenido_procesado == True)
+                        .filter(DocumentoAI.activo.is_(True), DocumentoAI.contenido_procesado.is_(True))
                         .limit(3)
                         .all()
                     )
@@ -5117,6 +5326,15 @@ async def chat_ai(
         else:
             logger.debug("ℹ️ No hay documentos AI activos y procesados disponibles para contexto")
 
+        # Detectar si la pregunta es una búsqueda por cédula/documento
+        import re
+        busqueda_cedula = None
+        patron_cedula = r'(?:cedula|cédula|documento|dni|ci)[\s:]*([A-Z0-9]+)'
+        match_cedula = re.search(patron_cedula, pregunta, re.IGNORECASE)
+        if match_cedula:
+            busqueda_cedula = match_cedula.group(1).strip()
+            logger.info(f"🔍 Búsqueda por cédula detectada: {busqueda_cedula}")
+        
         # Detectar si la pregunta requiere cálculos específicos
         pregunta_lower = pregunta.lower()
         requiere_calculo_especifico = any(palabra in pregunta_lower for palabra in [
@@ -5124,6 +5342,66 @@ async def chat_ai(
             "análisis", "tendencia", "evolución", "cálculo", "calcular", "métrica",
             "porcentaje", "variación", "incremento", "disminución"
         ])
+        
+        # Si es búsqueda por cédula, buscar información del cliente
+        info_cliente_buscado = ""
+        if busqueda_cedula:
+            try:
+                from app.models.cliente import Cliente
+                from app.models.prestamo import Prestamo
+                from app.models.amortizacion import Cuota
+                from sqlalchemy import func
+                
+                cliente = db.query(Cliente).filter(Cliente.cedula == busqueda_cedula).first()
+                
+                if cliente:
+                    info_cliente_buscado = f"\n\n=== INFORMACIÓN DEL CLIENTE BUSCADO (Cédula: {busqueda_cedula}) ===\n"
+                    info_cliente_buscado += f"Nombre: {cliente.nombres}\n"
+                    info_cliente_buscado += f"Cédula: {cliente.cedula}\n"
+                    info_cliente_buscado += f"Teléfono: {cliente.telefono}\n"
+                    info_cliente_buscado += f"Email: {cliente.email}\n"
+                    info_cliente_buscado += f"Estado: {cliente.estado}\n"
+                    info_cliente_buscado += f"Activo: {'Sí' if cliente.activo else 'No'}\n"
+                    info_cliente_buscado += f"Fecha de registro: {cliente.fecha_registro}\n"
+                    
+                    # Buscar préstamos del cliente
+                    prestamos = db.query(Prestamo).filter(Prestamo.cedula == busqueda_cedula).all()
+                    if prestamos:
+                        info_cliente_buscado += f"\nPréstamos: {len(prestamos)} préstamo(s)\n"
+                        for p in prestamos:
+                            info_cliente_buscado += f"  - Préstamo ID {p.id}: {p.total_financiamiento} Bs, Estado: {p.estado}\n"
+                        
+                        # Buscar cuotas pendientes
+                        prestamos_ids = [p.id for p in prestamos]
+                        cuotas_pendientes = db.query(Cuota).filter(
+                            Cuota.prestamo_id.in_(prestamos_ids),
+                            Cuota.estado.in_(['PENDIENTE', 'MORA'])
+                        ).all()
+                        if cuotas_pendientes:
+                            total_pendiente = sum(float(c.monto_cuota - c.total_pagado) for c in cuotas_pendientes)
+                            info_cliente_buscado += f"\nCuotas pendientes: {len(cuotas_pendientes)} cuota(s)\n"
+                            info_cliente_buscado += f"Total pendiente: {total_pendiente:,.2f} Bs\n"
+                    else:
+                        info_cliente_buscado += "\nPréstamos: 0 préstamos\n"
+                else:
+                    # Buscar en préstamos por si acaso
+                    prestamo = db.query(Prestamo).filter(Prestamo.cedula == busqueda_cedula).first()
+                    if prestamo:
+                        info_cliente_buscado = f"\n\n=== INFORMACIÓN ENCONTRADA (Cédula: {busqueda_cedula}) ===\n"
+                        info_cliente_buscado += f"⚠️ Cliente no encontrado en tabla clientes, pero hay préstamos con esta cédula\n"
+                        info_cliente_buscado += f"Nombre en préstamo: {prestamo.nombres}\n"
+                        info_cliente_buscado += f"Cédula: {prestamo.cedula}\n"
+                        info_cliente_buscado += f"Préstamo ID: {prestamo.id}\n"
+                        info_cliente_buscado += f"Total financiamiento: {prestamo.total_financiamiento} Bs\n"
+                        info_cliente_buscado += f"Estado: {prestamo.estado}\n"
+                    else:
+                        info_cliente_buscado = f"\n\n=== BÚSQUEDA POR CÉDULA: {busqueda_cedula} ===\n"
+                        info_cliente_buscado += "❌ No se encontró ningún cliente ni préstamo con esta cédula en la base de datos.\n"
+                
+                logger.info(f"✅ Información del cliente buscado preparada: {len(info_cliente_buscado)} caracteres")
+            except Exception as e:
+                logger.error(f"Error buscando cliente por cédula: {e}")
+                info_cliente_buscado = f"\n\n⚠️ Error al buscar cliente con cédula {busqueda_cedula}: {str(e)}\n"
         
         # Si requiere cálculo específico, ejecutar consultas adicionales
         datos_adicionales = ""
@@ -5273,8 +5551,23 @@ async def chat_ai(
             except Exception as e:
                 logger.error(f"Error calculando datos adicionales: {e}")
         
-        # Construir prompt del sistema con información de la BD
-        system_prompt = f"""Eres un ANALISTA ESPECIALIZADO en préstamos y cobranzas con capacidad de análisis de KPIs operativos. Tu función es proporcionar información precisa, análisis de tendencias y métricas clave basándote EXCLUSIVAMENTE en los datos almacenados en las bases de datos del sistema.
+        # Obtener prompt personalizado si existe, sino usar el default
+        prompt_personalizado = config_dict.get("system_prompt_personalizado", "")
+        usar_prompt_personalizado = prompt_personalizado and prompt_personalizado.strip()
+        
+        if usar_prompt_personalizado:
+            logger.info("✅ Usando prompt personalizado configurado por el usuario")
+            # El prompt personalizado debe incluir placeholders que se reemplazarán
+            system_prompt = prompt_personalizado.format(
+                resumen_bd=resumen_bd,
+                info_cliente_buscado=info_cliente_buscado,
+                datos_adicionales=datos_adicionales,
+                info_esquema=info_esquema,
+                contexto_documentos=contexto_documentos
+            )
+        else:
+            # Construir prompt del sistema con información de la BD (default)
+            system_prompt = f"""Eres un ANALISTA ESPECIALIZADO en préstamos y cobranzas con capacidad de análisis de KPIs operativos. Tu función es proporcionar información precisa, análisis de tendencias y métricas clave basándote EXCLUSIVAMENTE en los datos almacenados en las bases de datos del sistema.
 
 ROL Y CONTEXTO:
 - Eres un analista especializado en préstamos y cobranzas con capacidad de análisis de KPIs operativos
@@ -5293,6 +5586,7 @@ Tienes acceso a información de la base de datos del sistema y a la fecha/hora a
 
 === RESUMEN DE BASE DE DATOS ===
 {resumen_bd}
+{info_cliente_buscado}
 {datos_adicionales}
 {info_esquema}
 
@@ -5341,6 +5635,70 @@ PROCESO DE ANÁLISIS:
 3. Accede a los datos y realiza los cálculos necesarios
 4. Compara con períodos anteriores si es relevante
 5. Presenta resultados con contexto y conclusiones claras
+
+EJEMPLOS DE PREGUNTAS VÁLIDAS (para referencia):
+- **Búsqueda de clientes**: 
+  * "¿Cómo se llama quien tiene este número de cédula: V19226493?"
+  * "¿Quién tiene la cédula V19226493?"
+  * "Buscar cliente con cédula V19226493"
+  * "Datos del cliente con documento V19226493"
+- **Consultas de préstamos**:
+  * "¿Cuántos préstamos tiene el cliente con cédula V19226493?"
+  * "¿Cuál es el estado del préstamo del cliente V19226493?"
+  * "Mostrar préstamos del cliente V19226493"
+- **Consultas de pagos y cuotas**:
+  * "¿Cuántas cuotas tiene pendientes el cliente V19226493?"
+  * "¿Cuánto debe el cliente con cédula V19226493?"
+  * "Mostrar pagos del cliente V19226493"
+- **Consultas de morosidad**:
+  * "¿El cliente V19226493 está en mora?"
+  * "¿Cuántos días de mora tiene el cliente V19226493?"
+  * "¿Cuál es la morosidad del cliente V19226493?"
+- **Consultas estadísticas**:
+  * "¿Cuántos clientes hay en total?"
+  * "¿Cuál es la tasa de morosidad actual?"
+  * "¿Cuánto se debe cobrar hoy?"
+  * "Mostrar estadísticas de préstamos"
+- **Consultas de fechas**:
+  * "¿Qué fecha es hoy?"
+  * "¿Cuántas cuotas vencen hoy?"
+  * "¿Cuáles son las cuotas vencidas?"
+
+PATRONES DE PREGUNTAS RECONOCIDOS:
+- Búsqueda por identificación: "cedula:", "cédula:", "documento:", "quien tiene", "como se llama"
+- Consultas de estado: "estado", "cuánto debe", "en mora", "pendiente"
+- Consultas de cantidad: "cuántos", "cuántas", "total", "cantidad"
+- Consultas de información: "datos de", "información de", "mostrar", "listar"
+
+INSTRUCCIONES ESPECÍFICAS PARA BÚSQUEDAS Y CONSULTAS:
+
+**BÚSQUEDAS POR IDENTIFICACIÓN (Cédula/Documento)**:
+- Cuando el usuario pregunta "¿Cómo se llama quien tiene este número de cédula: V19226493?" o similar:
+  1. Busca en la tabla `clientes` usando el campo `cedula` (indexed para búsquedas rápidas)
+  2. Si encuentras el cliente, proporciona: nombres, cédula, teléfono, email, estado, fecha_registro
+  3. Si no encuentras el cliente, indica claramente: "No se encontró ningún cliente con la cédula V19226493"
+  4. Puedes buscar también en `prestamos.cedula` si el cliente no está en la tabla clientes pero tiene préstamos
+  5. Usa el mapeo semántico: "cedula", "cédula", "documento", "dni", "ci" son equivalentes
+
+**CONSULTAS DE INFORMACIÓN DE CLIENTES**:
+- Para preguntas como "datos del cliente", "información del cliente", "quién tiene la cédula":
+  - Busca primero en `clientes` por `cedula`
+  - Si hay préstamos, menciona: "El cliente tiene X préstamos"
+  - Si hay cuotas pendientes, menciona: "Tiene Y cuotas pendientes"
+  - Si está en mora, menciona: "El cliente está en mora con Z días de atraso"
+
+**FORMATO DE RESPUESTA PARA BÚSQUEDAS**:
+- Si encuentras el cliente:
+  ```
+  👤 Cliente encontrado:
+  • Nombre: [nombres]
+  • Cédula: [cedula]
+  • Teléfono: [telefono]
+  • Email: [email]
+  • Estado: [estado]
+  • Fecha de registro: [fecha_registro]
+  ```
+- Si no encuentras: "❌ No se encontró ningún cliente con la cédula [cedula] en la base de datos."
 
 INSTRUCCIONES COMO ESPECIALISTA EN COBRANZAS Y PRÉSTAMOS:
 1. Responde preguntas sobre la fecha y hora actual usando la información proporcionada en el resumen

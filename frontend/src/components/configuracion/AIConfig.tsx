@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap } from 'lucide-react'
+import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, BookOpen, RotateCcw, Copy } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -596,6 +596,317 @@ export function AIConfig() {
     setResultadoPrueba(null)
   }
 
+  // Componente para editar el prompt
+  const PromptEditor = () => {
+    const [promptPersonalizado, setPromptPersonalizado] = useState('')
+    const [cargandoPrompt, setCargandoPrompt] = useState(true)
+    const [guardandoPrompt, setGuardandoPrompt] = useState(false)
+    const [tienePromptPersonalizado, setTienePromptPersonalizado] = useState(false)
+    const [mostrarPlaceholders, setMostrarPlaceholders] = useState(true)
+
+    useEffect(() => {
+      cargarPrompt()
+    }, [])
+
+    const cargarPrompt = async () => {
+      setCargandoPrompt(true)
+      try {
+        const data = await apiClient.get<{
+          prompt_personalizado: string
+          tiene_prompt_personalizado: boolean
+          usando_prompt_default: boolean
+        }>('/api/v1/configuracion/ai/prompt')
+        
+        setPromptPersonalizado(data.prompt_personalizado || '')
+        setTienePromptPersonalizado(data.tiene_prompt_personalizado)
+      } catch (error) {
+        console.error('Error cargando prompt:', error)
+        toast.error('Error cargando prompt')
+      } finally {
+        setCargandoPrompt(false)
+      }
+    }
+
+    const handleGuardarPrompt = async () => {
+      setGuardandoPrompt(true)
+      try {
+        await apiClient.put('/api/v1/configuracion/ai/prompt', {
+          prompt: promptPersonalizado
+        })
+        toast.success('✅ Prompt personalizado guardado exitosamente')
+        await cargarPrompt()
+      } catch (error: any) {
+        console.error('Error guardando prompt:', error)
+        const errorDetail = error?.response?.data?.detail || error?.message || 'Error guardando prompt'
+        toast.error(errorDetail)
+      } finally {
+        setGuardandoPrompt(false)
+      }
+    }
+
+    const handleRestaurarDefault = async () => {
+      if (!confirm('¿Estás seguro de restaurar el prompt por defecto? Se perderá el prompt personalizado.')) {
+        return
+      }
+      
+      setGuardandoPrompt(true)
+      try {
+        await apiClient.put('/api/v1/configuracion/ai/prompt', {
+          prompt: ''
+        })
+        toast.success('✅ Prompt restaurado al valor por defecto')
+        await cargarPrompt()
+      } catch (error: any) {
+        console.error('Error restaurando prompt:', error)
+        toast.error('Error restaurando prompt')
+      } finally {
+        setGuardandoPrompt(false)
+      }
+    }
+
+    const handleCopiarPlaceholders = () => {
+      const placeholders = `{resumen_bd}
+{info_cliente_buscado}
+{datos_adicionales}
+{info_esquema}
+{contexto_documentos}`
+      navigator.clipboard.writeText(placeholders)
+      toast.success('Placeholders copiados al portapapeles')
+    }
+
+    const promptTemplate = `Eres un ANALISTA ESPECIALIZADO en préstamos y cobranzas con capacidad de análisis de KPIs operativos. Tu función es proporcionar información precisa, análisis de tendencias y métricas clave basándote EXCLUSIVAMENTE en los datos almacenados en las bases de datos del sistema.
+
+ROL Y CONTEXTO:
+- Eres un analista especializado en préstamos y cobranzas con capacidad de análisis de KPIs operativos
+- Tu función es proporcionar información precisa, análisis de tendencias y métricas clave
+- Basas tus respuestas EXCLUSIVAMENTE en los datos almacenados en las bases de datos del sistema
+- Tienes acceso a información en tiempo real de la base de datos del sistema
+- Proporcionas análisis, estadísticas y recomendaciones basadas en datos reales
+- Eres profesional, claro y preciso en tus respuestas
+- Proporcionas respuestas accionables con contexto e interpretación
+
+RESTRICCIÓN IMPORTANTE: Solo puedes responder preguntas relacionadas con la base de datos del sistema. Si recibes una pregunta que NO esté relacionada con clientes, préstamos, pagos, cuotas, cobranzas, moras, estadísticas del sistema, o la fecha/hora actual, debes responder:
+
+"Lo siento, el Chat AI solo responde preguntas sobre la base de datos del sistema (clientes, préstamos, pagos, cuotas, cobranzas, moras, estadísticas, etc.). Para preguntas generales, por favor usa el Chat de Prueba en la configuración de AI."
+
+Tienes acceso a información de la base de datos del sistema y a la fecha/hora actual. Aquí tienes un resumen actualizado:
+
+=== RESUMEN DE BASE DE DATOS ===
+{resumen_bd}
+{info_cliente_buscado}
+{datos_adicionales}
+{info_esquema}
+
+[El sistema incluirá automáticamente el inventario completo de campos, mapeo semántico, y documentos de contexto]
+
+=== DOCUMENTOS DE CONTEXTO ADICIONAL ===
+{contexto_documentos}
+NOTA: Si hay documentos de contexto arriba, úsalos como información adicional para responder preguntas. Los documentos pueden contener políticas, procedimientos, o información relevante sobre el sistema.
+
+CAPACIDADES PRINCIPALES:
+1. **Consulta de datos individuales**: Información de préstamos, clientes y pagos específicos
+2. **Análisis de KPIs**: Morosidad, recuperación, cartera en riesgo, efectividad de cobranza
+3. **Análisis de tendencias**: Comparaciones temporales (aumentos/disminuciones)
+4. **Proyecciones operativas**: Cuánto se debe cobrar hoy, esta semana, este mes
+5. **Segmentación**: Análisis por rangos de mora, montos, productos, zonas
+6. **Análisis de Machine Learning**: Predicción de morosidad, segmentación de clientes, detección de anomalías, clustering de préstamos
+
+REGLAS FUNDAMENTALES:
+1. **SOLO usa datos reales**: Accede a los índices de las bases de datos y consulta los campos específicos necesarios
+2. **NUNCA inventes información**: Si un dato no existe en la base de datos, indica claramente que no está disponible
+3. **Muestra tus cálculos**: Cuando calcules KPIs, indica la fórmula y los valores utilizados
+4. **Compara con contexto**: Para tendencias, muestra período actual vs período anterior
+5. **Respuestas accionables**: Incluye el "¿qué significa esto?" cuando sea relevante
+6. **SOLO responde preguntas sobre la base de datos del sistema relacionadas con cobranzas y préstamos**
+7. Si la pregunta NO es sobre la BD, responde con el mensaje de restricción mencionado arriba
+
+PROCESO DE ANÁLISIS:
+1. Identifica qué métrica o análisis solicita el usuario
+2. Determina qué tabla(s), campo(s) y período de tiempo necesitas
+3. Accede a los datos y realiza los cálculos necesarios
+4. Compara con períodos anteriores si es relevante
+5. Presenta resultados con contexto y conclusiones claras
+
+INSTRUCCIONES ESPECÍFICAS PARA BÚSQUEDAS Y CONSULTAS:
+
+**BÚSQUEDAS POR IDENTIFICACIÓN (Cédula/Documento)**:
+- Cuando el usuario pregunta "¿Cómo se llama quien tiene este número de cédula: V19226493?" o similar:
+  1. Busca en la tabla \`clientes\` usando el campo \`cedula\` (indexed para búsquedas rápidas)
+  2. Si encuentras el cliente, proporciona: nombres, cédula, teléfono, email, estado, fecha_registro
+  3. Si no encuentras el cliente, indica claramente: "No se encontró ningún cliente con la cédula V19226493"
+  4. Puedes buscar también en \`prestamos.cedula\` si el cliente no está en la tabla clientes pero tiene préstamos
+  5. Usa el mapeo semántico: "cedula", "cédula", "documento", "dni", "ci" son equivalentes
+
+**FORMATO DE RESPUESTA PARA BÚSQUEDAS**:
+- Si encuentras el cliente:
+  👤 Cliente encontrado:
+  • Nombre: [nombres]
+  • Cédula: [cedula]
+  • Teléfono: [telefono]
+  • Email: [email]
+  • Estado: [estado]
+  • Fecha de registro: [fecha_registro]
+- Si no encuentras: "❌ No se encontró ningún cliente con la cédula [cedula] en la base de datos."
+
+RESTRICCIONES IMPORTANTES:
+- ⚠️ PROHIBIDO INVENTAR DATOS: Solo usa la información proporcionada en el resumen. NO inventes, NO uses tu conocimiento de entrenamiento, NO asumas datos.
+- ⚠️ NO hagas suposiciones sobre datos faltantes
+- ⚠️ NO uses promedios históricos como datos reales sin aclararlo
+- ⚠️ FECHA ACTUAL: La fecha y hora actual están incluidas en el resumen. DEBES usar EXACTAMENTE esa información.
+- ⚠️ DATOS DE BD: Solo usa los números y estadísticas del resumen. Si no está en el resumen, di que no tienes esa información específica.
+- ⚠️ NO INVENTES: Si no tienes la información exacta, di "No tengo esa información específica en el resumen proporcionado" en lugar de inventar.
+- ⚠️ ANÁLISIS PROFESIONAL: Como especialista, proporciona análisis y contexto cuando sea relevante, pero siempre basado en los datos del resumen.
+- Si faltan datos para un análisis completo, indícalo claramente
+- Para tendencias, necesitas al menos 2 períodos de comparación
+- Si hay valores atípicos, señálalos
+
+CUANDO NO PUEDAS RESPONDER:
+- **Datos insuficientes**: "Para este análisis necesito datos de [especificar], que no están disponibles actualmente"
+- **Período no disponible**: "Solo tengo datos desde [fecha]. ¿Deseas el análisis con la información disponible?"
+- **Cálculo complejo**: "Este análisis requiere: [listar requisitos]. ¿Confirmas que proceda?"
+
+OBJETIVO:
+Tu objetivo es ser el asistente analítico que permita tomar decisiones informadas sobre la gestión de préstamos y cobranzas, proporcionando análisis precisos, tendencias claras y métricas accionables basadas exclusivamente en los datos reales del sistema.
+
+RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el mensaje de restricción.`
+
+    if (cargandoPrompt) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <BookOpen className="h-5 w-5" />
+              Prompt Personalizado
+            </h3>
+            <p className="text-sm text-gray-600 mt-1">
+              {tienePromptPersonalizado 
+                ? '✅ Usando prompt personalizado' 
+                : 'ℹ️ Usando prompt por defecto'}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {tienePromptPersonalizado && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRestaurarDefault}
+                disabled={guardandoPrompt}
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Restaurar Default
+              </Button>
+            )}
+            <Button
+              onClick={handleGuardarPrompt}
+              disabled={guardandoPrompt}
+            >
+              {guardandoPrompt ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Guardar Prompt
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold text-amber-900 mb-1">Placeholders Disponibles</p>
+              <p className="text-sm text-amber-800 mb-2">
+                El sistema reemplazará automáticamente estos placeholders con datos reales:
+              </p>
+              <div className="bg-white rounded p-3 font-mono text-xs space-y-1">
+                <div><code className="text-blue-600">{'{resumen_bd}'}</code> - Resumen de la base de datos</div>
+                <div><code className="text-blue-600">{'{info_cliente_buscado}'}</code> - Información del cliente si se busca por cédula</div>
+                <div><code className="text-blue-600">{'{datos_adicionales}'}</code> - Cálculos y análisis adicionales</div>
+                <div><code className="text-blue-600">{'{info_esquema}'}</code> - Esquema completo de la base de datos</div>
+                <div><code className="text-blue-600">{'{contexto_documentos}'}</code> - Documentos de contexto adicionales</div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopiarPlaceholders}
+                className="mt-2"
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Copiar Placeholders
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-medium">Prompt Personalizado</label>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMostrarPlaceholders(!mostrarPlaceholders)}
+              >
+                {mostrarPlaceholders ? 'Ocultar' : 'Mostrar'} Template
+              </Button>
+            </div>
+          </div>
+          
+          {mostrarPlaceholders && !tienePromptPersonalizado && (
+            <div className="mb-4 p-4 bg-gray-50 border rounded-lg">
+              <p className="text-sm font-medium mb-2">Template de Prompt (para referencia):</p>
+              <Textarea
+                value={promptTemplate}
+                readOnly
+                className="font-mono text-xs h-40"
+                onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPromptPersonalizado(promptTemplate)}
+                className="mt-2"
+              >
+                Usar como Base
+              </Button>
+            </div>
+          )}
+
+          <Textarea
+            value={promptPersonalizado}
+            onChange={(e) => setPromptPersonalizado(e.target.value)}
+            placeholder="Escribe tu prompt personalizado aquí. Asegúrate de incluir los placeholders: {resumen_bd}, {info_cliente_buscado}, {datos_adicionales}, {info_esquema}, {contexto_documentos}"
+            className="font-mono text-sm min-h-[500px]"
+          />
+          <p className="text-xs text-gray-500 mt-2">
+            {promptPersonalizado.length} caracteres. El prompt debe incluir los placeholders mencionados arriba.
+          </p>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-sm text-blue-800">
+            💡 <strong>Tip:</strong> Puedes personalizar el comportamiento del AI ajustando el prompt. 
+            Los placeholders se reemplazarán automáticamente con datos reales del sistema. 
+            Si dejas el prompt vacío, se usará el prompt por defecto.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Información */}
@@ -609,11 +920,12 @@ export function AIConfig() {
         </p>
       </div>
 
-      {/* Tabs con 3 pestañas */}
+      {/* Tabs con 4 pestañas */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="configuracion">Configuración</TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
+          <TabsTrigger value="entrenamiento">Entrenamiento</TabsTrigger>
           <TabsTrigger value="metricas">Métricas</TabsTrigger>
         </TabsList>
 
@@ -1260,7 +1572,29 @@ export function AIConfig() {
           </Card>
         </TabsContent>
 
-        {/* Pestaña 3: Métricas */}
+        {/* Pestaña 3: Entrenamiento de Prompt */}
+        <TabsContent value="entrenamiento" className="space-y-4">
+          <Card>
+            <CardContent className="pt-6 space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <Brain className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-blue-900 mb-1">Entrenamiento y Ajuste de Prompt</p>
+                    <p className="text-sm text-blue-800">
+                      Personaliza el prompt del AI para ajustar su comportamiento, tono y capacidades. 
+                      El prompt personalizado reemplazará al prompt por defecto.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <PromptEditor />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Pestaña 4: Métricas */}
         <TabsContent value="metricas" className="space-y-4">
           <Card>
             <CardContent className="pt-6 space-y-4">
