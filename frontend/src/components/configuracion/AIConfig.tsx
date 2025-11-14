@@ -105,6 +105,7 @@ export function AIConfig() {
   // Estado para verificar configuración correcta
   const [configuracionCorrecta, setConfiguracionCorrecta] = useState(false)
   const [verificandoConfig, setVerificandoConfig] = useState(false)
+  const [tokenAnterior, setTokenAnterior] = useState<string>('')
 
   useEffect(() => {
     cargarConfiguracion()
@@ -112,21 +113,31 @@ export function AIConfig() {
     cargarMetricas()
   }, [])
 
-  // Verificar configuración después de cargar la configuración
+  // Verificar configuración solo cuando el usuario cambia el token manualmente
+  // NO verificar en cada carga de página - el token se guarda permanentemente en BD
   useEffect(() => {
-    // Esperar a que la configuración se cargue antes de verificar
-    if (config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-') && config.activo === 'true') {
-      // Verificar si la configuración está correcta solo si está activa
-      // Usar un pequeño delay para evitar verificaciones innecesarias
+    // Solo verificar si el token cambió manualmente (no en la carga inicial)
+    if (tokenAnterior && tokenAnterior !== config.openai_api_key && config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-')) {
+      // El usuario cambió el token manualmente, verificar
       const timer = setTimeout(() => {
-        verificarConfiguracion(false) // No guardar automáticamente en la verificación inicial
-      }, 2000)
+        verificarConfiguracion(false)
+      }, 1000)
       return () => clearTimeout(timer)
+    }
+    
+    // En la carga inicial, asumir que está correcto si ya está guardado (se guardó permanentemente en BD)
+    if (config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-') && config.activo === 'true') {
+      // El token está guardado permanentemente en BD, asumir que es válido
+      setConfiguracionCorrecta(true)
     } else if (config.openai_api_key !== '') {
-      // Si ya se cargó la configuración pero no hay API key válida
       setConfiguracionCorrecta(false)
     }
-  }, [config.openai_api_key, config.activo]) // Ejecutar cuando cambie la API key o el estado activo
+    
+    // Actualizar token anterior solo después de la primera carga
+    if (!tokenAnterior && config.openai_api_key) {
+      setTokenAnterior(config.openai_api_key)
+    }
+  }, [config.openai_api_key, config.activo, tokenAnterior])
 
   const verificarConfiguracion = async (guardarAutomaticamente: boolean = false) => {
     if (!config.openai_api_key?.trim() || !config.openai_api_key.startsWith('sk-')) {
