@@ -20,8 +20,15 @@ from app.models.fine_tuning_job import FineTuningJob
 from app.models.modelo_riesgo import ModeloRiesgo
 from app.models.user import User
 from app.services.ai_training_service import AITrainingService
-from app.services.ml_service import MLService
 from app.services.rag_service import RAGService
+
+# Import condicional de MLService
+try:
+    from app.services.ml_service import MLService
+    ML_SERVICE_AVAILABLE = True
+except ImportError:
+    ML_SERVICE_AVAILABLE = False
+    MLService = None
 
 logger = logging.getLogger(__name__)
 
@@ -789,6 +796,13 @@ async def entrenar_modelo_riesgo(
                 detail=f"Se necesitan al menos 10 muestras válidas para entrenar. Se generaron {len(training_data)}.",
             )
 
+        # Verificar que MLService esté disponible
+        if not ML_SERVICE_AVAILABLE or MLService is None:
+            raise HTTPException(
+                status_code=503,
+                detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
+            )
+
         # Entrenar modelo
         ml_service = MLService()
         resultado = ml_service.train_risk_model(
@@ -884,6 +898,13 @@ async def activar_modelo_riesgo(
         modelo.activo = True
         modelo.activado_en = datetime.utcnow()
 
+        # Verificar que MLService esté disponible
+        if not ML_SERVICE_AVAILABLE or MLService is None:
+            raise HTTPException(
+                status_code=503,
+                detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
+            )
+
         # Cargar modelo en servicio ML
         ml_service = MLService()
         ml_service.load_model_from_path(modelo.ruta_archivo)
@@ -917,6 +938,13 @@ async def predecir_riesgo(
 
         if not modelo_activo:
             raise HTTPException(status_code=400, detail="No hay modelo activo")
+
+        # Verificar que MLService esté disponible
+        if not ML_SERVICE_AVAILABLE or MLService is None:
+            raise HTTPException(
+                status_code=503,
+                detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
+            )
 
         # Cargar modelo
         ml_service = MLService()
