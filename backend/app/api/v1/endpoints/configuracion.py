@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import time
 from datetime import datetime
@@ -2569,10 +2571,9 @@ def actualizar_configuracion_ai(
 # GESTIÓN DE DOCUMENTOS AI
 # ============================================
 
-
+# Definir schema ANTES de las funciones para evitar NameError
 class DocumentoAIUpdate(BaseModel):
     """Schema para actualizar documento AI"""
-
     titulo: Optional[str] = Field(None, description="Título del documento")
     descripcion: Optional[str] = Field(None, description="Descripción del documento")
     activo: Optional[bool] = Field(None, description="Estado activo/inactivo")
@@ -3388,7 +3389,7 @@ async def probar_configuracion_ai(
                         "messages": [
                             {
                                 "role": "system",
-                                "content": "Eres un asistente útil que responde preguntas sobre préstamos y servicios financieros. Responde de manera clara y profesional.",
+                                "content": "Eres un asistente útil y versátil. Puedes responder cualquier tipo de pregunta de manera clara, profesional y precisa. Si hay contexto de documentos disponibles, úsalo para enriquecer tu respuesta. Responde siempre en español.",
                             },
                             {"role": "user", "content": prompt},
                         ],
@@ -3470,6 +3471,23 @@ def _obtener_resumen_bd(db: Session) -> str:
         from sqlalchemy import func
 
         resumen = []
+        
+        # Información de fecha y hora actual
+        fecha_actual = datetime.now()
+        
+        # Mapeo de días y meses en español
+        dias_semana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+        meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
+                 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+        
+        dia_semana = dias_semana[fecha_actual.weekday()]
+        mes = meses[fecha_actual.month - 1]
+        
+        resumen.append(f"Fecha y hora actual del sistema: {dia_semana}, {fecha_actual.day} de {mes} de {fecha_actual.year}, {fecha_actual.strftime('%H:%M:%S')}")
+        resumen.append(f"Fecha actual (formato corto): {fecha_actual.strftime('%d/%m/%Y')}")
+        resumen.append(f"Día de la semana: {dia_semana}")
+        resumen.append(f"Hora actual: {fecha_actual.strftime('%H:%M:%S')}")
+        resumen.append("")  # Línea en blanco para separar
 
         # Clientes
         total_clientes = db.query(Cliente).count()
@@ -3563,6 +3581,27 @@ async def chat_ai(
         pregunta = request.pregunta.strip()
         if not pregunta:
             raise HTTPException(status_code=400, detail="La pregunta no puede estar vacía")
+        
+        # Validar que la pregunta sea sobre la base de datos
+        # Palabras clave que indican preguntas sobre BD
+        palabras_clave_bd = [
+            "cliente", "clientes", "préstamo", "préstamos", "prestamo", "prestamos",
+            "pago", "pagos", "cuota", "cuotas", "mora", "pendiente", "pagada",
+            "base de datos", "datos", "estadística", "estadísticas", "resumen",
+            "total", "cantidad", "cuántos", "cuántas", "monto", "montos",
+            "activo", "activos", "concesionario", "concesionarios", "analista", "analistas",
+            "usuario", "usuarios", "sistema", "registro", "registros",
+            "fecha actual", "día de hoy", "qué día", "qué fecha", "hora actual"
+        ]
+        
+        pregunta_lower = pregunta.lower()
+        es_pregunta_bd = any(palabra in pregunta_lower for palabra in palabras_clave_bd)
+        
+        if not es_pregunta_bd:
+            raise HTTPException(
+                status_code=400,
+                detail="El Chat AI solo responde preguntas sobre la base de datos del sistema (clientes, préstamos, pagos, cuotas, estadísticas, etc.). Para preguntas generales, usa el Chat de Prueba en la configuración de AI."
+            )
 
         # Obtener modelo y parámetros
         modelo = config_dict.get("modelo", "gpt-3.5-turbo")
@@ -3591,9 +3630,13 @@ async def chat_ai(
                 contexto_documentos = "\n\n=== DOCUMENTOS DE CONTEXTO ===\n" + "\n\n---\n\n".join(contextos)
 
         # Construir prompt del sistema con información de la BD
-        system_prompt = f"""Eres un asistente experto en sistemas de gestión de préstamos y servicios financieros.
+        system_prompt = f"""Eres un asistente especializado EXCLUSIVAMENTE en consultas sobre la base de datos del sistema de gestión de préstamos.
 
-Tienes acceso a información de la base de datos del sistema. Aquí tienes un resumen actualizado:
+RESTRICCIÓN IMPORTANTE: Solo puedes responder preguntas relacionadas con la base de datos del sistema. Si recibes una pregunta que NO esté relacionada con clientes, préstamos, pagos, cuotas, estadísticas del sistema, o la fecha/hora actual, debes responder:
+
+"Lo siento, el Chat AI solo responde preguntas sobre la base de datos del sistema (clientes, préstamos, pagos, cuotas, estadísticas, etc.). Para preguntas generales, por favor usa el Chat de Prueba en la configuración de AI."
+
+Tienes acceso a información de la base de datos del sistema y a la fecha/hora actual. Aquí tienes un resumen actualizado:
 
 === RESUMEN DE BASE DE DATOS ===
 {resumen_bd}
@@ -3608,15 +3651,22 @@ Tienes acceso a información de la base de datos del sistema. Aquí tienes un re
 - Analistas: Analistas/asesores
 
 INSTRUCCIONES:
-1. Responde preguntas sobre la base de datos de manera clara y profesional
-2. Si la pregunta requiere datos específicos que no están en el resumen, indica que necesitarías hacer una consulta más específica
-3. Usa los datos del resumen para dar respuestas precisas
-4. Si no tienes suficiente información, sé honesto al respecto
-5. Formatea números grandes con separadores de miles
-6. Responde siempre en español
+1. SOLO responde preguntas sobre la base de datos del sistema
+2. Si la pregunta NO es sobre la BD, responde con el mensaje de restricción mencionado arriba
+3. Responde preguntas sobre la fecha y hora actual usando la información proporcionada en el resumen
+4. Responde preguntas sobre préstamos, clientes, pagos y cuotas basándote en el resumen
+5. Si la pregunta requiere datos específicos que no están en el resumen, indica que necesitarías hacer una consulta más específica
+6. Usa los datos del resumen para dar respuestas precisas
+7. Si no tienes suficiente información, sé honesto al respecto
+8. Formatea números grandes con separadores de miles
+9. Responde siempre en español
+10. Para preguntas sobre la fecha actual, usa la información de "Fecha y hora actual del sistema" del resumen
 {contexto_documentos}
 
-IMPORTANTE: Solo usa la información proporcionada. No inventes datos."""
+IMPORTANTE: 
+- Solo usa la información proporcionada en el resumen. No inventes datos.
+- La fecha y hora actual están incluidas en el resumen de la base de datos.
+- RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el mensaje de restricción."""
 
         # Llamar a OpenAI API
         import httpx

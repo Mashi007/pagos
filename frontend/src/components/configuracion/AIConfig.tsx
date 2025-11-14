@@ -318,8 +318,12 @@ export function AIConfig() {
   const handleProcesarDocumento = async (id: number) => {
     setProcesandoDocumento(id)
     try {
-      const respuesta = await apiClient.post(`/api/v1/configuracion/ai/documentos/${id}/procesar`)
-      toast.success(`Documento procesado exitosamente (${respuesta.data?.caracteres_extraidos || 0} caracteres extraídos)`)
+      const respuesta = await apiClient.post<{
+        mensaje: string
+        documento: DocumentoAI
+        caracteres_extraidos: number
+      }>(`/api/v1/configuracion/ai/documentos/${id}/procesar`)
+      toast.success(`Documento procesado exitosamente (${respuesta.caracteres_extraidos || 0} caracteres extraídos)`)
       await cargarDocumentos()
       await cargarMetricas()
     } catch (error: any) {
@@ -778,7 +782,7 @@ export function AIConfig() {
                     )}
                   </div>
                   <p className="text-sm text-blue-100 mt-1">
-                    Haz preguntas y recibe respuestas contextualizadas. Presiona Enter para enviar.
+                    Haz cualquier pregunta y recibe respuestas. Puedes usar documentos como contexto. Presiona Enter para enviar.
                   </p>
                 </div>
 
