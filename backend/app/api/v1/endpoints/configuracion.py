@@ -2573,33 +2573,33 @@ def actualizar_configuracion_ai(
 def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
     """
     Extrae texto de un documento según su tipo
-    
+
     Args:
         ruta_archivo: Ruta completa al archivo
         tipo_archivo: Tipo de archivo (pdf, txt, docx)
-    
+
     Returns:
         Texto extraído del documento
     """
     try:
         from pathlib import Path
-        
+
         if not Path(ruta_archivo).exists():
             logger.error(f"❌ Archivo no encontrado: {ruta_archivo}")
             return ""
-        
+
         texto = ""
-        
+
         if tipo_archivo.lower() == "txt":
             # Leer archivo de texto plano
             with open(ruta_archivo, "r", encoding="utf-8", errors="ignore") as f:
                 texto = f.read()
-        
+
         elif tipo_archivo.lower() == "pdf":
             # Extraer texto de PDF
             try:
                 import PyPDF2
-                
+
                 with open(ruta_archivo, "rb") as f:
                     pdf_reader = PyPDF2.PdfReader(f)
                     textos_paginas = []
@@ -2611,6 +2611,7 @@ def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
                 # Intentar con pdfplumber como alternativa
                 try:
                     import pdfplumber
+
                     with pdfplumber.open(ruta_archivo) as pdf:
                         textos_paginas = []
                         for page in pdf.pages:
@@ -2619,12 +2620,12 @@ def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
                 except ImportError:
                     logger.error("❌ Ni PyPDF2 ni pdfplumber están instalados. No se puede extraer texto de PDF.")
                     return ""
-        
+
         elif tipo_archivo.lower() == "docx":
             # Extraer texto de DOCX
             try:
                 from docx import Document
-                
+
                 doc = Document(ruta_archivo)
                 textos_parrafos = []
                 for paragraph in doc.paragraphs:
@@ -2633,16 +2634,17 @@ def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
             except ImportError:
                 logger.warning("⚠️ python-docx no está instalado. Instala con: pip install python-docx")
                 return ""
-        
+
         # Limpiar y normalizar texto
         texto = texto.strip()
         # Eliminar espacios múltiples
         import re
-        texto = re.sub(r'\s+', ' ', texto)
-        
+
+        texto = re.sub(r"\s+", " ", texto)
+
         logger.info(f"✅ Texto extraído: {len(texto)} caracteres de {tipo_archivo}")
         return texto
-        
+
     except Exception as e:
         logger.error(f"❌ Error extrayendo texto de {ruta_archivo}: {e}", exc_info=True)
         return ""
@@ -2821,15 +2823,15 @@ def procesar_documento_ai(
 
         # Extraer texto del documento
         texto_extraido = _extraer_texto_documento(documento.ruta_archivo, documento.tipo_archivo)
-        
+
         if texto_extraido:
             documento.contenido_texto = texto_extraido
             documento.contenido_procesado = True
             db.commit()
             db.refresh(documento)
-            
+
             logger.info(f"✅ Documento procesado: {documento.titulo} ({len(texto_extraido)} caracteres)")
-            
+
             return {
                 "mensaje": "Documento procesado exitosamente",
                 "documento": documento.to_dict(),
@@ -2838,7 +2840,7 @@ def procesar_documento_ai(
         else:
             raise HTTPException(
                 status_code=400,
-                detail="No se pudo extraer texto del documento. Verifica que el archivo sea válido y que las librerías necesarias estén instaladas."
+                detail="No se pudo extraer texto del documento. Verifica que el archivo sea válido y que las librerías necesarias estén instaladas.",
             )
 
     except HTTPException:
@@ -3053,7 +3055,7 @@ async def probar_configuracion_ai(
                         contenido_limpiado = doc.contenido_texto.strip()[:2000]
                         if len(doc.contenido_texto) > 2000:
                             contenido_limpiado += "..."
-                        
+
                         contexto_doc = f"Documento: {doc.titulo}\n"
                         if doc.descripcion:
                             contexto_doc += f"Descripción: {doc.descripcion}\n"
@@ -3069,7 +3071,11 @@ async def probar_configuracion_ai(
                 if contextos:
                     # Limitar a 3 documentos para no exceder límites de tokens
                     contextos_seleccionados = contextos[:3]
-                    contexto_documentos = "\n\n=== CONTEXTO DE DOCUMENTOS ===\n" + "\n\n---\n\n".join(contextos_seleccionados) + "\n\nUsa esta información como base para responder la pregunta."
+                    contexto_documentos = (
+                        "\n\n=== CONTEXTO DE DOCUMENTOS ===\n"
+                        + "\n\n---\n\n".join(contextos_seleccionados)
+                        + "\n\nUsa esta información como base para responder la pregunta."
+                    )
 
         # Construir prompt con contexto
         prompt = pregunta
@@ -3177,49 +3183,51 @@ def _obtener_resumen_bd(db: Session) -> str:
     """
     try:
         from sqlalchemy import func
-        
+
         resumen = []
-        
+
         # Clientes
         total_clientes = db.query(Cliente).count()
         clientes_activos = db.query(Cliente).filter(Cliente.activo == True).count()
         resumen.append(f"Clientes: {total_clientes} totales, {clientes_activos} activos")
-        
+
         # Préstamos
         total_prestamos = db.query(Prestamo).count()
         prestamos_activos = db.query(Prestamo).filter(Prestamo.estado.in_(["APROBADO", "ACTIVO"])).count()
         prestamos_pendientes = db.query(Prestamo).filter(Prestamo.estado == "PENDIENTE").count()
-        resumen.append(f"Préstamos: {total_prestamos} totales, {prestamos_activos} activos/aprobados, {prestamos_pendientes} pendientes")
-        
+        resumen.append(
+            f"Préstamos: {total_prestamos} totales, {prestamos_activos} activos/aprobados, {prestamos_pendientes} pendientes"
+        )
+
         # Pagos
         total_pagos = db.query(Pago).count()
         pagos_activos = db.query(Pago).filter(Pago.activo == True).count()
         resumen.append(f"Pagos: {total_pagos} totales, {pagos_activos} activos")
-        
+
         # Cuotas
         total_cuotas = db.query(Cuota).count()
         cuotas_pagadas = db.query(Cuota).filter(Cuota.estado == "PAGADA").count()
         cuotas_pendientes = db.query(Cuota).filter(Cuota.estado == "PENDIENTE").count()
         cuotas_mora = db.query(Cuota).filter(Cuota.estado == "MORA").count()
-        resumen.append(f"Cuotas: {total_cuotas} totales, {cuotas_pagadas} pagadas, {cuotas_pendientes} pendientes, {cuotas_mora} en mora")
-        
+        resumen.append(
+            f"Cuotas: {total_cuotas} totales, {cuotas_pagadas} pagadas, {cuotas_pendientes} pendientes, {cuotas_mora} en mora"
+        )
+
         # Montos totales
         try:
-            monto_total_prestamos = db.query(func.sum(Prestamo.monto_financiado)).filter(
-                Prestamo.estado.in_(["APROBADO", "ACTIVO"])
-            ).scalar() or 0
+            monto_total_prestamos = (
+                db.query(func.sum(Prestamo.monto_financiado)).filter(Prestamo.estado.in_(["APROBADO", "ACTIVO"])).scalar() or 0
+            )
             resumen.append(f"Monto total de préstamos activos: {monto_total_prestamos:,.2f}")
         except:
             pass
-        
+
         try:
-            monto_total_pagos = db.query(func.sum(Pago.monto_pagado)).filter(
-                Pago.activo == True
-            ).scalar() or 0
+            monto_total_pagos = db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo == True).scalar() or 0
             resumen.append(f"Monto total de pagos: {monto_total_pagos:,.2f}")
         except:
             pass
-        
+
         return "\n".join(resumen)
     except Exception as e:
         logger.error(f"Error obteniendo resumen de BD: {e}", exc_info=True)
@@ -3234,7 +3242,7 @@ async def chat_ai(
 ):
     """
     Chat AI que puede responder preguntas sobre la base de datos
-    
+
     El AI tiene acceso a información de todas las tablas principales:
     - Clientes
     - Préstamos
@@ -3282,10 +3290,7 @@ async def chat_ai(
         # Buscar contexto en documentos si están disponibles
         contexto_documentos = ""
         documentos_activos = (
-            db.query(DocumentoAI)
-            .filter(DocumentoAI.activo == True, DocumentoAI.contenido_procesado == True)
-            .limit(3)
-            .all()
+            db.query(DocumentoAI).filter(DocumentoAI.activo == True, DocumentoAI.contenido_procesado == True).limit(3).all()
         )
 
         if documentos_activos:
@@ -3296,7 +3301,7 @@ async def chat_ai(
                     if len(doc.contenido_texto) > 1500:
                         contenido_limpiado += "..."
                     contextos.append(f"Documento: {doc.titulo}\n{contenido_limpiado}")
-            
+
             if contextos:
                 contexto_documentos = "\n\n=== DOCUMENTOS DE CONTEXTO ===\n" + "\n\n---\n\n".join(contextos)
 

@@ -185,10 +185,10 @@ def obtener_tareas_programadas(
     try:
         from app.core.scheduler import scheduler
         from datetime import datetime, timedelta
-        
+
         # Obtener jobs del scheduler
         jobs = scheduler.get_jobs() if scheduler.running else []
-        
+
         # Mapeo de IDs de jobs a información detallada
         tareas_info = {
             "notificaciones_previas": {
@@ -228,7 +228,7 @@ def obtener_tareas_programadas(
                 "canales": ["EMAIL"],
             },
         }
-        
+
         # Construir respuesta con información de cada tarea
         tareas = []
         for job in jobs:
@@ -237,51 +237,55 @@ def obtener_tareas_programadas(
                 # Calcular próxima ejecución
                 next_run = job.next_run_time
                 proxima_ejecucion = next_run.isoformat() if next_run else None
-                
+
                 # Obtener última ejecución (si está disponible en el job)
                 ultima_ejecucion = None
-                if hasattr(job, 'last_run_time') and job.last_run_time:
+                if hasattr(job, "last_run_time") and job.last_run_time:
                     ultima_ejecucion = job.last_run_time.isoformat()
-                
-                tareas.append({
-                    "id": info["id"],
-                    "nombre": info["nombre"],
-                    "descripcion": info["descripcion"],
-                    "tipo": info["tipo"],
-                    "frecuencia": info["frecuencia"],
-                    "hora": info["hora"],
-                    "estado": "ACTIVO" if scheduler.running else "PAUSADO",
-                    "ultimaEjecucion": ultima_ejecucion,
-                    "proximaEjecucion": proxima_ejecucion,
-                    "exitos": 0,  # Se puede calcular desde BD si es necesario
-                    "fallos": 0,  # Se puede calcular desde BD si es necesario
-                    "canales": info["canales"],
-                    "configuracion": {
-                        "trigger": str(job.trigger) if hasattr(job, 'trigger') else "CronTrigger(hour=4, minute=0)",
+
+                tareas.append(
+                    {
+                        "id": info["id"],
+                        "nombre": info["nombre"],
+                        "descripcion": info["descripcion"],
+                        "tipo": info["tipo"],
+                        "frecuencia": info["frecuencia"],
+                        "hora": info["hora"],
+                        "estado": "ACTIVO" if scheduler.running else "PAUSADO",
+                        "ultimaEjecucion": ultima_ejecucion,
+                        "proximaEjecucion": proxima_ejecucion,
+                        "exitos": 0,  # Se puede calcular desde BD si es necesario
+                        "fallos": 0,  # Se puede calcular desde BD si es necesario
+                        "canales": info["canales"],
+                        "configuracion": {
+                            "trigger": str(job.trigger) if hasattr(job, "trigger") else "CronTrigger(hour=4, minute=0)",
+                        },
                     }
-                })
-        
+                )
+
         # Si no hay jobs pero el scheduler está configurado, devolver las tareas definidas
         if not tareas and scheduler.running:
             # Calcular próxima ejecución (mañana a las 4 AM)
             tomorrow = datetime.now().replace(hour=4, minute=0, second=0, microsecond=0) + timedelta(days=1)
             for info in tareas_info.values():
-                tareas.append({
-                    "id": info["id"],
-                    "nombre": info["nombre"],
-                    "descripcion": info["descripcion"],
-                    "tipo": info["tipo"],
-                    "frecuencia": info["frecuencia"],
-                    "hora": info["hora"],
-                    "estado": "ACTIVO",
-                    "ultimaEjecucion": None,
-                    "proximaEjecucion": tomorrow.isoformat(),
-                    "exitos": 0,
-                    "fallos": 0,
-                    "canales": info["canales"],
-                    "configuracion": {},
-                })
-        
+                tareas.append(
+                    {
+                        "id": info["id"],
+                        "nombre": info["nombre"],
+                        "descripcion": info["descripcion"],
+                        "tipo": info["tipo"],
+                        "frecuencia": info["frecuencia"],
+                        "hora": info["hora"],
+                        "estado": "ACTIVO",
+                        "ultimaEjecucion": None,
+                        "proximaEjecucion": tomorrow.isoformat(),
+                        "exitos": 0,
+                        "fallos": 0,
+                        "canales": info["canales"],
+                        "configuracion": {},
+                    }
+                )
+
         return {
             "tareas": tareas,
             "total": len(tareas),
