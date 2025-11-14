@@ -25,6 +25,7 @@ from app.services.rag_service import RAGService
 # Import condicional de MLService
 try:
     from app.services.ml_service import MLService
+
     ML_SERVICE_AVAILABLE = True
 except ImportError:
     ML_SERVICE_AVAILABLE = False
