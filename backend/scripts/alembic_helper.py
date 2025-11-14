@@ -16,12 +16,12 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 if Path.cwd() != backend_dir:
     os.chdir(backend_dir)
-    print(f"📁 Cambiado al directorio: {backend_dir}")
+    print(f"[INFO] Cambiado al directorio: {backend_dir}")
 
 # Verificar que alembic.ini existe
 alembic_ini = backend_dir / "alembic.ini"
 if not alembic_ini.exists():
-    print(f"❌ Error: No se encontró alembic.ini en {alembic_ini}")
+    print(f"[ERROR] No se encontro alembic.ini en {alembic_ini}")
     sys.exit(1)
 
 # Ejecutar comando de Alembic
@@ -59,15 +59,15 @@ try:
         target = args[0] if args else "head"
         command.stamp(cfg, target)
     else:
-        print(f"❌ Comando desconocido: {cmd}")
+        print(f"[ERROR] Comando desconocido: {cmd}")
         print("Comandos disponibles: current, heads, history, upgrade, downgrade, stamp")
         sys.exit(1)
         
 except ImportError as e:
-    print(f"❌ Error: Alembic no está instalado: {e}")
+    print(f"[ERROR] Alembic no esta instalado: {e}")
     sys.exit(1)
 except Exception as e:
-    print(f"❌ Error ejecutando comando: {e}")
+    print(f"[ERROR] Error ejecutando comando: {e}")
     import traceback
     traceback.print_exc()
     sys.exit(1)

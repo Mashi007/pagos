@@ -17,11 +17,16 @@ Este es un **error interno de Cursor**, no un problema con tu código. Ocurre cu
 He creado un script helper que ejecuta Alembic correctamente desde cualquier directorio:
 
 ```powershell
-# Desde la raíz del proyecto o desde backend/
+# Desde la raíz del proyecto (recomendado)
+python backend\scripts\alembic_helper.py current
+python backend\scripts\alembic_helper.py heads
+python backend\scripts\alembic_helper.py upgrade head
+
+# O desde el directorio backend
 cd backend
-python scripts/alembic_helper.py current
-python scripts/alembic_helper.py heads
-python scripts/alembic_helper.py upgrade head
+python scripts\alembic_helper.py current
+python scripts\alembic_helper.py heads
+python scripts\alembic_helper.py upgrade head
 ```
 
 **Ventajas:**
@@ -31,11 +36,12 @@ python scripts/alembic_helper.py upgrade head
 
 **Comandos disponibles:**
 ```powershell
-python scripts/alembic_helper.py current      # Ver migración actual
-python scripts/alembic_helper.py heads        # Ver migraciones disponibles
-python scripts/alembic_helper.py history     # Ver historial
-python scripts/alembic_helper.py upgrade head # Ejecutar migraciones
-python scripts/alembic_helper.py downgrade -1 # Revertir última migración
+# Desde la raíz del proyecto
+python backend\scripts\alembic_helper.py current      # Ver migración actual
+python backend\scripts\alembic_helper.py heads        # Ver migraciones disponibles
+python backend\scripts\alembic_helper.py history     # Ver historial
+python backend\scripts\alembic_helper.py upgrade head # Ejecutar migraciones
+python backend\scripts\alembic_helper.py downgrade -1 # Revertir última migración
 ```
 
 ### Solución 2: Usar el Script de PowerShell (Alternativa)
