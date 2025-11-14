@@ -149,6 +149,39 @@ export function Notificaciones() {
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
   })
 
+  // Tipos de notificación por pestaña
+  const tiposPorPestaña: Record<TabType, string[]> = {
+    previa: ['PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES'],
+    'dia-pago': ['PAGO_DIA_0'],
+    retrasado: ['PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO'],
+    prejudicial: ['PREJUDICIAL', 'PREJUDICIAL_1', 'PREJUDICIAL_2'], // Tipos para notificaciones prejudiciales
+    configuracion: [] // No se muestran notificaciones en esta pestaña
+  }
+
+  // Filtrar notificaciones localmente por pestaña, búsqueda y canal
+  const filteredNotificaciones = notificaciones.filter(notif => {
+    // Filtrar por pestaña activa (excepto configuración)
+    if (activeTab !== 'configuracion') {
+      const tiposPermitidos = tiposPorPestaña[activeTab]
+      if (!tiposPermitidos.includes(notif.tipo)) {
+        return false
+      }
+    } else {
+      // En configuración no mostramos notificaciones
+      return false
+    }
+
+    const matchesSearch = 
+      (notif.asunto || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (notif.mensaje || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (notif.cliente_nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      notif.tipo.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    const matchesCanal = !filterCanal || notif.canal === filterCanal
+    
+    return matchesSearch && matchesCanal
+  })
+
   // Calcular estadísticas por pestaña desde datos reales de BD (optimizado con useMemo)
   const estadisticasPorPestaña = useMemo(() => {
     let total = 0
@@ -196,36 +229,6 @@ export function Notificaciones() {
     notificacionesPrejudiciales,
     filteredNotificaciones
   ])
-
-  // Tipos de notificación por pestaña
-  const tiposPorPestaña: Record<TabType, string[]> = {
-    previa: ['PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES'],
-    'dia-pago': ['PAGO_DIA_0'],
-    retrasado: ['PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO'],
-    prejudicial: ['PREJUDICIAL', 'PREJUDICIAL_1', 'PREJUDICIAL_2'], // Tipos para notificaciones prejudiciales
-    configuracion: [] // No se muestran notificaciones en esta pestaña
-  }
-
-  // Filtrar notificaciones localmente por pestaña, búsqueda y canal
-  const filteredNotificaciones = notificaciones.filter(notif => {
-    // Filtrar por pestaña activa (excepto configuración)
-    if (activeTab !== 'configuracion') {
-      const tiposPermitidos = tiposPorPestaña[activeTab]
-      if (!tiposPermitidos.includes(notif.tipo)) {
-        return false
-      }
-    } else {
-      // En configuración no mostramos notificaciones
-      return false
-    }
-
-    const matchesSearch = 
-      (notif.asunto || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (notif.mensaje || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      notif.tipo.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCanal = !filterCanal || notif.canal === filterCanal
-    return matchesSearch && matchesCanal
-  })
 
   const getEstadoBadge = (estado: string) => {
     switch (estado) {
