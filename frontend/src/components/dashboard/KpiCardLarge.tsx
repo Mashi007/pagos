@@ -103,7 +103,7 @@ export function KpiCardLarge({
           </div>
           
           {/* Variación mejorada con icono y mejor diseño */}
-          {variation && (
+          {variation && variation.percent !== undefined && typeof variation.percent === 'number' && (
             <div className="flex items-center gap-2 mt-3">
               <div className={`flex items-center gap-1 px-2 py-1 rounded-md ${
                 variation.percent >= 0 

@@ -581,7 +581,10 @@ export function DashboardMenu() {
             <KpiCardLarge
               title="Total Préstamos"
               value={kpisPrincipales.total_prestamos.valor_actual}
-              variation={kpisPrincipales.total_prestamos.variacion_porcentual}
+              variation={kpisPrincipales.total_prestamos.variacion_porcentual !== undefined ? {
+                percent: kpisPrincipales.total_prestamos.variacion_porcentual,
+                label: 'vs mes anterior'
+              } : undefined}
               icon={FileText}
               color="text-cyan-600"
               bgColor="bg-cyan-100"
@@ -591,7 +594,10 @@ export function DashboardMenu() {
             <KpiCardLarge
               title="Créditos Nuevos"
               value={kpisPrincipales.creditos_nuevos_mes.valor_actual}
-              variation={kpisPrincipales.creditos_nuevos_mes.variacion_porcentual}
+              variation={kpisPrincipales.creditos_nuevos_mes.variacion_porcentual !== undefined ? {
+                percent: kpisPrincipales.creditos_nuevos_mes.variacion_porcentual,
+                label: 'vs mes anterior'
+              } : undefined}
               icon={TrendingUp}
               color="text-green-600"
               bgColor="bg-green-100"
@@ -601,7 +607,10 @@ export function DashboardMenu() {
             <KpiCardLarge
               title="Total Clientes"
               value={kpisPrincipales.total_clientes.valor_actual}
-              variation={kpisPrincipales.total_clientes.variacion_porcentual}
+              variation={kpisPrincipales.total_clientes.variacion_porcentual !== undefined ? {
+                percent: kpisPrincipales.total_clientes.variacion_porcentual,
+                label: 'vs mes anterior'
+              } : undefined}
               icon={Users}
               color="text-blue-600"
               bgColor="bg-blue-100"
@@ -611,7 +620,10 @@ export function DashboardMenu() {
             <KpiCardLarge
               title="Morosidad Total"
               value={kpisPrincipales.total_morosidad_usd.valor_actual}
-              variation={kpisPrincipales.total_morosidad_usd.variacion_porcentual}
+              variation={kpisPrincipales.total_morosidad_usd.variacion_porcentual !== undefined ? {
+                percent: kpisPrincipales.total_morosidad_usd.variacion_porcentual,
+                label: 'vs mes anterior'
+              } : undefined}
               icon={AlertTriangle}
               color="text-red-600"
               bgColor="bg-red-100"
