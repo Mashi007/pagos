@@ -4,10 +4,11 @@ Almacena embeddings vectoriales para búsqueda semántica
 """
 
 import json
+
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.types import TypeDecorator, VARCHAR
+from sqlalchemy.types import VARCHAR, TypeDecorator
 
 from app.db.session import Base
 

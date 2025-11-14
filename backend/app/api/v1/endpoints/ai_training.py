@@ -702,10 +702,11 @@ async def entrenar_modelo_riesgo(
     """Entrenar modelo de riesgo"""
     try:
         # Obtener datos históricos de préstamos y pagos para entrenamiento
-        from app.models.prestamo import Prestamo
-        from app.models.pago import Pago
-        from app.models.amortizacion import Cuota
         from datetime import date
+
+        from app.models.amortizacion import Cuota
+        from app.models.pago import Pago
+        from app.models.prestamo import Prestamo
 
         # Obtener préstamos aprobados con historial
         prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").all()
