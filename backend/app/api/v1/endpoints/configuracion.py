@@ -2760,7 +2760,7 @@ async def crear_documento_ai(
         try:
             contenido = await archivo.read()
             tamaño_bytes = len(contenido)
-            
+
             with open(ruta_archivo, "wb") as f:
                 f.write(contenido)
         except Exception as file_error:
@@ -2790,10 +2790,10 @@ async def crear_documento_ai(
                     os.remove(ruta_archivo)
             except:
                 pass
-            
+
             error_msg = str(db_error)
             error_type = type(db_error).__name__
-            
+
             # Verificar si es error de tabla no existe
             is_table_missing = (
                 "does not exist" in error_msg.lower()
@@ -2801,11 +2801,11 @@ async def crear_documento_ai(
                 or ("relation" in error_msg.lower() and "does not exist" in error_msg.lower())
                 or "UndefinedTable" in error_type
             )
-            
+
             if is_table_missing:
                 raise HTTPException(
                     status_code=500,
-                    detail="La tabla de documentos AI no existe. Por favor, ejecuta las migraciones de base de datos."
+                    detail="La tabla de documentos AI no existe. Por favor, ejecuta las migraciones de base de datos.",
                 )
             else:
                 raise
@@ -3044,10 +3044,7 @@ async def probar_configuracion_ai(
         except Exception as query_error:
             error_msg = str(query_error)
             logger.error(f"❌ Error consultando configuración AI: {error_msg}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error consultando configuración de AI: {error_msg}"
-            )
+            raise HTTPException(status_code=500, detail=f"Error consultando configuración de AI: {error_msg}")
 
         if not configs:
             raise HTTPException(status_code=400, detail="No hay configuración de AI")
