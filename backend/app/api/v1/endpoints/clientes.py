@@ -231,33 +231,29 @@ def obtener_estadisticas_embudo(
 
         # Clientes con préstamos RECHAZADOS
         clientes_rechazados = (
-            db.query(func.count(func.distinct(Prestamo.cliente_id)))
-            .filter(Prestamo.estado == "RECHAZADO")
-            .scalar() or 0
+            db.query(func.count(func.distinct(Prestamo.cliente_id))).filter(Prestamo.estado == "RECHAZADO").scalar() or 0
         )
 
         # Clientes con préstamos APROBADOS
         clientes_aprobados = (
-            db.query(func.count(func.distinct(Prestamo.cliente_id)))
-            .filter(Prestamo.estado == "APROBADO")
-            .scalar() or 0
+            db.query(func.count(func.distinct(Prestamo.cliente_id))).filter(Prestamo.estado == "APROBADO").scalar() or 0
         )
 
         # Clientes con préstamos en evaluación (EN_REVISION o DRAFT)
         clientes_evaluacion = (
             db.query(func.count(func.distinct(Prestamo.cliente_id)))
             .filter(Prestamo.estado.in_(["EN_REVISION", "DRAFT"]))
-            .scalar() or 0
+            .scalar()
+            or 0
         )
 
         # Prospectos: todos los clientes que no están en los otros estados
         # Es decir, clientes que no tienen préstamos o tienen préstamos en otros estados
         clientes_con_prestamos = (
             db.query(func.count(func.distinct(Prestamo.cliente_id)))
-            .filter(
-                Prestamo.estado.in_(["RECHAZADO", "APROBADO", "EN_REVISION", "DRAFT"])
-            )
-            .scalar() or 0
+            .filter(Prestamo.estado.in_(["RECHAZADO", "APROBADO", "EN_REVISION", "DRAFT"]))
+            .scalar()
+            or 0
         )
         prospectos = total - clientes_con_prestamos
 
