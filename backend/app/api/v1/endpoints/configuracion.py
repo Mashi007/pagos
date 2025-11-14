@@ -3183,7 +3183,7 @@ def obtener_prompt_ai(
             status_code=403,
             detail="Solo administradores pueden ver el prompt de AI",
         )
-    
+
     try:
         config = (
             db.query(ConfiguracionSistema)
@@ -3193,10 +3193,10 @@ def obtener_prompt_ai(
             )
             .first()
         )
-        
+
         prompt_personalizado = config.valor if config else ""
         tiene_prompt_personalizado = bool(prompt_personalizado and prompt_personalizado.strip())
-        
+
         return {
             "prompt_personalizado": prompt_personalizado or "",
             "tiene_prompt_personalizado": tiene_prompt_personalizado,
@@ -3219,20 +3219,26 @@ def actualizar_prompt_ai(
             status_code=403,
             detail="Solo administradores pueden actualizar el prompt de AI",
         )
-    
+
     try:
         prompt_texto = prompt_data.get("prompt", "").strip()
-        
+
         # Validar que el prompt tenga los placeholders necesarios
-        placeholders_requeridos = ["{resumen_bd}", "{info_cliente_buscado}", "{datos_adicionales}", "{info_esquema}", "{contexto_documentos}"]
+        placeholders_requeridos = [
+            "{resumen_bd}",
+            "{info_cliente_buscado}",
+            "{datos_adicionales}",
+            "{info_esquema}",
+            "{contexto_documentos}",
+        ]
         placeholders_faltantes = [p for p in placeholders_requeridos if p not in prompt_texto]
-        
+
         if prompt_texto and placeholders_faltantes:
             raise HTTPException(
                 status_code=400,
-                detail=f"El prompt personalizado debe incluir los siguientes placeholders: {', '.join(placeholders_faltantes)}. Estos se reemplazarán automáticamente con los datos del sistema."
+                detail=f"El prompt personalizado debe incluir los siguientes placeholders: {', '.join(placeholders_faltantes)}. Estos se reemplazarán automáticamente con los datos del sistema.",
             )
-        
+
         config = (
             db.query(ConfiguracionSistema)
             .filter(
@@ -3241,7 +3247,7 @@ def actualizar_prompt_ai(
             )
             .first()
         )
-        
+
         if config:
             if prompt_texto:
                 config.valor = prompt_texto
@@ -3265,15 +3271,15 @@ def actualizar_prompt_ai(
                 mensaje = "Prompt personalizado guardado exitosamente"
             else:
                 mensaje = "No hay prompt personalizado para eliminar"
-        
+
         db.commit()
         logger.info(f"Prompt de AI actualizado por {current_user.email}")
-        
+
         return {
             "mensaje": mensaje,
             "tiene_prompt_personalizado": bool(prompt_texto),
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -3293,7 +3299,7 @@ def obtener_prompt_default_ai(
             status_code=403,
             detail="Solo administradores pueden ver el prompt de AI",
         )
-    
+
     # Retornar el prompt por defecto como referencia
     # Nota: Este es un ejemplo, el prompt real se construye dinámicamente
     prompt_default = """Eres un ANALISTA ESPECIALIZADO en préstamos y cobranzas...
@@ -3307,10 +3313,10 @@ Placeholders disponibles:
 - {info_esquema}: Esquema completo de la base de datos
 - {contexto_documentos}: Documentos de contexto adicionales
 """
-    
+
     return {
         "prompt_default": prompt_default,
-        "nota": "Este es solo un ejemplo. El prompt real se construye dinámicamente con los datos actuales del sistema."
+        "nota": "Este es solo un ejemplo. El prompt real se construye dinámicamente con los datos actuales del sistema.",
     }
 
 
@@ -3660,62 +3666,75 @@ EJEMPLO CORRECTO:
 def _calcular_tasa_morosidad_mes(db: Session, año: int, mes: int) -> dict:
     """Calcula la tasa de morosidad para un mes específico"""
     try:
-        from sqlalchemy import extract, and_, text
         from datetime import date
-        
+
+        from sqlalchemy import and_, extract, text
+
         # Calcular primer y último día del mes
         primer_dia = date(año, mes, 1)
         if mes == 12:
             ultimo_dia = date(año + 1, 1, 1)
         else:
             ultimo_dia = date(año, mes + 1, 1)
-        
+
         # Total de cuotas del mes
-        total_cuotas = db.query(func.count(Cuota.id)).join(
-            Prestamo, Cuota.prestamo_id == Prestamo.id
-        ).filter(
-            and_(
-                Prestamo.estado == "APROBADO",
-                extract('year', Cuota.fecha_vencimiento) == año,
-                extract('month', Cuota.fecha_vencimiento) == mes
+        total_cuotas = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    extract("year", Cuota.fecha_vencimiento) == año,
+                    extract("month", Cuota.fecha_vencimiento) == mes,
+                )
             )
-        ).scalar() or 0
-        
+            .scalar()
+            or 0
+        )
+
         # Cuotas en mora del mes (vencidas y no pagadas)
-        cuotas_mora = db.query(func.count(Cuota.id)).join(
-            Prestamo, Cuota.prestamo_id == Prestamo.id
-        ).filter(
-            and_(
-                Prestamo.estado == "APROBADO",
-                extract('year', Cuota.fecha_vencimiento) == año,
-                extract('month', Cuota.fecha_vencimiento) == mes,
-                Cuota.fecha_vencimiento < date.today(),
-                Cuota.estado != "PAGADA"
+        cuotas_mora = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    extract("year", Cuota.fecha_vencimiento) == año,
+                    extract("month", Cuota.fecha_vencimiento) == mes,
+                    Cuota.fecha_vencimiento < date.today(),
+                    Cuota.estado != "PAGADA",
+                )
             )
-        ).scalar() or 0
-        
+            .scalar()
+            or 0
+        )
+
         # Monto total en mora
-        monto_mora = db.query(func.sum(Cuota.monto_cuota)).join(
-            Prestamo, Cuota.prestamo_id == Prestamo.id
-        ).filter(
-            and_(
-                Prestamo.estado == "APROBADO",
-                extract('year', Cuota.fecha_vencimiento) == año,
-                extract('month', Cuota.fecha_vencimiento) == mes,
-                Cuota.fecha_vencimiento < date.today(),
-                Cuota.estado != "PAGADA"
+        monto_mora = (
+            db.query(func.sum(Cuota.monto_cuota))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    extract("year", Cuota.fecha_vencimiento) == año,
+                    extract("month", Cuota.fecha_vencimiento) == mes,
+                    Cuota.fecha_vencimiento < date.today(),
+                    Cuota.estado != "PAGADA",
+                )
             )
-        ).scalar() or 0
-        
+            .scalar()
+            or 0
+        )
+
         tasa = (cuotas_mora / total_cuotas * 100) if total_cuotas > 0 else 0
-        
+
         return {
             "año": año,
             "mes": mes,
             "total_cuotas": total_cuotas,
             "cuotas_mora": cuotas_mora,
             "monto_mora": float(monto_mora),
-            "tasa_morosidad": round(tasa, 2)
+            "tasa_morosidad": round(tasa, 2),
         }
     except Exception as e:
         logger.error(f"Error calculando tasa de morosidad: {e}")
@@ -3726,60 +3745,77 @@ def _calcular_metricas_periodo(db: Session, fecha_inicio: date, fecha_fin: date)
     """Calcula métricas financieras para un período específico"""
     try:
         from sqlalchemy import and_
-        
+
         # Total de préstamos aprobados en el período
-        prestamos_aprobados = db.query(func.count(Prestamo.id)).filter(
-            and_(
-                Prestamo.estado == "APROBADO",
-                func.date(Prestamo.fecha_aprobacion) >= fecha_inicio,
-                func.date(Prestamo.fecha_aprobacion) <= fecha_fin
+        prestamos_aprobados = (
+            db.query(func.count(Prestamo.id))
+            .filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    func.date(Prestamo.fecha_aprobacion) >= fecha_inicio,
+                    func.date(Prestamo.fecha_aprobacion) <= fecha_fin,
+                )
             )
-        ).scalar() or 0
-        
+            .scalar()
+            or 0
+        )
+
         # Monto total financiado en el período
-        monto_financiado = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-            and_(
-                Prestamo.estado == "APROBADO",
-                func.date(Prestamo.fecha_aprobacion) >= fecha_inicio,
-                func.date(Prestamo.fecha_aprobacion) <= fecha_fin
+        monto_financiado = (
+            db.query(func.sum(Prestamo.total_financiamiento))
+            .filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    func.date(Prestamo.fecha_aprobacion) >= fecha_inicio,
+                    func.date(Prestamo.fecha_aprobacion) <= fecha_fin,
+                )
             )
-        ).scalar() or 0
-        
+            .scalar()
+            or 0
+        )
+
         # Total de pagos en el período
-        total_pagos = db.query(func.sum(Pago.monto_pagado)).filter(
-            and_(
-                Pago.activo.is_(True),
-                Pago.fecha_pago >= fecha_inicio,
-                Pago.fecha_pago <= fecha_fin
-            )
-        ).scalar() or 0
-        
+        total_pagos = (
+            db.query(func.sum(Pago.monto_pagado))
+            .filter(and_(Pago.activo.is_(True), Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin))
+            .scalar()
+            or 0
+        )
+
         # Cuotas vencidas en el período
-        cuotas_vencidas = db.query(func.count(Cuota.id)).join(
-            Prestamo, Cuota.prestamo_id == Prestamo.id
-        ).filter(
-            and_(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento >= fecha_inicio,
-                Cuota.fecha_vencimiento <= fecha_fin,
-                Cuota.fecha_vencimiento < date.today(),
-                Cuota.estado != "PAGADA"
+        cuotas_vencidas = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento >= fecha_inicio,
+                    Cuota.fecha_vencimiento <= fecha_fin,
+                    Cuota.fecha_vencimiento < date.today(),
+                    Cuota.estado != "PAGADA",
+                )
             )
-        ).scalar() or 0
-        
+            .scalar()
+            or 0
+        )
+
         # Monto en mora del período
-        monto_mora = db.query(func.sum(Cuota.monto_cuota)).join(
-            Prestamo, Cuota.prestamo_id == Prestamo.id
-        ).filter(
-            and_(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento >= fecha_inicio,
-                Cuota.fecha_vencimiento <= fecha_fin,
-                Cuota.fecha_vencimiento < date.today(),
-                Cuota.estado != "PAGADA"
+        monto_mora = (
+            db.query(func.sum(Cuota.monto_cuota))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento >= fecha_inicio,
+                    Cuota.fecha_vencimiento <= fecha_fin,
+                    Cuota.fecha_vencimiento < date.today(),
+                    Cuota.estado != "PAGADA",
+                )
             )
-        ).scalar() or 0
-        
+            .scalar()
+            or 0
+        )
+
         return {
             "fecha_inicio": fecha_inicio.isoformat(),
             "fecha_fin": fecha_fin.isoformat(),
@@ -3787,7 +3823,7 @@ def _calcular_metricas_periodo(db: Session, fecha_inicio: date, fecha_fin: date)
             "monto_financiado": float(monto_financiado),
             "total_pagos": float(total_pagos),
             "cuotas_vencidas": cuotas_vencidas,
-            "monto_mora": float(monto_mora)
+            "monto_mora": float(monto_mora),
         }
     except Exception as e:
         logger.error(f"Error calculando métricas del período: {e}")
@@ -3799,7 +3835,7 @@ def _obtener_mapeo_semantico_campos() -> str:
     mapeo = []
     mapeo.append("=== MAPEO SEMÁNTICO DE CAMPOS (Sinónimos y Términos Relacionados) ===\n")
     mapeo.append("Usa este mapeo para entender términos similares y hacer inferencias semánticas\n")
-    
+
     # Mapeo por concepto semántico
     mapeo.append("\n📅 FECHAS Y PERÍODOS:")
     mapeo.append("  • fecha_vencimiento, fecha de vencimiento, vencimiento, fecha vencida, cuándo vence")
@@ -3809,7 +3845,7 @@ def _obtener_mapeo_semantico_campos() -> str:
     mapeo.append("  • fecha_nacimiento, fecha de nacimiento, nacimiento, edad")
     mapeo.append("  • fecha_actualizacion, fecha de actualización, actualizado, modificado")
     mapeo.append("  • fecha_conciliacion, fecha de conciliación, conciliado")
-    
+
     mapeo.append("\n💰 MONTOS Y VALORES:")
     mapeo.append("  • monto_cuota, cuota, monto de cuota, valor cuota, pago cuota, cuota mensual")
     mapeo.append("  • monto_pagado, pagado, monto pagado, cantidad pagada, abonado")
@@ -3821,14 +3857,14 @@ def _obtener_mapeo_semantico_campos() -> str:
     mapeo.append("  • capital_pagado, capital pagado, principal pagado")
     mapeo.append("  • interes_pagado, interés pagado, intereses pagados")
     mapeo.append("  • saldo_capital, saldo, capital pendiente, deuda pendiente")
-    
+
     mapeo.append("\n👤 IDENTIFICACIÓN DE CLIENTES:")
     mapeo.append("  • cedula, cédula, documento, documento identidad, DNI, CI, identificación")
     mapeo.append("  • nombres, nombre, nombre completo, cliente, persona, titular")
     mapeo.append("  • telefono, teléfono, tel, número teléfono, contacto, celular")
     mapeo.append("  • email, correo, correo electrónico, e-mail, mail")
     mapeo.append("  • cliente_id, id cliente, identificador cliente, código cliente")
-    
+
     mapeo.append("\n📋 PRÉSTAMOS Y CRÉDITOS:")
     mapeo.append("  • prestamo_id, id préstamo, préstamo, crédito, loan, préstamo número")
     mapeo.append("  • estado, estado préstamo, situación, condición, status")
@@ -3838,7 +3874,7 @@ def _obtener_mapeo_semantico_campos() -> str:
     mapeo.append("  • analista, analista asignado, asesor, ejecutivo, gestor")
     mapeo.append("  • concesionario, concesionario asignado, dealer, distribuidor")
     mapeo.append("  • modelo_vehiculo, modelo vehículo, vehículo, auto, carro")
-    
+
     mapeo.append("\n📊 CUOTAS Y PAGOS:")
     mapeo.append("  • numero_cuota, número cuota, cuota número, cuota N, cuota #")
     mapeo.append("  • estado cuota, estado, situación cuota, condición cuota")
@@ -3848,28 +3884,28 @@ def _obtener_mapeo_semantico_campos() -> str:
     mapeo.append("  • PARCIAL, parcial, pagada parcialmente, abono parcial")
     mapeo.append("  • dias_mora, días mora, días atraso, días retraso, días vencida")
     mapeo.append("  • dias_morosidad, días morosidad, días pendiente, días adeudado")
-    
+
     mapeo.append("\n💳 PAGOS Y TRANSACCIONES:")
     mapeo.append("  • pago, pagos, transacción, abono, depósito, transferencia")
     mapeo.append("  • numero_documento, número documento, comprobante, referencia, número referencia")
     mapeo.append("  • institucion_bancaria, banco, institución bancaria, entidad bancaria")
     mapeo.append("  • conciliado, conciliación, verificado, confirmado, validado")
     mapeo.append("  • activo, activo pago, pago activo, pago válido, pago vigente")
-    
+
     mapeo.append("\n📈 ESTADÍSTICAS Y MÉTRICAS:")
     mapeo.append("  • tasa_morosidad, tasa morosidad, porcentaje morosidad, % morosidad, índice morosidad")
     mapeo.append("  • morosidad, mora, atrasos, retrasos, incumplimientos")
     mapeo.append("  • cobranza, cobranzas, recaudación, recaudaciones, recuperación")
     mapeo.append("  • cartera, cartera activa, préstamos activos, créditos vigentes")
     mapeo.append("  • vencido, vencidos, vencimientos, cuotas vencidas")
-    
+
     mapeo.append("\n🔍 BÚSQUEDAS Y FILTROS:")
     mapeo.append("  • buscar por, filtrar por, encontrar, localizar, consultar")
     mapeo.append("  • entre fechas, en el rango, desde/hasta, período, intervalo")
     mapeo.append("  • por mes, en el mes, durante el mes, del mes")
     mapeo.append("  • por año, en el año, durante el año, del año")
     mapeo.append("  • por estado, según estado, con estado, que tengan estado")
-    
+
     mapeo.append("\n⚠️ INSTRUCCIONES PARA EL AI:")
     mapeo.append("  1. Si el usuario usa un término que no aparece exactamente en los campos,")
     mapeo.append("     busca en este mapeo para encontrar el campo equivalente")
@@ -3879,7 +3915,7 @@ def _obtener_mapeo_semantico_campos() -> str:
     mapeo.append("  4. Si preguntan sobre 'pagos', considera tanto la tabla 'pagos' como 'cuotas'")
     mapeo.append("  5. Para términos como 'morosidad', considera campos: dias_morosidad, monto_morosidad, estado='MORA'")
     mapeo.append("  6. Si no estás seguro, pregunta al usuario para aclarar antes de responder")
-    
+
     return "\n".join(mapeo)
 
 
@@ -3887,36 +3923,46 @@ def _obtener_inventario_campos_bd(db: Session) -> str:
     """Obtiene un inventario completo y organizado de todos los campos de BD por tablas con índices"""
     try:
         from sqlalchemy.engine import reflection
-        
+
         inspector = reflection.Inspector.from_engine(db.bind)
         inventario = []
-        
+
         inventario.append("=== INVENTARIO COMPLETO DE CAMPOS DE BASE DE DATOS ===\n")
         inventario.append("Organizado por tablas con información de índices, tipos de datos y relaciones\n")
-        
+
         # Tablas principales en orden de importancia
         tablas_prioritarias = [
-            "clientes", "prestamos", "cuotas", "pagos", 
-            "notificaciones", "users", "concesionarios", "analistas",
-            "configuracion_sistema", "documentos_ai", "auditorias",
-            "prestamos_evaluacion", "prestamos_auditoria", "pagos_auditoria"
+            "clientes",
+            "prestamos",
+            "cuotas",
+            "pagos",
+            "notificaciones",
+            "users",
+            "concesionarios",
+            "analistas",
+            "configuracion_sistema",
+            "documentos_ai",
+            "auditorias",
+            "prestamos_evaluacion",
+            "prestamos_auditoria",
+            "pagos_auditoria",
         ]
-        
+
         # Obtener todas las tablas
         todas_tablas = inspector.get_table_names()
-        
+
         # Procesar tablas prioritarias primero
         tablas_procesadas = set()
         for tabla in tablas_prioritarias:
             if tabla in todas_tablas:
                 tablas_procesadas.add(tabla)
                 _agregar_info_tabla(inventario, inspector, tabla)
-        
+
         # Procesar tablas restantes
         for tabla in sorted(todas_tablas):
             if tabla not in tablas_procesadas:
                 _agregar_info_tabla(inventario, inspector, tabla)
-        
+
         return "\n".join(inventario)
     except Exception as e:
         logger.error(f"Error obteniendo inventario de campos BD: {e}")
@@ -3929,11 +3975,11 @@ def _agregar_info_tabla(inventario: list, inspector, tabla: str):
         inventario.append(f"\n{'='*80}")
         inventario.append(f"TABLA: {tabla.upper()}")
         inventario.append(f"{'='*80}\n")
-        
+
         # Obtener columnas
         columnas = inspector.get_columns(tabla)
         inventario.append("📋 CAMPOS (Columnas):")
-        
+
         # Separar campos por tipo
         campos_primarios = []
         campos_indexados = []
@@ -3941,116 +3987,124 @@ def _agregar_info_tabla(inventario: list, inspector, tabla: str):
         campos_fecha = []
         campos_numericos = []
         campos_texto = []
-        
+
         # Obtener índices para identificar campos indexados
         indices = inspector.get_indexes(tabla)
         campos_con_indice = set()
         for idx in indices:
-            campos_con_indice.update(idx['column_names'])
-        
+            campos_con_indice.update(idx["column_names"])
+
         # Obtener claves foráneas
         fks = inspector.get_foreign_keys(tabla)
         campos_fk = set()
         for fk in fks:
-            campos_fk.update(fk['constrained_columns'])
-        
+            campos_fk.update(fk["constrained_columns"])
+
         for col in columnas:
-            nombre = col['name']
-            tipo = str(col['type'])
-            nullable = "NULL" if col['nullable'] else "NOT NULL"
-            default = f" DEFAULT {col['default']}" if col.get('default') is not None else ""
-            es_pk = col.get('primary_key', False)
+            nombre = col["name"]
+            tipo = str(col["type"])
+            nullable = "NULL" if col["nullable"] else "NOT NULL"
+            default = f" DEFAULT {col['default']}" if col.get("default") is not None else ""
+            es_pk = col.get("primary_key", False)
             tiene_indice = nombre in campos_con_indice
             es_fk = nombre in campos_fk
-            
+
             info_campo = {
-                'nombre': nombre,
-                'tipo': tipo,
-                'nullable': nullable,
-                'default': default,
-                'es_pk': es_pk,
-                'tiene_indice': tiene_indice,
-                'es_fk': es_fk
+                "nombre": nombre,
+                "tipo": tipo,
+                "nullable": nullable,
+                "default": default,
+                "es_pk": es_pk,
+                "tiene_indice": tiene_indice,
+                "es_fk": es_fk,
             }
-            
+
             if es_pk:
                 campos_primarios.append(info_campo)
             elif tiene_indice:
                 campos_indexados.append(info_campo)
-            elif 'date' in tipo.lower() or 'timestamp' in tipo.lower() or 'time' in tipo.lower():
+            elif "date" in tipo.lower() or "timestamp" in tipo.lower() or "time" in tipo.lower():
                 campos_fecha.append(info_campo)
-            elif 'numeric' in tipo.lower() or 'integer' in tipo.lower() or 'decimal' in tipo.lower():
+            elif "numeric" in tipo.lower() or "integer" in tipo.lower() or "decimal" in tipo.lower():
                 campos_numericos.append(info_campo)
-            elif 'varchar' in tipo.lower() or 'text' in tipo.lower() or 'string' in tipo.lower():
+            elif "varchar" in tipo.lower() or "text" in tipo.lower() or "string" in tipo.lower():
                 campos_texto.append(info_campo)
             else:
                 campos_normales.append(info_campo)
-        
+
         # Mostrar campos primarios
         if campos_primarios:
             inventario.append("\n  🔑 CLAVES PRIMARIAS:")
             for campo in campos_primarios:
-                fk_info = " [FK]" if campo['es_fk'] else ""
+                fk_info = " [FK]" if campo["es_fk"] else ""
                 inventario.append(f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{fk_info}")
-        
+
         # Mostrar campos indexados (importantes para consultas rápidas)
         if campos_indexados:
             inventario.append("\n  ⚡ CAMPOS INDEXADOS (consultas rápidas):")
             for campo in campos_indexados:
-                fk_info = " [FK]" if campo['es_fk'] else ""
+                fk_info = " [FK]" if campo["es_fk"] else ""
                 inventario.append(f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{fk_info}")
-        
+
         # Mostrar campos de fecha
         if campos_fecha:
             inventario.append("\n  📅 CAMPOS DE FECHA:")
             for campo in campos_fecha:
-                idx_info = " [INDEXED]" if campo['tiene_indice'] else ""
-                fk_info = " [FK]" if campo['es_fk'] else ""
-                inventario.append(f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{idx_info}{fk_info}")
-        
+                idx_info = " [INDEXED]" if campo["tiene_indice"] else ""
+                fk_info = " [FK]" if campo["es_fk"] else ""
+                inventario.append(
+                    f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{idx_info}{fk_info}"
+                )
+
         # Mostrar campos numéricos
         if campos_numericos:
             inventario.append("\n  🔢 CAMPOS NUMÉRICOS:")
             for campo in campos_numericos:
-                idx_info = " [INDEXED]" if campo['tiene_indice'] else ""
-                fk_info = " [FK]" if campo['es_fk'] else ""
-                inventario.append(f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{idx_info}{fk_info}")
-        
+                idx_info = " [INDEXED]" if campo["tiene_indice"] else ""
+                fk_info = " [FK]" if campo["es_fk"] else ""
+                inventario.append(
+                    f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{idx_info}{fk_info}"
+                )
+
         # Mostrar campos de texto
         if campos_texto:
             inventario.append("\n  📝 CAMPOS DE TEXTO:")
             for campo in campos_texto:
-                idx_info = " [INDEXED]" if campo['tiene_indice'] else ""
-                fk_info = " [FK]" if campo['es_fk'] else ""
-                inventario.append(f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{idx_info}{fk_info}")
-        
+                idx_info = " [INDEXED]" if campo["tiene_indice"] else ""
+                fk_info = " [FK]" if campo["es_fk"] else ""
+                inventario.append(
+                    f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{idx_info}{fk_info}"
+                )
+
         # Mostrar otros campos
         if campos_normales:
             inventario.append("\n  📦 OTROS CAMPOS:")
             for campo in campos_normales:
-                idx_info = " [INDEXED]" if campo['tiene_indice'] else ""
-                fk_info = " [FK]" if campo['es_fk'] else ""
-                inventario.append(f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{idx_info}{fk_info}")
-        
+                idx_info = " [INDEXED]" if campo["tiene_indice"] else ""
+                fk_info = " [FK]" if campo["es_fk"] else ""
+                inventario.append(
+                    f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{idx_info}{fk_info}"
+                )
+
         # Mostrar índices compuestos
         if indices:
-            indices_compuestos = [idx for idx in indices if len(idx['column_names']) > 1]
+            indices_compuestos = [idx for idx in indices if len(idx["column_names"]) > 1]
             if indices_compuestos:
                 inventario.append("\n  🔗 ÍNDICES COMPUESTOS:")
                 for idx in indices_compuestos:
-                    unique = " [UNIQUE]" if idx.get('unique') else ""
-                    columnas_idx = ', '.join(idx['column_names'])
+                    unique = " [UNIQUE]" if idx.get("unique") else ""
+                    columnas_idx = ", ".join(idx["column_names"])
                     inventario.append(f"    • {idx['name']}: ({columnas_idx}){unique}")
-        
+
         # Mostrar relaciones (claves foráneas)
         if fks:
             inventario.append("\n  🔗 RELACIONES (Claves Foráneas):")
             for fk in fks:
-                col_local = ', '.join(fk['constrained_columns'])
-                tabla_ref = fk['referred_table']
-                col_ref = ', '.join(fk['referred_columns'])
+                col_local = ", ".join(fk["constrained_columns"])
+                tabla_ref = fk["referred_table"]
+                col_ref = ", ".join(fk["referred_columns"])
                 inventario.append(f"    • {col_local} -> {tabla_ref}.{col_ref}")
-        
+
         # Información de uso común y sinónimos
         inventario.append(f"\n  💡 USO COMÚN Y SINÓNIMOS:")
         if tabla == "clientes":
@@ -4064,11 +4118,15 @@ def _agregar_info_tabla(inventario: list, inspector, tabla: str):
             inventario.append("    • Buscar por: cedula (indexed) [también: cédula, documento, DNI]")
             inventario.append("    • Filtrar por: estado (indexed) [también: situación, condición, status]")
             inventario.append("    • Filtrar por: fecha_registro (indexed) [también: fecha creación, creado]")
-            inventario.append("    • Campos relacionados: total_financiamiento [monto préstamo, valor préstamo, financiamiento]")
+            inventario.append(
+                "    • Campos relacionados: total_financiamiento [monto préstamo, valor préstamo, financiamiento]"
+            )
             inventario.append("    • Relaciona con: clientes (cliente_id), cuotas (prestamo_id)")
         elif tabla == "cuotas":
             inventario.append("    • Buscar por: prestamo_id (FK, indexed) [también: id préstamo, préstamo, crédito]")
-            inventario.append("    • Buscar por: fecha_vencimiento (indexed) [también: vencimiento, cuándo vence, fecha vencida]")
+            inventario.append(
+                "    • Buscar por: fecha_vencimiento (indexed) [también: vencimiento, cuándo vence, fecha vencida]"
+            )
             inventario.append("    • Filtrar por: estado (indexed) [PAGADA, PENDIENTE, MORA, PARCIAL]")
             inventario.append("    • Campos clave:")
             inventario.append("      - fecha_vencimiento [vencimiento, cuándo vence]")
@@ -4092,7 +4150,7 @@ def _agregar_info_tabla(inventario: list, inspector, tabla: str):
             inventario.append("    • Filtrar por: tipo (indexed) [EMAIL, SMS, WHATSAPP]")
             inventario.append("    • Filtrar por: estado (indexed) [PENDIENTE, ENVIADA, FALLIDA]")
             inventario.append("    • Campos relacionados: fecha_envio [fecha envío, cuando se envió]")
-        
+
     except Exception as e:
         logger.error(f"Error agregando info de tabla {tabla}: {e}")
         inventario.append(f"  ⚠️ Error obteniendo información de la tabla: {e}")
@@ -4103,48 +4161,48 @@ def _obtener_esquema_bd_completo(db: Session) -> str:
     try:
         from sqlalchemy import inspect, text
         from sqlalchemy.engine import reflection
-        
+
         # Obtener inspector desde el engine de la sesión
         inspector = reflection.Inspector.from_engine(db.bind)
         esquema = []
-        
+
         esquema.append("=== ESQUEMA COMPLETO DE BASE DE DATOS ===\n")
-        
+
         # Obtener todas las tablas
         tablas = inspector.get_table_names()
-        
+
         for tabla in sorted(tablas):
             esquema.append(f"\n--- TABLA: {tabla} ---")
-            
+
             # Obtener columnas
             columnas = inspector.get_columns(tabla)
             esquema.append("Columnas:")
             for col in columnas:
-                tipo = str(col['type'])
-                nullable = "NULL" if col['nullable'] else "NOT NULL"
-                default = f" DEFAULT {col['default']}" if col.get('default') is not None else ""
-                primary_key = " [PRIMARY KEY]" if col.get('primary_key') else ""
+                tipo = str(col["type"])
+                nullable = "NULL" if col["nullable"] else "NOT NULL"
+                default = f" DEFAULT {col['default']}" if col.get("default") is not None else ""
+                primary_key = " [PRIMARY KEY]" if col.get("primary_key") else ""
                 esquema.append(f"  - {col['name']}: {tipo} {nullable}{default}{primary_key}")
-            
+
             # Obtener índices
             indices = inspector.get_indexes(tabla)
             if indices:
                 esquema.append("Índices:")
                 for idx in indices:
-                    columnas_idx = ', '.join(idx['column_names'])
-                    unique = " [UNIQUE]" if idx.get('unique') else ""
+                    columnas_idx = ", ".join(idx["column_names"])
+                    unique = " [UNIQUE]" if idx.get("unique") else ""
                     esquema.append(f"  - {idx['name']}: ({columnas_idx}){unique}")
-            
+
             # Obtener claves foráneas
             fks = inspector.get_foreign_keys(tabla)
             if fks:
                 esquema.append("Claves Foráneas:")
                 for fk in fks:
-                    col_local = ', '.join(fk['constrained_columns'])
-                    tabla_ref = fk['referred_table']
-                    col_ref = ', '.join(fk['referred_columns'])
+                    col_local = ", ".join(fk["constrained_columns"])
+                    tabla_ref = fk["referred_table"]
+                    col_ref = ", ".join(fk["referred_columns"])
                     esquema.append(f"  - {col_local} -> {tabla_ref}.{col_ref}")
-        
+
         return "\n".join(esquema)
     except Exception as e:
         logger.error(f"Error obteniendo esquema de BD: {e}")
@@ -4155,10 +4213,10 @@ def _obtener_estadisticas_tablas(db: Session) -> str:
     """Obtiene estadísticas de todas las tablas (conteos, fechas mín/máx, etc.)"""
     try:
         from sqlalchemy import text
-        
+
         estadisticas = []
         estadisticas.append("\n=== ESTADÍSTICAS DE TABLAS ===\n")
-        
+
         # Tablas principales con sus conteos
         tablas_principales = [
             ("clientes", "id"),
@@ -4170,35 +4228,37 @@ def _obtener_estadisticas_tablas(db: Session) -> str:
             ("concesionarios", "id"),
             ("analistas", "id"),
         ]
-        
+
         for tabla, col_id in tablas_principales:
             try:
                 # Conteo total
                 query = text(f"SELECT COUNT(*) as total FROM {tabla}")
                 resultado = db.execute(query).fetchone()
                 total = resultado[0] if resultado else 0
-                
+
                 # Intentar obtener fechas mín/máx si existe columna de fecha
                 fecha_info = ""
                 try:
-                    query_fecha = text(f"""
+                    query_fecha = text(
+                        f"""
                         SELECT 
                             MIN(fecha_registro) as min_fecha,
                             MAX(fecha_registro) as max_fecha
                         FROM {tabla}
                         WHERE fecha_registro IS NOT NULL
-                    """)
+                    """
+                    )
                     fecha_result = db.execute(query_fecha).fetchone()
                     if fecha_result and fecha_result[0]:
                         fecha_info = f" | Rango fechas: {fecha_result[0]} a {fecha_result[1]}"
                 except Exception:
                     pass
-                
+
                 estadisticas.append(f"{tabla}: {total} registros{fecha_info}")
             except Exception as e:
                 logger.debug(f"No se pudo obtener estadísticas de {tabla}: {e}")
                 continue
-        
+
         return "\n".join(estadisticas)
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas de tablas: {e}")
@@ -4209,14 +4269,14 @@ def _ejecutar_consulta_cruzada(db: Session, tabla1: str, tabla2: str, campos: li
     """Ejecuta una consulta cruzada entre dos tablas con JOIN"""
     try:
         from sqlalchemy import text
-        
+
         # Construir query básico
         query_sql = f"""
             SELECT {', '.join(campos)}
             FROM {tabla1} t1
             INNER JOIN {tabla2} t2 ON t1.id = t2.{tabla1[:-1]}_id
         """
-        
+
         # Agregar condiciones si existen
         if condiciones:
             where_clauses = []
@@ -4231,7 +4291,7 @@ def _ejecutar_consulta_cruzada(db: Session, tabla1: str, tabla2: str, campos: li
                 resultado = db.execute(text(query_sql))
         else:
             resultado = db.execute(text(query_sql))
-        
+
         return [dict(row._mapping) for row in resultado.fetchall()]
     except Exception as e:
         logger.error(f"Error ejecutando consulta cruzada: {e}")
@@ -4241,14 +4301,16 @@ def _ejecutar_consulta_cruzada(db: Session, tabla1: str, tabla2: str, campos: li
 def _analisis_ml_morosidad_predictiva(db: Session) -> dict:
     """Análisis de Machine Learning: Predicción de morosidad basada en patrones históricos"""
     try:
-        from sqlalchemy import and_, func, text
         from datetime import date, timedelta
-        
+
+        from sqlalchemy import and_, func, text
+
         hoy = date.today()
         hace_6_meses = hoy - timedelta(days=180)
-        
+
         # Obtener datos históricos para análisis
-        query = text("""
+        query = text(
+            """
             SELECT 
                 p.analista,
                 p.concesionario,
@@ -4266,17 +4328,18 @@ def _analisis_ml_morosidad_predictiva(db: Session) -> dict:
             HAVING COUNT(c.id) > 0
             ORDER BY cuotas_mora_historial DESC
             LIMIT 50
-        """)
-        
+        """
+        )
+
         resultado = db.execute(query.bindparams(fecha_inicio=hace_6_meses))
         datos_historicos = [dict(row._mapping) for row in resultado.fetchall()]
-        
+
         # Calcular factores de riesgo
         factores_riesgo = []
         for dato in datos_historicos:
-            total_cuotas = (dato.get('cuotas_mora_historial', 0) + dato.get('cuotas_pagadas_historial', 0))
-            tasa_mora = (dato.get('cuotas_mora_historial', 0) / total_cuotas * 100) if total_cuotas > 0 else 0
-            
+            total_cuotas = dato.get("cuotas_mora_historial", 0) + dato.get("cuotas_pagadas_historial", 0)
+            tasa_mora = (dato.get("cuotas_mora_historial", 0) / total_cuotas * 100) if total_cuotas > 0 else 0
+
             # Factor de riesgo basado en múltiples variables
             factor_riesgo = 0
             if tasa_mora > 30:
@@ -4285,30 +4348,32 @@ def _analisis_ml_morosidad_predictiva(db: Session) -> dict:
                 factor_riesgo += 2
             elif tasa_mora > 5:
                 factor_riesgo += 1
-            
-            if dato.get('promedio_dias_mora', 0) > 60:
+
+            if dato.get("promedio_dias_mora", 0) > 60:
                 factor_riesgo += 2
-            elif dato.get('promedio_dias_mora', 0) > 30:
+            elif dato.get("promedio_dias_mora", 0) > 30:
                 factor_riesgo += 1
-            
-            factores_riesgo.append({
-                'analista': dato.get('analista', 'N/A'),
-                'concesionario': dato.get('concesionario', 'N/A'),
-                'tasa_mora_historica': round(tasa_mora, 2),
-                'promedio_dias_mora': round(dato.get('promedio_dias_mora', 0), 1),
-                'factor_riesgo': factor_riesgo,
-                'nivel_riesgo': 'ALTO' if factor_riesgo >= 4 else 'MEDIO' if factor_riesgo >= 2 else 'BAJO'
-            })
-        
+
+            factores_riesgo.append(
+                {
+                    "analista": dato.get("analista", "N/A"),
+                    "concesionario": dato.get("concesionario", "N/A"),
+                    "tasa_mora_historica": round(tasa_mora, 2),
+                    "promedio_dias_mora": round(dato.get("promedio_dias_mora", 0), 1),
+                    "factor_riesgo": factor_riesgo,
+                    "nivel_riesgo": "ALTO" if factor_riesgo >= 4 else "MEDIO" if factor_riesgo >= 2 else "BAJO",
+                }
+            )
+
         return {
-            'tipo_analisis': 'Predicción de Morosidad',
-            'datos_analizados': len(datos_historicos),
-            'factores_riesgo': factores_riesgo[:10],  # Top 10
-            'recomendaciones': [
-                'Préstamos con analistas/concesionarios de alto riesgo requieren seguimiento más cercano',
-                'Implementar alertas tempranas para préstamos con factores de riesgo >= 4',
-                'Revisar políticas de aprobación para analistas con tasa de mora histórica > 30%'
-            ]
+            "tipo_analisis": "Predicción de Morosidad",
+            "datos_analizados": len(datos_historicos),
+            "factores_riesgo": factores_riesgo[:10],  # Top 10
+            "recomendaciones": [
+                "Préstamos con analistas/concesionarios de alto riesgo requieren seguimiento más cercano",
+                "Implementar alertas tempranas para préstamos con factores de riesgo >= 4",
+                "Revisar políticas de aprobación para analistas con tasa de mora histórica > 30%",
+            ],
         }
     except Exception as e:
         logger.error(f"Error en análisis ML de morosidad: {e}")
@@ -4318,13 +4383,15 @@ def _analisis_ml_morosidad_predictiva(db: Session) -> dict:
 def _analisis_ml_segmentacion_clientes(db: Session) -> dict:
     """Análisis de Machine Learning: Segmentación de clientes por comportamiento"""
     try:
-        from sqlalchemy import and_, func, text
         from datetime import date, timedelta
-        
+
+        from sqlalchemy import and_, func, text
+
         hoy = date.today()
-        
+
         # Segmentar clientes por comportamiento de pago
-        query = text("""
+        query = text(
+            """
             SELECT 
                 c.cedula,
                 c.nombres,
@@ -4344,89 +4411,98 @@ def _analisis_ml_segmentacion_clientes(db: Session) -> dict:
             HAVING COUNT(DISTINCT p.id) > 0
             ORDER BY total_pagado_historico DESC
             LIMIT 100
-        """)
-        
+        """
+        )
+
         resultado = db.execute(query)
         clientes = [dict(row._mapping) for row in resultado.fetchall()]
-        
+
         # Segmentar en grupos
         segmentos = {
-            'excelentes': [],  # 0% mora, pagos puntuales
-            'buenos': [],      # < 5% mora
-            'regulares': [],   # 5-15% mora
-            'riesgo': [],      # > 15% mora
+            "excelentes": [],  # 0% mora, pagos puntuales
+            "buenos": [],  # < 5% mora
+            "regulares": [],  # 5-15% mora
+            "riesgo": [],  # > 15% mora
         }
-        
+
         for cliente in clientes:
-            total_cuotas = (cliente.get('cuotas_pagadas', 0) + 
-                          cliente.get('cuotas_mora', 0) + 
-                          cliente.get('cuotas_pendientes', 0))
-            
+            total_cuotas = (
+                cliente.get("cuotas_pagadas", 0) + cliente.get("cuotas_mora", 0) + cliente.get("cuotas_pendientes", 0)
+            )
+
             if total_cuotas == 0:
                 continue
-                
-            tasa_mora = (cliente.get('cuotas_mora', 0) / total_cuotas * 100)
-            prom_dias = cliente.get('promedio_dias_mora', 0) or 0
-            
+
+            tasa_mora = cliente.get("cuotas_mora", 0) / total_cuotas * 100
+            prom_dias = cliente.get("promedio_dias_mora", 0) or 0
+
             if tasa_mora == 0 and prom_dias == 0:
-                segmentos['excelentes'].append({
-                    'cedula': cliente.get('cedula'),
-                    'nombres': cliente.get('nombres'),
-                    'total_prestamos': cliente.get('total_prestamos', 0),
-                    'total_pagado': float(cliente.get('total_pagado_historico', 0) or 0)
-                })
+                segmentos["excelentes"].append(
+                    {
+                        "cedula": cliente.get("cedula"),
+                        "nombres": cliente.get("nombres"),
+                        "total_prestamos": cliente.get("total_prestamos", 0),
+                        "total_pagado": float(cliente.get("total_pagado_historico", 0) or 0),
+                    }
+                )
             elif tasa_mora < 5:
-                segmentos['buenos'].append({
-                    'cedula': cliente.get('cedula'),
-                    'nombres': cliente.get('nombres'),
-                    'tasa_mora': round(tasa_mora, 2),
-                    'total_prestamos': cliente.get('total_prestamos', 0)
-                })
+                segmentos["buenos"].append(
+                    {
+                        "cedula": cliente.get("cedula"),
+                        "nombres": cliente.get("nombres"),
+                        "tasa_mora": round(tasa_mora, 2),
+                        "total_prestamos": cliente.get("total_prestamos", 0),
+                    }
+                )
             elif tasa_mora < 15:
-                segmentos['regulares'].append({
-                    'cedula': cliente.get('cedula'),
-                    'nombres': cliente.get('nombres'),
-                    'tasa_mora': round(tasa_mora, 2),
-                    'promedio_dias_mora': round(prom_dias, 1)
-                })
+                segmentos["regulares"].append(
+                    {
+                        "cedula": cliente.get("cedula"),
+                        "nombres": cliente.get("nombres"),
+                        "tasa_mora": round(tasa_mora, 2),
+                        "promedio_dias_mora": round(prom_dias, 1),
+                    }
+                )
             else:
-                segmentos['riesgo'].append({
-                    'cedula': cliente.get('cedula'),
-                    'nombres': cliente.get('nombres'),
-                    'tasa_mora': round(tasa_mora, 2),
-                    'promedio_dias_mora': round(prom_dias, 1),
-                    'total_prestamos': cliente.get('total_prestamos', 0)
-                })
-        
+                segmentos["riesgo"].append(
+                    {
+                        "cedula": cliente.get("cedula"),
+                        "nombres": cliente.get("nombres"),
+                        "tasa_mora": round(tasa_mora, 2),
+                        "promedio_dias_mora": round(prom_dias, 1),
+                        "total_prestamos": cliente.get("total_prestamos", 0),
+                    }
+                )
+
         return {
-            'tipo_analisis': 'Segmentación de Clientes',
-            'total_analizados': len(clientes),
-            'segmentos': {
-                'excelentes': {
-                    'cantidad': len(segmentos['excelentes']),
-                    'caracteristicas': '0% mora, pagos puntuales',
-                    'muestra': segmentos['excelentes'][:5]
+            "tipo_analisis": "Segmentación de Clientes",
+            "total_analizados": len(clientes),
+            "segmentos": {
+                "excelentes": {
+                    "cantidad": len(segmentos["excelentes"]),
+                    "caracteristicas": "0% mora, pagos puntuales",
+                    "muestra": segmentos["excelentes"][:5],
                 },
-                'buenos': {
-                    'cantidad': len(segmentos['buenos']),
-                    'caracteristicas': '< 5% mora',
-                    'muestra': segmentos['buenos'][:5]
+                "buenos": {
+                    "cantidad": len(segmentos["buenos"]),
+                    "caracteristicas": "< 5% mora",
+                    "muestra": segmentos["buenos"][:5],
                 },
-                'regulares': {
-                    'cantidad': len(segmentos['regulares']),
-                    'caracteristicas': '5-15% mora',
-                    'muestra': segmentos['regulares'][:5]
+                "regulares": {
+                    "cantidad": len(segmentos["regulares"]),
+                    "caracteristicas": "5-15% mora",
+                    "muestra": segmentos["regulares"][:5],
                 },
-                'riesgo': {
-                    'cantidad': len(segmentos['riesgo']),
-                    'caracteristicas': '> 15% mora',
-                    'muestra': segmentos['riesgo'][:5]
-                }
+                "riesgo": {
+                    "cantidad": len(segmentos["riesgo"]),
+                    "caracteristicas": "> 15% mora",
+                    "muestra": segmentos["riesgo"][:5],
+                },
             },
-            'recomendaciones': [
+            "recomendaciones": [
                 f"Clientes Excelentes ({len(segmentos['excelentes'])}): Ofrecer préstamos adicionales o mejores condiciones",
-                f"Clientes en Riesgo ({len(segmentos['riesgo'])}): Requieren seguimiento intensivo y posible reestructuración"
-            ]
+                f"Clientes en Riesgo ({len(segmentos['riesgo'])}): Requieren seguimiento intensivo y posible reestructuración",
+            ],
         }
     except Exception as e:
         logger.error(f"Error en análisis ML de segmentación: {e}")
@@ -4436,14 +4512,16 @@ def _analisis_ml_segmentacion_clientes(db: Session) -> dict:
 def _analisis_ml_deteccion_anomalias(db: Session) -> dict:
     """Análisis de Machine Learning: Detección de anomalías en pagos y préstamos"""
     try:
-        from sqlalchemy import text
         from datetime import date, timedelta
-        
+
+        from sqlalchemy import text
+
         hoy = date.today()
         hace_30_dias = hoy - timedelta(days=30)
-        
+
         # Detectar anomalías en pagos
-        query_anomalias = text("""
+        query_anomalias = text(
+            """
             SELECT 
                 p.id,
                 p.cedula,
@@ -4468,34 +4546,29 @@ def _analisis_ml_deteccion_anomalias(db: Session) -> dict:
               )
             ORDER BY p.fecha_pago DESC
             LIMIT 20
-        """)
-        
+        """
+        )
+
         resultado = db.execute(query_anomalias.bindparams(fecha_inicio=hace_30_dias))
         anomalias = [dict(row._mapping) for row in resultado.fetchall()]
-        
+
         # Agrupar por tipo
         por_tipo = {}
         for anom in anomalias:
-            tipo = anom.get('tipo_anomalia', 'NORMAL')
+            tipo = anom.get("tipo_anomalia", "NORMAL")
             if tipo not in por_tipo:
                 por_tipo[tipo] = []
             por_tipo[tipo].append(anom)
-        
+
         return {
-            'tipo_analisis': 'Detección de Anomalías',
-            'total_anomalias': len(anomalias),
-            'anomalias_por_tipo': {
-                tipo: {
-                    'cantidad': len(lista),
-                    'ejemplos': lista[:3]
-                }
-                for tipo, lista in por_tipo.items()
-            },
-            'recomendaciones': [
-                'Revisar pagos con montos muy altos o muy bajos para verificar autenticidad',
-                'Validar pagos registrados antes de la aprobación del préstamo',
-                'Implementar alertas automáticas para detectar anomalías en tiempo real'
-            ]
+            "tipo_analisis": "Detección de Anomalías",
+            "total_anomalias": len(anomalias),
+            "anomalias_por_tipo": {tipo: {"cantidad": len(lista), "ejemplos": lista[:3]} for tipo, lista in por_tipo.items()},
+            "recomendaciones": [
+                "Revisar pagos con montos muy altos o muy bajos para verificar autenticidad",
+                "Validar pagos registrados antes de la aprobación del préstamo",
+                "Implementar alertas automáticas para detectar anomalías en tiempo real",
+            ],
         }
     except Exception as e:
         logger.error(f"Error en análisis ML de anomalías: {e}")
@@ -4506,9 +4579,10 @@ def _analisis_ml_clustering_prestamos(db: Session) -> dict:
     """Análisis de Machine Learning: Clustering de préstamos por características similares"""
     try:
         from sqlalchemy import text
-        
+
         # Agrupar préstamos por características similares
-        query = text("""
+        query = text(
+            """
             SELECT 
                 p.analista,
                 p.concesionario,
@@ -4528,41 +4602,44 @@ def _analisis_ml_clustering_prestamos(db: Session) -> dict:
             HAVING COUNT(*) >= 3
             ORDER BY cantidad_prestamos DESC
             LIMIT 20
-        """)
-        
+        """
+        )
+
         resultado = db.execute(query)
         clusters = [dict(row._mapping) for row in resultado.fetchall()]
-        
+
         # Identificar clusters con características similares
         clusters_identificados = []
         for cluster in clusters:
             caracteristicas = []
-            if cluster.get('tasa_mora_promedio', 0) < 5:
-                caracteristicas.append('Baja morosidad')
-            if cluster.get('promedio_monto', 0) > 50000:
-                caracteristicas.append('Montos altos')
-            if cluster.get('modalidad_pago') == 'MENSUAL':
-                caracteristicas.append('Pago mensual')
-            
-            clusters_identificados.append({
-                'cluster_id': f"{cluster.get('analista', 'N/A')}_{cluster.get('producto', 'N/A')}",
-                'caracteristicas': caracteristicas,
-                'cantidad_prestamos': cluster.get('cantidad_prestamos', 0),
-                'promedio_monto': round(float(cluster.get('promedio_monto', 0)), 2),
-                'tasa_mora_promedio': round(float(cluster.get('tasa_mora_promedio', 0) or 0), 2),
-                'analista': cluster.get('analista', 'N/A'),
-                'producto': cluster.get('producto', 'N/A')
-            })
-        
+            if cluster.get("tasa_mora_promedio", 0) < 5:
+                caracteristicas.append("Baja morosidad")
+            if cluster.get("promedio_monto", 0) > 50000:
+                caracteristicas.append("Montos altos")
+            if cluster.get("modalidad_pago") == "MENSUAL":
+                caracteristicas.append("Pago mensual")
+
+            clusters_identificados.append(
+                {
+                    "cluster_id": f"{cluster.get('analista', 'N/A')}_{cluster.get('producto', 'N/A')}",
+                    "caracteristicas": caracteristicas,
+                    "cantidad_prestamos": cluster.get("cantidad_prestamos", 0),
+                    "promedio_monto": round(float(cluster.get("promedio_monto", 0)), 2),
+                    "tasa_mora_promedio": round(float(cluster.get("tasa_mora_promedio", 0) or 0), 2),
+                    "analista": cluster.get("analista", "N/A"),
+                    "producto": cluster.get("producto", "N/A"),
+                }
+            )
+
         return {
-            'tipo_analisis': 'Clustering de Préstamos',
-            'clusters_identificados': len(clusters_identificados),
-            'clusters': clusters_identificados[:10],
-            'recomendaciones': [
-                'Usar clusters para identificar productos/analistas con mejor desempeño',
-                'Aplicar políticas diferenciadas según características del cluster',
-                'Optimizar aprobaciones basándose en clusters de bajo riesgo'
-            ]
+            "tipo_analisis": "Clustering de Préstamos",
+            "clusters_identificados": len(clusters_identificados),
+            "clusters": clusters_identificados[:10],
+            "recomendaciones": [
+                "Usar clusters para identificar productos/analistas con mejor desempeño",
+                "Aplicar políticas diferenciadas según características del cluster",
+                "Optimizar aprobaciones basándose en clusters de bajo riesgo",
+            ],
         }
     except Exception as e:
         logger.error(f"Error en análisis ML de clustering: {e}")
@@ -4572,18 +4649,20 @@ def _analisis_ml_clustering_prestamos(db: Session) -> dict:
 def _analizar_pagos_segun_vencimiento(db: Session, año: int, mes: int) -> dict:
     """Analiza pagos realizados según fechas de vencimiento de cuotas en un mes específico"""
     try:
-        from sqlalchemy import text, extract, and_
         from datetime import date, timedelta
-        
+
+        from sqlalchemy import and_, extract, text
+
         # Calcular rango del mes
         fecha_inicio_mes = date(año, mes, 1)
         if mes == 12:
             fecha_fin_mes = date(año + 1, 1, 1) - timedelta(days=1)
         else:
             fecha_fin_mes = date(año, mes + 1, 1) - timedelta(days=1)
-        
+
         # Consulta: Cuotas con fecha_vencimiento en el mes y si fueron pagadas
-        query = text("""
+        query = text(
+            """
             SELECT 
                 c.id as cuota_id,
                 c.prestamo_id,
@@ -4611,24 +4690,25 @@ def _analizar_pagos_segun_vencimiento(db: Session, año: int, mes: int) -> dict:
               AND EXTRACT(MONTH FROM c.fecha_vencimiento) = :mes
             GROUP BY c.id, c.prestamo_id, c.fecha_vencimiento, c.monto_cuota, c.estado, c.total_pagado, c.fecha_pago
             ORDER BY c.fecha_vencimiento
-        """)
-        
+        """
+        )
+
         resultado = db.execute(query.bindparams(año=año, mes=mes))
         cuotas = [dict(row._mapping) for row in resultado.fetchall()]
-        
+
         # Analizar resultados
         total_cuotas = len(cuotas)
         cuotas_pagadas_segun_vencimiento = 0
         cuotas_pagadas_antes = 0
         cuotas_pagadas_despues = 0
         cuotas_no_pagadas = 0
-        
+
         for cuota in cuotas:
-            fecha_vencimiento = cuota.get('fecha_vencimiento')
-            fecha_pago = cuota.get('fecha_pago_cuota')
-            fue_pagada = cuota.get('fue_pagada', False)
-            total_pagado = float(cuota.get('total_pagado', 0) or 0)
-            
+            fecha_vencimiento = cuota.get("fecha_vencimiento")
+            fecha_pago = cuota.get("fecha_pago_cuota")
+            fue_pagada = cuota.get("fue_pagada", False)
+            total_pagado = float(cuota.get("total_pagado", 0) or 0)
+
             if fue_pagada and fecha_pago:
                 # Verificar si el pago fue según la fecha de vencimiento (dentro de ±3 días)
                 dias_diferencia = (fecha_pago - fecha_vencimiento).days
@@ -4643,19 +4723,25 @@ def _analizar_pagos_segun_vencimiento(db: Session, año: int, mes: int) -> dict:
                 cuotas_pagadas_despues += 1
             else:
                 cuotas_no_pagadas += 1
-        
-        porcentaje_pagadas_segun_vencimiento = (cuotas_pagadas_segun_vencimiento / total_cuotas * 100) if total_cuotas > 0 else 0
-        
+
+        porcentaje_pagadas_segun_vencimiento = (
+            (cuotas_pagadas_segun_vencimiento / total_cuotas * 100) if total_cuotas > 0 else 0
+        )
+
         return {
-            'año': año,
-            'mes': mes,
-            'total_cuotas_vencimiento_mes': total_cuotas,
-            'cuotas_pagadas_segun_vencimiento': cuotas_pagadas_segun_vencimiento,
-            'cuotas_pagadas_antes': cuotas_pagadas_antes,
-            'cuotas_pagadas_despues': cuotas_pagadas_despues,
-            'cuotas_no_pagadas': cuotas_no_pagadas,
-            'porcentaje_pagadas_segun_vencimiento': round(porcentaje_pagadas_segun_vencimiento, 2),
-            'conclusion': 'NINGUNO' if cuotas_pagadas_segun_vencimiento == 0 else f'{cuotas_pagadas_segun_vencimiento} cuotas pagadas según vencimiento'
+            "año": año,
+            "mes": mes,
+            "total_cuotas_vencimiento_mes": total_cuotas,
+            "cuotas_pagadas_segun_vencimiento": cuotas_pagadas_segun_vencimiento,
+            "cuotas_pagadas_antes": cuotas_pagadas_antes,
+            "cuotas_pagadas_despues": cuotas_pagadas_despues,
+            "cuotas_no_pagadas": cuotas_no_pagadas,
+            "porcentaje_pagadas_segun_vencimiento": round(porcentaje_pagadas_segun_vencimiento, 2),
+            "conclusion": (
+                "NINGUNO"
+                if cuotas_pagadas_segun_vencimiento == 0
+                else f"{cuotas_pagadas_segun_vencimiento} cuotas pagadas según vencimiento"
+            ),
         }
     except Exception as e:
         logger.error(f"Error analizando pagos según vencimiento: {e}")
@@ -4665,72 +4751,79 @@ def _analizar_pagos_segun_vencimiento(db: Session, año: int, mes: int) -> dict:
 def _calcular_analisis_cobranzas(db: Session) -> dict:
     """Calcula análisis detallado de cobranzas"""
     try:
-        from sqlalchemy import and_
         from datetime import date, timedelta
-        
+
+        from sqlalchemy import and_
+
         hoy = date.today()
-        
+
         # Clientes en mora
-        clientes_mora = db.query(func.count(func.distinct(Prestamo.cedula))).join(
-            Cuota, Cuota.prestamo_id == Prestamo.id
-        ).filter(
-            and_(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADA"
-            )
-        ).scalar() or 0
-        
+        clientes_mora = (
+            db.query(func.count(func.distinct(Prestamo.cedula)))
+            .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+            .filter(and_(Prestamo.estado == "APROBADO", Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADA"))
+            .scalar()
+            or 0
+        )
+
         # Monto total en mora
-        monto_total_mora = db.query(func.sum(Cuota.monto_cuota)).join(
-            Prestamo, Cuota.prestamo_id == Prestamo.id
-        ).filter(
-            and_(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADA"
-            )
-        ).scalar() or 0
-        
+        monto_total_mora = (
+            db.query(func.sum(Cuota.monto_cuota))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(and_(Prestamo.estado == "APROBADO", Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADA"))
+            .scalar()
+            or 0
+        )
+
         # Cuotas vencidas por rango de días
-        cuotas_1_30_dias = db.query(func.count(Cuota.id)).join(
-            Prestamo, Cuota.prestamo_id == Prestamo.id
-        ).filter(
-            and_(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento >= hoy - timedelta(days=30),
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != "PAGADA"
+        cuotas_1_30_dias = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento >= hoy - timedelta(days=30),
+                    Cuota.fecha_vencimiento < hoy,
+                    Cuota.estado != "PAGADA",
+                )
             )
-        ).scalar() or 0
-        
-        cuotas_31_60_dias = db.query(func.count(Cuota.id)).join(
-            Prestamo, Cuota.prestamo_id == Prestamo.id
-        ).filter(
-            and_(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento >= hoy - timedelta(days=60),
-                Cuota.fecha_vencimiento < hoy - timedelta(days=30),
-                Cuota.estado != "PAGADA"
+            .scalar()
+            or 0
+        )
+
+        cuotas_31_60_dias = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento >= hoy - timedelta(days=60),
+                    Cuota.fecha_vencimiento < hoy - timedelta(days=30),
+                    Cuota.estado != "PAGADA",
+                )
             )
-        ).scalar() or 0
-        
-        cuotas_mas_60_dias = db.query(func.count(Cuota.id)).join(
-            Prestamo, Cuota.prestamo_id == Prestamo.id
-        ).filter(
-            and_(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento < hoy - timedelta(days=60),
-                Cuota.estado != "PAGADA"
+            .scalar()
+            or 0
+        )
+
+        cuotas_mas_60_dias = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Prestamo.estado == "APROBADO", Cuota.fecha_vencimiento < hoy - timedelta(days=60), Cuota.estado != "PAGADA"
+                )
             )
-        ).scalar() or 0
-        
+            .scalar()
+            or 0
+        )
+
         return {
             "clientes_en_mora": clientes_mora,
             "monto_total_mora": float(monto_total_mora),
             "cuotas_1_30_dias": cuotas_1_30_dias,
             "cuotas_31_60_dias": cuotas_31_60_dias,
-            "cuotas_mas_60_dias": cuotas_mas_60_dias
+            "cuotas_mas_60_dias": cuotas_mas_60_dias,
         }
     except Exception as e:
         logger.error(f"Error calculando análisis de cobranzas: {e}")
@@ -4874,46 +4967,41 @@ def _obtener_resumen_bd(db: Session) -> str:
         resumen.append("")
         resumen.append("=== INFORMACIÓN MENSUAL DE CUOTAS (Últimos 6 meses) ===")
         try:
-            from sqlalchemy import extract, and_
             from datetime import date
-            
+
+            from sqlalchemy import and_, extract
+
             # Obtener datos mensuales de cuotas
             fecha_limite = fecha_actual.date()
             fecha_inicio = date(fecha_actual.year, fecha_actual.month - 5 if fecha_actual.month > 5 else 1, 1)
             if fecha_actual.month <= 5:
                 fecha_inicio = date(fecha_actual.year - 1, fecha_actual.month + 7, 1)
-            
+
             # Consulta de cuotas por mes
             query_cuotas_mes = _ejecutar_consulta_segura(
                 lambda: db.query(
-                    extract('year', Cuota.fecha_vencimiento).label('año'),
-                    extract('month', Cuota.fecha_vencimiento).label('mes'),
-                    func.count(Cuota.id).label('total'),
-                    func.count(Cuota.id).filter(Cuota.estado == "PAGADA").label('pagadas'),
-                    func.count(Cuota.id).filter(Cuota.estado == "MORA").label('en_mora'),
-                    func.count(Cuota.id).filter(Cuota.estado == "PENDIENTE").label('pendientes'),
-                    func.sum(Cuota.monto_cuota).label('monto_total')
+                    extract("year", Cuota.fecha_vencimiento).label("año"),
+                    extract("month", Cuota.fecha_vencimiento).label("mes"),
+                    func.count(Cuota.id).label("total"),
+                    func.count(Cuota.id).filter(Cuota.estado == "PAGADA").label("pagadas"),
+                    func.count(Cuota.id).filter(Cuota.estado == "MORA").label("en_mora"),
+                    func.count(Cuota.id).filter(Cuota.estado == "PENDIENTE").label("pendientes"),
+                    func.sum(Cuota.monto_cuota).label("monto_total"),
                 )
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .filter(
                     and_(
                         Prestamo.estado == "APROBADO",
                         Cuota.fecha_vencimiento >= fecha_inicio,
-                        Cuota.fecha_vencimiento <= fecha_limite
+                        Cuota.fecha_vencimiento <= fecha_limite,
                     )
                 )
-                .group_by(
-                    extract('year', Cuota.fecha_vencimiento),
-                    extract('month', Cuota.fecha_vencimiento)
-                )
-                .order_by(
-                    extract('year', Cuota.fecha_vencimiento),
-                    extract('month', Cuota.fecha_vencimiento)
-                )
+                .group_by(extract("year", Cuota.fecha_vencimiento), extract("month", Cuota.fecha_vencimiento))
+                .order_by(extract("year", Cuota.fecha_vencimiento), extract("month", Cuota.fecha_vencimiento))
                 .all(),
-                "consulta de cuotas mensuales"
+                "consulta de cuotas mensuales",
             )
-            
+
             if query_cuotas_mes:
                 for row in query_cuotas_mes:
                     año = int(row.año) if row.año else 0
@@ -4923,10 +5011,10 @@ def _obtener_resumen_bd(db: Session) -> str:
                     mora_mes = row.en_mora or 0
                     pendientes_mes = row.pendientes or 0
                     monto_mes = float(row.monto_total or 0)
-                    
+
                     nombre_mes = meses[mes_num - 1] if 1 <= mes_num <= 12 else f"Mes {mes_num}"
                     tasa_mora_mes = (mora_mes / total_mes * 100) if total_mes > 0 else 0
-                    
+
                     resumen.append(
                         f"{nombre_mes.capitalize()} {año}: {total_mes} cuotas totales, "
                         f"{pagadas_mes} pagadas, {mora_mes} en mora, {pendientes_mes} pendientes. "
@@ -5240,13 +5328,25 @@ async def chat_ai(
 
         # Obtener resumen de la base de datos
         resumen_bd = _obtener_resumen_bd(db)
-        
+
         # Agregar esquema completo y estadísticas (solo si la pregunta requiere análisis profundo)
-        requiere_analisis_profundo = any(palabra in pregunta_lower for palabra in [
-            "esquema", "estructura", "tablas", "campos", "índices", "schema",
-            "relaciones", "foreign key", "cruces", "join", "consulta compleja"
-        ])
-        
+        requiere_analisis_profundo = any(
+            palabra in pregunta_lower
+            for palabra in [
+                "esquema",
+                "estructura",
+                "tablas",
+                "campos",
+                "índices",
+                "schema",
+                "relaciones",
+                "foreign key",
+                "cruces",
+                "join",
+                "consulta compleja",
+            ]
+        )
+
         # Siempre incluir inventario de campos (más organizado y útil para el AI)
         info_esquema = ""
         try:
@@ -5255,7 +5355,7 @@ async def chat_ai(
             # Luego el inventario completo
             info_esquema += "\n\n" + _obtener_inventario_campos_bd(db)
             info_esquema += "\n" + _obtener_estadisticas_tablas(db)
-            
+
             # Si requiere análisis profundo, agregar esquema completo también
             if requiere_analisis_profundo:
                 try:
@@ -5320,7 +5420,9 @@ async def chat_ai(
 
             if contextos:
                 contexto_documentos = "\n\n=== DOCUMENTOS DE CONTEXTO ===\n" + "\n\n---\n\n".join(contextos)
-                logger.info(f"✅ Contexto de documentos preparado: {len(contextos)} documentos, {len(contexto_documentos)} caracteres totales")
+                logger.info(
+                    f"✅ Contexto de documentos preparado: {len(contextos)} documentos, {len(contexto_documentos)} caracteres totales"
+                )
             else:
                 logger.warning("⚠️ Documentos encontrados pero sin contenido_texto válido")
         else:
@@ -5328,32 +5430,48 @@ async def chat_ai(
 
         # Detectar si la pregunta es una búsqueda por cédula/documento
         import re
+
         busqueda_cedula = None
-        patron_cedula = r'(?:cedula|cédula|documento|dni|ci)[\s:]*([A-Z0-9]+)'
+        patron_cedula = r"(?:cedula|cédula|documento|dni|ci)[\s:]*([A-Z0-9]+)"
         match_cedula = re.search(patron_cedula, pregunta, re.IGNORECASE)
         if match_cedula:
             busqueda_cedula = match_cedula.group(1).strip()
             logger.info(f"🔍 Búsqueda por cédula detectada: {busqueda_cedula}")
-        
+
         # Detectar si la pregunta requiere cálculos específicos
         pregunta_lower = pregunta.lower()
-        requiere_calculo_especifico = any(palabra in pregunta_lower for palabra in [
-            "tasa de morosidad", "morosidad entre", "comparar", "diferencia entre",
-            "análisis", "tendencia", "evolución", "cálculo", "calcular", "métrica",
-            "porcentaje", "variación", "incremento", "disminución"
-        ])
-        
+        requiere_calculo_especifico = any(
+            palabra in pregunta_lower
+            for palabra in [
+                "tasa de morosidad",
+                "morosidad entre",
+                "comparar",
+                "diferencia entre",
+                "análisis",
+                "tendencia",
+                "evolución",
+                "cálculo",
+                "calcular",
+                "métrica",
+                "porcentaje",
+                "variación",
+                "incremento",
+                "disminución",
+            ]
+        )
+
         # Si es búsqueda por cédula, buscar información del cliente
         info_cliente_buscado = ""
         if busqueda_cedula:
             try:
+                from sqlalchemy import func
+
+                from app.models.amortizacion import Cuota
                 from app.models.cliente import Cliente
                 from app.models.prestamo import Prestamo
-                from app.models.amortizacion import Cuota
-                from sqlalchemy import func
-                
+
                 cliente = db.query(Cliente).filter(Cliente.cedula == busqueda_cedula).first()
-                
+
                 if cliente:
                     info_cliente_buscado = f"\n\n=== INFORMACIÓN DEL CLIENTE BUSCADO (Cédula: {busqueda_cedula}) ===\n"
                     info_cliente_buscado += f"Nombre: {cliente.nombres}\n"
@@ -5363,20 +5481,23 @@ async def chat_ai(
                     info_cliente_buscado += f"Estado: {cliente.estado}\n"
                     info_cliente_buscado += f"Activo: {'Sí' if cliente.activo else 'No'}\n"
                     info_cliente_buscado += f"Fecha de registro: {cliente.fecha_registro}\n"
-                    
+
                     # Buscar préstamos del cliente
                     prestamos = db.query(Prestamo).filter(Prestamo.cedula == busqueda_cedula).all()
                     if prestamos:
                         info_cliente_buscado += f"\nPréstamos: {len(prestamos)} préstamo(s)\n"
                         for p in prestamos:
-                            info_cliente_buscado += f"  - Préstamo ID {p.id}: {p.total_financiamiento} Bs, Estado: {p.estado}\n"
-                        
+                            info_cliente_buscado += (
+                                f"  - Préstamo ID {p.id}: {p.total_financiamiento} Bs, Estado: {p.estado}\n"
+                            )
+
                         # Buscar cuotas pendientes
                         prestamos_ids = [p.id for p in prestamos]
-                        cuotas_pendientes = db.query(Cuota).filter(
-                            Cuota.prestamo_id.in_(prestamos_ids),
-                            Cuota.estado.in_(['PENDIENTE', 'MORA'])
-                        ).all()
+                        cuotas_pendientes = (
+                            db.query(Cuota)
+                            .filter(Cuota.prestamo_id.in_(prestamos_ids), Cuota.estado.in_(["PENDIENTE", "MORA"]))
+                            .all()
+                        )
                         if cuotas_pendientes:
                             total_pendiente = sum(float(c.monto_cuota - c.total_pagado) for c in cuotas_pendientes)
                             info_cliente_buscado += f"\nCuotas pendientes: {len(cuotas_pendientes)} cuota(s)\n"
@@ -5388,7 +5509,9 @@ async def chat_ai(
                     prestamo = db.query(Prestamo).filter(Prestamo.cedula == busqueda_cedula).first()
                     if prestamo:
                         info_cliente_buscado = f"\n\n=== INFORMACIÓN ENCONTRADA (Cédula: {busqueda_cedula}) ===\n"
-                        info_cliente_buscado += f"⚠️ Cliente no encontrado en tabla clientes, pero hay préstamos con esta cédula\n"
+                        info_cliente_buscado += (
+                            f"⚠️ Cliente no encontrado en tabla clientes, pero hay préstamos con esta cédula\n"
+                        )
                         info_cliente_buscado += f"Nombre en préstamo: {prestamo.nombres}\n"
                         info_cliente_buscado += f"Cédula: {prestamo.cedula}\n"
                         info_cliente_buscado += f"Préstamo ID: {prestamo.id}\n"
@@ -5396,26 +5519,39 @@ async def chat_ai(
                         info_cliente_buscado += f"Estado: {prestamo.estado}\n"
                     else:
                         info_cliente_buscado = f"\n\n=== BÚSQUEDA POR CÉDULA: {busqueda_cedula} ===\n"
-                        info_cliente_buscado += "❌ No se encontró ningún cliente ni préstamo con esta cédula en la base de datos.\n"
-                
+                        info_cliente_buscado += (
+                            "❌ No se encontró ningún cliente ni préstamo con esta cédula en la base de datos.\n"
+                        )
+
                 logger.info(f"✅ Información del cliente buscado preparada: {len(info_cliente_buscado)} caracteres")
             except Exception as e:
                 logger.error(f"Error buscando cliente por cédula: {e}")
                 info_cliente_buscado = f"\n\n⚠️ Error al buscar cliente con cédula {busqueda_cedula}: {str(e)}\n"
-        
+
         # Si requiere cálculo específico, ejecutar consultas adicionales
         datos_adicionales = ""
         if requiere_calculo_especifico:
             try:
                 from datetime import datetime
+
                 fecha_actual = datetime.now()
-                
+
                 # Intentar extraer meses/años de la pregunta
                 meses_nombres = {
-                    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
-                    "julio": 7, "agosto": 8, "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12
+                    "enero": 1,
+                    "febrero": 2,
+                    "marzo": 3,
+                    "abril": 4,
+                    "mayo": 5,
+                    "junio": 6,
+                    "julio": 7,
+                    "agosto": 8,
+                    "septiembre": 9,
+                    "octubre": 10,
+                    "noviembre": 11,
+                    "diciembre": 12,
                 }
-                
+
                 # Buscar menciones de meses en la pregunta
                 meses_encontrados = []
                 for mes_nombre, mes_num in meses_nombres.items():
@@ -5424,10 +5560,11 @@ async def chat_ai(
                         año_actual = fecha_actual.year
                         # Buscar año en la pregunta
                         import re
-                        años_match = re.findall(r'\b(20\d{2})\b', pregunta)
+
+                        años_match = re.findall(r"\b(20\d{2})\b", pregunta)
                         año = int(años_match[0]) if años_match else año_actual
                         meses_encontrados.append((año, mes_num, mes_nombre))
-                
+
                 # Si se encontraron meses, calcular tasas de morosidad y análisis de pagos
                 if meses_encontrados:
                     datos_adicionales += "\n\n=== CÁLCULOS ESPECÍFICOS SOLICITADOS ===\n"
@@ -5442,9 +5579,21 @@ async def chat_ai(
                                 f"Tasa de morosidad: {resultado['tasa_morosidad']}%, "
                                 f"Monto en mora: {resultado['monto_mora']:,.2f}\n"
                             )
-                        
+
                         # Si pregunta sobre pagos según vencimiento, agregar análisis
-                        if any(palabra in pregunta_lower for palabra in ["pago según", "pago segun", "pagos según", "pagos segun", "pagado según", "pagado segun", "ninguno", "ninguna"]):
+                        if any(
+                            palabra in pregunta_lower
+                            for palabra in [
+                                "pago según",
+                                "pago segun",
+                                "pagos según",
+                                "pagos segun",
+                                "pagado según",
+                                "pagado segun",
+                                "ninguno",
+                                "ninguna",
+                            ]
+                        ):
                             analisis_pagos = _analizar_pagos_segun_vencimiento(db, año, mes_num)
                             if analisis_pagos:
                                 datos_adicionales += (
@@ -5457,7 +5606,7 @@ async def chat_ai(
                                     f"Porcentaje pagadas según vencimiento: {analisis_pagos['porcentaje_pagadas_segun_vencimiento']}%\n"
                                     f"Conclusión: {analisis_pagos['conclusion']}\n"
                                 )
-                
+
                 # Si pregunta sobre análisis de cobranzas
                 if any(palabra in pregunta_lower for palabra in ["análisis", "cobranzas", "clientes en mora"]):
                     analisis = _calcular_analisis_cobranzas(db)
@@ -5470,18 +5619,33 @@ async def chat_ai(
                             f"Cuotas vencidas 31-60 días: {analisis['cuotas_31_60_dias']}\n"
                             f"Cuotas vencidas más de 60 días: {analisis['cuotas_mas_60_dias']}\n"
                         )
-                
+
                 # Detectar si requiere análisis de Machine Learning
-                requiere_ml = any(palabra in pregunta_lower for palabra in [
-                    "machine learning", "ml", "predicción", "predictivo", "predecir",
-                    "segmentación", "segmentar", "clustering", "cluster",
-                    "anomalías", "anomalía", "patrones", "patrón",
-                    "inteligencia artificial", "ia", "modelo predictivo"
-                ])
-                
+                requiere_ml = any(
+                    palabra in pregunta_lower
+                    for palabra in [
+                        "machine learning",
+                        "ml",
+                        "predicción",
+                        "predictivo",
+                        "predecir",
+                        "segmentación",
+                        "segmentar",
+                        "clustering",
+                        "cluster",
+                        "anomalías",
+                        "anomalía",
+                        "patrones",
+                        "patrón",
+                        "inteligencia artificial",
+                        "ia",
+                        "modelo predictivo",
+                    ]
+                )
+
                 if requiere_ml:
                     datos_adicionales += "\n\n=== ANÁLISIS DE MACHINE LEARNING ===\n"
-                    
+
                     # Predicción de morosidad
                     if any(palabra in pregunta_lower for palabra in ["morosidad", "mora", "predicción", "riesgo"]):
                         ml_morosidad = _analisis_ml_morosidad_predictiva(db)
@@ -5489,72 +5653,79 @@ async def chat_ai(
                             datos_adicionales += f"\n--- {ml_morosidad['tipo_analisis']} ---\n"
                             datos_adicionales += f"Datos analizados: {ml_morosidad['datos_analizados']}\n"
                             datos_adicionales += "Top factores de riesgo:\n"
-                            for factor in ml_morosidad.get('factores_riesgo', [])[:5]:
+                            for factor in ml_morosidad.get("factores_riesgo", [])[:5]:
                                 datos_adicionales += (
                                     f"  - {factor.get('analista', 'N/A')}: "
                                     f"Tasa mora {factor.get('tasa_mora_historica', 0)}%, "
                                     f"Riesgo {factor.get('nivel_riesgo', 'N/A')}\n"
                                 )
-                    
+
                     # Segmentación de clientes
                     if any(palabra in pregunta_lower for palabra in ["segmentación", "segmentar", "clientes", "grupos"]):
                         ml_segmentacion = _analisis_ml_segmentacion_clientes(db)
                         if ml_segmentacion:
                             datos_adicionales += f"\n--- {ml_segmentacion['tipo_analisis']} ---\n"
                             datos_adicionales += f"Total analizados: {ml_segmentacion['total_analizados']}\n"
-                            for segmento, datos in ml_segmentacion.get('segmentos', {}).items():
+                            for segmento, datos in ml_segmentacion.get("segmentos", {}).items():
                                 datos_adicionales += (
                                     f"  {segmento.capitalize()}: {datos.get('cantidad', 0)} clientes "
                                     f"({datos.get('caracteristicas', '')})\n"
                                 )
-                    
+
                     # Detección de anomalías
                     if any(palabra in pregunta_lower for palabra in ["anomalía", "anomalías", "irregular", "extraño"]):
                         ml_anomalias = _analisis_ml_deteccion_anomalias(db)
                         if ml_anomalias:
                             datos_adicionales += f"\n--- {ml_anomalias['tipo_analisis']} ---\n"
                             datos_adicionales += f"Total anomalías detectadas: {ml_anomalias['total_anomalias']}\n"
-                            for tipo, info in ml_anomalias.get('anomalias_por_tipo', {}).items():
+                            for tipo, info in ml_anomalias.get("anomalias_por_tipo", {}).items():
                                 datos_adicionales += f"  {tipo}: {info.get('cantidad', 0)} casos\n"
-                    
+
                     # Clustering
                     if any(palabra in pregunta_lower for palabra in ["clustering", "cluster", "agrupar", "grupos similares"]):
                         ml_clustering = _analisis_ml_clustering_prestamos(db)
                         if ml_clustering:
                             datos_adicionales += f"\n--- {ml_clustering['tipo_analisis']} ---\n"
                             datos_adicionales += f"Clusters identificados: {ml_clustering['clusters_identificados']}\n"
-                            for cluster in ml_clustering.get('clusters', [])[:5]:
+                            for cluster in ml_clustering.get("clusters", [])[:5]:
                                 datos_adicionales += (
                                     f"  - {cluster.get('cluster_id', 'N/A')}: "
                                     f"{cluster.get('cantidad_prestamos', 0)} préstamos, "
                                     f"Mora promedio: {cluster.get('tasa_mora_promedio', 0)}%\n"
                                 )
-                    
+
                     # Si no especifica tipo, ejecutar todos los análisis
-                    if not any([
-                        any(palabra in pregunta_lower for palabra in ["morosidad", "mora", "predicción", "riesgo"]),
-                        any(palabra in pregunta_lower for palabra in ["segmentación", "segmentar", "clientes", "grupos"]),
-                        any(palabra in pregunta_lower for palabra in ["anomalía", "anomalías", "irregular", "extraño"]),
-                        any(palabra in pregunta_lower for palabra in ["clustering", "cluster", "agrupar", "grupos similares"])
-                    ]):
+                    if not any(
+                        [
+                            any(palabra in pregunta_lower for palabra in ["morosidad", "mora", "predicción", "riesgo"]),
+                            any(palabra in pregunta_lower for palabra in ["segmentación", "segmentar", "clientes", "grupos"]),
+                            any(palabra in pregunta_lower for palabra in ["anomalía", "anomalías", "irregular", "extraño"]),
+                            any(
+                                palabra in pregunta_lower
+                                for palabra in ["clustering", "cluster", "agrupar", "grupos similares"]
+                            ),
+                        ]
+                    ):
                         # Ejecutar análisis general de ML
                         ml_morosidad = _analisis_ml_morosidad_predictiva(db)
                         ml_segmentacion = _analisis_ml_segmentacion_clientes(db)
-                        
+
                         if ml_morosidad:
                             datos_adicionales += f"\n--- {ml_morosidad['tipo_analisis']} ---\n"
-                            datos_adicionales += f"Factores de riesgo identificados: {len(ml_morosidad.get('factores_riesgo', []))}\n"
-                        
+                            datos_adicionales += (
+                                f"Factores de riesgo identificados: {len(ml_morosidad.get('factores_riesgo', []))}\n"
+                            )
+
                         if ml_segmentacion:
                             datos_adicionales += f"\n--- {ml_segmentacion['tipo_analisis']} ---\n"
                             datos_adicionales += f"Clientes segmentados: {ml_segmentacion['total_analizados']}\n"
             except Exception as e:
                 logger.error(f"Error calculando datos adicionales: {e}")
-        
+
         # Obtener prompt personalizado si existe, sino usar el default
         prompt_personalizado = config_dict.get("system_prompt_personalizado", "")
         usar_prompt_personalizado = prompt_personalizado and prompt_personalizado.strip()
-        
+
         if usar_prompt_personalizado:
             logger.info("✅ Usando prompt personalizado configurado por el usuario")
             # El prompt personalizado debe incluir placeholders que se reemplazarán
@@ -5563,7 +5734,7 @@ async def chat_ai(
                 info_cliente_buscado=info_cliente_buscado,
                 datos_adicionales=datos_adicionales,
                 info_esquema=info_esquema,
-                contexto_documentos=contexto_documentos
+                contexto_documentos=contexto_documentos,
             )
         else:
             # Construir prompt del sistema con información de la BD (default)

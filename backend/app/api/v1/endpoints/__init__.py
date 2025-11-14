@@ -2,10 +2,9 @@
 """Endpoints de la API v1"""
 
 # Importar todos los módulos de endpoints
-from . import (
+from . import (  # aprobaciones,  # MODULO DESHABILITADO - Ver main.py
     amortizacion,
     analistas,
-    # aprobaciones,  # MODULO DESHABILITADO - Ver main.py
     auditoria,
     auth,
     carga_masiva,
