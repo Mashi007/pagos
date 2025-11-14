@@ -203,7 +203,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                   clearTimeout(timeoutId)
                   logoCache.isChecking = false
                   notifyLogoListeners(logoUrl, logoCache.version)
-                  console.log('✅ Logo cargado desde configuración:', config.logo_filename)
+                  console.debug('✅ Logo cargado desde configuración:', config.logo_filename)
                   return
                 } else {
                   // Logo no existe (404), marcar como no encontrado
@@ -277,7 +277,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
 
     // Listener para cambios en el caché compartido
     const handleCacheUpdate = (url: string | null, version: number) => {
-      console.log('🔄 Actualizando logo desde caché compartido, versión:', version)
+      console.debug('🔄 Actualizando logo desde caché compartido, versión:', version)
       setCustomLogoUrl(url)
       setHasChecked(true)
       setImageLoaded(false) // ✅ Resetear estado de carga cuando se actualiza desde caché
@@ -295,7 +295,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     const handleLogoUpdate = (event: CustomEvent) => {
       const { filename, url, confirmed } = event.detail || {}
       
-      console.log('📢 Evento logoUpdated recibido:', { filename, url, confirmed })
+      console.debug('📢 Evento logoUpdated recibido:', { filename, url, confirmed })
       
       // Si solo viene confirmed: true sin filename ni url, ignorar
       if (confirmed && !filename && !url) {
@@ -305,7 +305,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
       
       // Cuando se confirma el logo, invalidar caché y recargar desde configuración
       if (confirmed && (filename || url)) {
-        console.log('🔄 Logo confirmado, invalidando caché y recargando desde configuración')
+        console.debug('🔄 Logo confirmado, invalidando caché y recargando desde configuración')
         // Invalidar caché para forzar recarga desde BD
         logoCache.logoUrl = null
         logoCache.hasChecked = false
@@ -324,7 +324,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                 const headResponse = await fetch(logoPath, { method: 'HEAD' })
                 if (headResponse.ok) {
                   newLogoUrl = `${logoPath}?t=${Date.now()}`
-                  console.log('✅ Logo recargado desde configuración (BD):', config.logo_filename)
+                  console.debug('✅ Logo recargado desde configuración (BD):', config.logo_filename)
                 } else {
                   console.warn('⚠️ Logo no encontrado al recargar desde configuración:', config.logo_filename)
                   logoCache.logoNotFound = true
@@ -353,7 +353,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                 const headResponse = await fetch(logoPath, { method: 'HEAD' })
                 if (headResponse.ok) {
                   newLogoUrl = `${logoPath}?t=${Date.now()}`
-                  console.log('✅ Logo actualizado desde evento (fallback):', filename)
+                  console.debug('✅ Logo actualizado desde evento (fallback):', filename)
                 } else {
                   console.warn('⚠️ Logo no encontrado en fallback:', filename)
                   logoCache.logoNotFound = true
@@ -467,7 +467,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
       
       if (newLogoUrl) {
         // Actualizar cache y notificar a todos los listeners
-        console.log('🔄 Actualizando logo (preview):', newLogoUrl)
+        console.debug('🔄 Actualizando logo (preview):', newLogoUrl)
         const logoFilename = filename || null
         logoCache.logoUrl = newLogoUrl
         logoCache.logoFilename = logoFilename // ✅ Guardar nombre del archivo

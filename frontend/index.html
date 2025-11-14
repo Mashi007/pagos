@@ -23,7 +23,6 @@
         padding: 0;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
         -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
       }
       #root {
         min-height: 100vh;
@@ -56,6 +55,8 @@
             'mal selector',
             'selector inválido',
             'regla ignorada',
+            'propiedad desconocida',
+            'declaración rechazada',
             // Patrones principales (inglés)
             'ignored due to bad selector',
             'ignored debido a un mal selector',
@@ -64,12 +65,15 @@
             'malformed selector',
             'ruleset ignored',
             'invalid selector',
+            'unknown property',
+            'declaration dropped',
             // Patrones de archivos CSS
             '.css:',
             // Patrones de propiedades CSS problemáticas
             'webkit-text-size-adjust',
             'moz-text-size-adjust',
             'text-size-adjust',
+            '-moz-osx-font-smoothing',
             // Patrones de errores de parsing
             'css parsing error',
             'error de análisis css',
