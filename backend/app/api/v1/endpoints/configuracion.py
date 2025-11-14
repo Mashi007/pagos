@@ -3374,12 +3374,22 @@ async def probar_configuracion_ai(
         fecha_actual = datetime.now()
         dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
         meses = [
-            "enero", "febrero", "marzo", "abril", "mayo", "junio",
-            "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+            "enero",
+            "febrero",
+            "marzo",
+            "abril",
+            "mayo",
+            "junio",
+            "julio",
+            "agosto",
+            "septiembre",
+            "octubre",
+            "noviembre",
+            "diciembre",
         ]
         dia_semana = dias_semana[fecha_actual.weekday()]
         mes = meses[fecha_actual.month - 1]
-        
+
         info_fecha = f"""
 === INFORMACIÓN DE FECHA Y HORA ACTUAL ===
 Fecha y hora actual del sistema: {dia_semana}, {fecha_actual.day} de {mes} de {fecha_actual.year}, {fecha_actual.strftime('%H:%M:%S')}
