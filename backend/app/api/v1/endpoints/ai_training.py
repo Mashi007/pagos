@@ -113,18 +113,17 @@ class PredecirRiesgoRequest(BaseModel):
 def _handle_database_error(e: Exception, operation: str) -> HTTPException:
     """Manejar errores de base de datos y retornar mensajes claros"""
     error_str = str(e).lower()
-    
+
     # Detectar errores de tablas no encontradas
     if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
         logger.error(f"Tablas de AI training no encontradas. Error: {e}")
         return HTTPException(
             status_code=503,
             detail=(
-                "Las tablas de entrenamiento AI no están creadas. "
-                "Ejecuta las migraciones de Alembic: alembic upgrade head"
+                "Las tablas de entrenamiento AI no están creadas. " "Ejecuta las migraciones de Alembic: alembic upgrade head"
             ),
         )
-    
+
     # Otros errores de base de datos
     if isinstance(e, (ProgrammingError, OperationalError)):
         logger.error(f"Error de base de datos en {operation}: {e}", exc_info=True)
@@ -132,7 +131,7 @@ def _handle_database_error(e: Exception, operation: str) -> HTTPException:
             status_code=500,
             detail=f"Error de base de datos en {operation}: {str(e)}",
         )
-    
+
     # Error genérico
     logger.error(f"Error en {operation}: {e}", exc_info=True)
     return HTTPException(status_code=500, detail=f"Error en {operation}: {str(e)}")
