@@ -16,7 +16,7 @@
   ],
   "venvPath": ".",
   "venv": ".venv",
-  "pythonVersion": "3.11",
+  "pythonVersion": "3.13",
   "typeCheckingMode": "off",
   "reportMissingImports": false,
   "reportMissingTypeStubs": false,
@@ -33,7 +33,7 @@
   "executionEnvironments": [
     {
       "root": "backend",
-      "pythonVersion": "3.11",
+      "pythonVersion": "3.13",
       "extraPaths": [
         "backend",
         "backend/app"
