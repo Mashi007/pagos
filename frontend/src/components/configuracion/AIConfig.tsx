@@ -79,6 +79,7 @@ export function AIConfig() {
     descripcion: '',
   })
   const [actualizandoDocumento, setActualizandoDocumento] = useState(false)
+  const [procesandoDocumento, setProcesandoDocumento] = useState<number | null>(null)
   
   // Estado para pruebas (chat)
   const [probando, setProbando] = useState(false)
@@ -315,15 +316,18 @@ export function AIConfig() {
   }
 
   const handleProcesarDocumento = async (id: number) => {
+    setProcesandoDocumento(id)
     try {
-      await apiClient.post(`/api/v1/configuracion/ai/documentos/${id}/procesar`)
-      toast.success('Documento procesado exitosamente')
+      const respuesta = await apiClient.post(`/api/v1/configuracion/ai/documentos/${id}/procesar`)
+      toast.success(`Documento procesado exitosamente (${respuesta.data?.caracteres_extraidos || 0} caracteres extraídos)`)
       await cargarDocumentos()
       await cargarMetricas()
     } catch (error: any) {
       console.error('Error procesando documento:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error procesando documento'
-      toast.error(mensajeError)
+      toast.error(`Error al procesar documento: ${mensajeError}`)
+    } finally {
+      setProcesandoDocumento(null)
     }
   }
 
@@ -1092,11 +1096,21 @@ export function AIConfig() {
                                   variant="outline"
                                   size="sm"
                                   onClick={() => handleProcesarDocumento(doc.id)}
+                                  disabled={procesandoDocumento === doc.id || procesandoDocumento !== null}
                                   className="text-blue-600 hover:text-blue-700"
                                   title="Procesar documento para extraer texto"
                                 >
-                                  <FileText className="h-4 w-4 mr-1" />
-                                  Procesar
+                                  {procesandoDocumento === doc.id ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                      Procesando...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <FileText className="h-4 w-4 mr-1" />
+                                      Procesar
+                                    </>
+                                  )}
                                 </Button>
                               )}
                               <Button

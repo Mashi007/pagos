@@ -2591,7 +2591,8 @@ def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
     try:
         from pathlib import Path
 
-        if not Path(ruta_archivo).exists():
+        ruta_path = Path(ruta_archivo)
+        if not ruta_path.exists():
             logger.error(f"❌ Archivo no encontrado: {ruta_archivo}")
             return ""
 
@@ -2599,34 +2600,70 @@ def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
 
         if tipo_archivo.lower() == "txt":
             # Leer archivo de texto plano
-            with open(ruta_archivo, "r", encoding="utf-8", errors="ignore") as f:
-                texto = f.read()
+            try:
+                with open(ruta_archivo, "r", encoding="utf-8", errors="ignore") as f:
+                    texto = f.read()
+            except UnicodeDecodeError:
+                # Intentar con otras codificaciones comunes
+                for encoding in ["latin-1", "cp1252", "iso-8859-1"]:
+                    try:
+                        with open(ruta_archivo, "r", encoding=encoding, errors="ignore") as f:
+                            texto = f.read()
+                            logger.info(f"✅ Texto leído con codificación {encoding}")
+                            break
+                    except:
+                        continue
 
         elif tipo_archivo.lower() == "pdf":
             # Extraer texto de PDF
+            texto_extraido = False
             try:
                 import PyPDF2
 
                 with open(ruta_archivo, "rb") as f:
                     pdf_reader = PyPDF2.PdfReader(f)
+                    # Verificar si el PDF está encriptado
+                    if pdf_reader.is_encrypted:
+                        logger.warning("⚠️ PDF está encriptado. Intentando desencriptar sin contraseña...")
+                        try:
+                            pdf_reader.decrypt("")
+                        except:
+                            logger.error("❌ PDF requiere contraseña para desencriptar.")
+                            return ""
+                    
                     textos_paginas = []
                     for page in pdf_reader.pages:
-                        textos_paginas.append(page.extract_text())
+                        texto_pagina = page.extract_text()
+                        if texto_pagina:
+                            textos_paginas.append(texto_pagina)
                     texto = "\n".join(textos_paginas)
+                    texto_extraido = True
             except ImportError:
                 logger.warning("⚠️ PyPDF2 no está instalado. Instala con: pip install PyPDF2")
-                # Intentar con pdfplumber como alternativa
+            except Exception as e:
+                logger.warning(f"⚠️ Error con PyPDF2: {e}. Intentando con pdfplumber...")
+            
+            # Intentar con pdfplumber como alternativa si PyPDF2 falló
+            if not texto_extraido or not texto.strip():
                 try:
                     import pdfplumber
 
                     with pdfplumber.open(ruta_archivo) as pdf:
                         textos_paginas = []
                         for page in pdf.pages:
-                            textos_paginas.append(page.extract_text() or "")
+                            texto_pagina = page.extract_text()
+                            if texto_pagina:
+                                textos_paginas.append(texto_pagina)
                         texto = "\n".join(textos_paginas)
+                        texto_extraido = True
                 except ImportError:
-                    logger.error("❌ Ni PyPDF2 ni pdfplumber están instalados. No se puede extraer texto de PDF.")
-                    return ""
+                    if not texto_extraido:
+                        logger.error("❌ Ni PyPDF2 ni pdfplumber están instalados. No se puede extraer texto de PDF.")
+                        return ""
+                except Exception as e:
+                    logger.error(f"❌ Error con pdfplumber: {e}")
+                    if not texto_extraido:
+                        return ""
 
         elif tipo_archivo.lower() == "docx":
             # Extraer texto de DOCX
@@ -2636,10 +2673,14 @@ def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
                 doc = Document(ruta_archivo)
                 textos_parrafos = []
                 for paragraph in doc.paragraphs:
-                    textos_parrafos.append(paragraph.text)
+                    if paragraph.text.strip():
+                        textos_parrafos.append(paragraph.text)
                 texto = "\n".join(textos_parrafos)
             except ImportError:
                 logger.warning("⚠️ python-docx no está instalado. Instala con: pip install python-docx")
+                return ""
+            except Exception as e:
+                logger.error(f"❌ Error extrayendo texto de DOCX: {e}")
                 return ""
 
         # Limpiar y normalizar texto
@@ -2764,7 +2805,15 @@ async def crear_documento_ai(
             logger.info(f"ℹ️ No se recibió Content-Type, validando solo por extensión: {extension}")
 
         # Crear directorio de almacenamiento si no existe
-        upload_dir = Path("uploads/documentos_ai")
+        from app.core.config import settings
+        
+        # Usar UPLOAD_DIR de configuración si está disponible, sino usar relativo
+        if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
+            base_upload_dir = Path(settings.UPLOAD_DIR).resolve()
+        else:
+            base_upload_dir = Path("uploads").resolve()
+        
+        upload_dir = base_upload_dir / "documentos_ai"
         try:
             upload_dir.mkdir(parents=True, exist_ok=True)
         except Exception as dir_error:
@@ -2776,6 +2825,8 @@ async def crear_documento_ai(
 
         nombre_unico = f"{uuid.uuid4()}{extension}"
         ruta_archivo = upload_dir / nombre_unico
+        # Asegurar que la ruta sea absoluta
+        ruta_archivo = ruta_archivo.resolve()
 
         # Guardar archivo
         try:
@@ -2892,10 +2943,42 @@ def procesar_documento_ai(
         if not documento:
             raise HTTPException(status_code=404, detail="Documento no encontrado")
 
+        # Verificar que el archivo existe
+        from pathlib import Path
+        from app.core.config import settings
+        
+        # Intentar resolver la ruta (puede ser relativa o absoluta)
+        ruta_archivo = Path(documento.ruta_archivo)
+        
+        # Si la ruta es relativa, intentar resolverla desde UPLOAD_DIR
+        if not ruta_archivo.is_absolute():
+            if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
+                base_upload_dir = Path(settings.UPLOAD_DIR).resolve()
+            else:
+                base_upload_dir = Path("uploads").resolve()
+            ruta_archivo = (base_upload_dir / documento.ruta_archivo).resolve()
+        else:
+            ruta_archivo = ruta_archivo.resolve()
+        
+        if not ruta_archivo.exists():
+            logger.error(f"❌ Archivo no encontrado: {ruta_archivo} (ruta original: {documento.ruta_archivo})")
+            raise HTTPException(
+                status_code=400,
+                detail=f"El archivo físico no existe en la ruta: {ruta_archivo}. El archivo puede haber sido eliminado o movido. Ruta original en BD: {documento.ruta_archivo}",
+            )
+
+        # Verificar que el archivo no esté vacío
+        if ruta_archivo.stat().st_size == 0:
+            logger.warning(f"⚠️ Archivo vacío: {documento.ruta_archivo}")
+            raise HTTPException(
+                status_code=400,
+                detail="El archivo está vacío. No se puede extraer texto de un archivo sin contenido.",
+            )
+
         # Extraer texto del documento
         texto_extraido = _extraer_texto_documento(documento.ruta_archivo, documento.tipo_archivo)
 
-        if texto_extraido:
+        if texto_extraido and texto_extraido.strip():
             documento.contenido_texto = texto_extraido
             documento.contenido_procesado = True
             db.commit()
@@ -2909,10 +2992,20 @@ def procesar_documento_ai(
                 "caracteres_extraidos": len(texto_extraido),
             }
         else:
-            raise HTTPException(
-                status_code=400,
-                detail="No se pudo extraer texto del documento. Verifica que el archivo sea válido y que las librerías necesarias estén instaladas.",
-            )
+            # Proporcionar mensaje más específico según el tipo de archivo
+            tipo = documento.tipo_archivo.lower()
+            mensaje_error = "No se pudo extraer texto del documento."
+            
+            if tipo == "pdf":
+                mensaje_error += " El PDF puede estar escaneado (imagen) sin OCR, estar protegido con contraseña, o las librerías PyPDF2/pdfplumber no están instaladas."
+            elif tipo == "docx":
+                mensaje_error += " El archivo DOCX puede estar corrupto o la librería python-docx no está instalada."
+            elif tipo == "txt":
+                mensaje_error += " El archivo de texto puede estar vacío o usar una codificación no soportada."
+            else:
+                mensaje_error += " Verifica que el archivo sea válido y que las librerías necesarias estén instaladas."
+            
+            raise HTTPException(status_code=400, detail=mensaje_error)
 
     except HTTPException:
         raise
