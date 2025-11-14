@@ -3666,8 +3666,9 @@ EJEMPLO CORRECTO:
 def _calcular_tasa_morosidad_mes(db: Session, año: int, mes: int) -> dict:
     """Calcula la tasa de morosidad para un mes específico"""
     try:
-        from sqlalchemy import extract, and_, text
         from datetime import date
+
+        from sqlalchemy import and_, extract, text
 
         # Calcular primer y último día del mes
         primer_dia = date(año, mes, 1)
@@ -4300,8 +4301,9 @@ def _ejecutar_consulta_cruzada(db: Session, tabla1: str, tabla2: str, campos: li
 def _analisis_ml_morosidad_predictiva(db: Session) -> dict:
     """Análisis de Machine Learning: Predicción de morosidad basada en patrones históricos"""
     try:
-        from sqlalchemy import and_, func, text
         from datetime import date, timedelta
+
+        from sqlalchemy import and_, func, text
 
         hoy = date.today()
         hace_6_meses = hoy - timedelta(days=180)
@@ -4381,8 +4383,9 @@ def _analisis_ml_morosidad_predictiva(db: Session) -> dict:
 def _analisis_ml_segmentacion_clientes(db: Session) -> dict:
     """Análisis de Machine Learning: Segmentación de clientes por comportamiento"""
     try:
-        from sqlalchemy import and_, func, text
         from datetime import date, timedelta
+
+        from sqlalchemy import and_, func, text
 
         hoy = date.today()
 
@@ -4509,8 +4512,9 @@ def _analisis_ml_segmentacion_clientes(db: Session) -> dict:
 def _analisis_ml_deteccion_anomalias(db: Session) -> dict:
     """Análisis de Machine Learning: Detección de anomalías en pagos y préstamos"""
     try:
-        from sqlalchemy import text
         from datetime import date, timedelta
+
+        from sqlalchemy import text
 
         hoy = date.today()
         hace_30_dias = hoy - timedelta(days=30)
@@ -4645,8 +4649,9 @@ def _analisis_ml_clustering_prestamos(db: Session) -> dict:
 def _analizar_pagos_segun_vencimiento(db: Session, año: int, mes: int) -> dict:
     """Analiza pagos realizados según fechas de vencimiento de cuotas en un mes específico"""
     try:
-        from sqlalchemy import text, extract, and_
         from datetime import date, timedelta
+
+        from sqlalchemy import and_, extract, text
 
         # Calcular rango del mes
         fecha_inicio_mes = date(año, mes, 1)
@@ -4746,8 +4751,9 @@ def _analizar_pagos_segun_vencimiento(db: Session, año: int, mes: int) -> dict:
 def _calcular_analisis_cobranzas(db: Session) -> dict:
     """Calcula análisis detallado de cobranzas"""
     try:
-        from sqlalchemy import and_
         from datetime import date, timedelta
+
+        from sqlalchemy import and_
 
         hoy = date.today()
 
@@ -4961,8 +4967,9 @@ def _obtener_resumen_bd(db: Session) -> str:
         resumen.append("")
         resumen.append("=== INFORMACIÓN MENSUAL DE CUOTAS (Últimos 6 meses) ===")
         try:
-            from sqlalchemy import extract, and_
             from datetime import date
+
+            from sqlalchemy import and_, extract
 
             # Obtener datos mensuales de cuotas
             fecha_limite = fecha_actual.date()
@@ -5457,10 +5464,11 @@ async def chat_ai(
         info_cliente_buscado = ""
         if busqueda_cedula:
             try:
+                from sqlalchemy import func
+
+                from app.models.amortizacion import Cuota
                 from app.models.cliente import Cliente
                 from app.models.prestamo import Prestamo
-                from app.models.amortizacion import Cuota
-                from sqlalchemy import func
 
                 cliente = db.query(Cliente).filter(Cliente.cedula == busqueda_cedula).first()
 
