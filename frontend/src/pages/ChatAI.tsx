@@ -117,24 +117,23 @@ export function ChatAI() {
       console.error('Error enviando pregunta:', error)
       const errorDetail = error?.response?.data?.detail || error?.message || 'No se pudo generar la respuesta'
       
-      // Si es un error 400 (pregunta rechazada), mostrar mensaje especial
+      // Si es un error 400 (pregunta rechazada), solo mostrar toast, no agregar mensaje al chat
       const esPreguntaRechazada = error?.response?.status === 400 && 
         (errorDetail.includes('solo responde preguntas') || errorDetail.includes('base de datos'))
       
-      const mensajeError: Mensaje = {
-        id: (Date.now() + 1).toString(),
-        tipo: 'ai',
-        contenido: esPreguntaRechazada 
-          ? `⚠️ ${errorDetail}\n\n💡 Recuerda: El Chat AI solo responde preguntas sobre la base de datos (clientes, préstamos, pagos, cuotas, estadísticas, fecha/hora actual). Para preguntas generales, usa el Chat de Prueba en Configuración > Inteligencia Artificial.`
-          : `Error: ${errorDetail}`,
-        timestamp: new Date(),
-        error: true
-      }
-      setMensajes(prev => [...prev, mensajeError])
-      
       if (esPreguntaRechazada) {
+        // Solo mostrar toast, no agregar mensaje al chat
         toast.warning('Esta pregunta no es sobre la base de datos')
       } else {
+        // Para otros errores, sí mostrar mensaje en el chat
+        const mensajeError: Mensaje = {
+          id: (Date.now() + 1).toString(),
+          tipo: 'ai',
+          contenido: `Error: ${errorDetail}`,
+          timestamp: new Date(),
+          error: true
+        }
+        setMensajes(prev => [...prev, mensajeError])
         toast.error('Error al generar respuesta')
       }
     } finally {

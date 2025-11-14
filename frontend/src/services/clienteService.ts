@@ -119,6 +119,14 @@ class ClienteService {
     return response
   }
 
+  // Obtener estadísticas del embudo de clientes
+  async getEstadisticasEmbudo(): Promise<{ total: number; prospectos: number; evaluacion: number; aprobados: number; rechazados: number }> {
+    const response = await apiClient.get<{ total: number; prospectos: number; evaluacion: number; aprobados: number; rechazados: number }>(
+      `${this.baseUrl}/embudo/estadisticas`
+    )
+    return response
+  }
+
   // Cambiar estado de cliente
   async cambiarEstado(clienteId: string, estado: Cliente['estado']): Promise<Cliente> {
     const response = await apiClient.patch<ApiResponse<Cliente>>(

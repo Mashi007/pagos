@@ -498,11 +498,11 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-gray-600">
-                  {activeTab === 'previa' ? totalPrevias 
+                  {estadisticas?.total ?? (activeTab === 'previa' ? totalPrevias 
                     : activeTab === 'dia-pago' ? totalDiaPago
                     : activeTab === 'retrasado' ? totalRetrasadas
                     : activeTab === 'prejudicial' ? totalPrejudiciales
-                    : filteredNotificaciones.length}
+                    : filteredNotificaciones.length)}
                 </div>
                 <p className="text-xs text-gray-600">Notificaciones en esta pestaña</p>
               </CardContent>
@@ -515,7 +515,7 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
-                  {activeTab === 'previa' 
+                  {estadisticas?.enviadas ?? (activeTab === 'previa' 
                     ? notificacionesPrevias.filter(n => n.estado === 'ENVIADA').length
                     : activeTab === 'dia-pago'
                     ? notificacionesDiaPago.filter(n => n.estado === 'ENVIADA').length
@@ -523,7 +523,7 @@ export function Notificaciones() {
                     ? notificacionesRetrasadas.filter(n => n.estado === 'ENVIADA').length
                     : activeTab === 'prejudicial'
                     ? notificacionesPrejudiciales.filter(n => n.estado === 'ENVIADA').length
-                    : filteredNotificaciones.filter(n => n.estado === 'ENVIADA').length}
+                    : filteredNotificaciones.filter(n => n.estado === 'ENVIADA').length)}
                 </div>
                 <p className="text-xs text-gray-600">Envíos exitosos</p>
               </CardContent>
@@ -536,7 +536,7 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-yellow-600">
-                  {activeTab === 'previa'
+                  {estadisticas?.pendientes ?? (activeTab === 'previa'
                     ? notificacionesPrevias.filter(n => n.estado === 'PENDIENTE').length
                     : activeTab === 'dia-pago'
                     ? notificacionesDiaPago.filter(n => n.estado === 'PENDIENTE').length
@@ -544,7 +544,7 @@ export function Notificaciones() {
                     ? notificacionesRetrasadas.filter(n => n.estado === 'PENDIENTE').length
                     : activeTab === 'prejudicial'
                     ? notificacionesPrejudiciales.filter(n => n.estado === 'PENDIENTE').length
-                    : filteredNotificaciones.filter(n => n.estado === 'PENDIENTE').length}
+                    : filteredNotificaciones.filter(n => n.estado === 'PENDIENTE').length)}
                 </div>
                 <p className="text-xs text-gray-600 mb-2">En espera de envío</p>
                 <Button
@@ -566,7 +566,7 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-600">
-                  {activeTab === 'previa'
+                  {estadisticas?.fallidas ?? (activeTab === 'previa'
                     ? notificacionesPrevias.filter(n => n.estado === 'FALLIDA').length
                     : activeTab === 'dia-pago'
                     ? notificacionesDiaPago.filter(n => n.estado === 'FALLIDA').length
@@ -574,7 +574,7 @@ export function Notificaciones() {
                     ? notificacionesRetrasadas.filter(n => n.estado === 'FALLIDA').length
                     : activeTab === 'prejudicial'
                     ? notificacionesPrejudiciales.filter(n => n.estado === 'FALLIDA').length
-                    : filteredNotificaciones.filter(n => n.estado === 'FALLIDA').length}
+                    : filteredNotificaciones.filter(n => n.estado === 'FALLIDA').length)}
                 </div>
                 <p className="text-xs text-gray-600 mb-2">Requieren revisión</p>
                 <Button

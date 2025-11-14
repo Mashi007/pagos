@@ -217,6 +217,63 @@ def obtener_estadisticas_clientes(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
+@router.get("/embudo/estadisticas")
+def obtener_estadisticas_embudo(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener estadísticas del embudo de clientes basadas en estados de préstamos"""
+    try:
+        logger.info(f"Obteniendo estadísticas del embudo - Usuario: {current_user.email}")
+
+        # Total de clientes
+        total = db.query(Cliente).count()
+
+        # Clientes con préstamos RECHAZADOS
+        clientes_rechazados = (
+            db.query(func.count(func.distinct(Prestamo.cliente_id)))
+            .filter(Prestamo.estado == "RECHAZADO")
+            .scalar() or 0
+        )
+
+        # Clientes con préstamos APROBADOS
+        clientes_aprobados = (
+            db.query(func.count(func.distinct(Prestamo.cliente_id)))
+            .filter(Prestamo.estado == "APROBADO")
+            .scalar() or 0
+        )
+
+        # Clientes con préstamos en evaluación (EN_REVISION o DRAFT)
+        clientes_evaluacion = (
+            db.query(func.count(func.distinct(Prestamo.cliente_id)))
+            .filter(Prestamo.estado.in_(["EN_REVISION", "DRAFT"]))
+            .scalar() or 0
+        )
+
+        # Prospectos: todos los clientes que no están en los otros estados
+        # Es decir, clientes que no tienen préstamos o tienen préstamos en otros estados
+        clientes_con_prestamos = (
+            db.query(func.count(func.distinct(Prestamo.cliente_id)))
+            .filter(
+                Prestamo.estado.in_(["RECHAZADO", "APROBADO", "EN_REVISION", "DRAFT"])
+            )
+            .scalar() or 0
+        )
+        prospectos = total - clientes_con_prestamos
+
+        return {
+            "total": total,
+            "prospectos": max(0, prospectos),  # Asegurar que no sea negativo
+            "evaluacion": clientes_evaluacion,
+            "aprobados": clientes_aprobados,
+            "rechazados": clientes_rechazados,
+        }
+
+    except Exception as e:
+        logger.error(f"Error en obtener_estadisticas_embudo: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
 @router.get("/{cliente_id}", response_model=ClienteResponse)
 def obtener_cliente(
     cliente_id: int = Path(..., description="ID del cliente"),

@@ -28,6 +28,8 @@ import { useClientes, useSearchClientes, useCambiarEstadoCliente } from '@/hooks
 import { usePrestamos } from '@/hooks/usePrestamos'
 import { Cliente } from '@/types'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { clienteService } from '@/services/clienteService'
+import { useQuery } from '@tanstack/react-query'
 
 // Estados del embudo
 const ESTADOS_EMBUDO = [
@@ -133,6 +135,14 @@ export function EmbudoClientes() {
   // Obtener préstamos para vincular concesionarios
   const { data: prestamosData } = usePrestamos(undefined, 1, 1000)
 
+  // Obtener estadísticas del embudo desde la API
+  const { data: estadisticasEmbudo, isLoading: isLoadingEstadisticas } = useQuery({
+    queryKey: ['estadisticas-embudo'],
+    queryFn: () => clienteService.getEstadisticasEmbudo(),
+    staleTime: 30 * 1000, // Cache de 30 segundos
+    refetchInterval: 60 * 1000, // Refrescar cada minuto
+  })
+
   // Búsqueda de clientes para agregar
   const { data: clientesBuscados = [], isLoading: isLoadingSearch } = useSearchClientes(searchCliente)
 
@@ -181,7 +191,7 @@ export function EmbudoClientes() {
       
       return {
         id: cliente.id,
-        nombre: `${cliente.nombres} ${cliente.apellidos}`,
+        nombre: [cliente.nombres, cliente.apellidos].filter(Boolean).join(' ').trim() || 'Sin nombre',
         cedula: cliente.cedula,
         telefono: cliente.telefono || 'N/A',
         estado: estadoFinal,
@@ -209,7 +219,15 @@ export function EmbudoClientes() {
     count: clientesFiltrados.filter(c => c.estado === estado.id).length
   }))
 
-  const estadisticas = {
+  // Usar estadísticas de la API si están disponibles, sino calcular desde clientesEmbudo
+  const estadisticas = estadisticasEmbudo ? {
+    total: estadisticasEmbudo.total,
+    prospectos: estadisticasEmbudo.prospectos,
+    evaluacion: estadisticasEmbudo.evaluacion,
+    aprobados: estadisticasEmbudo.aprobados,
+    rechazados: estadisticasEmbudo.rechazados,
+    agregarOtro: clientesEmbudo.filter(c => c.estado === 'agregar_otro').length,
+  } : {
     total: clientesEmbudo.length,
     prospectos: clientesEmbudo.filter(c => c.estado === 'prospecto').length,
     evaluacion: clientesEmbudo.filter(c => c.estado === 'evaluacion').length,
@@ -426,7 +444,7 @@ export function EmbudoClientes() {
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="font-semibold">{cliente.nombres} {cliente.apellidos}</h3>
+                            <h3 className="font-semibold">{[cliente.nombres, cliente.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}</h3>
                             <p className="text-sm text-gray-500">Cédula: {cliente.cedula}</p>
                             {cliente.telefono && (
                               <p className="text-sm text-gray-500">Tel: {cliente.telefono}</p>

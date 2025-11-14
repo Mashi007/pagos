@@ -88,7 +88,8 @@ export function useCreateCliente() {
         exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
       })
       
-      toast.success(`Cliente ${newCliente.nombres} ${newCliente.apellidos} creado exitosamente`)
+      const nombreCompleto = [newCliente.nombres, newCliente.apellidos].filter(Boolean).join(' ').trim() || 'Sin nombre'
+      toast.success(`Cliente ${nombreCompleto} creado exitosamente`)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Error al crear cliente')
@@ -118,7 +119,8 @@ export function useUpdateCliente() {
         exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
       })
       
-      toast.success(`Cliente ${updatedCliente.nombres} ${updatedCliente.apellidos} actualizado`)
+      const nombreCompleto = [updatedCliente.nombres, updatedCliente.apellidos].filter(Boolean).join(' ').trim() || 'Sin nombre'
+      toast.success(`Cliente ${nombreCompleto} actualizado`)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Error al actualizar cliente')

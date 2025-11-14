@@ -22,6 +22,7 @@ import {
   XCircle,
   X,
   Settings,
+  DollarSign,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -427,26 +428,6 @@ export function DashboardMenu() {
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
-  // Query para obtener actividades programadas
-  const { data: tareasProgramadas, isLoading: loadingTareas } = useQuery({
-    queryKey: ['tareas-programadas-dashboard'],
-    queryFn: async () => {
-      const response = await apiClient.get<{ tareas: Array<{
-        id: string
-        nombre: string
-        descripcion: string
-        tipo: string
-        frecuencia: string
-        hora: string
-        estado: string
-        ultimaEjecucion: string | null
-        proximaEjecucion: string | null
-      }>; total: number; scheduler_activo: boolean }>('/api/v1/scheduler/tareas')
-      return response
-    },
-    staleTime: 30 * 1000, // 30 segundos
-    refetchInterval: 60 * 1000, // Refrescar cada minuto
-  })
 
   const [isRefreshing, setIsRefreshing] = useState(false)
   
@@ -574,85 +555,147 @@ export function DashboardMenu() {
           </Card>
         </motion.div>
 
-        {/* SECCIÓN DE ACTIVIDADES PROGRAMADAS */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <Card className="shadow-md border-2 border-gray-200">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-cyan-600" />
-                Actividades Programadas
-              </CardTitle>
-              <CardDescription>
-                Tareas automatizadas del sistema que se ejecutan diariamente
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingTareas ? (
-                <div className="text-center py-8 text-gray-500">
-                  <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
-                  Cargando actividades programadas...
-                </div>
-              ) : tareasProgramadas?.tareas && tareasProgramadas.tareas.length > 0 ? (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  {tareasProgramadas.tareas.map((tarea) => (
-                    <Card key={tarea.id} className="border-l-4 border-l-cyan-500">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center justify-between">
-                          <span>{tarea.nombre}</span>
-                          <Badge variant={tarea.estado === 'ACTIVO' ? 'success' : 'secondary'}>
-                            {tarea.estado}
-                          </Badge>
-                        </CardTitle>
-                        <CardDescription className="text-xs">
-                          {tarea.descripcion}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="space-y-2 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-600">Frecuencia:</span>
-                            <Badge variant="outline">{tarea.frecuencia}</Badge>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-600">Hora:</span>
-                            <span className="font-semibold">{tarea.hora}</span>
-                          </div>
-                          {tarea.proximaEjecucion && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-gray-600">Próxima ejecución:</span>
-                              <span className="text-xs text-gray-500">
-                                {new Date(tarea.proximaEjecucion).toLocaleString('es-ES', {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                  <p>No hay actividades programadas configuradas.</p>
-                </div>
-              )}
-              {!tareasProgramadas?.scheduler_activo && (
-                <div className="mt-4 bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-2 rounded text-sm">
-                  ⚠️ El scheduler no está activo. Las tareas no se ejecutarán automáticamente.
-                </div>
-              )}
+        {/* KPIs PRINCIPALES */}
+        {loadingKPIs ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-[180px] bg-gray-100 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        ) : errorKPIs ? (
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 text-red-700">
+                <AlertTriangle className="h-5 w-5" />
+                <p>Error al cargar los KPIs principales. Por favor, intente nuevamente.</p>
+              </div>
             </CardContent>
           </Card>
-        </motion.div>
+        ) : kpisPrincipales ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+          >
+            <KpiCardLarge
+              title="Total Préstamos"
+              value={kpisPrincipales.total_prestamos.valor_actual}
+              variation={kpisPrincipales.total_prestamos.variacion_porcentual}
+              icon={FileText}
+              color="text-cyan-600"
+              bgColor="bg-cyan-100"
+              borderColor="border-cyan-500"
+              format="number"
+            />
+            <KpiCardLarge
+              title="Créditos Nuevos"
+              value={kpisPrincipales.creditos_nuevos_mes.valor_actual}
+              variation={kpisPrincipales.creditos_nuevos_mes.variacion_porcentual}
+              icon={TrendingUp}
+              color="text-green-600"
+              bgColor="bg-green-100"
+              borderColor="border-green-500"
+              format="number"
+            />
+            <KpiCardLarge
+              title="Total Clientes"
+              value={kpisPrincipales.total_clientes.valor_actual}
+              variation={kpisPrincipales.total_clientes.variacion_porcentual}
+              icon={Users}
+              color="text-blue-600"
+              bgColor="bg-blue-100"
+              borderColor="border-blue-500"
+              format="number"
+            />
+            <KpiCardLarge
+              title="Morosidad Total"
+              value={kpisPrincipales.total_morosidad_usd.valor_actual}
+              variation={kpisPrincipales.total_morosidad_usd.variacion_porcentual}
+              icon={AlertTriangle}
+              color="text-red-600"
+              bgColor="bg-red-100"
+              borderColor="border-red-500"
+              format="currency"
+            />
+          </motion.div>
+        ) : null}
+
+        {/* GRÁFICOS PRINCIPALES */}
+        {loadingDashboard ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-[400px] bg-gray-100 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        ) : datosDashboard ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+          >
+            {/* Gráfico de Evolución Mensual */}
+            {evolucionMensual.length > 0 && (
+              <Card className="shadow-lg border-2 border-gray-200">
+                <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b-2 border-cyan-200">
+                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <LineChart className="h-6 w-6 text-cyan-600" />
+                    <span>Evolución Mensual</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <ComposedChart data={evolucionMensual}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="mes" />
+                      <YAxis yAxisId="left" />
+                      <YAxis yAxisId="right" orientation="right" />
+                      <Tooltip />
+                      <Legend />
+                      <Bar yAxisId="left" dataKey="cartera" fill="#3b82f6" name="Cartera" />
+                      <Bar yAxisId="left" dataKey="cobrado" fill="#10b981" name="Cobrado" />
+                      <Line yAxisId="right" type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Gráfico de Financieros */}
+            {datosDashboard.financieros && (
+              <Card className="shadow-lg border-2 border-gray-200">
+                <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b-2 border-green-200">
+                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <DollarSign className="h-6 w-6 text-green-600" />
+                    <span>Indicadores Financieros</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Total Cobrado:</span>
+                      <span className="font-bold text-lg">{formatCurrency(datosDashboard.financieros.totalCobrado)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Ingresos Capital:</span>
+                      <span className="font-semibold">{formatCurrency(datosDashboard.financieros.ingresosCapital)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Ingresos Interés:</span>
+                      <span className="font-semibold">{formatCurrency(datosDashboard.financieros.ingresosInteres)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Ingresos Mora:</span>
+                      <span className="font-semibold text-red-600">{formatCurrency(datosDashboard.financieros.ingresosMora)}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </motion.div>
+        ) : null}
+
       </div>
     </div>
   )

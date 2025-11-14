@@ -126,14 +126,15 @@ export function TicketsAtencion() {
 
   const handleSeleccionarCliente = (cliente: Cliente) => {
     // Capturar rápidamente todos los datos del cliente
+    const nombreCompleto = [cliente.nombres, cliente.apellidos].filter(Boolean).join(' ').trim() || 'Sin nombre'
     setClienteSeleccionado(cliente)
     setNuevoTicket(prev => ({
       ...prev,
       clienteId: cliente.id,
-      cliente: `${cliente.nombres} ${cliente.apellidos}`,
+      cliente: nombreCompleto,
       clienteData: cliente,
       // Pre-llenar descripción con datos del cliente si está vacía para agilizar
-      descripcion: prev.descripcion || `Cliente: ${cliente.nombres} ${cliente.apellidos}\nCédula: ${cliente.cedula}${cliente.telefono ? `\nTeléfono: ${cliente.telefono}` : ''}${cliente.email ? `\nEmail: ${cliente.email}` : ''}\n\n`,
+      descripcion: prev.descripcion || `Cliente: ${nombreCompleto}\nCédula: ${cliente.cedula}${cliente.telefono ? `\nTeléfono: ${cliente.telefono}` : ''}${cliente.email ? `\nEmail: ${cliente.email}` : ''}\n\n`,
     }))
     setSearchCliente('')
   }
@@ -146,7 +147,9 @@ export function TicketsAtencion() {
     const ticket: Ticket = {
       id: Date.now(),
       ...nuevoTicket,
-      cliente: clienteSeleccionado ? `${clienteSeleccionado.nombres} ${clienteSeleccionado.apellidos}` : nuevoTicket.cliente,
+      cliente: clienteSeleccionado 
+        ? [clienteSeleccionado.nombres, clienteSeleccionado.apellidos].filter(Boolean).join(' ').trim() || 'Sin nombre'
+        : nuevoTicket.cliente,
       clienteId: clienteSeleccionado?.id,
       clienteData: clienteSeleccionado || undefined,
       fechaCreacion: new Date(),
@@ -203,7 +206,7 @@ export function TicketsAtencion() {
                   <Card className="p-3 bg-blue-50">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-semibold">{clienteSeleccionado.nombres} {clienteSeleccionado.apellidos}</p>
+                        <p className="font-semibold">{[clienteSeleccionado.nombres, clienteSeleccionado.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}</p>
                         <p className="text-sm text-gray-600">Cédula: {clienteSeleccionado.cedula}</p>
                         {clienteSeleccionado.telefono && (
                           <p className="text-sm text-gray-600">Tel: {clienteSeleccionado.telefono}</p>
@@ -256,7 +259,7 @@ export function TicketsAtencion() {
                             <CardContent className="p-3">
                               <div className="flex items-center justify-between">
                                 <div className="flex-1">
-                                  <p className="font-medium text-sm text-gray-900">{cliente.nombres} {cliente.apellidos}</p>
+                                  <p className="font-medium text-sm text-gray-900">{[cliente.nombres, cliente.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}</p>
                                   <div className="flex gap-3 mt-1">
                                     <p className="text-xs text-gray-600">Cédula: <span className="font-medium">{cliente.cedula}</span></p>
                                     {cliente.telefono && (

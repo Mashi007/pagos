@@ -14,11 +14,14 @@ import {
   Car,
   DollarSign,
   Link,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { formatCurrency, formatDate } from '@/utils'
 import { useConcesionarios } from '@/hooks/useConcesionarios'
 import { usePrestamos } from '@/hooks/usePrestamos'
@@ -88,7 +91,11 @@ const mapearEstadoConcesionario = (concesionario: Concesionario, prestamos: Pres
 export function EmbudoConcesionarios() {
   const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
-  const [concesionarioSeleccionado, setConcesionarioSeleccionado] = useState<number | null>(null)
+  const [concesionarioSeleccionadoId, setConcesionarioSeleccionadoId] = useState<string>('')
+  const [showAddDialog, setShowAddDialog] = useState(false)
+  const [searchConcesionario, setSearchConcesionario] = useState('')
+  const [concesionariosEnEmbudo, setConcesionariosEnEmbudo] = useState<Map<number, Concesionario>>(new Map())
+  const [estadosManuales, setEstadosManuales] = useState<Map<number, string>>(new Map())
 
   // Obtener concesionarios reales desde configuración/concesionarios
   const { 
@@ -128,9 +135,26 @@ export function EmbudoConcesionarios() {
   const prestamos = prestamosData?.data || []
   const clientes = clientesData?.data || []
 
+  // Combinar concesionarios de la API con concesionarios agregados manualmente
+  const todosConcesionarios = useMemo(() => {
+    const concesionariosAPI = concesionarios.map(concesionario => {
+      const concesionarioActualizado = concesionariosEnEmbudo.get(concesionario.id)
+      return concesionarioActualizado || concesionario
+    })
+    
+    // Agregar concesionarios que no están en la API pero sí en concesionariosEnEmbudo
+    concesionariosEnEmbudo.forEach((concesionario) => {
+      if (!concesionariosAPI.find(c => c.id === concesionario.id)) {
+        concesionariosAPI.push(concesionario)
+      }
+    })
+    
+    return concesionariosAPI
+  }, [concesionarios, concesionariosEnEmbudo])
+
   // Calcular estadísticas por concesionario
   const concesionariosConEstadisticas = useMemo(() => {
-    return concesionarios.map(concesionario => {
+    return todosConcesionarios.map(concesionario => {
       const prestamosConcesionario = prestamos.filter(p => 
         p.concesionario === concesionario.nombre
       )
@@ -156,16 +180,74 @@ export function EmbudoConcesionarios() {
         prestamos: prestamosConcesionario,
         clientes: clientesAsignados,
       }
+    }).map(concesionario => {
+      // Priorizar estado manual si existe
+      const estadoManual = estadosManuales.get(concesionario.id)
+      if (estadoManual) {
+        return { ...concesionario, estado: estadoManual }
+      }
+      return concesionario
     })
-  }, [concesionarios, prestamos, clientes])
+  }, [todosConcesionarios, prestamos, clientes, estadosManuales])
 
-  // Filtrar concesionarios
-  const concesionariosFiltrados = concesionariosConEstadisticas.filter(concesionario => {
+  // Concesionario seleccionado y sus datos
+  const concesionarioSeleccionado = concesionarioSeleccionadoId 
+    ? Number(concesionarioSeleccionadoId) 
+    : null
+  const concesionarioDetalle = concesionarioSeleccionado
+    ? concesionariosConEstadisticas.find(c => c.id === concesionarioSeleccionado)
+    : null
+
+  // Filtrar concesionarios para mostrar solo el seleccionado si hay uno
+  const concesionariosParaMostrar = concesionarioSeleccionado
+    ? concesionariosConEstadisticas.filter(c => c.id === concesionarioSeleccionado)
+    : concesionariosConEstadisticas
+
+  // Filtrar concesionarios (aplicar búsqueda si no hay concesionario seleccionado)
+  const concesionariosFiltrados = concesionariosParaMostrar.filter(concesionario => {
+    if (concesionarioSeleccionado) {
+      // Si hay un concesionario seleccionado, mostrar solo ese
+      return true
+    }
     const matchSearch =
       concesionario.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       searchTerm === ''
     return matchSearch
   })
+
+  // Búsqueda de concesionarios para agregar
+  const concesionariosBuscados = useMemo(() => {
+    if (!searchConcesionario || searchConcesionario.length < 2) return []
+    return concesionarios.filter(c => 
+      c.nombre.toLowerCase().includes(searchConcesionario.toLowerCase()) &&
+      !concesionariosEnEmbudo.has(c.id)
+    )
+  }, [searchConcesionario, concesionarios, concesionariosEnEmbudo])
+
+  const handleAgregarConcesionario = (concesionario: Concesionario) => {
+    setConcesionariosEnEmbudo(prev => new Map(prev).set(concesionario.id, concesionario))
+    // Asignar automáticamente al embudo "inactivo" (agregar otro)
+    setEstadosManuales(prev => {
+      const nuevo = new Map(prev)
+      nuevo.set(concesionario.id, 'inactivo')
+      return nuevo
+    })
+    setSearchConcesionario('')
+    setShowAddDialog(false)
+  }
+
+  const handleEliminarConcesionario = (concesionarioId: number) => {
+    setConcesionariosEnEmbudo(prev => {
+      const nuevo = new Map(prev)
+      nuevo.delete(concesionarioId)
+      return nuevo
+    })
+    setEstadosManuales(prev => {
+      const nuevo = new Map(prev)
+      nuevo.delete(concesionarioId)
+      return nuevo
+    })
+  }
 
   // Agrupar concesionarios por estado
   const concesionariosPorEstado = ESTADOS_EMBUDO.map(estado => ({
@@ -174,25 +256,24 @@ export function EmbudoConcesionarios() {
     count: concesionariosFiltrados.filter(c => c.estado === estado.id).length
   }))
 
-  // Estadísticas generales
+  // Estadísticas (generales o del concesionario seleccionado)
   const estadisticas = useMemo(() => {
+    const concesionariosParaEstadisticas = concesionarioSeleccionado
+      ? concesionariosConEstadisticas.filter(c => c.id === concesionarioSeleccionado)
+      : concesionariosConEstadisticas
+    
     return {
-      total: concesionariosConEstadisticas.length,
-      activos: concesionariosConEstadisticas.filter(c => c.estado === 'activo').length,
-      pendientes: concesionariosConEstadisticas.filter(c => c.estado === 'pendiente').length,
-      inactivos: concesionariosConEstadisticas.filter(c => c.estado === 'inactivo').length,
+      total: concesionariosParaEstadisticas.length,
+      activos: concesionariosParaEstadisticas.filter(c => c.estado === 'activo').length,
+      pendientes: concesionariosParaEstadisticas.filter(c => c.estado === 'pendiente').length,
+      inactivos: concesionariosParaEstadisticas.filter(c => c.estado === 'inactivo').length,
       totalClientes: new Set(
-        concesionariosConEstadisticas.flatMap(c => c.prestamos.map(p => p.cliente_id))
+        concesionariosParaEstadisticas.flatMap(c => c.prestamos.map(p => p.cliente_id))
       ).size,
-      totalPrestamos: concesionariosConEstadisticas.reduce((sum, c) => sum + c.prestamosActivos, 0),
-      montoTotal: concesionariosConEstadisticas.reduce((sum, c) => sum + c.montoTotal, 0),
+      totalPrestamos: concesionariosParaEstadisticas.reduce((sum, c) => sum + c.prestamosActivos, 0),
+      montoTotal: concesionariosParaEstadisticas.reduce((sum, c) => sum + c.montoTotal, 0),
     }
-  }, [concesionariosConEstadisticas])
-
-  // Concesionario seleccionado y sus datos
-  const concesionarioDetalle = concesionarioSeleccionado
-    ? concesionariosConEstadisticas.find(c => c.id === concesionarioSeleccionado)
-    : null
+  }, [concesionariosConEstadisticas, concesionarioSeleccionado])
 
   // Clientes y préstamos del concesionario seleccionado
   const clientesYprestamosDetalle = useMemo(() => {
@@ -272,10 +353,65 @@ export function EmbudoConcesionarios() {
             <Building className="h-4 w-4 mr-2" />
             Gestionar Concesionarios
           </Button>
-          <Button onClick={() => navigate('/concesionarios')}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nuevo Concesionario
-          </Button>
+          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Agregar Concesionario
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Buscar y Agregar Concesionario</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Buscar por nombre de concesionario..."
+                    value={searchConcesionario}
+                    onChange={(e) => setSearchConcesionario(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                {searchConcesionario.length >= 2 && concesionariosBuscados.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <AlertCircle className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p>No se encontraron concesionarios</p>
+                  </div>
+                ) : searchConcesionario.length >= 2 && concesionariosBuscados.length > 0 ? (
+                  <div className="max-h-96 overflow-y-auto space-y-2">
+                    {concesionariosBuscados.map((concesionario) => (
+                      <Card
+                        key={concesionario.id}
+                        className="cursor-pointer hover:bg-gray-50 transition-colors"
+                        onClick={() => handleAgregarConcesionario(concesionario)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="font-semibold">{concesionario.nombre}</h3>
+                              <p className="text-sm text-gray-500">
+                                {concesionario.activo ? 'Activo' : 'Inactivo'}
+                              </p>
+                            </div>
+                            <Button size="sm">
+                              <Plus className="h-4 w-4 mr-1" />
+                              Agregar
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : searchConcesionario.length > 0 && searchConcesionario.length < 2 ? (
+                  <div className="text-xs text-gray-400 mt-1 px-1">
+                    Escribe al menos 2 caracteres para buscar
+                  </div>
+                ) : null}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </motion.div>
 
@@ -325,21 +461,44 @@ export function EmbudoConcesionarios() {
         </Card>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros y Selector de Concesionario */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Buscar por nombre de concesionario..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+            <div className="w-full md:w-[300px]">
+              <Select
+                value={concesionarioSeleccionadoId}
+                onValueChange={(value) => {
+                  setConcesionarioSeleccionadoId(value)
+                  setSearchTerm('') // Limpiar búsqueda al seleccionar
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Seleccione un concesionario" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  <SelectItem value="">Todos los concesionarios</SelectItem>
+                  {concesionarios.map((concesionario) => (
+                    <SelectItem key={concesionario.id} value={String(concesionario.id)}>
+                      {concesionario.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            {!concesionarioSeleccionado && (
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Buscar por nombre de concesionario..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -358,6 +517,21 @@ export function EmbudoConcesionarios() {
                 <Plus className="h-4 w-4 mr-2" />
                 Crear Concesionario
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : !concesionarioSeleccionado ? (
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <Building className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Seleccione un concesionario</h3>
+              <p className="text-sm text-gray-600 mb-2">
+                Haga clic en un concesionario para ver sus clientes y préstamos
+              </p>
+              <p className="text-xs text-gray-500">
+                Seleccione un concesionario para ver sus clientes y préstamos
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -389,7 +563,107 @@ export function EmbudoConcesionarios() {
                       </div>
                     </CardHeader>
                     <CardContent className="p-3 space-y-3 max-h-[calc(100vh-400px)] overflow-y-auto">
-                      {columna.concesionarios.length === 0 ? (
+                      {columna.id === 'inactivo' ? (
+                        <div className="text-center py-8">
+                          <Button
+                            variant="outline"
+                            className="w-full border-2 border-dashed border-gray-300 hover:border-gray-400 hover:bg-gray-50"
+                            onClick={() => setShowAddDialog(true)}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Agregar Concesionario
+                          </Button>
+                          {columna.concesionarios.length > 0 && (
+                            <div className="mt-3 space-y-3">
+                              {columna.concesionarios.map((concesionario) => (
+                                <motion.div
+                                  key={concesionario.id}
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  whileHover={{ scale: 1.02 }}
+                                  onClick={() => setConcesionarioSeleccionadoId(
+                                    concesionarioSeleccionadoId === String(concesionario.id) ? '' : String(concesionario.id)
+                                  )}
+                                  className={`bg-white rounded-lg p-4 shadow-sm border-2 border-gray-200 hover:border-gray-300 hover:shadow-md transition-all cursor-pointer`}
+                                >
+                                  <div className="space-y-3">
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex-1">
+                                        <h3 className="font-semibold text-gray-900 text-sm">{concesionario.nombre}</h3>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                          {concesionario.activo ? 'Activo' : 'Inactivo'}
+                                        </p>
+                                      </div>
+                                      <div className="flex gap-1">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-7 w-7"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            setConcesionarioSeleccionadoId(
+                                              concesionarioSeleccionadoId === String(concesionario.id) ? '' : String(concesionario.id)
+                                            )
+                                          }}
+                                        >
+                                          <Eye className="h-3.5 w-3.5" />
+                                        </Button>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-7 w-7"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            navigate(`/concesionarios`)
+                                          }}
+                                        >
+                                          <Edit className="h-3.5 w-3.5" />
+                                        </Button>
+                                        {concesionariosEnEmbudo.has(concesionario.id) && (
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-7 w-7 text-red-600 hover:text-red-700"
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              handleEliminarConcesionario(concesionario.id)
+                                            }}
+                                            title="Remover del embudo"
+                                          >
+                                            <X className="h-3.5 w-3.5" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                                      <div className="grid grid-cols-2 gap-2 pt-2">
+                                        <div className="bg-blue-50 rounded p-2">
+                                          <div className="text-xs text-gray-600">Clientes</div>
+                                          <div className="text-sm font-bold text-blue-700">{concesionario.clientesAsignados}</div>
+                                        </div>
+                                        <div className="bg-purple-50 rounded p-2">
+                                          <div className="text-xs text-gray-600">Préstamos</div>
+                                          <div className="text-sm font-bold text-purple-700">{concesionario.prestamosActivos}</div>
+                                        </div>
+                                      </div>
+                                      {concesionario.montoTotal > 0 && (
+                                        <div className="flex items-center gap-2 text-xs pt-1">
+                                          <DollarSign className="h-3.5 w-3.5 text-green-600" />
+                                          <span className="font-semibold text-green-700">{formatCurrency(concesionario.montoTotal)}</span>
+                                        </div>
+                                      )}
+                                      <div className="text-xs text-gray-500 pt-1">
+                                        Registro: {formatDate(new Date(concesionario.created_at))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : columna.concesionarios.length === 0 ? (
                         <div className="text-center py-8 text-gray-400">
                           <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
                           <p className="text-xs">No hay concesionarios en este estado</p>
@@ -401,11 +675,11 @@ export function EmbudoConcesionarios() {
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             whileHover={{ scale: 1.02 }}
-                            onClick={() => setConcesionarioSeleccionado(
-                              concesionarioSeleccionado === concesionario.id ? null : concesionario.id
+                            onClick={() => setConcesionarioSeleccionadoId(
+                              concesionarioSeleccionadoId === String(concesionario.id) ? '' : String(concesionario.id)
                             )}
                             className={`bg-white rounded-lg p-4 shadow-sm border-2 transition-all cursor-pointer ${
-                              concesionarioSeleccionado === concesionario.id
+                              concesionarioSeleccionadoId === String(concesionario.id)
                                 ? 'border-blue-500 shadow-md'
                                 : 'border-gray-200 hover:shadow-md'
                             }`}
@@ -425,8 +699,8 @@ export function EmbudoConcesionarios() {
                                     className="h-7 w-7"
                                     onClick={(e) => {
                                       e.stopPropagation()
-                                      setConcesionarioSeleccionado(
-                                        concesionarioSeleccionado === concesionario.id ? null : concesionario.id
+                                      setConcesionarioSeleccionadoId(
+                                        concesionarioSeleccionadoId === String(concesionario.id) ? '' : String(concesionario.id)
                                       )
                                     }}
                                   >
@@ -516,7 +790,7 @@ export function EmbudoConcesionarios() {
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
                         <h4 className="font-medium text-sm text-gray-900">
-                          {cliente.nombres} {cliente.apellidos}
+                          {[cliente.nombres, cliente.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}
                         </h4>
                         <p className="text-xs text-gray-500 mt-1">Cédula: {cliente.cedula}</p>
                         {cliente.telefono && (
