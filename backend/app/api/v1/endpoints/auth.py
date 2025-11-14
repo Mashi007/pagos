@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, get_optional_current_user
 from app.core.config import settings
+from app.core.rate_limiter import get_rate_limiter, RATE_LIMITS
 from app.core.security import create_access_token, create_refresh_token, get_password_hash, verify_password
 from app.models.auditoria import Auditoria
 from app.models.user import User
@@ -27,6 +28,9 @@ from app.utils.validators import validate_password_strength
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Obtener limiter para aplicar rate limiting
+limiter = get_rate_limiter()
 
 
 def add_cors_headers(request: Request, response: Response):
@@ -91,6 +95,7 @@ def _generar_tokens_usuario(user_id: int) -> tuple[str, str]:
 
 
 @router.post("/login", response_model=LoginResponse)
+@limiter.limit(RATE_LIMITS["auth"])  # 5 intentos por minuto para proteger contra fuerza bruta
 async def login(
     login_data: LoginRequest,
     request: Request,
@@ -100,8 +105,7 @@ async def login(
     """
     🔐 Login de usuario - VERSIÓN SIMPLIFICADA
     Características:
-    - Sin auditoría (temporal)
-    - Sin rate limiting (temporal)
+    - Rate limiting: 5 intentos por minuto por IP
     - Solo autenticación básica
     - Headers CORS
     """

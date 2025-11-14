@@ -73,6 +73,10 @@ from app.api.v1.endpoints import (  # noqa: E402; aprobaciones deshabilitado - v
 from app.core import cache  # noqa: F401, E402
 from app.core.exceptions import global_exception_handler  # noqa: E402
 from app.core.performance_monitor import performance_monitor  # noqa: E402
+from app.core.rate_limiter import (  # noqa: E402
+    get_rate_limit_exceeded_handler,
+    get_rate_limiter,
+)
 from app.db.init_db import init_db_shutdown, init_db_startup  # noqa: E402
 
 # No crear otro logger duplicado - usar el root logger o el logger del módulo
@@ -312,6 +316,17 @@ app = FastAPI(
 
 # Registrar manejador global de excepciones
 app.add_exception_handler(Exception, global_exception_handler)
+
+# ============================================
+# RATE LIMITING
+# ============================================
+# Importar RateLimitExceeded antes de usarlo
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+
+# Configurar rate limiting para proteger contra abuso
+limiter = get_rate_limiter()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, get_rate_limit_exceeded_handler())
 
 # ============================================
 # MIDDLEWARES

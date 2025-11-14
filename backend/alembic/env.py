@@ -11,12 +11,37 @@ from alembic import context
 # Agregar el directorio del proyecto al path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from app.core.config import settings
-from app.db.base import Base
+# Cargar variables de entorno desde .env si existe
+env_file = Path(__file__).parent.parent / ".env"
+if env_file.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(env_file)
+    except ImportError:
+        # Si python-dotenv no está instalado, intentar cargar manualmente
+        try:
+            with open(env_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        os.environ[key.strip()] = value.strip().strip('"').strip("'")
+        except Exception:
+            pass  # Si falla, continuar sin cargar .env
 
-# Importar todos los modelos para que Alembic los detecte
-# Esto asegura que todos los modelos estén registrados en Base.metadata
-import app.models  # noqa: F401
+try:
+    from app.core.config import settings
+    from app.db.base import Base
+
+    # Importar todos los modelos para que Alembic los detecte
+    # Esto asegura que todos los modelos estén registrados en Base.metadata
+    import app.models  # noqa: F401
+except Exception as e:
+    print(f"❌ Error al importar configuración o modelos: {e}")
+    print(f"📁 Directorio actual: {os.getcwd()}")
+    print(f"📁 Path del script: {Path(__file__).parent.parent}")
+    print(f"🔍 DATABASE_URL en env: {os.getenv('DATABASE_URL', 'NO CONFIGURADA')[:50] if os.getenv('DATABASE_URL') else 'NO CONFIGURADA'}...")
+    raise
 
 # Configurar logging
 config = context.config
