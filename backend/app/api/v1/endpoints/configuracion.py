@@ -3520,6 +3520,34 @@ def _obtener_resumen_bd(db: Session) -> str:
     Obtiene un resumen de la base de datos con estadísticas principales
     para usar como contexto en las respuestas de AI
     """
+    def _ejecutar_consulta_segura(func_consulta, descripcion=""):
+        """Ejecuta una consulta de forma segura, manejando errores de transacción abortada"""
+        try:
+            return func_consulta()
+        except Exception as query_error:
+            error_str = str(query_error)
+            error_type = type(query_error).__name__
+            # Verificar si es un error de transacción abortada
+            is_transaction_aborted = (
+                "aborted" in error_str.lower()
+                or "InFailedSqlTransaction" in error_type
+                or "current transaction is aborted" in error_str.lower()
+            )
+            
+            if is_transaction_aborted:
+                # Hacer rollback antes de reintentar
+                try:
+                    db.rollback()
+                    logger.debug(f"✅ Rollback realizado antes de {descripcion} (transacción abortada)")
+                    # Reintentar la consulta
+                    return func_consulta()
+                except Exception as retry_error:
+                    logger.error(f"❌ Error al reintentar {descripcion}: {retry_error}")
+                    return None
+            else:
+                logger.error(f"❌ Error en {descripcion}: {query_error}")
+                return None
+    
     try:
         from sqlalchemy import func
 
@@ -3557,50 +3585,67 @@ def _obtener_resumen_bd(db: Session) -> str:
         resumen.append("")  # Línea en blanco para separar
 
         # Clientes
-        total_clientes = db.query(Cliente).count()
-        clientes_activos = db.query(Cliente).filter(Cliente.activo == True).count()
-        resumen.append(f"Clientes: {total_clientes} totales, {clientes_activos} activos")
+        total_clientes = _ejecutar_consulta_segura(lambda: db.query(Cliente).count(), "consulta de total clientes")
+        clientes_activos = _ejecutar_consulta_segura(lambda: db.query(Cliente).filter(Cliente.activo == True).count(), "consulta de clientes activos")
+        if total_clientes is not None and clientes_activos is not None:
+            resumen.append(f"Clientes: {total_clientes} totales, {clientes_activos} activos")
+        else:
+            resumen.append("Clientes: No disponible")
 
         # Préstamos
-        total_prestamos = db.query(Prestamo).count()
-        prestamos_activos = db.query(Prestamo).filter(Prestamo.estado.in_(["APROBADO", "ACTIVO"])).count()
-        prestamos_pendientes = db.query(Prestamo).filter(Prestamo.estado == "PENDIENTE").count()
-        resumen.append(
-            f"Préstamos: {total_prestamos} totales, {prestamos_activos} activos/aprobados, {prestamos_pendientes} pendientes"
-        )
+        total_prestamos = _ejecutar_consulta_segura(lambda: db.query(Prestamo).count(), "consulta de total préstamos")
+        prestamos_activos = _ejecutar_consulta_segura(lambda: db.query(Prestamo).filter(Prestamo.estado.in_(["APROBADO", "ACTIVO"])).count(), "consulta de préstamos activos")
+        prestamos_pendientes = _ejecutar_consulta_segura(lambda: db.query(Prestamo).filter(Prestamo.estado == "PENDIENTE").count(), "consulta de préstamos pendientes")
+        if total_prestamos is not None and prestamos_activos is not None and prestamos_pendientes is not None:
+            resumen.append(
+                f"Préstamos: {total_prestamos} totales, {prestamos_activos} activos/aprobados, {prestamos_pendientes} pendientes"
+            )
+        else:
+            resumen.append("Préstamos: No disponible")
 
         # Pagos
-        total_pagos = db.query(Pago).count()
-        pagos_activos = db.query(Pago).filter(Pago.activo == True).count()
-        resumen.append(f"Pagos: {total_pagos} totales, {pagos_activos} activos")
+        total_pagos = _ejecutar_consulta_segura(lambda: db.query(Pago).count(), "consulta de total pagos")
+        pagos_activos = _ejecutar_consulta_segura(lambda: db.query(Pago).filter(Pago.activo == True).count(), "consulta de pagos activos")
+        if total_pagos is not None and pagos_activos is not None:
+            resumen.append(f"Pagos: {total_pagos} totales, {pagos_activos} activos")
+        else:
+            resumen.append("Pagos: No disponible")
 
         # Cuotas
-        total_cuotas = db.query(Cuota).count()
-        cuotas_pagadas = db.query(Cuota).filter(Cuota.estado == "PAGADA").count()
-        cuotas_pendientes = db.query(Cuota).filter(Cuota.estado == "PENDIENTE").count()
-        cuotas_mora = db.query(Cuota).filter(Cuota.estado == "MORA").count()
-        resumen.append(
-            f"Cuotas: {total_cuotas} totales, {cuotas_pagadas} pagadas, {cuotas_pendientes} pendientes, {cuotas_mora} en mora"
-        )
+        total_cuotas = _ejecutar_consulta_segura(lambda: db.query(Cuota).count(), "consulta de total cuotas")
+        cuotas_pagadas = _ejecutar_consulta_segura(lambda: db.query(Cuota).filter(Cuota.estado == "PAGADA").count(), "consulta de cuotas pagadas")
+        cuotas_pendientes = _ejecutar_consulta_segura(lambda: db.query(Cuota).filter(Cuota.estado == "PENDIENTE").count(), "consulta de cuotas pendientes")
+        cuotas_mora = _ejecutar_consulta_segura(lambda: db.query(Cuota).filter(Cuota.estado == "MORA").count(), "consulta de cuotas en mora")
+        if total_cuotas is not None and cuotas_pagadas is not None and cuotas_pendientes is not None and cuotas_mora is not None:
+            resumen.append(
+                f"Cuotas: {total_cuotas} totales, {cuotas_pagadas} pagadas, {cuotas_pendientes} pendientes, {cuotas_mora} en mora"
+            )
+        else:
+            resumen.append("Cuotas: No disponible")
 
         # Montos totales
-        try:
-            monto_total_prestamos = (
-                db.query(func.sum(Prestamo.monto_financiado)).filter(Prestamo.estado.in_(["APROBADO", "ACTIVO"])).scalar() or 0
-            )
+        monto_total_prestamos = _ejecutar_consulta_segura(
+            lambda: db.query(func.sum(Prestamo.monto_financiado)).filter(Prestamo.estado.in_(["APROBADO", "ACTIVO"])).scalar() or 0,
+            "consulta de monto total préstamos"
+        )
+        if monto_total_prestamos is not None:
             resumen.append(f"Monto total de préstamos activos: {monto_total_prestamos:,.2f}")
-        except:
-            pass
 
-        try:
-            monto_total_pagos = db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo == True).scalar() or 0
+        monto_total_pagos = _ejecutar_consulta_segura(
+            lambda: db.query(func.sum(Pago.monto_pagado)).filter(Pago.activo == True).scalar() or 0,
+            "consulta de monto total pagos"
+        )
+        if monto_total_pagos is not None:
             resumen.append(f"Monto total de pagos: {monto_total_pagos:,.2f}")
-        except:
-            pass
 
         return "\n".join(resumen)
     except Exception as e:
         logger.error(f"Error obteniendo resumen de BD: {e}", exc_info=True)
+        # Intentar rollback si hay error
+        try:
+            db.rollback()
+        except:
+            pass
         return "No se pudo obtener resumen de la base de datos"
 
 
@@ -3628,7 +3673,30 @@ async def chat_ai(
 
     try:
         # Obtener configuración de AI
-        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "AI").all()
+        try:
+            configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "AI").all()
+        except Exception as query_error:
+            error_str = str(query_error)
+            error_type = type(query_error).__name__
+            # Verificar si es un error de transacción abortada
+            is_transaction_aborted = (
+                "aborted" in error_str.lower()
+                or "InFailedSqlTransaction" in error_type
+                or "current transaction is aborted" in error_str.lower()
+            )
+            
+            if is_transaction_aborted:
+                # Hacer rollback antes de reintentar
+                try:
+                    db.rollback()
+                    logger.debug("✅ Rollback realizado antes de consultar configuración AI (transacción abortada)")
+                    # Reintentar la consulta
+                    configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "AI").all()
+                except Exception as retry_error:
+                    logger.error(f"❌ Error al reintentar consulta de configuración AI: {retry_error}")
+                    raise HTTPException(status_code=500, detail="Error de conexión a la base de datos. Por favor, intenta nuevamente.")
+            else:
+                raise
 
         if not configs:
             raise HTTPException(status_code=400, detail="No hay configuración de AI")
@@ -3713,9 +3781,37 @@ async def chat_ai(
 
         # Buscar contexto en documentos si están disponibles
         contexto_documentos = ""
-        documentos_activos = (
-            db.query(DocumentoAI).filter(DocumentoAI.activo == True, DocumentoAI.contenido_procesado == True).limit(3).all()
-        )
+        try:
+            documentos_activos = (
+                db.query(DocumentoAI).filter(DocumentoAI.activo == True, DocumentoAI.contenido_procesado == True).limit(3).all()
+            )
+        except Exception as doc_error:
+            error_str = str(doc_error)
+            error_type = type(doc_error).__name__
+            # Verificar si es un error de transacción abortada
+            is_transaction_aborted = (
+                "aborted" in error_str.lower()
+                or "InFailedSqlTransaction" in error_type
+                or "current transaction is aborted" in error_str.lower()
+            )
+            
+            if is_transaction_aborted:
+                # Hacer rollback antes de reintentar
+                try:
+                    db.rollback()
+                    logger.debug("✅ Rollback realizado antes de consultar documentos AI (transacción abortada)")
+                    # Reintentar la consulta
+                    documentos_activos = (
+                        db.query(DocumentoAI).filter(DocumentoAI.activo == True, DocumentoAI.contenido_procesado == True).limit(3).all()
+                    )
+                except Exception as retry_error:
+                    logger.error(f"❌ Error al reintentar consulta de documentos AI: {retry_error}")
+                    # Continuar sin documentos si falla
+                    documentos_activos = []
+            else:
+                logger.error(f"❌ Error consultando documentos AI: {doc_error}")
+                # Continuar sin documentos si falla
+                documentos_activos = []
 
         if documentos_activos:
             contextos = []
