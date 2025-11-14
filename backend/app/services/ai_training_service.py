@@ -25,9 +25,7 @@ class AITrainingService:
         self.openai_api_key = openai_api_key
         self.base_url = "https://api.openai.com/v1"
 
-    async def preparar_datos_entrenamiento(
-        self, conversaciones: List[Dict]
-    ) -> Dict[str, str]:
+    async def preparar_datos_entrenamiento(self, conversaciones: List[Dict]) -> Dict[str, str]:
         """
         Preparar datos en formato JSONL para fine-tuning
 
@@ -56,9 +54,7 @@ class AITrainingService:
             # Subir archivo a OpenAI
             async with httpx.AsyncClient(timeout=60.0) as client:
                 # Crear archivo temporal en memoria
-                files = {
-                    "file": ("training_data.jsonl", jsonl_content.encode("utf-8"), "application/jsonl")
-                }
+                files = {"file": ("training_data.jsonl", jsonl_content.encode("utf-8"), "application/jsonl")}
                 data = {"purpose": "fine-tune"}
 
                 response = await client.post(
@@ -199,4 +195,3 @@ class AITrainingService:
         except Exception as e:
             logger.error(f"Error listando jobs: {e}", exc_info=True)
             raise
-

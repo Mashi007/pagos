@@ -18,49 +18,49 @@ class ModeloRiesgo(Base):
     __tablename__ = "modelos_riesgo"
 
     id = Column(Integer, primary_key=True, index=True)
-    
+
     # Información del modelo
     nombre = Column(String(200), nullable=False)
     version = Column(String(50), nullable=False, default="1.0.0")
     algoritmo = Column(String(100), nullable=False)  # random_forest, xgboost, etc.
-    
+
     # Métricas de rendimiento
     accuracy = Column(Float, nullable=True)
     precision = Column(Float, nullable=True)
     recall = Column(Float, nullable=True)
     f1_score = Column(Float, nullable=True)
     roc_auc = Column(Float, nullable=True)
-    
+
     # Información de entrenamiento
     ruta_archivo = Column(String(500), nullable=False)  # Ruta al archivo .pkl
     total_datos_entrenamiento = Column(Integer, nullable=True)
     total_datos_test = Column(Integer, nullable=True)
-    
+
     # Parámetros de entrenamiento
     test_size = Column(Float, nullable=True)  # 0.2 = 20%
     random_state = Column(Integer, nullable=True)
-    
+
     # Estado
     activo = Column(Boolean, default=False, nullable=False, index=True)
-    
+
     # Relación opcional con usuario que entrenó el modelo
     usuario_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
+
     # Metadatos adicionales
     descripcion = Column(Text, nullable=True)
     features_usadas = Column(Text, nullable=True)  # Lista de features separadas por coma
-    
+
     # Relación ORM
     usuario = relationship("User", foreign_keys=[usuario_id])
-    
+
     # Auditoría
     entrenado_en = Column(DateTime, server_default=func.now(), nullable=False, index=True)
     activado_en = Column(DateTime, nullable=True)
     actualizado_en = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
-    
+
     def __repr__(self):
         return f"<ModeloRiesgo {self.nombre} v{self.version} - {self.algoritmo}>"
-    
+
     def to_dict(self):
         """Convierte el modelo a diccionario"""
         return {
@@ -85,4 +85,3 @@ class ModeloRiesgo(Base):
             "entrenado_en": self.entrenado_en.isoformat() if self.entrenado_en else None,
             "activado_en": self.activado_en.isoformat() if self.activado_en else None,
         }
-

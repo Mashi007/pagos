@@ -154,12 +154,7 @@ async def listar_conversaciones(
             query = query.filter(ConversacionAI.creado_en <= fecha_hasta)
 
         total = query.count()
-        conversaciones = (
-            query.order_by(ConversacionAI.creado_en.desc())
-            .offset((page - 1) * per_page)
-            .limit(per_page)
-            .all()
-        )
+        conversaciones = query.order_by(ConversacionAI.creado_en.desc()).offset((page - 1) * per_page).limit(per_page).all()
 
         return {
             "conversaciones": [c.to_dict() for c in conversaciones],
@@ -181,11 +176,7 @@ async def crear_conversacion(
 ):
     """Crear nueva conversación"""
     try:
-        documentos_str = (
-            ",".join(map(str, conversacion.documentos_usados))
-            if conversacion.documentos_usados
-            else None
-        )
+        documentos_str = ",".join(map(str, conversacion.documentos_usados)) if conversacion.documentos_usados else None
 
         nueva_conversacion = ConversacionAI(
             pregunta=conversacion.pregunta,
@@ -346,7 +337,11 @@ async def listar_fine_tuning_jobs(
                 estado = await service.obtener_estado_job(job.openai_job_id)
                 job.status = estado.get("status", job.status)
                 job.modelo_entrenado = estado.get("fine_tuned_model")
-                job.progreso = estado.get("trained_tokens", 0) / estado.get("training_file_tokens", 1) * 100 if estado.get("training_file_tokens") else None
+                job.progreso = (
+                    estado.get("trained_tokens", 0) / estado.get("training_file_tokens", 1) * 100
+                    if estado.get("training_file_tokens")
+                    else None
+                )
 
                 if estado.get("status") in ["succeeded", "failed", "cancelled"]:
                     job.completado_en = datetime.utcnow()
@@ -385,7 +380,11 @@ async def obtener_estado_fine_tuning(
 
         job.status = estado.get("status", job.status)
         job.modelo_entrenado = estado.get("fine_tuned_model")
-        job.progreso = estado.get("trained_tokens", 0) / estado.get("training_file_tokens", 1) * 100 if estado.get("training_file_tokens") else None
+        job.progreso = (
+            estado.get("trained_tokens", 0) / estado.get("training_file_tokens", 1) * 100
+            if estado.get("training_file_tokens")
+            else None
+        )
 
         if estado.get("status") in ["succeeded", "failed", "cancelled"]:
             job.completado_en = datetime.utcnow()
@@ -415,9 +414,7 @@ async def activar_modelo_fine_tuned(
     """Activar modelo fine-tuned"""
     try:
         # Desactivar otros modelos
-        db.query(FineTuningJob).filter(FineTuningJob.modelo_entrenado == request.modelo_id).update(
-            {"status": "succeeded"}
-        )
+        db.query(FineTuningJob).filter(FineTuningJob.modelo_entrenado == request.modelo_id).update({"status": "succeeded"})
 
         # Guardar modelo activo en configuración
         from app.models.configuracion_sistema import ConfiguracionSistema
@@ -470,17 +467,10 @@ async def obtener_estado_embeddings(
     """Obtener estado de embeddings"""
     try:
         total_documentos = db.query(DocumentoAI).count()
-        documentos_con_embeddings = (
-            db.query(DocumentoEmbedding.documento_id)
-            .distinct()
-            .count()
-        )
+        documentos_con_embeddings = db.query(DocumentoEmbedding.documento_id).distinct().count()
         total_embeddings = db.query(DocumentoEmbedding).count()
 
-        ultima_actualizacion = (
-            db.query(func.max(DocumentoEmbedding.creado_en))
-            .scalar()
-        )
+        ultima_actualizacion = db.query(func.max(DocumentoEmbedding.creado_en)).scalar()
 
         return {
             "total_documentos": total_documentos,
@@ -518,11 +508,7 @@ async def generar_embeddings(
                 .all()
             )
         else:
-            documentos = (
-                db.query(DocumentoAI)
-                .filter(DocumentoAI.contenido_procesado == True)
-                .all()
-            )
+            documentos = db.query(DocumentoAI).filter(DocumentoAI.contenido_procesado == True).all()
 
         documentos_procesados = 0
         total_embeddings = 0
@@ -542,9 +528,7 @@ async def generar_embeddings(
             embeddings = await service.generar_embeddings_batch(textos)
 
             # Eliminar embeddings existentes del documento
-            db.query(DocumentoEmbedding).filter(
-                DocumentoEmbedding.documento_id == documento.id
-            ).delete()
+            db.query(DocumentoEmbedding).filter(DocumentoEmbedding.documento_id == documento.id).delete()
 
             # Guardar nuevos embeddings
             for idx, (texto, embedding) in enumerate(zip(textos, embeddings)):
@@ -602,9 +586,7 @@ async def buscar_documentos_relevantes(
         ]
 
         # Buscar documentos relevantes
-        resultados = service.buscar_documentos_relevantes(
-            query_embedding, documento_embeddings, top_k=request.top_k
-        )
+        resultados = service.buscar_documentos_relevantes(query_embedding, documento_embeddings, top_k=request.top_k)
 
         return {
             "documentos": resultados,
@@ -630,9 +612,7 @@ async def actualizar_embeddings_documento(
             raise HTTPException(status_code=404, detail="Documento no encontrado")
 
         if not documento.contenido_procesado or not documento.contenido_texto:
-            raise HTTPException(
-                status_code=400, detail="Documento no procesado o sin contenido"
-            )
+            raise HTTPException(status_code=400, detail="Documento no procesado o sin contenido")
 
         openai_api_key = _obtener_openai_api_key(db)
         service = RAGService(openai_api_key)
@@ -648,9 +628,7 @@ async def actualizar_embeddings_documento(
         embeddings = await service.generar_embeddings_batch(textos)
 
         # Eliminar embeddings existentes
-        db.query(DocumentoEmbedding).filter(
-            DocumentoEmbedding.documento_id == documento_id
-        ).delete()
+        db.query(DocumentoEmbedding).filter(DocumentoEmbedding.documento_id == documento_id).delete()
 
         # Guardar nuevos embeddings
         for idx, (texto, embedding) in enumerate(zip(textos, embeddings)):
@@ -730,11 +708,7 @@ async def entrenar_modelo_riesgo(
         from datetime import date
 
         # Obtener préstamos aprobados con historial
-        prestamos = (
-            db.query(Prestamo)
-            .filter(Prestamo.estado == "APROBADO")
-            .all()
-        )
+        prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").all()
 
         if len(prestamos) < 10:
             raise HTTPException(
@@ -787,7 +761,7 @@ async def entrenar_modelo_riesgo(
             # Determinar target (riesgo) basado en morosidad
             cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).all()
             cuotas_vencidas = [c for c in cuotas if c.fecha_vencimiento < date.today() and c.estado != "PAGADA"]
-            
+
             if len(cuotas_vencidas) > 3:
                 target = 2  # Alto riesgo
             elif len(cuotas_vencidas) > 0:
@@ -795,16 +769,18 @@ async def entrenar_modelo_riesgo(
             else:
                 target = 0  # Bajo riesgo
 
-            training_data.append({
-                "edad": edad,
-                "ingreso": ingreso_estimado,
-                "deuda_total": deuda_total,
-                "ratio_deuda_ingreso": ratio_deuda_ingreso,
-                "historial_pagos": historial_pagos,
-                "dias_ultimo_prestamo": dias_ultimo_prestamo,
-                "numero_prestamos_previos": prestamos_previos,
-                "target": target,
-            })
+            training_data.append(
+                {
+                    "edad": edad,
+                    "ingreso": ingreso_estimado,
+                    "deuda_total": deuda_total,
+                    "ratio_deuda_ingreso": ratio_deuda_ingreso,
+                    "historial_pagos": historial_pagos,
+                    "dias_ultimo_prestamo": dias_ultimo_prestamo,
+                    "numero_prestamos_previos": prestamos_previos,
+                    "target": target,
+                }
+            )
 
         if len(training_data) < 10:
             raise HTTPException(
@@ -986,15 +962,9 @@ async def obtener_metricas_entrenamiento(
     try:
         # Métricas de conversaciones
         total_conversaciones = db.query(ConversacionAI).count()
-        conversaciones_calificadas = (
-            db.query(ConversacionAI)
-            .filter(ConversacionAI.calificacion.isnot(None))
-            .count()
-        )
+        conversaciones_calificadas = db.query(ConversacionAI).filter(ConversacionAI.calificacion.isnot(None)).count()
         promedio_calificacion = (
-            db.query(func.avg(ConversacionAI.calificacion))
-            .filter(ConversacionAI.calificacion.isnot(None))
-            .scalar()
+            db.query(func.avg(ConversacionAI.calificacion)).filter(ConversacionAI.calificacion.isnot(None)).scalar()
         ) or 0
         conversaciones_listas = (
             db.query(ConversacionAI)
@@ -1009,20 +979,13 @@ async def obtener_metricas_entrenamiento(
 
         # Métricas de fine-tuning
         jobs_totales = db.query(FineTuningJob).count()
-        jobs_exitosos = (
-            db.query(FineTuningJob).filter(FineTuningJob.status == "succeeded").count()
-        )
-        jobs_fallidos = (
-            db.query(FineTuningJob).filter(FineTuningJob.status == "failed").count()
-        )
-        ultimo_job = (
-            db.query(FineTuningJob)
-            .order_by(FineTuningJob.creado_en.desc())
-            .first()
-        )
+        jobs_exitosos = db.query(FineTuningJob).filter(FineTuningJob.status == "succeeded").count()
+        jobs_fallidos = db.query(FineTuningJob).filter(FineTuningJob.status == "failed").count()
+        ultimo_job = db.query(FineTuningJob).order_by(FineTuningJob.creado_en.desc()).first()
         modelo_activo_ft = None
         if ultimo_job and ultimo_job.status == "succeeded":
             from app.models.configuracion_sistema import ConfiguracionSistema
+
             config = (
                 db.query(ConfiguracionSistema)
                 .filter(
@@ -1036,24 +999,14 @@ async def obtener_metricas_entrenamiento(
             modelo_activo_ft = config.valor if config else None
 
         # Métricas de RAG
-        documentos_con_embeddings = (
-            db.query(DocumentoEmbedding.documento_id).distinct().count()
-        )
+        documentos_con_embeddings = db.query(DocumentoEmbedding.documento_id).distinct().count()
         total_embeddings = db.query(DocumentoEmbedding).count()
-        ultima_actualizacion_rag = (
-            db.query(func.max(DocumentoEmbedding.creado_en)).scalar()
-        )
+        ultima_actualizacion_rag = db.query(func.max(DocumentoEmbedding.creado_en)).scalar()
 
         # Métricas de ML
         modelos_disponibles = db.query(ModeloRiesgo).count()
-        modelo_activo_ml = (
-            db.query(ModeloRiesgo).filter(ModeloRiesgo.activo == True).first()
-        )
-        ultimo_modelo = (
-            db.query(ModeloRiesgo)
-            .order_by(ModeloRiesgo.entrenado_en.desc())
-            .first()
-        )
+        modelo_activo_ml = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo == True).first()
+        ultimo_modelo = db.query(ModeloRiesgo).order_by(ModeloRiesgo.entrenado_en.desc()).first()
 
         return {
             "conversaciones": {
@@ -1067,23 +1020,17 @@ async def obtener_metricas_entrenamiento(
                 "jobs_exitosos": jobs_exitosos,
                 "jobs_fallidos": jobs_fallidos,
                 "modelo_activo": modelo_activo_ft,
-                "ultimo_entrenamiento": (
-                    ultimo_job.creado_en.isoformat() if ultimo_job else None
-                ),
+                "ultimo_entrenamiento": (ultimo_job.creado_en.isoformat() if ultimo_job else None),
             },
             "rag": {
                 "documentos_con_embeddings": documentos_con_embeddings,
                 "total_embeddings": total_embeddings,
-                "ultima_actualizacion": (
-                    ultima_actualizacion_rag.isoformat() if ultima_actualizacion_rag else None
-                ),
+                "ultima_actualizacion": (ultima_actualizacion_rag.isoformat() if ultima_actualizacion_rag else None),
             },
             "ml_riesgo": {
                 "modelos_disponibles": modelos_disponibles,
                 "modelo_activo": modelo_activo_ml.nombre if modelo_activo_ml else None,
-                "ultimo_entrenamiento": (
-                    ultimo_modelo.entrenado_en.isoformat() if ultimo_modelo else None
-                ),
+                "ultimo_entrenamiento": (ultimo_modelo.entrenado_en.isoformat() if ultimo_modelo else None),
                 "accuracy_promedio": (
                     float(modelo_activo_ml.accuracy) if modelo_activo_ml and modelo_activo_ml.accuracy else None
                 ),
@@ -1093,4 +1040,3 @@ async def obtener_metricas_entrenamiento(
     except Exception as e:
         logger.error(f"Error obteniendo métricas: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error obteniendo métricas: {str(e)}")
-

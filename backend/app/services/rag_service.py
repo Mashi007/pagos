@@ -111,9 +111,7 @@ class RAGService:
             logger.error(f"Error generando embeddings batch: {e}", exc_info=True)
             raise
 
-    def calcular_similitud_coseno(
-        self, embedding1: List[float], embedding2: List[float]
-    ) -> float:
+    def calcular_similitud_coseno(self, embedding1: List[float], embedding2: List[float]) -> float:
         """
         Calcular similitud coseno entre dos embeddings
 
@@ -192,9 +190,7 @@ class RAGService:
             logger.error(f"Error buscando documentos relevantes: {e}", exc_info=True)
             return []
 
-    def dividir_texto_en_chunks(
-        self, texto: str, chunk_size: int = 1000, overlap: int = 200
-    ) -> List[str]:
+    def dividir_texto_en_chunks(self, texto: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
         """
         Dividir texto en chunks para procesamiento
 
@@ -229,4 +225,3 @@ class RAGService:
             start = end - overlap  # Solapamiento
 
         return chunks
-

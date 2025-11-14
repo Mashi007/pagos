@@ -245,9 +245,7 @@ class MLService:
                     if len(np.unique(y)) == 2:
                         roc_auc = roc_auc_score(y_test, y_pred_proba[:, 1])
                     else:
-                        roc_auc = roc_auc_score(
-                            y_test, y_pred_proba, multi_class="ovr", average="weighted"
-                        )
+                        roc_auc = roc_auc_score(y_test, y_pred_proba, multi_class="ovr", average="weighted")
                 except Exception as e:
                     logger.warning(f"No se pudo calcular ROC AUC: {e}")
 
