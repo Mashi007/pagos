@@ -14,9 +14,10 @@ type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
 interface PlantillasNotificacionesProps {
   plantillaInicial?: NotificacionPlantilla | null
   onPlantillaCargada?: () => void
+  onCambiarPestaña?: (pestaña: string) => void
 }
 
-export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada }: PlantillasNotificacionesProps = {}) {
+export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada, onCambiarPestaña }: PlantillasNotificacionesProps = {}) {
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
   const [plantillasFiltradas, setPlantillasFiltradas] = useState<NotificacionPlantilla[]>([])
   const [loading, setLoading] = useState(false)
@@ -466,6 +467,10 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
         toast.success('Plantilla actualizada exitosamente')
         await cargar()
         limpiar()
+        // Cambiar a la pestaña de resumen después de guardar
+        if (onCambiarPestaña) {
+          onCambiarPestaña('resumen')
+        }
       } catch (error: any) {
         toast.error(error?.response?.data?.detail || 'Error al guardar plantilla')
       }
@@ -521,6 +526,10 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
 
       if (plantillasCreadas.length > 0) {
         toast.success(`Se crearon ${plantillasCreadas.length} plantilla(s) exitosamente`)
+        // Cambiar a la pestaña de resumen después de guardar
+        if (onCambiarPestaña) {
+          onCambiarPestaña('resumen')
+        }
       }
 
       if (erroresCreacion.length > 0) {

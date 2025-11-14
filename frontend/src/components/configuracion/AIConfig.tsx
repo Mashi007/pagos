@@ -88,7 +88,14 @@ export function AIConfig() {
   const cargarConfiguracion = async () => {
     try {
       const data = await apiClient.get<AIConfig>('/api/v1/configuracion/ai/configuracion')
-      setConfig(data)
+      // Asegurar que todos los campos tengan valores por defecto si vienen como null/undefined
+      setConfig({
+        openai_api_key: data.openai_api_key || '',
+        modelo: data.modelo || 'gpt-3.5-turbo',
+        temperatura: data.temperatura || '0.7',
+        max_tokens: data.max_tokens || '1000',
+        activo: data.activo || 'false',
+      })
     } catch (error) {
       console.error('Error cargando configuración de AI:', error)
       toast.error('Error cargando configuración')
@@ -200,6 +207,19 @@ export function AIConfig() {
     }
   }
 
+  const handleProcesarDocumento = async (id: number) => {
+    try {
+      await apiClient.post(`/api/v1/configuracion/ai/documentos/${id}/procesar`)
+      toast.success('Documento procesado exitosamente')
+      await cargarDocumentos()
+      await cargarMetricas()
+    } catch (error: any) {
+      console.error('Error procesando documento:', error)
+      const mensajeError = error?.response?.data?.detail || error?.message || 'Error procesando documento'
+      toast.error(mensajeError)
+    }
+  }
+
   const handleEliminarDocumento = async (id: number) => {
     if (!confirm('¿Está seguro de eliminar este documento?')) {
       return
@@ -225,8 +245,15 @@ export function AIConfig() {
   }
 
   const handleProbar = async () => {
-    if (!config.openai_api_key?.trim()) {
+    const apiKey = config.openai_api_key?.trim()
+    if (!apiKey) {
       toast.error('Debes configurar el OpenAI API Key primero')
+      return
+    }
+    
+    // Validar formato básico de API key (debe empezar con sk-)
+    if (!apiKey.startsWith('sk-')) {
+      toast.error('El API Key debe empezar con "sk-". Verifica que sea un token válido de OpenAI.')
       return
     }
 
@@ -604,10 +631,15 @@ export function AIConfig() {
                               <Badge variant={doc.activo ? "default" : "secondary"}>
                                 {doc.activo ? "Activo" : "Inactivo"}
                               </Badge>
-                              {doc.contenido_procesado && (
-                                <Badge variant="outline">
+                              {doc.contenido_procesado ? (
+                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                                   <CheckCircle className="h-3 w-3 mr-1" />
                                   Procesado
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                                  <AlertCircle className="h-3 w-3 mr-1" />
+                                  Sin procesar
                                 </Badge>
                               )}
                             </div>
@@ -621,14 +653,28 @@ export function AIConfig() {
                               <span>{new Date(doc.creado_en).toLocaleDateString()}</span>
                             </div>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEliminarDocumento(doc.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            {!doc.contenido_procesado && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleProcesarDocumento(doc.id)}
+                                className="text-blue-600 hover:text-blue-700"
+                                title="Procesar documento para extraer texto"
+                              >
+                                <FileText className="h-4 w-4 mr-1" />
+                                Procesar
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEliminarDocumento(doc.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -643,19 +689,67 @@ export function AIConfig() {
         <TabsContent value="metricas" className="space-y-4">
           <Card>
             <CardContent className="pt-6 space-y-4">
+              {/* Header con botón de refrescar */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Métricas de AI
+                </h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={cargarMetricas}
+                  disabled={cargandoMetricas}
+                >
+                  {cargandoMetricas ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Actualizando...
+                    </>
+                  ) : (
+                    <>
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      Actualizar
+                    </>
+                  )}
+                </Button>
+              </div>
+
               {cargandoMetricas ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
                 </div>
               ) : metricas ? (
                 <>
+                  {/* Información de última actualización */}
+                  {metricas.fecha_consulta && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <BarChart3 className="h-4 w-4 text-blue-600" />
+                          <span className="text-sm font-medium text-blue-900">Última Actualización</span>
+                        </div>
+                        <span className="text-sm text-blue-700">
+                          {new Date(metricas.fecha_consulta).toLocaleString('es-ES', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Métricas de Documentos */}
                   <div>
                     <h4 className="font-semibold mb-4 flex items-center gap-2">
                       <FileText className="h-5 w-5" />
                       Documentos
                     </h4>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
                       <div className="border rounded-lg p-4">
                         <div className="text-sm text-gray-500">Total</div>
                         <div className="text-2xl font-bold">{metricas.documentos.total}</div>
@@ -667,6 +761,10 @@ export function AIConfig() {
                       <div className="border rounded-lg p-4">
                         <div className="text-sm text-gray-500">Procesados</div>
                         <div className="text-2xl font-bold text-blue-600">{metricas.documentos.procesados}</div>
+                      </div>
+                      <div className="border rounded-lg p-4">
+                        <div className="text-sm text-gray-500">Pendientes</div>
+                        <div className="text-2xl font-bold text-amber-600">{metricas.documentos.pendientes}</div>
                       </div>
                       <div className="border rounded-lg p-4">
                         <div className="text-sm text-gray-500">Tamaño Total</div>

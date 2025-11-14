@@ -23,8 +23,9 @@ import {
   X,
   Settings,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { formatCurrency } from '@/utils'
 import { apiClient } from '@/services/api'
@@ -426,6 +427,27 @@ export function DashboardMenu() {
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
+  // Query para obtener actividades programadas
+  const { data: tareasProgramadas, isLoading: loadingTareas } = useQuery({
+    queryKey: ['tareas-programadas-dashboard'],
+    queryFn: async () => {
+      const response = await apiClient.get<{ tareas: Array<{
+        id: string
+        nombre: string
+        descripcion: string
+        tipo: string
+        frecuencia: string
+        hora: string
+        estado: string
+        ultimaEjecucion: string | null
+        proximaEjecucion: string | null
+      }>; total: number; scheduler_activo: boolean }>('/api/v1/scheduler/tareas')
+      return response
+    },
+    staleTime: 30 * 1000, // 30 segundos
+    refetchInterval: 60 * 1000, // Refrescar cada minuto
+  })
+
   const [isRefreshing, setIsRefreshing] = useState(false)
   
   // NOTA: No necesitamos invalidar queries manualmente aquí
@@ -547,3 +569,91 @@ export function DashboardMenu() {
                     errorOpcionesFiltros={errorOpcionesFiltros}
                   />
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* SECCIÓN DE ACTIVIDADES PROGRAMADAS */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Card className="shadow-md border-2 border-gray-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-cyan-600" />
+                Actividades Programadas
+              </CardTitle>
+              <CardDescription>
+                Tareas automatizadas del sistema que se ejecutan diariamente
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingTareas ? (
+                <div className="text-center py-8 text-gray-500">
+                  <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
+                  Cargando actividades programadas...
+                </div>
+              ) : tareasProgramadas?.tareas && tareasProgramadas.tareas.length > 0 ? (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  {tareasProgramadas.tareas.map((tarea) => (
+                    <Card key={tarea.id} className="border-l-4 border-l-cyan-500">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center justify-between">
+                          <span>{tarea.nombre}</span>
+                          <Badge variant={tarea.estado === 'ACTIVO' ? 'success' : 'secondary'}>
+                            {tarea.estado}
+                          </Badge>
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          {tarea.descripcion}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-600">Frecuencia:</span>
+                            <Badge variant="outline">{tarea.frecuencia}</Badge>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-600">Hora:</span>
+                            <span className="font-semibold">{tarea.hora}</span>
+                          </div>
+                          {tarea.proximaEjecucion && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-600">Próxima ejecución:</span>
+                              <span className="text-xs text-gray-500">
+                                {new Date(tarea.proximaEjecucion).toLocaleString('es-ES', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                  <p>No hay actividades programadas configuradas.</p>
+                </div>
+              )}
+              {!tareasProgramadas?.scheduler_activo && (
+                <div className="mt-4 bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-2 rounded text-sm">
+                  ⚠️ El scheduler no está activo. Las tareas no se ejecutarán automáticamente.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    </div>
+  )
+}

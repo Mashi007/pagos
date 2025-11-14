@@ -91,54 +91,17 @@ export function TicketsAtencion() {
   const [tickets, setTickets] = useState<Ticket[]>([])
 
   // Búsqueda de clientes para agregar al ticket
+  // Búsqueda optimizada: se activa con 2 caracteres para capturar datos rápidamente
   const { data: clientesBuscados = [], isLoading: isLoadingSearch } = useSearchClientes(searchCliente)
 
-  // Mock data inicial para demostración
-  const mockTickets: Ticket[] = [
-    {
-      id: 1,
-      titulo: 'Consulta sobre estado de préstamo',
-      descripcion: 'Cliente solicita información sobre el estado de su préstamo',
-      cliente: 'Juan Pérez',
-      estado: 'abierto',
-      prioridad: 'media',
-      asignadoA: 'Ana García',
-      fechaCreacion: new Date('2025-01-15'),
-      fechaActualizacion: new Date('2025-01-15'),
-      tipo: 'Consulta',
-    },
-    {
-      id: 2,
-      titulo: 'Problema con pago',
-      descripcion: 'Cliente reporta problema al realizar pago',
-      cliente: 'María González',
-      estado: 'en_proceso',
-      prioridad: 'alta',
-      asignadoA: 'Carlos López',
-      fechaCreacion: new Date('2025-01-14'),
-      fechaActualizacion: new Date('2025-01-15'),
-      tipo: 'Incidencia',
-    },
-    {
-      id: 3,
-      titulo: 'Solicitud de cambio de fecha de pago',
-      descripcion: 'Cliente solicita cambiar fecha de pago',
-      cliente: 'Carlos Rodríguez',
-      estado: 'resuelto',
-      prioridad: 'baja',
-      asignadoA: 'Ana García',
-      fechaCreacion: new Date('2025-01-13'),
-      fechaActualizacion: new Date('2025-01-14'),
-      tipo: 'Solicitud',
-    },
-  ]
-
-  const todosTickets = tickets.length > 0 ? tickets : mockTickets
-
-  const ticketsFiltrados = todosTickets.filter(ticket => {
+  const ticketsFiltrados = tickets.filter(ticket => {
     const matchSearch =
       ticket.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (ticket.cliente && ticket.cliente.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (ticket.clienteData && (
+        ticket.clienteData.cedula.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (ticket.clienteData.telefono && ticket.clienteData.telefono.includes(searchTerm))
+      )) ||
       ticket.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
     const matchEstado = filtroEstado === 'todos' || ticket.estado === filtroEstado
     const matchPrioridad = filtroPrioridad === 'todos' || ticket.prioridad === filtroPrioridad
@@ -146,11 +109,11 @@ export function TicketsAtencion() {
   })
 
   const estadisticas = {
-    total: todosTickets.length,
-    abiertos: todosTickets.filter(t => t.estado === 'abierto').length,
-    enProceso: todosTickets.filter(t => t.estado === 'en_proceso').length,
-    resueltos: todosTickets.filter(t => t.estado === 'resuelto').length,
-    cerrados: todosTickets.filter(t => t.estado === 'cerrado').length,
+    total: tickets.length,
+    abiertos: tickets.filter(t => t.estado === 'abierto').length,
+    enProceso: tickets.filter(t => t.estado === 'en_proceso').length,
+    resueltos: tickets.filter(t => t.estado === 'resuelto').length,
+    cerrados: tickets.filter(t => t.estado === 'cerrado').length,
   }
 
   const getEstadoInfo = (estado: string) => {
@@ -162,12 +125,15 @@ export function TicketsAtencion() {
   }
 
   const handleSeleccionarCliente = (cliente: Cliente) => {
+    // Capturar rápidamente todos los datos del cliente
     setClienteSeleccionado(cliente)
     setNuevoTicket(prev => ({
       ...prev,
       clienteId: cliente.id,
       cliente: `${cliente.nombres} ${cliente.apellidos}`,
       clienteData: cliente,
+      // Pre-llenar descripción con datos del cliente si está vacía para agilizar
+      descripcion: prev.descripcion || `Cliente: ${cliente.nombres} ${cliente.apellidos}\nCédula: ${cliente.cedula}${cliente.telefono ? `\nTeléfono: ${cliente.telefono}` : ''}${cliente.email ? `\nEmail: ${cliente.email}` : ''}\n\n`,
     }))
     setSearchCliente('')
   }
@@ -263,34 +229,45 @@ export function TicketsAtencion() {
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                       <Input
-                        placeholder="Buscar cliente por nombre, cédula o teléfono..."
+                        placeholder="Buscar cliente por nombre, cédula o teléfono (mín. 2 caracteres)..."
                         value={searchCliente}
                         onChange={(e) => setSearchCliente(e.target.value)}
                         className="pl-10"
+                        autoFocus
                       />
                     </div>
                     {isLoadingSearch ? (
                       <div className="flex justify-center py-4">
                         <LoadingSpinner />
                       </div>
-                    ) : searchCliente.length >= 2 && clientesBuscados.length > 0 && (
-                      <div className="max-h-48 overflow-y-auto border rounded-lg space-y-1 p-2">
+                    ) : searchCliente.length >= 2 && clientesBuscados.length === 0 ? (
+                      <div className="text-center py-4 text-sm text-gray-500">
+                        <AlertCircle className="h-5 w-5 mx-auto mb-2 text-gray-400" />
+                        <p>No se encontraron clientes</p>
+                      </div>
+                    ) : searchCliente.length >= 2 && clientesBuscados.length > 0 ? (
+                      <div className="max-h-48 overflow-y-auto border rounded-lg space-y-1 p-2 bg-white">
                         {clientesBuscados.map((cliente) => (
                           <Card
                             key={cliente.id}
-                            className="cursor-pointer hover:bg-gray-50 transition-colors"
+                            className="cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-all"
                             onClick={() => handleSeleccionarCliente(cliente)}
                           >
                             <CardContent className="p-3">
                               <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="font-medium text-sm">{cliente.nombres} {cliente.apellidos}</p>
-                                  <p className="text-xs text-gray-500">Cédula: {cliente.cedula}</p>
-                                  {cliente.telefono && (
-                                    <p className="text-xs text-gray-500">Tel: {cliente.telefono}</p>
-                                  )}
+                                <div className="flex-1">
+                                  <p className="font-medium text-sm text-gray-900">{cliente.nombres} {cliente.apellidos}</p>
+                                  <div className="flex gap-3 mt-1">
+                                    <p className="text-xs text-gray-600">Cédula: <span className="font-medium">{cliente.cedula}</span></p>
+                                    {cliente.telefono && (
+                                      <p className="text-xs text-gray-600">Tel: <span className="font-medium">{cliente.telefono}</span></p>
+                                    )}
+                                    {cliente.email && (
+                                      <p className="text-xs text-gray-600">Email: <span className="font-medium">{cliente.email}</span></p>
+                                    )}
+                                  </div>
                                 </div>
-                                <Button size="sm" variant="outline">
+                                <Button size="sm" variant="outline" className="ml-2">
                                   Seleccionar
                                 </Button>
                               </div>
@@ -298,7 +275,11 @@ export function TicketsAtencion() {
                           </Card>
                         ))}
                       </div>
-                    )}
+                    ) : searchCliente.length > 0 && searchCliente.length < 2 ? (
+                      <div className="text-xs text-gray-400 mt-1 px-1">
+                        Escribe al menos 2 caracteres para buscar
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -486,8 +467,15 @@ export function TicketsAtencion() {
         <CardContent>
           {ticketsFiltrados.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p>No se encontraron tickets con los filtros aplicados</p>
+              <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+              {tickets.length === 0 ? (
+                <>
+                  <p className="text-lg font-medium mb-2">No hay tickets creados</p>
+                  <p className="text-sm text-gray-400 mb-4">Crea tu primer ticket usando el botón "Nuevo Ticket"</p>
+                </>
+              ) : (
+                <p>No se encontraron tickets con los filtros aplicados</p>
+              )}
             </div>
           ) : (
             <div className="relative">
@@ -561,20 +549,28 @@ export function TicketsAtencion() {
                               {/* Cliente */}
                               <div className="flex items-start gap-3">
                                 <User className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <p className="text-xs text-gray-500 mb-1">Cliente</p>
                                   {ticket.clienteData ? (
                                     <div>
                                       <p className="font-semibold text-sm text-gray-900">{ticket.cliente}</p>
-                                      <p className="text-xs text-gray-500">Cédula: {ticket.clienteData.cedula}</p>
+                                      <div className="mt-1 space-y-0.5">
+                                        <p className="text-xs text-gray-600">Cédula: <span className="font-medium">{ticket.clienteData.cedula}</span></p>
+                                        {ticket.clienteData.telefono && (
+                                          <p className="text-xs text-gray-600">Tel: <span className="font-medium">{ticket.clienteData.telefono}</span></p>
+                                        )}
+                                        {ticket.clienteData.email && (
+                                          <p className="text-xs text-gray-600">Email: <span className="font-medium">{ticket.clienteData.email}</span></p>
+                                        )}
+                                      </div>
                                       {ticket.clienteId && (
                                         <Button
                                           variant="link"
                                           size="sm"
-                                          className="h-auto p-0 text-xs mt-1"
+                                          className="h-auto p-0 text-xs mt-1 text-blue-600 hover:text-blue-700"
                                           onClick={() => window.open(`/clientes/${ticket.clienteId}`, '_blank')}
                                         >
-                                          Ver cliente →
+                                          Ver cliente completo →
                                         </Button>
                                       )}
                                     </div>

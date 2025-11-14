@@ -144,6 +144,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       icon: Shield,
     },
     {
+      title: 'Chat AI',
+      href: '/chat-ai',
+      icon: Brain,
+    },
+    {
       title: 'Herramientas',
       icon: Wrench,
       isSubmenu: true,

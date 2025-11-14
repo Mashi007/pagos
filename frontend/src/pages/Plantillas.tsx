@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { FileText, Database } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PlantillasNotificaciones } from '@/components/notificaciones/PlantillasNotificaciones'
-import { GeneraVariables } from '@/components/notificaciones/GeneraVariables'
 import { ResumenPlantillas } from '@/components/notificaciones/ResumenPlantillas'
 
 export function Plantillas() {
@@ -16,7 +15,7 @@ export function Plantillas() {
         <p className="text-sm text-gray-500">Herramienta de construcción de plantillas (solo Administrador)</p>
       </div>
 
-      {/* Tabs para Plantillas, Variables y Resumen */}
+      {/* Tabs para Plantillas y Resumen */}
       <Tabs 
         value={activeTab} 
         onValueChange={(value) => {
@@ -28,14 +27,10 @@ export function Plantillas() {
         }} 
         className="space-y-4"
       >
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="plantillas" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             Plantillas
-          </TabsTrigger>
-          <TabsTrigger value="variables" className="flex items-center gap-2">
-            <Database className="h-4 w-4" />
-            Genera Variables
           </TabsTrigger>
           <TabsTrigger value="resumen" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -47,11 +42,8 @@ export function Plantillas() {
           <PlantillasNotificaciones 
             plantillaInicial={plantillaAEditar}
             onPlantillaCargada={() => setPlantillaAEditar(null)}
+            onCambiarPestaña={(pestaña) => setActiveTab(pestaña)}
           />
-        </TabsContent>
-
-        <TabsContent value="variables" className="space-y-4">
-          <GeneraVariables />
         </TabsContent>
 
         <TabsContent value="resumen" className="space-y-4">
@@ -61,6 +53,7 @@ export function Plantillas() {
               setActiveTab('plantillas')
             }}
             onCambiarPestaña={(pestaña) => setActiveTab(pestaña)}
+            activeTab={activeTab}
           />
         </TabsContent>
       </Tabs>

@@ -176,6 +176,122 @@ def obtener_estado_scheduler(
         raise HTTPException(status_code=500, detail=f"Error obteniendo estado: {str(e)}")
 
 
+@router.get("/tareas")
+def obtener_tareas_programadas(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """📋 Obtener lista de tareas programadas del scheduler"""
+    try:
+        from app.core.scheduler import scheduler
+        from datetime import datetime, timedelta
+        
+        # Obtener jobs del scheduler
+        jobs = scheduler.get_jobs() if scheduler.running else []
+        
+        # Mapeo de IDs de jobs a información detallada
+        tareas_info = {
+            "notificaciones_previas": {
+                "id": "notificaciones_previas",
+                "nombre": "Notificaciones Previas",
+                "descripcion": "Enviar notificaciones a clientes con cuotas próximas a vencer (5, 3, 1 días antes)",
+                "tipo": "NOTIFICACION",
+                "frecuencia": "DIARIO",
+                "hora": "04:00",
+                "canales": ["EMAIL"],
+            },
+            "notificaciones_dia_pago": {
+                "id": "notificaciones_dia_pago",
+                "nombre": "Día de Pago",
+                "descripcion": "Enviar notificaciones a clientes con cuotas que vencen hoy",
+                "tipo": "NOTIFICACION",
+                "frecuencia": "DIARIO",
+                "hora": "04:00",
+                "canales": ["EMAIL"],
+            },
+            "notificaciones_retrasadas": {
+                "id": "notificaciones_retrasadas",
+                "nombre": "Notificaciones Retrasadas",
+                "descripcion": "Enviar notificaciones a clientes con cuotas atrasadas (1, 3, 5 días de retraso)",
+                "tipo": "NOTIFICACION",
+                "frecuencia": "DIARIO",
+                "hora": "04:00",
+                "canales": ["EMAIL"],
+            },
+            "notificaciones_prejudiciales": {
+                "id": "notificaciones_prejudiciales",
+                "nombre": "Notificaciones Prejudiciales",
+                "descripcion": "Enviar notificaciones a clientes con 2 o más cuotas atrasadas",
+                "tipo": "NOTIFICACION",
+                "frecuencia": "DIARIO",
+                "hora": "04:00",
+                "canales": ["EMAIL"],
+            },
+        }
+        
+        # Construir respuesta con información de cada tarea
+        tareas = []
+        for job in jobs:
+            if job.id in tareas_info:
+                info = tareas_info[job.id]
+                # Calcular próxima ejecución
+                next_run = job.next_run_time
+                proxima_ejecucion = next_run.isoformat() if next_run else None
+                
+                # Obtener última ejecución (si está disponible en el job)
+                ultima_ejecucion = None
+                if hasattr(job, 'last_run_time') and job.last_run_time:
+                    ultima_ejecucion = job.last_run_time.isoformat()
+                
+                tareas.append({
+                    "id": info["id"],
+                    "nombre": info["nombre"],
+                    "descripcion": info["descripcion"],
+                    "tipo": info["tipo"],
+                    "frecuencia": info["frecuencia"],
+                    "hora": info["hora"],
+                    "estado": "ACTIVO" if scheduler.running else "PAUSADO",
+                    "ultimaEjecucion": ultima_ejecucion,
+                    "proximaEjecucion": proxima_ejecucion,
+                    "exitos": 0,  # Se puede calcular desde BD si es necesario
+                    "fallos": 0,  # Se puede calcular desde BD si es necesario
+                    "canales": info["canales"],
+                    "configuracion": {
+                        "trigger": str(job.trigger) if hasattr(job, 'trigger') else "CronTrigger(hour=4, minute=0)",
+                    }
+                })
+        
+        # Si no hay jobs pero el scheduler está configurado, devolver las tareas definidas
+        if not tareas and scheduler.running:
+            # Calcular próxima ejecución (mañana a las 4 AM)
+            tomorrow = datetime.now().replace(hour=4, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            for info in tareas_info.values():
+                tareas.append({
+                    "id": info["id"],
+                    "nombre": info["nombre"],
+                    "descripcion": info["descripcion"],
+                    "tipo": info["tipo"],
+                    "frecuencia": info["frecuencia"],
+                    "hora": info["hora"],
+                    "estado": "ACTIVO",
+                    "ultimaEjecucion": None,
+                    "proximaEjecucion": tomorrow.isoformat(),
+                    "exitos": 0,
+                    "fallos": 0,
+                    "canales": info["canales"],
+                    "configuracion": {},
+                })
+        
+        return {
+            "tareas": tareas,
+            "total": len(tareas),
+            "scheduler_activo": scheduler.running,
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo tareas programadas: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error obteniendo tareas programadas: {str(e)}")
+
+
 # ============================================
 # FUNCIONES AUXILIARES
 # ============================================

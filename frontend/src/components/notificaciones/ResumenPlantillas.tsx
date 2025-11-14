@@ -10,6 +10,7 @@ import toast from 'react-hot-toast'
 interface ResumenPlantillasProps {
   onEditarPlantilla?: (plantilla: NotificacionPlantilla) => void
   onCambiarPestaña?: (pestaña: string) => void
+  activeTab?: string
 }
 
 // Mapeo de tipos a categorías y casos
@@ -31,7 +32,7 @@ const categoriasOrden = [
   { key: 'Prejudicial', color: 'red', icon: '🚨' },
 ]
 
-export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaña }: ResumenPlantillasProps) {
+export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaña, activeTab }: ResumenPlantillasProps) {
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -50,6 +51,14 @@ export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaña }: Resu
   useEffect(() => {
     cargarPlantillas()
   }, [])
+
+  // Recargar plantillas cuando se cambia a la pestaña de resumen
+  // Esto asegura que las plantillas recién guardadas aparezcan
+  useEffect(() => {
+    if (activeTab === 'resumen') {
+      cargarPlantillas()
+    }
+  }, [activeTab])
 
   // Organizar plantillas por categoría
   const plantillasPorCategoria = useMemo(() => {

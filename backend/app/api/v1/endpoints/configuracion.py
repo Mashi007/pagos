@@ -14,6 +14,9 @@ from app.models.configuracion_sistema import ConfiguracionSistema
 from app.models.documento_ai import DocumentoAI
 from app.models.prestamo import Prestamo
 from app.models.user import User
+from app.models.cliente import Cliente
+from app.models.pago import Pago
+from app.models.amortizacion import Cuota
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -2567,6 +2570,84 @@ def actualizar_configuracion_ai(
 # ============================================
 
 
+def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
+    """
+    Extrae texto de un documento según su tipo
+    
+    Args:
+        ruta_archivo: Ruta completa al archivo
+        tipo_archivo: Tipo de archivo (pdf, txt, docx)
+    
+    Returns:
+        Texto extraído del documento
+    """
+    try:
+        from pathlib import Path
+        
+        if not Path(ruta_archivo).exists():
+            logger.error(f"❌ Archivo no encontrado: {ruta_archivo}")
+            return ""
+        
+        texto = ""
+        
+        if tipo_archivo.lower() == "txt":
+            # Leer archivo de texto plano
+            with open(ruta_archivo, "r", encoding="utf-8", errors="ignore") as f:
+                texto = f.read()
+        
+        elif tipo_archivo.lower() == "pdf":
+            # Extraer texto de PDF
+            try:
+                import PyPDF2
+                
+                with open(ruta_archivo, "rb") as f:
+                    pdf_reader = PyPDF2.PdfReader(f)
+                    textos_paginas = []
+                    for page in pdf_reader.pages:
+                        textos_paginas.append(page.extract_text())
+                    texto = "\n".join(textos_paginas)
+            except ImportError:
+                logger.warning("⚠️ PyPDF2 no está instalado. Instala con: pip install PyPDF2")
+                # Intentar con pdfplumber como alternativa
+                try:
+                    import pdfplumber
+                    with pdfplumber.open(ruta_archivo) as pdf:
+                        textos_paginas = []
+                        for page in pdf.pages:
+                            textos_paginas.append(page.extract_text() or "")
+                        texto = "\n".join(textos_paginas)
+                except ImportError:
+                    logger.error("❌ Ni PyPDF2 ni pdfplumber están instalados. No se puede extraer texto de PDF.")
+                    return ""
+        
+        elif tipo_archivo.lower() == "docx":
+            # Extraer texto de DOCX
+            try:
+                from docx import Document
+                
+                doc = Document(ruta_archivo)
+                textos_parrafos = []
+                for paragraph in doc.paragraphs:
+                    textos_parrafos.append(paragraph.text)
+                texto = "\n".join(textos_parrafos)
+            except ImportError:
+                logger.warning("⚠️ python-docx no está instalado. Instala con: pip install python-docx")
+                return ""
+        
+        # Limpiar y normalizar texto
+        texto = texto.strip()
+        # Eliminar espacios múltiples
+        import re
+        texto = re.sub(r'\s+', ' ', texto)
+        
+        logger.info(f"✅ Texto extraído: {len(texto)} caracteres de {tipo_archivo}")
+        return texto
+        
+    except Exception as e:
+        logger.error(f"❌ Error extrayendo texto de {ruta_archivo}: {e}", exc_info=True)
+        return ""
+
+
 @router.get("/ai/documentos")
 def listar_documentos_ai(
     db: Session = Depends(get_db),
@@ -2692,6 +2773,21 @@ async def crear_documento_ai(
         db.commit()
         db.refresh(nuevo_documento)
 
+        # Procesar documento automáticamente (extraer texto)
+        try:
+            texto_extraido = _extraer_texto_documento(str(ruta_archivo), tipo_archivo_db)
+            if texto_extraido:
+                nuevo_documento.contenido_texto = texto_extraido
+                nuevo_documento.contenido_procesado = True
+                db.commit()
+                db.refresh(nuevo_documento)
+                logger.info(f"✅ Documento procesado automáticamente: {len(texto_extraido)} caracteres")
+            else:
+                logger.warning(f"⚠️ No se pudo extraer texto del documento: {titulo}")
+        except Exception as proc_error:
+            logger.error(f"❌ Error procesando documento automáticamente: {proc_error}", exc_info=True)
+            # No fallar la creación si el procesamiento falla
+
         logger.info(f"✅ Documento AI creado: {titulo} ({nombre_archivo_original})")
 
         return {
@@ -2704,6 +2800,52 @@ async def crear_documento_ai(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creando documento AI: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.post("/ai/documentos/{documento_id}/procesar")
+def procesar_documento_ai(
+    documento_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Procesar documento AI (extraer texto)"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden procesar documentos AI")
+
+    try:
+        documento = db.query(DocumentoAI).filter(DocumentoAI.id == documento_id).first()
+
+        if not documento:
+            raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+        # Extraer texto del documento
+        texto_extraido = _extraer_texto_documento(documento.ruta_archivo, documento.tipo_archivo)
+        
+        if texto_extraido:
+            documento.contenido_texto = texto_extraido
+            documento.contenido_procesado = True
+            db.commit()
+            db.refresh(documento)
+            
+            logger.info(f"✅ Documento procesado: {documento.titulo} ({len(texto_extraido)} caracteres)")
+            
+            return {
+                "mensaje": "Documento procesado exitosamente",
+                "documento": documento.to_dict(),
+                "caracteres_extraidos": len(texto_extraido),
+            }
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo extraer texto del documento. Verifica que el archivo sea válido y que las librerías necesarias estén instaladas."
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error procesando documento AI: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -2803,9 +2945,12 @@ def obtener_metricas_ai(
             else (config_ai if isinstance(config_ai, dict) else {})
         )
 
-        ai_activo = config_dict.get("activo", "false").lower() in ("true", "1", "yes", "on")
-        modelo_configurado = config_dict.get("modelo", "")
-        tiene_token = bool(config_dict.get("openai_api_key", ""))
+        # Manejar valores None de forma segura
+        activo_value = config_dict.get("activo") or "false"
+        ai_activo = str(activo_value).lower() in ("true", "1", "yes", "on")
+        modelo_configurado = config_dict.get("modelo") or "gpt-3.5-turbo"
+        api_key = config_dict.get("openai_api_key") or ""
+        tiene_token = bool(api_key and api_key.strip())
 
         return {
             "documentos": {
@@ -2900,17 +3045,31 @@ async def probar_configuracion_ai(
             )
 
             if documentos_activos:
-                # Por ahora, solo usar títulos y descripciones
-                # En el futuro, se implementará búsqueda semántica con embeddings
                 contextos = []
                 for doc in documentos_activos:
-                    if doc.titulo:
-                        contextos.append(f"- {doc.titulo}")
-                    if doc.descripcion:
-                        contextos.append(f"  {doc.descripcion}")
+                    # Usar contenido real del documento si está disponible
+                    if doc.contenido_texto and doc.contenido_texto.strip():
+                        # Limitar el contenido a 2000 caracteres por documento para no exceder límites de tokens
+                        contenido_limpiado = doc.contenido_texto.strip()[:2000]
+                        if len(doc.contenido_texto) > 2000:
+                            contenido_limpiado += "..."
+                        
+                        contexto_doc = f"Documento: {doc.titulo}\n"
+                        if doc.descripcion:
+                            contexto_doc += f"Descripción: {doc.descripcion}\n"
+                        contexto_doc += f"Contenido:\n{contenido_limpiado}\n"
+                        contextos.append(contexto_doc)
+                    else:
+                        # Fallback: usar solo título y descripción si no hay contenido procesado
+                        contexto_doc = f"Documento: {doc.titulo}"
+                        if doc.descripcion:
+                            contexto_doc += f"\nDescripción: {doc.descripcion}"
+                        contextos.append(contexto_doc)
 
                 if contextos:
-                    contexto_documentos = "\n\nDocumentos disponibles:\n" + "\n".join(contextos[:3])  # Limitar a 3 documentos
+                    # Limitar a 3 documentos para no exceder límites de tokens
+                    contextos_seleccionados = contextos[:3]
+                    contexto_documentos = "\n\n=== CONTEXTO DE DOCUMENTOS ===\n" + "\n\n---\n\n".join(contextos_seleccionados) + "\n\nUsa esta información como base para responder la pregunta."
 
         # Construir prompt con contexto
         prompt = pregunta
@@ -2999,4 +3158,250 @@ async def probar_configuracion_ai(
         raise
     except Exception as e:
         logger.error(f"Error en prueba de AI: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+# ============================================
+# CHAT AI - CONSULTAS A BASE DE DATOS
+# ============================================
+
+
+class ChatAIRequest(BaseModel):
+    pregunta: str = Field(..., description="Pregunta del usuario sobre la base de datos")
+
+
+def _obtener_resumen_bd(db: Session) -> str:
+    """
+    Obtiene un resumen de la base de datos con estadísticas principales
+    para usar como contexto en las respuestas de AI
+    """
+    try:
+        from sqlalchemy import func
+        
+        resumen = []
+        
+        # Clientes
+        total_clientes = db.query(Cliente).count()
+        clientes_activos = db.query(Cliente).filter(Cliente.activo == True).count()
+        resumen.append(f"Clientes: {total_clientes} totales, {clientes_activos} activos")
+        
+        # Préstamos
+        total_prestamos = db.query(Prestamo).count()
+        prestamos_activos = db.query(Prestamo).filter(Prestamo.estado.in_(["APROBADO", "ACTIVO"])).count()
+        prestamos_pendientes = db.query(Prestamo).filter(Prestamo.estado == "PENDIENTE").count()
+        resumen.append(f"Préstamos: {total_prestamos} totales, {prestamos_activos} activos/aprobados, {prestamos_pendientes} pendientes")
+        
+        # Pagos
+        total_pagos = db.query(Pago).count()
+        pagos_activos = db.query(Pago).filter(Pago.activo == True).count()
+        resumen.append(f"Pagos: {total_pagos} totales, {pagos_activos} activos")
+        
+        # Cuotas
+        total_cuotas = db.query(Cuota).count()
+        cuotas_pagadas = db.query(Cuota).filter(Cuota.estado == "PAGADA").count()
+        cuotas_pendientes = db.query(Cuota).filter(Cuota.estado == "PENDIENTE").count()
+        cuotas_mora = db.query(Cuota).filter(Cuota.estado == "MORA").count()
+        resumen.append(f"Cuotas: {total_cuotas} totales, {cuotas_pagadas} pagadas, {cuotas_pendientes} pendientes, {cuotas_mora} en mora")
+        
+        # Montos totales
+        try:
+            monto_total_prestamos = db.query(func.sum(Prestamo.monto_financiado)).filter(
+                Prestamo.estado.in_(["APROBADO", "ACTIVO"])
+            ).scalar() or 0
+            resumen.append(f"Monto total de préstamos activos: {monto_total_prestamos:,.2f}")
+        except:
+            pass
+        
+        try:
+            monto_total_pagos = db.query(func.sum(Pago.monto_pagado)).filter(
+                Pago.activo == True
+            ).scalar() or 0
+            resumen.append(f"Monto total de pagos: {monto_total_pagos:,.2f}")
+        except:
+            pass
+        
+        return "\n".join(resumen)
+    except Exception as e:
+        logger.error(f"Error obteniendo resumen de BD: {e}", exc_info=True)
+        return "No se pudo obtener resumen de la base de datos"
+
+
+@router.post("/ai/chat")
+async def chat_ai(
+    request: ChatAIRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Chat AI que puede responder preguntas sobre la base de datos
+    
+    El AI tiene acceso a información de todas las tablas principales:
+    - Clientes
+    - Préstamos
+    - Pagos
+    - Cuotas
+    - Y más...
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden usar Chat AI",
+        )
+
+    try:
+        # Obtener configuración de AI
+        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "AI").all()
+
+        if not configs:
+            raise HTTPException(status_code=400, detail="No hay configuración de AI")
+
+        config_dict = {config.clave: config.valor for config in configs}
+
+        # Verificar que haya token configurado
+        openai_api_key = config_dict.get("openai_api_key", "")
+        if not openai_api_key:
+            raise HTTPException(status_code=400, detail="OpenAI API Key no configurado")
+
+        # Verificar que AI esté activo
+        activo = config_dict.get("activo", "false").lower() in ("true", "1", "yes", "on")
+        if not activo:
+            raise HTTPException(status_code=400, detail="AI no está activo. Actívalo en la configuración.")
+
+        pregunta = request.pregunta.strip()
+        if not pregunta:
+            raise HTTPException(status_code=400, detail="La pregunta no puede estar vacía")
+
+        # Obtener modelo y parámetros
+        modelo = config_dict.get("modelo", "gpt-3.5-turbo")
+        temperatura = float(config_dict.get("temperatura", "0.7"))
+        max_tokens = int(config_dict.get("max_tokens", "2000"))  # Más tokens para respuestas más largas
+
+        # Obtener resumen de la base de datos
+        resumen_bd = _obtener_resumen_bd(db)
+
+        # Buscar contexto en documentos si están disponibles
+        contexto_documentos = ""
+        documentos_activos = (
+            db.query(DocumentoAI)
+            .filter(DocumentoAI.activo == True, DocumentoAI.contenido_procesado == True)
+            .limit(3)
+            .all()
+        )
+
+        if documentos_activos:
+            contextos = []
+            for doc in documentos_activos:
+                if doc.contenido_texto and doc.contenido_texto.strip():
+                    contenido_limpiado = doc.contenido_texto.strip()[:1500]
+                    if len(doc.contenido_texto) > 1500:
+                        contenido_limpiado += "..."
+                    contextos.append(f"Documento: {doc.titulo}\n{contenido_limpiado}")
+            
+            if contextos:
+                contexto_documentos = "\n\n=== DOCUMENTOS DE CONTEXTO ===\n" + "\n\n---\n\n".join(contextos)
+
+        # Construir prompt del sistema con información de la BD
+        system_prompt = f"""Eres un asistente experto en sistemas de gestión de préstamos y servicios financieros.
+
+Tienes acceso a información de la base de datos del sistema. Aquí tienes un resumen actualizado:
+
+=== RESUMEN DE BASE DE DATOS ===
+{resumen_bd}
+
+=== TABLAS DISPONIBLES ===
+- Clientes: Información de clientes (nombre, cédula, teléfono, email, estado)
+- Préstamos: Información de préstamos (monto, estado, fecha, cliente)
+- Pagos: Registro de pagos realizados (monto, fecha, número de documento)
+- Cuotas: Cuotas de préstamos (estado: PAGADA, PENDIENTE, MORA)
+- Usuarios: Usuarios del sistema
+- Concesionarios: Concesionarios asociados
+- Analistas: Analistas/asesores
+
+INSTRUCCIONES:
+1. Responde preguntas sobre la base de datos de manera clara y profesional
+2. Si la pregunta requiere datos específicos que no están en el resumen, indica que necesitarías hacer una consulta más específica
+3. Usa los datos del resumen para dar respuestas precisas
+4. Si no tienes suficiente información, sé honesto al respecto
+5. Formatea números grandes con separadores de miles
+6. Responde siempre en español
+{contexto_documentos}
+
+IMPORTANTE: Solo usa la información proporcionada. No inventes datos."""
+
+        # Llamar a OpenAI API
+        import httpx
+
+        start_time = time.time()
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:  # Timeout más largo para consultas complejas
+                response = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {openai_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": modelo,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": pregunta},
+                        ],
+                        "temperature": temperatura,
+                        "max_tokens": max_tokens,
+                    },
+                )
+
+                elapsed_time = time.time() - start_time
+
+                if response.status_code == 200:
+                    result = response.json()
+                    respuesta_ai = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    tokens_usados = result.get("usage", {}).get("total_tokens", 0)
+
+                    logger.info(f"✅ Chat AI exitoso: {tokens_usados} tokens usados en {elapsed_time:.2f}s")
+
+                    return {
+                        "success": True,
+                        "respuesta": respuesta_ai,
+                        "pregunta": pregunta,
+                        "tokens_usados": tokens_usados,
+                        "modelo_usado": modelo,
+                        "tiempo_respuesta": round(elapsed_time, 2),
+                    }
+                else:
+                    error_data = response.json() if response.content else {}
+                    error_message = error_data.get("error", {}).get("message", "Error desconocido")
+
+                    logger.error(f"❌ Error en Chat AI: {error_message}")
+
+                    return {
+                        "success": False,
+                        "respuesta": f"Error de OpenAI: {error_message}",
+                        "error": error_message,
+                        "pregunta": pregunta,
+                    }
+
+        except httpx.TimeoutException:
+            elapsed_time = time.time() - start_time
+            logger.error(f"⏱️ Timeout en Chat AI (Tiempo: {elapsed_time:.2f}s)")
+            return {
+                "success": False,
+                "respuesta": f"Timeout al conectar con OpenAI (límite: 60s). La pregunta puede ser muy compleja.",
+                "error": "TIMEOUT",
+                "pregunta": pregunta,
+            }
+        except Exception as e:
+            elapsed_time = time.time() - start_time
+            logger.error(f"❌ Error en Chat AI: {str(e)} (Tiempo: {elapsed_time:.2f}s)")
+            return {
+                "success": False,
+                "respuesta": f"Error: {str(e)}",
+                "error": str(e),
+                "pregunta": pregunta,
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en Chat AI: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")

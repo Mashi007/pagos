@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { useQuery } from '@tanstack/react-query'
 import {
   Clock,
   Play,
@@ -24,6 +25,7 @@ import {
   Shield,
   Link,
   Search,
+  Loader2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -32,9 +34,28 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDate } from '@/utils'
+import { apiClient } from '@/services/api'
+import toast from 'react-hot-toast'
 
-// Mock data para programador
-const mockTareas = [
+// Tipo para las tareas programadas
+interface TareaProgramada {
+  id: string
+  nombre: string
+  descripcion: string
+  tipo: string
+  frecuencia: string
+  hora: string
+  estado: string
+  ultimaEjecucion: string | null
+  proximaEjecucion: string | null
+  exitos: number
+  fallos: number
+  canales: string[]
+  configuracion: Record<string, any>
+}
+
+// Mock data para programador (fallback)
+const mockTareas: TareaProgramada[] = [
   {
     id: 'TASK001',
     nombre: 'Recordatorio de Vencimientos',
@@ -149,7 +170,23 @@ export function Programador() {
   const [filterTipo, setFilterTipo] = useState('Todos')
   const [selectedTarea, setSelectedTarea] = useState<string | null>(null)
 
-  const filteredTareas = mockTareas.filter((tarea) => {
+  // Obtener tareas programadas del backend
+  const { data: tareasData, isLoading, error, refetch } = useQuery({
+    queryKey: ['tareas-programadas'],
+    queryFn: async () => {
+      const response = await apiClient.get<{ tareas: TareaProgramada[]; total: number; scheduler_activo: boolean }>(
+        '/api/v1/scheduler/tareas'
+      )
+      return response
+    },
+    staleTime: 30 * 1000, // 30 segundos
+    refetchInterval: 60 * 1000, // Refrescar cada minuto
+  })
+
+  const tareas = tareasData?.tareas || []
+  const schedulerActivo = tareasData?.scheduler_activo || false
+
+  const filteredTareas = tareas.filter((tarea) => {
     const matchesSearch =
       tarea.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       tarea.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -159,20 +196,26 @@ export function Programador() {
     return matchesSearch && matchesEstado && matchesTipo
   })
 
-  const totalTareas = mockTareas.length
-  const activas = mockTareas.filter((t) => t.estado === 'ACTIVO').length
-  const pausadas = mockTareas.filter((t) => t.estado === 'PAUSADO').length
-  const exitosTotales = mockTareas.reduce((sum, t) => sum + t.exitos, 0)
-  const fallosTotales = mockTareas.reduce((sum, t) => sum + t.fallos, 0)
+  const totalTareas = tareas.length
+  const activas = tareas.filter((t) => t.estado === 'ACTIVO').length
+  const pausadas = tareas.filter((t) => t.estado === 'PAUSADO').length
+  const exitosTotales = tareas.reduce((sum, t) => sum + t.exitos, 0)
+  const fallosTotales = tareas.reduce((sum, t) => sum + t.fallos, 0)
 
   const handleToggleTarea = (id: string) => {
     console.log(`Toggle tarea ${id}`)
-    // Lógica para pausar/reanudar tarea
+    // Lógica para pausar/reanudar tarea (futuro)
+    toast('Funcionalidad de pausar/reanudar próximamente')
   }
 
-  const handleEjecutarTarea = (id: string) => {
-    console.log(`Ejecutar tarea ${id}`)
-    // Lógica para ejecutar tarea manualmente
+  const handleEjecutarTarea = async (id: string) => {
+    try {
+      await apiClient.post('/api/v1/scheduler/ejecutar-manual')
+      toast.success('Tarea ejecutada manualmente')
+      refetch()
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || 'Error al ejecutar tarea')
+    }
   }
 
   return (
@@ -182,8 +225,37 @@ export function Programador() {
       transition={{ duration: 0.3 }}
       className="space-y-6"
     >
-      <h1 className="text-3xl font-bold text-gray-900">Programador de Tareas</h1>
-      <p className="text-gray-600">Gestiona las tareas automatizadas y programadas del sistema.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Programador de Tareas</h1>
+          <p className="text-gray-600">Gestiona las tareas automatizadas y programadas del sistema.</p>
+        </div>
+        <Button onClick={() => refetch()} variant="outline" size="sm" disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Cargando...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Actualizar
+            </>
+          )}
+        </Button>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          Error al cargar tareas programadas. Por favor, intente nuevamente.
+        </div>
+      )}
+
+      {!schedulerActivo && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded">
+          ⚠️ El scheduler no está activo. Las tareas programadas no se ejecutarán automáticamente.
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -304,7 +376,14 @@ export function Programador() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTareas.length > 0 ? (
+              {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={10} className="text-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" />
+                  <p className="text-gray-500 mt-2">Cargando tareas programadas...</p>
+                </TableCell>
+              </TableRow>
+            ) : filteredTareas.length > 0 ? (
                 filteredTareas.map((tarea) => (
                   <TableRow key={tarea.id}>
                     <TableCell className="font-medium">{tarea.id}</TableCell>
@@ -406,7 +485,7 @@ export function Programador() {
           </CardHeader>
           <CardContent>
             {(() => {
-              const tarea = mockTareas.find(t => t.id === selectedTarea)
+              const tarea = tareas.find(t => t.id === selectedTarea)
               if (!tarea) return null
 
               return (

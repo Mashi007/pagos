@@ -33,6 +33,7 @@ const Amortizacion = lazy(() => import('@/pages/Amortizacion').then(module => ({
 const Reportes = lazy(() => import('@/pages/Reportes').then(module => ({ default: module.Reportes })))
 const Cobranzas = lazy(() => import('@/pages/Cobranzas').then(module => ({ default: module.Cobranzas })))
 const Auditoria = lazy(() => import('@/pages/Auditoria').then(module => ({ default: module.Auditoria })))
+const ChatAI = lazy(() => import('@/pages/ChatAI').then(module => ({ default: module.ChatAI })))
 const Notificaciones = lazy(() => import('@/pages/Notificaciones').then(module => ({ default: module.Notificaciones })))
 const Programador = lazy(() => import('@/pages/Programador').then(module => ({ default: module.Programador })))
 const Plantillas = lazy(() => import('@/pages/Plantillas').then(module => ({ default: module.Plantillas })))
@@ -265,6 +266,16 @@ function App() {
             element={
               <SimpleProtectedRoute requireAdmin={true}>
                 <Auditoria />
+              </SimpleProtectedRoute>
+            }
+          />
+
+          {/* Chat AI */}
+          <Route
+            path="chat-ai"
+            element={
+              <SimpleProtectedRoute requireAdmin={true}>
+                <ChatAI />
               </SimpleProtectedRoute>
             }
           />

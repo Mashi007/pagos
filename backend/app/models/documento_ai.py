@@ -43,9 +43,14 @@ class DocumentoAI(Base):
     def __repr__(self):
         return f"<DocumentoAI {self.titulo} ({self.tipo_archivo})>"
 
-    def to_dict(self):
-        """Convierte el documento a diccionario"""
-        return {
+    def to_dict(self, incluir_contenido: bool = False):
+        """
+        Convierte el documento a diccionario
+        
+        Args:
+            incluir_contenido: Si True, incluye el contenido_texto (puede ser grande)
+        """
+        result = {
             "id": self.id,
             "titulo": self.titulo,
             "descripcion": self.descripcion,
@@ -57,3 +62,8 @@ class DocumentoAI(Base):
             "creado_en": self.creado_en.isoformat() if self.creado_en else None,
             "actualizado_en": self.actualizado_en.isoformat() if self.actualizado_en else None,
         }
+        
+        if incluir_contenido:
+            result["contenido_texto"] = self.contenido_texto
+        
+        return result
