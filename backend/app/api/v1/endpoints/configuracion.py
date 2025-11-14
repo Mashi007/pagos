@@ -2571,9 +2571,11 @@ def actualizar_configuracion_ai(
 # GESTIÓN DE DOCUMENTOS AI
 # ============================================
 
+
 # Definir schema ANTES de las funciones para evitar NameError
 class DocumentoAIUpdate(BaseModel):
     """Schema para actualizar documento AI"""
+
     titulo: Optional[str] = Field(None, description="Título del documento")
     descripcion: Optional[str] = Field(None, description="Descripción del documento")
     activo: Optional[bool] = Field(None, description="Estado activo/inactivo")
@@ -3472,19 +3474,33 @@ def _obtener_resumen_bd(db: Session) -> str:
         from sqlalchemy import func
 
         resumen = []
-        
+
         # Información de fecha y hora actual
         fecha_actual = datetime.now()
-        
+
         # Mapeo de días y meses en español
-        dias_semana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-        meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
-                 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-        
+        dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+        meses = [
+            "enero",
+            "febrero",
+            "marzo",
+            "abril",
+            "mayo",
+            "junio",
+            "julio",
+            "agosto",
+            "septiembre",
+            "octubre",
+            "noviembre",
+            "diciembre",
+        ]
+
         dia_semana = dias_semana[fecha_actual.weekday()]
         mes = meses[fecha_actual.month - 1]
-        
-        resumen.append(f"Fecha y hora actual del sistema: {dia_semana}, {fecha_actual.day} de {mes} de {fecha_actual.year}, {fecha_actual.strftime('%H:%M:%S')}")
+
+        resumen.append(
+            f"Fecha y hora actual del sistema: {dia_semana}, {fecha_actual.day} de {mes} de {fecha_actual.year}, {fecha_actual.strftime('%H:%M:%S')}"
+        )
         resumen.append(f"Fecha actual (formato corto): {fecha_actual.strftime('%d/%m/%Y')}")
         resumen.append(f"Día de la semana: {dia_semana}")
         resumen.append(f"Hora actual: {fecha_actual.strftime('%H:%M:%S')}")
@@ -3582,26 +3598,59 @@ async def chat_ai(
         pregunta = request.pregunta.strip()
         if not pregunta:
             raise HTTPException(status_code=400, detail="La pregunta no puede estar vacía")
-        
+
         # Validar que la pregunta sea sobre la base de datos
         # Palabras clave que indican preguntas sobre BD
         palabras_clave_bd = [
-            "cliente", "clientes", "préstamo", "préstamos", "prestamo", "prestamos",
-            "pago", "pagos", "cuota", "cuotas", "mora", "pendiente", "pagada",
-            "base de datos", "datos", "estadística", "estadísticas", "resumen",
-            "total", "cantidad", "cuántos", "cuántas", "monto", "montos",
-            "activo", "activos", "concesionario", "concesionarios", "analista", "analistas",
-            "usuario", "usuarios", "sistema", "registro", "registros",
-            "fecha actual", "día de hoy", "qué día", "qué fecha", "hora actual"
+            "cliente",
+            "clientes",
+            "préstamo",
+            "préstamos",
+            "prestamo",
+            "prestamos",
+            "pago",
+            "pagos",
+            "cuota",
+            "cuotas",
+            "mora",
+            "pendiente",
+            "pagada",
+            "base de datos",
+            "datos",
+            "estadística",
+            "estadísticas",
+            "resumen",
+            "total",
+            "cantidad",
+            "cuántos",
+            "cuántas",
+            "monto",
+            "montos",
+            "activo",
+            "activos",
+            "concesionario",
+            "concesionarios",
+            "analista",
+            "analistas",
+            "usuario",
+            "usuarios",
+            "sistema",
+            "registro",
+            "registros",
+            "fecha actual",
+            "día de hoy",
+            "qué día",
+            "qué fecha",
+            "hora actual",
         ]
-        
+
         pregunta_lower = pregunta.lower()
         es_pregunta_bd = any(palabra in pregunta_lower for palabra in palabras_clave_bd)
-        
+
         if not es_pregunta_bd:
             raise HTTPException(
                 status_code=400,
-                detail="El Chat AI solo responde preguntas sobre la base de datos del sistema (clientes, préstamos, pagos, cuotas, estadísticas, etc.). Para preguntas generales, usa el Chat de Prueba en la configuración de AI."
+                detail="El Chat AI solo responde preguntas sobre la base de datos del sistema (clientes, préstamos, pagos, cuotas, estadísticas, etc.). Para preguntas generales, usa el Chat de Prueba en la configuración de AI.",
             )
 
         # Obtener modelo y parámetros
