@@ -428,6 +428,41 @@ export function AIConfig() {
   }
 
   const handleActivarDesactivarDocumento = async (id: number, activo: boolean) => {
+    // Encontrar el documento para validar
+    const documento = documentos.find(doc => doc.id === id)
+    
+    // Si se está intentando activar, verificar que esté procesado
+    if (activo && documento && !documento.contenido_procesado) {
+      const confirmar = confirm(
+        '⚠️ Este documento no está procesado.\n\n' +
+        'Para que el AI pueda usar este documento como contexto, debe estar:\n' +
+        '1. ✅ Procesado (extraer texto del archivo)\n' +
+        '2. ✅ Activo\n' +
+        '3. ✅ Con contenido_texto válido\n\n' +
+        '¿Deseas procesarlo ahora antes de activarlo?'
+      )
+      
+      if (confirmar) {
+        // Procesar primero
+        try {
+          await handleProcesarDocumento(id)
+          // Después de procesar, activar
+          await apiClient.patch(`/api/v1/configuracion/ai/documentos/${id}/activar`, { activo: true })
+          toast.success('✅ Documento procesado y activado exitosamente')
+          await cargarDocumentos()
+          await cargarMetricas()
+        } catch (error: any) {
+          console.error('Error procesando/activando documento:', error)
+          const mensajeError = error?.response?.data?.detail || error?.message || 'Error procesando documento'
+          toast.error(`Error: ${mensajeError}`)
+        }
+        return
+      } else {
+        // Si no quiere procesar, solo activar (pero mostrar advertencia)
+        toast.warning('⚠️ Documento activado pero no procesado. El AI no podrá usarlo como contexto hasta que sea procesado.')
+      }
+    }
+    
     try {
       await apiClient.patch(`/api/v1/configuracion/ai/documentos/${id}/activar`, { activo })
       toast.success(`Documento ${activo ? 'activado' : 'desactivado'} exitosamente`)
@@ -1136,6 +1171,20 @@ export function AIConfig() {
                                   <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
                                     <AlertCircle className="h-3 w-3 mr-1" />
                                     Sin procesar
+                                  </Badge>
+                                )}
+                                {/* Advertencia si está activo pero no procesado */}
+                                {doc.activo && !doc.contenido_procesado && (
+                                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                                    <AlertCircle className="h-3 w-3 mr-1" />
+                                    ⚠️ No disponible para AI
+                                  </Badge>
+                                )}
+                                {/* Estado listo para AI */}
+                                {doc.activo && doc.contenido_procesado && (
+                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    ✅ Disponible para AI
                                   </Badge>
                                 )}
                               </div>
