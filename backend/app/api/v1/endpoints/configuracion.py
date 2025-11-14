@@ -2632,7 +2632,7 @@ def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
                         except:
                             logger.error("❌ PDF requiere contraseña para desencriptar.")
                             return ""
-                    
+
                     textos_paginas = []
                     for page in pdf_reader.pages:
                         texto_pagina = page.extract_text()
@@ -2644,7 +2644,7 @@ def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
                 logger.warning("⚠️ PyPDF2 no está instalado. Instala con: pip install PyPDF2")
             except Exception as e:
                 logger.warning(f"⚠️ Error con PyPDF2: {e}. Intentando con pdfplumber...")
-            
+
             # Intentar con pdfplumber como alternativa si PyPDF2 falló
             if not texto_extraido or not texto.strip():
                 try:
@@ -2810,13 +2810,13 @@ async def crear_documento_ai(
 
         # Crear directorio de almacenamiento si no existe
         from app.core.config import settings
-        
+
         # Usar UPLOAD_DIR de configuración si está disponible, sino usar relativo
         if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
             base_upload_dir = Path(settings.UPLOAD_DIR).resolve()
         else:
             base_upload_dir = Path("uploads").resolve()
-        
+
         upload_dir = base_upload_dir / "documentos_ai"
         try:
             upload_dir.mkdir(parents=True, exist_ok=True)
@@ -2949,11 +2949,12 @@ def procesar_documento_ai(
 
         # Verificar que el archivo existe
         from pathlib import Path
+
         from app.core.config import settings
-        
+
         # Intentar resolver la ruta (puede ser relativa o absoluta)
         ruta_archivo = Path(documento.ruta_archivo)
-        
+
         # Si la ruta es relativa, intentar resolverla desde UPLOAD_DIR
         if not ruta_archivo.is_absolute():
             if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
@@ -2963,7 +2964,7 @@ def procesar_documento_ai(
             ruta_archivo = (base_upload_dir / documento.ruta_archivo).resolve()
         else:
             ruta_archivo = ruta_archivo.resolve()
-        
+
         if not ruta_archivo.exists():
             logger.error(f"❌ Archivo no encontrado: {ruta_archivo} (ruta original: {documento.ruta_archivo})")
             raise HTTPException(
@@ -2999,7 +3000,7 @@ def procesar_documento_ai(
             # Proporcionar mensaje más específico según el tipo de archivo
             tipo = documento.tipo_archivo.lower()
             mensaje_error = "No se pudo extraer texto del documento."
-            
+
             if tipo == "pdf":
                 mensaje_error += " El PDF puede estar escaneado (imagen) sin OCR, estar protegido con contraseña, o las librerías PyPDF2/pdfplumber no están instaladas."
             elif tipo == "docx":
@@ -3008,7 +3009,7 @@ def procesar_documento_ai(
                 mensaje_error += " El archivo de texto puede estar vacío o usar una codificación no soportada."
             else:
                 mensaje_error += " Verifica que el archivo sea válido y que las librerías necesarias estén instaladas."
-            
+
             raise HTTPException(status_code=400, detail=mensaje_error)
 
     except HTTPException:
