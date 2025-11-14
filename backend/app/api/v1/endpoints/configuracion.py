@@ -2572,6 +2572,7 @@ def actualizar_configuracion_ai(
 
 class DocumentoAIUpdate(BaseModel):
     """Schema para actualizar documento AI"""
+
     titulo: Optional[str] = Field(None, description="Título del documento")
     descripcion: Optional[str] = Field(None, description="Descripción del documento")
     activo: Optional[bool] = Field(None, description="Estado activo/inactivo")
@@ -2778,15 +2779,15 @@ async def crear_documento_ai(
         # Obtener extensión primero (más confiable que content_type)
         nombre_archivo_original = archivo.filename or "documento"
         extension = Path(nombre_archivo_original).suffix.lower()
-        
+
         if extension not in extensiones_permitidas:
             raise HTTPException(
-                status_code=400, 
-                detail=f"Extensión de archivo no permitida: {extension}. Extensiones permitidas: .pdf, .txt, .docx"
+                status_code=400,
+                detail=f"Extensión de archivo no permitida: {extension}. Extensiones permitidas: .pdf, .txt, .docx",
             )
 
         tipo_archivo_db = extensiones_permitidas[extension]
-        
+
         # Validar content_type si está disponible (puede ser None en algunos casos)
         tipo_archivo = archivo.content_type
         if tipo_archivo:
@@ -2795,11 +2796,13 @@ async def crear_documento_ai(
                 "application/octet-stream",  # Tipo genérico que algunos navegadores usan
                 "application/x-pdf",  # Variante de PDF
             ]
-            
+
             # Si el content_type no coincide exactamente, verificar por extensión
             if tipo_archivo not in tipos_validos:
                 # Permitir si la extensión es válida (algunos navegadores no envían content_type correcto)
-                logger.warning(f"⚠️ Content-Type '{tipo_archivo}' no está en la lista permitida, pero extensión '{extension}' es válida. Continuando...")
+                logger.warning(
+                    f"⚠️ Content-Type '{tipo_archivo}' no está en la lista permitida, pero extensión '{extension}' es válida. Continuando..."
+                )
         else:
             # Si no hay content_type, confiar en la extensión
             logger.info(f"ℹ️ No se recibió Content-Type, validando solo por extensión: {extension}")
@@ -2910,10 +2913,10 @@ async def crear_documento_ai(
         db.rollback()
         error_msg = str(e)
         error_type = type(e).__name__
-        
+
         logger.error(f"❌ Error creando documento AI: {error_msg}", exc_info=True)
         logger.error(f"   Tipo de error: {error_type}")
-        
+
         # Mensaje de error más descriptivo
         if "does not exist" in error_msg.lower() or "no such table" in error_msg.lower():
             detail_msg = "La tabla de documentos AI no existe. Por favor, ejecuta las migraciones de base de datos."
@@ -2923,7 +2926,7 @@ async def crear_documento_ai(
             detail_msg = "No hay espacio suficiente en el servidor para guardar el archivo."
         else:
             detail_msg = f"Error interno al crear documento: {error_msg}"
-        
+
         raise HTTPException(status_code=500, detail=detail_msg)
 
 
