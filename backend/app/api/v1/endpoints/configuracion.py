@@ -2948,6 +2948,7 @@ def procesar_documento_ai(
 
         # Verificar que el archivo existe
         from pathlib import Path
+
         from app.core.config import settings
 
         # Intentar resolver la ruta (puede ser relativa o absoluta)
