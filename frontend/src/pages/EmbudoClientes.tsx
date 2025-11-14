@@ -80,44 +80,34 @@ const mapearEstadoEmbudo = (
   prestamosAlDia: boolean,
   prestamosCliente: any[] = []
 ): string => {
-  // Si está en mora, está en evaluación
-  if (cliente.estado === 'MORA') {
-    return 'evaluacion'
-  }
-  // Si está finalizado
-  if (cliente.estado === 'FINALIZADO') {
-    return 'aprobado'
-  }
-  // Si está inactivo
-  if (cliente.estado === 'INACTIVO') {
+  // 1. RECHAZADO: Solo si en módulo préstamos está con ese estado
+  const prestamosRechazados = prestamosCliente.filter(p => 
+    p.estado === 'RECHAZADO'
+  )
+  if (prestamosRechazados.length > 0) {
     return 'rechazado'
   }
   
-  // Verificar si tiene préstamos en aprobación de riesgo (EN_REVISION o DRAFT)
-  const prestamosEnAprobacionRiesgo = prestamosCliente.filter(p => 
+  // 2. APROBADO: Todos los que tienen estado aprobado en préstamos
+  const prestamosAprobados = prestamosCliente.filter(p => 
+    p.estado === 'APROBADO'
+  )
+  if (prestamosAprobados.length > 0) {
+    return 'aprobado'
+  }
+  
+  // 3. EN EVALUACIÓN: Solo si están en el módulo préstamos en evaluación (EN_REVISION o DRAFT)
+  const prestamosEnEvaluacion = prestamosCliente.filter(p => 
     p.estado === 'EN_REVISION' || p.estado === 'DRAFT'
   )
-  
-  // Si tiene préstamos en aprobación de riesgo, está en evaluación
-  if (prestamosEnAprobacionRiesgo.length > 0) {
+  if (prestamosEnEvaluacion.length > 0) {
     return 'evaluacion'
   }
   
-  // Si tiene préstamo activo, lo tratamos como en evaluación
-  if (cliente.estado === 'ACTIVO' && cliente.total_financiamiento && cliente.total_financiamiento > 0) {
-    return 'evaluacion'
-  }
-  
-  // Para "Prospecto": solo clientes con préstamos al día (sin mora y nunca han tenido pagos tardíos)
-  // Un cliente es "prospecto" si:
-  // 1. Tiene préstamos
-  // 2. Está al día (dias_mora === 0 y estado === 'ACTIVO')
-  // 3. Los préstamos están al día (prestamosAlDia === true)
-  if (tienePrestamos && prestamosAlDia && cliente.dias_mora === 0 && cliente.estado === 'ACTIVO') {
-    return 'prospecto'
-  }
-  // Por defecto, no es prospecto si no cumple los criterios
-  return 'evaluacion'
+  // 4. PROSPECTO: Debe habilitarse para encontrar cliente de base de datos
+  // Cualquier cliente de la base de datos puede ser prospecto (no requiere tener préstamos)
+  // Si no tiene préstamos o no está en ningún estado específico, es prospecto
+  return 'prospecto'
 }
 
 export function EmbudoClientes() {
