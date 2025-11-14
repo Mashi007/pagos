@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Brain, Send, Loader2, AlertCircle, MessageSquare } from 'lucide-react'
+import { Brain, ChevronRight, Loader2, AlertCircle, MessageSquare } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -41,9 +41,12 @@ export function ChatAI() {
   const verificarConfiguracionAI = async () => {
     setVerificando(true)
     try {
-      const config = await apiClient.get('/api/v1/configuracion/ai/configuracion')
-      const tieneToken = config.openai_api_key && config.openai_api_key.trim()
-      const estaActivo = config.activo?.toLowerCase() === 'true'
+      const config = await apiClient.get<{
+        openai_api_key?: string
+        activo?: string
+      }>('/api/v1/configuracion/ai/configuracion')
+      const tieneToken = !!(config?.openai_api_key && config.openai_api_key.trim())
+      const estaActivo = config?.activo?.toLowerCase() === 'true'
       setAiConfigurado(tieneToken && estaActivo)
       
       if (!tieneToken) {
@@ -252,7 +255,7 @@ export function ChatAI() {
                 {enviando ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Send className="h-4 w-4" />
+                  <ChevronRight className="h-4 w-4" />
                 )}
               </Button>
             </div>
