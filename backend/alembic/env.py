@@ -14,6 +14,10 @@ sys.path.append(str(Path(__file__).parent.parent))
 from app.core.config import settings
 from app.db.base import Base
 
+# Importar todos los modelos para que Alembic los detecte
+# Esto asegura que todos los modelos estén registrados en Base.metadata
+import app.models  # noqa: F401
+
 # Configurar logging
 config = context.config
 if config.config_file_name is not None:

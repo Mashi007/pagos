@@ -2744,7 +2744,11 @@ async def crear_documento_ai(
 
         # Crear directorio de almacenamiento si no existe
         upload_dir = Path("uploads/documentos_ai")
-        upload_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            upload_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as dir_error:
+            logger.error(f"❌ Error creando directorio de uploads: {dir_error}")
+            raise HTTPException(status_code=500, detail=f"Error creando directorio de almacenamiento: {str(dir_error)}")
 
         # Generar nombre único para el archivo
         import uuid
@@ -2753,27 +2757,58 @@ async def crear_documento_ai(
         ruta_archivo = upload_dir / nombre_unico
 
         # Guardar archivo
-        contenido = await archivo.read()
-        tamaño_bytes = len(contenido)
-
-        with open(ruta_archivo, "wb") as f:
-            f.write(contenido)
+        try:
+            contenido = await archivo.read()
+            tamaño_bytes = len(contenido)
+            
+            with open(ruta_archivo, "wb") as f:
+                f.write(contenido)
+        except Exception as file_error:
+            logger.error(f"❌ Error guardando archivo: {file_error}")
+            raise HTTPException(status_code=500, detail=f"Error guardando archivo: {str(file_error)}")
 
         # Crear registro en BD
-        nuevo_documento = DocumentoAI(
-            titulo=titulo,
-            descripcion=descripcion,
-            nombre_archivo=nombre_archivo_original,
-            tipo_archivo=tipo_archivo_db,
-            ruta_archivo=str(ruta_archivo),
-            tamaño_bytes=tamaño_bytes,
-            contenido_procesado=False,
-            activo=True,
-        )
+        try:
+            nuevo_documento = DocumentoAI(
+                titulo=titulo,
+                descripcion=descripcion,
+                nombre_archivo=nombre_archivo_original,
+                tipo_archivo=tipo_archivo_db,
+                ruta_archivo=str(ruta_archivo),
+                tamaño_bytes=tamaño_bytes,
+                contenido_procesado=False,
+                activo=True,
+            )
 
-        db.add(nuevo_documento)
-        db.commit()
-        db.refresh(nuevo_documento)
+            db.add(nuevo_documento)
+            db.commit()
+            db.refresh(nuevo_documento)
+        except Exception as db_error:
+            # Si hay error de BD, intentar eliminar el archivo guardado
+            try:
+                if ruta_archivo.exists():
+                    os.remove(ruta_archivo)
+            except:
+                pass
+            
+            error_msg = str(db_error)
+            error_type = type(db_error).__name__
+            
+            # Verificar si es error de tabla no existe
+            is_table_missing = (
+                "does not exist" in error_msg.lower()
+                or "no such table" in error_msg.lower()
+                or ("relation" in error_msg.lower() and "does not exist" in error_msg.lower())
+                or "UndefinedTable" in error_type
+            )
+            
+            if is_table_missing:
+                raise HTTPException(
+                    status_code=500,
+                    detail="La tabla de documentos AI no existe. Por favor, ejecuta las migraciones de base de datos."
+                )
+            else:
+                raise
 
         # Procesar documento automáticamente (extraer texto)
         try:
@@ -3004,7 +3039,15 @@ async def probar_configuracion_ai(
 
     try:
         # Obtener configuración
-        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "AI").all()
+        try:
+            configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "AI").all()
+        except Exception as query_error:
+            error_msg = str(query_error)
+            logger.error(f"❌ Error consultando configuración AI: {error_msg}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error consultando configuración de AI: {error_msg}"
+            )
 
         if not configs:
             raise HTTPException(status_code=400, detail="No hay configuración de AI")
@@ -3038,44 +3081,49 @@ async def probar_configuracion_ai(
 
         # Buscar contexto en documentos si está habilitado
         contexto_documentos = ""
+        documentos_activos = []  # Inicializar como lista vacía
         if usar_documentos:
-            documentos_activos = (
-                db.query(DocumentoAI)
-                .filter(DocumentoAI.activo == True, DocumentoAI.contenido_procesado == True)
-                .limit(5)
-                .all()
-            )
+            try:
+                documentos_activos = (
+                    db.query(DocumentoAI)
+                    .filter(DocumentoAI.activo == True, DocumentoAI.contenido_procesado == True)
+                    .limit(5)
+                    .all()
+                )
 
-            if documentos_activos:
-                contextos = []
-                for doc in documentos_activos:
-                    # Usar contenido real del documento si está disponible
-                    if doc.contenido_texto and doc.contenido_texto.strip():
-                        # Limitar el contenido a 2000 caracteres por documento para no exceder límites de tokens
-                        contenido_limpiado = doc.contenido_texto.strip()[:2000]
-                        if len(doc.contenido_texto) > 2000:
-                            contenido_limpiado += "..."
+                if documentos_activos:
+                    contextos = []
+                    for doc in documentos_activos:
+                        # Usar contenido real del documento si está disponible
+                        if doc.contenido_texto and doc.contenido_texto.strip():
+                            # Limitar el contenido a 2000 caracteres por documento para no exceder límites de tokens
+                            contenido_limpiado = doc.contenido_texto.strip()[:2000]
+                            if len(doc.contenido_texto) > 2000:
+                                contenido_limpiado += "..."
 
-                        contexto_doc = f"Documento: {doc.titulo}\n"
-                        if doc.descripcion:
-                            contexto_doc += f"Descripción: {doc.descripcion}\n"
-                        contexto_doc += f"Contenido:\n{contenido_limpiado}\n"
-                        contextos.append(contexto_doc)
-                    else:
-                        # Fallback: usar solo título y descripción si no hay contenido procesado
-                        contexto_doc = f"Documento: {doc.titulo}"
-                        if doc.descripcion:
-                            contexto_doc += f"\nDescripción: {doc.descripcion}"
-                        contextos.append(contexto_doc)
+                            contexto_doc = f"Documento: {doc.titulo}\n"
+                            if doc.descripcion:
+                                contexto_doc += f"Descripción: {doc.descripcion}\n"
+                            contexto_doc += f"Contenido:\n{contenido_limpiado}\n"
+                            contextos.append(contexto_doc)
+                        else:
+                            # Fallback: usar solo título y descripción si no hay contenido procesado
+                            contexto_doc = f"Documento: {doc.titulo}"
+                            if doc.descripcion:
+                                contexto_doc += f"\nDescripción: {doc.descripcion}"
+                            contextos.append(contexto_doc)
 
-                if contextos:
-                    # Limitar a 3 documentos para no exceder límites de tokens
-                    contextos_seleccionados = contextos[:3]
-                    contexto_documentos = (
-                        "\n\n=== CONTEXTO DE DOCUMENTOS ===\n"
-                        + "\n\n---\n\n".join(contextos_seleccionados)
-                        + "\n\nUsa esta información como base para responder la pregunta."
-                    )
+                    if contextos:
+                        # Limitar a 3 documentos para no exceder límites de tokens
+                        contextos_seleccionados = contextos[:3]
+                        contexto_documentos = (
+                            "\n\n=== CONTEXTO DE DOCUMENTOS ===\n"
+                            + "\n\n---\n\n".join(contextos_seleccionados)
+                            + "\n\nUsa esta información como base para responder la pregunta."
+                        )
+            except Exception as doc_error:
+                logger.warning(f"⚠️ Error obteniendo documentos para contexto: {doc_error}")
+                documentos_activos = []  # Asegurar que esté definido
 
         # Construir prompt con contexto
         prompt = pregunta
@@ -3126,7 +3174,7 @@ async def probar_configuracion_ai(
                         "modelo_usado": modelo,
                         "tiempo_respuesta": round(elapsed_time, 2),
                         "usar_documentos": usar_documentos,
-                        "documentos_consultados": len(documentos_activos) if usar_documentos else 0,
+                        "documentos_consultados": len(documentos_activos) if documentos_activos else 0,
                     }
                 else:
                     error_data = response.json() if response.content else {}
