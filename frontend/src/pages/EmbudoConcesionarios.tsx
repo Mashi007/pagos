@@ -467,9 +467,9 @@ export function EmbudoConcesionarios() {
           <div className="flex flex-col md:flex-row gap-4">
             <div className="w-full md:w-[300px]">
               <Select
-                value={concesionarioSeleccionadoId}
+                value={concesionarioSeleccionadoId || 'todos'}
                 onValueChange={(value) => {
-                  setConcesionarioSeleccionadoId(value)
+                  setConcesionarioSeleccionadoId(value === 'todos' ? '' : value)
                   setSearchTerm('') // Limpiar búsqueda al seleccionar
                 }}
               >
@@ -477,7 +477,7 @@ export function EmbudoConcesionarios() {
                   <SelectValue placeholder="Seleccione un concesionario" />
                 </SelectTrigger>
                 <SelectContent className="max-h-[300px]">
-                  <SelectItem value="">Todos los concesionarios</SelectItem>
+                  <SelectItem value="todos">Todos los concesionarios</SelectItem>
                   {concesionarios.map((concesionario) => (
                     <SelectItem key={concesionario.id} value={String(concesionario.id)}>
                       {concesionario.nombre}

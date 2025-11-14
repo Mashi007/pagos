@@ -116,26 +116,35 @@ export function AIConfig() {
   // Verificar configuración solo cuando el usuario cambia el token manualmente
   // NO verificar en cada carga de página - el token se guarda permanentemente en BD
   useEffect(() => {
+    // En la carga inicial, si hay token guardado, asumir que está correcto (se guardó permanentemente en BD)
+    if (!tokenAnterior && config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-')) {
+      // Token guardado permanentemente en BD - establecer estado
+      if (config.activo === 'true') {
+        setConfiguracionCorrecta(true)
+      }
+      setTokenAnterior(config.openai_api_key)
+      console.log('✅ Token detectado desde BD - guardado permanentemente, no requiere confirmación')
+      return
+    }
+    
     // Solo verificar si el token cambió manualmente (no en la carga inicial)
     if (tokenAnterior && tokenAnterior !== config.openai_api_key && config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-')) {
-      // El usuario cambió el token manualmente, verificar
+      // El usuario cambió el token manualmente, verificar después de un delay
       const timer = setTimeout(() => {
         verificarConfiguracion(false)
       }, 1000)
       return () => clearTimeout(timer)
     }
     
-    // En la carga inicial, asumir que está correcto si ya está guardado (se guardó permanentemente en BD)
-    if (config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-') && config.activo === 'true') {
-      // El token está guardado permanentemente en BD, asumir que es válido
-      setConfiguracionCorrecta(true)
-    } else if (config.openai_api_key !== '') {
+    // Actualizar estado basado en configuración actual
+    if (config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-')) {
+      if (config.activo === 'true') {
+        setConfiguracionCorrecta(true)
+      } else {
+        setConfiguracionCorrecta(false)
+      }
+    } else if (config.openai_api_key === '') {
       setConfiguracionCorrecta(false)
-    }
-    
-    // Actualizar token anterior solo después de la primera carga
-    if (!tokenAnterior && config.openai_api_key) {
-      setTokenAnterior(config.openai_api_key)
     }
   }, [config.openai_api_key, config.activo, tokenAnterior])
 
@@ -189,12 +198,21 @@ export function AIConfig() {
     try {
       const data = await apiClient.get<AIConfig>('/api/v1/configuracion/ai/configuracion')
       // Asegurar que todos los campos tengan valores por defecto si vienen como null/undefined
-      setConfig({
+      const configCargada = {
         openai_api_key: data.openai_api_key || '',
         modelo: data.modelo || 'gpt-3.5-turbo',
         temperatura: data.temperatura || '0.7',
         max_tokens: data.max_tokens || '1000',
         activo: data.activo || 'false',
+      }
+      setConfig(configCargada)
+      
+      // Log para depuración
+      console.log('📋 Configuración cargada desde BD:', {
+        tieneToken: !!(configCargada.openai_api_key && configCargada.openai_api_key.trim()),
+        tokenValido: configCargada.openai_api_key?.startsWith('sk-'),
+        activo: configCargada.activo === 'true',
+        tokenLength: configCargada.openai_api_key?.length || 0
       })
     } catch (error) {
       console.error('Error cargando configuración de AI:', error)
@@ -235,24 +253,28 @@ export function AIConfig() {
   const handleGuardar = async () => {
     setGuardando(true)
     try {
-      // Verificar el token antes de guardar
-      const tokenValido = await verificarConfiguracion(false)
-      
-      if (!tokenValido && config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')) {
-        // Si hay un token pero no es válido, advertir pero permitir guardar
-        const confirmar = confirm('⚠️ El token no parece ser válido. ¿Deseas guardarlo de todas formas?')
-        if (!confirmar) {
-          setGuardando(false)
-          return
-        }
-      }
+      // Guardar directamente - el token se guarda permanentemente en BD
+      console.log('💾 Guardando configuración:', {
+        tieneToken: !!(config.openai_api_key && config.openai_api_key.trim()),
+        activo: config.activo
+      })
       
       await apiClient.put('/api/v1/configuracion/ai/configuracion', config)
       toast.success('✅ Configuración de AI guardada exitosamente y de forma permanente')
+      
+      // Recargar configuración desde BD para confirmar que se guardó
       await cargarConfiguracion()
       await cargarMetricas()
-      // Verificar configuración después de guardar
-      await verificarConfiguracion(false)
+      
+      // Si hay token guardado, actualizar estado
+      if (config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')) {
+        if (config.activo === 'true') {
+          setConfiguracionCorrecta(true)
+        }
+        // Actualizar token anterior para evitar verificaciones innecesarias
+        setTokenAnterior(config.openai_api_key)
+        console.log('✅ Token guardado permanentemente. No se requiere confirmación adicional.')
+      }
     } catch (error: any) {
       console.error('Error guardando configuración:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error guardando configuración'
@@ -264,7 +286,11 @@ export function AIConfig() {
   
   const handleVerificarYGuardar = async () => {
     // Verificar y guardar automáticamente si el token es válido
-    await verificarConfiguracion(true)
+    const tokenValido = await verificarConfiguracion(true)
+    if (tokenValido) {
+      // Si el token es válido y se guardó, actualizar token anterior
+      setTokenAnterior(config.openai_api_key)
+    }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -572,15 +598,33 @@ export function AIConfig() {
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={config.activo === 'true'}
-                  onChange={(e) => {
-                    handleChange('activo', e.target.checked ? 'true' : 'false')
-                    toast.info(e.target.checked ? 'AI activado - Las respuestas inteligentes se habilitarán al guardar' : 'AI desactivado - Las respuestas inteligentes se deshabilitarán al guardar')
-                  }}
-                  className="sr-only peer"
-                />
+                    <input
+                      type="checkbox"
+                      checked={config.activo === 'true'}
+                      onChange={async (e) => {
+                        const nuevoEstado = e.target.checked ? 'true' : 'false'
+                        handleChange('activo', nuevoEstado)
+                        
+                        // Si hay token válido y se está activando, guardar automáticamente
+                        if (e.target.checked && config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')) {
+                          try {
+                            const configParaGuardar = { ...config, activo: nuevoEstado }
+                            await apiClient.put('/api/v1/configuracion/ai/configuracion', configParaGuardar)
+                            toast.success('✅ AI activado y guardado automáticamente')
+                            await cargarConfiguracion()
+                            await cargarMetricas()
+                            setConfiguracionCorrecta(true)
+                            setTokenAnterior(config.openai_api_key)
+                          } catch (error) {
+                            console.error('Error guardando automáticamente:', error)
+                            toast.warning('AI activado localmente. Recuerda guardar la configuración.')
+                          }
+                        } else {
+                          toast.info(e.target.checked ? 'AI activado - Las respuestas inteligentes se habilitarán al guardar' : 'AI desactivado - Las respuestas inteligentes se deshabilitarán al guardar')
+                        }
+                      }}
+                      className="sr-only peer"
+                    />
                 <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
                 <span className="ml-3 text-sm font-medium text-gray-700">
                   {config.activo === 'true' ? 'Activo' : 'Inactivo'}

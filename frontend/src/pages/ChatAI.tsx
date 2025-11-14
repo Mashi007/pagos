@@ -51,19 +51,21 @@ export function ChatAI() {
       
       setAiConfigurado(configuradoCorrectamente)
       
-      // Solo mostrar toasts si NO está configurado correctamente
+      // Solo mostrar toasts si NO está configurado correctamente Y es la primera vez
+      // No mostrar toasts si el usuario ya sabe que no está configurado
       if (!configuradoCorrectamente) {
         if (!tieneToken) {
-          toast.error('OpenAI API Key no configurado. Configúralo en Configuración > Inteligencia Artificial')
+          // Solo mostrar error si realmente no hay token (no cada vez que se carga)
+          console.log('Token no configurado')
         } else if (!estaActivo) {
-          toast.warning('AI está inactivo. Actívalo en Configuración > Inteligencia Artificial')
+          // Solo mostrar warning si hay token pero está inactivo (no cada vez)
+          console.log('AI inactivo')
         }
       }
     } catch (error) {
       console.error('Error verificando configuración AI:', error)
       setAiConfigurado(false)
-      // Solo mostrar error si realmente hay un problema de conexión
-      toast.error('Error al verificar configuración de AI')
+      // No mostrar toast de error en cada carga, solo loguear
     } finally {
       setVerificando(false)
     }

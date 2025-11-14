@@ -3,7 +3,8 @@ import { apiClient } from './api'
 export interface ClienteAtrasado {
   cedula: string
   nombres: string
-  analista: string
+  analista?: string
+  telefono?: string
   prestamo_id: number
   cuotas_vencidas: number
   total_adeudado: number
@@ -34,9 +35,31 @@ class CobranzasService {
   private baseUrl = '/api/v1/cobranzas'
 
   // Obtener clientes atrasados
-  async getClientesAtrasados(diasRetraso?: number, incluirAdmin: boolean = false): Promise<ClienteAtrasado[]> {
+  async getClientesAtrasados(
+    diasRetraso?: number, 
+    diasRetrasoMin?: number,
+    diasRetrasoMax?: number,
+    incluirAdmin: boolean = false
+  ): Promise<ClienteAtrasado[]> {
     const params = new URLSearchParams()
-    if (diasRetraso) params.append('dias_retraso', diasRetraso.toString())
+    if (diasRetraso) {
+      params.append('dias_retraso', diasRetraso.toString())
+    } else {
+      // Si hay rango, usar el endpoint de informes que soporta rangos
+      if (diasRetrasoMin !== undefined || diasRetrasoMax !== undefined) {
+        if (diasRetrasoMin !== undefined) params.append('dias_retraso_min', diasRetrasoMin.toString())
+        if (diasRetrasoMax !== undefined) params.append('dias_retraso_max', diasRetrasoMax.toString())
+        const url = `${this.baseUrl}/informes/clientes-atrasados?${params.toString()}&formato=json`
+        try {
+          const result = await apiClient.get<any>(url, { timeout: 60000 })
+          // El endpoint de informes devuelve { clientes: [...] }
+          return result.clientes || []
+        } catch (error: any) {
+          console.error('❌ [Cobranzas] Error cargando clientes atrasados:', error)
+          throw error
+        }
+      }
+    }
     if (incluirAdmin) params.append('incluir_admin', 'true')
     const url = `${this.baseUrl}/clientes-atrasados${params.toString() ? `?${params.toString()}` : ''}`
     

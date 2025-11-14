@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { 
   Bell, 
@@ -140,14 +140,62 @@ export function Notificaciones() {
   const notificacionesPrejudiciales = notificacionesPrejudicialesData?.items || []
   const totalPrejudiciales = notificacionesPrejudicialesData?.total || 0
 
-  // Cargar estadísticas
+  // Cargar estadísticas generales (para referencia, pero no se usan directamente en KPIs)
   const { data: estadisticas } = useQuery({
     queryKey: ['notificaciones-estadisticas'],
     queryFn: () => notificacionService.obtenerEstadisticas(),
     staleTime: 30 * 1000, // Cache de 30 segundos
-    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos (reducido de 30s)
+    refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
   })
+
+  // Calcular estadísticas por pestaña desde datos reales de BD (optimizado con useMemo)
+  const estadisticasPorPestaña = useMemo(() => {
+    let total = 0
+    let enviadas = 0
+    let pendientes = 0
+    let fallidas = 0
+
+    if (activeTab === 'previa') {
+      total = totalPrevias
+      enviadas = notificacionesPrevias.filter(n => n.estado === 'ENVIADA').length
+      pendientes = notificacionesPrevias.filter(n => n.estado === 'PENDIENTE').length
+      fallidas = notificacionesPrevias.filter(n => n.estado === 'FALLIDA').length
+    } else if (activeTab === 'dia-pago') {
+      total = totalDiaPago
+      enviadas = notificacionesDiaPago.filter(n => n.estado === 'ENVIADA').length
+      pendientes = notificacionesDiaPago.filter(n => n.estado === 'PENDIENTE').length
+      fallidas = notificacionesDiaPago.filter(n => n.estado === 'FALLIDA').length
+    } else if (activeTab === 'retrasado') {
+      total = totalRetrasadas
+      enviadas = notificacionesRetrasadas.filter(n => n.estado === 'ENVIADA').length
+      pendientes = notificacionesRetrasadas.filter(n => n.estado === 'PENDIENTE').length
+      fallidas = notificacionesRetrasadas.filter(n => n.estado === 'FALLIDA').length
+    } else if (activeTab === 'prejudicial') {
+      total = totalPrejudiciales
+      enviadas = notificacionesPrejudiciales.filter(n => n.estado === 'ENVIADA').length
+      pendientes = notificacionesPrejudiciales.filter(n => n.estado === 'PENDIENTE').length
+      fallidas = notificacionesPrejudiciales.filter(n => n.estado === 'FALLIDA').length
+    } else {
+      total = filteredNotificaciones.length
+      enviadas = filteredNotificaciones.filter(n => n.estado === 'ENVIADA').length
+      pendientes = filteredNotificaciones.filter(n => n.estado === 'PENDIENTE').length
+      fallidas = filteredNotificaciones.filter(n => n.estado === 'FALLIDA').length
+    }
+
+    return { total, enviadas, pendientes, fallidas }
+  }, [
+    activeTab,
+    totalPrevias,
+    totalDiaPago,
+    totalRetrasadas,
+    totalPrejudiciales,
+    notificacionesPrevias,
+    notificacionesDiaPago,
+    notificacionesRetrasadas,
+    notificacionesPrejudiciales,
+    filteredNotificaciones
+  ])
 
   // Tipos de notificación por pestaña
   const tiposPorPestaña: Record<TabType, string[]> = {
@@ -498,11 +546,7 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-gray-600">
-                  {estadisticas?.total ?? (activeTab === 'previa' ? totalPrevias 
-                    : activeTab === 'dia-pago' ? totalDiaPago
-                    : activeTab === 'retrasado' ? totalRetrasadas
-                    : activeTab === 'prejudicial' ? totalPrejudiciales
-                    : filteredNotificaciones.length)}
+                  {estadisticasPorPestaña.total}
                 </div>
                 <p className="text-xs text-gray-600">Notificaciones en esta pestaña</p>
               </CardContent>
@@ -515,15 +559,7 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
-                  {estadisticas?.enviadas ?? (activeTab === 'previa' 
-                    ? notificacionesPrevias.filter(n => n.estado === 'ENVIADA').length
-                    : activeTab === 'dia-pago'
-                    ? notificacionesDiaPago.filter(n => n.estado === 'ENVIADA').length
-                    : activeTab === 'retrasado'
-                    ? notificacionesRetrasadas.filter(n => n.estado === 'ENVIADA').length
-                    : activeTab === 'prejudicial'
-                    ? notificacionesPrejudiciales.filter(n => n.estado === 'ENVIADA').length
-                    : filteredNotificaciones.filter(n => n.estado === 'ENVIADA').length)}
+                  {estadisticasPorPestaña.enviadas}
                 </div>
                 <p className="text-xs text-gray-600">Envíos exitosos</p>
               </CardContent>
@@ -536,15 +572,7 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-yellow-600">
-                  {estadisticas?.pendientes ?? (activeTab === 'previa'
-                    ? notificacionesPrevias.filter(n => n.estado === 'PENDIENTE').length
-                    : activeTab === 'dia-pago'
-                    ? notificacionesDiaPago.filter(n => n.estado === 'PENDIENTE').length
-                    : activeTab === 'retrasado'
-                    ? notificacionesRetrasadas.filter(n => n.estado === 'PENDIENTE').length
-                    : activeTab === 'prejudicial'
-                    ? notificacionesPrejudiciales.filter(n => n.estado === 'PENDIENTE').length
-                    : filteredNotificaciones.filter(n => n.estado === 'PENDIENTE').length)}
+                  {estadisticasPorPestaña.pendientes}
                 </div>
                 <p className="text-xs text-gray-600 mb-2">En espera de envío</p>
                 <Button
@@ -566,15 +594,7 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-600">
-                  {estadisticas?.fallidas ?? (activeTab === 'previa'
-                    ? notificacionesPrevias.filter(n => n.estado === 'FALLIDA').length
-                    : activeTab === 'dia-pago'
-                    ? notificacionesDiaPago.filter(n => n.estado === 'FALLIDA').length
-                    : activeTab === 'retrasado'
-                    ? notificacionesRetrasadas.filter(n => n.estado === 'FALLIDA').length
-                    : activeTab === 'prejudicial'
-                    ? notificacionesPrejudiciales.filter(n => n.estado === 'FALLIDA').length
-                    : filteredNotificaciones.filter(n => n.estado === 'FALLIDA').length)}
+                  {estadisticasPorPestaña.fallidas}
                 </div>
                 <p className="text-xs text-gray-600 mb-2">Requieren revisión</p>
                 <Button

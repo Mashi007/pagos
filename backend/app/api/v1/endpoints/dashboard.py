@@ -2336,30 +2336,32 @@ def obtener_kpis_principales(
                     else_=0,
                 )
             ).label("total_anterior"),
-            # Créditos nuevos mes actual
-            func.count(
+            # Créditos nuevos mes actual - Préstamos aprobados en el mes corriente
+            func.sum(
                 case(
                     (
                         and_(
                             Prestamo.fecha_aprobacion >= fecha_inicio_mes_actual,
                             Prestamo.fecha_aprobacion < fecha_fin_mes_actual,
+                            Prestamo.estado == "APROBADO",
                         ),
                         1,
                     ),
-                    else_=None,
+                    else_=0,
                 )
             ).label("creditos_actual"),
-            # Créditos nuevos mes anterior
-            func.count(
+            # Créditos nuevos mes anterior - Préstamos aprobados en el mes anterior
+            func.sum(
                 case(
                     (
                         and_(
                             Prestamo.fecha_aprobacion >= fecha_inicio_mes_anterior,
                             Prestamo.fecha_aprobacion < fecha_fin_mes_anterior,
+                            Prestamo.estado == "APROBADO",
                         ),
                         1,
                     ),
-                    else_=None,
+                    else_=0,
                 )
             ).label("creditos_anterior"),
         ).filter(Prestamo.estado == "APROBADO")

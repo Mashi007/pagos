@@ -15,11 +15,12 @@ import {
   Eye
 } from 'lucide-react'
 import { cobranzasService } from '@/services/cobranzasService'
-import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 export function InformesCobranzas() {
   const [informeSeleccionado, setInformeSeleccionado] = useState<string | null>(null)
+  const [datosInforme, setDatosInforme] = useState<any>(null)
+  const [cargandoInforme, setCargandoInforme] = useState(false)
   const [filtros, setFiltros] = useState({
     dias_retraso_min: '',
     dias_retraso_max: '',
@@ -120,6 +121,8 @@ export function InformesCobranzas() {
   const verInforme = async (informeId: string) => {
     try {
       setInformeSeleccionado(informeId)
+      setCargandoInforme(true)
+      setDatosInforme(null)
       toast.loading('Cargando informe...')
       
       let datos: any
@@ -155,12 +158,16 @@ export function InformesCobranzas() {
           break
       }
       
+      setDatosInforme(datos)
       toast.dismiss()
       toast.success('Informe cargado correctamente')
     } catch (error: any) {
       toast.dismiss()
       toast.error(error.response?.data?.detail || 'Error al cargar el informe')
       setInformeSeleccionado(null)
+      setDatosInforme(null)
+    } finally {
+      setCargandoInforme(false)
     }
   }
 
@@ -281,17 +288,275 @@ export function InformesCobranzas() {
               </CardTitle>
               <Button
                 variant="ghost"
-                onClick={() => setInformeSeleccionado(null)}
+                onClick={() => {
+                  setInformeSeleccionado(null)
+                  setDatosInforme(null)
+                }}
               >
                 Cerrar
               </Button>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-center py-8 text-gray-500">
-              Los datos del informe se mostrarán aquí cuando se implemente la visualización completa.
-              Por ahora, utilice las opciones de descarga PDF o Excel.
-            </div>
+            {cargandoInforme ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+                <p className="text-gray-500">Cargando informe...</p>
+              </div>
+            ) : datosInforme ? (
+              <div className="space-y-6">
+                {/* Información general del informe */}
+                {datosInforme.titulo && (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold text-lg mb-2">{datosInforme.titulo}</h3>
+                    {datosInforme.fecha_generacion && (
+                      <p className="text-sm text-gray-600">
+                        Generado: {new Date(datosInforme.fecha_generacion).toLocaleString('es-VE')}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Renderizado según tipo de informe */}
+                {informeSeleccionado === 'clientes-atrasados' && datosInforme.clientes && (
+                  <div className="overflow-x-auto">
+                    <h4 className="font-semibold mb-4">
+                      Total de clientes: {datosInforme.clientes.length}
+                    </h4>
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="bg-gray-100 border-b">
+                          <th className="p-2 text-left">Cédula</th>
+                          <th className="p-2 text-left">Nombres</th>
+                          <th className="p-2 text-left">Teléfono</th>
+                          <th className="p-2 text-right">Cuotas Vencidas</th>
+                          <th className="p-2 text-right">Total Adeudado</th>
+                          <th className="p-2 text-left">Primera Vencida</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {datosInforme.clientes.map((cliente: any, idx: number) => (
+                          <tr key={idx} className="border-b hover:bg-gray-50">
+                            <td className="p-2 font-mono text-xs">{cliente.cedula}</td>
+                            <td className="p-2">{cliente.nombres}</td>
+                            <td className="p-2">{cliente.telefono || 'N/A'}</td>
+                            <td className="p-2 text-right">{cliente.cuotas_vencidas}</td>
+                            <td className="p-2 text-right font-semibold text-red-600">
+                              ${(cliente.total_adeudado || 0).toLocaleString('es-VE')}
+                            </td>
+                            <td className="p-2">
+                              {cliente.fecha_primera_vencida
+                                ? new Date(cliente.fecha_primera_vencida).toLocaleDateString('es-VE')
+                                : 'N/A'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {informeSeleccionado === 'rendimiento-analista' && datosInforme.datos && (
+                  <div className="overflow-x-auto">
+                    <h4 className="font-semibold mb-4">
+                      Total de analistas: {datosInforme.total_analistas || datosInforme.datos.length}
+                    </h4>
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="bg-gray-100 border-b">
+                          <th className="p-2 text-left">Analista</th>
+                          <th className="p-2 text-right">Total Clientes</th>
+                          <th className="p-2 text-right">Total Préstamos</th>
+                          <th className="p-2 text-right">Monto Adeudado</th>
+                          <th className="p-2 text-right">Cuotas Vencidas</th>
+                          <th className="p-2 text-right">Promedio Días Retraso</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {datosInforme.datos.map((analista: any, idx: number) => (
+                          <tr key={idx} className="border-b hover:bg-gray-50">
+                            <td className="p-2 font-semibold">{analista.analista}</td>
+                            <td className="p-2 text-right">{analista.total_clientes}</td>
+                            <td className="p-2 text-right">{analista.total_prestamos}</td>
+                            <td className="p-2 text-right font-semibold text-red-600">
+                              ${(analista.monto_total_adeudado || 0).toLocaleString('es-VE')}
+                            </td>
+                            <td className="p-2 text-right">{analista.total_cuotas_vencidas}</td>
+                            <td className="p-2 text-right">
+                              {analista.promedio_dias_retraso?.toFixed(1) || '0'} días
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {informeSeleccionado === 'montos-periodo' && datosInforme.meses && (
+                  <div className="overflow-x-auto">
+                    <h4 className="font-semibold mb-4">
+                      Período analizado: {datosInforme.meses.length} meses
+                    </h4>
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="bg-gray-100 border-b">
+                          <th className="p-2 text-left">Mes</th>
+                          <th className="p-2 text-right">Cantidad Cuotas</th>
+                          <th className="p-2 text-right">Monto Total</th>
+                          <th className="p-2 text-right">Clientes Únicos</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {datosInforme.meses.map((mes: any, idx: number) => (
+                          <tr key={idx} className="border-b hover:bg-gray-50">
+                            <td className="p-2 font-semibold">
+                              {mes.mes_display || mes.mes || 'N/A'}
+                            </td>
+                            <td className="p-2 text-right">{mes.cantidad_cuotas}</td>
+                            <td className="p-2 text-right font-semibold text-red-600">
+                              ${(mes.monto_total || 0).toLocaleString('es-VE')}
+                            </td>
+                            <td className="p-2 text-right">{mes.clientes_unicos}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {informeSeleccionado === 'antiguedad-saldos' && datosInforme.rangos && (
+                  <div className="overflow-x-auto">
+                    <h4 className="font-semibold mb-4">Distribución por Antigüedad</h4>
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="bg-gray-100 border-b">
+                          <th className="p-2 text-left">Rango de Días</th>
+                          <th className="p-2 text-right">Cantidad Cuotas</th>
+                          <th className="p-2 text-right">Monto Total</th>
+                          <th className="p-2 text-right">Porcentaje</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {datosInforme.rangos.map((rango: any, idx: number) => (
+                          <tr key={idx} className="border-b hover:bg-gray-50">
+                            <td className="p-2 font-semibold">{rango.rango || 'N/A'}</td>
+                            <td className="p-2 text-right">{rango.cantidad_cuotas}</td>
+                            <td className="p-2 text-right font-semibold text-red-600">
+                              ${(rango.monto_total || 0).toLocaleString('es-VE')}
+                            </td>
+                            <td className="p-2 text-right">
+                              {rango.porcentaje?.toFixed(2) || '0'}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {informeSeleccionado === 'resumen-ejecutivo' && datosInforme.resumen && (
+                  <div className="space-y-6">
+                    {/* Resumen General */}
+                    {datosInforme.resumen && (
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <h4 className="font-semibold text-lg mb-4">Resumen General</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600">Total Cuotas Vencidas</p>
+                            <p className="text-2xl font-bold">{datosInforme.resumen.total_cuotas_vencidas || 0}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Monto Total Adeudado</p>
+                            <p className="text-2xl font-bold text-red-600">
+                              ${(datosInforme.resumen.monto_total_adeudado || 0).toLocaleString('es-VE')}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Clientes Atrasados</p>
+                            <p className="text-2xl font-bold">{datosInforme.resumen.clientes_atrasados || 0}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Total Analistas</p>
+                            <p className="text-2xl font-bold">{datosInforme.resumen.total_analistas || 0}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Top Analistas */}
+                    {datosInforme.top_analistas && datosInforme.top_analistas.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold mb-4">Top Analistas</h4>
+                        <table className="w-full text-sm border-collapse">
+                          <thead>
+                            <tr className="bg-gray-100 border-b">
+                              <th className="p-2 text-left">Analista</th>
+                              <th className="p-2 text-right">Monto Adeudado</th>
+                              <th className="p-2 text-right">Clientes</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {datosInforme.top_analistas.map((analista: any, idx: number) => (
+                              <tr key={idx} className="border-b hover:bg-gray-50">
+                                <td className="p-2 font-semibold">{analista.analista}</td>
+                                <td className="p-2 text-right font-semibold text-red-600">
+                                  ${(analista.monto_total_adeudado || 0).toLocaleString('es-VE')}
+                                </td>
+                                <td className="p-2 text-right">{analista.total_clientes}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* Top Clientes */}
+                    {datosInforme.top_clientes && datosInforme.top_clientes.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold mb-4">Top Clientes</h4>
+                        <table className="w-full text-sm border-collapse">
+                          <thead>
+                            <tr className="bg-gray-100 border-b">
+                              <th className="p-2 text-left">Cédula</th>
+                              <th className="p-2 text-left">Nombres</th>
+                              <th className="p-2 text-right">Total Adeudado</th>
+                              <th className="p-2 text-right">Cuotas Vencidas</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {datosInforme.top_clientes.map((cliente: any, idx: number) => (
+                              <tr key={idx} className="border-b hover:bg-gray-50">
+                                <td className="p-2 font-mono text-xs">{cliente.cedula}</td>
+                                <td className="p-2">{cliente.nombres}</td>
+                                <td className="p-2 text-right font-semibold text-red-600">
+                                  ${(cliente.total_adeudado || 0).toLocaleString('es-VE')}
+                                </td>
+                                <td className="p-2 text-right">{cliente.cuotas_vencidas}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Mensaje si no hay datos específicos */}
+                {!datosInforme.clientes && 
+                 !datosInforme.datos && 
+                 !datosInforme.meses && 
+                 !datosInforme.rangos && 
+                 !datosInforme.resumen && (
+                  <div className="text-center py-8 text-gray-500">
+                    No hay datos disponibles para mostrar en este informe.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                No se pudieron cargar los datos del informe. Por favor, intente nuevamente.
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

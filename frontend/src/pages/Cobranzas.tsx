@@ -15,21 +15,31 @@ import {
   Bell,
   Loader2,
   Eye,
-  Search
+  Search,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 import { cobranzasService } from '@/services/cobranzasService'
 import { useQuery } from '@tanstack/react-query'
-import type { ClienteAtrasado, CobranzasPorAnalista, MontosPorMes } from '@/services/cobranzasService'
+import type { ClienteAtrasado, CobranzasPorAnalista } from '@/services/cobranzasService'
 import { InformesCobranzas } from '@/components/cobranzas/InformesCobranzas'
 import { toast } from 'sonner'
 
 export function Cobranzas() {
-  const [tabActiva, setTabActiva] = useState('resumen')
+  const [tabActiva, setTabActiva] = useState('cuotas')
   const [filtroDiasRetraso, setFiltroDiasRetraso] = useState<number | undefined>(undefined)
+  const [rangoDiasMin, setRangoDiasMin] = useState<number | undefined>(undefined)
+  const [rangoDiasMax, setRangoDiasMax] = useState<number | undefined>(undefined)
+  const [filtroCuotasMinimas, setFiltroCuotasMinimas] = useState<number | undefined>(undefined)
+  const [soloCuotasImpagas, setSoloCuotasImpagas] = useState(true)
   const [procesandoNotificaciones, setProcesandoNotificaciones] = useState(false)
   const [mostrandoDiagnostico, setMostrandoDiagnostico] = useState(false)
   const [diagnosticoData, setDiagnosticoData] = useState<any>(null)
   const [busquedaResumen, setBusquedaResumen] = useState<string>('')
+  const [analistasExpandidos, setAnalistasExpandidos] = useState<Set<string>>(new Set())
+  const [clientesPorAnalista, setClientesPorAnalista] = useState<Record<string, ClienteAtrasado[]>>({})
+  const [cargandoClientesAnalista, setCargandoClientesAnalista] = useState<Record<string, boolean>>({})
+  const [busquedaPorAnalista, setBusquedaPorAnalista] = useState<Record<string, string>>({})
 
   // Query para resumen
   const { 
@@ -53,8 +63,12 @@ export function Cobranzas() {
     error: errorClientesDetalle,
     refetch: refetchClientes
   } = useQuery({
-    queryKey: ['cobranzas-clientes', filtroDiasRetraso],
-    queryFn: () => cobranzasService.getClientesAtrasados(filtroDiasRetraso),
+    queryKey: ['cobranzas-clientes', filtroDiasRetraso, rangoDiasMin, rangoDiasMax],
+    queryFn: () => cobranzasService.getClientesAtrasados(
+      filtroDiasRetraso, 
+      rangoDiasMin, 
+      rangoDiasMax
+    ),
     retry: 2,
     retryDelay: 1000,
   })
@@ -69,20 +83,6 @@ export function Cobranzas() {
   } = useQuery({
     queryKey: ['cobranzas-por-analista'],
     queryFn: () => cobranzasService.getCobranzasPorAnalista(),
-    retry: 2,
-    retryDelay: 1000,
-  })
-
-  // Query para montos por mes
-  const { 
-    data: montosPorMes, 
-    isLoading: cargandoMontos,
-    isError: errorMontos,
-    error: errorMontosDetalle,
-    refetch: refetchMontos
-  } = useQuery({
-    queryKey: ['cobranzas-montos-mes'],
-    queryFn: () => cobranzasService.getMontosPorMes(),
     retry: 2,
     retryDelay: 1000,
   })
@@ -124,18 +124,6 @@ export function Cobranzas() {
     }
   }, [errorAnalistas, errorAnalistasDetalle])
 
-  useEffect(() => {
-    if (errorMontos) {
-      console.error('Error cargando montos por mes:', errorMontosDetalle)
-      toast.error('Error al cargar montos por mes', {
-        description: errorMontosDetalle instanceof Error 
-          ? errorMontosDetalle.message 
-          : 'No se pudieron cargar los montos por mes',
-        duration: 5000,
-      })
-    }
-  }, [errorMontos, errorMontosDetalle])
-
   // Función para exportar clientes de un analista
   const exportarClientesAnalista = async (nombreAnalista: string) => {
     try {
@@ -148,6 +136,34 @@ export function Cobranzas() {
     } catch (error) {
       console.error('Error obteniendo clientes del analista:', error)
       alert('Error al obtener clientes del analista')
+    }
+  }
+
+  // Función para expandir/colapsar analista y cargar sus clientes
+  const toggleAnalista = async (nombreAnalista: string) => {
+    const expandidos = new Set(analistasExpandidos)
+    
+    if (expandidos.has(nombreAnalista)) {
+      // Colapsar
+      expandidos.delete(nombreAnalista)
+      setAnalistasExpandidos(expandidos)
+    } else {
+      // Expandir y cargar clientes si no están cargados
+      expandidos.add(nombreAnalista)
+      setAnalistasExpandidos(expandidos)
+      
+      if (!clientesPorAnalista[nombreAnalista]) {
+        setCargandoClientesAnalista(prev => ({ ...prev, [nombreAnalista]: true }))
+        try {
+          const clientes = await cobranzasService.getClientesPorAnalista(nombreAnalista)
+          setClientesPorAnalista(prev => ({ ...prev, [nombreAnalista]: clientes }))
+        } catch (error) {
+          console.error(`Error cargando clientes del analista ${nombreAnalista}:`, error)
+          toast.error(`Error al cargar clientes de ${nombreAnalista}`)
+        } finally {
+          setCargandoClientesAnalista(prev => ({ ...prev, [nombreAnalista]: false }))
+        }
+      }
     }
   }
 
@@ -456,61 +472,161 @@ export function Cobranzas() {
 
       {/* Tabs de análisis */}
       <Tabs value={tabActiva} onValueChange={setTabActiva}>
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="resumen">Resumen</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="cuotas">Cuotas</TabsTrigger>
           <TabsTrigger value="por-dias">Por Días</TabsTrigger>
           <TabsTrigger value="por-analista">Por Analista</TabsTrigger>
-          <TabsTrigger value="grafico">Gráfico</TabsTrigger>
           <TabsTrigger value="informes">📊 Informes</TabsTrigger>
         </TabsList>
 
-        {/* Tab Resumen - Clientes atrasados */}
-        <TabsContent value="resumen" className="space-y-4">
+        {/* Tab Cuotas - Clientes con cuotas impagas */}
+        <TabsContent value="cuotas" className="space-y-4">
+          {/* Indicador de filtro activo */}
+          {(rangoDiasMin !== undefined || rangoDiasMax !== undefined || filtroDiasRetraso !== undefined) && (
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-blue-900">Filtro de Días de Retraso Activo:</p>
+                    <p className="text-sm text-blue-700">
+                      {filtroDiasRetraso !== undefined
+                        ? `Mostrando clientes con exactamente ${filtroDiasRetraso} días de retraso`
+                        : rangoDiasMin !== undefined && rangoDiasMax !== undefined
+                        ? `Mostrando clientes con ${rangoDiasMin} a ${rangoDiasMax} días de retraso`
+                        : rangoDiasMin !== undefined
+                        ? `Mostrando clientes con ${rangoDiasMin} o más días de retraso`
+                        : rangoDiasMax !== undefined
+                        ? `Mostrando clientes con hasta ${rangoDiasMax} días de retraso`
+                        : ''}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setRangoDiasMin(undefined)
+                      setRangoDiasMax(undefined)
+                      setFiltroDiasRetraso(undefined)
+                    }}
+                  >
+                    Limpiar Filtro
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <CardTitle>Clientes Atrasados</CardTitle>
+                  <CardTitle>Clientes con Cuotas Impagas</CardTitle>
                   <CardDescription>
-                    Listado de todos los clientes con cuotas vencidas
+                    Listado de clientes con cuotas no pagadas. Se muestra el número de cuotas impagas por cliente.
                   </CardDescription>
                 </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      // Filtrar clientes según búsqueda para exportar
-                      const clientesParaExportar = busquedaResumen.trim()
-                        ? (clientesAtrasados || []).filter(cliente => 
-                            cliente.cedula.toLowerCase().includes(busquedaResumen.toLowerCase()) ||
-                            cliente.nombres.toLowerCase().includes(busquedaResumen.toLowerCase())
-                          )
-                        : (clientesAtrasados || [])
-                      
-                      await exportarAExcel(
-                        clientesParaExportar,
-                        busquedaResumen.trim() 
-                          ? `clientes-atrasados-${busquedaResumen.replace(/\s+/g, '-')}` 
-                          : 'clientes-atrasados',
-                        ['cedula', 'nombres', 'analista', 'prestamo_id', 'cuotas_vencidas', 'total_adeudado', 'fecha_primera_vencida']
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    // Filtrar clientes según búsqueda y filtros para exportar
+                    let clientesParaExportar = clientesAtrasados || []
+                    
+                    // Aplicar filtro de cuotas mínimas
+                    if (filtroCuotasMinimas !== undefined) {
+                      clientesParaExportar = clientesParaExportar.filter(
+                        cliente => (cliente.cuotas_vencidas || 0) >= filtroCuotasMinimas!
                       )
-                    }}
-                  >
+                    }
+                    
+                    // Aplicar búsqueda
+                    if (busquedaResumen.trim()) {
+                      clientesParaExportar = clientesParaExportar.filter(cliente => 
+                        cliente.cedula.toLowerCase().includes(busquedaResumen.toLowerCase()) ||
+                        cliente.nombres.toLowerCase().includes(busquedaResumen.toLowerCase())
+                      )
+                    }
+                    
+                    await exportarAExcel(
+                      clientesParaExportar,
+                      busquedaResumen.trim() 
+                        ? `cuotas-impagas-${busquedaResumen.replace(/\s+/g, '-')}` 
+                        : 'cuotas-impagas',
+                      ['cedula', 'nombres', 'analista', 'prestamo_id', 'cuotas_vencidas', 'total_adeudado', 'fecha_primera_vencida']
+                    )
+                  }}
+                >
                   <Download className="h-4 w-4 mr-2" />
                   Exportar Excel
                 </Button>
               </div>
-              {/* Cuadro de búsqueda */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Buscar por nombre o cédula..."
-                  value={busquedaResumen}
-                  onChange={(e) => setBusquedaResumen(e.target.value)}
-                  className="pl-10"
-                />
+              
+              {/* Filtros */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {/* Filtro por cantidad mínima de cuotas impagas */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Filtrar por cantidad mínima de cuotas impagas
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      placeholder="Ej: 1, 2, 3..."
+                      min="1"
+                      value={filtroCuotasMinimas ?? ''}
+                      onChange={(e) => {
+                        const value = e.target.value ? parseInt(e.target.value) : undefined
+                        setFiltroCuotasMinimas(value)
+                      }}
+                      className="flex-1"
+                    />
+                    {filtroCuotasMinimas !== undefined && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setFiltroCuotasMinimas(undefined)}
+                      >
+                        Limpiar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Búsqueda */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Buscar cliente
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      placeholder="Buscar por nombre o cédula..."
+                      value={busquedaResumen}
+                      onChange={(e) => setBusquedaResumen(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
               </div>
+              
+              {/* Información del filtro activo */}
+              {filtroCuotasMinimas !== undefined && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-amber-800">
+                      <span className="font-semibold">Filtro activo:</span> Mostrando solo clientes con {filtroCuotasMinimas} o más cuotas impagas
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setFiltroCuotasMinimas(undefined)}
+                    >
+                      Limpiar
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               {cargandoClientes ? (
@@ -536,8 +652,16 @@ export function Cobranzas() {
                   <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
                     {filtroDiasRetraso 
-                      ? `No hay clientes atrasados con ${filtroDiasRetraso} días de retraso`
-                      : 'No hay clientes atrasados en este momento'}
+                      ? `No hay clientes con cuotas impagas con exactamente ${filtroDiasRetraso} días de retraso`
+                      : rangoDiasMin !== undefined && rangoDiasMax !== undefined
+                      ? `No hay clientes con cuotas impagas con ${rangoDiasMin} a ${rangoDiasMax} días de retraso`
+                      : rangoDiasMin !== undefined
+                      ? `No hay clientes con cuotas impagas con ${rangoDiasMin} o más días de retraso`
+                      : rangoDiasMax !== undefined
+                      ? `No hay clientes con cuotas impagas con hasta ${rangoDiasMax} días de retraso`
+                      : filtroCuotasMinimas !== undefined
+                      ? `No hay clientes con ${filtroCuotasMinimas} o más cuotas impagas`
+                      : 'No hay clientes con cuotas impagas en este momento'}
                   </p>
                 </div>
               ) : (
@@ -551,17 +675,35 @@ export function Cobranzas() {
                         )
                       : clientesAtrasados
                     
-                    // Ordenar por Total Adeudado de mayor a menor
-                    clientesFiltrados = [...clientesFiltrados].sort((a, b) => 
-                      (b.total_adeudado || 0) - (a.total_adeudado || 0)
-                    )
+                    // Aplicar filtro de cuotas mínimas
+                    if (filtroCuotasMinimas !== undefined) {
+                      clientesFiltrados = clientesFiltrados.filter(
+                        cliente => (cliente.cuotas_vencidas || 0) >= filtroCuotasMinimas!
+                      )
+                    }
+                    
+                    // Ordenar por número de cuotas impagas (mayor a menor), luego por total adeudado
+                    clientesFiltrados = [...clientesFiltrados].sort((a, b) => {
+                      const cuotasA = a.cuotas_vencidas || 0
+                      const cuotasB = b.cuotas_vencidas || 0
+                      if (cuotasA !== cuotasB) {
+                        return cuotasB - cuotasA // Más cuotas primero
+                      }
+                      return (b.total_adeudado || 0) - (a.total_adeudado || 0) // Luego por monto
+                    })
 
-                    if (clientesFiltrados.length === 0 && busquedaResumen.trim()) {
+                    if (clientesFiltrados.length === 0) {
                       return (
                         <div className="text-center py-8">
                           <Search className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                           <p className="text-sm text-muted-foreground">
-                            No se encontraron clientes que coincidan con "{busquedaResumen}"
+                            {busquedaResumen.trim() && filtroCuotasMinimas !== undefined
+                              ? `No se encontraron clientes que coincidan con "${busquedaResumen}" y tengan ${filtroCuotasMinimas} o más cuotas impagas`
+                              : busquedaResumen.trim()
+                              ? `No se encontraron clientes que coincidan con "${busquedaResumen}"`
+                              : filtroCuotasMinimas !== undefined
+                              ? `No se encontraron clientes con ${filtroCuotasMinimas} o más cuotas impagas`
+                              : 'No hay clientes con cuotas impagas'}
                           </p>
                         </div>
                       )
@@ -569,39 +711,94 @@ export function Cobranzas() {
 
                     return (
                       <>
-                        {busquedaResumen.trim() && (
+                        {(busquedaResumen.trim() || filtroCuotasMinimas !== undefined) && (
                           <div className="mb-4 text-sm text-muted-foreground">
                             Mostrando {clientesFiltrados.length} de {clientesAtrasados.length} clientes
+                            {filtroCuotasMinimas !== undefined && (
+                              <span className="ml-2 text-amber-700 font-semibold">
+                                (filtrado: {filtroCuotasMinimas}+ cuotas impagas)
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Resumen de cuotas impagas */}
+                        {clientesFiltrados.length > 0 && (
+                          <div className="mb-4 p-3 bg-gray-50 rounded-lg border">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                              <div>
+                                <p className="text-gray-600">Total Clientes</p>
+                                <p className="text-lg font-bold text-gray-900">{clientesFiltrados.length}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-600">Total Cuotas Impagas</p>
+                                <p className="text-lg font-bold text-red-600">
+                                  {clientesFiltrados.reduce((sum, c) => sum + (c.cuotas_vencidas || 0), 0)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-gray-600">Promedio por Cliente</p>
+                                <p className="text-lg font-bold text-blue-600">
+                                  {clientesFiltrados.length > 0
+                                    ? (clientesFiltrados.reduce((sum, c) => sum + (c.cuotas_vencidas || 0), 0) / clientesFiltrados.length).toFixed(1)
+                                    : '0'}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-gray-600">Monto Total Adeudado</p>
+                                <p className="text-lg font-bold text-red-600">
+                                  ${clientesFiltrados.reduce((sum, c) => sum + (c.total_adeudado || 0), 0).toLocaleString('es-VE')}
+                                </p>
+                              </div>
+                            </div>
                           </div>
                         )}
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="border-b">
-                              <th className="text-left p-2">Cédula</th>
-                              <th className="text-left p-2">Nombres</th>
-                              <th className="text-left p-2">Analista</th>
-                              <th className="text-right p-2">Cuotas Vencidas</th>
-                              <th className="text-right p-2">Total Adeudado</th>
-                              <th className="text-left p-2">Fecha Primera Vencida</th>
+                            <tr className="border-b bg-gray-50">
+                              <th className="text-left p-2 font-semibold">Cédula</th>
+                              <th className="text-left p-2 font-semibold">Nombres</th>
+                              <th className="text-left p-2 font-semibold">Analista</th>
+                              <th className="text-center p-2 font-semibold">Cuotas Impagas</th>
+                              <th className="text-right p-2 font-semibold">Total Adeudado</th>
+                              <th className="text-left p-2 font-semibold">Fecha Primera Vencida</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {clientesFiltrados.map((cliente, index) => (
-                              <tr key={index} className="border-b hover:bg-gray-50">
-                                <td className="p-2 font-mono">{cliente.cedula}</td>
-                                <td className="p-2">{cliente.nombres}</td>
-                                <td className="p-2">{cliente.analista}</td>
-                                <td className="p-2 text-right">{cliente.cuotas_vencidas}</td>
-                                <td className="p-2 text-right">
-                                  ${cliente.total_adeudado.toLocaleString('es-VE')}
-                                </td>
-                                <td className="p-2">
-                                  {cliente.fecha_primera_vencida
-                                    ? new Date(cliente.fecha_primera_vencida).toLocaleDateString('es-VE')
-                                    : 'N/A'}
-                                </td>
-                              </tr>
-                            ))}
+                            {clientesFiltrados.map((cliente, index) => {
+                              const cuotasImpagas = cliente.cuotas_vencidas || 0
+                              return (
+                                <tr key={index} className="border-b hover:bg-gray-50 transition-colors">
+                                  <td className="p-2 font-mono text-xs">{cliente.cedula}</td>
+                                  <td className="p-2">{cliente.nombres}</td>
+                                  <td className="p-2">{cliente.analista}</td>
+                                  <td className="p-2 text-center">
+                                    <Badge 
+                                      variant="outline" 
+                                      className={
+                                        cuotasImpagas >= 5 
+                                          ? "bg-red-100 text-red-800 border-red-300 font-bold"
+                                          : cuotasImpagas >= 3
+                                          ? "bg-orange-100 text-orange-800 border-orange-300 font-semibold"
+                                          : cuotasImpagas >= 2
+                                          ? "bg-yellow-100 text-yellow-800 border-yellow-300"
+                                          : "bg-blue-100 text-blue-800 border-blue-300"
+                                      }
+                                    >
+                                      {cuotasImpagas} {cuotasImpagas === 1 ? 'cuota' : 'cuotas'}
+                                    </Badge>
+                                  </td>
+                                  <td className="p-2 text-right font-semibold text-red-600">
+                                    ${(cliente.total_adeudado || 0).toLocaleString('es-VE')}
+                                  </td>
+                                  <td className="p-2">
+                                    {cliente.fecha_primera_vencida
+                                      ? new Date(cliente.fecha_primera_vencida).toLocaleDateString('es-VE')
+                                      : 'N/A'}
+                                  </td>
+                                </tr>
+                              )
+                            })}
                           </tbody>
                         </table>
                       </>
@@ -615,73 +812,180 @@ export function Cobranzas() {
 
         {/* Tab Por Días de Retraso */}
         <TabsContent value="por-dias" className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
-            {/* 1 día de retraso */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center">
-                  <Badge className="bg-green-100 text-green-800 mr-2">1 Día</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => {
-                    setFiltroDiasRetraso(1)
-                    setTabActiva('resumen')
-                  }}
-                >
-                  Ver Clientes
-                </Button>
-              </CardContent>
-            </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Filtro por Días de Retraso</CardTitle>
+              <CardDescription>
+                Filtre clientes con cuotas no pagadas según días de retraso desde la fecha de vencimiento
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Filtro de rango personalizado */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg border">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Días Mínimo de Retraso
+                  </label>
+                  <Input
+                    type="number"
+                    placeholder="Ej: 1"
+                    min="0"
+                    value={rangoDiasMin ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value ? parseInt(e.target.value) : undefined
+                      setRangoDiasMin(value)
+                      if (value !== undefined) {
+                        setFiltroDiasRetraso(undefined) // Limpiar filtro simple
+                      }
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    Días Máximo de Retraso
+                  </label>
+                  <Input
+                    type="number"
+                    placeholder="Ej: 30"
+                    min="0"
+                    value={rangoDiasMax ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value ? parseInt(e.target.value) : undefined
+                      setRangoDiasMax(value)
+                      if (value !== undefined) {
+                        setFiltroDiasRetraso(undefined) // Limpiar filtro simple
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setRangoDiasMin(undefined)
+                      setRangoDiasMax(undefined)
+                      setFiltroDiasRetraso(undefined)
+                      setTabActiva('cuotas')
+                    }}
+                  >
+                    Limpiar Filtros
+                  </Button>
+                </div>
+              </div>
 
-            {/* 3 días de retraso */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center">
-                  <Badge className="bg-yellow-100 text-yellow-800 mr-2">3 Días</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => {
-                    setFiltroDiasRetraso(3)
-                    setTabActiva('resumen')
-                  }}
-                >
-                  Ver Clientes
-                </Button>
-              </CardContent>
-            </Card>
+              {/* Botones de rangos predefinidos */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Rangos Predefinidos</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex flex-col items-center p-4 h-auto"
+                    onClick={() => {
+                      setRangoDiasMin(1)
+                      setRangoDiasMax(7)
+                      setFiltroDiasRetraso(undefined)
+                      setTabActiva('cuotas')
+                    }}
+                  >
+                    <Badge className="bg-green-100 text-green-800 mb-2">1-7 Días</Badge>
+                    <span className="text-xs text-gray-600">Retraso Leve</span>
+                  </Button>
 
-            {/* 5 días de retraso */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center">
-                  <Badge className="bg-orange-100 text-orange-800 mr-2">5 Días</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => {
-                    setFiltroDiasRetraso(5)
-                    setTabActiva('resumen')
-                  }}
-                >
-                  Ver Clientes
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
+                  <Button
+                    variant="outline"
+                    className="flex flex-col items-center p-4 h-auto"
+                    onClick={() => {
+                      setRangoDiasMin(8)
+                      setRangoDiasMax(30)
+                      setFiltroDiasRetraso(undefined)
+                      setTabActiva('cuotas')
+                    }}
+                  >
+                    <Badge className="bg-yellow-100 text-yellow-800 mb-2">8-30 Días</Badge>
+                    <span className="text-xs text-gray-600">Retraso Moderado</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="flex flex-col items-center p-4 h-auto"
+                    onClick={() => {
+                      setRangoDiasMin(31)
+                      setRangoDiasMax(60)
+                      setFiltroDiasRetraso(undefined)
+                      setTabActiva('cuotas')
+                    }}
+                  >
+                    <Badge className="bg-orange-100 text-orange-800 mb-2">31-60 Días</Badge>
+                    <span className="text-xs text-gray-600">Retraso Alto</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="flex flex-col items-center p-4 h-auto"
+                    onClick={() => {
+                      setRangoDiasMin(61)
+                      setRangoDiasMax(undefined)
+                      setFiltroDiasRetraso(undefined)
+                      setTabActiva('cuotas')
+                    }}
+                  >
+                    <Badge className="bg-red-100 text-red-800 mb-2">61+ Días</Badge>
+                    <span className="text-xs text-gray-600">Retraso Crítico</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Botón para aplicar filtro personalizado */}
+              {(rangoDiasMin !== undefined || rangoDiasMax !== undefined) && (
+                <div className="flex justify-center">
+                  <Button
+                    onClick={() => setTabActiva('cuotas')}
+                    className="w-full md:w-auto"
+                  >
+                    Ver Clientes con {rangoDiasMin !== undefined ? `mínimo ${rangoDiasMin} días` : ''}
+                    {rangoDiasMin !== undefined && rangoDiasMax !== undefined ? ' y ' : ''}
+                    {rangoDiasMax !== undefined ? `máximo ${rangoDiasMax} días` : ''}
+                    {rangoDiasMin === undefined && rangoDiasMax !== undefined ? ' de retraso' : ''}
+                    {rangoDiasMin !== undefined && rangoDiasMax === undefined ? ' o más de retraso' : ''}
+                  </Button>
+                </div>
+              )}
+
+              {/* Información del filtro activo */}
+              {(rangoDiasMin !== undefined || rangoDiasMax !== undefined || filtroDiasRetraso !== undefined) && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-blue-900">Filtro Activo:</p>
+                      <p className="text-sm text-blue-700">
+                        {filtroDiasRetraso !== undefined
+                          ? `Clientes con exactamente ${filtroDiasRetraso} días de retraso`
+                          : rangoDiasMin !== undefined && rangoDiasMax !== undefined
+                          ? `Clientes con ${rangoDiasMin} a ${rangoDiasMax} días de retraso`
+                          : rangoDiasMin !== undefined
+                          ? `Clientes con ${rangoDiasMin} o más días de retraso`
+                          : rangoDiasMax !== undefined
+                          ? `Clientes con hasta ${rangoDiasMax} días de retraso`
+                          : ''}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setRangoDiasMin(undefined)
+                        setRangoDiasMax(undefined)
+                        setFiltroDiasRetraso(undefined)
+                      }}
+                    >
+                      Limpiar
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Tab Por Analista */}
@@ -719,159 +1023,158 @@ export function Cobranzas() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {porAnalista.map((analista, index) => (
-                    <div key={index} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-semibold">{analista.nombre}</h3>
-                          <p className="text-sm text-gray-600">
-                            {analista.cantidad_clientes} clientes atrasados
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-red-600">
-                            ${analista.monto_total.toLocaleString('es-VE')}
-                          </p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => exportarClientesAnalista(analista.nombre)}
-                          >
-                            <Download className="h-4 w-4 mr-2" />
-                            Exportar
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                  {porAnalista.map((analista, index) => {
+                    const estaExpandido = analistasExpandidos.has(analista.nombre)
+                    const clientes = clientesPorAnalista[analista.nombre] || []
+                    const cargando = cargandoClientesAnalista[analista.nombre] || false
+                    const busqueda = busquedaPorAnalista[analista.nombre] || ''
+                    
+                    // Filtrar clientes según búsqueda
+                    const clientesFiltrados = busqueda.trim()
+                      ? clientes.filter(cliente => 
+                          cliente.cedula.toLowerCase().includes(busqueda.toLowerCase()) ||
+                          cliente.nombres.toLowerCase().includes(busqueda.toLowerCase())
+                        )
+                      : clientes
+                    
+                    // Ordenar por total adeudado de mayor a menor
+                    const clientesOrdenados = [...clientesFiltrados].sort((a, b) => 
+                      (b.total_adeudado || 0) - (a.total_adeudado || 0)
+                    )
 
-        {/* Tab Gráfico */}
-        <TabsContent value="grafico" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Monto Vencido por Mes</CardTitle>
-              <CardDescription>
-                Distribución de montos no pagados agrupados por mes de vencimiento
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {cargandoMontos ? (
-                <div className="text-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Cargando montos por mes...</p>
-                </div>
-              ) : errorMontos ? (
-                <div className="text-center py-8">
-                  <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-500" />
-                  <p className="text-sm font-semibold text-red-800 mb-2">Error al cargar montos por mes</p>
-                  <p className="text-xs text-red-600 mb-4">
-                    {errorMontosDetalle instanceof Error 
-                      ? errorMontosDetalle.message 
-                      : 'No se pudieron cargar los datos. Por favor, intenta nuevamente.'}
-                  </p>
-                  <Button size="sm" variant="outline" onClick={() => refetchMontos()}>
-                    Reintentar
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Gráfico de barras mejorado */}
-                  {montosPorMes && montosPorMes.length > 0 ? (
-                    <>
-                      <div className="bg-gradient-to-b from-blue-50 to-white p-6 rounded-lg border-2 border-blue-100">
-                        <h3 className="text-lg font-semibold mb-4 text-gray-800">
-                          Distribución de Montos Vencidos por Mes
-                        </h3>
-                        <div className="space-y-3">
-                          {montosPorMes.map((mes, index) => {
-                            const maxMonto = Math.max(...(montosPorMes?.map(m => m.monto_total) || [0]))
-                            const porcentaje = maxMonto > 0 ? (mes.monto_total / maxMonto) * 100 : 0
-                            
-                            return (
-                              <div key={index} className="space-y-1">
-                                <div className="flex justify-between items-center mb-1">
-                                  <span className="text-sm font-medium text-gray-700">
-                                    {mes.mes_display}
-                                  </span>
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-xs text-gray-500">
-                                      {mes.cantidad_cuotas} cuotas
-                                    </span>
-                                    <span className="text-sm font-bold text-blue-700">
-                                      ${mes.monto_total.toLocaleString('es-VE')}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="w-full bg-gray-200 rounded-full h-6 shadow-inner">
-                                  <div
-                                    className="bg-gradient-to-r from-blue-500 to-blue-600 h-6 rounded-full flex items-center justify-end pr-2 transition-all duration-500"
-                                    style={{ width: `${porcentaje}%` }}
-                                  >
-                                    {porcentaje > 10 && (
-                                      <span className="text-xs font-semibold text-white">
-                                        {porcentaje.toFixed(0)}%
-                                      </span>
-                                    )}
-                                  </div>
+                    return (
+                      <div key={index} className="border rounded-lg overflow-hidden">
+                        {/* Header del analista */}
+                        <div className="p-4 bg-gray-50 hover:bg-gray-100 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleAnalista(analista.nombre)}
+                                  className="p-1 h-auto"
+                                >
+                                  {estaExpandido ? (
+                                    <ChevronUp className="h-5 w-5" />
+                                  ) : (
+                                    <ChevronDown className="h-5 w-5" />
+                                  )}
+                                </Button>
+                                <div>
+                                  <h3 className="font-semibold text-lg">{analista.nombre}</h3>
+                                  <p className="text-sm text-gray-600">
+                                    {analista.cantidad_clientes} clientes atrasados con al menos 1 cuota vencida
+                                  </p>
                                 </div>
                               </div>
-                            )
-                          })}
+                            </div>
+                            <div className="text-right mr-4">
+                              <p className="text-2xl font-bold text-red-600">
+                                ${analista.monto_total.toLocaleString('es-VE')}
+                              </p>
+                              <p className="text-xs text-gray-500">Monto total adeudado</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => exportarClientesAnalista(analista.nombre)}
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Exportar
+                              </Button>
+                            </div>
+                          </div>
                         </div>
+
+                        {/* Contenido expandible con clientes */}
+                        {estaExpandido && (
+                          <div className="p-4 border-t">
+                            {cargando ? (
+                              <div className="text-center py-8">
+                                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
+                                <p className="text-sm text-muted-foreground">Cargando clientes...</p>
+                              </div>
+                            ) : clientes.length === 0 ? (
+                              <div className="text-center py-8">
+                                <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                                <p className="text-sm text-muted-foreground">No hay clientes atrasados para este analista</p>
+                              </div>
+                            ) : (
+                              <div className="space-y-4">
+                                {/* Búsqueda de clientes */}
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    type="text"
+                                    placeholder="Buscar cliente por nombre o cédula..."
+                                    value={busqueda}
+                                    onChange={(e) => setBusquedaPorAnalista(prev => ({ ...prev, [analista.nombre]: e.target.value }))}
+                                    className="pl-10"
+                                  />
+                                </div>
+
+                                {/* Información de resultados */}
+                                {busqueda.trim() && (
+                                  <div className="text-sm text-muted-foreground">
+                                    Mostrando {clientesOrdenados.length} de {clientes.length} clientes
+                                  </div>
+                                )}
+
+                                {/* Tabla de clientes */}
+                                {clientesOrdenados.length === 0 && busqueda.trim() ? (
+                                  <div className="text-center py-8">
+                                    <Search className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                                    <p className="text-sm text-muted-foreground">
+                                      No se encontraron clientes que coincidan con "{busqueda}"
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                      <thead>
+                                        <tr className="border-b bg-gray-50">
+                                          <th className="text-left p-2 font-semibold">Cédula</th>
+                                          <th className="text-left p-2 font-semibold">Nombres</th>
+                                          <th className="text-left p-2 font-semibold">Teléfono</th>
+                                          <th className="text-right p-2 font-semibold">Cuotas Vencidas</th>
+                                          <th className="text-right p-2 font-semibold">Total Adeudado</th>
+                                          <th className="text-left p-2 font-semibold">Primera Vencida</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {clientesOrdenados.map((cliente, idx) => (
+                                          <tr key={idx} className="border-b hover:bg-gray-50 transition-colors">
+                                            <td className="p-2 font-mono text-xs">{cliente.cedula}</td>
+                                            <td className="p-2">{cliente.nombres}</td>
+                                            <td className="p-2">{cliente.telefono || 'N/A'}</td>
+                                            <td className="p-2 text-right">
+                                              <Badge variant="outline" className="bg-red-50 text-red-700">
+                                                {cliente.cuotas_vencidas}
+                                              </Badge>
+                                            </td>
+                                            <td className="p-2 text-right font-semibold text-red-600">
+                                              ${(cliente.total_adeudado || 0).toLocaleString('es-VE')}
+                                            </td>
+                                            <td className="p-2">
+                                              {cliente.fecha_primera_vencida
+                                                ? new Date(cliente.fecha_primera_vencida).toLocaleDateString('es-VE')
+                                                : 'N/A'}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      
-                      {/* Resumen numérico */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Card>
-                          <CardContent className="pt-4">
-                            <p className="text-sm text-gray-600">Total Cuotas Vencidas</p>
-                            <p className="text-2xl font-bold text-gray-900">
-                              {montosPorMes.reduce((sum, m) => sum + m.cantidad_cuotas, 0)}
-                            </p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="pt-4">
-                            <p className="text-sm text-gray-600">Monto Total Vencido</p>
-                            <p className="text-2xl font-bold text-red-600">
-                              ${montosPorMes.reduce((sum, m) => sum + m.monto_total, 0).toLocaleString('es-VE')}
-                            </p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="pt-4">
-                            <p className="text-sm text-gray-600">Promedio por Mes</p>
-                            <p className="text-2xl font-bold text-blue-600">
-                              ${(montosPorMes.reduce((sum, m) => sum + m.monto_total, 0) / montosPorMes.length).toLocaleString('es-VE')}
-                            </p>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-center py-12 text-gray-500">
-                      <BarChart3 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                      <p>No hay montos vencidos por mes para mostrar</p>
-                    </div>
-                  )}
-                  
-                  <Button
-                    variant="outline"
-                    onClick={async () => await exportarAExcel(
-                      montosPorMes || [],
-                      'montos-por-mes',
-                      ['mes', 'mes_display', 'cantidad_cuotas', 'monto_total']
-                    )}
-                    disabled={!montosPorMes || montosPorMes.length === 0}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Exportar Gráfico a Excel
-                  </Button>
+                    )
+                  })}
                 </div>
               )}
             </CardContent>

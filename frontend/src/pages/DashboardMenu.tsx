@@ -220,7 +220,11 @@ export function DashboardMenu() {
       const response = await apiClient.get(
         `/api/v1/dashboard/prestamos-por-modelo?${queryParams.toString()}`
       ) as { modelos: Array<{ modelo: string; total_prestamos: number; porcentaje: number }> }
-      return response.modelos.slice(0, 10) // Top 10
+      // ✅ Ordenar de mayor a menor por total_prestamos
+      const modelosOrdenados = response.modelos
+        .sort((a, b) => b.total_prestamos - a.total_prestamos)
+        .slice(0, 10) // Top 10
+      return modelosOrdenados
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
@@ -379,7 +383,11 @@ export function DashboardMenu() {
       const response = await apiClient.get(
         `/api/v1/dashboard/morosidad-por-analista?${queryParams.toString()}`
       ) as { analistas: Array<{ analista: string; total_morosidad: number; cantidad_clientes: number }> }
-      return response.analistas.slice(0, 10) // Top 10
+      // ✅ Ordenar de mayor a menor por total_morosidad
+      const analistasOrdenados = response.analistas
+        .sort((a, b) => b.total_morosidad - a.total_morosidad)
+        .slice(0, 10) // Top 10
+      return analistasOrdenados
     },
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
@@ -549,36 +557,36 @@ export function DashboardMenu() {
                     loadingOpcionesFiltros={loadingOpcionesFiltros}
                     errorOpcionesFiltros={errorOpcionesFiltros}
                   />
-                </div>
+                          </div>
               </div>
             </CardContent>
           </Card>
         </motion.div>
 
         {/* KPIs PRINCIPALES */}
-        {loadingKPIs ? (
+            {loadingKPIs ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="h-[180px] bg-gray-100 rounded-xl animate-pulse" />
-            ))}
-          </div>
-        ) : errorKPIs ? (
+                ))}
+              </div>
+            ) : errorKPIs ? (
           <Card className="border-red-200 bg-red-50">
-            <CardContent className="p-6">
+                <CardContent className="p-6">
               <div className="flex items-center gap-3 text-red-700">
                 <AlertTriangle className="h-5 w-5" />
                 <p>Error al cargar los KPIs principales. Por favor, intente nuevamente.</p>
-              </div>
-            </CardContent>
-          </Card>
+                  </div>
+                </CardContent>
+              </Card>
         ) : kpisPrincipales ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
           >
-            <KpiCardLarge
+                <KpiCardLarge
               title="Total Préstamos"
               value={kpisPrincipales.total_prestamos.valor_actual}
               variation={kpisPrincipales.total_prestamos.variacion_porcentual !== undefined ? {
@@ -598,12 +606,12 @@ export function DashboardMenu() {
                 percent: kpisPrincipales.creditos_nuevos_mes.variacion_porcentual,
                 label: 'vs mes anterior'
               } : undefined}
-              icon={TrendingUp}
-              color="text-green-600"
-              bgColor="bg-green-100"
-              borderColor="border-green-500"
-              format="number"
-            />
+                  icon={TrendingUp}
+                  color="text-green-600"
+                  bgColor="bg-green-100"
+                  borderColor="border-green-500"
+                  format="number"
+                />
             <KpiCardLarge
               title="Total Clientes"
               value={kpisPrincipales.total_clientes.valor_actual}
@@ -617,19 +625,19 @@ export function DashboardMenu() {
               borderColor="border-blue-500"
               format="number"
             />
-            <KpiCardLarge
-              title="Morosidad Total"
+                  <KpiCardLarge
+                    title="Morosidad Total"
               value={kpisPrincipales.total_morosidad_usd.valor_actual}
               variation={kpisPrincipales.total_morosidad_usd.variacion_porcentual !== undefined ? {
                 percent: kpisPrincipales.total_morosidad_usd.variacion_porcentual,
                 label: 'vs mes anterior'
               } : undefined}
-              icon={AlertTriangle}
-              color="text-red-600"
-              bgColor="bg-red-100"
-              borderColor="border-red-500"
-              format="currency"
-            />
+                    icon={AlertTriangle}
+                    color="text-red-600"
+                    bgColor="bg-red-100"
+                    borderColor="border-red-500"
+                    format="currency"
+                  />
           </motion.div>
         ) : null}
 
@@ -641,22 +649,22 @@ export function DashboardMenu() {
             ))}
           </div>
         ) : datosDashboard ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
             className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-          >
+              >
             {/* Gráfico de Evolución Mensual */}
             {evolucionMensual.length > 0 && (
-              <Card className="shadow-lg border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b-2 border-cyan-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                <Card className="shadow-lg border-2 border-gray-200">
+                  <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b-2 border-cyan-200">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                     <LineChart className="h-6 w-6 text-cyan-600" />
                     <span>Evolución Mensual</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
                   <ResponsiveContainer width="100%" height={300}>
                     <ComposedChart data={evolucionMensual}>
                       <CartesianGrid strokeDasharray="3 3" />
@@ -668,14 +676,14 @@ export function DashboardMenu() {
                       <Bar yAxisId="left" dataKey="cartera" fill="#3b82f6" name="Cartera" />
                       <Bar yAxisId="left" dataKey="cobrado" fill="#10b981" name="Cobrado" />
                       <Line yAxisId="right" type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
             )}
 
-            {/* Gráfico de Financieros */}
-            {datosDashboard.financieros && (
+            {/* Gráfico de Áreas - Indicadores Financieros */}
+            {datosTendencia && datosTendencia.length > 0 && (
               <Card className="shadow-lg border-2 border-gray-200">
                 <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b-2 border-green-200">
                   <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
@@ -684,46 +692,108 @@ export function DashboardMenu() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Total Cobrado:</span>
-                      <span className="font-bold text-lg">{formatCurrency(datosDashboard.financieros.totalCobrado)}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Ingresos Capital:</span>
-                      <span className="font-semibold">{formatCurrency(datosDashboard.financieros.ingresosCapital)}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Ingresos Interés:</span>
-                      <span className="font-semibold">{formatCurrency(datosDashboard.financieros.ingresosInteres)}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Ingresos Mora:</span>
-                      <span className="font-semibold text-red-600">{formatCurrency(datosDashboard.financieros.ingresosMora)}</span>
-                    </div>
-                  </div>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <AreaChart data={datosTendencia} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorFinanciamiento" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                        </linearGradient>
+                        <linearGradient id="colorPagosProgramados" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
+                        </linearGradient>
+                        <linearGradient id="colorPagosReales" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1}/>
+                        </linearGradient>
+                        <linearGradient id="colorMorosidad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="mes" 
+                        tick={{ fontSize: 12 }}
+                        angle={-45}
+                        textAnchor="end"
+                        height={80}
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 12 }}
+                        tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
+                        label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft' }}
+                      />
+                      <Tooltip 
+                        formatter={(value: number, name: string) => {
+                          const labels: Record<string, string> = {
+                            'monto_nuevos': 'Total Financiamiento',
+                            'monto_cuotas_programadas': 'Total Pagos Programados',
+                            'monto_pagado': 'Total Pagos Reales',
+                            'morosidad_mensual': 'Morosidad'
+                          }
+                          return [formatCurrency(value), labels[name] || name]
+                        }}
+                        labelFormatter={(label) => `Mes: ${label}`}
+                      />
+                      <Legend />
+                      <Area 
+                        type="monotone" 
+                        dataKey="monto_nuevos" 
+                        stroke="#3b82f6" 
+                        fillOpacity={0.6}
+                        fill="url(#colorFinanciamiento)" 
+                        name="Total Financiamiento"
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="monto_cuotas_programadas" 
+                        stroke="#10b981" 
+                        fillOpacity={0.6}
+                        fill="url(#colorPagosProgramados)" 
+                        name="Total Pagos Programados"
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="monto_pagado" 
+                        stroke="#f59e0b" 
+                        fillOpacity={0.6}
+                        fill="url(#colorPagosReales)" 
+                        name="Total Pagos Reales"
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="morosidad_mensual" 
+                        stroke="#ef4444" 
+                        fillOpacity={0.6}
+                        fill="url(#colorMorosidad)" 
+                        name="Morosidad"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </CardContent>
               </Card>
             )}
-          </motion.div>
+            </motion.div>
         ) : null}
 
         {/* GRÁFICOS SECUNDARIOS - TENDENCIA Y DISTRIBUCIONES */}
         {datosTendencia && datosTendencia.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-          >
-            <Card className="shadow-lg border-2 border-gray-200">
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
               <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
-                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                   <LineChart className="h-6 w-6 text-blue-600" />
                   <span>Tendencia de Financiamiento</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <ResponsiveContainer width="100%" height={350}>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                      <ResponsiveContainer width="100%" height={350}>
                   <AreaChart data={datosTendencia}>
                     <defs>
                       <linearGradient id="colorMontoNuevos" x1="0" y1="0" x2="0" y2="1">
@@ -739,130 +809,146 @@ export function DashboardMenu() {
                     <XAxis dataKey="mes" />
                     <YAxis />
                     <Tooltip />
-                    <Legend />
+                          <Legend />
                     <Area type="monotone" dataKey="monto_nuevos" stroke="#3b82f6" fillOpacity={1} fill="url(#colorMontoNuevos)" name="Monto Nuevos" />
                     <Area type="monotone" dataKey="monto_pagado" stroke="#10b981" fillOpacity={1} fill="url(#colorMontoPagado)" name="Monto Pagado" />
                     <Line type="monotone" dataKey="morosidad_mensual" stroke="#ef4444" strokeWidth={2} name="Morosidad Mensual" />
                   </AreaChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </motion.div>
+                      </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </motion.div>
         )}
 
         {/* GRÁFICOS DE DISTRIBUCIÓN */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Préstamos por Concesionario */}
           {datosConcesionarios && datosConcesionarios.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-            >
-              <Card className="shadow-lg border-2 border-gray-200">
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
                 <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <PieChart className="h-6 w-6 text-purple-600" />
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <BarChart3 className="h-6 w-6 text-purple-600" />
                     <span>Préstamos por Concesionario</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <RechartsPieChart>
-                      <Pie
-                        data={datosConcesionarios}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ concesionario, porcentaje }) => `${concesionario}: ${porcentaje.toFixed(1)}%`}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="total_prestamos"
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                  <ResponsiveContainer width="100%" height={400}>
+                    <BarChart data={datosConcesionarios} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" />
+                      <YAxis 
+                        type="category" 
+                        dataKey="concesionario" 
+                        width={140}
+                        tick={{ fontSize: 12 }}
+                      />
+                      <Tooltip 
+                        formatter={(value: number, name: string) => [
+                          `${value} préstamos`,
+                          'Total'
+                        ]}
+                        labelFormatter={(label) => `Concesionario: ${label}`}
+                      />
+                      <Bar 
+                        dataKey="total_prestamos" 
+                        fill="#8b5cf6"
+                        radius={[0, 4, 4, 0]}
                       >
                         {datosConcesionarios.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} />
                         ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </RechartsPieChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </motion.div>
+                      </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </motion.div>
           )}
 
           {/* Préstamos por Modelo */}
           {datosModelos && datosModelos.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-            >
-              <Card className="shadow-lg border-2 border-gray-200">
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
                 <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b-2 border-amber-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <PieChart className="h-6 w-6 text-amber-600" />
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <BarChart3 className="h-6 w-6 text-amber-600" />
                     <span>Préstamos por Modelo</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <RechartsPieChart>
-                      <Pie
-                        data={datosModelos}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ modelo, porcentaje }) => `${modelo}: ${porcentaje.toFixed(1)}%`}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="total_prestamos"
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                  <ResponsiveContainer width="100%" height={400}>
+                    <BarChart data={datosModelos} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" />
+                        <YAxis 
+                        type="category" 
+                        dataKey="modelo" 
+                        width={140}
+                        tick={{ fontSize: 12 }}
+                        />
+                            <Tooltip 
+                        formatter={(value: number, name: string) => [
+                          `${value} préstamos`,
+                          'Total'
+                        ]}
+                        labelFormatter={(label) => `Modelo: ${label}`}
+                      />
+                      <Bar 
+                        dataKey="total_prestamos" 
+                        fill="#f59e0b"
+                        radius={[0, 4, 4, 0]}
                       >
                         {datosModelos.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </RechartsPieChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </motion.div>
+                            ))}
+                        </Bar>
+                      </BarChart>
+                        </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </motion.div>
           )}
         </div>
 
         {/* GRÁFICOS DE COBRANZAS */}
         {datosCobranzas && datosCobranzas.meses && datosCobranzas.meses.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.7 }}
-          >
-            <Card className="shadow-lg border-2 border-gray-200">
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
               <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
-                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                   <BarChart3 className="h-6 w-6 text-emerald-600" />
                   <span>Cobranzas Mensuales</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={datosCobranzas.meses}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="nombre_mes" />
                     <YAxis />
                     <Tooltip />
-                    <Legend />
+                          <Legend />
                     <Bar dataKey="cobranzas_planificadas" fill="#3b82f6" name="Planificadas" />
                     <Bar dataKey="pagos_reales" fill="#10b981" name="Reales" />
                     <Bar dataKey="meta_mensual" fill="#f59e0b" name="Meta" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </motion.div>
+                        </BarChart>
+                      </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </motion.div>
         )}
 
         {/* GRÁFICOS DE MOROSIDAD */}
@@ -888,10 +974,10 @@ export function DashboardMenu() {
                       <XAxis dataKey="categoria" />
                       <YAxis />
                       <Tooltip />
-                      <Legend />
+                        <Legend />
                       <Bar dataKey="monto" fill="#ef4444" name="Monto en Morosidad" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                      </BarChart>
+                    </ResponsiveContainer>
                 </CardContent>
               </Card>
             </motion.div>
@@ -912,14 +998,30 @@ export function DashboardMenu() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={datosMorosidadAnalista} layout="vertical">
+                  <ResponsiveContainer width="100%" height={400}>
+                    <BarChart data={datosMorosidadAnalista} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" />
-                      <YAxis dataKey="analista" type="category" width={120} />
-                      <Tooltip />
+                      <XAxis 
+                        dataKey="analista" 
+                        angle={-45}
+                        textAnchor="end"
+                        height={80}
+                        tick={{ fontSize: 12 }}
+                      />
+                      <YAxis 
+                        label={{ value: 'Morosidad Total', angle: -90, position: 'insideLeft' }}
+                      />
+                      <Tooltip 
+                        formatter={(value: number) => [`${formatCurrency(value)}`, 'Morosidad Total']}
+                        labelFormatter={(label) => `Analista: ${label}`}
+                      />
                       <Legend />
-                      <Bar dataKey="total_morosidad" fill="#f97316" name="Morosidad Total" />
+                      <Bar 
+                        dataKey="total_morosidad" 
+                        fill="#f97316" 
+                        name="Morosidad Total"
+                        radius={[4, 4, 0, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -955,26 +1057,26 @@ export function DashboardMenu() {
                       <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" />
                     </RechartsLineChart>
                   </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </motion.div>
+                  </CardContent>
+                </Card>
+              </motion.div>
           )}
 
           {/* Evolución de Pagos */}
           {datosEvolucionPagos && datosEvolucionPagos.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1.1 }}
-            >
-              <Card className="shadow-lg border-2 border-gray-200">
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
                 <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b-2 border-green-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                     <LineChart className="h-6 w-6 text-green-600" />
                     <span>Evolución de Pagos</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
                   <ResponsiveContainer width="100%" height={300}>
                     <ComposedChart data={datosEvolucionPagos}>
                       <CartesianGrid strokeDasharray="3 3" />
@@ -982,16 +1084,16 @@ export function DashboardMenu() {
                       <YAxis yAxisId="left" />
                       <YAxis yAxisId="right" orientation="right" />
                       <Tooltip />
-                      <Legend />
+                            <Legend />
                       <Bar yAxisId="left" dataKey="pagos" fill="#10b981" name="Cantidad Pagos" />
                       <Line yAxisId="right" type="monotone" dataKey="monto" stroke="#3b82f6" strokeWidth={2} name="Monto Total" />
                     </ComposedChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </motion.div>
+                        </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </motion.div>
           )}
-        </div>
+            </div>
 
       </div>
     </div>
