@@ -985,13 +985,15 @@ async def predecir_riesgo(
         if not ml_service.load_model_from_path(modelo_activo.ruta_archivo):
             raise HTTPException(status_code=500, detail="Error cargando modelo")
 
-        # Preparar datos del cliente
+        # Preparar datos del cliente (debe coincidir con features de entrenamiento)
         client_data = {
             "age": request.edad or 0,
             "income": request.ingreso or 0,
             "debt_total": request.deuda_total or 0,
             "debt_ratio": request.ratio_deuda_ingreso or 0,
-            "credit_score": request.historial_pagos or 0,  # Usar historial como score
+            "credit_score": request.historial_pagos or 0,  # historial_pagos
+            "dias_ultimo_prestamo": request.dias_ultimo_prestamo or 0,
+            "numero_prestamos_previos": request.numero_prestamos_previos or 0,
         }
 
         # Predecir

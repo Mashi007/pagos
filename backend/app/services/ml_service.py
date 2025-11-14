@@ -101,14 +101,18 @@ class MLService:
                     "recommendation": "Modelo no disponible",
                 }
 
-            # Preparar características
+            # Preparar características (debe coincidir con el orden de entrenamiento)
+            # Orden: edad, ingreso, deuda_total, ratio_deuda_ingreso, historial_pagos, dias_ultimo_prestamo, numero_prestamos_previos
             features = np.array(
                 [
                     [
                         client_data.get("age", 0),
                         client_data.get("income", 0),
+                        client_data.get("debt_total", 0),
                         client_data.get("debt_ratio", 0),
-                        client_data.get("credit_score", 0),
+                        client_data.get("credit_score", 0),  # historial_pagos
+                        client_data.get("dias_ultimo_prestamo", 0),
+                        client_data.get("numero_prestamos_previos", 0),
                     ]
                 ]
             )
@@ -142,8 +146,11 @@ class MLService:
                 "features_used": {
                     "age": client_data.get("age", 0),
                     "income": client_data.get("income", 0),
+                    "debt_total": client_data.get("debt_total", 0),
                     "debt_ratio": client_data.get("debt_ratio", 0),
                     "credit_score": client_data.get("credit_score", 0),
+                    "dias_ultimo_prestamo": client_data.get("dias_ultimo_prestamo", 0),
+                    "numero_prestamos_previos": client_data.get("numero_prestamos_previos", 0),
                 },
             }
 
