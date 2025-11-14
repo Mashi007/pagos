@@ -9,12 +9,28 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 
 logger = logging.getLogger(__name__)
+
+# Imports condicionales de scikit-learn
+try:
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import StandardScaler
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    logger.warning("scikit-learn no está disponible. Funcionalidades de ML estarán limitadas.")
+    # Crear placeholders para evitar errores de referencia
+    RandomForestClassifier = None
+    accuracy_score = None
+    f1_score = None
+    precision_score = None
+    recall_score = None
+    roc_auc_score = None
+    train_test_split = None
+    StandardScaler = None
 
 
 class MLService:
@@ -69,6 +85,13 @@ class MLService:
         Returns:
             Dict con predicción de riesgo
         """
+        if not SKLEARN_AVAILABLE:
+            return {
+                "risk_level": "Error",
+                "confidence": 0.0,
+                "recommendation": "scikit-learn no está instalado. Instala con: pip install scikit-learn",
+            }
+        
         try:
             if "risk_model" not in self.models:
                 return {
@@ -176,6 +199,12 @@ class MLService:
         Returns:
             Dict con métricas y ruta del modelo guardado
         """
+        if not SKLEARN_AVAILABLE:
+            return {
+                "success": False,
+                "error": "scikit-learn no está instalado. Instala con: pip install scikit-learn",
+            }
+        
         try:
             if not training_data or len(training_data) < 10:
                 raise ValueError("Se necesitan al menos 10 muestras para entrenar")
