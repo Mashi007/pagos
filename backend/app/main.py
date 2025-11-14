@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 # Routers
 # Imports después de logging por diseño - ver comentario arriba
 from app.api.v1.endpoints import (  # noqa: E402; aprobaciones deshabilitado - ver __init__.py
+    ai_training,
     amortizacion,
     analistas,
     auditoria,
@@ -384,6 +385,7 @@ app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboar
 app.include_router(kpis.router, prefix="/api/v1/kpis", tags=["kpis"])
 app.include_router(auditoria.router, prefix="/api/v1", tags=["auditoria"])
 app.include_router(configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"])
+app.include_router(ai_training.router, prefix="/api/v1/ai/training", tags=["ai-training"])
 app.include_router(whatsapp_webhook.router, prefix="/api/v1", tags=["whatsapp-webhook"])
 # IMPORTANTE: Registrar estos routers ANTES de otros para evitar conflictos de rutas
 # Orden: modelos_vehiculos → analistas → concesionarios

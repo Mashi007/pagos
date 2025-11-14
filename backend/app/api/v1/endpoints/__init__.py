@@ -3,6 +3,7 @@
 
 # Importar todos los módulos de endpoints
 from . import (  # aprobaciones,  # MODULO DESHABILITADO - Ver main.py
+    ai_training,
     amortizacion,
     analistas,
     auditoria,
@@ -33,6 +34,7 @@ from . import (  # aprobaciones,  # MODULO DESHABILITADO - Ver main.py
 )
 
 __all__ = [
+    "ai_training",
     "health",
     "auth",
     "users",
