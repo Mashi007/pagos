@@ -14,10 +14,61 @@ export function TrainingDashboard() {
     setCargando(true)
     try {
       const data = await aiTrainingService.getMetricasEntrenamiento()
-      setMetricas(data)
+      // Validar que la respuesta tenga la estructura esperada
+      if (data && data.conversaciones && data.fine_tuning && data.rag && data.ml_riesgo) {
+        setMetricas(data)
+      } else {
+        // Si el endpoint no existe o devuelve estructura incorrecta, usar valores por defecto
+        setMetricas({
+          conversaciones: {
+            total: 0,
+            con_calificacion: 0,
+            promedio_calificacion: 0,
+            listas_entrenamiento: 0,
+          },
+          fine_tuning: {
+            jobs_totales: 0,
+            jobs_exitosos: 0,
+            jobs_fallidos: 0,
+          },
+          rag: {
+            documentos_con_embeddings: 0,
+            total_embeddings: 0,
+          },
+          ml_riesgo: {
+            modelos_disponibles: 0,
+          },
+        })
+      }
     } catch (error: any) {
       console.error('Error cargando métricas:', error)
-      toast.error('Error al cargar métricas de entrenamiento')
+      // Si es un 404, el endpoint no existe aún - mostrar mensaje informativo
+      if (error?.response?.status === 404) {
+        setMetricas({
+          conversaciones: {
+            total: 0,
+            con_calificacion: 0,
+            promedio_calificacion: 0,
+            listas_entrenamiento: 0,
+          },
+          fine_tuning: {
+            jobs_totales: 0,
+            jobs_exitosos: 0,
+            jobs_fallidos: 0,
+          },
+          rag: {
+            documentos_con_embeddings: 0,
+            total_embeddings: 0,
+          },
+          ml_riesgo: {
+            modelos_disponibles: 0,
+          },
+        })
+        // No mostrar toast de error para 404, es esperado si el endpoint no está implementado
+      } else {
+        toast.error('Error al cargar métricas de entrenamiento')
+        setMetricas(null)
+      }
     } finally {
       setCargando(false)
     }
@@ -39,7 +90,10 @@ export function TrainingDashboard() {
     return (
       <div className="text-center py-12">
         <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-        <p className="text-gray-500">No se pudieron cargar las métricas</p>
+        <p className="text-gray-500 mb-2">No se pudieron cargar las métricas</p>
+        <p className="text-sm text-gray-400 mb-4">
+          El endpoint de métricas aún no está implementado en el backend
+        </p>
         <Button onClick={cargarMetricas} variant="outline" className="mt-4">
           Reintentar
         </Button>
@@ -85,26 +139,26 @@ export function TrainingDashboard() {
           <div className="grid gap-4 md:grid-cols-4">
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Total Conversaciones</div>
-              <div className="text-2xl font-bold">{metricas.conversaciones.total}</div>
+              <div className="text-2xl font-bold">{metricas.conversaciones?.total ?? 0}</div>
             </div>
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Con Calificación</div>
               <div className="text-2xl font-bold text-green-600">
-                {metricas.conversaciones.con_calificacion}
+                {metricas.conversaciones?.con_calificacion ?? 0}
               </div>
             </div>
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Promedio Calificación</div>
               <div className="text-2xl font-bold text-blue-600">
-                {metricas.conversaciones.promedio_calificacion > 0
-                  ? metricas.conversaciones.promedio_calificacion.toFixed(1)
+                {(metricas.conversaciones?.promedio_calificacion ?? 0) > 0
+                  ? (metricas.conversaciones?.promedio_calificacion ?? 0).toFixed(1)
                   : 'N/A'}
               </div>
             </div>
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Listas para Entrenamiento</div>
               <div className="text-2xl font-bold text-purple-600">
-                {metricas.conversaciones.listas_entrenamiento}
+                {metricas.conversaciones?.listas_entrenamiento ?? 0}
               </div>
             </div>
           </div>
@@ -121,24 +175,24 @@ export function TrainingDashboard() {
           <div className="grid gap-4 md:grid-cols-4">
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Jobs Totales</div>
-              <div className="text-2xl font-bold">{metricas.fine_tuning.jobs_totales}</div>
+              <div className="text-2xl font-bold">{metricas.fine_tuning?.jobs_totales ?? 0}</div>
             </div>
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Exitosos</div>
               <div className="text-2xl font-bold text-green-600">
-                {metricas.fine_tuning.jobs_exitosos}
+                {metricas.fine_tuning?.jobs_exitosos ?? 0}
               </div>
             </div>
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Fallidos</div>
               <div className="text-2xl font-bold text-red-600">
-                {metricas.fine_tuning.jobs_fallidos}
+                {metricas.fine_tuning?.jobs_fallidos ?? 0}
               </div>
             </div>
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Modelo Activo</div>
               <div className="text-lg font-semibold">
-                {metricas.fine_tuning.modelo_activo ? (
+                {metricas.fine_tuning?.modelo_activo ? (
                   <Badge variant="default" className="text-xs">
                     <CheckCircle className="h-3 w-3 mr-1" />
                     {metricas.fine_tuning.modelo_activo}
@@ -147,7 +201,7 @@ export function TrainingDashboard() {
                   <span className="text-gray-400">Ninguno</span>
                 )}
               </div>
-              {metricas.fine_tuning.ultimo_entrenamiento && (
+              {metricas.fine_tuning?.ultimo_entrenamiento && (
                 <div className="text-xs text-gray-500 mt-1">
                   {new Date(metricas.fine_tuning.ultimo_entrenamiento).toLocaleDateString()}
                 </div>
@@ -168,19 +222,19 @@ export function TrainingDashboard() {
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Documentos con Embeddings</div>
               <div className="text-2xl font-bold text-green-600">
-                {metricas.rag.documentos_con_embeddings}
+                {metricas.rag?.documentos_con_embeddings ?? 0}
               </div>
             </div>
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Total Embeddings</div>
               <div className="text-2xl font-bold text-blue-600">
-                {metricas.rag.total_embeddings}
+                {metricas.rag?.total_embeddings ?? 0}
               </div>
             </div>
             <div className="border rounded-lg p-4 col-span-2">
               <div className="text-sm text-gray-500 mb-1">Última Actualización</div>
               <div className="text-lg font-semibold">
-                {metricas.rag.ultima_actualizacion ? (
+                {metricas.rag?.ultima_actualizacion ? (
                   new Date(metricas.rag.ultima_actualizacion).toLocaleString('es-ES')
                 ) : (
                   <span className="text-gray-400">Nunca</span>
@@ -201,12 +255,12 @@ export function TrainingDashboard() {
           <div className="grid gap-4 md:grid-cols-4">
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Modelos Disponibles</div>
-              <div className="text-2xl font-bold">{metricas.ml_riesgo.modelos_disponibles}</div>
+              <div className="text-2xl font-bold">{metricas.ml_riesgo?.modelos_disponibles ?? 0}</div>
             </div>
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Modelo Activo</div>
               <div className="text-lg font-semibold">
-                {metricas.ml_riesgo.modelo_activo ? (
+                {metricas.ml_riesgo?.modelo_activo ? (
                   <Badge variant="default" className="text-xs">
                     <CheckCircle className="h-3 w-3 mr-1" />
                     {metricas.ml_riesgo.modelo_activo}
@@ -219,7 +273,7 @@ export function TrainingDashboard() {
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Accuracy Promedio</div>
               <div className="text-2xl font-bold text-blue-600">
-                {metricas.ml_riesgo.accuracy_promedio
+                {metricas.ml_riesgo?.accuracy_promedio
                   ? `${(metricas.ml_riesgo.accuracy_promedio * 100).toFixed(1)}%`
                   : 'N/A'}
               </div>
@@ -227,7 +281,7 @@ export function TrainingDashboard() {
             <div className="border rounded-lg p-4">
               <div className="text-sm text-gray-500 mb-1">Último Entrenamiento</div>
               <div className="text-sm font-semibold">
-                {metricas.ml_riesgo.ultimo_entrenamiento ? (
+                {metricas.ml_riesgo?.ultimo_entrenamiento ? (
                   new Date(metricas.ml_riesgo.ultimo_entrenamiento).toLocaleDateString()
                 ) : (
                   <span className="text-gray-400">Nunca</span>
@@ -248,10 +302,10 @@ export function TrainingDashboard() {
                 <span className="font-medium">Fine-tuning</span>
                 <Badge
                   variant={
-                    metricas.fine_tuning.modelo_activo ? 'default' : 'secondary'
+                    metricas.fine_tuning?.modelo_activo ? 'default' : 'secondary'
                   }
                 >
-                  {metricas.fine_tuning.modelo_activo ? 'Activo' : 'Inactivo'}
+                  {metricas.fine_tuning?.modelo_activo ? 'Activo' : 'Inactivo'}
                 </Badge>
               </div>
             </div>
@@ -260,10 +314,10 @@ export function TrainingDashboard() {
                 <span className="font-medium">RAG</span>
                 <Badge
                   variant={
-                    metricas.rag.documentos_con_embeddings > 0 ? 'default' : 'secondary'
+                    (metricas.rag?.documentos_con_embeddings ?? 0) > 0 ? 'default' : 'secondary'
                   }
                 >
-                  {metricas.rag.documentos_con_embeddings > 0 ? 'Configurado' : 'Sin configurar'}
+                  {(metricas.rag?.documentos_con_embeddings ?? 0) > 0 ? 'Configurado' : 'Sin configurar'}
                 </Badge>
               </div>
             </div>
@@ -272,10 +326,10 @@ export function TrainingDashboard() {
                 <span className="font-medium">ML Riesgo</span>
                 <Badge
                   variant={
-                    metricas.ml_riesgo.modelo_activo ? 'default' : 'secondary'
+                    metricas.ml_riesgo?.modelo_activo ? 'default' : 'secondary'
                   }
                 >
-                  {metricas.ml_riesgo.modelo_activo ? 'Activo' : 'Inactivo'}
+                  {metricas.ml_riesgo?.modelo_activo ? 'Activo' : 'Inactivo'}
                 </Badge>
               </div>
             </div>

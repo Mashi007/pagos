@@ -322,7 +322,7 @@ class AITrainingService {
    * Obtener métricas de entrenamiento
    */
   async getMetricasEntrenamiento(): Promise<MetricasEntrenamiento> {
-    return await apiClient.get(`${this.baseUrl}/metricas`)
+    return await apiClient.get<MetricasEntrenamiento>(`${this.baseUrl}/metricas`)
   }
 }
 
