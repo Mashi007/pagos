@@ -10,13 +10,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.models.amortizacion import Cuota
+from app.models.cliente import Cliente
 from app.models.configuracion_sistema import ConfiguracionSistema
 from app.models.documento_ai import DocumentoAI
+from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
-from app.models.cliente import Cliente
-from app.models.pago import Pago
-from app.models.amortizacion import Cuota
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

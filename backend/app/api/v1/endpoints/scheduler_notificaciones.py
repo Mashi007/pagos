@@ -183,8 +183,9 @@ def obtener_tareas_programadas(
 ):
     """📋 Obtener lista de tareas programadas del scheduler"""
     try:
-        from app.core.scheduler import scheduler
         from datetime import datetime, timedelta
+
+        from app.core.scheduler import scheduler
 
         # Obtener jobs del scheduler
         jobs = scheduler.get_jobs() if scheduler.running else []
