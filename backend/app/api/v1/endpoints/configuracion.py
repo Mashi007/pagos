@@ -3652,6 +3652,310 @@ def _calcular_metricas_periodo(db: Session, fecha_inicio: date, fecha_fin: date)
         return None
 
 
+def _obtener_mapeo_semantico_campos() -> str:
+    """Genera un mapeo semántico de campos con sinónimos y términos relacionados"""
+    mapeo = []
+    mapeo.append("=== MAPEO SEMÁNTICO DE CAMPOS (Sinónimos y Términos Relacionados) ===\n")
+    mapeo.append("Usa este mapeo para entender términos similares y hacer inferencias semánticas\n")
+    
+    # Mapeo por concepto semántico
+    mapeo.append("\n📅 FECHAS Y PERÍODOS:")
+    mapeo.append("  • fecha_vencimiento, fecha de vencimiento, vencimiento, fecha vencida, cuándo vence")
+    mapeo.append("  • fecha_pago, fecha de pago, cuando pagó, fecha pagado, día de pago")
+    mapeo.append("  • fecha_registro, fecha de registro, cuando se registró, fecha creación, creado")
+    mapeo.append("  • fecha_aprobacion, fecha de aprobación, cuando se aprobó, aprobado")
+    mapeo.append("  • fecha_nacimiento, fecha de nacimiento, nacimiento, edad")
+    mapeo.append("  • fecha_actualizacion, fecha de actualización, actualizado, modificado")
+    mapeo.append("  • fecha_conciliacion, fecha de conciliación, conciliado")
+    
+    mapeo.append("\n💰 MONTOS Y VALORES:")
+    mapeo.append("  • monto_cuota, cuota, monto de cuota, valor cuota, pago cuota, cuota mensual")
+    mapeo.append("  • monto_pagado, pagado, monto pagado, cantidad pagada, abonado")
+    mapeo.append("  • total_pagado, total pagado, suma pagada, acumulado pagado")
+    mapeo.append("  • total_financiamiento, monto préstamo, valor préstamo, monto total, financiamiento")
+    mapeo.append("  • monto_mora, mora, monto mora, intereses mora, recargo mora")
+    mapeo.append("  • monto_morosidad, morosidad, monto pendiente, deuda pendiente")
+    mapeo.append("  • valor_activo, valor del activo, valor vehículo, precio vehículo")
+    mapeo.append("  • capital_pagado, capital pagado, principal pagado")
+    mapeo.append("  • interes_pagado, interés pagado, intereses pagados")
+    mapeo.append("  • saldo_capital, saldo, capital pendiente, deuda pendiente")
+    
+    mapeo.append("\n👤 IDENTIFICACIÓN DE CLIENTES:")
+    mapeo.append("  • cedula, cédula, documento, documento identidad, DNI, CI, identificación")
+    mapeo.append("  • nombres, nombre, nombre completo, cliente, persona, titular")
+    mapeo.append("  • telefono, teléfono, tel, número teléfono, contacto, celular")
+    mapeo.append("  • email, correo, correo electrónico, e-mail, mail")
+    mapeo.append("  • cliente_id, id cliente, identificador cliente, código cliente")
+    
+    mapeo.append("\n📋 PRÉSTAMOS Y CRÉDITOS:")
+    mapeo.append("  • prestamo_id, id préstamo, préstamo, crédito, loan, préstamo número")
+    mapeo.append("  • estado, estado préstamo, situación, condición, status")
+    mapeo.append("  • numero_cuotas, número cuotas, cantidad cuotas, total cuotas, cuotas totales")
+    mapeo.append("  • modalidad_pago, modalidad, frecuencia pago, periodicidad, forma pago")
+    mapeo.append("  • producto, producto financiero, tipo producto, plan")
+    mapeo.append("  • analista, analista asignado, asesor, ejecutivo, gestor")
+    mapeo.append("  • concesionario, concesionario asignado, dealer, distribuidor")
+    mapeo.append("  • modelo_vehiculo, modelo vehículo, vehículo, auto, carro")
+    
+    mapeo.append("\n📊 CUOTAS Y PAGOS:")
+    mapeo.append("  • numero_cuota, número cuota, cuota número, cuota N, cuota #")
+    mapeo.append("  • estado cuota, estado, situación cuota, condición cuota")
+    mapeo.append("  • PAGADA, pagada, pagado, liquidada, cancelada, saldada")
+    mapeo.append("  • PENDIENTE, pendiente, por pagar, no pagada, adeudada")
+    mapeo.append("  • MORA, mora, atrasada, vencida, en mora, retrasada")
+    mapeo.append("  • PARCIAL, parcial, pagada parcialmente, abono parcial")
+    mapeo.append("  • dias_mora, días mora, días atraso, días retraso, días vencida")
+    mapeo.append("  • dias_morosidad, días morosidad, días pendiente, días adeudado")
+    
+    mapeo.append("\n💳 PAGOS Y TRANSACCIONES:")
+    mapeo.append("  • pago, pagos, transacción, abono, depósito, transferencia")
+    mapeo.append("  • numero_documento, número documento, comprobante, referencia, número referencia")
+    mapeo.append("  • institucion_bancaria, banco, institución bancaria, entidad bancaria")
+    mapeo.append("  • conciliado, conciliación, verificado, confirmado, validado")
+    mapeo.append("  • activo, activo pago, pago activo, pago válido, pago vigente")
+    
+    mapeo.append("\n📈 ESTADÍSTICAS Y MÉTRICAS:")
+    mapeo.append("  • tasa_morosidad, tasa morosidad, porcentaje morosidad, % morosidad, índice morosidad")
+    mapeo.append("  • morosidad, mora, atrasos, retrasos, incumplimientos")
+    mapeo.append("  • cobranza, cobranzas, recaudación, recaudaciones, recuperación")
+    mapeo.append("  • cartera, cartera activa, préstamos activos, créditos vigentes")
+    mapeo.append("  • vencido, vencidos, vencimientos, cuotas vencidas")
+    
+    mapeo.append("\n🔍 BÚSQUEDAS Y FILTROS:")
+    mapeo.append("  • buscar por, filtrar por, encontrar, localizar, consultar")
+    mapeo.append("  • entre fechas, en el rango, desde/hasta, período, intervalo")
+    mapeo.append("  • por mes, en el mes, durante el mes, del mes")
+    mapeo.append("  • por año, en el año, durante el año, del año")
+    mapeo.append("  • por estado, según estado, con estado, que tengan estado")
+    
+    mapeo.append("\n⚠️ INSTRUCCIONES PARA EL AI:")
+    mapeo.append("  1. Si el usuario usa un término que no aparece exactamente en los campos,")
+    mapeo.append("     busca en este mapeo para encontrar el campo equivalente")
+    mapeo.append("  2. Si estás confundido entre dos campos similares, puedes hacer una pregunta")
+    mapeo.append("     aclaratoria como: '¿Te refieres a fecha_vencimiento o fecha_pago?'")
+    mapeo.append("  3. Usa inferencia semántica: si preguntan 'cuándo vence', usa fecha_vencimiento")
+    mapeo.append("  4. Si preguntan sobre 'pagos', considera tanto la tabla 'pagos' como 'cuotas'")
+    mapeo.append("  5. Para términos como 'morosidad', considera campos: dias_morosidad, monto_morosidad, estado='MORA'")
+    mapeo.append("  6. Si no estás seguro, pregunta al usuario para aclarar antes de responder")
+    
+    return "\n".join(mapeo)
+
+
+def _obtener_inventario_campos_bd(db: Session) -> str:
+    """Obtiene un inventario completo y organizado de todos los campos de BD por tablas con índices"""
+    try:
+        from sqlalchemy.engine import reflection
+        
+        inspector = reflection.Inspector.from_engine(db.bind)
+        inventario = []
+        
+        inventario.append("=== INVENTARIO COMPLETO DE CAMPOS DE BASE DE DATOS ===\n")
+        inventario.append("Organizado por tablas con información de índices, tipos de datos y relaciones\n")
+        
+        # Tablas principales en orden de importancia
+        tablas_prioritarias = [
+            "clientes", "prestamos", "cuotas", "pagos", 
+            "notificaciones", "users", "concesionarios", "analistas",
+            "configuracion_sistema", "documentos_ai", "auditorias",
+            "prestamos_evaluacion", "prestamos_auditoria", "pagos_auditoria"
+        ]
+        
+        # Obtener todas las tablas
+        todas_tablas = inspector.get_table_names()
+        
+        # Procesar tablas prioritarias primero
+        tablas_procesadas = set()
+        for tabla in tablas_prioritarias:
+            if tabla in todas_tablas:
+                tablas_procesadas.add(tabla)
+                _agregar_info_tabla(inventario, inspector, tabla)
+        
+        # Procesar tablas restantes
+        for tabla in sorted(todas_tablas):
+            if tabla not in tablas_procesadas:
+                _agregar_info_tabla(inventario, inspector, tabla)
+        
+        return "\n".join(inventario)
+    except Exception as e:
+        logger.error(f"Error obteniendo inventario de campos BD: {e}")
+        return "No se pudo obtener el inventario completo de campos"
+
+
+def _agregar_info_tabla(inventario: list, inspector, tabla: str):
+    """Agrega información detallada de una tabla al inventario"""
+    try:
+        inventario.append(f"\n{'='*80}")
+        inventario.append(f"TABLA: {tabla.upper()}")
+        inventario.append(f"{'='*80}\n")
+        
+        # Obtener columnas
+        columnas = inspector.get_columns(tabla)
+        inventario.append("📋 CAMPOS (Columnas):")
+        
+        # Separar campos por tipo
+        campos_primarios = []
+        campos_indexados = []
+        campos_normales = []
+        campos_fecha = []
+        campos_numericos = []
+        campos_texto = []
+        
+        # Obtener índices para identificar campos indexados
+        indices = inspector.get_indexes(tabla)
+        campos_con_indice = set()
+        for idx in indices:
+            campos_con_indice.update(idx['column_names'])
+        
+        # Obtener claves foráneas
+        fks = inspector.get_foreign_keys(tabla)
+        campos_fk = set()
+        for fk in fks:
+            campos_fk.update(fk['constrained_columns'])
+        
+        for col in columnas:
+            nombre = col['name']
+            tipo = str(col['type'])
+            nullable = "NULL" if col['nullable'] else "NOT NULL"
+            default = f" DEFAULT {col['default']}" if col.get('default') is not None else ""
+            es_pk = col.get('primary_key', False)
+            tiene_indice = nombre in campos_con_indice
+            es_fk = nombre in campos_fk
+            
+            info_campo = {
+                'nombre': nombre,
+                'tipo': tipo,
+                'nullable': nullable,
+                'default': default,
+                'es_pk': es_pk,
+                'tiene_indice': tiene_indice,
+                'es_fk': es_fk
+            }
+            
+            if es_pk:
+                campos_primarios.append(info_campo)
+            elif tiene_indice:
+                campos_indexados.append(info_campo)
+            elif 'date' in tipo.lower() or 'timestamp' in tipo.lower() or 'time' in tipo.lower():
+                campos_fecha.append(info_campo)
+            elif 'numeric' in tipo.lower() or 'integer' in tipo.lower() or 'decimal' in tipo.lower():
+                campos_numericos.append(info_campo)
+            elif 'varchar' in tipo.lower() or 'text' in tipo.lower() or 'string' in tipo.lower():
+                campos_texto.append(info_campo)
+            else:
+                campos_normales.append(info_campo)
+        
+        # Mostrar campos primarios
+        if campos_primarios:
+            inventario.append("\n  🔑 CLAVES PRIMARIAS:")
+            for campo in campos_primarios:
+                fk_info = " [FK]" if campo['es_fk'] else ""
+                inventario.append(f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{fk_info}")
+        
+        # Mostrar campos indexados (importantes para consultas rápidas)
+        if campos_indexados:
+            inventario.append("\n  ⚡ CAMPOS INDEXADOS (consultas rápidas):")
+            for campo in campos_indexados:
+                fk_info = " [FK]" if campo['es_fk'] else ""
+                inventario.append(f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{fk_info}")
+        
+        # Mostrar campos de fecha
+        if campos_fecha:
+            inventario.append("\n  📅 CAMPOS DE FECHA:")
+            for campo in campos_fecha:
+                idx_info = " [INDEXED]" if campo['tiene_indice'] else ""
+                fk_info = " [FK]" if campo['es_fk'] else ""
+                inventario.append(f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{idx_info}{fk_info}")
+        
+        # Mostrar campos numéricos
+        if campos_numericos:
+            inventario.append("\n  🔢 CAMPOS NUMÉRICOS:")
+            for campo in campos_numericos:
+                idx_info = " [INDEXED]" if campo['tiene_indice'] else ""
+                fk_info = " [FK]" if campo['es_fk'] else ""
+                inventario.append(f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{idx_info}{fk_info}")
+        
+        # Mostrar campos de texto
+        if campos_texto:
+            inventario.append("\n  📝 CAMPOS DE TEXTO:")
+            for campo in campos_texto:
+                idx_info = " [INDEXED]" if campo['tiene_indice'] else ""
+                fk_info = " [FK]" if campo['es_fk'] else ""
+                inventario.append(f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{idx_info}{fk_info}")
+        
+        # Mostrar otros campos
+        if campos_normales:
+            inventario.append("\n  📦 OTROS CAMPOS:")
+            for campo in campos_normales:
+                idx_info = " [INDEXED]" if campo['tiene_indice'] else ""
+                fk_info = " [FK]" if campo['es_fk'] else ""
+                inventario.append(f"    • {campo['nombre']}: {campo['tipo']} {campo['nullable']}{campo['default']}{idx_info}{fk_info}")
+        
+        # Mostrar índices compuestos
+        if indices:
+            indices_compuestos = [idx for idx in indices if len(idx['column_names']) > 1]
+            if indices_compuestos:
+                inventario.append("\n  🔗 ÍNDICES COMPUESTOS:")
+                for idx in indices_compuestos:
+                    unique = " [UNIQUE]" if idx.get('unique') else ""
+                    columnas_idx = ', '.join(idx['column_names'])
+                    inventario.append(f"    • {idx['name']}: ({columnas_idx}){unique}")
+        
+        # Mostrar relaciones (claves foráneas)
+        if fks:
+            inventario.append("\n  🔗 RELACIONES (Claves Foráneas):")
+            for fk in fks:
+                col_local = ', '.join(fk['constrained_columns'])
+                tabla_ref = fk['referred_table']
+                col_ref = ', '.join(fk['referred_columns'])
+                inventario.append(f"    • {col_local} -> {tabla_ref}.{col_ref}")
+        
+        # Información de uso común y sinónimos
+        inventario.append(f"\n  💡 USO COMÚN Y SINÓNIMOS:")
+        if tabla == "clientes":
+            inventario.append("    • Buscar por: cedula (indexed) [también: cédula, documento, DNI, CI]")
+            inventario.append("    • Buscar por: telefono (indexed) [también: teléfono, tel, contacto, celular]")
+            inventario.append("    • Buscar por: email (indexed) [también: correo, e-mail, mail]")
+            inventario.append("    • Filtrar por: estado (indexed), activo (indexed)")
+            inventario.append("    • Campos relacionados: nombres [nombre, nombre completo, cliente, persona]")
+        elif tabla == "prestamos":
+            inventario.append("    • Buscar por: cliente_id (FK, indexed) [también: id cliente, código cliente]")
+            inventario.append("    • Buscar por: cedula (indexed) [también: cédula, documento, DNI]")
+            inventario.append("    • Filtrar por: estado (indexed) [también: situación, condición, status]")
+            inventario.append("    • Filtrar por: fecha_registro (indexed) [también: fecha creación, creado]")
+            inventario.append("    • Campos relacionados: total_financiamiento [monto préstamo, valor préstamo, financiamiento]")
+            inventario.append("    • Relaciona con: clientes (cliente_id), cuotas (prestamo_id)")
+        elif tabla == "cuotas":
+            inventario.append("    • Buscar por: prestamo_id (FK, indexed) [también: id préstamo, préstamo, crédito]")
+            inventario.append("    • Buscar por: fecha_vencimiento (indexed) [también: vencimiento, cuándo vence, fecha vencida]")
+            inventario.append("    • Filtrar por: estado (indexed) [PAGADA, PENDIENTE, MORA, PARCIAL]")
+            inventario.append("    • Campos clave:")
+            inventario.append("      - fecha_vencimiento [vencimiento, cuándo vence]")
+            inventario.append("      - fecha_pago [cuando pagó, fecha pagado, día de pago]")
+            inventario.append("      - monto_cuota [cuota, valor cuota, pago cuota]")
+            inventario.append("      - total_pagado [total pagado, suma pagada, acumulado pagado]")
+            inventario.append("      - dias_morosidad [días morosidad, días pendiente, días adeudado]")
+            inventario.append("      - monto_morosidad [morosidad, monto pendiente, deuda pendiente]")
+        elif tabla == "pagos":
+            inventario.append("    • Buscar por: prestamo_id (indexed) [también: id préstamo, préstamo, crédito]")
+            inventario.append("    • Buscar por: cedula (indexed) [también: cédula, documento, DNI]")
+            inventario.append("    • Buscar por: fecha_pago (indexed) [también: cuando pagó, fecha pagado, día de pago]")
+            inventario.append("    • Filtrar por: activo (indexed) [también: pago activo, pago válido, pago vigente]")
+            inventario.append("    • Campos clave:")
+            inventario.append("      - fecha_pago [cuando pagó, fecha pagado, día de pago]")
+            inventario.append("      - monto_pagado [pagado, cantidad pagada, abonado]")
+            inventario.append("      - numero_documento [número documento, comprobante, referencia]")
+            inventario.append("      - conciliado [conciliación, verificado, confirmado]")
+        elif tabla == "notificaciones":
+            inventario.append("    • Buscar por: cliente_id (FK, indexed)")
+            inventario.append("    • Filtrar por: tipo (indexed) [EMAIL, SMS, WHATSAPP]")
+            inventario.append("    • Filtrar por: estado (indexed) [PENDIENTE, ENVIADA, FALLIDA]")
+            inventario.append("    • Campos relacionados: fecha_envio [fecha envío, cuando se envió]")
+        
+    except Exception as e:
+        logger.error(f"Error agregando info de tabla {tabla}: {e}")
+        inventario.append(f"  ⚠️ Error obteniendo información de la tabla: {e}")
+
+
 def _obtener_esquema_bd_completo(db: Session) -> str:
     """Obtiene el esquema completo de la base de datos con todas las tablas, campos e índices"""
     try:
@@ -4123,6 +4427,99 @@ def _analisis_ml_clustering_prestamos(db: Session) -> dict:
         return None
 
 
+def _analizar_pagos_segun_vencimiento(db: Session, año: int, mes: int) -> dict:
+    """Analiza pagos realizados según fechas de vencimiento de cuotas en un mes específico"""
+    try:
+        from sqlalchemy import text, extract, and_
+        from datetime import date, timedelta
+        
+        # Calcular rango del mes
+        fecha_inicio_mes = date(año, mes, 1)
+        if mes == 12:
+            fecha_fin_mes = date(año + 1, 1, 1) - timedelta(days=1)
+        else:
+            fecha_fin_mes = date(año, mes + 1, 1) - timedelta(days=1)
+        
+        # Consulta: Cuotas con fecha_vencimiento en el mes y si fueron pagadas
+        query = text("""
+            SELECT 
+                c.id as cuota_id,
+                c.prestamo_id,
+                c.fecha_vencimiento,
+                c.monto_cuota,
+                c.estado as estado_cuota,
+                c.total_pagado,
+                CASE 
+                    WHEN c.estado = 'PAGADA' AND c.fecha_pago IS NOT NULL THEN TRUE
+                    ELSE FALSE
+                END as fue_pagada,
+                c.fecha_pago as fecha_pago_cuota,
+                COUNT(DISTINCT p.id) FILTER (WHERE p.activo = TRUE) as pagos_asociados,
+                COALESCE(SUM(p.monto_pagado) FILTER (WHERE p.activo = TRUE), 0) as total_pagado_en_pagos
+            FROM cuotas c
+            INNER JOIN prestamos pr ON c.prestamo_id = pr.id
+            LEFT JOIN pagos p ON (
+                (p.prestamo_id = pr.id OR p.cedula = pr.cedula)
+                AND p.activo = TRUE
+                AND EXTRACT(YEAR FROM p.fecha_pago) = :año
+                AND EXTRACT(MONTH FROM p.fecha_pago) = :mes
+            )
+            WHERE pr.estado = 'APROBADO'
+              AND EXTRACT(YEAR FROM c.fecha_vencimiento) = :año
+              AND EXTRACT(MONTH FROM c.fecha_vencimiento) = :mes
+            GROUP BY c.id, c.prestamo_id, c.fecha_vencimiento, c.monto_cuota, c.estado, c.total_pagado, c.fecha_pago
+            ORDER BY c.fecha_vencimiento
+        """)
+        
+        resultado = db.execute(query.bindparams(año=año, mes=mes))
+        cuotas = [dict(row._mapping) for row in resultado.fetchall()]
+        
+        # Analizar resultados
+        total_cuotas = len(cuotas)
+        cuotas_pagadas_segun_vencimiento = 0
+        cuotas_pagadas_antes = 0
+        cuotas_pagadas_despues = 0
+        cuotas_no_pagadas = 0
+        
+        for cuota in cuotas:
+            fecha_vencimiento = cuota.get('fecha_vencimiento')
+            fecha_pago = cuota.get('fecha_pago_cuota')
+            fue_pagada = cuota.get('fue_pagada', False)
+            total_pagado = float(cuota.get('total_pagado', 0) or 0)
+            
+            if fue_pagada and fecha_pago:
+                # Verificar si el pago fue según la fecha de vencimiento (dentro de ±3 días)
+                dias_diferencia = (fecha_pago - fecha_vencimiento).days
+                if abs(dias_diferencia) <= 3:
+                    cuotas_pagadas_segun_vencimiento += 1
+                elif dias_diferencia < 0:
+                    cuotas_pagadas_antes += 1
+                else:
+                    cuotas_pagadas_despues += 1
+            elif total_pagado > 0:
+                # Tiene pagos pero no está marcada como PAGADA
+                cuotas_pagadas_despues += 1
+            else:
+                cuotas_no_pagadas += 1
+        
+        porcentaje_pagadas_segun_vencimiento = (cuotas_pagadas_segun_vencimiento / total_cuotas * 100) if total_cuotas > 0 else 0
+        
+        return {
+            'año': año,
+            'mes': mes,
+            'total_cuotas_vencimiento_mes': total_cuotas,
+            'cuotas_pagadas_segun_vencimiento': cuotas_pagadas_segun_vencimiento,
+            'cuotas_pagadas_antes': cuotas_pagadas_antes,
+            'cuotas_pagadas_despues': cuotas_pagadas_despues,
+            'cuotas_no_pagadas': cuotas_no_pagadas,
+            'porcentaje_pagadas_segun_vencimiento': round(porcentaje_pagadas_segun_vencimiento, 2),
+            'conclusion': 'NINGUNO' if cuotas_pagadas_segun_vencimiento == 0 else f'{cuotas_pagadas_segun_vencimiento} cuotas pagadas según vencimiento'
+        }
+    except Exception as e:
+        logger.error(f"Error analizando pagos según vencimiento: {e}")
+        return None
+
+
 def _calcular_analisis_cobranzas(db: Session) -> dict:
     """Calcula análisis detallado de cobranzas"""
     try:
@@ -4542,6 +4939,23 @@ async def chat_ai(
             "qué día",
             "qué fecha",
             "hora actual",
+            "fecha de vencimiento",
+            "fechas de vencimiento",
+            "vencimiento",
+            "vencidas",
+            "vencido",
+            "pago según",
+            "pago segun",
+            "pagos según",
+            "pagos segun",
+            "pagado según",
+            "pagado segun",
+            "ninguno",
+            "ninguna",
+            "cuántos pagaron",
+            "cuántas pagaron",
+            "cuántos pagaron en",
+            "cuántas pagaron en",
             # Términos de cálculos y análisis
             "tasa",
             "tasas",
@@ -4624,14 +5038,24 @@ async def chat_ai(
             "relaciones", "foreign key", "cruces", "join", "consulta compleja"
         ])
         
+        # Siempre incluir inventario de campos (más organizado y útil para el AI)
         info_esquema = ""
-        if requiere_analisis_profundo:
-            try:
-                info_esquema = "\n\n" + _obtener_esquema_bd_completo(db)
-                info_esquema += "\n" + _obtener_estadisticas_tablas(db)
-            except Exception as e:
-                logger.error(f"Error obteniendo esquema completo: {e}")
-                info_esquema = "\n\n[Esquema completo no disponible en este momento]"
+        try:
+            # Primero el mapeo semántico (para que el AI entienda sinónimos)
+            info_esquema = "\n\n" + _obtener_mapeo_semantico_campos()
+            # Luego el inventario completo
+            info_esquema += "\n\n" + _obtener_inventario_campos_bd(db)
+            info_esquema += "\n" + _obtener_estadisticas_tablas(db)
+            
+            # Si requiere análisis profundo, agregar esquema completo también
+            if requiere_analisis_profundo:
+                try:
+                    info_esquema += "\n\n" + _obtener_esquema_bd_completo(db)
+                except Exception as e:
+                    logger.debug(f"Error obteniendo esquema completo: {e}")
+        except Exception as e:
+            logger.error(f"Error obteniendo inventario de campos: {e}")
+            info_esquema = "\n\n[Inventario de campos no disponible en este momento]"
 
         # Buscar contexto en documentos si están disponibles
         contexto_documentos = ""
@@ -4718,10 +5142,11 @@ async def chat_ai(
                         año = int(años_match[0]) if años_match else año_actual
                         meses_encontrados.append((año, mes_num, mes_nombre))
                 
-                # Si se encontraron meses, calcular tasas de morosidad
+                # Si se encontraron meses, calcular tasas de morosidad y análisis de pagos
                 if meses_encontrados:
                     datos_adicionales += "\n\n=== CÁLCULOS ESPECÍFICOS SOLICITADOS ===\n"
                     for año, mes_num, mes_nombre in meses_encontrados:
+                        # Calcular tasa de morosidad
                         resultado = _calcular_tasa_morosidad_mes(db, año, mes_num)
                         if resultado:
                             datos_adicionales += (
@@ -4731,6 +5156,21 @@ async def chat_ai(
                                 f"Tasa de morosidad: {resultado['tasa_morosidad']}%, "
                                 f"Monto en mora: {resultado['monto_mora']:,.2f}\n"
                             )
+                        
+                        # Si pregunta sobre pagos según vencimiento, agregar análisis
+                        if any(palabra in pregunta_lower for palabra in ["pago según", "pago segun", "pagos según", "pagos segun", "pagado según", "pagado segun", "ninguno", "ninguna"]):
+                            analisis_pagos = _analizar_pagos_segun_vencimiento(db, año, mes_num)
+                            if analisis_pagos:
+                                datos_adicionales += (
+                                    f"\n--- Análisis de Pagos según Fechas de Vencimiento ({mes_nombre.capitalize()} {año}) ---\n"
+                                    f"Total cuotas con vencimiento en {mes_nombre}: {analisis_pagos['total_cuotas_vencimiento_mes']}\n"
+                                    f"Cuotas pagadas según fecha de vencimiento (±3 días): {analisis_pagos['cuotas_pagadas_segun_vencimiento']}\n"
+                                    f"Cuotas pagadas antes del vencimiento: {analisis_pagos['cuotas_pagadas_antes']}\n"
+                                    f"Cuotas pagadas después del vencimiento: {analisis_pagos['cuotas_pagadas_despues']}\n"
+                                    f"Cuotas no pagadas: {analisis_pagos['cuotas_no_pagadas']}\n"
+                                    f"Porcentaje pagadas según vencimiento: {analisis_pagos['porcentaje_pagadas_segun_vencimiento']}%\n"
+                                    f"Conclusión: {analisis_pagos['conclusion']}\n"
+                                )
                 
                 # Si pregunta sobre análisis de cobranzas
                 if any(palabra in pregunta_lower for palabra in ["análisis", "cobranzas", "clientes en mora"]):
@@ -4845,75 +5285,72 @@ Tienes acceso a información de la base de datos del sistema y a la fecha/hora a
 {datos_adicionales}
 {info_esquema}
 
-=== TABLAS DISPONIBLES Y RELACIONES ===
-- **clientes**: Información de clientes
-  - Campos principales: id, cedula (indexed), nombres, telefono (indexed), email (indexed), estado (indexed), activo (indexed), fecha_registro, fecha_actualizacion
-  - Relaciones: prestamos (cliente_id)
-  
-- **prestamos**: Información de préstamos
-  - Campos principales: id, cliente_id (FK, indexed), cedula (indexed), total_financiamiento, estado (indexed), fecha_registro (indexed), fecha_aprobacion, analista, concesionario, producto, modelo_vehiculo
-  - Relaciones: clientes (cliente_id), cuotas (prestamo_id), pagos (prestamo_id o cedula)
-  
-- **cuotas**: Cuotas de préstamos
-  - Campos principales: id, prestamo_id (FK, indexed), fecha_vencimiento (indexed), monto_cuota, estado (indexed), total_pagado, fecha_vencimiento
-  - Relaciones: prestamos (prestamo_id)
-  - Estados: PAGADA, PENDIENTE, MORA
-  
-- **pagos**: Registro de pagos realizados
-  - Campos principales: id, prestamo_id (FK, indexed), cedula (indexed), monto_pagado, fecha_pago (indexed), activo (indexed), numero_documento
-  - Relaciones: prestamos (prestamo_id o cedula)
-  
-- **notificaciones**: Notificaciones enviadas
-  - Campos principales: id, cliente_id, tipo, estado, fecha_envio, fecha_creacion
-  - Relaciones: clientes (cliente_id)
-  
-- **users**: Usuarios del sistema
-  - Campos principales: id, email (unique), nombre, apellido, rol, is_admin, is_active
-  
-- **concesionarios**: Concesionarios asociados
-  - Campos principales: id, nombre, activo
-  
-- **analistas**: Analistas/asesores
-  - Campos principales: id, nombre, email, activo
-  
-- **configuracion_sistema**: Configuración del sistema
-  - Campos principales: id, categoria, clave, valor, tipo_dato
-  
-- **documentos_ai**: Documentos para contexto de AI
-  - Campos principales: id, titulo, contenido_texto, activo, contenido_procesado
+=== INVENTARIO COMPLETO DE CAMPOS ===
+El sistema tiene acceso completo a TODOS los campos de TODAS las tablas. 
+El inventario detallado está disponible más abajo en "INVENTARIO COMPLETO DE CAMPOS DE BASE DE DATOS".
 
-=== ÍNDICES DISPONIBLES (para consultas rápidas) ===
-- clientes: cedula, telefono, email, estado, activo
-- prestamos: cliente_id, cedula, estado, fecha_registro
-- cuotas: prestamo_id, fecha_vencimiento, estado
-- pagos: prestamo_id, cedula, fecha_pago, activo
+RESUMEN RÁPIDO DE TABLAS PRINCIPALES:
+- **clientes**: Información de clientes (cedula, nombres, telefono, email, estado, activo)
+- **prestamos**: Préstamos aprobados (cliente_id, cedula, total_financiamiento, estado, analista, concesionario)
+- **cuotas**: Cuotas de préstamos (prestamo_id, fecha_vencimiento, monto_cuota, estado, total_pagado, fecha_pago)
+- **pagos**: Pagos realizados (prestamo_id, cedula, fecha_pago, monto_pagado, numero_documento, activo)
+- **notificaciones**: Notificaciones enviadas (cliente_id, tipo, estado, fecha_envio)
+- **users**: Usuarios del sistema (email, nombre, apellido, rol, is_admin)
+- **concesionarios**: Concesionarios (nombre, activo)
+- **analistas**: Analistas/asesores (nombre, email, activo)
+- **configuracion_sistema**: Configuración (categoria, clave, valor, tipo_dato)
+- **documentos_ai**: Documentos para AI (titulo, contenido_texto, activo, contenido_procesado)
 
-=== RELACIONES PRINCIPALES (para JOINs y cruces) ===
-- clientes.id -> prestamos.cliente_id
-- prestamos.id -> cuotas.prestamo_id
-- prestamos.id -> pagos.prestamo_id (o prestamos.cedula -> pagos.cedula)
-- clientes.id -> notificaciones.cliente_id
+IMPORTANTE: Consulta el "INVENTARIO COMPLETO DE CAMPOS DE BASE DE DATOS" más abajo para:
+- Ver TODOS los campos de cada tabla con sus tipos de datos
+- Identificar qué campos están INDEXADOS (para consultas rápidas)
+- Conocer las relaciones entre tablas (claves foráneas)
+- Entender qué campos usar para filtros y búsquedas eficientes
 
 INSTRUCCIONES COMO ESPECIALISTA EN COBRANZAS Y PRÉSTAMOS:
 1. SOLO responde preguntas sobre la base de datos del sistema relacionadas con cobranzas y préstamos
 2. Si la pregunta NO es sobre la BD, responde con el mensaje de restricción mencionado arriba
 3. Responde preguntas sobre la fecha y hora actual usando la información proporcionada en el resumen
-4. Analiza y responde preguntas sobre préstamos, clientes, pagos, cuotas y moras basándote en el resumen
-5. Proporciona análisis y recomendaciones basadas en los datos del resumen
-6. Si la pregunta requiere datos específicos que no están en el resumen, indica que necesitarías hacer una consulta más específica
-7. Usa los datos del resumen para dar respuestas precisas y profesionales
-8. Si no tienes suficiente información, sé honesto al respecto
-9. Formatea números grandes con separadores de miles
-10. Responde siempre en español con un tono profesional de especialista
-11. Para preguntas sobre la fecha actual, usa la información de "Fecha y hora actual del sistema" del resumen
-12. Proporciona contexto y análisis cuando sea relevante (ej: "Tienes X cuotas en mora, lo que representa Y% del total")
-13. **CÁLCULOS MATEMÁTICOS Y CONSULTAS A BD**: Puedes y DEBES realizar cálculos matemáticos y análisis cuando se soliciten:
+4. **SI ESTÁS CONFUNDIDO, PUEDES HACER PREGUNTAS ACLARATORIAS**:
+   - Si no estás seguro qué campo usar, pregunta: "¿Te refieres a [campo1] o [campo2]?"
+   - Si hay ambigüedad en la pregunta, aclara: "Para darte una respuesta precisa, ¿te refieres a...?"
+   - Ejemplos de preguntas aclaratorias válidas:
+     * "¿Te refieres a fecha_vencimiento (cuándo debe pagarse) o fecha_pago (cuándo se pagó)?"
+     * "¿Quieres saber el monto_pagado (de un pago específico) o total_pagado (acumulado de la cuota)?"
+     * "¿Te refieres a morosidad en términos de días (dias_morosidad) o monto (monto_morosidad)?"
+   - Es MEJOR preguntar que responder incorrectamente
+5. Analiza y responde preguntas sobre préstamos, clientes, pagos, cuotas y moras basándote en el resumen
+6. Proporciona análisis y recomendaciones basadas en los datos del resumen
+7. Si la pregunta requiere datos específicos que no están en el resumen, indica que necesitarías hacer una consulta más específica
+8. Usa los datos del resumen para dar respuestas precisas y profesionales
+9. Si no tienes suficiente información, sé honesto al respecto
+10. Formatea números grandes con separadores de miles
+11. Responde siempre en español con un tono profesional de especialista
+12. Para preguntas sobre la fecha actual, usa la información de "Fecha y hora actual del sistema" del resumen
+13. Proporciona contexto y análisis cuando sea relevante (ej: "Tienes X cuotas en mora, lo que representa Y% del total")
+14. **COMPRENSIÓN SEMÁNTICA DE CAMPOS**: 
+    - NO busques solo coincidencias textuales exactas. Usa el "MAPEO SEMÁNTICO DE CAMPOS" para entender sinónimos
+    - Si el usuario dice "cuándo vence", entiende que se refiere a "fecha_vencimiento"
+    - Si dice "monto pagado", puede referirse a "monto_pagado" o "total_pagado" según el contexto
+    - Si dice "morosidad", considera: dias_morosidad, monto_morosidad, estado='MORA', o cuotas con fecha_vencimiento pasada
+    - Si estás confundido entre dos campos similares, puedes hacer una pregunta aclaratoria:
+      Ejemplo: "¿Te refieres a la fecha_vencimiento (cuándo debe pagarse) o fecha_pago (cuándo se pagó)?"
+    - Usa inferencia semántica: relaciona conceptos similares aunque no sean exactamente iguales
+    - Si no estás seguro del campo exacto, pregunta al usuario antes de responder incorrectamente
+
+15. **CÁLCULOS MATEMÁTICOS Y CONSULTAS A BD**: Puedes y DEBES realizar cálculos matemáticos y análisis cuando se soliciten:
     - Tasas de morosidad: (Cuotas en mora / Total de cuotas) × 100
     - Comparaciones entre períodos: calcula diferencias y porcentajes de cambio
     - Promedios, sumas, diferencias, porcentajes, variaciones, etc.
     - Si la pregunta menciona meses específicos (ej: "septiembre", "octubre"), 
       el sistema automáticamente ejecutará consultas SQL para obtener datos precisos de esos meses
     - Usa los datos de "CÁLCULOS ESPECÍFICOS SOLICITADOS" cuando estén disponibles - son consultas directas a BD
+    - **ANÁLISIS DE PAGOS SEGÚN FECHAS DE VENCIMIENTO**: 
+      * El sistema puede analizar si los pagos se realizaron según las fechas de vencimiento de las cuotas
+      * Compara fecha_pago de cuotas con fecha_vencimiento
+      * Clasifica pagos como: según vencimiento (±3 días), antes, después, o no pagados
+      * Si preguntan "ninguno en [mes] pagó según fechas de vencimiento", el sistema ejecutará este análisis automáticamente
+      * Los resultados aparecen en "Análisis de Pagos según Fechas de Vencimiento"
 14. **ANÁLISIS COMPARATIVO**: Cuando se pidan comparaciones entre meses/períodos:
     - Si hay datos en "CÁLCULOS ESPECÍFICOS SOLICITADOS", úsalos directamente (son más precisos)
     - Si no, extrae los datos relevantes del resumen mensual
