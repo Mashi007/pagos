@@ -37,8 +37,34 @@ def run_migrations() -> None:
         alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
         logger.info("🔄 Ejecutando migraciones de Alembic...")
-        # Ejecutar upgrade a head
-        command.upgrade(alembic_cfg, "head")
+        # Verificar si hay múltiples heads
+        from alembic.script import ScriptDirectory
+        script = ScriptDirectory.from_config(alembic_cfg)
+        heads = script.get_revisions("heads")
+        
+        if len(heads) > 1:
+            # Si hay múltiples heads, intentar actualizar al merge point si existe
+            # Buscar el merge point 9537ffbe05a6 que contiene las migraciones de AI training
+            try:
+                merge_point = script.get_revision("9537ffbe05a6")
+                if merge_point:
+                    logger.info("📌 Actualizando a merge point 9537ffbe05a6 (incluye migraciones AI training)...")
+                    command.upgrade(alembic_cfg, "9537ffbe05a6")
+                else:
+                    # Si no existe el merge point, actualizar a todos los heads
+                    logger.info(f"⚠️ Múltiples heads detectados ({len(heads)}), actualizando todos...")
+                    for head in heads:
+                        logger.info(f"📌 Actualizando a head: {head.revision}")
+                        command.upgrade(alembic_cfg, head.revision)
+            except Exception:
+                # Si falla, intentar actualizar a todos los heads
+                logger.info(f"⚠️ Múltiples heads detectados ({len(heads)}), actualizando todos...")
+                for head in heads:
+                    logger.info(f"📌 Actualizando a head: {head.revision}")
+                    command.upgrade(alembic_cfg, head.revision)
+        else:
+            # Un solo head, actualizar normalmente
+            command.upgrade(alembic_cfg, "head")
         logger.info("✅ Migraciones de Alembic ejecutadas exitosamente")
 
     except ImportError:
