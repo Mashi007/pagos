@@ -2727,20 +2727,34 @@ async def crear_documento_ai(
         ]
         extensiones_permitidas = {".pdf": "pdf", ".txt": "txt", ".docx": "docx"}
 
-        tipo_archivo = archivo.content_type
-        if tipo_archivo not in tipos_permitidos:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Tipo de archivo no permitido. Tipos permitidos: PDF, TXT, DOCX",
-            )
-
-        # Obtener extensión
+        # Obtener extensión primero (más confiable que content_type)
         nombre_archivo_original = archivo.filename or "documento"
         extension = Path(nombre_archivo_original).suffix.lower()
+        
         if extension not in extensiones_permitidas:
-            raise HTTPException(status_code=400, detail=f"Extensión de archivo no permitida: {extension}")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Extensión de archivo no permitida: {extension}. Extensiones permitidas: .pdf, .txt, .docx"
+            )
 
         tipo_archivo_db = extensiones_permitidas[extension]
+        
+        # Validar content_type si está disponible (puede ser None en algunos casos)
+        tipo_archivo = archivo.content_type
+        if tipo_archivo:
+            # Validación flexible: verificar si el tipo coincide o si es un tipo genérico aceptable
+            tipos_validos = tipos_permitidos + [
+                "application/octet-stream",  # Tipo genérico que algunos navegadores usan
+                "application/x-pdf",  # Variante de PDF
+            ]
+            
+            # Si el content_type no coincide exactamente, verificar por extensión
+            if tipo_archivo not in tipos_validos:
+                # Permitir si la extensión es válida (algunos navegadores no envían content_type correcto)
+                logger.warning(f"⚠️ Content-Type '{tipo_archivo}' no está en la lista permitida, pero extensión '{extension}' es válida. Continuando...")
+        else:
+            # Si no hay content_type, confiar en la extensión
+            logger.info(f"ℹ️ No se recibió Content-Type, validando solo por extensión: {extension}")
 
         # Crear directorio de almacenamiento si no existe
         upload_dir = Path("uploads/documentos_ai")
@@ -2836,8 +2850,23 @@ async def crear_documento_ai(
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error creando documento AI: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        error_msg = str(e)
+        error_type = type(e).__name__
+        
+        logger.error(f"❌ Error creando documento AI: {error_msg}", exc_info=True)
+        logger.error(f"   Tipo de error: {error_type}")
+        
+        # Mensaje de error más descriptivo
+        if "does not exist" in error_msg.lower() or "no such table" in error_msg.lower():
+            detail_msg = "La tabla de documentos AI no existe. Por favor, ejecuta las migraciones de base de datos."
+        elif "permission denied" in error_msg.lower() or "access denied" in error_msg.lower():
+            detail_msg = f"Error de permisos al guardar el archivo: {error_msg}"
+        elif "no space left" in error_msg.lower():
+            detail_msg = "No hay espacio suficiente en el servidor para guardar el archivo."
+        else:
+            detail_msg = f"Error interno al crear documento: {error_msg}"
+        
+        raise HTTPException(status_code=500, detail=detail_msg)
 
 
 @router.post("/ai/documentos/{documento_id}/procesar")
@@ -2925,6 +2954,114 @@ def eliminar_documento_ai(
     except Exception as e:
         db.rollback()
         logger.error(f"Error eliminando documento AI: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/ai/documentos/{documento_id}")
+def obtener_documento_ai(
+    documento_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    incluir_contenido: bool = False,
+):
+    """Obtener un documento AI específico"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden ver documentos AI")
+
+    try:
+        documento = db.query(DocumentoAI).filter(DocumentoAI.id == documento_id).first()
+
+        if not documento:
+            raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+        return {
+            "documento": documento.to_dict(incluir_contenido=incluir_contenido),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo documento AI: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.put("/ai/documentos/{documento_id}")
+def actualizar_documento_ai(
+    documento_id: int,
+    documento_data: DocumentoAIUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Actualizar documento AI (título, descripción, estado activo)"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden actualizar documentos AI")
+
+    try:
+        documento = db.query(DocumentoAI).filter(DocumentoAI.id == documento_id).first()
+
+        if not documento:
+            raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+        # Actualizar campos si se proporcionan
+        if documento_data.titulo is not None:
+            documento.titulo = documento_data.titulo
+        if documento_data.descripcion is not None:
+            documento.descripcion = documento_data.descripcion
+        if documento_data.activo is not None:
+            documento.activo = documento_data.activo
+
+        db.commit()
+        db.refresh(documento)
+
+        logger.info(f"✅ Documento AI actualizado: {documento.titulo} (ID: {documento_id})")
+
+        return {
+            "mensaje": "Documento actualizado exitosamente",
+            "documento": documento.to_dict(),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando documento AI: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.patch("/ai/documentos/{documento_id}/activar")
+def activar_desactivar_documento_ai(
+    documento_id: int,
+    activo: bool = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Activar o desactivar un documento AI"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden activar/desactivar documentos AI")
+
+    try:
+        documento = db.query(DocumentoAI).filter(DocumentoAI.id == documento_id).first()
+
+        if not documento:
+            raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+        documento.activo = activo
+        db.commit()
+        db.refresh(documento)
+
+        estado = "activado" if activo else "desactivado"
+        logger.info(f"✅ Documento AI {estado}: {documento.titulo} (ID: {documento_id})")
+
+        return {
+            "mensaje": f"Documento {estado} exitosamente",
+            "documento": documento.to_dict(),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error activando/desactivando documento AI: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -3016,6 +3153,13 @@ def obtener_metricas_ai(
 class ProbarAIRequest(BaseModel):
     pregunta: Optional[str] = None
     usar_documentos: Optional[bool] = True
+
+
+class DocumentoAIUpdate(BaseModel):
+    """Schema para actualizar documento AI"""
+    titulo: Optional[str] = Field(None, description="Título del documento")
+    descripcion: Optional[str] = Field(None, description="Descripción del documento")
+    activo: Optional[bool] = Field(None, description="Estado activo/inactivo")
 
 
 @router.post("/ai/probar")

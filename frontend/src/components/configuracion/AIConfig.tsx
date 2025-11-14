@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, Send, MessageSquare, User, Bot, Edit, Power } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -72,11 +72,33 @@ export function AIConfig() {
   })
   const [subiendoDocumento, setSubiendoDocumento] = useState(false)
   
-  // Estado para pruebas
+  // Estado para editar documento
+  const [editandoDocumento, setEditandoDocumento] = useState<number | null>(null)
+  const [documentoEditado, setDocumentoEditado] = useState({
+    titulo: '',
+    descripcion: '',
+  })
+  const [actualizandoDocumento, setActualizandoDocumento] = useState(false)
+  
+  // Estado para pruebas (chat)
   const [probando, setProbando] = useState(false)
   const [preguntaPrueba, setPreguntaPrueba] = useState('')
   const [usarDocumentos, setUsarDocumentos] = useState(true)
   const [resultadoPrueba, setResultadoPrueba] = useState<any>(null)
+  const [mensajesChat, setMensajesChat] = useState<Array<{
+    id: string
+    tipo: 'user' | 'ai'
+    texto: string
+    timestamp: Date
+    metadata?: {
+      tokens?: number
+      tiempo?: number
+      modelo?: string
+      documentos?: number
+    }
+  }>>([])
+  const chatEndRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [activeTab, setActiveTab] = useState('configuracion')
 
   useEffect(() => {
@@ -237,6 +259,57 @@ export function AIConfig() {
     }
   }
 
+  const handleIniciarEdicion = (doc: DocumentoAI) => {
+    setEditandoDocumento(doc.id)
+    setDocumentoEditado({
+      titulo: doc.titulo,
+      descripcion: doc.descripcion || '',
+    })
+  }
+
+  const handleCancelarEdicion = () => {
+    setEditandoDocumento(null)
+    setDocumentoEditado({ titulo: '', descripcion: '' })
+  }
+
+  const handleActualizarDocumento = async (id: number) => {
+    if (!documentoEditado.titulo.trim()) {
+      toast.error('El título es requerido')
+      return
+    }
+
+    setActualizandoDocumento(true)
+    try {
+      await apiClient.put(`/api/v1/configuracion/ai/documentos/${id}`, {
+        titulo: documentoEditado.titulo,
+        descripcion: documentoEditado.descripcion || null,
+      })
+      toast.success('Documento actualizado exitosamente')
+      setEditandoDocumento(null)
+      setDocumentoEditado({ titulo: '', descripcion: '' })
+      await cargarDocumentos()
+    } catch (error: any) {
+      console.error('Error actualizando documento:', error)
+      const mensajeError = error?.response?.data?.detail || error?.message || 'Error actualizando documento'
+      toast.error(mensajeError)
+    } finally {
+      setActualizandoDocumento(false)
+    }
+  }
+
+  const handleActivarDesactivarDocumento = async (id: number, activo: boolean) => {
+    try {
+      await apiClient.patch(`/api/v1/configuracion/ai/documentos/${id}/activar`, { activo })
+      toast.success(`Documento ${activo ? 'activado' : 'desactivado'} exitosamente`)
+      await cargarDocumentos()
+      await cargarMetricas()
+    } catch (error: any) {
+      console.error('Error activando/desactivando documento:', error)
+      const mensajeError = error?.response?.data?.detail || error?.message || 'Error cambiando estado del documento'
+      toast.error(mensajeError)
+    }
+  }
+
   const formatearTamaño = (bytes: number | null) => {
     if (!bytes) return '0 B'
     if (bytes < 1024) return `${bytes} B`
@@ -244,7 +317,18 @@ export function AIConfig() {
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
   }
 
+  // Scroll automático al final del chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [mensajesChat, probando])
+
   const handleProbar = async () => {
+    const pregunta = preguntaPrueba.trim()
+    if (!pregunta) {
+      toast.error('Por favor, escribe una pregunta')
+      return
+    }
+
     const apiKey = config.openai_api_key?.trim()
     if (!apiKey) {
       toast.error('Debes configurar el OpenAI API Key primero')
@@ -257,6 +341,15 @@ export function AIConfig() {
       return
     }
 
+    // Agregar mensaje del usuario al chat
+    const mensajeUsuario = {
+      id: `user-${Date.now()}`,
+      tipo: 'user' as const,
+      texto: pregunta,
+      timestamp: new Date(),
+    }
+    setMensajesChat(prev => [...prev, mensajeUsuario])
+    setPreguntaPrueba('')
     setProbando(true)
     setResultadoPrueba(null)
     
@@ -273,25 +366,69 @@ export function AIConfig() {
         documentos_consultados?: number
         error_code?: string
       }>('/api/v1/configuracion/ai/probar', {
-        pregunta: preguntaPrueba.trim() || undefined,
+        pregunta: pregunta,
         usar_documentos: usarDocumentos,
       })
       
       setResultadoPrueba(resultado)
       
-      if (resultado.success) {
+      if (resultado.success && resultado.respuesta) {
+        // Agregar respuesta de AI al chat
+        const mensajeAI = {
+          id: `ai-${Date.now()}`,
+          tipo: 'ai' as const,
+          texto: resultado.respuesta,
+          timestamp: new Date(),
+          metadata: {
+            tokens: resultado.tokens_usados,
+            tiempo: resultado.tiempo_respuesta,
+            modelo: resultado.modelo_usado,
+            documentos: resultado.documentos_consultados,
+          },
+        }
+        setMensajesChat(prev => [...prev, mensajeAI])
         toast.success('Respuesta generada exitosamente')
       } else {
+        // Agregar mensaje de error al chat
+        const mensajeError = {
+          id: `error-${Date.now()}`,
+          tipo: 'ai' as const,
+          texto: resultado.mensaje || 'Error generando respuesta',
+          timestamp: new Date(),
+        }
+        setMensajesChat(prev => [...prev, mensajeError])
         toast.error(resultado.mensaje || 'Error generando respuesta')
       }
     } catch (error: any) {
       console.error('Error probando AI:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error probando AI'
+      const mensajeErrorChat = {
+        id: `error-${Date.now()}`,
+        tipo: 'ai' as const,
+        texto: `❌ Error: ${mensajeError}`,
+        timestamp: new Date(),
+      }
+      setMensajesChat(prev => [...prev, mensajeErrorChat])
       toast.error(mensajeError)
       setResultadoPrueba({ success: false, mensaje: mensajeError })
     } finally {
       setProbando(false)
     }
+  }
+
+  // Manejar Enter para enviar (Shift+Enter para nueva línea)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      if (!probando && preguntaPrueba.trim()) {
+        handleProbar()
+      }
+    }
+  }
+
+  const limpiarChat = () => {
+    setMensajesChat([])
+    setResultadoPrueba(null)
   }
 
   return (
@@ -414,122 +551,169 @@ export function AIConfig() {
             </CardContent>
           </Card>
 
-          {/* Prueba de AI */}
+          {/* Chat de Prueba de AI */}
           <div className="border-t pt-4 mt-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                <TestTube className="h-5 w-5" />
-                Prueba de Respuesta de AI
-              </h3>
-              <p className="text-sm text-blue-700 mb-4">
-                Envía una pregunta de prueba para verificar que la configuración de ChatGPT funciona correctamente y genera respuestas contextualizadas.
-              </p>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium block mb-2">
-                    Pregunta de Prueba <span className="text-gray-500">(opcional)</span>
-                  </label>
-                  <Textarea
-                    value={preguntaPrueba}
-                    onChange={(e) => setPreguntaPrueba(e.target.value)}
-                    placeholder="Escribe aquí tu pregunta de prueba... (Ej: ¿Cuáles son los requisitos para un préstamo?)"
-                    rows={4}
-                    className="resize-y"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Si no especificas una pregunta, se usará una pregunta predeterminada.
-                  </p>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={usarDocumentos}
-                    onChange={(e) => setUsarDocumentos(e.target.checked)}
-                    className="rounded"
-                  />
-                  <label className="text-sm font-medium">
-                    Usar documentos de contexto para la respuesta
-                  </label>
-                </div>
-                
-                <Button
-                  type="button"
-                  onClick={handleProbar}
-                  disabled={probando || !config.openai_api_key?.trim()}
-                  className="w-full"
-                >
-                  {probando ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Generando Respuesta...
-                    </>
-                  ) : (
-                    <>
-                      <TestTube className="w-4 h-4 mr-2" />
-                      Probar Respuesta de AI
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Resultado de prueba */}
-          {resultadoPrueba && (
-            <div className={`p-4 rounded-lg border ${
-              resultadoPrueba.success
-                ? 'bg-green-50 border-green-200' 
-                : 'bg-red-50 border-red-200'
-            }`}>
-              <div className="flex items-start gap-2">
-                {resultadoPrueba.success ? (
-                  <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                )}
-                <div className="flex-1">
-                  <p className={`text-sm font-medium mb-2 ${
-                    resultadoPrueba.success ? 'text-green-900' : 'text-red-900'
-                  }`}>
-                    {resultadoPrueba.mensaje}
-                  </p>
-                  
-                  {resultadoPrueba.success && resultadoPrueba.respuesta && (
-                    <div className="mt-3 space-y-2">
-                      <div className="bg-white rounded p-3 border">
-                        <p className="text-xs font-semibold text-gray-600 mb-1">Pregunta:</p>
-                        <p className="text-sm text-gray-800">{resultadoPrueba.pregunta}</p>
-                      </div>
-                      <div className="bg-white rounded p-3 border">
-                        <p className="text-xs font-semibold text-gray-600 mb-1">Respuesta de AI:</p>
-                        <p className="text-sm text-gray-800 whitespace-pre-wrap">{resultadoPrueba.respuesta}</p>
-                      </div>
-                      <div className="flex gap-4 text-xs text-gray-600 mt-2">
-                        {resultadoPrueba.tokens_usados && (
-                          <span>Tokens: {resultadoPrueba.tokens_usados}</span>
-                        )}
-                        {resultadoPrueba.tiempo_respuesta && (
-                          <span>Tiempo: {resultadoPrueba.tiempo_respuesta}s</span>
-                        )}
-                        {resultadoPrueba.modelo_usado && (
-                          <span>Modelo: {resultadoPrueba.modelo_usado}</span>
-                        )}
-                        {resultadoPrueba.documentos_consultados !== undefined && (
-                          <span>Documentos: {resultadoPrueba.documentos_consultados}</span>
-                        )}
-                      </div>
+            <Card className="border-2">
+              <CardContent className="pt-6 p-0">
+                {/* Header del Chat */}
+                <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-t-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="h-5 w-5" />
+                      <h3 className="font-semibold">Chat de Prueba de AI</h3>
                     </div>
-                  )}
-                  
-                  {!resultadoPrueba.success && resultadoPrueba.error_code && (
-                    <p className="text-sm text-red-600 mt-1">Código de error: {resultadoPrueba.error_code}</p>
-                  )}
+                    {mensajesChat.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={limpiarChat}
+                        className="text-white hover:bg-blue-700"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Limpiar
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-sm text-blue-100 mt-1">
+                    Haz preguntas y recibe respuestas contextualizadas. Presiona Enter para enviar.
+                  </p>
                 </div>
-              </div>
-            </div>
-          )}
+
+                {/* Área de Chat */}
+                <div className="bg-gray-50 h-[500px] flex flex-col">
+                  {/* Mensajes */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {mensajesChat.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                        <MessageSquare className="h-12 w-12 mb-3 opacity-50" />
+                        <p className="text-sm">No hay mensajes aún</p>
+                        <p className="text-xs mt-1">Escribe una pregunta para comenzar</p>
+                      </div>
+                    ) : (
+                      mensajesChat.map((mensaje) => (
+                        <div
+                          key={mensaje.id}
+                          className={`flex gap-3 ${
+                            mensaje.tipo === 'user' ? 'justify-end' : 'justify-start'
+                          }`}
+                        >
+                          {mensaje.tipo === 'ai' && (
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+                              <Bot className="h-4 w-4 text-white" />
+                            </div>
+                          )}
+                          <div
+                            className={`max-w-[80%] rounded-lg p-3 ${
+                              mensaje.tipo === 'user'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-white border border-gray-200 text-gray-800'
+                            }`}
+                          >
+                            <p className="text-sm whitespace-pre-wrap break-words">
+                              {mensaje.texto}
+                            </p>
+                            {mensaje.metadata && mensaje.tipo === 'ai' && (
+                              <div className="mt-2 pt-2 border-t border-gray-200 flex flex-wrap gap-2 text-xs text-gray-500">
+                                {mensaje.metadata.tokens && (
+                                  <span>Tokens: {mensaje.metadata.tokens}</span>
+                                )}
+                                {mensaje.metadata.tiempo && (
+                                  <span>Tiempo: {mensaje.metadata.tiempo.toFixed(2)}s</span>
+                                )}
+                                {mensaje.metadata.modelo && (
+                                  <span>Modelo: {mensaje.metadata.modelo}</span>
+                                )}
+                                {mensaje.metadata.documentos !== undefined && (
+                                  <span>Documentos: {mensaje.metadata.documentos}</span>
+                                )}
+                              </div>
+                            )}
+                            <p className="text-xs mt-1 opacity-70">
+                              {mensaje.timestamp.toLocaleTimeString('es-ES', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                          </div>
+                          {mensaje.tipo === 'user' && (
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
+                              <User className="h-4 w-4 text-gray-600" />
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                    
+                    {/* Indicador de escritura */}
+                    {probando && (
+                      <div className="flex gap-3 justify-start">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+                          <Bot className="h-4 w-4 text-white" />
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-lg p-3">
+                          <div className="flex gap-1">
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+
+                  {/* Input de mensaje */}
+                  <div className="border-t bg-white p-4">
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1 relative">
+                        <Textarea
+                          ref={textareaRef}
+                          value={preguntaPrueba}
+                          onChange={(e) => setPreguntaPrueba(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder="Escribe tu pregunta aquí... (Presiona Enter para enviar, Shift+Enter para nueva línea)"
+                          rows={3}
+                          className="resize-none pr-12"
+                          disabled={probando || !config.openai_api_key?.trim()}
+                        />
+                        <div className="absolute bottom-2 right-2 text-xs text-gray-400">
+                          {preguntaPrueba.length > 0 && `${preguntaPrueba.length} caracteres`}
+                        </div>
+                      </div>
+                      <Button
+                        onClick={handleProbar}
+                        disabled={probando || !preguntaPrueba.trim() || !config.openai_api_key?.trim()}
+                        className="h-[72px] px-4"
+                      >
+                        {probando ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <Send className="h-5 w-5" />
+                        )}
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="usar-documentos"
+                          checked={usarDocumentos}
+                          onChange={(e) => setUsarDocumentos(e.target.checked)}
+                          className="rounded"
+                        />
+                        <label htmlFor="usar-documentos" className="text-xs text-gray-600 cursor-pointer">
+                          Usar documentos de contexto
+                        </label>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Enter para enviar • Shift+Enter para nueva línea
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* Pestaña 2: Documentos */}
@@ -624,58 +808,128 @@ export function AIConfig() {
                   <div className="space-y-3">
                     {documentos.map((doc) => (
                       <div key={doc.id} className="border rounded-lg p-4 hover:bg-gray-50">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <h5 className="font-semibold">{doc.titulo}</h5>
-                              <Badge variant={doc.activo ? "default" : "secondary"}>
-                                {doc.activo ? "Activo" : "Inactivo"}
-                              </Badge>
-                              {doc.contenido_procesado ? (
-                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                  <CheckCircle className="h-3 w-3 mr-1" />
-                                  Procesado
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                                  <AlertCircle className="h-3 w-3 mr-1" />
-                                  Sin procesar
-                                </Badge>
-                              )}
+                        {editandoDocumento === doc.id ? (
+                          // Modo edición
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-sm font-medium block mb-1">Título <span className="text-red-500">*</span></label>
+                              <Input
+                                value={documentoEditado.titulo}
+                                onChange={(e) => setDocumentoEditado(prev => ({ ...prev, titulo: e.target.value }))}
+                                placeholder="Título del documento"
+                              />
                             </div>
-                            {doc.descripcion && (
-                              <p className="text-sm text-gray-600 mb-2">{doc.descripcion}</p>
-                            )}
-                            <div className="flex items-center gap-4 text-xs text-gray-500">
-                              <span>{doc.nombre_archivo}</span>
-                              <span>{doc.tipo_archivo.toUpperCase()}</span>
-                              <span>{formatearTamaño(doc.tamaño_bytes)}</span>
-                              <span>{new Date(doc.creado_en).toLocaleDateString()}</span>
+                            <div>
+                              <label className="text-sm font-medium block mb-1">Descripción</label>
+                              <Textarea
+                                value={documentoEditado.descripcion}
+                                onChange={(e) => setDocumentoEditado(prev => ({ ...prev, descripcion: e.target.value }))}
+                                placeholder="Descripción del documento"
+                                rows={2}
+                              />
                             </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {!doc.contenido_procesado && (
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleActualizarDocumento(doc.id)}
+                                disabled={actualizandoDocumento || !documentoEditado.titulo.trim()}
+                              >
+                                {actualizandoDocumento ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                    Guardando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="h-4 w-4 mr-1" />
+                                    Guardar
+                                  </>
+                                )}
+                              </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleProcesarDocumento(doc.id)}
-                                className="text-blue-600 hover:text-blue-700"
-                                title="Procesar documento para extraer texto"
+                                onClick={handleCancelarEdicion}
+                                disabled={actualizandoDocumento}
                               >
-                                <FileText className="h-4 w-4 mr-1" />
-                                Procesar
+                                Cancelar
                               </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEliminarDocumento(doc.id)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          // Modo visualización
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h5 className="font-semibold">{doc.titulo}</h5>
+                                <Badge variant={doc.activo ? "default" : "secondary"}>
+                                  {doc.activo ? "Activo" : "Inactivo"}
+                                </Badge>
+                                {doc.contenido_procesado ? (
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Procesado
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                                    <AlertCircle className="h-3 w-3 mr-1" />
+                                    Sin procesar
+                                  </Badge>
+                                )}
+                              </div>
+                              {doc.descripcion && (
+                                <p className="text-sm text-gray-600 mb-2">{doc.descripcion}</p>
+                              )}
+                              <div className="flex items-center gap-4 text-xs text-gray-500">
+                                <span>{doc.nombre_archivo}</span>
+                                <span>{doc.tipo_archivo.toUpperCase()}</span>
+                                <span>{formatearTamaño(doc.tamaño_bytes)}</span>
+                                <span>{new Date(doc.creado_en).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {!doc.contenido_procesado && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleProcesarDocumento(doc.id)}
+                                  className="text-blue-600 hover:text-blue-700"
+                                  title="Procesar documento para extraer texto"
+                                >
+                                  <FileText className="h-4 w-4 mr-1" />
+                                  Procesar
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleIniciarEdicion(doc)}
+                                className="text-blue-600 hover:text-blue-700"
+                                title="Editar documento"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleActivarDesactivarDocumento(doc.id, !doc.activo)}
+                                className={doc.activo ? "text-amber-600 hover:text-amber-700" : "text-green-600 hover:text-green-700"}
+                                title={doc.activo ? "Desactivar documento" : "Activar documento"}
+                              >
+                                <Power className={`h-4 w-4 ${doc.activo ? '' : 'opacity-50'}`} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEliminarDocumento(doc.id)}
+                                className="text-red-600 hover:text-red-700"
+                                title="Eliminar documento"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

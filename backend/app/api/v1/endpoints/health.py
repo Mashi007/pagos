@@ -623,6 +623,78 @@ async def verify_database_indexes(
         }
 
 
+@router.get("/database/tabla-documentos-ai")
+async def verificar_tabla_documentos_ai(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Verifica si la tabla documentos_ai existe en la base de datos
+    """
+    try:
+        from sqlalchemy import inspect, text
+        
+        inspector = inspect(db.bind)
+        tablas = inspector.get_table_names()
+        
+        resultado = {
+            "tabla_existe": False,
+            "tabla_nombre": "documentos_ai",
+            "total_tablas": len(tablas),
+            "columnas": [],
+            "indices": [],
+            "total_documentos": 0,
+            "mensaje": "",
+        }
+        
+        if "documentos_ai" in tablas:
+            resultado["tabla_existe"] = True
+            resultado["mensaje"] = "✅ La tabla 'documentos_ai' existe"
+            
+            # Obtener información de columnas
+            columnas = inspector.get_columns("documentos_ai")
+            resultado["columnas"] = [
+                {
+                    "nombre": col["name"],
+                    "tipo": str(col["type"]),
+                    "nullable": col["nullable"],
+                    "default": str(col.get("default", "")) if col.get("default") else None,
+                }
+                for col in columnas
+            ]
+            
+            # Obtener índices
+            indices = inspector.get_indexes("documentos_ai")
+            resultado["indices"] = [
+                {
+                    "nombre": idx["name"],
+                    "columnas": idx["column_names"],
+                    "unique": idx.get("unique", False),
+                }
+                for idx in indices
+            ]
+            
+            # Contar documentos
+            try:
+                count_result = db.execute(text("SELECT COUNT(*) FROM documentos_ai"))
+                resultado["total_documentos"] = count_result.scalar() or 0
+            except Exception as e:
+                resultado["mensaje"] += f" (Error contando documentos: {str(e)})"
+        else:
+            resultado["mensaje"] = "❌ La tabla 'documentos_ai' NO existe. Ejecuta las migraciones: alembic upgrade head"
+            resultado["tablas_disponibles"] = sorted(tablas)[:20]  # Primeras 20 tablas
+        
+        return resultado
+        
+    except Exception as e:
+        logger.error(f"Error verificando tabla documentos_ai: {e}", exc_info=True)
+        return {
+            "tabla_existe": False,
+            "error": str(e),
+            "mensaje": f"❌ Error verificando tabla: {str(e)}",
+        }
+
+
 @router.post("/database/indexes/create")
 async def create_database_indexes(
     db: Session = Depends(get_db),
