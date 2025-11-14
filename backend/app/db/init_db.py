@@ -17,6 +17,38 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 
 
+def run_migrations() -> None:
+    """Ejecutar migraciones de Alembic automáticamente."""
+    try:
+        from alembic import command
+        from alembic.config import Config
+        from pathlib import Path
+
+        # Obtener ruta del archivo alembic.ini
+        alembic_ini_path = Path(__file__).parent.parent.parent / "alembic.ini"
+        
+        if not alembic_ini_path.exists():
+            logger.warning("⚠️ alembic.ini no encontrado, omitiendo migraciones automáticas")
+            return
+
+        # Configurar Alembic
+        alembic_cfg = Config(str(alembic_ini_path))
+        alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
+        logger.info("🔄 Ejecutando migraciones de Alembic...")
+        # Ejecutar upgrade a head
+        command.upgrade(alembic_cfg, "head")
+        logger.info("✅ Migraciones de Alembic ejecutadas exitosamente")
+
+    except ImportError:
+        logger.warning("⚠️ Alembic no está disponible, omitiendo migraciones automáticas")
+    except Exception as e:
+        logger.error(f"❌ Error ejecutando migraciones de Alembic: {e}")
+        logger.error(traceback.format_exc())
+        # No lanzar excepción para no bloquear el startup si las migraciones fallan
+        # Las migraciones pueden ejecutarse manualmente si es necesario
+
+
 def init_db_startup() -> None:
     """Initialize database on startup."""
     try:
@@ -29,6 +61,9 @@ def init_db_startup() -> None:
             # Test connection
             conn.execute(text("SELECT 1"))
             logger.info("Database connection successful")
+
+        # Ejecutar migraciones de Alembic automáticamente
+        run_migrations()
 
         # Create admin user if it doesn't exist
         create_admin_user()
