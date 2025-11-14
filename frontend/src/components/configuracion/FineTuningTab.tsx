@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Brain,
   Heart,
@@ -44,6 +44,13 @@ export function FineTuningTab() {
   const [mostrarFormEntrenamiento, setMostrarFormEntrenamiento] = useState(false)
   const [modeloBase, setModeloBase] = useState('gpt-3.5-turbo')
   const [archivoId, setArchivoId] = useState('')
+
+  // Estados para crear conversación manual
+  const [mostrarFormNuevaConversacion, setMostrarFormNuevaConversacion] = useState(false)
+  const [nuevaPregunta, setNuevaPregunta] = useState('')
+  const [nuevaRespuesta, setNuevaRespuesta] = useState('')
+  const [guardandoConversacion, setGuardandoConversacion] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const cargarConversaciones = async () => {
     setCargando(true)
@@ -176,6 +183,113 @@ export function FineTuningTab() {
     }
   }
 
+  const handleCrearConversacion = async () => {
+    if (!nuevaPregunta.trim() || !nuevaRespuesta.trim()) {
+      toast.error('La pregunta y respuesta son requeridas')
+      return
+    }
+
+    setGuardandoConversacion(true)
+    try {
+      await aiTrainingService.guardarConversacion({
+        pregunta: nuevaPregunta.trim(),
+        respuesta: nuevaRespuesta.trim(),
+        modelo_usado: 'manual',
+      })
+      toast.success('Conversación creada exitosamente')
+      setNuevaPregunta('')
+      setNuevaRespuesta('')
+      setMostrarFormNuevaConversacion(false)
+      cargarConversaciones()
+    } catch (error: any) {
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al crear conversación'
+      toast.error(mensaje)
+    } finally {
+      setGuardandoConversacion(false)
+    }
+  }
+
+  const handleExportarConversaciones = () => {
+    try {
+      const datos = conversaciones.map((c) => ({
+        id: c.id,
+        pregunta: c.pregunta,
+        respuesta: c.respuesta,
+        calificacion: c.calificacion || null,
+        feedback: c.feedback || null,
+        modelo_usado: c.modelo_usado || null,
+        tokens_usados: c.tokens_usados || null,
+        creado_en: c.creado_en,
+      }))
+
+      const json = JSON.stringify(datos, null, 2)
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `conversaciones_${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      toast.success('Conversaciones exportadas exitosamente')
+    } catch (error: any) {
+      toast.error('Error al exportar conversaciones')
+    }
+  }
+
+  const handleImportarConversaciones = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      const text = await file.text()
+      const datos = JSON.parse(text)
+
+      if (!Array.isArray(datos)) {
+        toast.error('El archivo debe contener un array de conversaciones')
+        return
+      }
+
+      let importadas = 0
+      let errores = 0
+
+      for (const item of datos) {
+        if (!item.pregunta || !item.respuesta) {
+          errores++
+          continue
+        }
+
+        try {
+          await aiTrainingService.guardarConversacion({
+            pregunta: item.pregunta,
+            respuesta: item.respuesta,
+            modelo_usado: item.modelo_usado || 'importado',
+            tokens_usados: item.tokens_usados,
+          })
+          importadas++
+        } catch (error) {
+          errores++
+        }
+      }
+
+      if (importadas > 0) {
+        toast.success(`${importadas} conversaciones importadas exitosamente${errores > 0 ? ` (${errores} errores)` : ''}`)
+        cargarConversaciones()
+      } else {
+        toast.error('No se pudieron importar conversaciones')
+      }
+
+      // Limpiar el input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    } catch (error: any) {
+      toast.error('Error al leer el archivo. Verifica que sea un JSON válido.')
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     const variants: Record<string, any> = {
       pending: { variant: 'secondary' as const, icon: Clock, text: 'Pendiente' },
@@ -211,6 +325,48 @@ export function FineTuningTab() {
           </p>
         </div>
       </div>
+
+      {/* Guía de uso */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardContent className="pt-6">
+          <h4 className="font-semibold mb-3 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-blue-600" />
+            ¿Cómo usar Fine-tuning?
+          </h4>
+          <div className="space-y-2 text-sm text-gray-700">
+            <div className="flex items-start gap-2">
+              <span className="font-semibold text-blue-600">1.</span>
+              <div>
+                <strong>Agregar conversaciones:</strong> Usa "Nueva Conversación" para crear manualmente o "Importar desde JSON" para cargar múltiples conversaciones.
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="font-semibold text-blue-600">2.</span>
+              <div>
+                <strong>Calificar conversaciones:</strong> Para cada conversación, califica con 1-5 estrellas. Solo las conversaciones con 4+ estrellas se usarán para entrenar.
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="font-semibold text-blue-600">3.</span>
+              <div>
+                <strong>Preparar datos:</strong> Necesitas al menos 10 conversaciones calificadas (4+ estrellas). Luego haz clic en "Preparar Datos para Entrenamiento".
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="font-semibold text-blue-600">4.</span>
+              <div>
+                <strong>Iniciar entrenamiento:</strong> Selecciona el modelo base y haz clic en "Iniciar Entrenamiento". El proceso puede tardar varios minutos.
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="font-semibold text-blue-600">5.</span>
+              <div>
+                <strong>Activar modelo:</strong> Una vez completado el entrenamiento, puedes activar el modelo entrenado para usarlo en el sistema.
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Filtros */}
       <Card>
@@ -256,6 +412,73 @@ export function FineTuningTab() {
         </CardContent>
       </Card>
 
+      {/* Formulario para crear conversación manual */}
+      {mostrarFormNuevaConversacion && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-semibold">Nueva Conversación</h4>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setMostrarFormNuevaConversacion(false)
+                  setNuevaPregunta('')
+                  setNuevaRespuesta('')
+                }}
+              >
+                <XCircle className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Pregunta *</label>
+                <Textarea
+                  placeholder="Ej: ¿Cuál es el proceso para solicitar un préstamo?"
+                  value={nuevaPregunta}
+                  onChange={(e) => setNuevaPregunta(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Respuesta *</label>
+                <Textarea
+                  placeholder="Ej: Para solicitar un préstamo necesitas..."
+                  value={nuevaRespuesta}
+                  onChange={(e) => setNuevaRespuesta(e.target.value)}
+                  rows={5}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleCrearConversacion} disabled={guardandoConversacion}>
+                  {guardandoConversacion ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Guardar Conversación
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setMostrarFormNuevaConversacion(false)
+                    setNuevaPregunta('')
+                    setNuevaRespuesta('')
+                  }}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Conversaciones */}
       <Card>
         <CardContent className="pt-6">
@@ -264,22 +487,51 @@ export function FineTuningTab() {
               <MessageSquare className="h-5 w-5" />
               Conversaciones ({conversaciones.length})
             </h4>
-            <Button
-              onClick={handlePrepararDatos}
-              disabled={preparando || conversaciones.filter((c) => c.calificacion && c.calificacion >= 4).length < 10}
-            >
-              {preparando ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Preparando...
-                </>
-              ) : (
-                <>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={() => setMostrarFormNuevaConversacion(!mostrarFormNuevaConversacion)}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                {mostrarFormNuevaConversacion ? 'Ocultar Formulario' : 'Nueva Conversación'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Importar desde JSON
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleImportarConversaciones}
+                className="hidden"
+              />
+              {conversaciones.length > 0 && (
+                <Button variant="outline" onClick={handleExportarConversaciones}>
                   <Download className="h-4 w-4 mr-2" />
-                  Preparar Datos para Entrenamiento
-                </>
+                  Exportar JSON
+                </Button>
               )}
-            </Button>
+              <Button
+                onClick={handlePrepararDatos}
+                disabled={preparando || conversaciones.filter((c) => c.calificacion && c.calificacion >= 4).length < 10}
+              >
+                {preparando ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Preparando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4 mr-2" />
+                    Preparar Datos para Entrenamiento
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
 
           {cargando ? (

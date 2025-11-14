@@ -44,6 +44,87 @@ const TABLAS_DISPONIBLES = [
   { value: 'pagos', label: 'Pagos' },
 ]
 
+const CAMPOS_DISPONIBLES: Record<string, Array<{ campo: string; descripcion: string }>> = {
+  clientes: [
+    { campo: 'id', descripcion: 'ID único del cliente' },
+    { campo: 'cedula', descripcion: 'Cédula de identidad' },
+    { campo: 'nombres', descripcion: 'Nombres completos' },
+    { campo: 'telefono', descripcion: 'Teléfono de contacto' },
+    { campo: 'email', descripcion: 'Correo electrónico' },
+    { campo: 'direccion', descripcion: 'Dirección de residencia' },
+    { campo: 'fecha_nacimiento', descripcion: 'Fecha de nacimiento' },
+    { campo: 'ocupacion', descripcion: 'Ocupación del cliente' },
+    { campo: 'estado', descripcion: 'Estado (ACTIVO, INACTIVO, FINALIZADO)' },
+    { campo: 'activo', descripcion: 'Estado activo (true/false)' },
+    { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
+    { campo: 'fecha_actualizacion', descripcion: 'Fecha de última actualización' },
+    { campo: 'usuario_registro', descripcion: 'Usuario que registró' },
+    { campo: 'notas', descripcion: 'Notas adicionales' },
+  ],
+  prestamos: [
+    { campo: 'id', descripcion: 'ID del préstamo' },
+    { campo: 'cliente_id', descripcion: 'ID del cliente' },
+    { campo: 'cedula', descripcion: 'Cédula del cliente' },
+    { campo: 'nombres', descripcion: 'Nombres del cliente' },
+    { campo: 'valor_activo', descripcion: 'Valor del activo (vehículo)' },
+    { campo: 'total_financiamiento', descripcion: 'Monto total financiado' },
+    { campo: 'fecha_requerimiento', descripcion: 'Fecha requerida del préstamo' },
+    { campo: 'modalidad_pago', descripcion: 'Modalidad (MENSUAL, QUINCENAL, SEMANAL)' },
+    { campo: 'numero_cuotas', descripcion: 'Número total de cuotas' },
+    { campo: 'cuota_periodo', descripcion: 'Monto de cuota por período' },
+    { campo: 'tasa_interes', descripcion: 'Tasa de interés (%)' },
+    { campo: 'fecha_base_calculo', descripcion: 'Fecha base para cálculo' },
+    { campo: 'producto', descripcion: 'Producto financiero' },
+    { campo: 'producto_financiero', descripcion: 'Producto financiero' },
+    { campo: 'concesionario', descripcion: 'Concesionario' },
+    { campo: 'analista', descripcion: 'Analista asignado' },
+    { campo: 'modelo_vehiculo', descripcion: 'Modelo del vehículo' },
+    { campo: 'estado', descripcion: 'Estado del préstamo' },
+    { campo: 'usuario_proponente', descripcion: 'Usuario proponente' },
+    { campo: 'usuario_aprobador', descripcion: 'Usuario aprobador' },
+    { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
+    { campo: 'fecha_aprobacion', descripcion: 'Fecha de aprobación' },
+  ],
+  cuotas: [
+    { campo: 'id', descripcion: 'ID de la cuota' },
+    { campo: 'prestamo_id', descripcion: 'ID del préstamo' },
+    { campo: 'numero_cuota', descripcion: 'Número de cuota' },
+    { campo: 'fecha_vencimiento', descripcion: 'Fecha de vencimiento' },
+    { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
+    { campo: 'monto_cuota', descripcion: 'Monto total de la cuota' },
+    { campo: 'monto_capital', descripcion: 'Monto de capital' },
+    { campo: 'monto_interes', descripcion: 'Monto de interés' },
+    { campo: 'saldo_capital_inicial', descripcion: 'Saldo capital inicial' },
+    { campo: 'saldo_capital_final', descripcion: 'Saldo capital final' },
+    { campo: 'capital_pagado', descripcion: 'Capital pagado' },
+    { campo: 'interes_pagado', descripcion: 'Interés pagado' },
+    { campo: 'mora_pagada', descripcion: 'Mora pagada' },
+    { campo: 'total_pagado', descripcion: 'Total pagado' },
+    { campo: 'capital_pendiente', descripcion: 'Capital pendiente' },
+    { campo: 'interes_pendiente', descripcion: 'Interés pendiente' },
+    { campo: 'dias_mora', descripcion: 'Días de mora' },
+    { campo: 'monto_mora', descripcion: 'Monto de mora' },
+    { campo: 'tasa_mora', descripcion: 'Tasa de mora (%)' },
+    { campo: 'dias_morosidad', descripcion: 'Días de morosidad' },
+    { campo: 'monto_morosidad', descripcion: 'Monto de morosidad' },
+    { campo: 'estado', descripcion: 'Estado de la cuota' },
+  ],
+  pagos: [
+    { campo: 'id', descripcion: 'ID del pago' },
+    { campo: 'cedula', descripcion: 'Cédula del cliente' },
+    { campo: 'prestamo_id', descripcion: 'ID del préstamo' },
+    { campo: 'numero_cuota', descripcion: 'Número de cuota' },
+    { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
+    { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
+    { campo: 'monto_pagado', descripcion: 'Monto pagado' },
+    { campo: 'numero_documento', descripcion: 'Número de documento' },
+    { campo: 'institucion_bancaria', descripcion: 'Institución bancaria' },
+    { campo: 'estado', descripcion: 'Estado del pago' },
+    { campo: 'conciliado', descripcion: 'Si está conciliado' },
+    { campo: 'fecha_conciliacion', descripcion: 'Fecha de conciliación' },
+  ],
+}
+
 export function GestionVariables() {
   const [variables, setVariables] = useState<NotificacionVariable[]>([])
   const [cargando, setCargando] = useState(false)
@@ -93,6 +174,24 @@ export function GestionVariables() {
     setDescripcion('')
     setActiva(true)
     setDialogoAbierto(true)
+  }
+
+  // Obtener campos disponibles para la tabla seleccionada
+  const camposDisponibles = tabla ? CAMPOS_DISPONIBLES[tabla] || [] : []
+
+  // Manejar cambio de tabla - limpiar campo BD si cambia
+  const handleTablaChange = (nuevaTabla: string) => {
+    setTabla(nuevaTabla)
+    // Si el campo BD actual no existe en la nueva tabla, limpiarlo
+    if (campoBd && nuevaTabla) {
+      const camposNuevaTabla = CAMPOS_DISPONIBLES[nuevaTabla] || []
+      const campoExiste = camposNuevaTabla.some((c) => c.campo === campoBd)
+      if (!campoExiste) {
+        setCampoBd('')
+      }
+    } else {
+      setCampoBd('')
+    }
   }
 
   const abrirDialogoEditar = (variable: NotificacionVariable) => {
@@ -419,7 +518,10 @@ export function GestionVariables() {
                 <Label htmlFor="tabla">
                   Tabla <span className="text-red-500">*</span>
                 </Label>
-                <Select value={tabla} onValueChange={setTabla}>
+                <Select
+                  value={tabla}
+                  onValueChange={handleTablaChange}
+                >
                   <SelectTrigger id="tabla">
                     <SelectValue placeholder="Selecciona una tabla" />
                   </SelectTrigger>
@@ -438,14 +540,45 @@ export function GestionVariables() {
               <Label htmlFor="campo-bd">
                 Campo de Base de Datos <span className="text-red-500">*</span>
               </Label>
-              <Input
-                id="campo-bd"
-                placeholder="ej: nombres, monto_cuota, fecha_vencimiento"
-                value={campoBd}
-                onChange={(e) => setCampoBd(e.target.value)}
-              />
-              <p className="text-xs text-gray-500">
-                Nombre del campo en la tabla seleccionada
+              {tabla ? (
+                <>
+                  <Select
+                    value={campoBd}
+                    onValueChange={setCampoBd}
+                    disabled={!tabla}
+                  >
+                    <SelectTrigger id="campo-bd">
+                      <SelectValue placeholder="Selecciona un campo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {camposDisponibles.map((campo) => (
+                        <SelectItem key={campo.campo} value={campo.campo}>
+                          <div className="flex flex-col">
+                            <span className="font-mono text-sm">{campo.campo}</span>
+                            <span className="text-xs text-gray-500">{campo.descripcion}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {campoBd && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {camposDisponibles.find((c) => c.campo === campoBd)?.descripcion}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <Input
+                  id="campo-bd"
+                  placeholder="Primero selecciona una tabla"
+                  value={campoBd}
+                  disabled
+                />
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                {tabla
+                  ? `${camposDisponibles.length} campos disponibles en la tabla "${TABLAS_DISPONIBLES.find((t) => t.value === tabla)?.label}"`
+                  : 'Selecciona una tabla para ver los campos disponibles'}
               </p>
             </div>
 
