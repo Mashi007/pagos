@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, Send, MessageSquare, User, Bot, Edit, Power } from 'lucide-react'
+import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ArrowRight, MessageSquare, User, Edit, PowerOff } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -100,12 +100,78 @@ export function AIConfig() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [activeTab, setActiveTab] = useState('configuracion')
+  
+  // Estado para verificar configuración correcta
+  const [configuracionCorrecta, setConfiguracionCorrecta] = useState(false)
+  const [verificandoConfig, setVerificandoConfig] = useState(false)
 
   useEffect(() => {
     cargarConfiguracion()
     cargarDocumentos()
     cargarMetricas()
   }, [])
+
+  // Verificar configuración después de cargar la configuración
+  useEffect(() => {
+    // Esperar a que la configuración se cargue antes de verificar
+    if (config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-') && config.activo === 'true') {
+      // Verificar si la configuración está correcta solo si está activa
+      // Usar un pequeño delay para evitar verificaciones innecesarias
+      const timer = setTimeout(() => {
+        verificarConfiguracion(false) // No guardar automáticamente en la verificación inicial
+      }, 2000)
+      return () => clearTimeout(timer)
+    } else if (config.openai_api_key !== '') {
+      // Si ya se cargó la configuración pero no hay API key válida
+      setConfiguracionCorrecta(false)
+    }
+  }, [config.openai_api_key, config.activo]) // Ejecutar cuando cambie la API key o el estado activo
+
+  const verificarConfiguracion = async (guardarAutomaticamente: boolean = false) => {
+    if (!config.openai_api_key?.trim() || !config.openai_api_key.startsWith('sk-')) {
+      setConfiguracionCorrecta(false)
+      return false
+    }
+
+    setVerificandoConfig(true)
+    try {
+      // Hacer una prueba simple para verificar que la API key funciona
+      const resultado = await apiClient.post<{
+        success: boolean
+        mensaje?: string
+      }>('/api/v1/configuracion/ai/probar', {
+        pregunta: 'test',
+        usar_documentos: false,
+      })
+      
+      // Si la respuesta es exitosa o el error no es de autenticación, la config está correcta
+      const esValida = resultado.success || !resultado.mensaje?.includes('API key')
+      setConfiguracionCorrecta(esValida)
+      
+      // Si el token es válido y se debe guardar automáticamente, guardar la configuración
+      if (esValida && guardarAutomaticamente) {
+        try {
+          await apiClient.put('/api/v1/configuracion/ai/configuracion', config)
+          toast.success('✅ Token válido confirmado y guardado automáticamente')
+          await cargarConfiguracion()
+          await cargarMetricas()
+        } catch (saveError: any) {
+          console.error('Error guardando configuración automáticamente:', saveError)
+          toast.error('Token válido pero error al guardar. Guarda manualmente.')
+        }
+      }
+      
+      return esValida
+    } catch (error: any) {
+      // Si el error es de autenticación, la config no está correcta
+      const errorMsg = error?.response?.data?.detail || error?.message || ''
+      const esValida = !errorMsg.toLowerCase().includes('api key') && !errorMsg.toLowerCase().includes('authentication')
+      setConfiguracionCorrecta(esValida)
+      return esValida
+    } finally {
+      setVerificandoConfig(false)
+    }
+  }
 
   const cargarConfiguracion = async () => {
     try {
@@ -157,10 +223,24 @@ export function AIConfig() {
   const handleGuardar = async () => {
     setGuardando(true)
     try {
+      // Verificar el token antes de guardar
+      const tokenValido = await verificarConfiguracion(false)
+      
+      if (!tokenValido && config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')) {
+        // Si hay un token pero no es válido, advertir pero permitir guardar
+        const confirmar = confirm('⚠️ El token no parece ser válido. ¿Deseas guardarlo de todas formas?')
+        if (!confirmar) {
+          setGuardando(false)
+          return
+        }
+      }
+      
       await apiClient.put('/api/v1/configuracion/ai/configuracion', config)
-      toast.success('Configuración de AI guardada exitosamente')
+      toast.success('✅ Configuración de AI guardada exitosamente y de forma permanente')
       await cargarConfiguracion()
       await cargarMetricas()
+      // Verificar configuración después de guardar
+      await verificarConfiguracion(false)
     } catch (error: any) {
       console.error('Error guardando configuración:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error guardando configuración'
@@ -168,6 +248,11 @@ export function AIConfig() {
     } finally {
       setGuardando(false)
     }
+  }
+  
+  const handleVerificarYGuardar = async () => {
+    // Verificar y guardar automáticamente si el token es válido
+    await verificarConfiguracion(true)
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -454,6 +539,105 @@ export function AIConfig() {
 
         {/* Pestaña 1: Configuración */}
         <TabsContent value="configuracion" className="space-y-4">
+          {/* ✅ Toggle Activar/Desactivar AI */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <label className="text-sm font-semibold text-gray-900 block mb-1">
+                  Servicio de AI
+                </label>
+                <p className="text-xs text-gray-600">
+                  {config.activo === 'true' 
+                    ? '✅ El sistema está usando AI para generar respuestas automáticas' 
+                    : '⚠️ El sistema NO usará AI. Activa el servicio para habilitar respuestas inteligentes.'}
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.activo === 'true'}
+                  onChange={(e) => {
+                    handleChange('activo', e.target.checked ? 'true' : 'false')
+                    toast.info(e.target.checked ? 'AI activado - Las respuestas inteligentes se habilitarán al guardar' : 'AI desactivado - Las respuestas inteligentes se deshabilitarán al guardar')
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+                <span className="ml-3 text-sm font-medium text-gray-700">
+                  {config.activo === 'true' ? 'Activo' : 'Inactivo'}
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* ✅ Estado: Configuración correcta */}
+          {config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-') && configuracionCorrecta && (
+            <div className="bg-white border-2 border-green-500 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                {/* Semáforo Verde */}
+                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                  <div className="w-4 h-4 bg-green-500 rounded-full shadow-lg"></div>
+                  <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                  <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-gray-900">
+                    Configuración correcta
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    OpenAI aceptó la conexión. Puedes usar AI para generar respuestas.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ⚠️ Estado: API Key no válida o no configurada */}
+          {config.openai_api_key?.trim() && !configuracionCorrecta && !verificandoConfig && (
+            <div className="bg-white border-2 border-amber-400 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                {/* Semáforo Amarillo */}
+                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                  <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                  <div className="w-4 h-4 bg-amber-500 rounded-full shadow-lg"></div>
+                  <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-gray-900 mb-2">
+                    API Key no válida o no configurada
+                  </p>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <p>1. Verifica que tu API Key comience con "sk-"</p>
+                    <p>2. Asegúrate de que la API Key sea válida y tenga créditos disponibles</p>
+                    <p>3. Obtén una nueva API Key en: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">platform.openai.com/api-keys</a></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ❌ Estado: No configurado */}
+          {(!config.openai_api_key?.trim() || !config.openai_api_key.startsWith('sk-')) && (
+            <div className="bg-white border-2 border-red-500 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                {/* Semáforo Rojo */}
+                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                  <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                  <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                  <div className="w-4 h-4 bg-red-500 rounded-full shadow-lg"></div>
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-gray-900">
+                    Configuración incompleta
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Ingresa una API Key válida de OpenAI para habilitar el servicio de AI.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <Card>
             <CardContent className="pt-6 space-y-4">
               <div>
@@ -518,23 +702,16 @@ export function AIConfig() {
                   />
                   <p className="text-xs text-gray-500 mt-1">Máximo de tokens en la respuesta.</p>
                 </div>
-
-                <div>
-                  <label className="text-sm font-medium block mb-2">Estado</label>
-                  <Select value={config.activo} onValueChange={(value) => handleChange('activo', value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="true">Activo</SelectItem>
-                      <SelectItem value="false">Inactivo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
 
               <div className="flex gap-2 pt-4 border-t">
-                <Button onClick={handleGuardar} disabled={guardando}>
+                <Button 
+                  onClick={handleGuardar} 
+                  disabled={guardando}
+                  className={configuracionCorrecta && config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-') 
+                    ? 'bg-green-600 hover:bg-green-700 text-white' 
+                    : ''}
+                >
                   {guardando ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -543,10 +720,32 @@ export function AIConfig() {
                   ) : (
                     <>
                       <Save className="mr-2 h-4 w-4" />
-                      Guardar Configuración
+                      {configuracionCorrecta && config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')
+                        ? '✅ Guardar Configuración (Token Válido)'
+                        : 'Guardar Configuración'}
                     </>
                   )}
                 </Button>
+                {config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-') && !configuracionCorrecta && (
+                  <Button 
+                    onClick={handleVerificarYGuardar} 
+                    disabled={verificandoConfig}
+                    variant="outline"
+                    className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                  >
+                    {verificandoConfig ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Verificando...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Verificar y Guardar
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -599,7 +798,7 @@ export function AIConfig() {
                         >
                           {mensaje.tipo === 'ai' && (
                             <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
-                              <Bot className="h-4 w-4 text-white" />
+                              <Brain className="h-4 w-4 text-white" />
                             </div>
                           )}
                           <div
@@ -648,7 +847,7 @@ export function AIConfig() {
                     {probando && (
                       <div className="flex gap-3 justify-start">
                         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
-                          <Bot className="h-4 w-4 text-white" />
+                          <Brain className="h-4 w-4 text-white" />
                         </div>
                         <div className="bg-white border border-gray-200 rounded-lg p-3">
                           <div className="flex gap-1">
@@ -688,7 +887,7 @@ export function AIConfig() {
                         {probando ? (
                           <Loader2 className="h-5 w-5 animate-spin" />
                         ) : (
-                          <Send className="h-5 w-5" />
+                          <ArrowRight className="h-5 w-5" />
                         )}
                       </Button>
                     </div>
@@ -916,7 +1115,7 @@ export function AIConfig() {
                                 className={doc.activo ? "text-amber-600 hover:text-amber-700" : "text-green-600 hover:text-green-700"}
                                 title={doc.activo ? "Desactivar documento" : "Activar documento"}
                               >
-                                <Power className={`h-4 w-4 ${doc.activo ? '' : 'opacity-50'}`} />
+                                <PowerOff className={`h-4 w-4 ${doc.activo ? '' : 'opacity-50'}`} />
                               </Button>
                               <Button
                                 variant="ghost"

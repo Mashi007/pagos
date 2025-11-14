@@ -91,7 +91,7 @@ export function ChatAI() {
         modelo_usado?: string
         tiempo_respuesta?: number
         error?: string
-      }>('/api/v1/ai/chat', {
+      }>('/api/v1/configuracion/ai/chat', {
         pregunta: preguntaTexto
       })
 
