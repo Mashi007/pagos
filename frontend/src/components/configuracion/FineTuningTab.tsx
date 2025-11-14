@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   Brain,
-  Star,
+  Heart,
   Play,
   CheckCircle,
   XCircle,
@@ -317,7 +317,7 @@ export function FineTuningTab() {
                       {conv.calificacion ? (
                         <div className="flex items-center gap-1">
                           {[1, 2, 3, 4, 5].map((star) => (
-                            <Star
+                            <Heart
                               key={star}
                               className={`h-4 w-4 ${
                                 star <= conv.calificacion!
@@ -349,7 +349,7 @@ export function FineTuningTab() {
                                   : 'text-gray-300 hover:text-yellow-300'
                               }`}
                             >
-                              <Star className="h-5 w-5" />
+                              <Heart className="h-5 w-5" />
                             </button>
                           ))}
                         </div>

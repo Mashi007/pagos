@@ -125,7 +125,7 @@ class AITrainingService {
     tokens_usados?: number
     tiempo_respuesta?: number
   }): Promise<ConversacionAI> {
-    const response = await apiClient.post(`${this.baseUrl}/conversaciones`, conversacion)
+    const response = await apiClient.post<{ conversacion: ConversacionAI }>(`${this.baseUrl}/conversaciones`, conversacion)
     return response.conversacion
   }
 
@@ -137,7 +137,7 @@ class AITrainingService {
     calificacion: number,
     feedback?: string
   ): Promise<ConversacionAI> {
-    const response = await apiClient.post(`${this.baseUrl}/conversaciones/${conversacionId}/calificar`, {
+    const response = await apiClient.post<{ conversacion: ConversacionAI }>(`${this.baseUrl}/conversaciones/${conversacionId}/calificar`, {
       calificacion,
       feedback,
     })
@@ -148,7 +148,7 @@ class AITrainingService {
    * Preparar datos para fine-tuning
    */
   async prepararDatosEntrenamiento(conversacionIds?: number[]): Promise<{ archivo_id: string; total_conversaciones: number }> {
-    const response = await apiClient.post(`${this.baseUrl}/fine-tuning/preparar`, {
+    const response = await apiClient.post<{ archivo_id: string; total_conversaciones: number }>(`${this.baseUrl}/fine-tuning/preparar`, {
       conversacion_ids: conversacionIds,
     })
     return response
@@ -163,7 +163,7 @@ class AITrainingService {
     epochs?: number
     learning_rate?: number
   }): Promise<FineTuningJob> {
-    const response = await apiClient.post(`${this.baseUrl}/fine-tuning/iniciar`, params)
+    const response = await apiClient.post<{ job: FineTuningJob }>(`${this.baseUrl}/fine-tuning/iniciar`, params)
     return response.job
   }
 
@@ -171,7 +171,7 @@ class AITrainingService {
    * Obtener estado de fine-tuning job
    */
   async getEstadoFineTuning(jobId: string): Promise<FineTuningJob> {
-    const response = await apiClient.get(`${this.baseUrl}/fine-tuning/jobs/${jobId}`)
+    const response = await apiClient.get<{ job: FineTuningJob }>(`${this.baseUrl}/fine-tuning/jobs/${jobId}`)
     return response.job
   }
 
@@ -179,7 +179,7 @@ class AITrainingService {
    * Listar todos los jobs de fine-tuning
    */
   async listarFineTuningJobs(): Promise<FineTuningJob[]> {
-    const response = await apiClient.get(`${this.baseUrl}/fine-tuning/jobs`)
+    const response = await apiClient.get<{ jobs: FineTuningJob[] }>(`${this.baseUrl}/fine-tuning/jobs`)
     return response.jobs || []
   }
 
@@ -198,7 +198,7 @@ class AITrainingService {
    * Generar embeddings para documentos
    */
   async generarEmbeddings(documentoIds?: number[]): Promise<{ documentos_procesados: number; total_embeddings: number }> {
-    const response = await apiClient.post(`${this.baseUrl}/rag/generar-embeddings`, {
+    const response = await apiClient.post<{ documentos_procesados: number; total_embeddings: number }>(`${this.baseUrl}/rag/generar-embeddings`, {
       documento_ids: documentoIds,
     })
     return response
@@ -211,7 +211,7 @@ class AITrainingService {
     pregunta: string,
     topK: number = 3
   ): Promise<{ documentos: DocumentoEmbedding[]; query_embedding?: number[] }> {
-    const response = await apiClient.post(`${this.baseUrl}/rag/buscar`, {
+    const response = await apiClient.post<{ documentos: DocumentoEmbedding[]; query_embedding?: number[] }>(`${this.baseUrl}/rag/buscar`, {
       pregunta,
       top_k: topK,
     })
@@ -234,7 +234,7 @@ class AITrainingService {
    * Actualizar embeddings de un documento
    */
   async actualizarEmbeddingsDocumento(documentoId: number): Promise<{ embeddings_generados: number }> {
-    const response = await apiClient.post(`${this.baseUrl}/rag/documentos/${documentoId}/embeddings`)
+    const response = await apiClient.post<{ embeddings_generados: number }>(`${this.baseUrl}/rag/documentos/${documentoId}/embeddings`)
     return response
   }
 
@@ -250,7 +250,7 @@ class AITrainingService {
     test_size?: number
     random_state?: number
   }): Promise<{ job_id: string; mensaje: string }> {
-    const response = await apiClient.post(`${this.baseUrl}/ml-riesgo/entrenar`, params || {})
+    const response = await apiClient.post<{ job_id: string; mensaje: string }>(`${this.baseUrl}/ml-riesgo/entrenar`, params || {})
     return response
   }
 
@@ -270,7 +270,7 @@ class AITrainingService {
    * Listar modelos de riesgo disponibles
    */
   async listarModelosRiesgo(): Promise<ModeloRiesgo[]> {
-    const response = await apiClient.get(`${this.baseUrl}/ml-riesgo/modelos`)
+    const response = await apiClient.get<{ modelos: ModeloRiesgo[] }>(`${this.baseUrl}/ml-riesgo/modelos`)
     return response.modelos || []
   }
 
@@ -279,7 +279,7 @@ class AITrainingService {
    */
   async getModeloRiesgoActivo(): Promise<ModeloRiesgo | null> {
     try {
-      const response = await apiClient.get(`${this.baseUrl}/ml-riesgo/modelo-activo`)
+      const response = await apiClient.get<{ modelo: ModeloRiesgo }>(`${this.baseUrl}/ml-riesgo/modelo-activo`)
       return response.modelo || null
     } catch {
       return null
@@ -290,7 +290,7 @@ class AITrainingService {
    * Activar modelo de riesgo
    */
   async activarModeloRiesgo(modeloId: number): Promise<{ mensaje: string; modelo_activo: ModeloRiesgo }> {
-    const response = await apiClient.post(`${this.baseUrl}/ml-riesgo/activar`, { modelo_id: modeloId })
+    const response = await apiClient.post<{ mensaje: string; modelo_activo: ModeloRiesgo }>(`${this.baseUrl}/ml-riesgo/activar`, { modelo_id: modeloId })
     return response
   }
 

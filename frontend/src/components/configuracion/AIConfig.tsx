@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, BookOpen, RotateCcw, Copy, Sparkles } from 'lucide-react'
+import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, RotateCcw, Copy } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -105,6 +105,7 @@ export function AIConfig() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [activeTab, setActiveTab] = useState('configuracion')
+  const [activeHybridTab, setActiveHybridTab] = useState('dashboard')
   
   // Estado para verificar configuración correcta
   const [configuracionCorrecta, setConfiguracionCorrecta] = useState(false)
@@ -787,7 +788,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
+              <FileText className="h-5 w-5" />
               Prompt Personalizado
             </h3>
             <p className="text-sm text-gray-600 mt-1">
@@ -932,7 +933,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           <TabsTrigger value="entrenamiento">Entrenamiento</TabsTrigger>
           <TabsTrigger value="metricas">Métricas</TabsTrigger>
           <TabsTrigger value="sistema-hibrido">
-            <Sparkles className="h-4 w-4 mr-1" />
+            <Zap className="h-4 w-4 mr-1" />
             Sistema Híbrido
           </TabsTrigger>
         </TabsList>
@@ -1728,7 +1729,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
         {/* Pestaña 5: Sistema Híbrido */}
         <TabsContent value="sistema-hibrido" className="space-y-4">
-          <Tabs defaultValue="dashboard" className="w-full">
+          <Tabs value={activeHybridTab} onValueChange={setActiveHybridTab} className="w-full">
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="dashboard">
                 <BarChart3 className="h-4 w-4 mr-2" />
@@ -1739,7 +1740,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 Fine-tuning
               </TabsTrigger>
               <TabsTrigger value="rag">
-                <Sparkles className="h-4 w-4 mr-2" />
+                <Zap className="h-4 w-4 mr-2" />
                 RAG
               </TabsTrigger>
               <TabsTrigger value="ml-riesgo">

@@ -7,7 +7,6 @@ import {
   CheckCircle,
   AlertCircle,
   RefreshCw,
-  Sparkles,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -96,7 +95,7 @@ export function RAGTab() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
-            <Sparkles className="h-6 w-6" />
+            <Zap className="h-6 w-6" />
             RAG Mejorado - Embeddings
           </h3>
           <p className="text-sm text-gray-500 mt-1">
@@ -321,7 +320,7 @@ export function RAGTab() {
         <CardContent className="pt-6">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-start gap-2">
-              <Sparkles className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <Zap className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
               <div className="flex-1">
                 <p className="font-semibold text-blue-900 mb-1">¿Qué es RAG Mejorado?</p>
                 <p className="text-sm text-blue-800">
