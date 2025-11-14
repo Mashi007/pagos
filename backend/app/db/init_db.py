@@ -26,7 +26,7 @@ def run_migrations() -> None:
 
         # Obtener ruta del archivo alembic.ini
         alembic_ini_path = Path(__file__).parent.parent.parent / "alembic.ini"
-        
+
         if not alembic_ini_path.exists():
             logger.warning("⚠️ alembic.ini no encontrado, omitiendo migraciones automáticas")
             return
