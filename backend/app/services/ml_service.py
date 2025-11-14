@@ -18,6 +18,7 @@ try:
     from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
     from sklearn.model_selection import train_test_split
     from sklearn.preprocessing import StandardScaler
+
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
@@ -91,7 +92,7 @@ class MLService:
                 "confidence": 0.0,
                 "recommendation": "scikit-learn no está instalado. Instala con: pip install scikit-learn",
             }
-        
+
         try:
             if "risk_model" not in self.models:
                 return {
@@ -204,7 +205,7 @@ class MLService:
                 "success": False,
                 "error": "scikit-learn no está instalado. Instala con: pip install scikit-learn",
             }
-        
+
         try:
             if not training_data or len(training_data) < 10:
                 raise ValueError("Se necesitan al menos 10 muestras para entrenar")
