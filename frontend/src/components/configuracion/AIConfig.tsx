@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ArrowRight, MessageSquare, User, Edit, PowerOff } from 'lucide-react'
+import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -887,7 +887,7 @@ export function AIConfig() {
                         {probando ? (
                           <Loader2 className="h-5 w-5 animate-spin" />
                         ) : (
-                          <ArrowRight className="h-5 w-5" />
+                          <ChevronRight className="h-5 w-5" />
                         )}
                       </Button>
                     </div>
@@ -1115,7 +1115,7 @@ export function AIConfig() {
                                 className={doc.activo ? "text-amber-600 hover:text-amber-700" : "text-green-600 hover:text-green-700"}
                                 title={doc.activo ? "Desactivar documento" : "Activar documento"}
                               >
-                                <PowerOff className={`h-4 w-4 ${doc.activo ? '' : 'opacity-50'}`} />
+                                <Zap className={`h-4 w-4 ${doc.activo ? '' : 'opacity-50'}`} />
                               </Button>
                               <Button
                                 variant="ghost"
