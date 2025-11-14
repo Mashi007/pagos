@@ -633,10 +633,10 @@ async def verificar_tabla_documentos_ai(
     """
     try:
         from sqlalchemy import inspect, text
-        
+
         inspector = inspect(db.bind)
         tablas = inspector.get_table_names()
-        
+
         resultado = {
             "tabla_existe": False,
             "tabla_nombre": "documentos_ai",
@@ -646,11 +646,11 @@ async def verificar_tabla_documentos_ai(
             "total_documentos": 0,
             "mensaje": "",
         }
-        
+
         if "documentos_ai" in tablas:
             resultado["tabla_existe"] = True
             resultado["mensaje"] = "✅ La tabla 'documentos_ai' existe"
-            
+
             # Obtener información de columnas
             columnas = inspector.get_columns("documentos_ai")
             resultado["columnas"] = [
@@ -662,7 +662,7 @@ async def verificar_tabla_documentos_ai(
                 }
                 for col in columnas
             ]
-            
+
             # Obtener índices
             indices = inspector.get_indexes("documentos_ai")
             resultado["indices"] = [
@@ -673,7 +673,7 @@ async def verificar_tabla_documentos_ai(
                 }
                 for idx in indices
             ]
-            
+
             # Contar documentos
             try:
                 count_result = db.execute(text("SELECT COUNT(*) FROM documentos_ai"))
@@ -683,9 +683,9 @@ async def verificar_tabla_documentos_ai(
         else:
             resultado["mensaje"] = "❌ La tabla 'documentos_ai' NO existe. Ejecuta las migraciones: alembic upgrade head"
             resultado["tablas_disponibles"] = sorted(tablas)[:20]  # Primeras 20 tablas
-        
+
         return resultado
-        
+
     except Exception as e:
         logger.error(f"Error verificando tabla documentos_ai: {e}", exc_info=True)
         return {
