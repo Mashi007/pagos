@@ -2570,6 +2570,13 @@ def actualizar_configuracion_ai(
 # ============================================
 
 
+class DocumentoAIUpdate(BaseModel):
+    """Schema para actualizar documento AI"""
+    titulo: Optional[str] = Field(None, description="Título del documento")
+    descripcion: Optional[str] = Field(None, description="Descripción del documento")
+    activo: Optional[bool] = Field(None, description="Estado activo/inactivo")
+
+
 def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
     """
     Extrae texto de un documento según su tipo
@@ -3155,11 +3162,8 @@ class ProbarAIRequest(BaseModel):
     usar_documentos: Optional[bool] = True
 
 
-class DocumentoAIUpdate(BaseModel):
-    """Schema para actualizar documento AI"""
-    titulo: Optional[str] = Field(None, description="Título del documento")
-    descripcion: Optional[str] = Field(None, description="Descripción del documento")
-    activo: Optional[bool] = Field(None, description="Estado activo/inactivo")
+class ChatAIRequest(BaseModel):
+    pregunta: str = Field(..., description="Pregunta del usuario sobre la base de datos")
 
 
 @router.post("/ai/probar")
@@ -3359,10 +3363,6 @@ async def probar_configuracion_ai(
 # ============================================
 # CHAT AI - CONSULTAS A BASE DE DATOS
 # ============================================
-
-
-class ChatAIRequest(BaseModel):
-    pregunta: str = Field(..., description="Pregunta del usuario sobre la base de datos")
 
 
 def _obtener_resumen_bd(db: Session) -> str:
