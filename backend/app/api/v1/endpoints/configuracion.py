@@ -16,6 +16,7 @@ from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.configuracion_sistema import ConfiguracionSistema
 from app.models.documento_ai import DocumentoAI
+from app.models.ai_prompt_variable import AIPromptVariable
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
@@ -3188,6 +3189,208 @@ def activar_desactivar_documento_ai(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
+# ============================================
+# GESTIÓN DE VARIABLES PERSONALIZADAS DEL PROMPT AI
+# ============================================
+
+
+class AIPromptVariableCreate(BaseModel):
+    """Schema para crear variable de prompt AI"""
+
+    variable: str = Field(..., description="Nombre de la variable (ej: {mi_variable})")
+    descripcion: str = Field(..., description="Descripción de qué contiene la variable")
+    activo: Optional[bool] = Field(True, description="Estado activo/inactivo")
+    orden: Optional[int] = Field(0, description="Orden de visualización")
+
+
+class AIPromptVariableUpdate(BaseModel):
+    """Schema para actualizar variable de prompt AI"""
+
+    variable: Optional[str] = Field(None, description="Nombre de la variable")
+    descripcion: Optional[str] = Field(None, description="Descripción de qué contiene la variable")
+    activo: Optional[bool] = Field(None, description="Estado activo/inactivo")
+    orden: Optional[int] = Field(None, description="Orden de visualización")
+
+
+@router.get("/ai/prompt/variables")
+def listar_variables_prompt_ai(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Listar todas las variables personalizadas del prompt AI"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden ver variables del prompt AI",
+        )
+
+    try:
+        variables = (
+            db.query(AIPromptVariable)
+            .order_by(AIPromptVariable.orden.asc(), AIPromptVariable.variable.asc())
+            .all()
+        )
+        return {
+            "variables": [var.to_dict() for var in variables],
+            "total": len(variables),
+        }
+    except Exception as e:
+        logger.error(f"Error listando variables de prompt AI: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.post("/ai/prompt/variables")
+def crear_variable_prompt_ai(
+    variable_data: AIPromptVariableCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Crear una nueva variable personalizada del prompt AI"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden crear variables del prompt AI",
+        )
+
+    try:
+        # Validar formato de variable (debe empezar con { y terminar con })
+        variable = variable_data.variable.strip()
+        if not variable.startswith("{") or not variable.endswith("}"):
+            raise HTTPException(
+                status_code=400,
+                detail="La variable debe tener formato {nombre_variable} (con llaves)",
+            )
+
+        # Verificar que no exista
+        existe = db.query(AIPromptVariable).filter(AIPromptVariable.variable == variable).first()
+        if existe:
+            raise HTTPException(
+                status_code=400,
+                detail=f"La variable {variable} ya existe",
+            )
+
+        nueva_variable = AIPromptVariable(
+            variable=variable,
+            descripcion=variable_data.descripcion,
+            activo=variable_data.activo if variable_data.activo is not None else True,
+            orden=variable_data.orden if variable_data.orden is not None else 0,
+        )
+
+        db.add(nueva_variable)
+        db.commit()
+        db.refresh(nueva_variable)
+
+        return {
+            "mensaje": "Variable creada exitosamente",
+            "variable": nueva_variable.to_dict(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creando variable de prompt AI: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.put("/ai/prompt/variables/{variable_id}")
+def actualizar_variable_prompt_ai(
+    variable_id: int,
+    variable_data: AIPromptVariableUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Actualizar una variable personalizada del prompt AI"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden actualizar variables del prompt AI",
+        )
+
+    try:
+        variable = db.query(AIPromptVariable).filter(AIPromptVariable.id == variable_id).first()
+
+        if not variable:
+            raise HTTPException(status_code=404, detail="Variable no encontrada")
+
+        # Si se actualiza el nombre de la variable, validar formato
+        if variable_data.variable is not None:
+            nueva_variable = variable_data.variable.strip()
+            if not nueva_variable.startswith("{") or not nueva_variable.endswith("}"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="La variable debe tener formato {nombre_variable} (con llaves)",
+                )
+
+            # Verificar que no exista otra variable con ese nombre
+            existe = (
+                db.query(AIPromptVariable)
+                .filter(
+                    AIPromptVariable.variable == nueva_variable,
+                    AIPromptVariable.id != variable_id,
+                )
+                .first()
+            )
+            if existe:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"La variable {nueva_variable} ya existe",
+                )
+
+            variable.variable = nueva_variable
+
+        if variable_data.descripcion is not None:
+            variable.descripcion = variable_data.descripcion
+        if variable_data.activo is not None:
+            variable.activo = variable_data.activo
+        if variable_data.orden is not None:
+            variable.orden = variable_data.orden
+
+        db.commit()
+        db.refresh(variable)
+
+        return {
+            "mensaje": "Variable actualizada exitosamente",
+            "variable": variable.to_dict(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando variable de prompt AI: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.delete("/ai/prompt/variables/{variable_id}")
+def eliminar_variable_prompt_ai(
+    variable_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Eliminar una variable personalizada del prompt AI"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden eliminar variables del prompt AI",
+        )
+
+    try:
+        variable = db.query(AIPromptVariable).filter(AIPromptVariable.id == variable_id).first()
+
+        if not variable:
+            raise HTTPException(status_code=404, detail="Variable no encontrada")
+
+        db.delete(variable)
+        db.commit()
+
+        return {"mensaje": "Variable eliminada exitosamente"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error eliminando variable de prompt AI: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
 @router.get("/ai/prompt")
 def obtener_prompt_ai(
     db: Session = Depends(get_db),
@@ -3213,10 +3416,19 @@ def obtener_prompt_ai(
         prompt_personalizado = config.valor if config else ""
         tiene_prompt_personalizado = bool(prompt_personalizado and prompt_personalizado.strip())
 
+        # Obtener variables personalizadas activas
+        variables_personalizadas = (
+            db.query(AIPromptVariable)
+            .filter(AIPromptVariable.activo.is_(True))
+            .order_by(AIPromptVariable.orden.asc(), AIPromptVariable.variable.asc())
+            .all()
+        )
+
         return {
             "prompt_personalizado": prompt_personalizado or "",
             "tiene_prompt_personalizado": tiene_prompt_personalizado,
             "usando_prompt_default": not tiene_prompt_personalizado,
+            "variables_personalizadas": [var.to_dict() for var in variables_personalizadas],
         }
     except Exception as e:
         logger.error(f"Error obteniendo prompt de AI: {e}")
@@ -5742,16 +5954,55 @@ async def chat_ai(
         prompt_personalizado = config_dict.get("system_prompt_personalizado", "")
         usar_prompt_personalizado = prompt_personalizado and prompt_personalizado.strip()
 
+        # Obtener variables personalizadas activas
+        variables_personalizadas = {}
+        try:
+            vars_activas = (
+                db.query(AIPromptVariable)
+                .filter(AIPromptVariable.activo.is_(True))
+                .all()
+            )
+            # Por ahora, las variables personalizadas se reemplazarán con valores vacíos
+            # En el futuro se puede implementar lógica específica para cada variable
+            for var in vars_activas:
+                # Extraer el nombre sin llaves para usar como clave
+                nombre_var = var.variable.strip("{}")
+                variables_personalizadas[var.variable] = f"[Variable personalizada: {var.descripcion}]"
+                variables_personalizadas[nombre_var] = f"[Variable personalizada: {var.descripcion}]"
+        except Exception as e:
+            logger.warning(f"Error obteniendo variables personalizadas: {e}")
+            # Continuar sin variables personalizadas si hay error
+
         if usar_prompt_personalizado:
             logger.info("✅ Usando prompt personalizado configurado por el usuario")
             # El prompt personalizado debe incluir placeholders que se reemplazarán
-            system_prompt = prompt_personalizado.format(
-                resumen_bd=resumen_bd,
-                info_cliente_buscado=info_cliente_buscado,
-                datos_adicionales=datos_adicionales,
-                info_esquema=info_esquema,
-                contexto_documentos=contexto_documentos,
-            )
+            # Primero reemplazar variables predeterminadas
+            try:
+                system_prompt = prompt_personalizado.format(
+                    resumen_bd=resumen_bd,
+                    info_cliente_buscado=info_cliente_buscado,
+                    datos_adicionales=datos_adicionales,
+                    info_esquema=info_esquema,
+                    contexto_documentos=contexto_documentos,
+                )
+                # Luego reemplazar variables personalizadas usando replace (más seguro)
+                for var_name, var_value in variables_personalizadas.items():
+                    if var_name.startswith("{") and var_name.endswith("}"):
+                        system_prompt = system_prompt.replace(var_name, var_value)
+            except KeyError as e:
+                logger.warning(f"⚠️ Variable no encontrada en prompt personalizado: {e}")
+                # Si falta una variable predeterminada, usar el prompt con las que están
+                system_prompt = prompt_personalizado
+                # Reemplazar manualmente las variables conocidas
+                system_prompt = system_prompt.replace("{resumen_bd}", resumen_bd or "")
+                system_prompt = system_prompt.replace("{info_cliente_buscado}", info_cliente_buscado or "")
+                system_prompt = system_prompt.replace("{datos_adicionales}", datos_adicionales or "")
+                system_prompt = system_prompt.replace("{info_esquema}", info_esquema or "")
+                system_prompt = system_prompt.replace("{contexto_documentos}", contexto_documentos or "")
+                # Reemplazar variables personalizadas
+                for var_name, var_value in variables_personalizadas.items():
+                    if var_name.startswith("{") and var_name.endswith("}"):
+                        system_prompt = system_prompt.replace(var_name, var_value)
         else:
             # Construir prompt del sistema con información de la BD (default)
             system_prompt = f"""Eres un ANALISTA ESPECIALIZADO en préstamos y cobranzas con capacidad de análisis de KPIs operativos. Tu función es proporcionar información precisa, análisis de tendencias y métricas clave basándote EXCLUSIVAMENTE en los datos almacenados en las bases de datos del sistema.

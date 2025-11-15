@@ -35,23 +35,6 @@ interface DocumentoAI {
   actualizado_en: string
 }
 
-interface MetricasAI {
-  documentos: {
-    total: number
-    activos: number
-    procesados: number
-    pendientes: number
-    tamaño_total_bytes: number
-    tamaño_total_mb: number
-  }
-  configuracion: {
-    ai_activo: boolean
-    modelo: string
-    tiene_token: boolean
-  }
-  fecha_consulta: string
-}
-
 export function AIConfig() {
   const [config, setConfig] = useState<AIConfig>({
     openai_api_key: '',
@@ -65,8 +48,6 @@ export function AIConfig() {
   const [guardando, setGuardando] = useState(false)
   const [documentos, setDocumentos] = useState<DocumentoAI[]>([])
   const [cargandoDocumentos, setCargandoDocumentos] = useState(false)
-  const [metricas, setMetricas] = useState<MetricasAI | null>(null)
-  const [cargandoMetricas, setCargandoMetricas] = useState(false)
   
   // Formulario de nuevo documento
   const [nuevoDocumento, setNuevoDocumento] = useState({
@@ -115,7 +96,6 @@ export function AIConfig() {
   useEffect(() => {
     cargarConfiguracion()
     cargarDocumentos()
-    cargarMetricas()
   }, [])
 
   // Verificar configuración solo cuando el usuario cambia el token manualmente
@@ -180,7 +160,6 @@ export function AIConfig() {
           await apiClient.put('/api/v1/configuracion/ai/configuracion', config)
           toast.success('✅ Token válido confirmado y guardado automáticamente')
           await cargarConfiguracion()
-          await cargarMetricas()
         } catch (saveError: any) {
           console.error('Error guardando configuración automáticamente:', saveError)
           toast.error('Token válido pero error al guardar. Guarda manualmente.')
@@ -238,18 +217,6 @@ export function AIConfig() {
     }
   }
 
-  const cargarMetricas = async () => {
-    setCargandoMetricas(true)
-    try {
-      const data = await apiClient.get<MetricasAI>('/api/v1/configuracion/ai/metricas')
-      setMetricas(data)
-    } catch (error) {
-      console.error('Error cargando métricas:', error)
-      toast.error('Error cargando métricas')
-    } finally {
-      setCargandoMetricas(false)
-    }
-  }
 
   const handleChange = (campo: keyof AIConfig, valor: string) => {
     setConfig(prev => ({ ...prev, [campo]: valor }))
@@ -269,7 +236,6 @@ export function AIConfig() {
       
       // Recargar configuración desde BD para confirmar que se guardó
       await cargarConfiguracion()
-      await cargarMetricas()
       
       // Si hay token guardado, actualizar estado
       if (config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')) {
@@ -347,7 +313,6 @@ export function AIConfig() {
       toast.success('Documento subido exitosamente')
       setNuevoDocumento({ titulo: '', descripcion: '', archivo: null })
       await cargarDocumentos()
-      await cargarMetricas()
     } catch (error: any) {
       console.error('Error subiendo documento:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error subiendo documento'
@@ -367,7 +332,6 @@ export function AIConfig() {
       }>(`/api/v1/configuracion/ai/documentos/${id}/procesar`)
       toast.success(`Documento procesado exitosamente (${respuesta.caracteres_extraidos || 0} caracteres extraídos)`)
       await cargarDocumentos()
-      await cargarMetricas()
     } catch (error: any) {
       console.error('Error procesando documento:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error procesando documento'
@@ -386,7 +350,6 @@ export function AIConfig() {
       await apiClient.delete(`/api/v1/configuracion/ai/documentos/${id}`)
       toast.success('Documento eliminado exitosamente')
       await cargarDocumentos()
-      await cargarMetricas()
     } catch (error: any) {
       console.error('Error eliminando documento:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error eliminando documento'
@@ -455,7 +418,6 @@ export function AIConfig() {
           await apiClient.patch(`/api/v1/configuracion/ai/documentos/${id}/activar`, { activo: true })
           toast.success('✅ Documento procesado y activado exitosamente')
           await cargarDocumentos()
-          await cargarMetricas()
         } catch (error: any) {
           console.error('Error procesando/activando documento:', error)
           const mensajeError = error?.response?.data?.detail || error?.message || 'Error procesando documento'
@@ -472,7 +434,6 @@ export function AIConfig() {
       await apiClient.patch(`/api/v1/configuracion/ai/documentos/${id}/activar`, { activo })
       toast.success(`Documento ${activo ? 'activado' : 'desactivado'} exitosamente`)
       await cargarDocumentos()
-      await cargarMetricas()
     } catch (error: any) {
       console.error('Error activando/desactivando documento:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error cambiando estado del documento'
@@ -608,9 +569,25 @@ export function AIConfig() {
     const [guardandoPrompt, setGuardandoPrompt] = useState(false)
     const [tienePromptPersonalizado, setTienePromptPersonalizado] = useState(false)
     const [mostrarPlaceholders, setMostrarPlaceholders] = useState(true)
+    
+    // Estados para variables personalizadas
+    const [variablesPersonalizadas, setVariablesPersonalizadas] = useState<Array<{
+      id: number
+      variable: string
+      descripcion: string
+      activo: boolean
+      orden: number
+    }>>([])
+    const [cargandoVariables, setCargandoVariables] = useState(false)
+    const [mostrarGestionVariables, setMostrarGestionVariables] = useState(false)
+    const [nuevaVariable, setNuevaVariable] = useState({ variable: '', descripcion: '' })
+    const [creandoVariable, setCreandoVariable] = useState(false)
+    const [editandoVariable, setEditandoVariable] = useState<number | null>(null)
+    const [variableEditada, setVariableEditada] = useState({ variable: '', descripcion: '' })
 
     useEffect(() => {
       cargarPrompt()
+      cargarVariables()
     }, [])
 
     const cargarPrompt = async () => {
@@ -620,10 +597,20 @@ export function AIConfig() {
           prompt_personalizado: string
           tiene_prompt_personalizado: boolean
           usando_prompt_default: boolean
+          variables_personalizadas?: Array<{
+            id: number
+            variable: string
+            descripcion: string
+            activo: boolean
+            orden: number
+          }>
         }>('/api/v1/configuracion/ai/prompt')
         
         setPromptPersonalizado(data.prompt_personalizado || '')
         setTienePromptPersonalizado(data.tiene_prompt_personalizado)
+        if (data.variables_personalizadas) {
+          setVariablesPersonalizadas(data.variables_personalizadas)
+        }
       } catch (error) {
         console.error('Error cargando prompt:', error)
         toast.error('Error cargando prompt')
@@ -669,13 +656,125 @@ export function AIConfig() {
       }
     }
 
+    const cargarVariables = async () => {
+      setCargandoVariables(true)
+      try {
+        const data = await apiClient.get<{
+          variables: Array<{
+            id: number
+            variable: string
+            descripcion: string
+            activo: boolean
+            orden: number
+          }>
+          total: number
+        }>('/api/v1/configuracion/ai/prompt/variables')
+        setVariablesPersonalizadas(data.variables || [])
+      } catch (error) {
+        console.error('Error cargando variables:', error)
+        // No mostrar error si la tabla no existe aún
+      } finally {
+        setCargandoVariables(false)
+      }
+    }
+
+    const handleCrearVariable = async () => {
+      if (!nuevaVariable.variable.trim() || !nuevaVariable.descripcion.trim()) {
+        toast.error('Variable y descripción son requeridos')
+        return
+      }
+
+      // Validar formato de variable
+      let variable = nuevaVariable.variable.trim()
+      if (!variable.startsWith('{') || !variable.endsWith('}')) {
+        variable = `{${variable.replace(/[{}]/g, '')}}`
+      }
+
+      setCreandoVariable(true)
+      try {
+        await apiClient.post('/api/v1/configuracion/ai/prompt/variables', {
+          variable,
+          descripcion: nuevaVariable.descripcion.trim(),
+          activo: true,
+          orden: variablesPersonalizadas.length,
+        })
+        toast.success('Variable creada exitosamente')
+        setNuevaVariable({ variable: '', descripcion: '' })
+        await cargarVariables()
+        await cargarPrompt() // Recargar para incluir nuevas variables
+      } catch (error: any) {
+        console.error('Error creando variable:', error)
+        toast.error(error?.response?.data?.detail || 'Error creando variable')
+      } finally {
+        setCreandoVariable(false)
+      }
+    }
+
+    const handleIniciarEdicionVariable = (variable: typeof variablesPersonalizadas[0]) => {
+      setEditandoVariable(variable.id)
+      setVariableEditada({ variable: variable.variable, descripcion: variable.descripcion })
+    }
+
+    const handleCancelarEdicionVariable = () => {
+      setEditandoVariable(null)
+      setVariableEditada({ variable: '', descripcion: '' })
+    }
+
+    const handleActualizarVariable = async (id: number) => {
+      if (!variableEditada.variable.trim() || !variableEditada.descripcion.trim()) {
+        toast.error('Variable y descripción son requeridos')
+        return
+      }
+
+      let variable = variableEditada.variable.trim()
+      if (!variable.startsWith('{') || !variable.endsWith('}')) {
+        variable = `{${variable.replace(/[{}]/g, '')}}`
+      }
+
+      try {
+        await apiClient.put(`/api/v1/configuracion/ai/prompt/variables/${id}`, {
+          variable,
+          descripcion: variableEditada.descripcion.trim(),
+        })
+        toast.success('Variable actualizada exitosamente')
+        setEditandoVariable(null)
+        setVariableEditada({ variable: '', descripcion: '' })
+        await cargarVariables()
+        await cargarPrompt()
+      } catch (error: any) {
+        console.error('Error actualizando variable:', error)
+        toast.error(error?.response?.data?.detail || 'Error actualizando variable')
+      }
+    }
+
+    const handleEliminarVariable = async (id: number) => {
+      if (!confirm('¿Estás seguro de eliminar esta variable?')) return
+
+      try {
+        await apiClient.delete(`/api/v1/configuracion/ai/prompt/variables/${id}`)
+        toast.success('Variable eliminada exitosamente')
+        await cargarVariables()
+        await cargarPrompt()
+      } catch (error: any) {
+        console.error('Error eliminando variable:', error)
+        toast.error(error?.response?.data?.detail || 'Error eliminando variable')
+      }
+    }
+
     const handleCopiarPlaceholders = () => {
-      const placeholders = `{resumen_bd}
+      const placeholdersDefault = `{resumen_bd}
 {info_cliente_buscado}
 {datos_adicionales}
 {info_esquema}
 {contexto_documentos}`
-      navigator.clipboard.writeText(placeholders)
+      
+      const placeholdersPersonalizados = variablesPersonalizadas
+        .filter(v => v.activo)
+        .map(v => v.variable)
+        .join('\n')
+      
+      const todos = placeholdersDefault + (placeholdersPersonalizados ? '\n' + placeholdersPersonalizados : '')
+      navigator.clipboard.writeText(todos)
       toast.success('Placeholders copiados al portapapeles')
     }
 
@@ -832,17 +931,187 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           <div className="flex items-start gap-2">
             <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
-              <p className="font-semibold text-amber-900 mb-1">Placeholders Disponibles</p>
+              <div className="flex items-center justify-between mb-1">
+                <p className="font-semibold text-amber-900">Placeholders Disponibles</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMostrarGestionVariables(!mostrarGestionVariables)}
+                  className="text-xs"
+                >
+                  {mostrarGestionVariables ? 'Ocultar' : 'Gestionar Variables'}
+                </Button>
+              </div>
               <p className="text-sm text-amber-800 mb-2">
                 El sistema reemplazará automáticamente estos placeholders con datos reales:
               </p>
-              <div className="bg-white rounded p-3 font-mono text-xs space-y-1">
+              
+              {/* Placeholders predeterminados */}
+              <div className="bg-white rounded p-3 font-mono text-xs space-y-1 mb-3">
+                <div className="font-semibold text-amber-900 mb-1">Predeterminados:</div>
                 <div><code className="text-blue-600">{'{resumen_bd}'}</code> - Resumen de la base de datos</div>
                 <div><code className="text-blue-600">{'{info_cliente_buscado}'}</code> - Información del cliente si se busca por cédula</div>
                 <div><code className="text-blue-600">{'{datos_adicionales}'}</code> - Cálculos y análisis adicionales</div>
                 <div><code className="text-blue-600">{'{info_esquema}'}</code> - Esquema completo de la base de datos</div>
                 <div><code className="text-blue-600">{'{contexto_documentos}'}</code> - Documentos de contexto adicionales</div>
               </div>
+
+              {/* Variables personalizadas */}
+              {variablesPersonalizadas.length > 0 && (
+                <div className="bg-white rounded p-3 font-mono text-xs space-y-1 mb-3">
+                  <div className="font-semibold text-green-700 mb-1">Personalizadas:</div>
+                  {variablesPersonalizadas.filter(v => v.activo).map((varItem) => (
+                    <div key={varItem.id}>
+                      <code className="text-green-600">{varItem.variable}</code> - {varItem.descripcion}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Gestión de Variables Personalizadas */}
+              {mostrarGestionVariables && (
+                <div className="bg-white rounded-lg p-4 border border-amber-300 mt-3">
+                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Gestión de Variables Personalizadas
+                  </h4>
+                  
+                  {/* Formulario para nueva variable */}
+                  <div className="border rounded-lg p-3 mb-4 space-y-3">
+                    <h5 className="font-medium text-sm">Nueva Variable</h5>
+                    <div>
+                      <label className="text-xs font-medium block mb-1">Variable <span className="text-red-500">*</span></label>
+                      <Input
+                        value={nuevaVariable.variable}
+                        onChange={(e) => setNuevaVariable(prev => ({ ...prev, variable: e.target.value }))}
+                        placeholder="Ej: {mi_variable} o mi_variable"
+                        className="font-mono text-xs"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Se agregarán llaves automáticamente si no las incluyes</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium block mb-1">Descripción <span className="text-red-500">*</span></label>
+                      <Input
+                        value={nuevaVariable.descripcion}
+                        onChange={(e) => setNuevaVariable(prev => ({ ...prev, descripcion: e.target.value }))}
+                        placeholder="Describe qué contiene esta variable"
+                        className="text-xs"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleCrearVariable}
+                      disabled={creandoVariable || !nuevaVariable.variable.trim() || !nuevaVariable.descripcion.trim()}
+                      size="sm"
+                      className="w-full"
+                    >
+                      {creandoVariable ? (
+                        <>
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Creando...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-3 w-3 mr-1" />
+                          Agregar Variable
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* Tabla de variables existentes */}
+                  {cargandoVariables ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                    </div>
+                  ) : variablesPersonalizadas.length === 0 ? (
+                    <div className="text-center py-4 text-gray-500 text-sm">
+                      No hay variables personalizadas. Agrega una arriba.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-gray-700 mb-2">Variables Existentes:</div>
+                      {variablesPersonalizadas.map((varItem) => (
+                        <div key={varItem.id} className="border rounded p-2 hover:bg-gray-50">
+                          {editandoVariable === varItem.id ? (
+                            <div className="space-y-2">
+                              <div>
+                                <label className="text-xs font-medium block mb-1">Variable</label>
+                                <Input
+                                  value={variableEditada.variable}
+                                  onChange={(e) => setVariableEditada(prev => ({ ...prev, variable: e.target.value }))}
+                                  className="font-mono text-xs"
+                                  size={1}
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs font-medium block mb-1">Descripción</label>
+                                <Input
+                                  value={variableEditada.descripcion}
+                                  onChange={(e) => setVariableEditada(prev => ({ ...prev, descripcion: e.target.value }))}
+                                  className="text-xs"
+                                  size={1}
+                                />
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleActualizarVariable(varItem.id)}
+                                  disabled={!variableEditada.variable.trim() || !variableEditada.descripcion.trim()}
+                                  className="text-xs h-7"
+                                >
+                                  <Save className="h-3 w-3 mr-1" />
+                                  Guardar
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={handleCancelarEdicionVariable}
+                                  className="text-xs h-7"
+                                >
+                                  Cancelar
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <code className="text-green-600 font-mono text-xs">{varItem.variable}</code>
+                                  <Badge variant={varItem.activo ? "default" : "secondary"} className="text-xs">
+                                    {varItem.activo ? "Activo" : "Inactivo"}
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-gray-600">{varItem.descripcion}</p>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleIniciarEdicionVariable(varItem)}
+                                  className="text-blue-600 hover:text-blue-700 h-7 w-7 p-0"
+                                  title="Editar variable"
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEliminarVariable(varItem.id)}
+                                  className="text-red-600 hover:text-red-700 h-7 w-7 p-0"
+                                  title="Eliminar variable"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <Button
                 variant="outline"
                 size="sm"
@@ -925,12 +1194,11 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
         </p>
       </div>
 
-      {/* Tabs con 4 pestañas */}
+      {/* Tabs con 3 pestañas */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="configuracion">Configuración</TabsTrigger>
           <TabsTrigger value="entrenamiento">Entrenamiento</TabsTrigger>
-          <TabsTrigger value="metricas">Métricas</TabsTrigger>
           <TabsTrigger value="sistema-hibrido">
             <Zap className="h-4 w-4 mr-1" />
             Sistema Híbrido
@@ -967,7 +1235,6 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                             await apiClient.put('/api/v1/configuracion/ai/configuracion', configParaGuardar)
                             toast.success('✅ AI activado y guardado automáticamente')
                             await cargarConfiguracion()
-                            await cargarMetricas()
                             setConfiguracionCorrecta(true)
                             setTokenAnterior(config.openai_api_key)
                           } catch (error) {
@@ -1355,131 +1622,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           </Card>
         </TabsContent>
 
-        {/* Pestaña 3: Métricas */}
-        <TabsContent value="metricas" className="space-y-4">
-          <Card>
-            <CardContent className="pt-6 space-y-4">
-              {/* Header con botón de refrescar */}
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Métricas de AI
-                </h3>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={cargarMetricas}
-                  disabled={cargandoMetricas}
-                >
-                  {cargandoMetricas ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Actualizando...
-                    </>
-                  ) : (
-                    <>
-                      <BarChart3 className="h-4 w-4 mr-2" />
-                      Actualizar
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              {cargandoMetricas ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                </div>
-              ) : metricas ? (
-                <>
-                  {/* Información de última actualización */}
-                  {metricas.fecha_consulta && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <BarChart3 className="h-4 w-4 text-blue-600" />
-                          <span className="text-sm font-medium text-blue-900">Última Actualización</span>
-                        </div>
-                        <span className="text-sm text-blue-700">
-                          {new Date(metricas.fecha_consulta).toLocaleString('es-ES', {
-                            year: 'numeric',
-                            month: '2-digit',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit'
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Métricas de Documentos */}
-                  <div>
-                    <h4 className="font-semibold mb-4 flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
-                      Documentos
-                    </h4>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-                      <div className="border rounded-lg p-4">
-                        <div className="text-sm text-gray-500">Total</div>
-                        <div className="text-2xl font-bold">{metricas.documentos.total}</div>
-                      </div>
-                      <div className="border rounded-lg p-4">
-                        <div className="text-sm text-gray-500">Activos</div>
-                        <div className="text-2xl font-bold text-green-600">{metricas.documentos.activos}</div>
-                      </div>
-                      <div className="border rounded-lg p-4">
-                        <div className="text-sm text-gray-500">Procesados</div>
-                        <div className="text-2xl font-bold text-blue-600">{metricas.documentos.procesados}</div>
-                      </div>
-                      <div className="border rounded-lg p-4">
-                        <div className="text-sm text-gray-500">Pendientes</div>
-                        <div className="text-2xl font-bold text-amber-600">{metricas.documentos.pendientes}</div>
-                      </div>
-                      <div className="border rounded-lg p-4">
-                        <div className="text-sm text-gray-500">Tamaño Total</div>
-                        <div className="text-2xl font-bold">{metricas.documentos.tamaño_total_mb} MB</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Estado de Configuración */}
-                  <div className="border-t pt-4">
-                    <h4 className="font-semibold mb-4 flex items-center gap-2">
-                      <BarChart3 className="h-5 w-5" />
-                      Estado de Configuración
-                    </h4>
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div className="border rounded-lg p-4">
-                        <div className="text-sm text-gray-500 mb-2">AI Activo</div>
-                        <Badge variant={metricas.configuracion.ai_activo ? "default" : "secondary"}>
-                          {metricas.configuracion.ai_activo ? "✅ Activo" : "❌ Inactivo"}
-                        </Badge>
-                      </div>
-                      <div className="border rounded-lg p-4">
-                        <div className="text-sm text-gray-500 mb-2">Modelo</div>
-                        <div className="font-semibold">{metricas.configuracion.modelo || "No configurado"}</div>
-                      </div>
-                      <div className="border rounded-lg p-4">
-                        <div className="text-sm text-gray-500 mb-2">Token Configurado</div>
-                        <Badge variant={metricas.configuracion.tiene_token ? "default" : "destructive"}>
-                          {metricas.configuracion.tiene_token ? "✅ Sí" : "❌ No"}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <AlertCircle className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                  <p>No se pudieron cargar las métricas</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Pestaña 4: Sistema Híbrido */}
+        {/* Pestaña 3: Sistema Híbrido */}
         <TabsContent value="sistema-hibrido" className="space-y-4">
           <Tabs value={activeHybridTab} onValueChange={setActiveHybridTab} className="w-full">
             <TabsList className="grid w-full grid-cols-4">
