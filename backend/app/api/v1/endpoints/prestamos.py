@@ -1090,6 +1090,7 @@ def _obtener_prediccion_ml(prestamo: Prestamo, datos_evaluacion: dict, db: Sessi
         # Verificar que MLService esté disponible
         try:
             from app.services.ml_service import MLService, ML_SERVICE_AVAILABLE
+
             if not ML_SERVICE_AVAILABLE or MLService is None:
                 logger.warning("MLService no disponible, omitiendo predicción ML")
                 return None
@@ -1110,9 +1111,10 @@ def _obtener_prediccion_ml(prestamo: Prestamo, datos_evaluacion: dict, db: Sessi
             return None
 
         # Calcular edad
-        edad = datos_evaluacion.get('edad', 0)
+        edad = datos_evaluacion.get("edad", 0)
         if not edad and cliente.fecha_nacimiento:
             from datetime import date
+
             hoy = date.today()
             edad = (hoy - cliente.fecha_nacimiento).days // 365
 
@@ -1130,6 +1132,7 @@ def _obtener_prediccion_ml(prestamo: Prestamo, datos_evaluacion: dict, db: Sessi
 
         # Calcular días desde último préstamo
         from datetime import date
+
         dias_ultimo_prestamo = 0
         if prestamos_previos > 0:
             ultimo_prestamo = (
@@ -1149,10 +1152,10 @@ def _obtener_prediccion_ml(prestamo: Prestamo, datos_evaluacion: dict, db: Sessi
         # Calcular historial de pagos (simplificado: porcentaje de préstamos pagados)
         from app.models.pago import Pago
         from app.models.amortizacion import Cuota
-        
+
         total_pagado = 0
         total_debe = 0
-        
+
         # Obtener todos los préstamos del cliente
         prestamos_cliente = db.query(Prestamo).filter(Prestamo.cliente_id == prestamo.cliente_id).all()
         for p in prestamos_cliente:
@@ -1162,12 +1165,12 @@ def _obtener_prediccion_ml(prestamo: Prestamo, datos_evaluacion: dict, db: Sessi
             for pago in pagos:
                 if pago.monto_pagado:
                     total_pagado += float(pago.monto_pagado)
-        
+
         historial_pagos = total_pagado / total_debe if total_debe > 0 else 0.95  # Default si no hay historial
 
         # Calcular deuda total y ratio
-        ingresos = float(datos_evaluacion.get('ingresos_mensuales', 0))
-        otras_deudas = float(datos_evaluacion.get('otras_deudas', 0))
+        ingresos = float(datos_evaluacion.get("ingresos_mensuales", 0))
+        otras_deudas = float(datos_evaluacion.get("otras_deudas", 0))
         deuda_total = otras_deudas + float(prestamo.total_financiamiento or 0)
         ratio_deuda_ingreso = deuda_total / ingresos if ingresos > 0 else 0
 
@@ -1286,11 +1289,11 @@ def _construir_respuesta_evaluacion(evaluacion, prestamo_id: int, prediccion_ml:
             },
         },
     }
-    
+
     # Agregar predicción ML si está disponible
     if prediccion_ml:
         respuesta["prediccion_ml"] = prediccion_ml
-    
+
     return respuesta
 
 
