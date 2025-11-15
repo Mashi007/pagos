@@ -16,11 +16,11 @@ from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
+from app.models.modelo_riesgo import ModeloRiesgo
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.prestamo import Prestamo
 from app.models.prestamo_auditoria import PrestamoAuditoria
 from app.models.user import User
-from app.models.modelo_riesgo import ModeloRiesgo
 from app.schemas.prestamo import (
     PrestamoCreate,
     PrestamoResponse,
@@ -1089,7 +1089,7 @@ def _obtener_prediccion_ml(prestamo: Prestamo, datos_evaluacion: dict, db: Sessi
 
         # Verificar que MLService esté disponible
         try:
-            from app.services.ml_service import MLService, ML_SERVICE_AVAILABLE
+            from app.services.ml_service import ML_SERVICE_AVAILABLE, MLService
 
             if not ML_SERVICE_AVAILABLE or MLService is None:
                 logger.warning("MLService no disponible, omitiendo predicción ML")
@@ -1150,8 +1150,8 @@ def _obtener_prediccion_ml(prestamo: Prestamo, datos_evaluacion: dict, db: Sessi
                 dias_ultimo_prestamo = (date.today() - ultimo_prestamo.fecha_registro.date()).days
 
         # Calcular historial de pagos (simplificado: porcentaje de préstamos pagados)
-        from app.models.pago import Pago
         from app.models.amortizacion import Cuota
+        from app.models.pago import Pago
 
         total_pagado = 0
         total_debe = 0
