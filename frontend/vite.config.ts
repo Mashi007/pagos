@@ -5,7 +5,7 @@ import type { Plugin } from 'vite'
 
 // Plugin para eliminar modulepreload de chunks pesados (lazy loading)
 function removeHeavyChunksPreload(): Plugin {
-  const heavyChunks = ['exceljs', 'pdf-export']
+  const heavyChunks = ['exceljs', 'pdf-export', 'jspdf', 'html2canvas', 'jspdf-autotable']
   
   return {
     name: 'remove-heavy-chunks-preload',
@@ -20,42 +20,69 @@ function removeHeavyChunksPreload(): Plugin {
           if (isHeavyChunk) {
             // Marcar el chunk para que no se precargue
             chunk.modulePreload = false
+            // También marcar todas las dependencias del chunk pesado
+            if (chunk.imports) {
+              chunk.imports.forEach(imp => {
+                const importedChunk = bundle[imp]
+                if (importedChunk && importedChunk.type === 'chunk') {
+                  importedChunk.modulePreload = false
+                }
+              })
+            }
           }
         }
       })
     },
     transformIndexHtml(html) {
-      // ✅ Eliminar TODOS los modulepreload para exceljs y pdf-export (carga bajo demanda)
+      // ✅ Eliminar TODOS los modulepreload y preload para chunks pesados (carga bajo demanda)
       // Esto evita que el navegador precargue estos chunks automáticamente
       let modifiedHtml = html
       
-      // Eliminar modulepreload para exceljs (múltiples patrones)
-      modifiedHtml = modifiedHtml.replace(
-        /<link[^>]*rel=["']modulepreload["'][^>]*exceljs[^>]*>/gi,
-        ''
-      )
-      modifiedHtml = modifiedHtml.replace(
-        /<link[^>]*exceljs[^>]*rel=["']modulepreload["'][^>]*>/gi,
-        ''
-      )
+      // Lista de nombres de chunks pesados para usar en patrones
+      const heavyChunkNames = ['exceljs', 'pdf-export', 'jspdf', 'html2canvas', 'jspdf-autotable']
       
-      // Eliminar modulepreload para pdf-export (múltiples patrones)
-      modifiedHtml = modifiedHtml.replace(
-        /<link[^>]*rel=["']modulepreload["'][^>]*(pdf-export|jspdf|html2canvas)[^>]*>/gi,
-        ''
-      )
-      modifiedHtml = modifiedHtml.replace(
-        /<link[^>]*(pdf-export|jspdf|html2canvas)[^>]*rel=["']modulepreload["'][^>]*>/gi,
-        ''
-      )
+      // Eliminar modulepreload para chunks pesados (múltiples patrones)
+      heavyChunkNames.forEach(name => {
+        // Patrón 1: rel="modulepreload" ... nombre-chunk
+        modifiedHtml = modifiedHtml.replace(
+          new RegExp(`<link[^>]*rel=["']modulepreload["'][^>]*${name}[^"']*["'][^>]*>`, 'gi'),
+          ''
+        )
+        // Patrón 2: nombre-chunk ... rel="modulepreload"
+        modifiedHtml = modifiedHtml.replace(
+          new RegExp(`<link[^>]*${name}[^"']*["'][^>]*rel=["']modulepreload["'][^>]*>`, 'gi'),
+          ''
+        )
+        // Patrón 3: href contiene nombre-chunk con modulepreload
+        modifiedHtml = modifiedHtml.replace(
+          new RegExp(`<link[^>]*href=["'][^"']*${name}[^"']*["'][^>]*rel=["']modulepreload["'][^>]*>`, 'gi'),
+          ''
+        )
+      })
       
       // ✅ También eliminar cualquier preload que pueda estar causando la carga prematura
+      heavyChunkNames.forEach(name => {
+        // Patrón 1: rel="preload" ... nombre-chunk
+        modifiedHtml = modifiedHtml.replace(
+          new RegExp(`<link[^>]*rel=["']preload["'][^>]*${name}[^"']*["'][^>]*>`, 'gi'),
+          ''
+        )
+        // Patrón 2: nombre-chunk ... rel="preload"
+        modifiedHtml = modifiedHtml.replace(
+          new RegExp(`<link[^>]*${name}[^"']*["'][^>]*rel=["']preload["'][^>]*>`, 'gi'),
+          ''
+        )
+        // Patrón 3: href contiene nombre-chunk con preload
+        modifiedHtml = modifiedHtml.replace(
+          new RegExp(`<link[^>]*href=["'][^"']*${name}[^"']*["'][^>]*rel=["']preload["'][^>]*>`, 'gi'),
+          ''
+        )
+      })
+      
+      // ✅ Eliminar también cualquier referencia genérica a chunks pesados en links
+      const allNamesPattern = heavyChunkNames.join('|')
       modifiedHtml = modifiedHtml.replace(
-        /<link[^>]*rel=["']preload["'][^>]*(exceljs|pdf-export|jspdf|html2canvas)[^>]*>/gi,
-        ''
-      )
-      modifiedHtml = modifiedHtml.replace(
-        /<link[^>]*(exceljs|pdf-export|jspdf|html2canvas)[^>]*rel=["']preload["'][^>]*>/gi,
+        new RegExp(`<link[^>]*href=["'][^"']*(${allNamesPattern})[^"']*["'][^>]*>`, 'gi'),
         ''
       )
       
@@ -93,7 +120,25 @@ export default defineConfig({
   build: {
     // ✅ Deshabilitar completamente modulePreload para evitar precarga automática
     // Los chunks pesados se cargarán solo cuando se necesiten (lazy loading)
-    modulePreload: false, // Deshabilitar completamente modulePreload
+    modulePreload: {
+      polyfill: false, // Deshabilitar polyfill de modulePreload
+      resolveDependencies(filename, deps) {
+        // ✅ CRÍTICO: Excluir chunks pesados de la resolución de dependencias
+        // Esto previene que el navegador descubra y precargue estos chunks
+        const heavyChunks = ['exceljs', 'pdf-export', 'jspdf', 'html2canvas', 'jspdf-autotable']
+        
+        // Si el chunk actual es uno pesado, no resolver dependencias
+        if (heavyChunks.some(name => filename.includes(name))) {
+          return [] // Retornar array vacío = no preload
+        }
+        
+        // Si alguna dependencia es un chunk pesado, excluirla
+        return deps.filter(dep => {
+          const isHeavy = heavyChunks.some(name => dep.includes(name))
+          return !isHeavy // Solo incluir dependencias que NO sean chunks pesados
+        })
+      }
+    },
     rollupOptions: {
       output: {
         // ✅ Deshabilitar modulePreload para chunks pesados
