@@ -191,69 +191,75 @@ export function Auditoria() {
       </div>
 
       {/* Stats Dashboard */}
-      {stats && (
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Total Acciones</p>
-                  <p className="text-2xl font-bold">{stats.total_acciones.toLocaleString()}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Registros históricos
-                  </p>
-                </div>
-                <Activity className="w-8 h-8 text-blue-600" />
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Total Acciones</p>
+                <p className="text-2xl font-bold">
+                  {stats ? stats.total_acciones.toLocaleString() : '0'}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Registros históricos
+                </p>
               </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Hoy</p>
-                  <p className="text-2xl font-bold text-green-600">{stats.acciones_hoy}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Acciones realizadas
-                  </p>
-                </div>
-                <Calendar className="w-8 h-8 text-green-600" />
+              <Activity className="w-8 h-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Hoy</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {stats ? stats.acciones_hoy.toLocaleString() : '0'}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Acciones realizadas
+                </p>
               </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Esta Semana</p>
-                  <p className="text-2xl font-bold text-blue-600">{stats.acciones_esta_semana}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Últimos 7 días
-                  </p>
-                </div>
-                <BarChart3 className="w-8 h-8 text-blue-600" />
+              <Calendar className="w-8 h-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Esta Semana</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {stats ? stats.acciones_esta_semana.toLocaleString() : '0'}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Últimos 7 días
+                </p>
               </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Este Mes</p>
-                  <p className="text-2xl font-bold text-purple-600">{stats.acciones_este_mes}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Últimos 30 días
-                  </p>
-                </div>
-                <Shield className="w-8 h-8 text-purple-600" />
+              <BarChart3 className="w-8 h-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Este Mes</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {stats ? stats.acciones_este_mes.toLocaleString() : '0'}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Últimos 30 días
+                </p>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+              <Shield className="w-8 h-8 text-purple-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Filtros */}
       <Card>
