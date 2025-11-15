@@ -337,16 +337,16 @@ export function Auditoria() {
       {/* Tabla */}
       <Card>
         <CardContent className="pt-6">
-          <Table>
+          <Table className="[&_table]:table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead>Email Usuario</TableHead>
-                <TableHead>Acción</TableHead>
-                <TableHead>Módulo</TableHead>
-                <TableHead>Campo</TableHead>
-                <TableHead>Descripción</TableHead>
-                <TableHead>Resultado</TableHead>
-                <TableHead>Fecha</TableHead>
+                <TableHead className="w-[180px]">Email Usuario</TableHead>
+                <TableHead className="w-[120px]">Acción</TableHead>
+                <TableHead className="w-[120px]">Módulo</TableHead>
+                <TableHead className="w-[140px]">Campo</TableHead>
+                <TableHead className="min-w-[200px]">Descripción</TableHead>
+                <TableHead className="w-[110px]">Resultado</TableHead>
+                <TableHead className="w-[160px]">Fecha</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -375,34 +375,34 @@ export function Auditoria() {
               ) : (
                 auditorias.map((auditoria) => (
                   <TableRow key={auditoria.id}>
-                    <TableCell>
+                    <TableCell className="w-[180px]">
                       <div className="flex items-center text-sm">
-                        <User className="w-3 h-3 mr-1 text-gray-400" />
-                        {auditoria.usuario_email || 'N/A'}
+                        <User className="w-3 h-3 mr-1 text-gray-400 flex-shrink-0" />
+                        <span className="truncate">{auditoria.usuario_email || 'N/A'}</span>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="w-[120px]">
                       <Badge className={getAccionBadgeColor(auditoria.accion)}>
                         {auditoria.accion}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="w-[120px]">
                       <Badge className={getModuloBadgeColor(auditoria.modulo)}>
                         {auditoria.modulo}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-gray-600 font-medium">
-                      {auditoria.campo || '-'}
+                    <TableCell className="w-[140px] text-sm text-gray-600 font-medium">
+                      <span className="truncate block">{auditoria.campo || '-'}</span>
                     </TableCell>
-                    <TableCell className="text-sm text-gray-600 max-w-xs truncate">
-                      {auditoria.descripcion || `${auditoria.accion} en ${auditoria.modulo}${auditoria.registro_id ? ` #${auditoria.registro_id}` : ''}`}
+                    <TableCell className="min-w-[200px] text-sm text-gray-600">
+                      <span className="line-clamp-2">{auditoria.descripcion || `${auditoria.accion} en ${auditoria.modulo}${auditoria.registro_id ? ` #${auditoria.registro_id}` : ''}`}</span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="w-[110px]">
                       <Badge className={auditoria.resultado === 'EXITOSO' ? 'bg-green-600' : 'bg-red-600'}>
                         {auditoria.resultado}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-gray-600">
+                    <TableCell className="w-[160px] text-sm text-gray-600 whitespace-nowrap">
                       {new Date(auditoria.fecha).toLocaleString('es-VE', {
                         year: 'numeric',
                         month: 'short',

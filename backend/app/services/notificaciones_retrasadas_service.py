@@ -26,7 +26,8 @@ class NotificacionesRetrasadasService:
         Condiciones:
         - Préstamos con estado = 'APROBADO'
         - Cuotas que vencieron hace 1, 3 o 5 días
-        - Cuotas con estado ATRASADO o PENDIENTE (cuando ya pasó la fecha)
+        - Cuotas con estado ATRASADO, PENDIENTE o PARCIAL (cuando ya pasó la fecha)
+        - Cuotas con total_pagado < monto_cuota (incompletas)
         - Clientes activos (estado != 'INACTIVO')
 
         Returns:
@@ -73,7 +74,8 @@ class NotificacionesRetrasadasService:
                   AND (c.fecha_vencimiento = :fecha_1_dia_atrasado
                        OR c.fecha_vencimiento = :fecha_3_dias_atrasado
                        OR c.fecha_vencimiento = :fecha_5_dias_atrasado)
-                  AND c.estado IN ('ATRASADO', 'PENDIENTE')
+                  AND c.estado IN ('ATRASADO', 'PENDIENTE', 'PARCIAL')
+                  AND c.total_pagado < c.monto_cuota
                   AND cl.estado != 'INACTIVO'
                   AND c.fecha_vencimiento < :hoy
                 ORDER BY dias_atrasado, c.fecha_vencimiento

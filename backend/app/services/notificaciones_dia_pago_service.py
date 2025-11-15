@@ -26,7 +26,8 @@ class NotificacionesDiaPagoService:
         Condiciones:
         - Préstamos con estado = 'APROBADO'
         - Cuotas con fecha_vencimiento = HOY
-        - Cuotas con estado PENDIENTE o ATRASADO
+        - Cuotas con estado PENDIENTE, ATRASADO o PARCIAL
+        - Cuotas con total_pagado < monto_cuota (incompletas)
         - Clientes activos (estado != 'INACTIVO')
         - Ordenado alfabéticamente por nombre del cliente
 
@@ -58,7 +59,8 @@ class NotificacionesDiaPagoService:
                 INNER JOIN clientes cl ON cl.id = p.cliente_id
                 WHERE p.estado = 'APROBADO'
                   AND c.fecha_vencimiento = :hoy
-                  AND c.estado IN ('PENDIENTE', 'ATRASADO')
+                  AND c.estado IN ('PENDIENTE', 'ATRASADO', 'PARCIAL')
+                  AND c.total_pagado < c.monto_cuota
                   AND cl.estado != 'INACTIVO'
                 ORDER BY cl.nombres ASC, c.numero_cuota ASC
             """

@@ -23,8 +23,6 @@ export function ChatAI() {
   const [verificando, setVerificando] = useState(true)
   const mensajesEndRef = useRef<HTMLDivElement>(null)
 
-  const [mostrarEjemplos, setMostrarEjemplos] = useState(true)
-
   useEffect(() => {
     verificarConfiguracionAI()
     // Mensaje de bienvenida
@@ -35,59 +33,6 @@ export function ChatAI() {
       timestamp: new Date()
     }])
   }, [])
-
-  const ejemplosPreguntas = [
-    {
-      categoria: 'Búsqueda de Clientes',
-      preguntas: [
-        '¿Cómo se llama quien tiene este número de cédula: V19226493?',
-        '¿Quién tiene la cédula V19226493?',
-        'Buscar cliente con cédula V19226493',
-        'Datos del cliente con documento V19226493'
-      ]
-    },
-    {
-      categoria: 'Préstamos',
-      preguntas: [
-        '¿Cuántos préstamos tiene el cliente con cédula V19226493?',
-        '¿Cuál es el estado del préstamo del cliente V19226493?',
-        'Mostrar préstamos activos',
-        '¿Cuántos préstamos hay en total?'
-      ]
-    },
-    {
-      categoria: 'Pagos y Cuotas',
-      preguntas: [
-        '¿Cuántas cuotas tiene pendientes el cliente V19226493?',
-        '¿Cuánto debe el cliente con cédula V19226493?',
-        '¿Cuánto se debe cobrar hoy?',
-        'Mostrar pagos del mes actual'
-      ]
-    },
-    {
-      categoria: 'Morosidad',
-      preguntas: [
-        '¿El cliente V19226493 está en mora?',
-        '¿Cuál es la tasa de morosidad actual?',
-        '¿Cuántos clientes están en mora?',
-        'Mostrar cuotas vencidas'
-      ]
-    },
-    {
-      categoria: 'Estadísticas',
-      preguntas: [
-        '¿Cuántos clientes hay en total?',
-        '¿Cuál es la cartera total?',
-        'Mostrar estadísticas de préstamos',
-        '¿Cuántos préstamos se aprobaron este mes?'
-      ]
-    }
-  ]
-
-  const usarEjemplo = (ejemplo: string) => {
-    setPregunta(ejemplo)
-    setMostrarEjemplos(false)
-  }
 
   useEffect(() => {
     mensajesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -279,52 +224,6 @@ export function ChatAI() {
           </CardContent>
         </Card>
       ) : null}
-
-      {/* Ejemplos de preguntas */}
-      {mostrarEjemplos && mensajes.length === 1 && (
-        <Card className="mb-4 border-blue-200 bg-blue-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-blue-600" />
-                <h3 className="font-semibold text-blue-900">Ejemplos de preguntas que puedes hacer:</h3>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setMostrarEjemplos(false)}
-                className="text-blue-600 hover:text-blue-700"
-              >
-                Ocultar
-              </Button>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {ejemplosPreguntas.map((categoria, idx) => (
-                <div key={idx} className="border rounded-lg p-3 bg-white">
-                  <h4 className="font-medium text-sm mb-2 text-gray-700">{categoria.categoria}</h4>
-                  <div className="space-y-1">
-                    {categoria.preguntas.slice(0, 2).map((pregunta, pIdx) => (
-                      <button
-                        key={pIdx}
-                        onClick={() => usarEjemplo(pregunta)}
-                        className="text-xs text-left text-blue-600 hover:text-blue-800 hover:underline block w-full text-start"
-                      >
-                        "{pregunta}"
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 p-3 bg-blue-100 rounded-lg">
-              <p className="text-xs text-blue-800">
-                💡 <strong>Tip:</strong> Puedes buscar clientes por cédula, consultar préstamos, pagos, cuotas, morosidad y estadísticas. 
-                Usa términos como "cliente", "cédula", "préstamo", "pago", "cuota", "mora" en tus preguntas.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Chat */}
       <Card className="h-[calc(100vh-280px)] flex flex-col">

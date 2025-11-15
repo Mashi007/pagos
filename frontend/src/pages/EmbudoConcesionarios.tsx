@@ -15,6 +15,7 @@ import {
   DollarSign,
   Link,
   X,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,13 +24,14 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { formatCurrency, formatDate } from '@/utils'
-import { useConcesionarios } from '@/hooks/useConcesionarios'
+import { useConcesionarios, useCreateConcesionario } from '@/hooks/useConcesionarios'
 import { usePrestamos } from '@/hooks/usePrestamos'
 import { useClientes } from '@/hooks/useClientes'
-import { Concesionario } from '@/services/concesionarioService'
+import { Concesionario, ConcesionarioCreate } from '@/services/concesionarioService'
 import { Prestamo } from '@/types'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { useNavigate } from 'react-router-dom'
+import { Label } from '@/components/ui/label'
 
 // Estados del embudo de concesionarios
 const ESTADOS_EMBUDO = [
@@ -93,9 +95,16 @@ export function EmbudoConcesionarios() {
   const [searchTerm, setSearchTerm] = useState('')
   const [concesionarioSeleccionadoId, setConcesionarioSeleccionadoId] = useState<string>('')
   const [showAddDialog, setShowAddDialog] = useState(false)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [searchConcesionario, setSearchConcesionario] = useState('')
   const [concesionariosEnEmbudo, setConcesionariosEnEmbudo] = useState<Map<number, Concesionario>>(new Map())
   const [estadosManuales, setEstadosManuales] = useState<Map<number, string>>(new Map())
+  const [nuevoConcesionario, setNuevoConcesionario] = useState<ConcesionarioCreate>({
+    nombre: '',
+    activo: true
+  })
+  
+  const createConcesionarioMutation = useCreateConcesionario()
 
   // Obtener concesionarios reales desde configuración/concesionarios
   const { 
@@ -249,6 +258,28 @@ export function EmbudoConcesionarios() {
     })
   }
 
+  const handleCrearConcesionario = async () => {
+    if (!nuevoConcesionario.nombre.trim()) {
+      return
+    }
+    
+    try {
+      const creado = await createConcesionarioMutation.mutateAsync(nuevoConcesionario)
+      // Agregar el nuevo concesionario al embudo
+      setConcesionariosEnEmbudo(prev => new Map(prev).set(creado.id, creado))
+      setEstadosManuales(prev => {
+        const nuevo = new Map(prev)
+        nuevo.set(creado.id, 'inactivo')
+        return nuevo
+      })
+      setNuevoConcesionario({ nombre: '', activo: true })
+      setShowCreateDialog(false)
+      refetchConcesionarios()
+    } catch (error) {
+      console.error('Error al crear concesionario:', error)
+    }
+  }
+
   // Agrupar concesionarios por estado
   const concesionariosPorEstado = ESTADOS_EMBUDO.map(estado => ({
     ...estado,
@@ -355,9 +386,9 @@ export function EmbudoConcesionarios() {
           </Button>
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
-              <Button>
+              <Button variant="outline">
                 <Plus className="h-4 w-4 mr-2" />
-                Agregar Concesionario
+                Agregar Existente
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
@@ -409,6 +440,66 @@ export function EmbudoConcesionarios() {
                     Escribe al menos 2 caracteres para buscar
                   </div>
                 ) : null}
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Crear Nuevo
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Crear Nuevo Concesionario</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="nombre">Nombre del Concesionario *</Label>
+                  <Input
+                    id="nombre"
+                    placeholder="Ej: Concesionario ABC"
+                    value={nuevoConcesionario.nombre}
+                    onChange={(e) => setNuevoConcesionario({ ...nuevoConcesionario, nombre: e.target.value })}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="activo"
+                    checked={nuevoConcesionario.activo}
+                    onChange={(e) => setNuevoConcesionario({ ...nuevoConcesionario, activo: e.target.checked })}
+                    className="rounded border-gray-300"
+                  />
+                  <Label htmlFor="activo" className="cursor-pointer">
+                    Concesionario activo
+                  </Label>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => {
+                    setShowCreateDialog(false)
+                    setNuevoConcesionario({ nombre: '', activo: true })
+                  }}>
+                    Cancelar
+                  </Button>
+                  <Button 
+                    onClick={handleCrearConcesionario}
+                    disabled={!nuevoConcesionario.nombre.trim() || createConcesionarioMutation.isPending}
+                  >
+                    {createConcesionarioMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creando...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Crear
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
@@ -564,14 +655,22 @@ export function EmbudoConcesionarios() {
                     </CardHeader>
                     <CardContent className="p-3 space-y-3 max-h-[calc(100vh-400px)] overflow-y-auto">
                       {columna.id === 'inactivo' ? (
-                        <div className="text-center py-8">
+                        <div className="text-center py-8 space-y-3">
                           <Button
                             variant="outline"
                             className="w-full border-2 border-dashed border-gray-300 hover:border-gray-400 hover:bg-gray-50"
                             onClick={() => setShowAddDialog(true)}
                           >
                             <Plus className="h-4 w-4 mr-2" />
-                            Agregar Concesionario
+                            Agregar Existente
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="w-full border-2 border-dashed border-blue-300 hover:border-blue-400 hover:bg-blue-50"
+                            onClick={() => setShowCreateDialog(true)}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Crear Nuevo Concesionario
                           </Button>
                           {columna.concesionarios.length > 0 && (
                             <div className="mt-3 space-y-3">

@@ -25,8 +25,9 @@ class NotificacionesPrejudicialService:
 
         Condiciones:
         - Préstamos con estado = 'APROBADO'
-        - Clientes con 3 o más cuotas atrasadas
-        - Cuotas con estado ATRASADO
+        - Clientes con 3 o más cuotas impagas (atrasadas o parciales)
+        - Cuotas con estado ATRASADO, PENDIENTE o PARCIAL que están vencidas e incompletas
+        - Cuotas con fecha_vencimiento < hoy y total_pagado < monto_cuota
         - Clientes activos (estado != 'INACTIVO')
         - Ordenado por fecha de vencimiento más antigua primero
 
@@ -38,7 +39,7 @@ class NotificacionesPrejudicialService:
         try:
             logger.info("🔍 [NotificacionesPrejudicial] Iniciando cálculo de notificaciones prejudiciales...")
 
-            # Query optimizada: clientes con 3+ cuotas atrasadas
+            # Query optimizada: clientes con 3+ cuotas impagas (atrasadas o parciales)
             # Ordenado por fecha de vencimiento más antigua primero
             query_optimizada = text(
                 """WITH cuotas_atrasadas AS (
@@ -52,13 +53,12 @@ class NotificacionesPrejudicialService:
                         cl.telefono,
                         c.fecha_vencimiento,
                         c.numero_cuota,
-                        c.monto_cuota,
-                        ROW_NUMBER() OVER (PARTITION BY p.cliente_id ORDER BY c.fecha_vencimiento ASC) as rn
+                        c.monto_cuota
                     FROM prestamos p
                     INNER JOIN cuotas c ON c.prestamo_id = p.id
                     INNER JOIN clientes cl ON cl.id = p.cliente_id
                     WHERE p.estado = 'APROBADO'
-                      AND c.estado IN ('ATRASADO', 'PENDIENTE')
+                      AND c.estado IN ('ATRASADO', 'PENDIENTE', 'PARCIAL')
                       AND c.fecha_vencimiento < :hoy
                       AND c.total_pagado < c.monto_cuota
                       AND cl.estado != 'INACTIVO'
@@ -83,7 +83,7 @@ class NotificacionesPrejudicialService:
                     (SELECT COUNT(*)
                      FROM cuotas c2
                      WHERE c2.prestamo_id = ca.prestamo_id
-                       AND c2.estado IN ('ATRASADO', 'PENDIENTE')
+                       AND c2.estado IN ('ATRASADO', 'PENDIENTE', 'PARCIAL')
                        AND c2.fecha_vencimiento < :hoy
                        AND c2.total_pagado < c2.monto_cuota) as total_cuotas_atrasadas,
                     'PREJUDICIAL' as tipo_notificacion

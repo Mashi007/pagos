@@ -65,8 +65,8 @@ def listar_notificaciones_prejudiciales(
     Listar notificaciones prejudiciales
 
     - Préstamos con estado = 'APROBADO'
-    - Clientes con 3 o más cuotas atrasadas
-    - Cuotas con estado ATRASADO o PENDIENTE que tienen fecha_vencimiento < hoy y no están pagadas
+    - Clientes con 3 o más cuotas impagas (atrasadas o parciales)
+    - Cuotas con estado ATRASADO, PENDIENTE o PARCIAL que tienen fecha_vencimiento < hoy y total_pagado < monto_cuota
     - Ordenado por fecha de vencimiento más antigua primero
     - Filtro opcional por estado de envío (ENVIADA, PENDIENTE, FALLIDA)
     """
