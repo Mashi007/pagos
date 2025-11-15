@@ -714,6 +714,7 @@ def estadisticas_auditoria(
 
         # Hoy / semana / mes
         from datetime import datetime, timedelta
+
         import pytz
 
         # Usar zona horaria de Venezuela (America/Caracas) para cálculos
