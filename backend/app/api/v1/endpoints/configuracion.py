@@ -2999,8 +2999,8 @@ def procesar_documento_ai(
                 detail="El archivo está vacío. No se puede extraer texto de un archivo sin contenido.",
             )
 
-        # Extraer texto del documento
-        texto_extraido = _extraer_texto_documento(documento.ruta_archivo, documento.tipo_archivo)
+        # Extraer texto del documento (usar la ruta resuelta, no la original)
+        texto_extraido = _extraer_texto_documento(str(ruta_archivo), documento.tipo_archivo)
 
         if texto_extraido and texto_extraido.strip():
             documento.contenido_texto = texto_extraido
