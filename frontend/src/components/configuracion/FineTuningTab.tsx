@@ -13,6 +13,13 @@ import {
   AlertCircle,
   MessageSquare,
   Plus,
+  Edit,
+  Save,
+  Sparkles,
+  BarChart3,
+  TrendingUp,
+  TrendingDown,
+  Info,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -51,7 +58,26 @@ export function FineTuningTab() {
   const [nuevaPregunta, setNuevaPregunta] = useState('')
   const [nuevaRespuesta, setNuevaRespuesta] = useState('')
   const [guardandoConversacion, setGuardandoConversacion] = useState(false)
+
+  // Estados para editar conversación
+  const [editandoConversacionId, setEditandoConversacionId] = useState<number | null>(null)
+  const [preguntaEditada, setPreguntaEditada] = useState('')
+  const [respuestaEditada, setRespuestaEditada] = useState('')
+  const [actualizandoConversacion, setActualizandoConversacion] = useState(false)
+  const preguntaEditadaRef = useRef<HTMLTextAreaElement>(null)
+  const respuestaEditadaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Estados para mejorador de IA
+  const [mejorandoPregunta, setMejorandoPregunta] = useState(false)
+  const [mejorandoRespuesta, setMejorandoRespuesta] = useState(false)
+  const [mejorandoConversacion, setMejorandoConversacion] = useState(false)
+
+  // Estados para estadísticas de feedback
+  const [estadisticasFeedback, setEstadisticasFeedback] = useState<any>(null)
+  const [cargandoEstadisticas, setCargandoEstadisticas] = useState(false)
+  const [mostrarEstadisticas, setMostrarEstadisticas] = useState(false)
+  const [filtrarFeedbackNegativo, setFiltrarFeedbackNegativo] = useState(true)
 
   // Estados para insertar tablas y campos
   const [tablaSeleccionada, setTablaSeleccionada] = useState<string>('')
@@ -98,30 +124,45 @@ export function FineTuningTab() {
   }, [tablaSeleccionada, campoSeleccionado, camposDisponibles])
 
   // Función para insertar tabla o campo en el textarea activo
-  const insertarEnTextarea = (texto: string) => {
+  const insertarEnTextarea = (
+    texto: string,
+    valorActual?: string,
+    setter?: (value: string) => void,
+    textareaRef?: React.RefObject<HTMLTextAreaElement>
+  ) => {
     let textarea: HTMLTextAreaElement | null = null
-    let setter: (value: string) => void
+    let valor: string
+    let setValue: (value: string) => void
 
-    // Determinar qué textarea usar
-    if (textareaActivo === 'pregunta' || (document.activeElement === preguntaTextareaRef.current)) {
-      textarea = preguntaTextareaRef.current
-      setter = setNuevaPregunta
-    } else if (textareaActivo === 'respuesta' || (document.activeElement === respuestaTextareaRef.current)) {
-      textarea = respuestaTextareaRef.current
-      setter = setNuevaRespuesta
+    // Si estamos en modo edición y se pasaron los parámetros
+    if (valorActual !== undefined && setter && textareaRef) {
+      textarea = textareaRef.current
+      valor = valorActual
+      setValue = setter
     } else {
-      // Si no hay textarea activo, usar el de pregunta por defecto
-      textarea = preguntaTextareaRef.current
-      setter = setNuevaPregunta
+      // Modo creación (comportamiento original)
+      if (textareaActivo === 'pregunta' || (document.activeElement === preguntaTextareaRef.current)) {
+        textarea = preguntaTextareaRef.current
+        valor = nuevaPregunta
+        setValue = setNuevaPregunta
+      } else if (textareaActivo === 'respuesta' || (document.activeElement === respuestaTextareaRef.current)) {
+        textarea = respuestaTextareaRef.current
+        valor = nuevaRespuesta
+        setValue = setNuevaRespuesta
+      } else {
+        // Si no hay textarea activo, usar el de pregunta por defecto
+        textarea = preguntaTextareaRef.current
+        valor = nuevaPregunta
+        setValue = setNuevaPregunta
+      }
     }
 
     if (textarea) {
       const start = textarea.selectionStart
       const end = textarea.selectionEnd
-      const valorActual = textarea.value
-      const nuevoValor = valorActual.substring(0, start) + texto + valorActual.substring(end)
+      const nuevoValor = valor.substring(0, start) + texto + valor.substring(end)
       
-      setter(nuevoValor)
+      setValue(nuevoValor)
       
       // Restaurar el foco y posición del cursor
       setTimeout(() => {
@@ -208,7 +249,21 @@ export function FineTuningTab() {
     setCalificandoId(conversacionId)
     try {
       await aiTrainingService.calificarConversacion(conversacionId, calificacion, feedback)
-      toast.success('Conversación calificada exitosamente')
+      
+      // Si la calificación es 4+ estrellas, la conversación está lista para entrenamiento
+      if (calificacion >= 4) {
+        const conversacionesCalificadas = conversaciones.filter(
+          (c) => c.calificacion && c.calificacion >= 4
+        ).length + 1 // +1 porque acabamos de calificar una
+        
+        toast.success(
+          `✅ Conversación calificada (${calificacion} estrellas) - Lista para entrenamiento. ` +
+          `Total listas: ${conversacionesCalificadas}${conversacionesCalificadas >= 10 ? ' - ¡Ya puedes preparar datos!' : ` (necesitas ${10 - conversacionesCalificadas} más)`}`
+        )
+      } else {
+        toast.success(`Conversación calificada (${calificacion} estrellas)`)
+      }
+      
       setCalificacion(0)
       setFeedback('')
       cargarConversaciones()
@@ -216,6 +271,19 @@ export function FineTuningTab() {
       toast.error('Error al calificar conversación')
     } finally {
       setCalificandoId(null)
+    }
+  }
+
+  const cargarEstadisticasFeedback = async () => {
+    setCargandoEstadisticas(true)
+    try {
+      const stats = await aiTrainingService.getEstadisticasFeedback()
+      setEstadisticasFeedback(stats)
+    } catch (error: any) {
+      console.error('Error cargando estadísticas:', error)
+      toast.error('Error al cargar estadísticas de feedback')
+    } finally {
+      setCargandoEstadisticas(false)
     }
   }
 
@@ -236,10 +304,24 @@ export function FineTuningTab() {
         return
       }
 
-      const result = await aiTrainingService.prepararDatosEntrenamiento(conversacionesSeleccionadas)
+      const result = await aiTrainingService.prepararDatosEntrenamiento(
+        conversacionesSeleccionadas,
+        filtrarFeedbackNegativo
+      )
       setArchivoId(result.archivo_id)
-      toast.success(`Datos preparados: ${result.total_conversaciones} conversaciones`)
+      
+      let mensaje = `Datos preparados: ${result.total_conversaciones} conversaciones`
+      if (result.conversaciones_excluidas && result.conversaciones_excluidas > 0) {
+        mensaje += ` (${result.conversaciones_excluidas} excluidas por feedback negativo)`
+      }
+      
+      toast.success(mensaje)
       setMostrarFormEntrenamiento(true)
+      
+      // Recargar estadísticas después de preparar
+      if (mostrarEstadisticas) {
+        cargarEstadisticasFeedback()
+      }
     } catch (error: any) {
       const mensajeError =
         error?.response?.data?.detail ||
@@ -309,6 +391,177 @@ export function FineTuningTab() {
       toast.error(mensaje)
     } finally {
       setGuardandoConversacion(false)
+    }
+  }
+
+  const handleIniciarEdicion = (conversacion: ConversacionAI) => {
+    setEditandoConversacionId(conversacion.id)
+    setPreguntaEditada(conversacion.pregunta)
+    setRespuestaEditada(conversacion.respuesta)
+  }
+
+  const handleCancelarEdicion = () => {
+    setEditandoConversacionId(null)
+    setPreguntaEditada('')
+    setRespuestaEditada('')
+  }
+
+  const handleGuardarEdicion = async () => {
+    if (!editandoConversacionId || !preguntaEditada.trim() || !respuestaEditada.trim()) {
+      toast.error('La pregunta y respuesta son requeridas')
+      return
+    }
+
+    setActualizandoConversacion(true)
+    try {
+      await aiTrainingService.actualizarConversacion(editandoConversacionId, {
+        pregunta: preguntaEditada.trim(),
+        respuesta: respuestaEditada.trim(),
+        modelo_usado: 'manual',
+      })
+      toast.success('Conversación actualizada exitosamente')
+      handleCancelarEdicion()
+      cargarConversaciones()
+    } catch (error: any) {
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al actualizar conversación'
+      toast.error(mensaje)
+    } finally {
+      setActualizandoConversacion(false)
+    }
+  }
+
+  const handleMejorarPregunta = async () => {
+    if (!preguntaEditada.trim()) {
+      toast.warning('Primero escribe una pregunta')
+      return
+    }
+
+    setMejorandoPregunta(true)
+    try {
+      const resultado = await aiTrainingService.mejorarConversacion({
+        pregunta: preguntaEditada,
+        respuesta: '', // Solo mejorar pregunta
+      })
+      setPreguntaEditada(resultado.pregunta_mejorada)
+      toast.success(`Pregunta mejorada: ${resultado.mejoras_aplicadas.join(', ')}`)
+    } catch (error: any) {
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al mejorar pregunta'
+      toast.error(mensaje)
+    } finally {
+      setMejorandoPregunta(false)
+    }
+  }
+
+  const handleMejorarRespuesta = async () => {
+    if (!respuestaEditada.trim()) {
+      toast.warning('Primero escribe una respuesta')
+      return
+    }
+
+    setMejorandoRespuesta(true)
+    try {
+      const resultado = await aiTrainingService.mejorarConversacion({
+        pregunta: '', // Solo mejorar respuesta
+        respuesta: respuestaEditada,
+      })
+      setRespuestaEditada(resultado.respuesta_mejorada)
+      toast.success(`Respuesta mejorada: ${resultado.mejoras_aplicadas.join(', ')}`)
+    } catch (error: any) {
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al mejorar respuesta'
+      toast.error(mensaje)
+    } finally {
+      setMejorandoRespuesta(false)
+    }
+  }
+
+  const handleMejorarConversacionCompleta = async () => {
+    if (!preguntaEditada.trim() || !respuestaEditada.trim()) {
+      toast.warning('Ambas pregunta y respuesta son requeridas')
+      return
+    }
+
+    setMejorandoConversacion(true)
+    try {
+      const resultado = await aiTrainingService.mejorarConversacion({
+        pregunta: preguntaEditada,
+        respuesta: respuestaEditada,
+      })
+      setPreguntaEditada(resultado.pregunta_mejorada)
+      setRespuestaEditada(resultado.respuesta_mejorada)
+      toast.success(`Conversación mejorada: ${resultado.mejoras_aplicadas.join(', ')}`)
+    } catch (error: any) {
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al mejorar conversación'
+      toast.error(mensaje)
+    } finally {
+      setMejorandoConversacion(false)
+    }
+  }
+
+  // Funciones para mejorar en modo creación
+  const handleMejorarNuevaPregunta = async () => {
+    if (!nuevaPregunta.trim()) {
+      toast.warning('Primero escribe una pregunta')
+      return
+    }
+
+    setMejorandoPregunta(true)
+    try {
+      const resultado = await aiTrainingService.mejorarConversacion({
+        pregunta: nuevaPregunta,
+        respuesta: '',
+      })
+      setNuevaPregunta(resultado.pregunta_mejorada)
+      toast.success(`Pregunta mejorada: ${resultado.mejoras_aplicadas.join(', ')}`)
+    } catch (error: any) {
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al mejorar pregunta'
+      toast.error(mensaje)
+    } finally {
+      setMejorandoPregunta(false)
+    }
+  }
+
+  const handleMejorarNuevaRespuesta = async () => {
+    if (!nuevaRespuesta.trim()) {
+      toast.warning('Primero escribe una respuesta')
+      return
+    }
+
+    setMejorandoRespuesta(true)
+    try {
+      const resultado = await aiTrainingService.mejorarConversacion({
+        pregunta: '',
+        respuesta: nuevaRespuesta,
+      })
+      setNuevaRespuesta(resultado.respuesta_mejorada)
+      toast.success(`Respuesta mejorada: ${resultado.mejoras_aplicadas.join(', ')}`)
+    } catch (error: any) {
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al mejorar respuesta'
+      toast.error(mensaje)
+    } finally {
+      setMejorandoRespuesta(false)
+    }
+  }
+
+  const handleMejorarNuevaConversacionCompleta = async () => {
+    if (!nuevaPregunta.trim() || !nuevaRespuesta.trim()) {
+      toast.warning('Ambas pregunta y respuesta son requeridas')
+      return
+    }
+
+    setMejorandoConversacion(true)
+    try {
+      const resultado = await aiTrainingService.mejorarConversacion({
+        pregunta: nuevaPregunta,
+        respuesta: nuevaRespuesta,
+      })
+      setNuevaPregunta(resultado.pregunta_mejorada)
+      setNuevaRespuesta(resultado.respuesta_mejorada)
+      toast.success(`Conversación mejorada: ${resultado.mejoras_aplicadas.join(', ')}`)
+    } catch (error: any) {
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al mejorar conversación'
+      toast.error(mensaje)
+    } finally {
+      setMejorandoConversacion(false)
     }
   }
 
@@ -429,13 +682,174 @@ export function FineTuningTab() {
         </div>
       </div>
 
+      {/* Estadísticas de Feedback */}
+      {mostrarEstadisticas && estadisticasFeedback && (
+        <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-semibold text-lg flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-purple-600" />
+                Estadísticas de Feedback
+              </h4>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMostrarEstadisticas(false)}
+              >
+                <XCircle className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <div className="bg-white rounded-lg p-4 border">
+                <div className="text-sm text-gray-600 mb-1">Total Conversaciones</div>
+                <div className="text-2xl font-bold text-gray-900">{estadisticasFeedback.total_conversaciones}</div>
+              </div>
+              <div className="bg-white rounded-lg p-4 border">
+                <div className="text-sm text-gray-600 mb-1">Calificadas</div>
+                <div className="text-2xl font-bold text-blue-600">{estadisticasFeedback.conversaciones_calificadas}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {((estadisticasFeedback.conversaciones_calificadas / estadisticasFeedback.total_conversaciones) * 100).toFixed(1)}%
+                </div>
+              </div>
+              <div className="bg-white rounded-lg p-4 border">
+                <div className="text-sm text-gray-600 mb-1">Con Feedback</div>
+                <div className="text-2xl font-bold text-purple-600">{estadisticasFeedback.conversaciones_con_feedback}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {estadisticasFeedback.conversaciones_calificadas > 0
+                    ? ((estadisticasFeedback.conversaciones_con_feedback / estadisticasFeedback.conversaciones_calificadas) * 100).toFixed(1)
+                    : 0}% de calificadas
+                </div>
+              </div>
+              <div className="bg-white rounded-lg p-4 border">
+                <div className="text-sm text-gray-600 mb-1">Listas para Entrenar</div>
+                <div className="text-2xl font-bold text-green-600">
+                  {estadisticasFeedback.conversaciones_listas_entrenamiento.sin_feedback_negativo}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {estadisticasFeedback.conversaciones_listas_entrenamiento.con_feedback_negativo > 0 && (
+                    <span className="text-red-600">
+                      {estadisticasFeedback.conversaciones_listas_entrenamiento.con_feedback_negativo} excluidas
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Análisis de Feedback */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp className="h-4 w-4 text-green-600" />
+                  <div className="text-sm font-semibold text-green-800">Feedback Positivo</div>
+                </div>
+                <div className="text-2xl font-bold text-green-700">
+                  {estadisticasFeedback.analisis_feedback.positivo}
+                </div>
+                <div className="text-xs text-green-600 mt-1">
+                  {estadisticasFeedback.analisis_feedback.total > 0
+                    ? ((estadisticasFeedback.analisis_feedback.positivo / estadisticasFeedback.analisis_feedback.total) * 100).toFixed(1)
+                    : 0}% del total
+                </div>
+              </div>
+              
+              <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingDown className="h-4 w-4 text-red-600" />
+                  <div className="text-sm font-semibold text-red-800">Feedback Negativo</div>
+                </div>
+                <div className="text-2xl font-bold text-red-700">
+                  {estadisticasFeedback.analisis_feedback.negativo}
+                </div>
+                <div className="text-xs text-red-600 mt-1">
+                  {estadisticasFeedback.analisis_feedback.total > 0
+                    ? ((estadisticasFeedback.analisis_feedback.negativo / estadisticasFeedback.analisis_feedback.total) * 100).toFixed(1)
+                    : 0}% del total
+                </div>
+                {filtrarFeedbackNegativo && (
+                  <div className="text-xs text-red-700 mt-2 font-semibold">
+                    ⚠️ Estas conversaciones se excluirán automáticamente
+                  </div>
+                )}
+              </div>
+              
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <Info className="h-4 w-4 text-gray-600" />
+                  <div className="text-sm font-semibold text-gray-800">Feedback Neutro</div>
+                </div>
+                <div className="text-2xl font-bold text-gray-700">
+                  {estadisticasFeedback.analisis_feedback.neutro}
+                </div>
+                <div className="text-xs text-gray-600 mt-1">
+                  {estadisticasFeedback.analisis_feedback.total > 0
+                    ? ((estadisticasFeedback.analisis_feedback.neutro / estadisticasFeedback.analisis_feedback.total) * 100).toFixed(1)
+                    : 0}% del total
+                </div>
+              </div>
+            </div>
+
+            {/* Distribución de Calificaciones */}
+            <div className="bg-white rounded-lg p-4 border">
+              <div className="text-sm font-semibold mb-3">Distribución de Calificaciones</div>
+              <div className="flex items-end gap-2 h-32">
+                {[1, 2, 3, 4, 5].map((star) => {
+                  const cantidad = estadisticasFeedback.distribucion_calificaciones[star] || 0
+                  const maxCantidad = Math.max(...Object.values(estadisticasFeedback.distribucion_calificaciones).map(Number), 1)
+                  const altura = (cantidad / maxCantidad) * 100
+                  
+                  return (
+                    <div key={star} className="flex-1 flex flex-col items-center">
+                      <div className="w-full bg-gray-200 rounded-t relative" style={{ height: '100px' }}>
+                        <div
+                          className={`absolute bottom-0 w-full rounded-t ${
+                            star >= 4 ? 'bg-green-500' : star >= 3 ? 'bg-yellow-500' : 'bg-red-500'
+                          }`}
+                          style={{ height: `${altura}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 text-xs font-semibold">{star}⭐</div>
+                      <div className="text-xs text-gray-600">{cantidad}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Guía de uso */}
       <Card className="bg-blue-50 border-blue-200">
         <CardContent className="pt-6">
-          <h4 className="font-semibold mb-3 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-blue-600" />
-            ¿Cómo usar Fine-tuning?
-          </h4>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-semibold flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-blue-600" />
+              ¿Cómo usar Fine-tuning?
+            </h4>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!mostrarEstadisticas) {
+                  cargarEstadisticasFeedback()
+                }
+                setMostrarEstadisticas(!mostrarEstadisticas)
+              }}
+            >
+              {mostrarEstadisticas ? (
+                <>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Ocultar Estadísticas
+                </>
+              ) : (
+                <>
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Ver Estadísticas
+                </>
+              )}
+            </Button>
+          </div>
           <div className="space-y-2 text-sm text-gray-700">
             <div className="flex items-start gap-2">
               <span className="font-semibold text-blue-600">1.</span>
@@ -653,7 +1067,29 @@ export function FineTuningTab() {
               </Card>
 
               <div>
-                <label className="text-sm font-medium mb-2 block">Pregunta *</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium">Pregunta *</label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleMejorarNuevaPregunta}
+                    disabled={mejorandoPregunta || !nuevaPregunta.trim()}
+                    className="text-blue-600 hover:text-blue-700"
+                  >
+                    {mejorandoPregunta ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        Mejorando...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        Mejorar con IA
+                      </>
+                    )}
+                  </Button>
+                </div>
                 <Textarea
                   ref={preguntaTextareaRef}
                   placeholder="Ej: ¿Cuál es el proceso para solicitar un préstamo?"
@@ -664,7 +1100,51 @@ export function FineTuningTab() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-2 block">Respuesta *</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium">Respuesta *</label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleMejorarNuevaRespuesta}
+                      disabled={mejorandoRespuesta || !nuevaRespuesta.trim()}
+                      className="text-blue-600 hover:text-blue-700"
+                    >
+                      {mejorandoRespuesta ? (
+                        <>
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Mejorando...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3 w-3 mr-1" />
+                          Mejorar
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleMejorarNuevaConversacionCompleta}
+                      disabled={mejorandoConversacion || !nuevaPregunta.trim() || !nuevaRespuesta.trim()}
+                      className="text-purple-600 hover:text-purple-700"
+                    >
+                      {mejorandoConversacion ? (
+                        <>
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Mejorando...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3 w-3 mr-1" />
+                          Mejorar Todo
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
                 <Textarea
                   ref={respuestaTextareaRef}
                   placeholder="Ej: Para solicitar un préstamo necesitas..."
@@ -743,22 +1223,50 @@ export function FineTuningTab() {
                   Exportar JSON
                 </Button>
               )}
-              <Button
-                onClick={handlePrepararDatos}
-                disabled={preparando || conversaciones.filter((c) => c.calificacion && c.calificacion >= 4).length < 10}
-              >
-                {preparando ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Preparando...
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-4 w-4 mr-2" />
-                    Preparar Datos para Entrenamiento
-                  </>
-                )}
-              </Button>
+              {(() => {
+                const conversacionesListas = conversaciones.filter((c) => c.calificacion && c.calificacion >= 4)
+                const totalListas = conversacionesListas.length
+                const puedePreparar = totalListas >= 10
+                
+                return (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {totalListas > 0 && (
+                      <Badge variant={puedePreparar ? "default" : "secondary"} className="mr-2">
+                        {totalListas} lista{totalListas !== 1 ? 's' : ''} para entrenamiento
+                        {!puedePreparar && ` (${10 - totalListas} más necesarias)`}
+                      </Badge>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-gray-600 flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={filtrarFeedbackNegativo}
+                          onChange={(e) => setFiltrarFeedbackNegativo(e.target.checked)}
+                          className="rounded"
+                        />
+                        Filtrar feedback negativo
+                      </label>
+                    </div>
+                    <Button
+                      onClick={handlePrepararDatos}
+                      disabled={preparando || !puedePreparar}
+                      variant={puedePreparar ? "default" : "outline"}
+                    >
+                      {preparando ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Preparando...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-4 w-4 mr-2" />
+                          Preparar Datos para Entrenamiento
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )
+              })()}
             </div>
           </div>
 
@@ -775,43 +1283,320 @@ export function FineTuningTab() {
             <div className="space-y-4">
               {conversaciones.map((conv) => (
                 <div key={conv.id} className="border rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium">Pregunta:</span>
-                        <span className="text-sm text-gray-600">{conv.pregunta}</span>
+                  {editandoConversacionId === conv.id ? (
+                    // Modo edición
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h5 className="font-semibold text-blue-600">Editando conversación</h5>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleCancelarEdicion}
+                          disabled={actualizandoConversacion}
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <div className="text-sm text-gray-500 mt-2">
-                        <div className="line-clamp-2">{conv.respuesta}</div>
-                      </div>
-                      <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-                        {conv.modelo_usado && <span>Modelo: {conv.modelo_usado}</span>}
-                        {conv.tokens_usados && <span>Tokens: {conv.tokens_usados}</span>}
-                        {conv.tiempo_respuesta && (
-                          <span>Tiempo: {conv.tiempo_respuesta}ms</span>
-                        )}
-                        <span>{new Date(conv.creado_en).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                    <div className="ml-4">
-                      {conv.calificacion ? (
-                        <div className="flex items-center gap-1">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <Heart
-                              key={star}
-                              className={`h-4 w-4 ${
-                                star <= conv.calificacion!
-                                  ? 'fill-yellow-400 text-yellow-400'
-                                  : 'text-gray-300'
-                              }`}
-                            />
-                          ))}
+
+                      {/* Selector de Tablas y Campos (también disponible en edición) */}
+                      <Card className="bg-gray-50 border-gray-200">
+                        <CardContent className="pt-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <MessageSquare className="h-4 w-4 text-gray-600" />
+                              <h5 className="text-sm font-semibold text-gray-700">Insertar Tablas y Campos</h5>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={cargarTablasCampos}
+                              disabled={cargandoTablasCampos}
+                              className="shrink-0"
+                            >
+                              {cargandoTablasCampos ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  Cargando...
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="h-3 w-3 mr-1" />
+                                  Actualizar
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                          {ultimaActualizacion && (
+                            <p className="text-xs text-gray-500 mb-3">
+                              Última actualización: {new Date(ultimaActualizacion).toLocaleString('es-ES')} 
+                              ({Object.keys(tablasYCampos).length} tablas)
+                            </p>
+                          )}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {/* Selector de Tablas */}
+                            <div className="space-y-2">
+                              <label className="text-xs font-medium text-gray-600">Tabla</label>
+                              <div className="flex gap-2">
+                                <Select value={tablaSeleccionada} onValueChange={setTablaSeleccionada}>
+                                  <SelectTrigger className="flex-1">
+                                    <SelectValue placeholder="Selecciona una tabla" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {Object.keys(tablasYCampos).length === 0 ? (
+                                      <div className="px-2 py-1.5 text-sm text-gray-500">
+                                        {cargandoTablasCampos ? 'Cargando tablas...' : 'No hay tablas disponibles'}
+                                      </div>
+                                    ) : (
+                                      Object.keys(tablasYCampos).map((tabla) => (
+                                        <SelectItem key={tabla} value={tabla}>
+                                          {tabla}
+                                        </SelectItem>
+                                      ))
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    if (textareaActivo === 'pregunta') {
+                                      insertarEnTextarea(tablaSeleccionada, preguntaEditada, setPreguntaEditada, preguntaEditadaRef)
+                                    } else if (textareaActivo === 'respuesta') {
+                                      insertarEnTextarea(tablaSeleccionada, respuestaEditada, setRespuestaEditada, respuestaEditadaRef)
+                                    }
+                                  }}
+                                  disabled={!tablaSeleccionada || !textareaActivo}
+                                  className="shrink-0"
+                                >
+                                  <Plus className="h-4 w-4 mr-1" />
+                                  Insertar
+                                </Button>
+                              </div>
+                            </div>
+
+                            {/* Selector de Campos */}
+                            <div className="space-y-2">
+                              <label className="text-xs font-medium text-gray-600">Campo</label>
+                              <div className="flex gap-2">
+                                <Select
+                                  value={campoSeleccionado}
+                                  onValueChange={setCampoSeleccionado}
+                                  disabled={!tablaSeleccionada}
+                                >
+                                  <SelectTrigger className="flex-1">
+                                    <SelectValue placeholder={tablaSeleccionada ? "Selecciona un campo" : "Selecciona tabla primero"} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {camposDisponibles.length === 0 ? (
+                                      <div className="px-2 py-1.5 text-sm text-gray-500">
+                                        {!tablaSeleccionada ? 'Selecciona una tabla primero' : 'No hay campos disponibles'}
+                                      </div>
+                                    ) : (
+                                      camposDisponibles.map((campo) => (
+                                        <SelectItem key={campo} value={campo}>
+                                          {campo}
+                                        </SelectItem>
+                                      ))
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    if (textareaActivo === 'pregunta') {
+                                      insertarEnTextarea(campoSeleccionado, preguntaEditada, setPreguntaEditada, preguntaEditadaRef)
+                                    } else if (textareaActivo === 'respuesta') {
+                                      insertarEnTextarea(campoSeleccionado, respuestaEditada, setRespuestaEditada, respuestaEditadaRef)
+                                    }
+                                  }}
+                                  disabled={!campoSeleccionado || !textareaActivo}
+                                  className="shrink-0"
+                                >
+                                  <Plus className="h-4 w-4 mr-1" />
+                                  Insertar
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-3">
+                            💡 Tip: Haz clic en el campo de Pregunta o Respuesta donde quieras insertar, luego selecciona la tabla/campo y presiona Insertar.
+                          </p>
+                        </CardContent>
+                      </Card>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-sm font-medium">Pregunta *</label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleMejorarPregunta}
+                            disabled={mejorandoPregunta || !preguntaEditada.trim()}
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            {mejorandoPregunta ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                Mejorando...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-3 w-3 mr-1" />
+                                Mejorar con IA
+                              </>
+                            )}
+                          </Button>
                         </div>
-                      ) : (
-                        <Badge variant="secondary">Sin calificar</Badge>
-                      )}
+                        <Textarea
+                          ref={preguntaEditadaRef}
+                          placeholder="Ej: ¿Qué es total_financiamiento en la tabla prestamos?"
+                          value={preguntaEditada}
+                          onChange={(e) => setPreguntaEditada(e.target.value)}
+                          onFocus={() => setTextareaActivo('pregunta')}
+                          rows={3}
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-sm font-medium">Respuesta *</label>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleMejorarRespuesta}
+                              disabled={mejorandoRespuesta || !respuestaEditada.trim()}
+                              className="text-blue-600 hover:text-blue-700"
+                            >
+                              {mejorandoRespuesta ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  Mejorando...
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles className="h-3 w-3 mr-1" />
+                                  Mejorar
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleMejorarConversacionCompleta}
+                              disabled={mejorandoConversacion || !preguntaEditada.trim() || !respuestaEditada.trim()}
+                              className="text-purple-600 hover:text-purple-700"
+                            >
+                              {mejorandoConversacion ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  Mejorando...
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles className="h-3 w-3 mr-1" />
+                                  Mejorar Todo
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                        <Textarea
+                          ref={respuestaEditadaRef}
+                          placeholder="Ej: En la tabla prestamos, el campo total_financiamiento representa..."
+                          value={respuestaEditada}
+                          onChange={(e) => setRespuestaEditada(e.target.value)}
+                          onFocus={() => setTextareaActivo('respuesta')}
+                          rows={5}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleGuardarEdicion}
+                          disabled={actualizandoConversacion || !preguntaEditada.trim() || !respuestaEditada.trim()}
+                          size="sm"
+                        >
+                          {actualizandoConversacion ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Guardando...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-4 w-4 mr-2" />
+                              Guardar Cambios
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            handleCancelarEdicion()
+                            setTablaSeleccionada('')
+                            setCampoSeleccionado('')
+                            setTextareaActivo(null)
+                          }}
+                          disabled={actualizandoConversacion}
+                          size="sm"
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    // Modo visualización
+                    <>
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium">Pregunta:</span>
+                            <span className="text-sm text-gray-600">{conv.pregunta}</span>
+                          </div>
+                          <div className="text-sm text-gray-500 mt-2">
+                            <div className="line-clamp-2">{conv.respuesta}</div>
+                          </div>
+                          <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                            {conv.modelo_usado && <span>Modelo: {conv.modelo_usado}</span>}
+                            {conv.tokens_usados && <span>Tokens: {conv.tokens_usados}</span>}
+                            {conv.tiempo_respuesta && (
+                              <span>Tiempo: {conv.tiempo_respuesta}ms</span>
+                            )}
+                            <span>{new Date(conv.creado_en).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                        <div className="ml-4 flex flex-col gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleIniciarEdicion(conv)}
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            Editar
+                          </Button>
+                          {conv.calificacion ? (
+                            <div className="flex items-center gap-1">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Heart
+                                  key={star}
+                                  className={`h-4 w-4 ${
+                                    star <= conv.calificacion!
+                                      ? 'fill-yellow-400 text-yellow-400'
+                                      : 'text-gray-300'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <Badge variant="secondary">Sin calificar</Badge>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   {!conv.calificacion && (
                     <div className="mt-4 pt-4 border-t">

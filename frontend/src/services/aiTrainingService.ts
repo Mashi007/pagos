@@ -160,13 +160,84 @@ class AITrainingService {
   }
 
   /**
+   * Actualizar conversación existente
+   */
+  async actualizarConversacion(
+    conversacionId: number,
+    conversacion: {
+      pregunta: string
+      respuesta: string
+      contexto_usado?: string
+      documentos_usados?: number[]
+      modelo_usado?: string
+    }
+  ): Promise<ConversacionAI> {
+    const response = await apiClient.put<{ conversacion: ConversacionAI }>(`${this.baseUrl}/conversaciones/${conversacionId}`, conversacion)
+    return response.conversacion
+  }
+
+  /**
+   * Mejorar pregunta y/o respuesta usando IA
+   */
+  async mejorarConversacion(params: {
+    pregunta?: string
+    respuesta?: string
+  }): Promise<{
+    pregunta_mejorada: string
+    respuesta_mejorada: string
+    mejoras_aplicadas: string[]
+  }> {
+    return await apiClient.post(`${this.baseUrl}/conversaciones/mejorar`, params)
+  }
+
+  /**
    * Preparar datos para fine-tuning
    */
-  async prepararDatosEntrenamiento(conversacionIds?: number[]): Promise<{ archivo_id: string; total_conversaciones: number }> {
-    const response = await apiClient.post<{ archivo_id: string; total_conversaciones: number }>(`${this.baseUrl}/fine-tuning/preparar`, {
+  async prepararDatosEntrenamiento(
+    conversacionIds?: number[],
+    filtrarFeedbackNegativo: boolean = true
+  ): Promise<{
+    archivo_id: string
+    total_conversaciones: number
+    conversaciones_originales?: number
+    conversaciones_excluidas?: number
+    detalles_exclusion?: Array<{ id: number; razon: string; feedback: string }>
+  }> {
+    const response = await apiClient.post<{
+      archivo_id: string
+      total_conversaciones: number
+      conversaciones_originales?: number
+      conversaciones_excluidas?: number
+      detalles_exclusion?: Array<{ id: number; razon: string; feedback: string }>
+    }>(`${this.baseUrl}/fine-tuning/preparar`, {
       conversacion_ids: conversacionIds,
+      filtrar_feedback_negativo: filtrarFeedbackNegativo,
     })
     return response
+  }
+
+  /**
+   * Obtener estadísticas de feedback
+   */
+  async getEstadisticasFeedback(): Promise<{
+    total_conversaciones: number
+    conversaciones_calificadas: number
+    conversaciones_con_feedback: number
+    distribucion_calificaciones: Record<string, number>
+    analisis_feedback: {
+      positivo: number
+      negativo: number
+      neutro: number
+      total: number
+    }
+    conversaciones_listas_entrenamiento: {
+      total: number
+      sin_feedback_negativo: number
+      con_feedback_negativo: number
+      puede_preparar: boolean
+    }
+  }> {
+    return await apiClient.get(`${this.baseUrl}/conversaciones/estadisticas-feedback`)
   }
 
   /**

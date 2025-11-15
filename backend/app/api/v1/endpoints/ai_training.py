@@ -71,8 +71,14 @@ class CalificarConversacionRequest(BaseModel):
     feedback: Optional[str] = None
 
 
+class MejorarConversacionRequest(BaseModel):
+    pregunta: Optional[str] = Field(None, description="Pregunta a mejorar")
+    respuesta: Optional[str] = Field(None, description="Respuesta a mejorar")
+
+
 class PrepararDatosRequest(BaseModel):
     conversacion_ids: Optional[List[int]] = None
+    filtrar_feedback_negativo: bool = Field(True, description="Excluir conversaciones con feedback negativo automáticamente")
 
 
 class IniciarFineTuningRequest(BaseModel):
@@ -266,6 +272,172 @@ async def crear_conversacion(
         raise HTTPException(status_code=500, detail=f"Error creando conversación: {str(e)}")
 
 
+@router.put("/conversaciones/{conversacion_id}")
+async def actualizar_conversacion(
+    conversacion_id: int,
+    conversacion: ConversacionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Actualizar una conversación existente"""
+    try:
+        conversacion_existente = db.query(ConversacionAI).filter(ConversacionAI.id == conversacion_id).first()
+
+        if not conversacion_existente:
+            raise HTTPException(status_code=404, detail="Conversación no encontrada")
+
+        # Actualizar campos
+        conversacion_existente.pregunta = conversacion.pregunta
+        conversacion_existente.respuesta = conversacion.respuesta
+        if conversacion.contexto_usado is not None:
+            conversacion_existente.contexto_usado = conversacion.contexto_usado
+        if conversacion.documentos_usados:
+            conversacion_existente.documentos_usados = ",".join(map(str, conversacion.documentos_usados))
+        if conversacion.modelo_usado is not None:
+            conversacion_existente.modelo_usado = conversacion.modelo_usado
+
+        # Si se actualiza pregunta/respuesta, resetear calificación para revisión
+        # (opcional: puedes comentar estas líneas si quieres mantener la calificación)
+        # conversacion_existente.calificacion = None
+        # conversacion_existente.feedback = None
+
+        db.commit()
+        db.refresh(conversacion_existente)
+
+        logger.info(f"✅ Conversación {conversacion_id} actualizada por usuario {current_user.email}")
+
+        return {"conversacion": conversacion_existente.to_dict()}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando conversación: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error actualizando conversación: {str(e)}")
+
+
+@router.get("/conversaciones/estadisticas-feedback")
+async def obtener_estadisticas_feedback(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener estadísticas sobre feedback de conversaciones"""
+    try:
+        from sqlalchemy import func, case
+        
+        # Total de conversaciones
+        total_conversaciones = db.query(ConversacionAI).count()
+        
+        # Conversaciones con calificación
+        conversaciones_calificadas = db.query(ConversacionAI).filter(
+            ConversacionAI.calificacion.isnot(None)
+        ).count()
+        
+        # Conversaciones con feedback
+        conversaciones_con_feedback = db.query(ConversacionAI).filter(
+            ConversacionAI.feedback.isnot(None),
+            ConversacionAI.feedback != ""
+        ).count()
+        
+        # Distribución de calificaciones
+        distribucion_calificaciones = db.query(
+            ConversacionAI.calificacion,
+            func.count(ConversacionAI.id).label('cantidad')
+        ).filter(
+            ConversacionAI.calificacion.isnot(None)
+        ).group_by(ConversacionAI.calificacion).all()
+        
+        distribucion = {str(cal): cant for cal, cant in distribucion_calificaciones}
+        
+        # Análisis de feedback (usar servicio para detectar negativo)
+        # Crear instancia temporal solo para usar el método de detección
+        temp_service = AITrainingService("dummy")  # No necesitamos API key para detección
+        conversaciones_con_feedback_list = db.query(ConversacionAI).filter(
+            ConversacionAI.feedback.isnot(None),
+            ConversacionAI.feedback != ""
+        ).all()
+        
+        feedback_positivo = 0
+        feedback_negativo = 0
+        feedback_neutro = 0
+        
+        for conv in conversaciones_con_feedback_list:
+            if temp_service._detectar_feedback_negativo(conv.feedback):
+                feedback_negativo += 1
+            elif conv.calificacion and conv.calificacion >= 4:
+                feedback_positivo += 1
+            else:
+                feedback_neutro += 1
+        
+        # Conversaciones listas para entrenamiento (4+ estrellas, sin feedback negativo)
+        conversaciones_listas = db.query(ConversacionAI).filter(
+            ConversacionAI.calificacion.isnot(None),
+            ConversacionAI.calificacion >= 4
+        ).all()
+        
+        listas_sin_feedback_negativo = 0
+        listas_con_feedback_negativo = 0
+        
+        for conv in conversaciones_listas:
+            if conv.feedback and temp_service._detectar_feedback_negativo(conv.feedback):
+                listas_con_feedback_negativo += 1
+            else:
+                listas_sin_feedback_negativo += 1
+        
+        return {
+            "total_conversaciones": total_conversaciones,
+            "conversaciones_calificadas": conversaciones_calificadas,
+            "conversaciones_con_feedback": conversaciones_con_feedback,
+            "distribucion_calificaciones": distribucion,
+            "analisis_feedback": {
+                "positivo": feedback_positivo,
+                "negativo": feedback_negativo,
+                "neutro": feedback_neutro,
+                "total": conversaciones_con_feedback
+            },
+            "conversaciones_listas_entrenamiento": {
+                "total": len(conversaciones_listas),
+                "sin_feedback_negativo": listas_sin_feedback_negativo,
+                "con_feedback_negativo": listas_con_feedback_negativo,
+                "puede_preparar": listas_sin_feedback_negativo >= 10
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo estadísticas de feedback: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error obteniendo estadísticas: {str(e)}")
+
+
+@router.post("/conversaciones/mejorar")
+async def mejorar_conversacion(
+    request: MejorarConversacionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mejorar pregunta y/o respuesta usando IA para optimizar el entrenamiento"""
+    try:
+        if not request.pregunta and not request.respuesta:
+            raise HTTPException(status_code=400, detail="Debe proporcionar al menos pregunta o respuesta")
+
+        # Obtener API key
+        openai_api_key = _obtener_openai_api_key(db)
+
+        # Preparar datos
+        service = AITrainingService(openai_api_key)
+        resultado = await service.mejorar_conversacion_para_entrenamiento(
+            pregunta=request.pregunta or "",
+            respuesta=request.respuesta or "",
+        )
+
+        return resultado
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error mejorando conversación: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error mejorando conversación: {str(e)}")
+
+
 @router.post("/conversaciones/{conversacion_id}/calificar")
 async def calificar_conversacion(
     conversacion_id: int,
@@ -329,7 +501,10 @@ async def preparar_datos_entrenamiento(
         # Preparar datos
         service = AITrainingService(openai_api_key)
         conversaciones_data = [c.to_dict() for c in conversaciones]
-        result = await service.preparar_datos_entrenamiento(conversaciones_data)
+        result = await service.preparar_datos_entrenamiento(
+            conversaciones_data,
+            filtrar_feedback_negativo=request.filtrar_feedback_negativo
+        )
 
         return result
 
