@@ -324,6 +324,17 @@ class AITrainingService {
   async getMetricasEntrenamiento(): Promise<MetricasEntrenamiento> {
     return await apiClient.get<MetricasEntrenamiento>(`${this.baseUrl}/metricas`)
   }
+
+  /**
+   * Obtener tablas y campos de la base de datos
+   */
+  async getTablasCampos(): Promise<{
+    tablas_campos: Record<string, string[]>
+    total_tablas: number
+    fecha_consulta: string
+  }> {
+    return await apiClient.get('/api/v1/configuracion/ai/tablas-campos')
+  }
 }
 
 export const aiTrainingService = new AITrainingService()

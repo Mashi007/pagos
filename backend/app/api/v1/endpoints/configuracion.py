@@ -3648,6 +3648,48 @@ def obtener_metricas_ai(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
+@router.get("/ai/tablas-campos")
+def obtener_tablas_campos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obtener todas las tablas y campos de la base de datos para uso en Fine-tuning.
+    Devuelve un diccionario con tablas como claves y listas de campos como valores.
+    """
+    try:
+        from sqlalchemy.engine import reflection
+
+        inspector = reflection.Inspector.from_engine(db.bind)
+        
+        # Obtener todas las tablas
+        todas_tablas = inspector.get_table_names()
+        
+        # Construir diccionario de tablas y campos
+        tablas_campos: Dict[str, list[str]] = {}
+        
+        for tabla in sorted(todas_tablas):
+            try:
+                # Obtener columnas de la tabla
+                columnas = inspector.get_columns(tabla)
+                # Extraer solo los nombres de las columnas
+                nombres_campos = [col["name"] for col in columnas]
+                tablas_campos[tabla] = nombres_campos
+            except Exception as e:
+                logger.warning(f"Error obteniendo campos de tabla {tabla}: {e}")
+                # Si hay error, agregar tabla vacía
+                tablas_campos[tabla] = []
+        
+        return {
+            "tablas_campos": tablas_campos,
+            "total_tablas": len(todas_tablas),
+            "fecha_consulta": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo tablas y campos: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error obteniendo tablas y campos: {str(e)}")
+
+
 class ProbarAIRequest(BaseModel):
     pregunta: Optional[str] = None
     usar_documentos: Optional[bool] = True

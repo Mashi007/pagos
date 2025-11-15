@@ -23,65 +23,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { aiTrainingService, ConversacionAI, FineTuningJob } from '@/services/aiTrainingService'
 import { toast } from 'sonner'
 
-// Estructura de tablas y campos de la base de datos
-const TABLAS_Y_CAMPOS: Record<string, string[]> = {
-  clientes: [
-    'id', 'cedula', 'nombres', 'telefono', 'email', 'direccion', 'fecha_nacimiento',
-    'ocupacion', 'estado', 'activo', 'fecha_registro', 'fecha_actualizacion',
-    'usuario_registro', 'notas'
-  ],
-  prestamos: [
-    'id', 'cliente_id', 'cedula', 'nombres', 'total_financiamiento', 'fecha_requerimiento',
-    'modalidad_pago', 'numero_cuotas', 'cuota_periodo', 'tasa_interes', 'fecha_base_calculo',
-    'producto', 'producto_financiero', 'estado', 'usuario_proponente', 'usuario_aprobador',
-    'fecha_registro', 'fecha_aprobacion', 'concesionario_id', 'analista_id', 'observaciones',
-    'monto_inicial', 'saldo_pendiente', 'total_pagado', 'dias_morosidad', 'monto_morosidad'
-  ],
-  cuotas: [
-    'id', 'prestamo_id', 'numero_cuota', 'fecha_vencimiento', 'monto_cuota', 'capital',
-    'interes', 'saldo_pendiente', 'estado', 'fecha_pago', 'monto_pagado', 'total_pagado',
-    'dias_morosidad', 'monto_morosidad', 'dias_vencido', 'fecha_registro', 'fecha_actualizacion',
-    'numero_documento', 'metodo_pago', 'observaciones', 'usuario_registro', 'usuario_pago',
-    'fecha_ultimo_pago', 'monto_pendiente', 'monto_mora', 'interes_mora'
-  ],
-  pagos: [
-    'id', 'prestamo_id', 'cedula', 'fecha_pago', 'monto_pagado', 'numero_documento',
-    'metodo_pago', 'observaciones', 'usuario_registro', 'fecha_registro', 'activo',
-    'cuota_id', 'monto_capital', 'monto_interes', 'monto_mora', 'saldo_anterior',
-    'saldo_actual', 'referencia_pago', 'banco', 'numero_cuenta', 'tipo_transaccion',
-    'estado_pago', 'fecha_confirmacion', 'usuario_confirmacion', 'comprobante_url',
-    'monto_efectivo', 'monto_transferencia', 'monto_cheque', 'monto_tarjeta',
-    'numero_cheque', 'banco_cheque', 'fecha_cheque', 'numero_tarjeta', 'tipo_tarjeta',
-    'autorizacion_tarjeta', 'monto_devolucion', 'motivo_devolucion', 'fecha_devolucion'
-  ],
-  notificaciones: [
-    'id', 'cliente_id', 'prestamo_id', 'tipo', 'estado', 'fecha_envio', 'fecha_vencimiento',
-    'canal', 'contenido', 'asunto', 'destinatario', 'usuario_envio', 'fecha_registro',
-    'fecha_lectura', 'leido', 'respuesta', 'metadata'
-  ],
-  users: [
-    'id', 'email', 'nombre', 'apellido', 'rol', 'is_admin', 'activo', 'fecha_registro',
-    'fecha_actualizacion', 'ultimo_acceso', 'password_hash', 'telefono', 'departamento'
-  ],
-  concesionarios: [
-    'id', 'nombre', 'direccion', 'telefono', 'email', 'contacto', 'activo',
-    'fecha_registro', 'fecha_actualizacion', 'codigo', 'ciudad', 'region'
-  ],
-  analistas: [
-    'id', 'nombre', 'email', 'telefono', 'activo', 'fecha_registro', 'fecha_actualizacion',
-    'codigo', 'departamento', 'cargo', 'usuario_id'
-  ],
-  configuracion_sistema: [
-    'id', 'categoria', 'clave', 'valor', 'tipo_dato', 'descripcion', 'activo',
-    'fecha_registro', 'fecha_actualizacion', 'usuario_registro'
-  ],
-  documentos_ai: [
-    'id', 'titulo', 'descripcion', 'contenido_texto', 'contenido_procesado', 'activo',
-    'fecha_registro', 'fecha_actualizacion', 'usuario_registro', 'tipo_documento',
-    'metadata', 'tokens_estimados'
-  ]
-}
-
 export function FineTuningTab() {
   const [conversaciones, setConversaciones] = useState<ConversacionAI[]>([])
   const [cargando, setCargando] = useState(false)
@@ -118,9 +59,35 @@ export function FineTuningTab() {
   const [textareaActivo, setTextareaActivo] = useState<'pregunta' | 'respuesta' | null>(null)
   const preguntaTextareaRef = useRef<HTMLTextAreaElement>(null)
   const respuestaTextareaRef = useRef<HTMLTextAreaElement>(null)
+  
+  // Estados para tablas y campos dinámicos
+  const [tablasYCampos, setTablasYCampos] = useState<Record<string, string[]>>({})
+  const [cargandoTablasCampos, setCargandoTablasCampos] = useState(false)
+  const [ultimaActualizacion, setUltimaActualizacion] = useState<string>('')
 
   // Obtener campos disponibles según la tabla seleccionada
-  const camposDisponibles = tablaSeleccionada ? (TABLAS_Y_CAMPOS[tablaSeleccionada] || []) : []
+  const camposDisponibles = tablaSeleccionada ? (tablasYCampos[tablaSeleccionada] || []) : []
+
+  // Cargar tablas y campos desde el backend
+  const cargarTablasCampos = async () => {
+    setCargandoTablasCampos(true)
+    try {
+      const data = await aiTrainingService.getTablasCampos()
+      setTablasYCampos(data.tablas_campos)
+      setUltimaActualizacion(data.fecha_consulta)
+      toast.success(`Cargadas ${data.total_tablas} tablas con sus campos`)
+    } catch (error: any) {
+      console.error('Error cargando tablas y campos:', error)
+      toast.error('Error al cargar tablas y campos desde la base de datos')
+    } finally {
+      setCargandoTablasCampos(false)
+    }
+  }
+
+  // Cargar tablas y campos al montar el componente
+  useEffect(() => {
+    cargarTablasCampos()
+  }, [])
 
   // Limpiar campo seleccionado cuando cambia la tabla
   useEffect(() => {
@@ -572,10 +539,37 @@ export function FineTuningTab() {
               {/* Selector de Tablas y Campos */}
               <Card className="bg-gray-50 border-gray-200">
                 <CardContent className="pt-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <MessageSquare className="h-4 w-4 text-gray-600" />
-                    <h5 className="text-sm font-semibold text-gray-700">Insertar Tablas y Campos</h5>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4 text-gray-600" />
+                      <h5 className="text-sm font-semibold text-gray-700">Insertar Tablas y Campos</h5>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={cargarTablasCampos}
+                      disabled={cargandoTablasCampos}
+                      className="shrink-0"
+                    >
+                      {cargandoTablasCampos ? (
+                        <>
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Cargando...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-3 w-3 mr-1" />
+                          Actualizar
+                        </>
+                      )}
+                    </Button>
                   </div>
+                  {ultimaActualizacion && (
+                    <p className="text-xs text-gray-500 mb-3">
+                      Última actualización: {new Date(ultimaActualizacion).toLocaleString('es-ES')} 
+                      ({Object.keys(tablasYCampos).length} tablas)
+                    </p>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* Selector de Tablas */}
                     <div className="space-y-2">
@@ -586,11 +580,17 @@ export function FineTuningTab() {
                             <SelectValue placeholder="Selecciona una tabla" />
                           </SelectTrigger>
                           <SelectContent>
-                            {Object.keys(TABLAS_Y_CAMPOS).map((tabla) => (
-                              <SelectItem key={tabla} value={tabla}>
-                                {tabla}
+                            {Object.keys(tablasYCampos).length === 0 ? (
+                              <SelectItem value="" disabled>
+                                {cargandoTablasCampos ? 'Cargando tablas...' : 'No hay tablas disponibles'}
                               </SelectItem>
-                            ))}
+                            ) : (
+                              Object.keys(tablasYCampos).map((tabla) => (
+                                <SelectItem key={tabla} value={tabla}>
+                                  {tabla}
+                                </SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                         <Button
