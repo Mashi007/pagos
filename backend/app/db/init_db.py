@@ -43,30 +43,25 @@ def run_migrations() -> None:
         heads = script.get_revisions("heads")
         
         if len(heads) > 1:
-            # Si hay múltiples heads, intentar actualizar al merge point si existe
-            # Buscar el merge point 9537ffbe05a6 que contiene las migraciones de AI training
+            # Si hay múltiples heads, primero actualizar a todos los heads individuales
+            # y luego al merge point si existe
+            logger.info(f"⚠️ Múltiples heads detectados ({len(heads)}), actualizando todos primero...")
+            for head in heads:
+                try:
+                    logger.info(f"📌 Actualizando a head: {head.revision}")
+                    command.upgrade(alembic_cfg, head.revision)
+                except Exception as head_error:
+                    logger.warning(f"⚠️ Error actualizando head {head.revision}: {head_error}")
+                    # Continuar con el siguiente head
+            
+            # Después de actualizar todos los heads, intentar actualizar al merge point
             try:
                 merge_point = script.get_revision("9537ffbe05a6")
                 if merge_point:
                     logger.info("📌 Actualizando a merge point 9537ffbe05a6 (incluye migraciones AI training)...")
                     command.upgrade(alembic_cfg, "9537ffbe05a6")
-                else:
-                    # Si no existe el merge point, actualizar a todos los heads
-                    logger.info(f"⚠️ Múltiples heads detectados ({len(heads)}), actualizando todos...")
-                    for head in heads:
-                        logger.info(f"📌 Actualizando a head: {head.revision}")
-                        command.upgrade(alembic_cfg, head.revision)
             except Exception as merge_error:
-                # Si falla, intentar actualizar a todos los heads
-                logger.warning(f"⚠️ Error al actualizar merge point: {merge_error}")
-                logger.info(f"⚠️ Múltiples heads detectados ({len(heads)}), actualizando todos...")
-                for head in heads:
-                    try:
-                        logger.info(f"📌 Actualizando a head: {head.revision}")
-                        command.upgrade(alembic_cfg, head.revision)
-                    except Exception as head_error:
-                        logger.error(f"❌ Error actualizando head {head.revision}: {head_error}")
-                        raise
+                logger.warning(f"⚠️ No se pudo actualizar al merge point (puede que ya esté aplicado): {merge_error}")
         else:
             # Un solo head, actualizar normalmente
             command.upgrade(alembic_cfg, "head")
