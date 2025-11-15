@@ -41,10 +41,11 @@ def run_migrations() -> None:
         logger.info("=" * 60)
         # Verificar si hay múltiples heads
         from alembic.script import ScriptDirectory
+
         script = ScriptDirectory.from_config(alembic_cfg)
         heads = script.get_revisions("heads")
         logger.info(f"📊 Total de heads detectados: {len(heads)}")
-        
+
         if len(heads) > 1:
             # Si hay múltiples heads, primero actualizar a todos los heads individuales
             # y luego al merge point si existe
@@ -56,7 +57,7 @@ def run_migrations() -> None:
                 except Exception as head_error:
                     logger.warning(f"⚠️ Error actualizando head {head.revision}: {head_error}")
                     # Continuar con el siguiente head
-            
+
             # Después de actualizar todos los heads, intentar actualizar al merge point
             try:
                 merge_point = script.get_revision("9537ffbe05a6")
