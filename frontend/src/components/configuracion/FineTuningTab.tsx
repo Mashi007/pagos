@@ -1084,7 +1084,7 @@ export function FineTuningTab() {
                       </>
                     ) : (
                       <>
-                        <Wand2 className="h-3 w-3 mr-1" />
+                        <Zap className="h-3 w-3 mr-1" />
                         Mejorar con IA
                       </>
                     )}
