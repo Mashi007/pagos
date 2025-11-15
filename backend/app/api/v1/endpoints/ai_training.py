@@ -323,7 +323,7 @@ async def obtener_estadisticas_feedback(
 ):
     """Obtener estadísticas sobre feedback de conversaciones"""
     try:
-        from sqlalchemy import func, case
+        from sqlalchemy import case, func
 
         # Total de conversaciones
         total_conversaciones = db.query(ConversacionAI).count()
