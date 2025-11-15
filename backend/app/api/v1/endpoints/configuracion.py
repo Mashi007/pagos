@@ -2985,7 +2985,7 @@ def procesar_documento_ai(
                 base_upload_dir = Path(settings.UPLOAD_DIR).resolve()
             else:
                 base_upload_dir = Path("uploads").resolve()
-            
+
             # Si la ruta guardada es relativa, usarla directamente
             if not ruta_archivo.is_absolute():
                 ruta_intento = (base_upload_dir / documento.ruta_archivo).resolve()
@@ -2994,7 +2994,7 @@ def procesar_documento_ai(
                 nombre_archivo = documento.nombre_archivo or Path(documento.ruta_archivo).name
                 upload_dir = base_upload_dir / "documentos_ai"
                 ruta_intento = upload_dir / nombre_archivo
-            
+
             if ruta_intento.exists():
                 ruta_archivo = ruta_intento
                 archivo_encontrado = True
@@ -3005,14 +3005,18 @@ def procesar_documento_ai(
                     nombre_archivo = documento.nombre_archivo or Path(documento.ruta_archivo).name
                     # Buscar archivos que coincidan con el nombre o UUID
                     for archivo_en_dir in upload_dir.iterdir():
-                        if archivo_en_dir.is_file() and (archivo_en_dir.name == nombre_archivo or archivo_en_dir.name.endswith(Path(nombre_archivo).suffix)):
+                        if archivo_en_dir.is_file() and (
+                            archivo_en_dir.name == nombre_archivo or archivo_en_dir.name.endswith(Path(nombre_archivo).suffix)
+                        ):
                             ruta_archivo = archivo_en_dir.resolve()
                             archivo_encontrado = True
                             logger.info(f"✅ Archivo encontrado por búsqueda: {ruta_archivo}")
                             break
 
         if not archivo_encontrado or not ruta_archivo.exists():
-            logger.error(f"❌ Archivo no encontrado: {ruta_archivo} (ruta original: {documento.ruta_archivo}, nombre: {documento.nombre_archivo})")
+            logger.error(
+                f"❌ Archivo no encontrado: {ruta_archivo} (ruta original: {documento.ruta_archivo}, nombre: {documento.nombre_archivo})"
+            )
             raise HTTPException(
                 status_code=400,
                 detail=f"El archivo físico no existe. Se buscó en: {ruta_archivo}. El archivo puede haber sido eliminado o movido. Ruta original en BD: {documento.ruta_archivo}",
