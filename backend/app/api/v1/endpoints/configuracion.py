@@ -2973,7 +2973,9 @@ def procesar_documento_ai(
         from app.core.config import settings
 
         # Obtener información del documento
-        nombre_archivo_original = documento.nombre_archivo or Path(documento.ruta_archivo).name if documento.ruta_archivo else None
+        nombre_archivo_original = (
+            documento.nombre_archivo or Path(documento.ruta_archivo).name if documento.ruta_archivo else None
+        )
         ruta_original = documento.ruta_archivo or ""
         extension = Path(nombre_archivo_original).suffix if nombre_archivo_original else ""
 
@@ -2984,17 +2986,17 @@ def procesar_documento_ai(
 
         # Determinar directorios base posibles
         directorios_base = []
-        
+
         # Directorio desde configuración
         if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
             directorios_base.append(Path(settings.UPLOAD_DIR).resolve())
-        
+
         # Directorio por defecto
         directorios_base.append(Path("uploads").resolve())
-        
+
         # Directorio actual de trabajo
         directorios_base.append(Path.cwd() / "uploads")
-        
+
         # Directorio del proyecto
         directorios_base.append(Path(__file__).parent.parent.parent.parent / "uploads")
 
@@ -3118,19 +3120,19 @@ def procesar_documento_ai(
                 f"Nombre: {nombre_archivo_original}, Ruta original: {ruta_original}. "
                 f"Rutas intentadas: {len(rutas_intentadas)} ubicaciones."
             )
-            
+
             logger.error(
                 f"❌ Archivo no encontrado después de {len(rutas_intentadas)} intentos. "
                 f"Rutas intentadas: {', '.join(rutas_intentadas[:5])}..."
             )
-            
+
             # Agregar información de diagnóstico
             info_diagnostico = f"\nDirectorios base verificados: {[str(d) for d in directorios_base]}"
             if nombre_archivo_original:
                 info_diagnostico += f"\nNombre de archivo buscado: {nombre_archivo_original}"
             if documento.tamaño_bytes:
                 info_diagnostico += f"\nTamaño esperado: {documento.tamaño_bytes} bytes"
-            
+
             raise HTTPException(
                 status_code=400,
                 detail=mensaje_error + info_diagnostico,
