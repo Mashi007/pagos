@@ -552,7 +552,7 @@ export function DashboardMenu() {
     })
 
     // Convertir a array y ordenar por monto (ascendente)
-    return Object.entries(bandas)
+    const bandasArray = Object.entries(bandas)
       .map(([categoria, cantidad]) => {
         // Extraer el monto mínimo para ordenar
         const match = categoria.match(/\$(\d+)/)
@@ -564,7 +564,14 @@ export function DashboardMenu() {
         }
       })
       .filter(item => item.cantidad > 0) // Solo mostrar bandas con datos
-      .sort((a, b) => a.montoMin - b.montoMin)
+      .sort((a, b) => a.montoMin - b.montoMin) // Ordenar de menor a mayor
+    
+    // Formatear etiquetas de manera más legible
+    // El orden ya está correcto (menor a mayor), y en gráficos verticales el primer elemento aparece arriba
+    return bandasArray.map(item => ({
+      ...item,
+      categoriaFormateada: item.categoria.replace(/,/g, '') // Remover comas para mejor visualización
+    }))
   }, [datosFinanciamientoRangos])
 
   return (
@@ -866,37 +873,76 @@ export function DashboardMenu() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height={450}>
                   <BarChart 
                     data={datosBandas200} 
                     layout="vertical"
-                    margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
+                    margin={{ top: 10, right: 40, left: 120, bottom: 20 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <defs>
+                      <linearGradient id="colorBandas200" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.9}/>
+                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.9}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
                     <XAxis 
                       type="number"
                       domain={[0, 'dataMax']}
-                      tick={{ fontSize: 11 }}
-                      label={{ value: 'Cantidad de Préstamos', position: 'insideBottom', offset: -5 }}
+                      tick={{ fontSize: 11, fill: '#6b7280' }}
+                      tickFormatter={(value) => value.toLocaleString('es-EC')}
+                      label={{ 
+                        value: 'Cantidad de Préstamos', 
+                        position: 'insideBottom', 
+                        offset: -10,
+                        style: { textAnchor: 'middle', fill: '#374151', fontSize: 12, fontWeight: 600 }
+                      }}
+                      allowDecimals={false}
                     />
                     <YAxis 
                       type="category"
-                      dataKey="categoria"
-                      width={100}
-                      tick={{ fontSize: 9 }}
+                      dataKey="categoriaFormateada"
+                      width={115}
+                      tick={{ fontSize: 10, fill: '#4b5563', fontWeight: 500 }}
                       interval={0}
+                      tickLine={false}
                     />
                     <Tooltip 
-                      formatter={(value: number) => [`${value} préstamos`, 'Cantidad']}
+                      formatter={(value: number) => [
+                        `${value.toLocaleString('es-EC')} préstamos`, 
+                        'Cantidad'
+                      ]}
                       labelFormatter={(label) => `Banda: ${label}`}
+                      contentStyle={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                      }}
+                      cursor={{ fill: 'rgba(99, 102, 241, 0.1)' }}
                     />
-                    <Legend />
+                    <Legend 
+                      wrapperStyle={{ paddingTop: '10px' }}
+                      iconType="rect"
+                    />
                     <Bar 
                       dataKey="cantidad" 
-                      fill="#6366f1"
-                      radius={[0, 4, 4, 0]}
+                      fill="url(#colorBandas200)"
+                      radius={[0, 6, 6, 0]}
                       name="Cantidad de Préstamos"
-                    />
+                    >
+                      {datosBandas200.map((entry, index) => {
+                        // Gradiente de color según la posición (más oscuro para valores más altos)
+                        const intensity = entry.cantidad / Math.max(...datosBandas200.map(d => d.cantidad))
+                        const opacity = 0.6 + (intensity * 0.4)
+                        return (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={`rgba(99, 102, 241, ${opacity})`}
+                          />
+                        )
+                      })}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
