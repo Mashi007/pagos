@@ -649,8 +649,10 @@ def estadisticas_auditoria(
                 pass
 
         total_acciones = total_auditoria + total_prestamos + total_pagos
-        
-        logger.info(f"📊 Totales calculados - Auditoría: {total_auditoria}, Préstamos: {total_prestamos}, Pagos: {total_pagos}, Total: {total_acciones}")
+
+        logger.info(
+            f"📊 Totales calculados - Auditoría: {total_auditoria}, Préstamos: {total_prestamos}, Pagos: {total_pagos}, Total: {total_acciones}"
+        )
 
         # Acciones por módulo (entidad)
         acciones_por_modulo: dict[str, int] = {}
@@ -715,21 +717,23 @@ def estadisticas_auditoria(
         import pytz
 
         # Usar zona horaria de Venezuela (America/Caracas) para cálculos
-        tz_caracas = pytz.timezone('America/Caracas')
+        tz_caracas = pytz.timezone("America/Caracas")
         now_caracas = datetime.now(tz_caracas)
-        
+
         # Crear fechas de inicio en la zona horaria local
         inicio_hoy_caracas = datetime(now_caracas.year, now_caracas.month, now_caracas.day, tzinfo=tz_caracas)
         inicio_semana_caracas = inicio_hoy_caracas - timedelta(days=6)
         inicio_mes_caracas = datetime(now_caracas.year, now_caracas.month, 1, tzinfo=tz_caracas)
-        
+
         # Convertir a UTC para comparar con fechas de la BD (que probablemente están en UTC)
         # Las fechas en PostgreSQL con timezone=True se almacenan en UTC
         inicio_hoy = inicio_hoy_caracas.astimezone(pytz.UTC).replace(tzinfo=None)
         inicio_semana = inicio_semana_caracas.astimezone(pytz.UTC).replace(tzinfo=None)
         inicio_mes = inicio_mes_caracas.astimezone(pytz.UTC).replace(tzinfo=None)
-        
-        logger.info(f"📅 Calculando estadísticas - Hoy (UTC): {inicio_hoy}, Semana (UTC): {inicio_semana}, Mes (UTC): {inicio_mes}")
+
+        logger.info(
+            f"📅 Calculando estadísticas - Hoy (UTC): {inicio_hoy}, Semana (UTC): {inicio_semana}, Mes (UTC): {inicio_mes}"
+        )
 
         # Calcular acciones por período de forma segura
         try:
@@ -831,8 +835,10 @@ def estadisticas_auditoria(
                 pass
 
         acciones_este_mes = acciones_mes_aud + acciones_mes_prest + acciones_mes_pagos
-        
-        logger.info(f"📈 Estadísticas por período - Hoy: {acciones_hoy}, Semana: {acciones_esta_semana}, Mes: {acciones_este_mes}")
+
+        logger.info(
+            f"📈 Estadísticas por período - Hoy: {acciones_hoy}, Semana: {acciones_esta_semana}, Mes: {acciones_este_mes}"
+        )
 
         stats_response = AuditoriaStatsResponse(
             total_acciones=total_acciones,
@@ -842,7 +848,7 @@ def estadisticas_auditoria(
             acciones_esta_semana=acciones_esta_semana,
             acciones_este_mes=acciones_este_mes,
         )
-        
+
         logger.info(f"✅ Estadísticas generadas exitosamente: {stats_response.model_dump()}")
         return stats_response
     except Exception as e:
