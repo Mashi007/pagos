@@ -2967,8 +2967,8 @@ def procesar_documento_ai(
             raise HTTPException(status_code=404, detail="Documento no encontrado")
 
         # Verificar que el archivo existe
-        from pathlib import Path
         import os
+        from pathlib import Path
 
         from app.core.config import settings
 
