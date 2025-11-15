@@ -15,7 +15,7 @@ import {
   Plus,
   Edit,
   Save,
-  Sparkles,
+  Wand2,
   BarChart3,
   TrendingUp,
   TrendingDown,
@@ -1084,7 +1084,7 @@ export function FineTuningTab() {
                       </>
                     ) : (
                       <>
-                        <Sparkles className="h-3 w-3 mr-1" />
+                        <Wand2 className="h-3 w-3 mr-1" />
                         Mejorar con IA
                       </>
                     )}
@@ -1118,7 +1118,7 @@ export function FineTuningTab() {
                         </>
                       ) : (
                         <>
-                          <Sparkles className="h-3 w-3 mr-1" />
+                          <Wand2 className="h-3 w-3 mr-1" />
                           Mejorar
                         </>
                       )}
@@ -1138,7 +1138,7 @@ export function FineTuningTab() {
                         </>
                       ) : (
                         <>
-                          <Sparkles className="h-3 w-3 mr-1" />
+                          <Wand2 className="h-3 w-3 mr-1" />
                           Mejorar Todo
                         </>
                       )}
@@ -1443,7 +1443,7 @@ export function FineTuningTab() {
                               </>
                             ) : (
                               <>
-                                <Sparkles className="h-3 w-3 mr-1" />
+                                <Wand2 className="h-3 w-3 mr-1" />
                                 Mejorar con IA
                               </>
                             )}
@@ -1477,7 +1477,7 @@ export function FineTuningTab() {
                                 </>
                               ) : (
                                 <>
-                                  <Sparkles className="h-3 w-3 mr-1" />
+                                  <Wand2 className="h-3 w-3 mr-1" />
                                   Mejorar
                                 </>
                               )}
@@ -1497,7 +1497,7 @@ export function FineTuningTab() {
                                 </>
                               ) : (
                                 <>
-                                  <Sparkles className="h-3 w-3 mr-1" />
+                                  <Wand2 className="h-3 w-3 mr-1" />
                                   Mejorar Todo
                                 </>
                               )}
