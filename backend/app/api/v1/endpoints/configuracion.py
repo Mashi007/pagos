@@ -715,15 +715,30 @@ async def obtener_logo(
         from fastapi.responses import Response
 
         # Usar la misma función de verificación que HEAD para garantizar consistencia
-        logo_path, media_type, logo_bytes = _verificar_logo_existe(filename, db)
+        try:
+            logo_path, media_type, logo_bytes = _verificar_logo_existe(filename, db)
+        except HTTPException as e:
+            # Si el logo no existe, devolver 404 inmediatamente sin más procesamiento
+            logger.debug(f"Logo no encontrado: {filename}")
+            raise e
 
         # Si existe en filesystem, leer desde ahí
         if logo_path and logo_path.exists():
-            with open(logo_path, "rb") as f:
-                file_content = f.read()
+            try:
+                with open(logo_path, "rb") as f:
+                    file_content = f.read()
+                if len(file_content) == 0:
+                    logger.warning(f"Logo existe pero está vacío: {filename}")
+                    raise HTTPException(status_code=404, detail="Logo no encontrado")
+            except (OSError, IOError) as e:
+                logger.error(f"Error leyendo logo desde filesystem: {str(e)}")
+                raise HTTPException(status_code=404, detail="Logo no encontrado")
         # Si no existe en filesystem pero existe en BD, usar base64
         elif logo_bytes:
             file_content = logo_bytes
+            if len(file_content) == 0:
+                logger.warning(f"Logo existe en BD pero está vacío: {filename}")
+                raise HTTPException(status_code=404, detail="Logo no encontrado")
             logger.info(f"✅ Sirviendo logo desde BD (base64) para: {filename}")
         else:
             raise HTTPException(status_code=404, detail="Logo no encontrado")
@@ -737,6 +752,7 @@ async def obtener_logo(
                 "Pragma": "no-cache",
                 "Expires": "0",
                 "Content-Disposition": f'inline; filename="{filename}"',
+                "Content-Length": str(len(file_content)),  # ✅ Agregar Content-Length para evitar abortos
             },
         )
     except HTTPException:

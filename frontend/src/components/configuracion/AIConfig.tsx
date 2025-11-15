@@ -927,9 +927,8 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
       {/* Tabs con 4 pestañas */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="configuracion">Configuración</TabsTrigger>
-          <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="entrenamiento">Entrenamiento</TabsTrigger>
           <TabsTrigger value="metricas">Métricas</TabsTrigger>
           <TabsTrigger value="sistema-hibrido">
@@ -1334,254 +1333,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           </div>
         </TabsContent>
 
-        {/* Pestaña 2: Documentos */}
-        <TabsContent value="documentos" className="space-y-4">
-          <Card>
-            <CardContent className="pt-6 space-y-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-amber-900 mb-1">Agregar Documento de Contexto</p>
-                    <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
-                      <li>Formatos permitidos: PDF, TXT, DOCX</li>
-                      <li>Tamaño máximo: 10MB por archivo</li>
-                      <li>Los documentos se procesarán para generar respuestas contextualizadas</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Formulario de nuevo documento */}
-              <div className="border rounded-lg p-4 space-y-4">
-                <h4 className="font-semibold">Nuevo Documento</h4>
-                
-                <div>
-                  <label className="text-sm font-medium block mb-2">Título <span className="text-red-500">*</span></label>
-                  <Input
-                    value={nuevoDocumento.titulo}
-                    onChange={(e) => setNuevoDocumento(prev => ({ ...prev, titulo: e.target.value }))}
-                    placeholder="Ej: Políticas de Préstamos"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium block mb-2">Descripción</label>
-                  <Textarea
-                    value={nuevoDocumento.descripcion}
-                    onChange={(e) => setNuevoDocumento(prev => ({ ...prev, descripcion: e.target.value }))}
-                    placeholder="Describe de qué trata este documento..."
-                    rows={3}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium block mb-2">Archivo <span className="text-red-500">*</span></label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="file"
-                      accept=".pdf,.txt,.docx"
-                      onChange={handleFileChange}
-                      className="flex-1"
-                    />
-                    {nuevoDocumento.archivo && (
-                      <Badge variant="secondary">{nuevoDocumento.archivo.name}</Badge>
-                    )}
-                  </div>
-                </div>
-
-                <Button 
-                  onClick={handleSubirDocumento} 
-                  disabled={subiendoDocumento || !nuevoDocumento.titulo || !nuevoDocumento.archivo}
-                  className="w-full"
-                >
-                  {subiendoDocumento ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Subiendo...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="mr-2 h-4 w-4" />
-                      Subir Documento
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              {/* Lista de documentos */}
-              <div className="border-t pt-4">
-                <h4 className="font-semibold mb-4">Documentos Existentes</h4>
-                
-                {cargandoDocumentos ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                  </div>
-                ) : documentos.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <FileText className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                    <p>No hay documentos cargados</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {documentos.map((doc) => (
-                      <div key={doc.id} className="border rounded-lg p-4 hover:bg-gray-50">
-                        {editandoDocumento === doc.id ? (
-                          // Modo edición
-                          <div className="space-y-3">
-                            <div>
-                              <label className="text-sm font-medium block mb-1">Título <span className="text-red-500">*</span></label>
-                              <Input
-                                value={documentoEditado.titulo}
-                                onChange={(e) => setDocumentoEditado(prev => ({ ...prev, titulo: e.target.value }))}
-                                placeholder="Título del documento"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium block mb-1">Descripción</label>
-                              <Textarea
-                                value={documentoEditado.descripcion}
-                                onChange={(e) => setDocumentoEditado(prev => ({ ...prev, descripcion: e.target.value }))}
-                                placeholder="Descripción del documento"
-                                rows={2}
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() => handleActualizarDocumento(doc.id)}
-                                disabled={actualizandoDocumento || !documentoEditado.titulo.trim()}
-                              >
-                                {actualizandoDocumento ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                    Guardando...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Save className="h-4 w-4 mr-1" />
-                                    Guardar
-                                  </>
-                                )}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={handleCancelarEdicion}
-                                disabled={actualizandoDocumento}
-                              >
-                                Cancelar
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          // Modo visualización
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <h5 className="font-semibold">{doc.titulo}</h5>
-                                <Badge variant={doc.activo ? "default" : "secondary"}>
-                                  {doc.activo ? "Activo" : "Inactivo"}
-                                </Badge>
-                                {doc.contenido_procesado ? (
-                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                    <CheckCircle className="h-3 w-3 mr-1" />
-                                    Procesado
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                                    <AlertCircle className="h-3 w-3 mr-1" />
-                                    Sin procesar
-                                  </Badge>
-                                )}
-                                {/* Advertencia si está activo pero no procesado */}
-                                {doc.activo && !doc.contenido_procesado && (
-                                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                                    <AlertCircle className="h-3 w-3 mr-1" />
-                                    ⚠️ No disponible para AI
-                                  </Badge>
-                                )}
-                                {/* Estado listo para AI */}
-                                {doc.activo && doc.contenido_procesado && (
-                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                    <CheckCircle className="h-3 w-3 mr-1" />
-                                    ✅ Disponible para AI
-                                  </Badge>
-                                )}
-                              </div>
-                              {doc.descripcion && (
-                                <p className="text-sm text-gray-600 mb-2">{doc.descripcion}</p>
-                              )}
-                              <div className="flex items-center gap-4 text-xs text-gray-500">
-                                <span>{doc.nombre_archivo}</span>
-                                <span>{doc.tipo_archivo.toUpperCase()}</span>
-                                <span>{formatearTamaño(doc.tamaño_bytes)}</span>
-                                <span>{new Date(doc.creado_en).toLocaleDateString()}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {!doc.contenido_procesado && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleProcesarDocumento(doc.id)}
-                                  disabled={procesandoDocumento === doc.id || procesandoDocumento !== null}
-                                  className="text-blue-600 hover:text-blue-700"
-                                  title="Procesar documento para extraer texto"
-                                >
-                                  {procesandoDocumento === doc.id ? (
-                                    <>
-                                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                      Procesando...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <FileText className="h-4 w-4 mr-1" />
-                                      Procesar
-                                    </>
-                                  )}
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleIniciarEdicion(doc)}
-                                className="text-blue-600 hover:text-blue-700"
-                                title="Editar documento"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleActivarDesactivarDocumento(doc.id, !doc.activo)}
-                                className={doc.activo ? "text-amber-600 hover:text-amber-700" : "text-green-600 hover:text-green-700"}
-                                title={doc.activo ? "Desactivar documento" : "Activar documento"}
-                              >
-                                <Zap className={`h-4 w-4 ${doc.activo ? '' : 'opacity-50'}`} />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEliminarDocumento(doc.id)}
-                                className="text-red-600 hover:text-red-700"
-                                title="Eliminar documento"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Pestaña 3: Entrenamiento de Prompt */}
+        {/* Pestaña 2: Entrenamiento de Prompt */}
         <TabsContent value="entrenamiento" className="space-y-4">
           <Card>
             <CardContent className="pt-6 space-y-4">
@@ -1603,7 +1355,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           </Card>
         </TabsContent>
 
-        {/* Pestaña 4: Métricas */}
+        {/* Pestaña 3: Métricas */}
         <TabsContent value="metricas" className="space-y-4">
           <Card>
             <CardContent className="pt-6 space-y-4">
@@ -1727,7 +1479,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           </Card>
         </TabsContent>
 
-        {/* Pestaña 5: Sistema Híbrido */}
+        {/* Pestaña 4: Sistema Híbrido */}
         <TabsContent value="sistema-hibrido" className="space-y-4">
           <Tabs value={activeHybridTab} onValueChange={setActiveHybridTab} className="w-full">
             <TabsList className="grid w-full grid-cols-4">
