@@ -36,11 +36,14 @@ def run_migrations() -> None:
         alembic_cfg = Config(str(alembic_ini_path))
         alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
-        logger.info("🔄 Ejecutando migraciones de Alembic...")
+        logger.info("=" * 60)
+        logger.info("🔄 EJECUTANDO MIGRACIONES DE ALEMBIC...")
+        logger.info("=" * 60)
         # Verificar si hay múltiples heads
         from alembic.script import ScriptDirectory
         script = ScriptDirectory.from_config(alembic_cfg)
         heads = script.get_revisions("heads")
+        logger.info(f"📊 Total de heads detectados: {len(heads)}")
         
         if len(heads) > 1:
             # Si hay múltiples heads, primero actualizar a todos los heads individuales
@@ -65,7 +68,9 @@ def run_migrations() -> None:
         else:
             # Un solo head, actualizar normalmente
             command.upgrade(alembic_cfg, "head")
-        logger.info("✅ Migraciones de Alembic ejecutadas exitosamente")
+        logger.info("=" * 60)
+        logger.info("✅ MIGRACIONES DE ALEMBIC EJECUTADAS EXITOSAMENTE")
+        logger.info("=" * 60)
 
     except ImportError:
         logger.warning("⚠️ Alembic no está disponible, omitiendo migraciones automáticas")
