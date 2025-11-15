@@ -113,9 +113,7 @@ class MLImpagoCuotasService:
         # Tasa de cumplimiento (cuotas pagadas a tiempo / total de cuotas vencidas)
         cuotas_vencidas = [c for c in cuotas_ordenadas if c.fecha_vencimiento < fecha_actual]
         cuotas_vencidas_pagadas = sum(1 for c in cuotas_vencidas if c.estado == "PAGADO")
-        tasa_cumplimiento = (
-            (cuotas_vencidas_pagadas / len(cuotas_vencidas) * 100) if cuotas_vencidas else 100.0
-        )
+        tasa_cumplimiento = (cuotas_vencidas_pagadas / len(cuotas_vencidas) * 100) if cuotas_vencidas else 100.0
 
         # Días desde último pago
         cuotas_con_pago = [c for c in cuotas_ordenadas if c.fecha_pago is not None]
@@ -159,9 +157,7 @@ class MLImpagoCuotasService:
 
         # Cuotas vencidas sin pagar
         cuotas_vencidas_sin_pagar = sum(
-            1
-            for c in cuotas_ordenadas
-            if c.fecha_vencimiento < fecha_actual and c.estado not in ["PAGADO", "PARCIAL"]
+            1 for c in cuotas_ordenadas if c.fecha_vencimiento < fecha_actual and c.estado not in ["PAGADO", "PARCIAL"]
         )
 
         return {
@@ -511,4 +507,3 @@ class MLImpagoCuotasService:
         except Exception as e:
             logger.error(f"Error cargando modelo: {e}", exc_info=True)
             return False
-

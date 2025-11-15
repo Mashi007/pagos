@@ -86,4 +86,3 @@ class ModeloImpagoCuotas(Base):
             "entrenado_en": self.entrenado_en.isoformat() if self.entrenado_en else None,
             "activado_en": self.activado_en.isoformat() if self.activado_en else None,
         }
-

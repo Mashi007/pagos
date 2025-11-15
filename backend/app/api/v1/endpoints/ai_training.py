@@ -1157,10 +1157,7 @@ async def entrenar_modelo_impago(
 
         # Obtener todos los préstamos aprobados con cuotas
         prestamos = (
-            db.query(Prestamo)
-            .filter(Prestamo.estado == "APROBADO")
-            .filter(Prestamo.fecha_aprobacion.isnot(None))
-            .all()
+            db.query(Prestamo).filter(Prestamo.estado == "APROBADO").filter(Prestamo.fecha_aprobacion.isnot(None)).all()
         )
 
         if not prestamos:
@@ -1195,9 +1192,7 @@ async def entrenar_modelo_impago(
                 continue  # No hay cuotas vencidas aún, no podemos determinar target
 
             # Target: 0 = Pagó (todas las cuotas vencidas están pagadas), 1 = No pagó (hay cuotas vencidas sin pagar)
-            cuotas_vencidas_sin_pagar = sum(
-                1 for c in cuotas_vencidas if c.estado not in ["PAGADO", "PARCIAL"]
-            )
+            cuotas_vencidas_sin_pagar = sum(1 for c in cuotas_vencidas if c.estado not in ["PAGADO", "PARCIAL"])
             target = 1 if cuotas_vencidas_sin_pagar > 0 else 0
 
             # Agregar a datos de entrenamiento
