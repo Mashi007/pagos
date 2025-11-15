@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Eye, Calendar, DollarSign, User, Building } from 'lucide-react'
+import { X, Eye, Calendar, DollarSign, User, Building, TrendingUp, AlertTriangle, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +9,8 @@ import { formatDate } from '@/utils'
 import { TablaAmortizacionPrestamo } from './TablaAmortizacionPrestamo'
 import { AuditoriaPrestamo } from './AuditoriaPrestamo'
 import { usePrestamo } from '@/hooks/usePrestamos'
+import { aiTrainingService } from '@/services/aiTrainingService'
+import { toast } from 'sonner'
 
 interface PrestamoDetalleModalProps {
   prestamo: Prestamo
@@ -17,9 +19,43 @@ interface PrestamoDetalleModalProps {
 
 export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: PrestamoDetalleModalProps) {
   const [activeTab, setActiveTab] = useState<'detalles' | 'amortizacion' | 'auditoria'>('detalles')
+  const [prediccionImpago, setPrediccionImpago] = useState<any>(null)
+  const [cargandoPrediccion, setCargandoPrediccion] = useState(false)
   
   // Recargar datos completos del préstamo
   const { data: prestamo, isLoading } = usePrestamo(prestamoInitial.id)
+
+  // Cargar predicción de impago si el préstamo está aprobado
+  useEffect(() => {
+    const prestamoData = prestamo || prestamoInitial
+    if (prestamoData?.estado === 'APROBADO') {
+      cargarPrediccionImpago(prestamoData.id)
+    }
+  }, [prestamo, prestamoInitial])
+
+  const cargarPrediccionImpago = async (prestamoId: number) => {
+    setCargandoPrediccion(true)
+    try {
+      const resultado = await aiTrainingService.predecirImpago(prestamoId)
+      setPrediccionImpago(resultado)
+    } catch (error: any) {
+      // No mostrar error si no hay modelo activo, solo no mostrar la predicción
+      if (error?.response?.status !== 400) {
+        console.error('Error cargando predicción de impago:', error)
+      }
+    } finally {
+      setCargandoPrediccion(false)
+    }
+  }
+
+  const getRiesgoColor = (nivel: string) => {
+    const colores: Record<string, string> = {
+      Bajo: 'text-green-600 bg-green-50 border-green-200',
+      Medio: 'text-yellow-600 bg-yellow-50 border-yellow-200',
+      Alto: 'text-red-600 bg-red-50 border-red-200',
+    }
+    return colores[nivel] || 'text-gray-600 bg-gray-50 border-gray-200'
+  }
 
   if (isLoading) {
     return (
@@ -218,6 +254,81 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Predicción de Impago de Cuotas */}
+                {prestamoData.estado === 'APROBADO' && (
+                  <Card className={prediccionImpago ? getRiesgoColor(prediccionImpago.nivel_riesgo) : ''}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5" />
+                        Predicción de Impago de Cuotas
+                        {cargandoPrediccion && (
+                          <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                        )}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {cargandoPrediccion ? (
+                        <div className="text-center py-4">
+                          <p className="text-sm text-gray-500">Cargando predicción...</p>
+                        </div>
+                      ) : prediccionImpago ? (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <div className="text-sm text-gray-600 mb-1">Predicción</div>
+                              <div className="font-semibold text-lg">{prediccionImpago.prediccion}</div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-gray-600 mb-1">Nivel de Riesgo</div>
+                              <Badge className={getRiesgoColor(prediccionImpago.nivel_riesgo)}>
+                                {prediccionImpago.nivel_riesgo}
+                              </Badge>
+                            </div>
+                            <div>
+                              <div className="text-sm text-gray-600 mb-1">Probabilidad de Impago</div>
+                              <div className="font-semibold text-red-600">
+                                {(prediccionImpago.probabilidad_impago * 100).toFixed(1)}%
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-gray-600 mb-1">Probabilidad de Pago</div>
+                              <div className="font-semibold text-green-600">
+                                {(prediccionImpago.probabilidad_pago * 100).toFixed(1)}%
+                              </div>
+                            </div>
+                          </div>
+                          <div className="pt-4 border-t">
+                            <div className="flex items-start gap-2">
+                              {prediccionImpago.nivel_riesgo === 'Alto' && (
+                                <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+                              )}
+                              <div>
+                                <div className="text-sm font-medium mb-1">Recomendación</div>
+                                <div className="text-sm">{prediccionImpago.recomendacion}</div>
+                              </div>
+                            </div>
+                          </div>
+                          {prediccionImpago.modelo_usado && (
+                            <div className="pt-2 text-xs text-gray-500">
+                              Modelo: {prediccionImpago.modelo_usado.nombre} v{prediccionImpago.modelo_usado.version} 
+                              {' '}({prediccionImpago.modelo_usado.algoritmo})
+                              {prediccionImpago.modelo_usado.accuracy && (
+                                <> - Accuracy: {(prediccionImpago.modelo_usado.accuracy * 100).toFixed(1)}%</>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center py-4">
+                          <p className="text-sm text-gray-500">
+                            No hay modelo activo para predecir impago. Entrena un modelo en Configuración → AI → ML Impago.
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Información de Producto */}
                 <Card>

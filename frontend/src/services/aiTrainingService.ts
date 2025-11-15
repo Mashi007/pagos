@@ -54,6 +54,21 @@ export interface ModeloRiesgo {
   total_datos_entrenamiento?: number
 }
 
+export interface ModeloImpagoCuotas {
+  id: number
+  nombre: string
+  version: string
+  algoritmo: string
+  accuracy?: number
+  precision?: number
+  recall?: number
+  f1_score?: number
+  roc_auc?: number
+  entrenado_en: string
+  activo: boolean
+  total_datos_entrenamiento?: number
+}
+
 export interface MetricasEntrenamiento {
   conversaciones: {
     total: number
@@ -334,6 +349,71 @@ class AITrainingService {
     fecha_consulta: string
   }> {
     return await apiClient.get('/api/v1/configuracion/ai/tablas-campos')
+  }
+
+  // ============================================
+  // ML PREDICCIÓN DE IMPAGO DE CUOTAS
+  // ============================================
+
+  /**
+   * Entrenar modelo de predicción de impago de cuotas
+   */
+  async entrenarModeloImpago(params?: {
+    algoritmo?: string
+    test_size?: number
+    random_state?: number
+  }): Promise<{ mensaje: string; modelo: ModeloImpagoCuotas; metricas: any }> {
+    return await apiClient.post(`${this.baseUrl}/ml-impago/entrenar`, params || {})
+  }
+
+  /**
+   * Listar modelos de impago disponibles
+   */
+  async listarModelosImpago(): Promise<ModeloImpagoCuotas[]> {
+    const response = await apiClient.get<{ modelos: ModeloImpagoCuotas[]; modelo_activo: ModeloImpagoCuotas | null }>(`${this.baseUrl}/ml-impago/modelos`)
+    return response.modelos || []
+  }
+
+  /**
+   * Obtener modelo de impago activo
+   */
+  async getModeloImpagoActivo(): Promise<ModeloImpagoCuotas | null> {
+    try {
+      const response = await apiClient.get<{ modelos: ModeloImpagoCuotas[]; modelo_activo: ModeloImpagoCuotas | null }>(`${this.baseUrl}/ml-impago/modelos`)
+      return response.modelo_activo || null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Activar modelo de impago
+   */
+  async activarModeloImpago(modeloId: number): Promise<{ mensaje: string; modelo_activo: ModeloImpagoCuotas }> {
+    return await apiClient.post(`${this.baseUrl}/ml-impago/activar`, { modelo_id: modeloId })
+  }
+
+  /**
+   * Predecir impago de cuotas para un préstamo
+   */
+  async predecirImpago(prestamoId: number): Promise<{
+    prestamo_id: number
+    probabilidad_impago: number
+    probabilidad_pago: number
+    prediccion: string
+    nivel_riesgo: string
+    confidence: number
+    recomendacion: string
+    features_usadas: Record<string, number>
+    modelo_usado: {
+      id: number
+      nombre: string
+      version: string
+      algoritmo: string
+      accuracy?: number
+    }
+  }> {
+    return await apiClient.post(`${this.baseUrl}/ml-impago/predecir`, { prestamo_id: prestamoId })
   }
 }
 

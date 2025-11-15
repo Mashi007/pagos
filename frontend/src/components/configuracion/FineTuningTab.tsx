@@ -620,11 +620,17 @@ export function FineTuningTab() {
                             <SelectValue placeholder={tablaSeleccionada ? "Selecciona un campo" : "Selecciona tabla primero"} />
                           </SelectTrigger>
                           <SelectContent>
-                            {camposDisponibles.map((campo) => (
-                              <SelectItem key={campo} value={campo}>
-                                {campo}
-                              </SelectItem>
-                            ))}
+                            {camposDisponibles.length === 0 ? (
+                              <div className="px-2 py-1.5 text-sm text-gray-500">
+                                {!tablaSeleccionada ? 'Selecciona una tabla primero' : 'No hay campos disponibles'}
+                              </div>
+                            ) : (
+                              camposDisponibles.map((campo) => (
+                                <SelectItem key={campo} value={campo}>
+                                  {campo}
+                                </SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                         <Button

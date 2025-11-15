@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, RotateCcw, Copy, Settings } from 'lucide-react'
+import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, RotateCcw, Copy, Settings, DollarSign } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,7 @@ import { TrainingDashboard } from './TrainingDashboard'
 import { FineTuningTab } from './FineTuningTab'
 import { RAGTab } from './RAGTab'
 import { MLRiesgoTab } from './MLRiesgoTab'
+import { MLImpagoCuotasTab } from './MLImpagoCuotasTab'
 
 interface AIConfig {
   openai_api_key: string
@@ -1644,7 +1645,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
         {/* Pestaña 3: Sistema Híbrido */}
         <TabsContent value="sistema-hibrido" className="space-y-4 mt-6">
           <Tabs value={activeHybridTab} onValueChange={setActiveHybridTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-4 bg-gray-100/50 p-1 rounded-lg">
+            <TabsList className="grid w-full grid-cols-5 bg-gray-100/50 p-1 rounded-lg">
               <TabsTrigger 
                 value="dashboard"
                 className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
@@ -1673,6 +1674,13 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 <Brain className="h-4 w-4" />
                 ML Riesgo
               </TabsTrigger>
+              <TabsTrigger 
+                value="ml-impago"
+                className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
+              >
+                <DollarSign className="h-4 w-4" />
+                ML Impago
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="dashboard" className="mt-6">
@@ -1689,6 +1697,10 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
             <TabsContent value="ml-riesgo" className="mt-6">
               <MLRiesgoTab />
+            </TabsContent>
+
+            <TabsContent value="ml-impago" className="mt-6">
+              <MLImpagoCuotasTab />
             </TabsContent>
           </Tabs>
         </TabsContent>

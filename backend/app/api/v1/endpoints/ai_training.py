@@ -19,6 +19,7 @@ from app.models.documento_ai import DocumentoAI
 from app.models.documento_embedding import DocumentoEmbedding
 from app.models.fine_tuning_job import FineTuningJob
 from app.models.modelo_riesgo import ModeloRiesgo
+from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
 from app.models.user import User
 from app.services.ai_training_service import AITrainingService
 from app.services.rag_service import RAGService
@@ -31,6 +32,15 @@ try:
 except ImportError:
     ML_SERVICE_AVAILABLE = False
     MLService = None
+
+# Import condicional de MLImpagoCuotasService
+try:
+    from app.services.ml_impago_cuotas_service import MLImpagoCuotasService
+
+    ML_IMPAGO_SERVICE_AVAILABLE = True
+except ImportError:
+    ML_IMPAGO_SERVICE_AVAILABLE = False
+    MLImpagoCuotasService = None
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +113,20 @@ class PredecirRiesgoRequest(BaseModel):
     historial_pagos: Optional[float] = None
     dias_ultimo_prestamo: Optional[int] = None
     numero_prestamos_previos: Optional[int] = None
+
+
+class EntrenarModeloImpagoRequest(BaseModel):
+    algoritmo: str = "random_forest"
+    test_size: float = 0.2
+    random_state: int = 42
+
+
+class ActivarModeloImpagoRequest(BaseModel):
+    modelo_id: int
+
+
+class PredecirImpagoRequest(BaseModel):
+    prestamo_id: int
 
 
 # ============================================
@@ -1106,3 +1130,271 @@ async def obtener_metricas_entrenamiento(
         raise
     except Exception as e:
         raise _handle_database_error(e, "obteniendo métricas")
+
+
+# ============================================
+# ML PREDICCIÓN DE IMPAGO DE CUOTAS
+# ============================================
+
+
+@router.post("/ml-impago/entrenar")
+async def entrenar_modelo_impago(
+    request: EntrenarModeloImpagoRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Entrenar modelo de predicción de impago de cuotas
+    Analiza el historial de pagos de préstamos aprobados para predecir impago futuro
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden entrenar modelos ML")
+
+    try:
+        from app.models.amortizacion import Cuota
+        from app.models.prestamo import Prestamo
+        from datetime import date
+
+        # Obtener todos los préstamos aprobados con cuotas
+        prestamos = (
+            db.query(Prestamo)
+            .filter(Prestamo.estado == "APROBADO")
+            .filter(Prestamo.fecha_aprobacion.isnot(None))
+            .all()
+        )
+
+        if not prestamos:
+            raise HTTPException(status_code=400, detail="No hay préstamos aprobados para entrenar el modelo")
+
+        # Verificar que MLImpagoCuotasService esté disponible
+        if not ML_IMPAGO_SERVICE_AVAILABLE or MLImpagoCuotasService is None:
+            raise HTTPException(
+                status_code=503,
+                detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
+            )
+
+        ml_service = MLImpagoCuotasService()
+        training_data = []
+        fecha_actual = date.today()
+
+        # Generar datos de entrenamiento
+        for prestamo in prestamos:
+            # Obtener cuotas del préstamo
+            cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
+
+            if not cuotas or len(cuotas) < 2:
+                continue  # Necesitamos al menos 2 cuotas para tener historial
+
+            # Extraer features del historial de pagos
+            features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
+
+            # Determinar target: ¿El cliente pagó o no pagó sus cuotas?
+            # Usamos las cuotas vencidas para determinar si pagó o no
+            cuotas_vencidas = [c for c in cuotas if c.fecha_vencimiento < fecha_actual]
+            if not cuotas_vencidas:
+                continue  # No hay cuotas vencidas aún, no podemos determinar target
+
+            # Target: 0 = Pagó (todas las cuotas vencidas están pagadas), 1 = No pagó (hay cuotas vencidas sin pagar)
+            cuotas_vencidas_sin_pagar = sum(
+                1 for c in cuotas_vencidas if c.estado not in ["PAGADO", "PARCIAL"]
+            )
+            target = 1 if cuotas_vencidas_sin_pagar > 0 else 0
+
+            # Agregar a datos de entrenamiento
+            training_data.append({**features, "target": target})
+
+        if len(training_data) < 10:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Se necesitan al menos 10 muestras válidas para entrenar. Se generaron {len(training_data)}.",
+            )
+
+        # Entrenar modelo
+        resultado = ml_service.train_impago_model(
+            training_data,
+            algoritmo=request.algoritmo,
+            test_size=request.test_size,
+            random_state=request.random_state,
+        )
+
+        if not resultado.get("success"):
+            raise HTTPException(status_code=500, detail=resultado.get("error", "Error entrenando modelo"))
+
+        # Guardar modelo en BD
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        modelo = ModeloImpagoCuotas(
+            nombre=f"Modelo Impago Cuotas {timestamp}",
+            version="1.0.0",
+            algoritmo=request.algoritmo,
+            accuracy=resultado["metrics"]["accuracy"],
+            precision=resultado["metrics"]["precision"],
+            recall=resultado["metrics"]["recall"],
+            f1_score=resultado["metrics"]["f1_score"],
+            roc_auc=resultado["metrics"]["roc_auc"],
+            ruta_archivo=resultado["model_path"],
+            total_datos_entrenamiento=resultado["training_samples"],
+            total_datos_test=resultado["test_samples"],
+            test_size=request.test_size,
+            random_state=request.random_state,
+            activo=False,
+            usuario_id=current_user.id,
+            descripcion=f"Modelo entrenado para predecir impago de cuotas usando {request.algoritmo}",
+            features_usadas=",".join(resultado["features"]),
+        )
+
+        db.add(modelo)
+        db.commit()
+        db.refresh(modelo)
+
+        logger.info(f"✅ Modelo de impago entrenado: {modelo.nombre} (ID: {modelo.id})")
+
+        return {
+            "mensaje": "Modelo entrenado exitosamente",
+            "modelo": modelo.to_dict(),
+            "metricas": resultado["metrics"],
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error entrenando modelo de impago: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error entrenando modelo: {str(e)}")
+
+
+@router.post("/ml-impago/activar")
+async def activar_modelo_impago(
+    request: ActivarModeloImpagoRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Activar un modelo de predicción de impago de cuotas"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden activar modelos ML")
+
+    try:
+        # Desactivar todos los modelos
+        db.query(ModeloImpagoCuotas).update({ModeloImpagoCuotas.activo: False})
+
+        # Activar el modelo solicitado
+        modelo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.id == request.modelo_id).first()
+
+        if not modelo:
+            raise HTTPException(status_code=404, detail="Modelo no encontrado")
+
+        modelo.activo = True
+        modelo.activado_en = datetime.now()
+        db.commit()
+        db.refresh(modelo)
+
+        logger.info(f"✅ Modelo de impago activado: {modelo.nombre} (ID: {modelo.id})")
+
+        return {
+            "mensaje": "Modelo activado exitosamente",
+            "modelo_activo": modelo.to_dict(),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error activando modelo: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error activando modelo: {str(e)}")
+
+
+@router.post("/ml-impago/predecir")
+async def predecir_impago(
+    request: PredecirImpagoRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Predecir probabilidad de impago de cuotas futuras para un préstamo"""
+    try:
+        from app.models.amortizacion import Cuota
+        from app.models.prestamo import Prestamo
+        from datetime import date
+
+        # Obtener modelo activo
+        modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
+
+        if not modelo_activo:
+            raise HTTPException(status_code=400, detail="No hay modelo activo")
+
+        # Verificar que MLImpagoCuotasService esté disponible
+        if not ML_IMPAGO_SERVICE_AVAILABLE or MLImpagoCuotasService is None:
+            raise HTTPException(
+                status_code=503,
+                detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
+            )
+
+        # Obtener préstamo
+        prestamo = db.query(Prestamo).filter(Prestamo.id == request.prestamo_id).first()
+
+        if not prestamo:
+            raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+        if prestamo.estado != "APROBADO":
+            raise HTTPException(status_code=400, detail="El préstamo debe estar aprobado para predecir impago")
+
+        # Obtener cuotas del préstamo
+        cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
+
+        if not cuotas:
+            raise HTTPException(status_code=400, detail="El préstamo no tiene cuotas generadas")
+
+        # Cargar modelo
+        ml_service = MLImpagoCuotasService()
+        if not ml_service.load_model_from_path(modelo_activo.ruta_archivo):
+            raise HTTPException(status_code=500, detail="Error cargando modelo")
+
+        # Extraer features del historial de pagos
+        fecha_actual = date.today()
+        features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
+
+        # Predecir
+        prediccion = ml_service.predict_impago(features)
+
+        return {
+            "prestamo_id": prestamo.id,
+            "probabilidad_impago": prediccion["probabilidad_impago"],
+            "probabilidad_pago": prediccion["probabilidad_pago"],
+            "prediccion": prediccion["prediccion"],
+            "nivel_riesgo": prediccion["nivel_riesgo"],
+            "confidence": prediccion["confidence"],
+            "recomendacion": prediccion["recomendacion"],
+            "features_usadas": prediccion["features_usadas"],
+            "modelo_usado": {
+                "id": modelo_activo.id,
+                "nombre": modelo_activo.nombre,
+                "version": modelo_activo.version,
+                "algoritmo": modelo_activo.algoritmo,
+                "accuracy": modelo_activo.accuracy,
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error prediciendo impago: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error prediciendo impago: {str(e)}")
+
+
+@router.get("/ml-impago/modelos")
+async def listar_modelos_impago(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Listar todos los modelos de predicción de impago"""
+    try:
+        modelos = db.query(ModeloImpagoCuotas).order_by(ModeloImpagoCuotas.entrenado_en.desc()).all()
+        modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
+
+        return {
+            "modelos": [modelo.to_dict() for modelo in modelos],
+            "modelo_activo": modelo_activo.to_dict() if modelo_activo else None,
+            "total": len(modelos),
+        }
+
+    except Exception as e:
+        logger.error(f"Error listando modelos: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error listando modelos: {str(e)}")
