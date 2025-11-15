@@ -2535,7 +2535,7 @@ def obtener_kpis_principales(
 
         # ✅ Calcular cuotas programadas (suma de monto_cuota de todas las cuotas)
         from app.utils.filtros_dashboard import FiltrosDashboard
-        
+
         query_cuotas_programadas = (
             db.query(func.sum(Cuota.monto_cuota))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -2545,21 +2545,18 @@ def obtener_kpis_principales(
             query_cuotas_programadas, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         total_cuotas_programadas = float(query_cuotas_programadas.scalar() or 0)
-        
+
         # ✅ Calcular porcentaje de cuotas pagadas
         query_cuotas_pagadas = (
             db.query(func.count(Cuota.id))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Cuota.estado == "PAGADO"
-            )
+            .filter(Prestamo.estado == "APROBADO", Cuota.estado == "PAGADO")
         )
         query_cuotas_pagadas = FiltrosDashboard.aplicar_filtros_cuota(
             query_cuotas_pagadas, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         total_cuotas_pagadas = query_cuotas_pagadas.scalar() or 0
-        
+
         query_total_cuotas = (
             db.query(func.count(Cuota.id))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -2569,7 +2566,7 @@ def obtener_kpis_principales(
             query_total_cuotas, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         total_cuotas = query_total_cuotas.scalar() or 0
-        
+
         porcentaje_cuotas_pagadas = (total_cuotas_pagadas / total_cuotas * 100) if total_cuotas > 0 else 0.0
 
         logger.info(f"📊 [kpis-principales] Completado en {total_time}ms (query: {query_time}ms)")
