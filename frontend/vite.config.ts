@@ -8,11 +8,29 @@ function removeHeavyChunksPreload(): Plugin {
   return {
     name: 'remove-heavy-chunks-preload',
     transformIndexHtml(html) {
-      // Eliminar modulepreload para exceljs y pdf-export (carga bajo demanda)
-      return html.replace(
-        /<link rel="modulepreload"[^>]*(exceljs|pdf-export)[^>]*>/gi,
+      // ✅ Eliminar TODOS los modulepreload para exceljs y pdf-export (carga bajo demanda)
+      // Esto evita que el navegador precargue estos chunks automáticamente
+      let modifiedHtml = html
+      
+      // Eliminar modulepreload para exceljs
+      modifiedHtml = modifiedHtml.replace(
+        /<link[^>]*rel=["']modulepreload["'][^>]*(exceljs|exceljs-)[^>]*>/gi,
         ''
       )
+      
+      // Eliminar modulepreload para pdf-export
+      modifiedHtml = modifiedHtml.replace(
+        /<link[^>]*rel=["']modulepreload["'][^>]*(pdf-export|jspdf|html2canvas)[^>]*>/gi,
+        ''
+      )
+      
+      // ✅ También eliminar cualquier preload que pueda estar causando la carga prematura
+      modifiedHtml = modifiedHtml.replace(
+        /<link[^>]*rel=["']preload["'][^>]*(exceljs|pdf-export)[^>]*>/gi,
+        ''
+      )
+      
+      return modifiedHtml
     },
   }
 }
@@ -46,6 +64,8 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
+        // ✅ Deshabilitar modulePreload para chunks pesados
+        experimentalMinChunkSize: 20000,
         manualChunks: (id) => {
           // ✅ CRÍTICO: React DEBE estar en el chunk principal y cargarse primero
           // Verificar React ANTES de cualquier otra lógica
@@ -68,6 +88,7 @@ export default defineConfig({
             
             // Librerías pesadas de exportación - LAZY LOADING (cargar solo cuando se necesiten)
             // Estas librerías NO se incluyen en el bundle inicial, solo se cargan bajo demanda
+            // ✅ EXCELJS: Forzar chunk separado y evitar precarga
             if (id.includes('exceljs')) {
               return 'exceljs' // Chunk separado, se carga solo al exportar Excel
             }

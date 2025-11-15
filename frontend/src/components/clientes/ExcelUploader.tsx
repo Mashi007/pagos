@@ -20,7 +20,8 @@ import { SearchableSelect } from '@/components/ui/searchable-select'
 // exceljs se importa dinámicamente para reducir el bundle inicial
 import { clienteService } from '@/services/clienteService'
 import { useQueryClient } from '@tanstack/react-query'
-import { readExcelToJSON } from '@/types/exceljs'
+// ✅ IMPORT DINÁMICO: readExcelToJSON se carga solo cuando se necesita
+// import { readExcelToJSON } from '@/types/exceljs' // ❌ REMOVIDO: Import estático causaba precarga
 import { useIsMounted } from '@/hooks/useIsMounted'
 
 interface ExcelData {
@@ -841,7 +842,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         return
       }
       
-      // Leer archivo Excel usando exceljs
+      // ✅ Leer archivo Excel usando exceljs (import dinámico para evitar precarga)
+      const { readExcelToJSON } = await import('@/types/exceljs')
       const jsonData = await readExcelToJSON(data)
       
       if (!isMounted()) return

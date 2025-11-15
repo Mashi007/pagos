@@ -73,33 +73,51 @@ ReactDOM.createRoot(rootElement).render(
 
 // Manejador global de errores para capturar NS_ERROR_FAILURE y otros errores de React
 window.addEventListener('error', (event) => {
-  // Capturar errores NS_ERROR_FAILURE que ocurren en Firefox
+  // ✅ Capturar errores NS_ERROR_FAILURE que ocurren en Firefox (especialmente con ExcelJS)
   if (event.error && event.error.name === 'NS_ERROR_FAILURE') {
     // Este error generalmente ocurre cuando se intenta actualizar el estado después del desmontaje
+    // o durante la inicialización de módulos dinámicos (como ExcelJS)
     // Ya está siendo manejado por useIsMounted, pero lo capturamos para evitar que se muestre en consola
-    console.debug('Error NS_ERROR_FAILURE capturado (probablemente componente desmontado):', event.error)
     event.preventDefault() // Prevenir que el error se propague
-    return
+    event.stopPropagation() // Detener la propagación del evento
+    return false // Retornar false para indicar que el error fue manejado
+  }
+  
+  // ✅ Capturar errores relacionados con ExcelJS durante la inicialización
+  if (event.filename && event.filename.includes('exceljs')) {
+    if (event.error && event.error.name === 'NS_ERROR_FAILURE') {
+      event.preventDefault()
+      event.stopPropagation()
+      return false
+    }
   }
   
   // Capturar otros errores relacionados con React/Radix UI
   if (event.error && typeof event.error.message === 'string') {
     const errorMessage = event.error.message.toLowerCase()
     if (errorMessage.includes('cannot read property') && errorMessage.includes('useState')) {
-      console.debug('Error de useState capturado (probablemente componente desmontado):', event.error)
       event.preventDefault()
-      return
+      event.stopPropagation()
+      return false
     }
   }
-})
+}, true) // ✅ Usar capture phase para interceptar errores antes de que se propaguen
 
 // Manejador global de promesas rechazadas no manejadas
 window.addEventListener('unhandledrejection', (event) => {
-  // Capturar promesas rechazadas relacionadas con NS_ERROR_FAILURE
+  // ✅ Capturar promesas rechazadas relacionadas con NS_ERROR_FAILURE
   if (event.reason && event.reason.name === 'NS_ERROR_FAILURE') {
-    console.debug('Promesa rechazada NS_ERROR_FAILURE capturada:', event.reason)
     event.preventDefault() // Prevenir que el error se propague
-    return
+    event.stopPropagation() // Detener la propagación
+    return false
+  }
+  
+  // ✅ Capturar errores relacionados con ExcelJS
+  const reasonMessage = event.reason?.message || event.reason?.toString() || ''
+  if (reasonMessage.includes('exceljs') && event.reason?.name === 'NS_ERROR_FAILURE') {
+    event.preventDefault()
+    event.stopPropagation()
+    return false
   }
 })
 

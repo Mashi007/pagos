@@ -105,7 +105,8 @@ export function Logo({ className, size = 'md' }: LogoProps) {
       return
     }
 
-    // ✅ PRIORIDAD 2: Si ya tenemos el logo cacheado y existe, usarlo directamente
+    // ✅ PRIORIDAD 2: Si ya tenemos el logo cacheado, usarlo temporalmente PERO verificar si hay actualización
+    // Esto evita mostrar el logo antiguo mientras se verifica el nuevo
     if (logoCache.logoUrl && logoCache.hasChecked) {
       setCustomLogoUrl(logoCache.logoUrl)
       setHasChecked(true)
@@ -116,7 +117,8 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         img.onerror = () => setImageLoaded(false)
         img.src = logoCache.logoUrl
       }
-      return
+      // ✅ NO retornar aquí - continuar para verificar si hay una versión más reciente en el servidor
+      // Esto asegura que si el logo cambió, se actualice inmediatamente sin mostrar la versión antigua
     }
 
     // ✅ PRIORIDAD 3: Si otra instancia ya está verificando, esperar a que termine
@@ -125,11 +127,18 @@ export function Logo({ className, size = 'md' }: LogoProps) {
       const checkInterval = setInterval(() => {
         if (!logoCache.isChecking) {
           if (logoCache.logoNotFound) {
-            setCustomLogoUrl(null)
+            if (isMounted()) {
+              setCustomLogoUrl(null)
+            }
           } else {
-            setCustomLogoUrl(logoCache.logoUrl)
+            if (isMounted()) {
+              setCustomLogoUrl(logoCache.logoUrl)
+              setLogoVersion(logoCache.version)
+            }
           }
-          setHasChecked(true)
+          if (isMounted()) {
+            setHasChecked(true)
+          }
           clearInterval(checkInterval)
         }
       }, 50) // ✅ Reducir intervalo para respuesta más rápida
@@ -138,7 +147,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     }
 
     // ✅ PRIORIDAD 4: Si ya verificamos pero no hay logo (sin logoNotFound), no hacer nada
-    if (logoCache.hasChecked && !logoCache.logoUrl) {
+    if (logoCache.hasChecked && !logoCache.logoUrl && !logoCache.logoFilename) {
       setHasChecked(true)
       return
     }
@@ -189,23 +198,51 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                 if (headResponse.ok) {
                   // Logo existe, usar URL con timestamp
                   const logoUrl = `${logoPath}?t=${Date.now()}`
+                  
+                  // ✅ Verificar si el logo cambió comparando el filename
+                  const logoChanged = logoCache.logoFilename !== config.logo_filename
+                  
                   logoCache.logoUrl = logoUrl
                   logoCache.logoFilename = config.logo_filename // ✅ Guardar nombre del archivo
                   logoCache.logoNotFound = false // ✅ Resetear flag
                   logoCache.hasChecked = true
-                  logoCache.version += 1
+                  
+                  // ✅ Solo incrementar versión si el logo realmente cambió
+                  if (logoChanged) {
+                    logoCache.version += 1
+                  }
+                  
                   // ✅ Guardar metadatos en localStorage para persistencia
                   saveLogoMetadata(config.logo_filename)
+                  
                   if (isMounted()) {
-                    setCustomLogoUrl(logoUrl)
+                    // ✅ Actualizar inmediatamente si el logo cambió (filename diferente)
+                    // Si el logo no cambió, mantener el URL cacheado pero actualizar el timestamp para evitar caché del navegador
+                    if (logoChanged) {
+                      setCustomLogoUrl(logoUrl)
+                      setImageLoaded(false) // ✅ Resetear estado de carga cuando cambia el URL
+                      setLogoVersion(logoCache.version)
+                    } else if (logoCache.logoUrl) {
+                      // ✅ Mismo logo, pero actualizar URL con nuevo timestamp para evitar caché del navegador
+                      // Solo actualizar si el URL actual no tiene timestamp (para forzar recarga si es necesario)
+                      const currentUrl = logoCache.logoUrl
+                      if (!currentUrl.includes('?t=')) {
+                        setCustomLogoUrl(logoUrl)
+                      }
+                      // Si ya tiene timestamp, mantener el URL actual para evitar cambios visuales innecesarios
+                    }
                     setHasChecked(true)
-                    setImageLoaded(false) // ✅ Resetear estado de carga cuando cambia el URL
-                    setLogoVersion(logoCache.version)
                   }
                   clearTimeout(timeoutId)
                   logoCache.isChecking = false
-                  notifyLogoListeners(logoUrl, logoCache.version)
-                  console.debug('✅ Logo cargado desde configuración:', config.logo_filename)
+                  
+                  // ✅ Solo notificar si el logo cambió para evitar actualizaciones innecesarias
+                  if (logoChanged) {
+                    notifyLogoListeners(logoUrl, logoCache.version)
+                    console.debug('✅ Logo actualizado desde configuración:', config.logo_filename)
+                  } else {
+                    console.debug('✅ Logo verificado (sin cambios):', config.logo_filename)
+                  }
                   return
                 } else {
                   // Logo no existe (404), marcar como no encontrado
@@ -290,11 +327,32 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     // Listener para cambios en el caché compartido
     const handleCacheUpdate = (url: string | null, version: number) => {
       if (!isMounted()) return
-      console.debug('🔄 Actualizando logo desde caché compartido, versión:', version)
-      setCustomLogoUrl(url)
-      setHasChecked(true)
-      setImageLoaded(false) // ✅ Resetear estado de carga cuando se actualiza desde caché
-      setLogoVersion(version)
+      
+      // ✅ Extraer filename del URL para comparar si es el mismo logo
+      const currentFilename = logoCache.logoFilename
+      let newFilename: string | null = null
+      if (url) {
+        const urlMatch = url.match(/\/logo\/([^/?]+)/)
+        newFilename = urlMatch ? urlMatch[1] : null
+      }
+      
+      // ✅ Solo actualizar si el filename realmente cambió (no solo la versión)
+      const filenameChanged = newFilename !== currentFilename
+      const hadNoLogo = !currentFilename && !customLogoUrl
+      
+      if (filenameChanged || hadNoLogo) {
+        // ✅ Solo mostrar mensaje si el logo realmente cambió
+        if (filenameChanged && currentFilename) {
+          console.debug('🔄 Actualizando logo desde caché compartido, versión:', version, 'filename:', newFilename)
+        }
+        setCustomLogoUrl(url)
+        setImageLoaded(false) // ✅ Resetear estado de carga cuando se actualiza desde caché
+        setLogoVersion(version)
+        setHasChecked(true)
+      } else if (version > logoVersion) {
+        // ✅ Mismo logo, solo actualizar versión sin cambiar el URL (evita parpadeo)
+        setLogoVersion(version)
+      }
     }
 
     logoListeners.add(handleCacheUpdate)
