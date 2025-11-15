@@ -885,9 +885,6 @@ export function DashboardMenu() {
                       width={100}
                       tick={{ fontSize: 9 }}
                       interval={0}
-                      angle={-45}
-                      textAnchor="end"
-                      height={60}
                     />
                     <Tooltip 
                       formatter={(value: number) => [`${value} préstamos`, 'Cantidad']}

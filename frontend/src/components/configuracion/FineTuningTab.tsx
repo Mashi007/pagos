@@ -12,6 +12,7 @@ import {
   Upload,
   AlertCircle,
   MessageSquare,
+  Plus,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,65 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { aiTrainingService, ConversacionAI, FineTuningJob } from '@/services/aiTrainingService'
 import { toast } from 'sonner'
+
+// Estructura de tablas y campos de la base de datos
+const TABLAS_Y_CAMPOS: Record<string, string[]> = {
+  clientes: [
+    'id', 'cedula', 'nombres', 'telefono', 'email', 'direccion', 'fecha_nacimiento',
+    'ocupacion', 'estado', 'activo', 'fecha_registro', 'fecha_actualizacion',
+    'usuario_registro', 'notas'
+  ],
+  prestamos: [
+    'id', 'cliente_id', 'cedula', 'nombres', 'total_financiamiento', 'fecha_requerimiento',
+    'modalidad_pago', 'numero_cuotas', 'cuota_periodo', 'tasa_interes', 'fecha_base_calculo',
+    'producto', 'producto_financiero', 'estado', 'usuario_proponente', 'usuario_aprobador',
+    'fecha_registro', 'fecha_aprobacion', 'concesionario_id', 'analista_id', 'observaciones',
+    'monto_inicial', 'saldo_pendiente', 'total_pagado', 'dias_morosidad', 'monto_morosidad'
+  ],
+  cuotas: [
+    'id', 'prestamo_id', 'numero_cuota', 'fecha_vencimiento', 'monto_cuota', 'capital',
+    'interes', 'saldo_pendiente', 'estado', 'fecha_pago', 'monto_pagado', 'total_pagado',
+    'dias_morosidad', 'monto_morosidad', 'dias_vencido', 'fecha_registro', 'fecha_actualizacion',
+    'numero_documento', 'metodo_pago', 'observaciones', 'usuario_registro', 'usuario_pago',
+    'fecha_ultimo_pago', 'monto_pendiente', 'monto_mora', 'interes_mora'
+  ],
+  pagos: [
+    'id', 'prestamo_id', 'cedula', 'fecha_pago', 'monto_pagado', 'numero_documento',
+    'metodo_pago', 'observaciones', 'usuario_registro', 'fecha_registro', 'activo',
+    'cuota_id', 'monto_capital', 'monto_interes', 'monto_mora', 'saldo_anterior',
+    'saldo_actual', 'referencia_pago', 'banco', 'numero_cuenta', 'tipo_transaccion',
+    'estado_pago', 'fecha_confirmacion', 'usuario_confirmacion', 'comprobante_url',
+    'monto_efectivo', 'monto_transferencia', 'monto_cheque', 'monto_tarjeta',
+    'numero_cheque', 'banco_cheque', 'fecha_cheque', 'numero_tarjeta', 'tipo_tarjeta',
+    'autorizacion_tarjeta', 'monto_devolucion', 'motivo_devolucion', 'fecha_devolucion'
+  ],
+  notificaciones: [
+    'id', 'cliente_id', 'prestamo_id', 'tipo', 'estado', 'fecha_envio', 'fecha_vencimiento',
+    'canal', 'contenido', 'asunto', 'destinatario', 'usuario_envio', 'fecha_registro',
+    'fecha_lectura', 'leido', 'respuesta', 'metadata'
+  ],
+  users: [
+    'id', 'email', 'nombre', 'apellido', 'rol', 'is_admin', 'activo', 'fecha_registro',
+    'fecha_actualizacion', 'ultimo_acceso', 'password_hash', 'telefono', 'departamento'
+  ],
+  concesionarios: [
+    'id', 'nombre', 'direccion', 'telefono', 'email', 'contacto', 'activo',
+    'fecha_registro', 'fecha_actualizacion', 'codigo', 'ciudad', 'region'
+  ],
+  analistas: [
+    'id', 'nombre', 'email', 'telefono', 'activo', 'fecha_registro', 'fecha_actualizacion',
+    'codigo', 'departamento', 'cargo', 'usuario_id'
+  ],
+  configuracion_sistema: [
+    'id', 'categoria', 'clave', 'valor', 'tipo_dato', 'descripcion', 'activo',
+    'fecha_registro', 'fecha_actualizacion', 'usuario_registro'
+  ],
+  documentos_ai: [
+    'id', 'titulo', 'descripcion', 'contenido_texto', 'contenido_procesado', 'activo',
+    'fecha_registro', 'fecha_actualizacion', 'usuario_registro', 'tipo_documento',
+    'metadata', 'tokens_estimados'
+  ]
+}
 
 export function FineTuningTab() {
   const [conversaciones, setConversaciones] = useState<ConversacionAI[]>([])
@@ -51,6 +111,78 @@ export function FineTuningTab() {
   const [nuevaRespuesta, setNuevaRespuesta] = useState('')
   const [guardandoConversacion, setGuardandoConversacion] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Estados para insertar tablas y campos
+  const [tablaSeleccionada, setTablaSeleccionada] = useState<string>('')
+  const [campoSeleccionado, setCampoSeleccionado] = useState<string>('')
+  const [textareaActivo, setTextareaActivo] = useState<'pregunta' | 'respuesta' | null>(null)
+  const preguntaTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const respuestaTextareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Obtener campos disponibles según la tabla seleccionada
+  const camposDisponibles = tablaSeleccionada ? (TABLAS_Y_CAMPOS[tablaSeleccionada] || []) : []
+
+  // Limpiar campo seleccionado cuando cambia la tabla
+  useEffect(() => {
+    if (tablaSeleccionada && campoSeleccionado && !camposDisponibles.includes(campoSeleccionado)) {
+      setCampoSeleccionado('')
+    }
+  }, [tablaSeleccionada, campoSeleccionado, camposDisponibles])
+
+  // Función para insertar tabla o campo en el textarea activo
+  const insertarEnTextarea = (texto: string) => {
+    let textarea: HTMLTextAreaElement | null = null
+    let setter: (value: string) => void
+
+    // Determinar qué textarea usar
+    if (textareaActivo === 'pregunta' || (document.activeElement === preguntaTextareaRef.current)) {
+      textarea = preguntaTextareaRef.current
+      setter = setNuevaPregunta
+    } else if (textareaActivo === 'respuesta' || (document.activeElement === respuestaTextareaRef.current)) {
+      textarea = respuestaTextareaRef.current
+      setter = setNuevaRespuesta
+    } else {
+      // Si no hay textarea activo, usar el de pregunta por defecto
+      textarea = preguntaTextareaRef.current
+      setter = setNuevaPregunta
+    }
+
+    if (textarea) {
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      const valorActual = textarea.value
+      const nuevoValor = valorActual.substring(0, start) + texto + valorActual.substring(end)
+      
+      setter(nuevoValor)
+      
+      // Restaurar el foco y posición del cursor
+      setTimeout(() => {
+        textarea?.focus()
+        const nuevaPosicion = start + texto.length
+        textarea?.setSelectionRange(nuevaPosicion, nuevaPosicion)
+      }, 0)
+    }
+  }
+
+  // Función para insertar tabla
+  const handleInsertarTabla = () => {
+    if (!tablaSeleccionada) {
+      toast.warning('Selecciona una tabla primero')
+      return
+    }
+    insertarEnTextarea(tablaSeleccionada)
+    setTablaSeleccionada('')
+  }
+
+  // Función para insertar campo
+  const handleInsertarCampo = () => {
+    if (!campoSeleccionado) {
+      toast.warning('Selecciona un campo primero')
+      return
+    }
+    insertarEnTextarea(campoSeleccionado)
+    setCampoSeleccionado('')
+  }
 
   const cargarConversaciones = async () => {
     setCargando(true)
@@ -199,6 +331,9 @@ export function FineTuningTab() {
       toast.success('Conversación creada exitosamente')
       setNuevaPregunta('')
       setNuevaRespuesta('')
+      setTablaSeleccionada('')
+      setCampoSeleccionado('')
+      setTextareaActivo(null)
       setMostrarFormNuevaConversacion(false)
       cargarConversaciones()
     } catch (error: any) {
@@ -425,27 +560,110 @@ export function FineTuningTab() {
                   setMostrarFormNuevaConversacion(false)
                   setNuevaPregunta('')
                   setNuevaRespuesta('')
+                  setTablaSeleccionada('')
+                  setCampoSeleccionado('')
+                  setTextareaActivo(null)
                 }}
               >
                 <XCircle className="h-4 w-4" />
               </Button>
             </div>
             <div className="space-y-4">
+              {/* Selector de Tablas y Campos */}
+              <Card className="bg-gray-50 border-gray-200">
+                <CardContent className="pt-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <MessageSquare className="h-4 w-4 text-gray-600" />
+                    <h5 className="text-sm font-semibold text-gray-700">Insertar Tablas y Campos</h5>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Selector de Tablas */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-600">Tabla</label>
+                      <div className="flex gap-2">
+                        <Select value={tablaSeleccionada} onValueChange={setTablaSeleccionada}>
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder="Selecciona una tabla" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.keys(TABLAS_Y_CAMPOS).map((tabla) => (
+                              <SelectItem key={tabla} value={tabla}>
+                                {tabla}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleInsertarTabla}
+                          disabled={!tablaSeleccionada}
+                          className="shrink-0"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Insertar
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Selector de Campos */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-600">Campo</label>
+                      <div className="flex gap-2">
+                        <Select
+                          value={campoSeleccionado}
+                          onValueChange={setCampoSeleccionado}
+                          disabled={!tablaSeleccionada}
+                        >
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder={tablaSeleccionada ? "Selecciona un campo" : "Selecciona tabla primero"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {camposDisponibles.map((campo) => (
+                              <SelectItem key={campo} value={campo}>
+                                {campo}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleInsertarCampo}
+                          disabled={!campoSeleccionado}
+                          className="shrink-0"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Insertar
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-3">
+                    💡 Tip: Haz clic en el campo de Pregunta o Respuesta donde quieras insertar, luego selecciona la tabla/campo y presiona Insertar.
+                  </p>
+                </CardContent>
+              </Card>
+
               <div>
                 <label className="text-sm font-medium mb-2 block">Pregunta *</label>
                 <Textarea
+                  ref={preguntaTextareaRef}
                   placeholder="Ej: ¿Cuál es el proceso para solicitar un préstamo?"
                   value={nuevaPregunta}
                   onChange={(e) => setNuevaPregunta(e.target.value)}
+                  onFocus={() => setTextareaActivo('pregunta')}
                   rows={3}
                 />
               </div>
               <div>
                 <label className="text-sm font-medium mb-2 block">Respuesta *</label>
                 <Textarea
+                  ref={respuestaTextareaRef}
                   placeholder="Ej: Para solicitar un préstamo necesitas..."
                   value={nuevaRespuesta}
                   onChange={(e) => setNuevaRespuesta(e.target.value)}
+                  onFocus={() => setTextareaActivo('respuesta')}
                   rows={5}
                 />
               </div>
@@ -469,6 +687,9 @@ export function FineTuningTab() {
                     setMostrarFormNuevaConversacion(false)
                     setNuevaPregunta('')
                     setNuevaRespuesta('')
+                    setTablaSeleccionada('')
+                    setCampoSeleccionado('')
+                    setTextareaActivo(null)
                   }}
                 >
                   Cancelar
