@@ -11,6 +11,7 @@ from slowapi.util import get_remote_address
 
 logger = logging.getLogger(__name__)
 
+
 # Función personalizada para obtener IP del cliente
 # Considera proxies y headers X-Forwarded-For
 def get_client_ip(request) -> str:
@@ -24,13 +25,13 @@ def get_client_ip(request) -> str:
         client_ip = forwarded_for.split(",")[0].strip()
         logger.debug(f"IP desde X-Forwarded-For: {client_ip}")
         return client_ip
-    
+
     # Verificar header X-Real-IP (usado por algunos proxies)
     real_ip = request.headers.get("X-Real-IP")
     if real_ip:
         logger.debug(f"IP desde X-Real-IP: {real_ip}")
         return real_ip
-    
+
     # Usar función por defecto de slowapi que maneja request.client
     return get_remote_address(request)
 
@@ -65,4 +66,3 @@ RATE_LIMITS = {
     "public": "100/minute",  # Límite más permisivo para endpoints públicos
     "strict": "10/minute",  # Límite muy estricto para operaciones críticas
 }
-

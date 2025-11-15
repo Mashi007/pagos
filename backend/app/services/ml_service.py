@@ -272,10 +272,10 @@ class MLService:
                     max_depth=10,
                     random_state=random_state,
                     n_jobs=-1,
-                    class_weight='balanced',  # Manejar desbalance de clases
+                    class_weight="balanced",  # Manejar desbalance de clases
                 )
                 logger.info("Entrenando modelo Random Forest...")
-                
+
             elif algoritmo == "xgboost":
                 if not XGBOOST_AVAILABLE or XGBClassifier is None:
                     raise ValueError("xgboost no está disponible. Instala con: pip install xgboost")
@@ -285,12 +285,12 @@ class MLService:
                     learning_rate=0.1,
                     random_state=random_state,
                     n_jobs=-1,
-                    tree_method='hist',  # Más rápido y eficiente en memoria
-                    eval_metric='mlogloss',  # Para clasificación multiclase
+                    tree_method="hist",  # Más rápido y eficiente en memoria
+                    eval_metric="mlogloss",  # Para clasificación multiclase
                     use_label_encoder=False,
                 )
                 logger.info("Entrenando modelo XGBoost...")
-                
+
             elif algoritmo == "neural_network":
                 if not SKLEARN_AVAILABLE or MLPClassifier is None:
                     raise ValueError("scikit-learn no está disponible. Instala con: pip install scikit-learn")
@@ -300,10 +300,10 @@ class MLService:
                 hidden_layer_sizes = (max(50, n_features * 2), max(25, n_features))
                 model = MLPClassifier(
                     hidden_layer_sizes=hidden_layer_sizes,
-                    activation='relu',
-                    solver='adam',
+                    activation="relu",
+                    solver="adam",
                     alpha=0.0001,  # Regularización L2
-                    learning_rate='adaptive',
+                    learning_rate="adaptive",
                     max_iter=500,
                     random_state=random_state,
                     early_stopping=True,
@@ -312,7 +312,7 @@ class MLService:
                     tol=1e-4,
                 )
                 logger.info(f"Entrenando modelo Neural Network con capas {hidden_layer_sizes}...")
-                
+
             else:
                 # Por defecto usar Random Forest si el algoritmo no es reconocido
                 logger.warning(f"Algoritmo '{algoritmo}' no reconocido. Usando Random Forest por defecto.")
@@ -323,7 +323,7 @@ class MLService:
                     max_depth=10,
                     random_state=random_state,
                     n_jobs=-1,
-                    class_weight='balanced',
+                    class_weight="balanced",
                 )
 
             model.fit(X_train_scaled, y_train)

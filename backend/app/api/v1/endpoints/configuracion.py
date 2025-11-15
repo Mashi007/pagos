@@ -3225,11 +3225,7 @@ def listar_variables_prompt_ai(
         )
 
     try:
-        variables = (
-            db.query(AIPromptVariable)
-            .order_by(AIPromptVariable.orden.asc(), AIPromptVariable.variable.asc())
-            .all()
-        )
+        variables = db.query(AIPromptVariable).order_by(AIPromptVariable.orden.asc(), AIPromptVariable.variable.asc()).all()
         return {
             "variables": [var.to_dict() for var in variables],
             "total": len(variables),
@@ -5976,11 +5972,7 @@ async def chat_ai(
         # Obtener variables personalizadas activas
         variables_personalizadas = {}
         try:
-            vars_activas = (
-                db.query(AIPromptVariable)
-                .filter(AIPromptVariable.activo.is_(True))
-                .all()
-            )
+            vars_activas = db.query(AIPromptVariable).filter(AIPromptVariable.activo.is_(True)).all()
             # Por ahora, las variables personalizadas se reemplazarán con valores vacíos
             # En el futuro se puede implementar lógica específica para cada variable
             for var in vars_activas:
