@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, RotateCcw, Copy } from 'lucide-react'
+import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, RotateCcw, Copy, Settings, GraduationCap } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1183,32 +1183,51 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
   return (
     <div className="space-y-6">
-      {/* Información */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Brain className="h-5 w-5 text-blue-600" />
-          <h3 className="font-semibold text-blue-900">Configuración de Inteligencia Artificial</h3>
+      {/* Información mejorada */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 shadow-sm">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2 bg-blue-100 rounded-lg">
+            <Brain className="h-6 w-6 text-blue-600" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg text-blue-900">Configuración de Inteligencia Artificial</h3>
+            <p className="text-sm text-blue-700 mt-1">
+              Configura ChatGPT para respuestas automáticas contextualizadas en WhatsApp usando tus documentos como base de conocimiento.
+            </p>
+          </div>
         </div>
-        <p className="text-sm text-blue-700">
-          Configura ChatGPT para respuestas automáticas contextualizadas en WhatsApp usando tus documentos como base de conocimiento.
-        </p>
       </div>
 
-      {/* Tabs con 3 pestañas */}
+      {/* Tabs con 3 pestañas - diseño mejorado */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="configuracion">Configuración</TabsTrigger>
-          <TabsTrigger value="entrenamiento">Entrenamiento</TabsTrigger>
-          <TabsTrigger value="sistema-hibrido">
-            <Zap className="h-4 w-4 mr-1" />
+        <TabsList className="grid w-full grid-cols-3 bg-gray-100/50 p-1 rounded-lg">
+          <TabsTrigger 
+            value="configuracion" 
+            className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
+          >
+            <Settings className="h-4 w-4" />
+            Configuración
+          </TabsTrigger>
+          <TabsTrigger 
+            value="entrenamiento"
+            className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
+          >
+            <GraduationCap className="h-4 w-4" />
+            Entrenamiento
+          </TabsTrigger>
+          <TabsTrigger 
+            value="sistema-hibrido"
+            className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
+          >
+            <Zap className="h-4 w-4" />
             Sistema Híbrido
           </TabsTrigger>
         </TabsList>
 
         {/* Pestaña 1: Configuración */}
-        <TabsContent value="configuracion" className="space-y-4">
+        <TabsContent value="configuracion" className="space-y-4 mt-6">
           {/* ✅ Toggle Activar/Desactivar AI */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <label className="text-sm font-semibold text-gray-900 block mb-1">
@@ -1257,7 +1276,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
           {/* ✅ Estado: Configuración correcta */}
           {config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-') && configuracionCorrecta && (
-            <div className="bg-white border-2 border-green-500 rounded-lg p-4">
+            <div className="bg-white border-2 border-green-500 rounded-xl p-5 shadow-sm">
               <div className="flex items-center gap-3">
                 {/* Semáforo Verde */}
                 <div className="flex flex-col items-center gap-1 flex-shrink-0">
@@ -1279,7 +1298,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
           {/* ⚠️ Estado: API Key no válida o no configurada */}
           {config.openai_api_key?.trim() && !configuracionCorrecta && !verificandoConfig && (
-            <div className="bg-white border-2 border-amber-400 rounded-lg p-4">
+            <div className="bg-white border-2 border-amber-400 rounded-xl p-5 shadow-sm">
               <div className="flex items-center gap-3">
                 {/* Semáforo Amarillo */}
                 <div className="flex flex-col items-center gap-1 flex-shrink-0">
@@ -1303,7 +1322,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
           {/* ❌ Estado: No configurado */}
           {(!config.openai_api_key?.trim() || !config.openai_api_key.startsWith('sk-')) && (
-            <div className="bg-white border-2 border-red-500 rounded-lg p-4">
+            <div className="bg-white border-2 border-red-500 rounded-xl p-5 shadow-sm">
               <div className="flex items-center gap-3">
                 {/* Semáforo Rojo */}
                 <div className="flex flex-col items-center gap-1 flex-shrink-0">
@@ -1323,7 +1342,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
             </div>
           )}
 
-          <Card>
+          <Card className="shadow-sm border-gray-200">
             <CardContent className="pt-6 space-y-4">
               <div>
                 <label className="text-sm font-medium block mb-2">OpenAI API Key <span className="text-red-500">*</span></label>
@@ -1437,7 +1456,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
           {/* Chat de Prueba de AI */}
           <div className="border-t pt-4 mt-4">
-            <Card className="border-2">
+            <Card className="border-2 shadow-sm border-gray-200">
               <CardContent className="pt-6 p-0">
                 {/* Header del Chat */}
                 <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-t-lg">
@@ -1601,10 +1620,10 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
         </TabsContent>
 
         {/* Pestaña 2: Entrenamiento de Prompt */}
-        <TabsContent value="entrenamiento" className="space-y-4">
-          <Card>
+        <TabsContent value="entrenamiento" className="space-y-4 mt-6">
+          <Card className="shadow-sm border-gray-200">
             <CardContent className="pt-6 space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 shadow-sm">
                 <div className="flex items-start gap-2">
                   <Brain className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
@@ -1623,23 +1642,35 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
         </TabsContent>
 
         {/* Pestaña 3: Sistema Híbrido */}
-        <TabsContent value="sistema-hibrido" className="space-y-4">
+        <TabsContent value="sistema-hibrido" className="space-y-4 mt-6">
           <Tabs value={activeHybridTab} onValueChange={setActiveHybridTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="dashboard">
-                <BarChart3 className="h-4 w-4 mr-2" />
+            <TabsList className="grid w-full grid-cols-4 bg-gray-100/50 p-1 rounded-lg">
+              <TabsTrigger 
+                value="dashboard"
+                className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
+              >
+                <BarChart3 className="h-4 w-4" />
                 Dashboard
               </TabsTrigger>
-              <TabsTrigger value="fine-tuning">
-                <Brain className="h-4 w-4 mr-2" />
+              <TabsTrigger 
+                value="fine-tuning"
+                className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
+              >
+                <Brain className="h-4 w-4" />
                 Fine-tuning
               </TabsTrigger>
-              <TabsTrigger value="rag">
-                <Zap className="h-4 w-4 mr-2" />
+              <TabsTrigger 
+                value="rag"
+                className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
+              >
+                <Zap className="h-4 w-4" />
                 RAG
               </TabsTrigger>
-              <TabsTrigger value="ml-riesgo">
-                <Brain className="h-4 w-4 mr-2" />
+              <TabsTrigger 
+                value="ml-riesgo"
+                className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
+              >
+                <Brain className="h-4 w-4" />
                 ML Riesgo
               </TabsTrigger>
             </TabsList>
