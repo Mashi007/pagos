@@ -12,11 +12,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.models.ai_prompt_variable import AIPromptVariable
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.configuracion_sistema import ConfiguracionSistema
 from app.models.documento_ai import DocumentoAI
-from app.models.ai_prompt_variable import AIPromptVariable
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
