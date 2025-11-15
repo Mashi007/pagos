@@ -2973,22 +2973,49 @@ def procesar_documento_ai(
 
         # Intentar resolver la ruta (puede ser relativa o absoluta)
         ruta_archivo = Path(documento.ruta_archivo)
+        archivo_encontrado = False
 
-        # Si la ruta es relativa, intentar resolverla desde UPLOAD_DIR
-        if not ruta_archivo.is_absolute():
+        # Estrategia 1: Si la ruta es absoluta y existe, usarla directamente
+        if ruta_archivo.is_absolute() and ruta_archivo.exists():
+            ruta_archivo = ruta_archivo.resolve()
+            archivo_encontrado = True
+        else:
+            # Estrategia 2: Intentar resolver desde UPLOAD_DIR
             if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
                 base_upload_dir = Path(settings.UPLOAD_DIR).resolve()
             else:
                 base_upload_dir = Path("uploads").resolve()
-            ruta_archivo = (base_upload_dir / documento.ruta_archivo).resolve()
-        else:
-            ruta_archivo = ruta_archivo.resolve()
+            
+            # Si la ruta guardada es relativa, usarla directamente
+            if not ruta_archivo.is_absolute():
+                ruta_intento = (base_upload_dir / documento.ruta_archivo).resolve()
+            else:
+                # Si es absoluta pero no existe, intentar reconstruir desde el nombre del archivo
+                nombre_archivo = documento.nombre_archivo or Path(documento.ruta_archivo).name
+                upload_dir = base_upload_dir / "documentos_ai"
+                ruta_intento = upload_dir / nombre_archivo
+            
+            if ruta_intento.exists():
+                ruta_archivo = ruta_intento
+                archivo_encontrado = True
+            else:
+                # Estrategia 3: Buscar por nombre de archivo en el directorio de documentos_ai
+                upload_dir = base_upload_dir / "documentos_ai"
+                if upload_dir.exists():
+                    nombre_archivo = documento.nombre_archivo or Path(documento.ruta_archivo).name
+                    # Buscar archivos que coincidan con el nombre o UUID
+                    for archivo_en_dir in upload_dir.iterdir():
+                        if archivo_en_dir.is_file() and (archivo_en_dir.name == nombre_archivo or archivo_en_dir.name.endswith(Path(nombre_archivo).suffix)):
+                            ruta_archivo = archivo_en_dir.resolve()
+                            archivo_encontrado = True
+                            logger.info(f"✅ Archivo encontrado por búsqueda: {ruta_archivo}")
+                            break
 
-        if not ruta_archivo.exists():
-            logger.error(f"❌ Archivo no encontrado: {ruta_archivo} (ruta original: {documento.ruta_archivo})")
+        if not archivo_encontrado or not ruta_archivo.exists():
+            logger.error(f"❌ Archivo no encontrado: {ruta_archivo} (ruta original: {documento.ruta_archivo}, nombre: {documento.nombre_archivo})")
             raise HTTPException(
                 status_code=400,
-                detail=f"El archivo físico no existe en la ruta: {ruta_archivo}. El archivo puede haber sido eliminado o movido. Ruta original en BD: {documento.ruta_archivo}",
+                detail=f"El archivo físico no existe. Se buscó en: {ruta_archivo}. El archivo puede haber sido eliminado o movido. Ruta original en BD: {documento.ruta_archivo}",
             )
 
         # Verificar que el archivo no esté vacío

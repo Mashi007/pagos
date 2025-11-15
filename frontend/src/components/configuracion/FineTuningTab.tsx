@@ -582,9 +582,9 @@ export function FineTuningTab() {
                           </SelectTrigger>
                           <SelectContent>
                             {Object.keys(tablasYCampos).length === 0 ? (
-                              <SelectItem value="" disabled>
+                              <div className="px-2 py-1.5 text-sm text-gray-500">
                                 {cargandoTablasCampos ? 'Cargando tablas...' : 'No hay tablas disponibles'}
-                              </SelectItem>
+                              </div>
                             ) : (
                               Object.keys(tablasYCampos).map((tabla) => (
                                 <SelectItem key={tabla} value={tabla}>
