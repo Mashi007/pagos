@@ -56,12 +56,17 @@ def run_migrations() -> None:
                     for head in heads:
                         logger.info(f"📌 Actualizando a head: {head.revision}")
                         command.upgrade(alembic_cfg, head.revision)
-            except Exception:
+            except Exception as merge_error:
                 # Si falla, intentar actualizar a todos los heads
+                logger.warning(f"⚠️ Error al actualizar merge point: {merge_error}")
                 logger.info(f"⚠️ Múltiples heads detectados ({len(heads)}), actualizando todos...")
                 for head in heads:
-                    logger.info(f"📌 Actualizando a head: {head.revision}")
-                    command.upgrade(alembic_cfg, head.revision)
+                    try:
+                        logger.info(f"📌 Actualizando a head: {head.revision}")
+                        command.upgrade(alembic_cfg, head.revision)
+                    except Exception as head_error:
+                        logger.error(f"❌ Error actualizando head {head.revision}: {head_error}")
+                        raise
         else:
             # Un solo head, actualizar normalmente
             command.upgrade(alembic_cfg, "head")
