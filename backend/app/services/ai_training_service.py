@@ -28,55 +28,76 @@ class AITrainingService:
     def _detectar_feedback_negativo(self, feedback: Optional[str]) -> bool:
         """
         Detectar si el feedback es negativo usando palabras clave
-        
+
         Args:
             feedback: Texto del feedback
-            
+
         Returns:
             True si el feedback es negativo, False en caso contrario
         """
         if not feedback:
             return False
-        
+
         feedback_lower = feedback.lower()
-        
+
         # Palabras clave que indican feedback negativo
         palabras_negativas = [
-            "mal", "malo", "incorrecto", "error", "equivocado", "confuso",
-            "no entendí", "no entiendo", "poco claro", "poco clara",
-            "incompleto", "incompleta", "faltante", "falta", "deficiente",
-            "mejorar", "debería", "deberia", "podría", "podria", "sería mejor",
-            "no me gusta", "no me sirve", "no ayuda", "no es útil",
-            "muy técnico", "muy técnica", "demasiado complejo", "compleja",
-            "no responde", "no contesta", "no es lo que busco", "no es lo que necesito"
+            "mal",
+            "malo",
+            "incorrecto",
+            "error",
+            "equivocado",
+            "confuso",
+            "no entendí",
+            "no entiendo",
+            "poco claro",
+            "poco clara",
+            "incompleto",
+            "incompleta",
+            "faltante",
+            "falta",
+            "deficiente",
+            "mejorar",
+            "debería",
+            "deberia",
+            "podría",
+            "podria",
+            "sería mejor",
+            "no me gusta",
+            "no me sirve",
+            "no ayuda",
+            "no es útil",
+            "muy técnico",
+            "muy técnica",
+            "demasiado complejo",
+            "compleja",
+            "no responde",
+            "no contesta",
+            "no es lo que busco",
+            "no es lo que necesito",
         ]
-        
+
         # Contar palabras negativas
         conteo_negativo = sum(1 for palabra in palabras_negativas if palabra in feedback_lower)
-        
+
         # Si hay 2 o más palabras negativas, considerar feedback negativo
         return conteo_negativo >= 2
 
-    async def mejorar_respuesta_con_feedback(
-        self, pregunta: str, respuesta: str, feedback: Optional[str]
-    ) -> Dict[str, str]:
+    async def mejorar_respuesta_con_feedback(self, pregunta: str, respuesta: str, feedback: Optional[str]) -> Dict[str, str]:
         """
         Mejorar una respuesta usando el feedback proporcionado
-        
+
         Args:
             pregunta: Pregunta original
             respuesta: Respuesta original
             feedback: Feedback del usuario sobre la respuesta
-            
+
         Returns:
             Dict con respuesta_mejorada y mejoras_aplicadas
         """
         if not feedback:
-            return {
-                "respuesta_mejorada": respuesta,
-                "mejoras_aplicadas": ["No hay feedback para aplicar"]
-            }
-        
+            return {"respuesta_mejorada": respuesta, "mejoras_aplicadas": ["No hay feedback para aplicar"]}
+
         try:
             prompt_sistema = """Eres un experto en mejorar respuestas de IA basándote en feedback de usuarios.
 
@@ -132,15 +153,13 @@ Por favor, mejora la respuesta incorporando el feedback. Responde SOLO con el JS
                 if response.status_code != 200:
                     error_msg = response.text
                     logger.error(f"Error en OpenAI API mejorando con feedback: {error_msg}")
-                    return {
-                        "respuesta_mejorada": respuesta,
-                        "mejoras_aplicadas": ["Error al mejorar con feedback"]
-                    }
+                    return {"respuesta_mejorada": respuesta, "mejoras_aplicadas": ["Error al mejorar con feedback"]}
 
                 result = response.json()
                 contenido = result["choices"][0]["message"]["content"].strip()
 
                 import json
+
                 try:
                     if contenido.startswith("```json"):
                         contenido = contenido.replace("```json", "").replace("```", "").strip()
@@ -149,9 +168,7 @@ Por favor, mejora la respuesta incorporando el feedback. Responde SOLO con el JS
 
                     datos_mejorados = json.loads(contenido)
 
-                    logger.info(
-                        f"✅ Respuesta mejorada con feedback. Mejoras: {datos_mejorados.get('mejoras_aplicadas', [])}"
-                    )
+                    logger.info(f"✅ Respuesta mejorada con feedback. Mejoras: {datos_mejorados.get('mejoras_aplicadas', [])}")
 
                     return {
                         "respuesta_mejorada": datos_mejorados.get("respuesta_mejorada", respuesta),
@@ -159,19 +176,15 @@ Por favor, mejora la respuesta incorporando el feedback. Responde SOLO con el JS
                     }
                 except json.JSONDecodeError as e:
                     logger.error(f"Error parseando JSON de OpenAI: {e}. Contenido: {contenido}")
-                    return {
-                        "respuesta_mejorada": respuesta,
-                        "mejoras_aplicadas": ["Error al parsear respuesta de IA"]
-                    }
+                    return {"respuesta_mejorada": respuesta, "mejoras_aplicadas": ["Error al parsear respuesta de IA"]}
 
         except Exception as e:
             logger.error(f"Error mejorando respuesta con feedback: {e}", exc_info=True)
-            return {
-                "respuesta_mejorada": respuesta,
-                "mejoras_aplicadas": [f"Error: {str(e)}"]
-            }
+            return {"respuesta_mejorada": respuesta, "mejoras_aplicadas": [f"Error: {str(e)}"]}
 
-    async def preparar_datos_entrenamiento(self, conversaciones: List[Dict], filtrar_feedback_negativo: bool = True) -> Dict[str, str]:
+    async def preparar_datos_entrenamiento(
+        self, conversaciones: List[Dict], filtrar_feedback_negativo: bool = True
+    ) -> Dict[str, str]:
         """
         Preparar datos en formato JSONL para fine-tuning
 
@@ -186,41 +199,37 @@ Por favor, mejora la respuesta incorporando el feedback. Responde SOLO con el JS
             conversaciones_originales = len(conversaciones)
             conversaciones_filtradas = []
             conversaciones_excluidas = []
-            
+
             # Filtrar conversaciones con feedback negativo si está habilitado
             for conv in conversaciones:
                 feedback = conv.get("feedback")
-                
+
                 if filtrar_feedback_negativo and self._detectar_feedback_negativo(feedback):
-                    conversaciones_excluidas.append({
-                        "id": conv.get("id"),
-                        "razon": "Feedback negativo detectado",
-                        "feedback": feedback
-                    })
+                    conversaciones_excluidas.append(
+                        {"id": conv.get("id"), "razon": "Feedback negativo detectado", "feedback": feedback}
+                    )
                     continue
-                
+
                 conversaciones_filtradas.append(conv)
-            
+
             if len(conversaciones_filtradas) < 10:
                 raise Exception(
                     f"Después del filtrado, solo quedan {len(conversaciones_filtradas)} conversaciones. "
                     f"Se necesitan al menos 10. Se excluyeron {len(conversaciones_excluidas)} conversaciones con feedback negativo."
                 )
-            
+
             # Convertir conversaciones a formato JSONL
             jsonl_lines = []
             for conv in conversaciones_filtradas:
                 # Mejorar respuesta con feedback si existe
                 feedback = conv.get("feedback")
                 respuesta = conv["respuesta"]
-                
+
                 if feedback and not self._detectar_feedback_negativo(feedback):
                     # Mejorar respuesta usando feedback positivo
-                    mejora_result = await self.mejorar_respuesta_con_feedback(
-                        conv["pregunta"], respuesta, feedback
-                    )
+                    mejora_result = await self.mejorar_respuesta_con_feedback(conv["pregunta"], respuesta, feedback)
                     respuesta = mejora_result["respuesta_mejorada"]
-                
+
                 # Formato requerido por OpenAI para fine-tuning
                 training_example = {
                     "messages": [
@@ -271,16 +280,14 @@ Por favor, mejora la respuesta incorporando el feedback. Responde SOLO con el JS
             logger.error(f"Error preparando datos de entrenamiento: {e}", exc_info=True)
             raise
 
-    async def mejorar_conversacion_para_entrenamiento(
-        self, pregunta: str, respuesta: str
-    ) -> Dict[str, str]:
+    async def mejorar_conversacion_para_entrenamiento(self, pregunta: str, respuesta: str) -> Dict[str, str]:
         """
         Mejorar pregunta y respuesta usando IA para optimizar el entrenamiento
-        
+
         Args:
             pregunta: Pregunta original
             respuesta: Respuesta original
-            
+
         Returns:
             Dict con pregunta_mejorada y respuesta_mejorada
         """
@@ -359,6 +366,7 @@ Por favor, mejora ambos textos siguiendo las instrucciones del sistema. Responde
 
                 # Intentar parsear JSON
                 import json
+
                 try:
                     # Limpiar el contenido si tiene markdown code blocks
                     if contenido.startswith("```json"):

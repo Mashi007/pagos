@@ -324,43 +324,39 @@ async def obtener_estadisticas_feedback(
     """Obtener estadísticas sobre feedback de conversaciones"""
     try:
         from sqlalchemy import func, case
-        
+
         # Total de conversaciones
         total_conversaciones = db.query(ConversacionAI).count()
-        
+
         # Conversaciones con calificación
-        conversaciones_calificadas = db.query(ConversacionAI).filter(
-            ConversacionAI.calificacion.isnot(None)
-        ).count()
-        
+        conversaciones_calificadas = db.query(ConversacionAI).filter(ConversacionAI.calificacion.isnot(None)).count()
+
         # Conversaciones con feedback
-        conversaciones_con_feedback = db.query(ConversacionAI).filter(
-            ConversacionAI.feedback.isnot(None),
-            ConversacionAI.feedback != ""
-        ).count()
-        
+        conversaciones_con_feedback = (
+            db.query(ConversacionAI).filter(ConversacionAI.feedback.isnot(None), ConversacionAI.feedback != "").count()
+        )
+
         # Distribución de calificaciones
-        distribucion_calificaciones = db.query(
-            ConversacionAI.calificacion,
-            func.count(ConversacionAI.id).label('cantidad')
-        ).filter(
-            ConversacionAI.calificacion.isnot(None)
-        ).group_by(ConversacionAI.calificacion).all()
-        
+        distribucion_calificaciones = (
+            db.query(ConversacionAI.calificacion, func.count(ConversacionAI.id).label("cantidad"))
+            .filter(ConversacionAI.calificacion.isnot(None))
+            .group_by(ConversacionAI.calificacion)
+            .all()
+        )
+
         distribucion = {str(cal): cant for cal, cant in distribucion_calificaciones}
-        
+
         # Análisis de feedback (usar servicio para detectar negativo)
         # Crear instancia temporal solo para usar el método de detección
         temp_service = AITrainingService("dummy")  # No necesitamos API key para detección
-        conversaciones_con_feedback_list = db.query(ConversacionAI).filter(
-            ConversacionAI.feedback.isnot(None),
-            ConversacionAI.feedback != ""
-        ).all()
-        
+        conversaciones_con_feedback_list = (
+            db.query(ConversacionAI).filter(ConversacionAI.feedback.isnot(None), ConversacionAI.feedback != "").all()
+        )
+
         feedback_positivo = 0
         feedback_negativo = 0
         feedback_neutro = 0
-        
+
         for conv in conversaciones_con_feedback_list:
             if temp_service._detectar_feedback_negativo(conv.feedback):
                 feedback_negativo += 1
@@ -368,22 +364,21 @@ async def obtener_estadisticas_feedback(
                 feedback_positivo += 1
             else:
                 feedback_neutro += 1
-        
+
         # Conversaciones listas para entrenamiento (4+ estrellas, sin feedback negativo)
-        conversaciones_listas = db.query(ConversacionAI).filter(
-            ConversacionAI.calificacion.isnot(None),
-            ConversacionAI.calificacion >= 4
-        ).all()
-        
+        conversaciones_listas = (
+            db.query(ConversacionAI).filter(ConversacionAI.calificacion.isnot(None), ConversacionAI.calificacion >= 4).all()
+        )
+
         listas_sin_feedback_negativo = 0
         listas_con_feedback_negativo = 0
-        
+
         for conv in conversaciones_listas:
             if conv.feedback and temp_service._detectar_feedback_negativo(conv.feedback):
                 listas_con_feedback_negativo += 1
             else:
                 listas_sin_feedback_negativo += 1
-        
+
         return {
             "total_conversaciones": total_conversaciones,
             "conversaciones_calificadas": conversaciones_calificadas,
@@ -393,16 +388,16 @@ async def obtener_estadisticas_feedback(
                 "positivo": feedback_positivo,
                 "negativo": feedback_negativo,
                 "neutro": feedback_neutro,
-                "total": conversaciones_con_feedback
+                "total": conversaciones_con_feedback,
             },
             "conversaciones_listas_entrenamiento": {
                 "total": len(conversaciones_listas),
                 "sin_feedback_negativo": listas_sin_feedback_negativo,
                 "con_feedback_negativo": listas_con_feedback_negativo,
-                "puede_preparar": listas_sin_feedback_negativo >= 10
-            }
+                "puede_preparar": listas_sin_feedback_negativo >= 10,
+            },
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas de feedback: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error obteniendo estadísticas: {str(e)}")
@@ -502,8 +497,7 @@ async def preparar_datos_entrenamiento(
         service = AITrainingService(openai_api_key)
         conversaciones_data = [c.to_dict() for c in conversaciones]
         result = await service.preparar_datos_entrenamiento(
-            conversaciones_data,
-            filtrar_feedback_negativo=request.filtrar_feedback_negativo
+            conversaciones_data, filtrar_feedback_negativo=request.filtrar_feedback_negativo
         )
 
         return result
