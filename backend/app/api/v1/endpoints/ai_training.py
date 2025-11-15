@@ -18,8 +18,8 @@ from app.models.conversacion_ai import ConversacionAI
 from app.models.documento_ai import DocumentoAI
 from app.models.documento_embedding import DocumentoEmbedding
 from app.models.fine_tuning_job import FineTuningJob
-from app.models.modelo_riesgo import ModeloRiesgo
 from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
+from app.models.modelo_riesgo import ModeloRiesgo
 from app.models.user import User
 from app.services.ai_training_service import AITrainingService
 from app.services.rag_service import RAGService
@@ -1151,9 +1151,10 @@ async def entrenar_modelo_impago(
         raise HTTPException(status_code=403, detail="Solo administradores pueden entrenar modelos ML")
 
     try:
+        from datetime import date
+
         from app.models.amortizacion import Cuota
         from app.models.prestamo import Prestamo
-        from datetime import date
 
         # Obtener todos los préstamos aprobados con cuotas
         prestamos = (
@@ -1305,9 +1306,10 @@ async def predecir_impago(
 ):
     """Predecir probabilidad de impago de cuotas futuras para un préstamo"""
     try:
+        from datetime import date
+
         from app.models.amortizacion import Cuota
         from app.models.prestamo import Prestamo
-        from datetime import date
 
         # Obtener modelo activo
         modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
