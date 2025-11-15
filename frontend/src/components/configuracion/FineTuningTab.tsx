@@ -87,6 +87,7 @@ export function FineTuningTab() {
   // Cargar tablas y campos al montar el componente
   useEffect(() => {
     cargarTablasCampos()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Limpiar campo seleccionado cuando cambia la tabla

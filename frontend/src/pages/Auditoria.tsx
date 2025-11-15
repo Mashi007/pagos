@@ -29,19 +29,23 @@ export function Auditoria() {
     orden: 'desc'
   })
 
-  // Cargar auditoría al montar el componente y auto-actualizar (polling cada 30 min)
+  // Cargar auditoría cuando cambian los filtros o la página
   useEffect(() => {
     cargarAuditoria()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, filtros.usuario_email, filtros.modulo, filtros.accion, filtros.fecha_desde, filtros.fecha_hasta, filtros.ordenar_por, filtros.orden])
+
+  // Cargar estadísticas solo una vez al montar y luego con polling
+  useEffect(() => {
     cargarEstadisticas()
 
     const interval = setInterval(() => {
-      cargarAuditoria()
       cargarEstadisticas()
     }, 30 * 60 * 1000) // 30 minutos
 
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, filtros.usuario_email, filtros.modulo, filtros.accion, filtros.fecha_desde, filtros.fecha_hasta])
+  }, [])
 
   const cargarAuditoria = async () => {
     try {
