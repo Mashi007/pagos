@@ -5,28 +5,57 @@ import type { Plugin } from 'vite'
 
 // Plugin para eliminar modulepreload de chunks pesados (lazy loading)
 function removeHeavyChunksPreload(): Plugin {
+  const heavyChunks = ['exceljs', 'pdf-export']
+  
   return {
     name: 'remove-heavy-chunks-preload',
+    generateBundle(options, bundle) {
+      // ✅ Marcar chunks pesados para que no se incluyan en modulepreload
+      Object.keys(bundle).forEach(fileName => {
+        const chunk = bundle[fileName]
+        if (chunk.type === 'chunk') {
+          const isHeavyChunk = heavyChunks.some(name => 
+            fileName.includes(name) || chunk.name?.includes(name)
+          )
+          if (isHeavyChunk) {
+            // Marcar el chunk para que no se precargue
+            chunk.modulePreload = false
+          }
+        }
+      })
+    },
     transformIndexHtml(html) {
       // ✅ Eliminar TODOS los modulepreload para exceljs y pdf-export (carga bajo demanda)
       // Esto evita que el navegador precargue estos chunks automáticamente
       let modifiedHtml = html
       
-      // Eliminar modulepreload para exceljs
+      // Eliminar modulepreload para exceljs (múltiples patrones)
       modifiedHtml = modifiedHtml.replace(
-        /<link[^>]*rel=["']modulepreload["'][^>]*(exceljs|exceljs-)[^>]*>/gi,
+        /<link[^>]*rel=["']modulepreload["'][^>]*exceljs[^>]*>/gi,
+        ''
+      )
+      modifiedHtml = modifiedHtml.replace(
+        /<link[^>]*exceljs[^>]*rel=["']modulepreload["'][^>]*>/gi,
         ''
       )
       
-      // Eliminar modulepreload para pdf-export
+      // Eliminar modulepreload para pdf-export (múltiples patrones)
       modifiedHtml = modifiedHtml.replace(
         /<link[^>]*rel=["']modulepreload["'][^>]*(pdf-export|jspdf|html2canvas)[^>]*>/gi,
+        ''
+      )
+      modifiedHtml = modifiedHtml.replace(
+        /<link[^>]*(pdf-export|jspdf|html2canvas)[^>]*rel=["']modulepreload["'][^>]*>/gi,
         ''
       )
       
       // ✅ También eliminar cualquier preload que pueda estar causando la carga prematura
       modifiedHtml = modifiedHtml.replace(
-        /<link[^>]*rel=["']preload["'][^>]*(exceljs|pdf-export)[^>]*>/gi,
+        /<link[^>]*rel=["']preload["'][^>]*(exceljs|pdf-export|jspdf|html2canvas)[^>]*>/gi,
+        ''
+      )
+      modifiedHtml = modifiedHtml.replace(
+        /<link[^>]*(exceljs|pdf-export|jspdf|html2canvas)[^>]*rel=["']preload["'][^>]*>/gi,
         ''
       )
       
@@ -62,6 +91,9 @@ export default defineConfig({
     },
   },
   build: {
+    // ✅ Deshabilitar completamente modulePreload para evitar precarga automática
+    // Los chunks pesados se cargarán solo cuando se necesiten (lazy loading)
+    modulePreload: false, // Deshabilitar completamente modulePreload
     rollupOptions: {
       output: {
         // ✅ Deshabilitar modulePreload para chunks pesados
