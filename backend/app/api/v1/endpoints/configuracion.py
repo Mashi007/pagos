@@ -3661,13 +3661,13 @@ def obtener_tablas_campos(
         from sqlalchemy.engine import reflection
 
         inspector = reflection.Inspector.from_engine(db.bind)
-        
+
         # Obtener todas las tablas
         todas_tablas = inspector.get_table_names()
-        
+
         # Construir diccionario de tablas y campos
         tablas_campos: Dict[str, list[str]] = {}
-        
+
         for tabla in sorted(todas_tablas):
             try:
                 # Obtener columnas de la tabla
@@ -3679,7 +3679,7 @@ def obtener_tablas_campos(
                 logger.warning(f"Error obteniendo campos de tabla {tabla}: {e}")
                 # Si hay error, agregar tabla vacía
                 tablas_campos[tabla] = []
-        
+
         return {
             "tablas_campos": tablas_campos,
             "total_tablas": len(todas_tablas),
