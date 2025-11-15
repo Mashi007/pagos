@@ -2533,6 +2533,45 @@ def obtener_kpis_principales(
             columns=query_analysis["columns"],
         )
 
+        # ✅ Calcular cuotas programadas (suma de monto_cuota de todas las cuotas)
+        from app.utils.filtros_dashboard import FiltrosDashboard
+        
+        query_cuotas_programadas = (
+            db.query(func.sum(Cuota.monto_cuota))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(Prestamo.estado == "APROBADO")
+        )
+        query_cuotas_programadas = FiltrosDashboard.aplicar_filtros_cuota(
+            query_cuotas_programadas, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+        total_cuotas_programadas = float(query_cuotas_programadas.scalar() or 0)
+        
+        # ✅ Calcular porcentaje de cuotas pagadas
+        query_cuotas_pagadas = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Cuota.estado == "PAGADO"
+            )
+        )
+        query_cuotas_pagadas = FiltrosDashboard.aplicar_filtros_cuota(
+            query_cuotas_pagadas, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+        total_cuotas_pagadas = query_cuotas_pagadas.scalar() or 0
+        
+        query_total_cuotas = (
+            db.query(func.count(Cuota.id))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(Prestamo.estado == "APROBADO")
+        )
+        query_total_cuotas = FiltrosDashboard.aplicar_filtros_cuota(
+            query_total_cuotas, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+        total_cuotas = query_total_cuotas.scalar() or 0
+        
+        porcentaje_cuotas_pagadas = (total_cuotas_pagadas / total_cuotas * 100) if total_cuotas > 0 else 0.0
+
         logger.info(f"📊 [kpis-principales] Completado en {total_time}ms (query: {query_time}ms)")
 
         # ✅ ALERTA: Si la query es muy lenta (con info de BD y campos)
@@ -2599,6 +2638,10 @@ def obtener_kpis_principales(
                 "variacion_porcentual": round(variacion_morosidad, 2),
                 "variacion_absoluta": variacion_morosidad_abs,
             },
+            "cuotas_programadas": {
+                "valor_actual": total_cuotas_programadas,
+            },
+            "porcentaje_cuotas_pagadas": round(porcentaje_cuotas_pagadas, 2),
             "mes_actual": nombres_meses[mes_actual - 1],
             "mes_anterior": nombres_meses[mes_anterior - 1],
         }

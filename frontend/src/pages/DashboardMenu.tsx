@@ -103,6 +103,8 @@ export function DashboardMenu() {
           finalizados: { valor_actual: number; variacion_porcentual: number }
         }
         total_morosidad_usd: { valor_actual: number; variacion_porcentual: number }
+        cuotas_programadas?: { valor_actual: number }
+        porcentaje_cuotas_pagadas?: number
       }
       return response
     },
@@ -485,20 +487,85 @@ export function DashboardMenu() {
   const evolucionMensual = datosDashboard?.evolucion_mensual || []
   const COLORS_CONCESIONARIOS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1']
 
-  // Calcular el dominio del eje Y para el gráfico de tendencia
-  const yAxisDomainTendencia = useMemo(() => {
-    if (!datosTendencia || datosTendencia.length === 0) {
-      return [0, 'auto'] as [number, 'auto']
+  // Procesar datos de financiamiento por rangos en bandas de $200 USD
+  const datosBandas200 = useMemo(() => {
+    if (!datosFinanciamientoRangos?.rangos || datosFinanciamientoRangos.rangos.length === 0) {
+      return []
     }
-    const allValues = datosTendencia.flatMap(d => [
-      d.monto_nuevos || 0,
-      d.monto_cuotas_programadas || 0,
-      d.monto_pagado || 0,
-      d.morosidad_mensual || 0
-    ])
-    const maxValue = allValues.length > 0 ? Math.max(...allValues, 0) : 0
-    return maxValue > 0 ? [0, maxValue * 1.1] as [number, number] : [0, 'auto'] as [number, 'auto']
-  }, [datosTendencia])
+
+    // Crear bandas de $200 USD
+    const bandas: Record<string, number> = {}
+    const maxMonto = Math.max(...datosFinanciamientoRangos.rangos.map(r => {
+      // Extraer el monto máximo del rango
+      const match = r.categoria.match(/\$(\d+)/g)
+      if (match) {
+        const montos = match.map(m => parseInt(m.replace('$', '').replace(/,/g, '')))
+        return Math.max(...montos)
+      }
+      return 0
+    }))
+
+    // Inicializar todas las bandas de $200 desde $0 hasta el máximo
+    for (let i = 0; i <= maxMonto; i += 200) {
+      const bandaMax = i + 200
+      const etiqueta = bandaMax > maxMonto && i > 0 
+        ? `$${i.toLocaleString()}+` 
+        : `$${i.toLocaleString()} - $${bandaMax.toLocaleString()}`
+      bandas[etiqueta] = 0
+    }
+
+    // Distribuir los préstamos de los rangos existentes en las nuevas bandas de $200
+    datosFinanciamientoRangos.rangos.forEach(rango => {
+      const cantidad = rango.cantidad_prestamos
+      const montoPromedio = rango.monto_total / (cantidad || 1)
+      
+      // Extraer límites del rango
+      const match = rango.categoria.match(/\$(\d+)/g)
+      if (match) {
+        const montos = match.map(m => parseInt(m.replace('$', '').replace(/,/g, '')))
+        const minRango = montos[0] || 0
+        const maxRango = rango.categoria.includes('+') ? maxMonto : (montos[1] || montos[0] + 300)
+        
+        // Distribuir proporcionalmente en las bandas de $200
+        for (let i = 0; i <= maxMonto; i += 200) {
+          const bandaMin = i
+          const bandaMax = i + 200
+          
+          // Calcular intersección entre el rango y la banda
+          const interseccionMin = Math.max(bandaMin, minRango)
+          const interseccionMax = Math.min(bandaMax, maxRango)
+          
+          if (interseccionMin < interseccionMax) {
+            const porcentaje = (interseccionMax - interseccionMin) / (maxRango - minRango)
+            const cantidadAsignada = Math.round(cantidad * porcentaje)
+            
+            const etiqueta = bandaMax > maxMonto && i > 0 
+              ? `$${i.toLocaleString()}+` 
+              : `$${i.toLocaleString()} - $${bandaMax.toLocaleString()}`
+            
+            if (bandas[etiqueta] !== undefined) {
+              bandas[etiqueta] += cantidadAsignada
+            }
+          }
+        }
+      }
+    })
+
+    // Convertir a array y ordenar por monto (ascendente)
+    return Object.entries(bandas)
+      .map(([categoria, cantidad]) => {
+        // Extraer el monto mínimo para ordenar
+        const match = categoria.match(/\$(\d+)/)
+        const montoMin = match ? parseInt(match[1].replace(/,/g, '')) : 0
+        return {
+          categoria,
+          cantidad,
+          montoMin
+        }
+      })
+      .filter(item => item.cantidad > 0) // Solo mostrar bandas con datos
+      .sort((a, b) => a.montoMin - b.montoMin)
+  }, [datosFinanciamientoRangos])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -613,17 +680,16 @@ export function DashboardMenu() {
                   format="number"
                 />
             <KpiCardLarge
-              title="Total Clientes"
-              value={kpisPrincipales.total_clientes.valor_actual}
-              variation={kpisPrincipales.total_clientes.variacion_porcentual !== undefined ? {
-                percent: kpisPrincipales.total_clientes.variacion_porcentual,
-                label: 'vs mes anterior'
-              } : undefined}
-              icon={Users}
+              title="Cuotas Programadas"
+              value={kpisPrincipales.cuotas_programadas?.valor_actual || 0}
+              subtitle={kpisPrincipales.porcentaje_cuotas_pagadas !== undefined 
+                ? `% Cuotas pagadas: ${kpisPrincipales.porcentaje_cuotas_pagadas.toFixed(1)}%`
+                : undefined}
+              icon={FileText}
               color="text-blue-600"
               bgColor="bg-blue-100"
               borderColor="border-blue-500"
-              format="number"
+              format="currency"
             />
                   <KpiCardLarge
                     title="Morosidad Total"
@@ -643,181 +709,202 @@ export function DashboardMenu() {
 
         {/* GRÁFICOS PRINCIPALES */}
         {loadingDashboard ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {[1, 2].map((i) => (
-              <div key={i} className="h-[400px] bg-gray-100 rounded-xl animate-pulse" />
-            ))}
+          <div className="space-y-6">
+            <div className="h-[400px] bg-gray-100 rounded-xl animate-pulse" />
+            <div className="h-[400px] bg-gray-100 rounded-xl animate-pulse" />
           </div>
         ) : datosDashboard ? (
+          <div className="space-y-6">
+            {/* Gráfico de Evolución Mensual */}
+            {evolucionMensual.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-6"
               >
-            {/* Gráfico de Evolución Mensual */}
-            {evolucionMensual.length > 0 && (
                 <Card className="shadow-lg border-2 border-gray-200">
                   <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b-2 border-cyan-200">
                     <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <LineChart className="h-6 w-6 text-cyan-600" />
-                    <span>Evolución Mensual</span>
+                      <LineChart className="h-6 w-6 text-cyan-600" />
+                      <span>Evolución Mensual</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <ComposedChart data={evolucionMensual}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="mes" />
-                      <YAxis yAxisId="left" />
-                      <YAxis yAxisId="right" orientation="right" />
-                      <Tooltip />
-                      <Legend />
-                      <Bar yAxisId="left" dataKey="cartera" fill="#3b82f6" name="Cartera" />
-                      <Bar yAxisId="left" dataKey="cobrado" fill="#10b981" name="Cobrado" />
-                      <Line yAxisId="right" type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" />
+                    <ResponsiveContainer width="100%" height={300}>
+                      <ComposedChart data={evolucionMensual}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="mes" />
+                        <YAxis yAxisId="left" />
+                        <YAxis yAxisId="right" orientation="right" />
+                        <Tooltip />
+                        <Legend />
+                        <Bar yAxisId="left" dataKey="cartera" fill="#3b82f6" name="Cartera" />
+                        <Bar yAxisId="left" dataKey="cobrado" fill="#10b981" name="Cobrado" />
+                        <Line yAxisId="right" type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </CardContent>
                 </Card>
+              </motion.div>
             )}
 
-            {/* Gráfico de Áreas - Indicadores Financieros */}
+            {/* Gráfico de Áreas - Indicadores Financieros - Ancho Completo */}
             {datosTendencia && datosTendencia.length > 0 && (
-              <Card className="shadow-lg border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b-2 border-green-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <DollarSign className="h-6 w-6 text-green-600" />
-                    <span>Indicadores Financieros</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <ResponsiveContainer width="100%" height={400}>
-                    <AreaChart data={datosTendencia} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorFinanciamiento" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                        </linearGradient>
-                        <linearGradient id="colorPagosProgramados" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
-                        </linearGradient>
-                        <linearGradient id="colorPagosReales" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
-                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1}/>
-                        </linearGradient>
-                        <linearGradient id="colorMorosidad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
-                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="mes" 
-                        tick={{ fontSize: 12 }}
-                        angle={-45}
-                        textAnchor="end"
-                        height={80}
-                      />
-                      <YAxis 
-                        tick={{ fontSize: 12 }}
-                        tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
-                        label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft' }}
-                      />
-                      <Tooltip 
-                        formatter={(value: number, name: string) => {
-                          const labels: Record<string, string> = {
-                            'monto_nuevos': 'Total Financiamiento',
-                            'monto_cuotas_programadas': 'Total Pagos Programados',
-                            'monto_pagado': 'Total Pagos Reales',
-                            'morosidad_mensual': 'Morosidad'
-                          }
-                          return [formatCurrency(value), labels[name] || name]
-                        }}
-                        labelFormatter={(label) => `Mes: ${label}`}
-                      />
-                      <Legend />
-                      <Area 
-                        type="monotone" 
-                        dataKey="monto_nuevos" 
-                        stroke="#3b82f6" 
-                        fillOpacity={0.6}
-                        fill="url(#colorFinanciamiento)" 
-                        name="Total Financiamiento"
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="monto_cuotas_programadas" 
-                        stroke="#10b981" 
-                        fillOpacity={0.6}
-                        fill="url(#colorPagosProgramados)" 
-                        name="Total Pagos Programados"
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="monto_pagado" 
-                        stroke="#f59e0b" 
-                        fillOpacity={0.6}
-                        fill="url(#colorPagosReales)" 
-                        name="Total Pagos Reales"
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="morosidad_mensual" 
-                        stroke="#ef4444" 
-                        fillOpacity={0.6}
-                        fill="url(#colorMorosidad)" 
-                        name="Morosidad"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            )}
-            </motion.div>
-        ) : null}
-
-        {/* GRÁFICOS SECUNDARIOS - TENDENCIA Y DISTRIBUCIONES */}
-        {datosTendencia && datosTendencia.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
+                transition={{ delay: 0.35 }}
               >
                 <Card className="shadow-lg border-2 border-gray-200">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+                  <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b-2 border-green-200">
                     <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                  <LineChart className="h-6 w-6 text-blue-600" />
-                  <span>Tendencia de Financiamiento</span>
+                      <DollarSign className="h-6 w-6 text-green-600" />
+                      <span>Indicadores Financieros</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">
-                      <ResponsiveContainer width="100%" height={350}>
-                  <AreaChart data={datosTendencia}>
-                    <defs>
-                      <linearGradient id="colorMontoNuevos" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1} />
-                      </linearGradient>
-                      <linearGradient id="colorMontoPagado" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.1} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="mes" />
-                    <YAxis />
-                    <Tooltip />
-                          <Legend />
-                    <Area type="monotone" dataKey="monto_nuevos" stroke="#3b82f6" fillOpacity={1} fill="url(#colorMontoNuevos)" name="Monto Nuevos" />
-                    <Area type="monotone" dataKey="monto_pagado" stroke="#10b981" fillOpacity={1} fill="url(#colorMontoPagado)" name="Monto Pagado" />
-                    <Line type="monotone" dataKey="morosidad_mensual" stroke="#ef4444" strokeWidth={2} name="Morosidad Mensual" />
-                  </AreaChart>
-                      </ResponsiveContainer>
+                    <ResponsiveContainer width="100%" height={400}>
+                      <AreaChart data={datosTendencia} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorFinanciamiento" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                          </linearGradient>
+                          <linearGradient id="colorPagosProgramados" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
+                          </linearGradient>
+                          <linearGradient id="colorPagosReales" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1}/>
+                          </linearGradient>
+                          <linearGradient id="colorMorosidad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis 
+                          dataKey="mes" 
+                          tick={{ fontSize: 12 }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                        />
+                        <YAxis 
+                          tick={{ fontSize: 12 }}
+                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
+                          label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft' }}
+                        />
+                        <Tooltip 
+                          formatter={(value: number, name: string) => {
+                            const labels: Record<string, string> = {
+                              'monto_nuevos': 'Total Financiamiento',
+                              'monto_cuotas_programadas': 'Total Pagos Programados',
+                              'monto_pagado': 'Total Pagos Reales',
+                              'morosidad_mensual': 'Morosidad'
+                            }
+                            return [formatCurrency(value), labels[name] || name]
+                          }}
+                          labelFormatter={(label) => `Mes: ${label}`}
+                        />
+                        <Legend />
+                        <Area 
+                          type="monotone" 
+                          dataKey="monto_nuevos" 
+                          stroke="#3b82f6" 
+                          fillOpacity={0.6}
+                          fill="url(#colorFinanciamiento)" 
+                          name="Total Financiamiento"
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="monto_cuotas_programadas" 
+                          stroke="#10b981" 
+                          fillOpacity={0.6}
+                          fill="url(#colorPagosProgramados)" 
+                          name="Total Pagos Programados"
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="monto_pagado" 
+                          stroke="#f59e0b" 
+                          fillOpacity={0.6}
+                          fill="url(#colorPagosReales)" 
+                          name="Total Pagos Reales"
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="morosidad_mensual" 
+                          stroke="#ef4444" 
+                          fillOpacity={0.6}
+                          fill="url(#colorMorosidad)" 
+                          name="Morosidad"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
                   </CardContent>
                 </Card>
               </motion.div>
+            )}
+          </div>
+        ) : null}
+
+        {/* GRÁFICO DE BANDAS DE $200 USD */}
+        {datosBandas200 && datosBandas200.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="w-full lg:w-1/2"
+          >
+            <Card className="shadow-lg border-2 border-gray-200">
+              <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b-2 border-indigo-200">
+                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                  <BarChart3 className="h-6 w-6 text-indigo-600" />
+                  <span>Distribución por Bandas de $200 USD</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart 
+                    data={datosBandas200} 
+                    layout="vertical"
+                    margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      type="number"
+                      domain={[0, 'dataMax']}
+                      tick={{ fontSize: 11 }}
+                      label={{ value: 'Cantidad de Préstamos', position: 'insideBottom', offset: -5 }}
+                    />
+                    <YAxis 
+                      type="category"
+                      dataKey="categoria"
+                      width={100}
+                      tick={{ fontSize: 9 }}
+                      interval={0}
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <Tooltip 
+                      formatter={(value: number) => [`${value} préstamos`, 'Cantidad']}
+                      labelFormatter={(label) => `Banda: ${label}`}
+                    />
+                    <Legend />
+                    <Bar 
+                      dataKey="cantidad" 
+                      fill="#6366f1"
+                      radius={[0, 4, 4, 0]}
+                      name="Cantidad de Préstamos"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </motion.div>
         )}
 
         {/* GRÁFICOS DE DISTRIBUCIÓN */}

@@ -89,9 +89,6 @@ export function KpiCardLarge({
               <h3 className={`${titleSize} font-bold text-gray-700 uppercase tracking-tight leading-tight line-clamp-2`}>
                 {title}
               </h3>
-              {subtitle && (
-                <p className="text-xs md:text-sm text-gray-500 mt-1">{subtitle}</p>
-              )}
             </div>
           </div>
         </div>
@@ -128,6 +125,13 @@ export function KpiCardLarge({
             </div>
           )}
         </div>
+
+        {/* Subtitle en la parte inferior izquierda */}
+        {subtitle && (
+          <div className="mt-auto pt-3">
+            <p className="text-xs md:text-sm text-gray-600 font-medium">{subtitle}</p>
+          </div>
+        )}
 
         {/* Decoración sutil en la esquina inferior */}
         <div className={`absolute bottom-0 right-0 w-20 h-20 ${bgColor} opacity-5 rounded-tl-full -mr-10 -mb-10`}></div>
