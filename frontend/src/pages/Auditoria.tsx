@@ -89,10 +89,24 @@ export function Auditoria() {
 
   const cargarEstadisticas = async () => {
     try {
+      console.log('📊 Cargando estadísticas de auditoría...')
       const response = await auditoriaService.obtenerEstadisticas()
+      console.log('✅ Estadísticas recibidas:', response)
       setStats(response)
-    } catch (err) {
+    } catch (err: any) {
       console.error('❌ Error cargando estadísticas:', err)
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Error al cargar estadísticas'
+      console.error('❌ Detalles del error:', errorMessage)
+      // Establecer valores por defecto en caso de error
+      setStats({
+        total_acciones: 0,
+        acciones_por_modulo: {},
+        acciones_por_usuario: {},
+        acciones_hoy: 0,
+        acciones_esta_semana: 0,
+        acciones_este_mes: 0,
+      })
+      // No mostrar toast para no molestar al usuario, solo log
     }
   }
 
