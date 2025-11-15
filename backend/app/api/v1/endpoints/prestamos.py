@@ -20,6 +20,7 @@ from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.prestamo import Prestamo
 from app.models.prestamo_auditoria import PrestamoAuditoria
 from app.models.user import User
+from app.models.modelo_riesgo import ModeloRiesgo
 from app.schemas.prestamo import (
     PrestamoCreate,
     PrestamoResponse,
@@ -1074,9 +1075,141 @@ def _actualizar_estado_evaluado(prestamo: Prestamo, prestamo_id: int, db: Sessio
         logger.info(f"Préstamo {prestamo_id} cambiado a estado EVALUADO después de evaluación de riesgo")
 
 
-def _construir_respuesta_evaluacion(evaluacion, prestamo_id: int) -> dict:
+def _obtener_prediccion_ml(prestamo: Prestamo, datos_evaluacion: dict, db: Session) -> Optional[dict]:
+    """
+    Obtiene predicción de riesgo del modelo ML activo si está disponible.
+    Retorna None si no hay modelo activo o hay error.
+    """
+    try:
+        # Verificar si hay modelo ML activo
+        modelo_activo = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo == True).first()
+        if not modelo_activo:
+            logger.info("No hay modelo ML activo, omitiendo predicción ML")
+            return None
+
+        # Verificar que MLService esté disponible
+        try:
+            from app.services.ml_service import MLService, ML_SERVICE_AVAILABLE
+            if not ML_SERVICE_AVAILABLE or MLService is None:
+                logger.warning("MLService no disponible, omitiendo predicción ML")
+                return None
+        except ImportError:
+            logger.warning("MLService no disponible (scikit-learn no instalado), omitiendo predicción ML")
+            return None
+
+        # Cargar modelo
+        ml_service = MLService()
+        if not ml_service.load_model_from_path(modelo_activo.ruta_archivo):
+            logger.warning(f"Error cargando modelo ML desde {modelo_activo.ruta_archivo}")
+            return None
+
+        # Obtener datos del cliente para la predicción
+        cliente = prestamo.cliente
+        if not cliente:
+            logger.warning("No se encontró cliente para predicción ML")
+            return None
+
+        # Calcular edad
+        edad = datos_evaluacion.get('edad', 0)
+        if not edad and cliente.fecha_nacimiento:
+            from datetime import date
+            hoy = date.today()
+            edad = (hoy - cliente.fecha_nacimiento).days // 365
+
+        # Obtener préstamos previos del cliente
+        prestamos_previos = (
+            db.query(Prestamo)
+            .filter(
+                and_(
+                    Prestamo.cliente_id == prestamo.cliente_id,
+                    Prestamo.id < prestamo.id,
+                )
+            )
+            .count()
+        )
+
+        # Calcular días desde último préstamo
+        from datetime import date
+        dias_ultimo_prestamo = 0
+        if prestamos_previos > 0:
+            ultimo_prestamo = (
+                db.query(Prestamo)
+                .filter(
+                    and_(
+                        Prestamo.cliente_id == prestamo.cliente_id,
+                        Prestamo.id < prestamo.id,
+                    )
+                )
+                .order_by(Prestamo.fecha_registro.desc())
+                .first()
+            )
+            if ultimo_prestamo and ultimo_prestamo.fecha_registro:
+                dias_ultimo_prestamo = (date.today() - ultimo_prestamo.fecha_registro.date()).days
+
+        # Calcular historial de pagos (simplificado: porcentaje de préstamos pagados)
+        from app.models.pago import Pago
+        from app.models.amortizacion import Cuota
+        
+        total_pagado = 0
+        total_debe = 0
+        
+        # Obtener todos los préstamos del cliente
+        prestamos_cliente = db.query(Prestamo).filter(Prestamo.cliente_id == prestamo.cliente_id).all()
+        for p in prestamos_cliente:
+            if p.total_financiamiento:
+                total_debe += float(p.total_financiamiento)
+            pagos = db.query(Pago).filter(Pago.prestamo_id == p.id).all()
+            for pago in pagos:
+                if pago.monto_pagado:
+                    total_pagado += float(pago.monto_pagado)
+        
+        historial_pagos = total_pagado / total_debe if total_debe > 0 else 0.95  # Default si no hay historial
+
+        # Calcular deuda total y ratio
+        ingresos = float(datos_evaluacion.get('ingresos_mensuales', 0))
+        otras_deudas = float(datos_evaluacion.get('otras_deudas', 0))
+        deuda_total = otras_deudas + float(prestamo.total_financiamiento or 0)
+        ratio_deuda_ingreso = deuda_total / ingresos if ingresos > 0 else 0
+
+        # Preparar datos para predicción ML
+        client_data = {
+            "age": int(edad) if edad else 0,
+            "income": ingresos,
+            "debt_total": deuda_total,
+            "debt_ratio": ratio_deuda_ingreso,
+            "credit_score": historial_pagos,
+            "dias_ultimo_prestamo": dias_ultimo_prestamo,
+            "numero_prestamos_previos": prestamos_previos,
+        }
+
+        # Predecir
+        prediccion = ml_service.predict_risk(client_data)
+
+        logger.info(
+            f"Predicción ML obtenida: Riesgo={prediccion.get('risk_level')}, "
+            f"Confianza={prediccion.get('confidence', 0):.2%}"
+        )
+
+        return {
+            "riesgo_level": prediccion.get("risk_level", "Desconocido"),
+            "confidence": float(prediccion.get("confidence", 0)),
+            "recommendation": prediccion.get("recommendation", ""),
+            "features_used": prediccion.get("features_used", {}),
+            "modelo_usado": {
+                "nombre": modelo_activo.nombre,
+                "version": modelo_activo.version,
+                "algoritmo": modelo_activo.algoritmo,
+                "accuracy": float(modelo_activo.accuracy) if modelo_activo.accuracy else None,
+            },
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo predicción ML: {e}", exc_info=True)
+        return None
+
+
+def _construir_respuesta_evaluacion(evaluacion, prestamo_id: int, prediccion_ml: Optional[dict] = None) -> dict:
     """Construye la respuesta completa de evaluación con todos los detalles"""
-    return {
+    respuesta = {
         "prestamo_id": prestamo_id,
         "puntuacion_total": float(evaluacion.puntuacion_total or 0),
         "clasificacion_riesgo": evaluacion.clasificacion_riesgo,
@@ -1153,6 +1286,12 @@ def _construir_respuesta_evaluacion(evaluacion, prestamo_id: int) -> dict:
             },
         },
     }
+    
+    # Agregar predicción ML si está disponible
+    if prediccion_ml:
+        respuesta["prediccion_ml"] = prediccion_ml
+    
+    return respuesta
 
 
 @router.post("/{prestamo_id}/evaluar-riesgo")
@@ -1193,6 +1332,9 @@ def evaluar_riesgo_prestamo(
         evaluacion = crear_evaluacion_prestamo(datos_evaluacion, db)
         _actualizar_estado_evaluado(prestamo, prestamo_id, db)
 
+        # Obtener predicción ML si hay modelo activo
+        prediccion_ml = _obtener_prediccion_ml(prestamo, datos_evaluacion, db)
+
         if evaluacion.decision_final == "APROBADO_AUTOMATICO":
             logger.info(
                 f"Préstamo {prestamo_id} es candidato para aprobación "
@@ -1203,7 +1345,7 @@ def evaluar_riesgo_prestamo(
                 "Usar endpoint '/aplicar-condiciones-aprobacion' para aprobar manualmente."
             )
 
-        return _construir_respuesta_evaluacion(evaluacion, prestamo_id)
+        return _construir_respuesta_evaluacion(evaluacion, prestamo_id, prediccion_ml)
 
     except Exception as e:
         logger.error(f"Error evaluando riesgo: {str(e)}")

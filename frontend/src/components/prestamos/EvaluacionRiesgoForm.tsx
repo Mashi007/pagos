@@ -11,7 +11,9 @@ import {
   MapPin,
   Users,
   Calendar,
-  DollarSign
+  DollarSign,
+  Brain,
+  Shield
 } from 'lucide-react'
 import {
   Popover,
@@ -1412,6 +1414,118 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     <p className="text-sm">{resultado.requisitos_adicionales}</p>
                     </div>
                 )}
+
+                {/* Predicción ML */}
+                {resultado.prediccion_ml && (
+                  <Card className="border-purple-200 bg-purple-50/50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-purple-700">
+                        <Brain className="h-5 w-5" />
+                        Predicción de Machine Learning
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-sm text-gray-600 mb-1">Nivel de Riesgo ML</div>
+                          <Badge 
+                            className={`text-lg ${
+                              resultado.prediccion_ml.riesgo_level === 'Bajo' 
+                                ? 'bg-green-600 text-white' 
+                                : resultado.prediccion_ml.riesgo_level === 'Medio'
+                                ? 'bg-yellow-600 text-white'
+                                : 'bg-red-600 text-white'
+                            }`}
+                          >
+                            <Shield className="h-4 w-4 mr-1" />
+                            {resultado.prediccion_ml.riesgo_level}
+                          </Badge>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-600 mb-1">Confianza</div>
+                          <div className="text-2xl font-bold text-purple-600">
+                            {(resultado.prediccion_ml.confidence * 100).toFixed(1)}%
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {resultado.prediccion_ml.recommendation && (
+                        <div className="bg-white p-3 rounded border border-purple-200">
+                          <div className="text-sm font-medium text-gray-700 mb-1">Recomendación ML:</div>
+                          <p className="text-sm text-gray-600">{resultado.prediccion_ml.recommendation}</p>
+                        </div>
+                      )}
+
+                      {resultado.prediccion_ml.modelo_usado && (
+                        <div className="bg-white p-3 rounded border border-purple-200">
+                          <div className="text-xs text-gray-500 mb-2">Modelo utilizado:</div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="text-gray-600">Nombre:</span>{' '}
+                              <span className="font-semibold">{resultado.prediccion_ml.modelo_usado.nombre}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Versión:</span>{' '}
+                              <span className="font-semibold">v{resultado.prediccion_ml.modelo_usado.version}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Algoritmo:</span>{' '}
+                              <span className="font-semibold">{resultado.prediccion_ml.modelo_usado.algoritmo}</span>
+                            </div>
+                            {resultado.prediccion_ml.modelo_usado.accuracy && (
+                              <div>
+                                <span className="text-gray-600">Accuracy:</span>{' '}
+                                <span className="font-semibold">
+                                  {(resultado.prediccion_ml.modelo_usado.accuracy * 100).toFixed(1)}%
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Comparación con evaluación tradicional */}
+                      <div className="bg-blue-50 p-3 rounded border border-blue-200">
+                        <div className="text-xs font-semibold text-blue-900 mb-2">📊 Comparación de Métodos:</div>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <div className="text-gray-600">Sistema 100 Puntos:</div>
+                            <div className="font-semibold text-blue-700">
+                              {resultado.clasificacion_riesgo} ({resultado.puntuacion_total?.toFixed(1)}/100)
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-gray-600">Machine Learning:</div>
+                            <div className="font-semibold text-purple-700">
+                              {resultado.prediccion_ml.riesgo_level} ({(resultado.prediccion_ml.confidence * 100).toFixed(1)}% confianza)
+                            </div>
+                          </div>
+                        </div>
+                        {resultado.clasificacion_riesgo === 'A' && resultado.prediccion_ml.riesgo_level === 'Bajo' && (
+                          <div className="mt-2 text-xs text-green-700 bg-green-100 p-2 rounded">
+                            ✅ Ambos métodos coinciden: Cliente de bajo riesgo
+                          </div>
+                        )}
+                        {resultado.clasificacion_riesgo === 'E' && resultado.prediccion_ml.riesgo_level === 'Alto' && (
+                          <div className="mt-2 text-xs text-red-700 bg-red-100 p-2 rounded">
+                            ⚠️ Ambos métodos coinciden: Cliente de alto riesgo
+                          </div>
+                        )}
+                        {((resultado.clasificacion_riesgo === 'A' || resultado.clasificacion_riesgo === 'B') && resultado.prediccion_ml.riesgo_level === 'Alto') && (
+                          <div className="mt-2 text-xs text-amber-700 bg-amber-100 p-2 rounded">
+                            ⚠️ Discrepancia detectada: El ML sugiere mayor riesgo que el sistema de puntos
+                          </div>
+                        )}
+                        {((resultado.clasificacion_riesgo === 'D' || resultado.clasificacion_riesgo === 'E') && resultado.prediccion_ml.riesgo_level === 'Bajo') && (
+                          <div className="mt-2 text-xs text-amber-700 bg-amber-100 p-2 rounded">
+                            ⚠️ Discrepancia detectada: El ML sugiere menor riesgo que el sistema de puntos
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 <div className="bg-white p-3 rounded border">
                   <h5 className="font-semibold mb-2">Detalle de Criterios:</h5>
                   <ul className="list-disc list-inside text-sm space-y-1">
