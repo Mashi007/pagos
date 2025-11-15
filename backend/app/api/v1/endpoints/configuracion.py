@@ -3235,6 +3235,14 @@ def listar_variables_prompt_ai(
             "total": len(variables),
         }
     except Exception as e:
+        error_str = str(e).lower()
+        # Si la tabla no existe, devolver lista vacía en lugar de error
+        if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+            logger.warning(f"Tabla ai_prompt_variables no existe aún. Devolviendo lista vacía. Error: {e}")
+            return {
+                "variables": [],
+                "total": 0,
+            }
         logger.error(f"Error listando variables de prompt AI: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
@@ -3417,12 +3425,23 @@ def obtener_prompt_ai(
         tiene_prompt_personalizado = bool(prompt_personalizado and prompt_personalizado.strip())
 
         # Obtener variables personalizadas activas
-        variables_personalizadas = (
-            db.query(AIPromptVariable)
-            .filter(AIPromptVariable.activo.is_(True))
-            .order_by(AIPromptVariable.orden.asc(), AIPromptVariable.variable.asc())
-            .all()
-        )
+        variables_personalizadas = []
+        try:
+            variables_personalizadas = (
+                db.query(AIPromptVariable)
+                .filter(AIPromptVariable.activo.is_(True))
+                .order_by(AIPromptVariable.orden.asc(), AIPromptVariable.variable.asc())
+                .all()
+            )
+        except Exception as var_error:
+            error_str = str(var_error).lower()
+            # Si la tabla no existe, continuar con lista vacía
+            if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+                logger.warning(f"Tabla ai_prompt_variables no existe aún. Continuando sin variables. Error: {var_error}")
+                variables_personalizadas = []
+            else:
+                # Si es otro error, registrar pero continuar
+                logger.warning(f"Error obteniendo variables personalizadas: {var_error}")
 
         return {
             "prompt_personalizado": prompt_personalizado or "",
