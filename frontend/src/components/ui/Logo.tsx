@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { cn } from '@/utils'
 import { getErrorMessage, isAxiosError } from '@/types/errors'
 import { safeGetItem, safeSetItem } from '@/utils/storage'
+import { useIsMounted } from '@/hooks/useIsMounted'
 
 interface LogoProps {
   className?: string
@@ -94,6 +95,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
   const [hasChecked, setHasChecked] = useState(logoCache.hasChecked)
   const [logoVersion, setLogoVersion] = useState(logoCache.version)
   const [imageLoaded, setImageLoaded] = useState(false) // ✅ Estado para controlar cuando la imagen está completamente cargada
+  const isMounted = useIsMounted()
 
   useEffect(() => {
     // ✅ PRIORIDAD 1: Si ya verificamos y el logo NO existe, no hacer nada más
@@ -144,8 +146,6 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     // ✅ Marcar que estamos verificando ANTES de hacer cualquier request
     logoCache.isChecking = true
 
-    // ✅ Flag para verificar si el componente sigue montado (fuera de la función para acceso en cleanup)
-    let isMounted = true
     let controller: AbortController | null = null
     let timeoutId: NodeJS.Timeout | null = null
 
@@ -162,7 +162,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           })
           
           // ✅ Verificar si el componente sigue montado antes de continuar
-          if (!isMounted) {
+          if (!isMounted()) {
             clearTimeout(timeoutId)
             return
           }
@@ -181,7 +181,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                 })
                 
                 // ✅ Verificar si el componente sigue montado antes de continuar
-                if (!isMounted) {
+                if (!isMounted()) {
                   clearTimeout(timeoutId)
                   return
                 }
@@ -196,10 +196,12 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                   logoCache.version += 1
                   // ✅ Guardar metadatos en localStorage para persistencia
                   saveLogoMetadata(config.logo_filename)
-                  setCustomLogoUrl(logoUrl)
-                  setHasChecked(true)
-                  setImageLoaded(false) // ✅ Resetear estado de carga cuando cambia el URL
-                  setLogoVersion(logoCache.version)
+                  if (isMounted()) {
+                    setCustomLogoUrl(logoUrl)
+                    setHasChecked(true)
+                    setImageLoaded(false) // ✅ Resetear estado de carga cuando cambia el URL
+                    setLogoVersion(logoCache.version)
+                  }
                   clearTimeout(timeoutId)
                   logoCache.isChecking = false
                   notifyLogoListeners(logoUrl, logoCache.version)
@@ -215,8 +217,10 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                   logoCache.isChecking = false
                   // ✅ Limpiar metadatos guardados
                   saveLogoMetadata(null)
-                  setCustomLogoUrl(null)
-                  setHasChecked(true)
+                  if (isMounted()) {
+                    setCustomLogoUrl(null)
+                    setHasChecked(true)
+                  }
                   clearTimeout(timeoutId)
                   notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
                   return
@@ -231,8 +235,10 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                 logoCache.logoUrl = null
                 logoCache.hasChecked = true
                 logoCache.isChecking = false
-                setCustomLogoUrl(null)
-                setHasChecked(true)
+                if (isMounted()) {
+                  setCustomLogoUrl(null)
+                  setHasChecked(true)
+                }
                 clearTimeout(timeoutId)
                 notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
                 return
@@ -242,7 +248,9 @@ export function Logo({ className, size = 'md' }: LogoProps) {
               // No hacer solicitudes HEAD innecesarias
               logoCache.hasChecked = true
               logoCache.isChecking = false
-              setHasChecked(true)
+              if (isMounted()) {
+                setHasChecked(true)
+              }
               clearTimeout(timeoutId)
               return
             }
@@ -255,7 +263,9 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           }
           logoCache.hasChecked = true
           logoCache.isChecking = false
-          setHasChecked(true)
+          if (isMounted()) {
+            setHasChecked(true)
+          }
           clearTimeout(timeoutId)
           return
         }
@@ -270,13 +280,16 @@ export function Logo({ className, size = 'md' }: LogoProps) {
       clearTimeout(timeoutId)
       logoCache.hasChecked = true
       logoCache.isChecking = false
-      setHasChecked(true)
+      if (isMounted()) {
+        setHasChecked(true)
+      }
     }
 
     checkCustomLogo()
 
     // Listener para cambios en el caché compartido
     const handleCacheUpdate = (url: string | null, version: number) => {
+      if (!isMounted()) return
       console.debug('🔄 Actualizando logo desde caché compartido, versión:', version)
       setCustomLogoUrl(url)
       setHasChecked(true)
@@ -485,8 +498,6 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     window.addEventListener('logoUpdated', handleLogoUpdate as EventListener)
 
     return () => {
-      // ✅ Marcar como desmontado para evitar actualizaciones de estado
-      isMounted = false
       // ✅ Cancelar peticiones en curso si el componente se desmonta
       if (controller) {
         controller.abort()

@@ -21,6 +21,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select'
 import { clienteService } from '@/services/clienteService'
 import { useQueryClient } from '@tanstack/react-query'
 import { readExcelToJSON } from '@/types/exceljs'
+import { useIsMounted } from '@/hooks/useIsMounted'
 
 interface ExcelData {
   cedula: string
@@ -56,6 +57,7 @@ interface ExcelUploaderProps {
 export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUploaderProps) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const isMounted = useIsMounted()
   
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -800,6 +802,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
   // 📊 PROCESAR ARCHIVO EXCEL
   const processExcelFile = async (file: File) => {
+    if (!isMounted()) return
     setIsProcessing(true)
     try {
       console.log('📊 Procesando archivo Excel:', file.name)
@@ -807,10 +810,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       // ✅ VALIDACIÓN DE SEGURIDAD: Validar archivo antes de procesar
       const { validateExcelFile, validateWorkbookStructure, validateExcelData, sanitizeFileName } = await import('@/utils/excelValidation')
       
+      if (!isMounted()) return
+      
       const fileValidation = validateExcelFile(file)
       if (!fileValidation.isValid) {
         alert(`Error de validación: ${fileValidation.error}`)
-        setIsProcessing(false)
+        if (isMounted()) setIsProcessing(false)
         return
       }
       
@@ -827,21 +832,25 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       // ✅ Importar exceljs dinámicamente para reducir bundle inicial
       const data = await file.arrayBuffer()
       
+      if (!isMounted()) return
+      
       // ✅ VALIDACIÓN DE SEGURIDAD: Validar tamaño del archivo antes de procesar
       if (data.byteLength > 10 * 1024 * 1024) {
         alert('El archivo es demasiado grande. Tamaño máximo: 10 MB')
-        setIsProcessing(false)
+        if (isMounted()) setIsProcessing(false)
         return
       }
       
       // Leer archivo Excel usando exceljs
       const jsonData = await readExcelToJSON(data)
       
+      if (!isMounted()) return
+      
       // ✅ VALIDACIÓN DE SEGURIDAD: Validar datos extraídos
       const dataValidation = validateExcelData(jsonData)
       if (!dataValidation.isValid) {
         alert(`Error en datos del archivo: ${dataValidation.error}`)
-        setIsProcessing(false)
+        if (isMounted()) setIsProcessing(false)
         return
       }
       
@@ -857,6 +866,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       const processedData: ExcelRow[] = []
       
       for (let i = 1; i < jsonData.length; i++) {
+        if (!isMounted()) return
+        
         const row = jsonData[i] as any[]
         if (!row || row.every(cell => !cell)) continue // Saltar filas vacías
         
@@ -882,6 +893,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         
         let hasErrors = false
         for (const field of requiredFields) {
+          if (!isMounted()) return
           const validation = await validateField(field, rowData[field as keyof ExcelData] || '')
           rowData._validation[field] = validation
           if (!validation.isValid) hasErrors = true
@@ -894,6 +906,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         processedData.push(rowData)
       }
       
+      if (!isMounted()) return
+      
       console.log('✅ Datos procesados:', processedData.length, 'filas')
       setExcelData(processedData)
       setShowPreview(true)
@@ -905,7 +919,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       console.error('❌ Error procesando Excel:', error)
       alert(`Error procesando el archivo: ${error instanceof Error ? error.message : 'Error desconocido'}`)
     } finally {
-      setIsProcessing(false)
+      if (isMounted()) {
+        setIsProcessing(false)
+      }
     }
   }
 
