@@ -551,11 +551,11 @@ export function DashboardMenu() {
       }
     })
 
-    // Convertir a array y ordenar por monto (ascendente)
+    // Convertir a array y ordenar por monto (descendente)
     const bandasArray = Object.entries(bandas)
       .map(([categoria, cantidad]) => {
-        // Extraer el monto mínimo para ordenar
-        const match = categoria.match(/\$(\d+)/)
+        // Extraer el monto mínimo para ordenar (capturar todos los dígitos y comas después del $)
+        const match = categoria.match(/\$([\d,]+)/)
         const montoMin = match ? parseInt(match[1].replace(/,/g, '')) : 0
         return {
           categoria,
@@ -564,10 +564,10 @@ export function DashboardMenu() {
         }
       })
       .filter(item => item.cantidad > 0) // Solo mostrar bandas con datos
-      .sort((a, b) => a.montoMin - b.montoMin) // Ordenar de menor a mayor
+      .sort((a, b) => b.montoMin - a.montoMin) // Ordenar de mayor a menor (valores grandes arriba)
     
     // Formatear etiquetas de manera más legible
-    // El orden ya está correcto (menor a mayor), y en gráficos verticales el primer elemento aparece arriba
+    // El orden es descendente (mayor a menor), así los valores más grandes aparecen arriba en el gráfico vertical
     return bandasArray.map(item => ({
       ...item,
       categoriaFormateada: item.categoria.replace(/,/g, '') // Remover comas para mejor visualización
@@ -879,12 +879,6 @@ export function DashboardMenu() {
                     layout="vertical"
                     margin={{ top: 10, right: 40, left: 120, bottom: 20 }}
                   >
-                    <defs>
-                      <linearGradient id="colorBandas200" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.9}/>
-                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.9}/>
-                      </linearGradient>
-                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
                     <XAxis 
                       type="number"
@@ -927,7 +921,6 @@ export function DashboardMenu() {
                     />
                     <Bar 
                       dataKey="cantidad" 
-                      fill="url(#colorBandas200)"
                       radius={[0, 6, 6, 0]}
                       name="Cantidad de Préstamos"
                     >

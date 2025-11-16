@@ -2918,17 +2918,19 @@ def obtener_cobranza_por_dia(
 
         dias_data = []
         for fecha_dia in fechas:
-            total_a_cobrar = _calcular_total_a_cobrar_fecha(
+            cobranza_planificada = _calcular_total_a_cobrar_fecha(
                 db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
-            pagos = _calcular_pagos_fecha(db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin)
+            cobranza_real = _calcular_pagos_fecha(db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin)
             morosidad = _calcular_morosidad(db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin)
 
             dias_data.append(
                 {
                     "fecha": fecha_dia.isoformat(),
-                    "total_a_cobrar": total_a_cobrar,
-                    "pagos": pagos,
+                    "total_a_cobrar": cobranza_planificada,  # Mantener compatibilidad
+                    "cobranza_planificada": cobranza_planificada,
+                    "cobranza_real": cobranza_real,
+                    "pagos": cobranza_real,  # Mantener compatibilidad
                     "morosidad": morosidad,
                 }
             )

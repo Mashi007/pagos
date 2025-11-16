@@ -24,6 +24,7 @@ import { useNavigate } from 'react-router-dom'
 import { KpiCardLarge } from '@/components/dashboard/KpiCardLarge'
 import { CobranzasMensualesModal } from '@/components/dashboard/modals/CobranzasMensualesModal'
 import { CobranzaPorDiaModal } from '@/components/dashboard/modals/CobranzaPorDiaModal'
+import { CobranzaPlanificadaRealModal } from '@/components/dashboard/modals/CobranzaPlanificadaRealModal'
 import {
   BarChart,
   Bar,
@@ -59,6 +60,7 @@ export function DashboardCobranza() {
 
   const [isCobranzasMensualesOpen, setIsCobranzasMensualesOpen] = useState(false)
   const [isCobranzaPorDiaOpen, setIsCobranzaPorDiaOpen] = useState(false)
+  const [isCobranzaPlanificadaRealOpen, setIsCobranzaPlanificadaRealOpen] = useState(false)
 
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
@@ -409,6 +411,15 @@ export function DashboardCobranza() {
               <Button
                 variant="secondary"
                 className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-transparent hover:border-emerald-300 h-auto py-4 flex flex-col items-center space-y-2"
+                onClick={() => setIsCobranzaPlanificadaRealOpen(true)}
+              >
+                <LineChart className="h-6 w-6" />
+                <span className="font-semibold">Planificada vs Real</span>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="secondary"
+                className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-transparent hover:border-emerald-300 h-auto py-4 flex flex-col items-center space-y-2"
                 onClick={() => {
                   // TODO: Navegar a desglose por analista
                   console.log('Desglose por Analista Completo')
@@ -438,6 +449,7 @@ export function DashboardCobranza() {
       {/* Modales */}
       <CobranzasMensualesModal isOpen={isCobranzasMensualesOpen} onClose={() => setIsCobranzasMensualesOpen(false)} />
       <CobranzaPorDiaModal isOpen={isCobranzaPorDiaOpen} onClose={() => setIsCobranzaPorDiaOpen(false)} />
+      <CobranzaPlanificadaRealModal isOpen={isCobranzaPlanificadaRealOpen} onClose={() => setIsCobranzaPlanificadaRealOpen(false)} />
     </div>
   )
 }
