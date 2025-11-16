@@ -302,7 +302,7 @@ class Settings(BaseSettings):
             elif not self.ADMIN_EMAIL:
                 # Si hay variable de entorno pero self.ADMIN_EMAIL está vacío, usar el valor de la variable
                 self.ADMIN_EMAIL = admin_email_from_env
-                
+
             if not admin_password_from_env:
                 self.ADMIN_PASSWORD = "R@pi_2025**"
                 logger.critical(
