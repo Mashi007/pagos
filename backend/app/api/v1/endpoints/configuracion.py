@@ -5870,10 +5870,10 @@ async def chat_ai(
                                 documentos_activos.sort(key=lambda d: orden_relevancia.get(d.id, 999))
                                 
                                 # Formatear similitudes antes del f-string (no se pueden usar backslashes en f-strings)
-                                similitudes = [f'{r["similitud"]:.2f}' for r in resultados]
+                                similitudes_str = ", ".join([f"{r['similitud']:.2f}" for r in resultados])
                                 logger.info(
                                     f"✅ Búsqueda semántica: {len(documentos_activos)} documentos relevantes encontrados "
-                                    f"(similitud: {similitudes})"
+                                    f"(similitud: [{similitudes_str}])"
                                 )
                             else:
                                 logger.info("ℹ️ Búsqueda semántica: No se encontraron documentos con similitud suficiente (umbral: 0.7)")

@@ -211,12 +211,36 @@ class Settings(BaseSettings):
     # VALIDACIÓN DE CONFIGURACIÓN
     # ============================================
 
+    def _generate_secret_key(self) -> str:
+        """
+        Genera una SECRET_KEY segura automáticamente.
+        Solo para uso en desarrollo.
+        """
+        import secrets
+        return secrets.token_urlsafe(32)
+
     def validate_secret_key(self) -> bool:
         """
         Valida que SECRET_KEY sea seguro en producción.
-        Bloquea valores por defecto o débiles.
+        En desarrollo, genera una automáticamente si no está configurado.
         """
+        # En desarrollo, generar automáticamente si no está configurado
+        if self.ENVIRONMENT != "production" and not self.SECRET_KEY:
+            self.SECRET_KEY = self._generate_secret_key()
+            logger.warning(
+                "⚠️ SECRET_KEY no configurado. Generada automáticamente para desarrollo. "
+                "Para producción, configure SECRET_KEY como variable de entorno."
+            )
+            return True
+
+        # En producción, SECRET_KEY es obligatorio
         if self.ENVIRONMENT == "production":
+            if not self.SECRET_KEY:
+                raise ValueError(
+                    "CRÍTICO: SECRET_KEY debe estar configurado en producción. "
+                    "Configure SECRET_KEY como variable de entorno con al menos 32 caracteres."
+                )
+
             default_secrets = [
                 "your-secret-key-here-change-in-production",
                 "secret-key",
@@ -240,8 +264,51 @@ class Settings(BaseSettings):
     def validate_admin_credentials(self) -> bool:
         """
         Valida que las credenciales de admin estén configuradas y sean seguras.
-        Bloquea contraseñas por defecto en producción.
+        En desarrollo, usa valores por defecto si no están configurados.
+        En producción, usa valores por defecto con advertencia crítica si no están configurados.
         """
+        import os
+        
+        # Verificar si fueron configurados desde variables de entorno
+        admin_email_from_env = os.getenv("ADMIN_EMAIL")
+        admin_password_from_env = os.getenv("ADMIN_PASSWORD")
+        
+        # En desarrollo, usar valores por defecto si no están configurados
+        if self.ENVIRONMENT != "production":
+            if not self.ADMIN_EMAIL:
+                self.ADMIN_EMAIL = "itmaster@rapicreditca.com"
+                logger.warning(
+                    "⚠️ ADMIN_EMAIL no configurado. Usando valor por defecto para desarrollo. "
+                    "Para producción, configure ADMIN_EMAIL como variable de entorno."
+                )
+            if not self.ADMIN_PASSWORD:
+                self.ADMIN_PASSWORD = "R@pi_2025**"
+                logger.warning(
+                    "⚠️ ADMIN_PASSWORD no configurado. Usando valor por defecto para desarrollo. "
+                    "Para producción, configure ADMIN_PASSWORD como variable de entorno."
+                )
+        else:
+            # En producción, usar valores por defecto si no están configurados (con advertencia crítica)
+            if not admin_email_from_env:
+                if not self.ADMIN_EMAIL:
+                    self.ADMIN_EMAIL = "itmaster@rapicreditca.com"
+                logger.critical(
+                    "🚨🚨🚨 CRÍTICO: ADMIN_EMAIL no está configurado como variable de entorno en producción. "
+                    "ESTO ES UNA GRAVE FALTA DE SEGURIDAD. "
+                    "Usando valor por defecto temporalmente. "
+                    "Configure ADMIN_EMAIL en Render Dashboard inmediatamente. 🚨🚨🚨"
+                )
+            if not admin_password_from_env:
+                if not self.ADMIN_PASSWORD:
+                    self.ADMIN_PASSWORD = "R@pi_2025**"
+                logger.critical(
+                    "🚨🚨🚨 CRÍTICO: ADMIN_PASSWORD no está configurado como variable de entorno en producción. "
+                    "ESTO ES UNA GRAVE FALTA DE SEGURIDAD. "
+                    "Usando valor por defecto temporalmente. "
+                    "Configure ADMIN_PASSWORD en Render Dashboard inmediatamente. 🚨🚨🚨"
+                )
+
+        # Validaciones básicas (después de asignar valores por defecto)
         if not self.ADMIN_EMAIL:
             raise ValueError("ADMIN_EMAIL debe estar configurado")
         if not self.ADMIN_PASSWORD:
@@ -252,63 +319,29 @@ class Settings(BaseSettings):
 
         # Validación específica para producción
         if self.ENVIRONMENT == "production":
-            import os
-
-            # Verificar si ADMIN_PASSWORD fue configurado desde variable de entorno
-            admin_password_from_env = os.getenv("ADMIN_PASSWORD")
-            default_password = "R@pi_2025**"
-
-            # Si NO está configurado en variable de entorno y usa el valor por defecto
-            # IMPORTANTE: NO bloquear para permitir que la aplicación inicie y el usuario pueda configurar
-            if (
-                not admin_password_from_env or admin_password_from_env.strip() == ""
-            ) and self.ADMIN_PASSWORD == default_password:
-                # Advertir severamente pero NO bloquear
-                logger.critical(
-                    "🚨🚨🚨 CRÍTICO: ADMIN_PASSWORD no está configurada como variable de entorno y usa el valor por defecto. "
-                    "ESTO ES UNA GRAVE FALTA DE SEGURIDAD. "
-                    "Por favor, configure ADMIN_PASSWORD como variable de entorno en Render Dashboard con una contraseña segura. "
-                    "La aplicación iniciará con esta configuración insegura SOLO para permitir la configuración. "
-                    "CAMBIE ESTO INMEDIATAMENTE. 🚨🚨🚨"
-                )
-                # NO lanzar excepción - permitir que la aplicación inicie
-                # La seguridad es importante, pero bloquear impide que el usuario pueda configurar
-
-            # Si viene de variable de entorno, permitir aunque sea débil (asumimos decisión consciente)
-            # Pero advertir si es muy corta o débil
-            if admin_password_from_env:
-                if len(admin_password_from_env) < 12:
-                    logger.warning(
-                        "⚠️ ADMIN_PASSWORD configurado desde variable de entorno pero es muy corta (<12 caracteres). "
-                        "Se recomienda usar una contraseña más segura para producción."
-                    )
-
-                # Si es el valor por defecto pero viene de env, permitir pero advertir
-                if admin_password_from_env == default_password:
-                    logger.warning(
-                        "⚠️ ADMIN_PASSWORD está configurado con el valor por defecto desde variable de entorno. "
-                        "Se recomienda cambiar por una contraseña más segura en producción."
-                    )
-
             # Validar formato de email
             if "@" not in self.ADMIN_EMAIL or "." not in self.ADMIN_EMAIL.split("@")[1]:
                 raise ValueError("ADMIN_EMAIL debe ser un email válido en producción")
 
-            # Contraseña debe tener complejidad mínima (solo si NO viene de env)
-            # Pero no bloquear si usa el valor por defecto (ya se advirtió arriba)
-            if not admin_password_from_env and self.ADMIN_PASSWORD != default_password:
-                has_upper = any(c.isupper() for c in self.ADMIN_PASSWORD)
-                has_lower = any(c.islower() for c in self.ADMIN_PASSWORD)
-                has_digit = any(c.isdigit() for c in self.ADMIN_PASSWORD)
-                has_special = any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in self.ADMIN_PASSWORD)
+            # Advertir si la contraseña es débil (solo si viene de variable de entorno)
+            if admin_password_from_env and len(admin_password_from_env) < 12:
+                logger.warning(
+                    "⚠️ ADMIN_PASSWORD configurado desde variable de entorno pero es muy corta (<12 caracteres). "
+                    "Se recomienda usar una contraseña más segura para producción."
+                )
 
-                if not (has_upper and has_lower and (has_digit or has_special)):
-                    # Solo advertir, no bloquear
-                    logger.warning(
-                        "⚠️ La contraseña de admin en producción debería contener: "
-                        "mayúsculas, minúsculas y números o caracteres especiales. "
-                        "Se recomienda mejorar la seguridad."
-                    )
+            # Validar complejidad de contraseña
+            has_upper = any(c.isupper() for c in self.ADMIN_PASSWORD)
+            has_lower = any(c.islower() for c in self.ADMIN_PASSWORD)
+            has_digit = any(c.isdigit() for c in self.ADMIN_PASSWORD)
+            has_special = any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in self.ADMIN_PASSWORD)
+
+            if not (has_upper and has_lower and (has_digit or has_special)):
+                logger.warning(
+                    "⚠️ La contraseña de admin en producción debería contener: "
+                    "mayúsculas, minúsculas y números o caracteres especiales. "
+                    "Se recomienda mejorar la seguridad."
+                )
 
         return True
 

@@ -122,14 +122,25 @@ def create_admin_user() -> None:
     try:
         db = SessionLocal()
 
+        # Usar configuración desde settings
+        admin_email = settings.ADMIN_EMAIL
+        admin_password = settings.ADMIN_PASSWORD
+
+        if not admin_email or not admin_password:
+            logger.warning(
+                "⚠️ ADMIN_EMAIL o ADMIN_PASSWORD no configurados. "
+                "Omitiendo creación de usuario admin."
+            )
+            return
+
         # Check if admin user exists
-        admin_user = db.query(User).filter(User.email == "itmaster@rapicreditca.com").first()
+        admin_user = db.query(User).filter(User.email == admin_email).first()
 
         if not admin_user:
-            # Create admin user
+            # Create admin user usando configuración desde settings
             admin_user = User(
-                email="itmaster@rapicreditca.com",
-                hashed_password=get_password_hash("Casa1803+"),
+                email=admin_email,
+                hashed_password=get_password_hash(admin_password),
                 rol="ADMIN",
                 is_admin=True,
                 is_active=True,

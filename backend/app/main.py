@@ -19,19 +19,59 @@ from starlette.middleware.base import BaseHTTPMiddleware
 # Esto asegura que los logs de inicialización (como cache) se muestren correctamente
 from app.core.config import settings
 
-# Configurar logging básico pero efectivo
+# Configurar logging estructurado JSON para producción, texto para desarrollo
 # Evitar duplicación: limpiar handlers existentes antes de configurar
 root_logger = logging.getLogger()
 root_logger.handlers.clear()
 
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL),
-    handlers=[
-        logging.StreamHandler(sys.stdout),  # Asegurar que vaya a stdout
-    ],
-    force=True,  # Forzar reconfiguración
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+# Determinar si usar logging estructurado JSON
+use_json_logging = settings.ENVIRONMENT == "production"
+
+if use_json_logging:
+    # Logging estructurado JSON para producción
+    try:
+        from pythonjsonlogger import jsonlogger
+
+        class CustomJsonFormatter(jsonlogger.JsonFormatter):
+            """Formatter JSON personalizado con campos adicionales"""
+
+            def add_fields(self, log_record, record, message_dict):
+                super().add_fields(log_record, record, message_dict)
+                log_record["timestamp"] = self.formatTime(record, self.datefmt)
+                log_record["level"] = record.levelname
+                log_record["logger"] = record.name
+                log_record["environment"] = settings.ENVIRONMENT
+
+        json_formatter = CustomJsonFormatter(
+            "%(timestamp)s %(level)s %(logger)s %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
+
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(json_formatter)
+
+        logging.basicConfig(
+            level=getattr(logging, settings.LOG_LEVEL),
+            handlers=[handler],
+            force=True,
+        )
+        logger = logging.getLogger(__name__)
+        logger.info("✅ Logging estructurado JSON configurado para producción")
+    except ImportError:
+        # Si python-json-logger no está disponible, usar formato texto
+        use_json_logging = False
+        logging.warning("⚠️ python-json-logger no disponible. Usando formato texto.")
+
+if not use_json_logging:
+    # Logging en formato texto para desarrollo
+    logging.basicConfig(
+        level=getattr(logging, settings.LOG_LEVEL),
+        handlers=[
+            logging.StreamHandler(sys.stdout),  # Asegurar que vaya a stdout
+        ],
+        force=True,  # Forzar reconfiguración
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -351,9 +391,9 @@ logger.info("Configurando CORS middleware")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=settings.CORS_ALLOW_METHODS,
+    allow_headers=settings.CORS_ALLOW_HEADERS,
 )
 
 # ============================================

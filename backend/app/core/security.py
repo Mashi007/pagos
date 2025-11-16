@@ -3,18 +3,20 @@ Módulo de seguridad para autenticación JWT
 Maneja creación, validación y decodificación de tokens
 """
 
-import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Union
 
 import jwt
 from passlib.context import CryptContext
 
-# Configuración de seguridad - leemos de variables de entorno
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
+# Importar configuración centralizada
+from app.core.config import settings
+
+# Usar configuración centralizada desde settings
+# SECRET_KEY ahora se obtiene de settings (validado y generado automáticamente en desarrollo)
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 240  # 4 horas (Access Token)
-REFRESH_TOKEN_EXPIRE_DAYS = 7  # 7 días (Refresh Token)
+ACCESS_TOKEN_EXPIRE_MINUTES = 240  # 4 horas (Access Token) - se usa desde settings
+REFRESH_TOKEN_EXPIRE_DAYS = 7  # 7 días (Refresh Token) - se usa desde settings
 
 # Contexto para hashing de contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -66,7 +68,7 @@ def create_access_token(
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
     to_encode = {"exp": expire, "sub": str(subject), "type": "access"}
 
@@ -74,7 +76,13 @@ def create_access_token(
     if additional_claims:
         to_encode.update(additional_claims)
 
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    # Verificar que SECRET_KEY esté configurado (debería estar validado por validate_all())
+    if not settings.SECRET_KEY:
+        raise RuntimeError(
+            "SECRET_KEY no está configurado. "
+            "Configure SECRET_KEY como variable de entorno o ejecute validate_all() primero."
+        )
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
@@ -88,9 +96,15 @@ def create_refresh_token(subject: Union[str, int]) -> str:
     Returns:
         Token de refresh JWT codificado
     """
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    # Verificar que SECRET_KEY esté configurado (debería estar validado por validate_all())
+    if not settings.SECRET_KEY:
+        raise RuntimeError(
+            "SECRET_KEY no está configurado. "
+            "Configure SECRET_KEY como variable de entorno o ejecute validate_all() primero."
+        )
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
@@ -108,7 +122,7 @@ def decode_token(token: str) -> Dict[str, Any]:
         Exception: Si el token es inválido o expiró
     """
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         return dict(payload)  # type: ignore[no-any-return]
     except jwt.ExpiredSignatureError as e:
         # Token expirado

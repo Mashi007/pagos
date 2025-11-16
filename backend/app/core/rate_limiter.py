@@ -9,6 +9,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,11 +38,37 @@ def get_client_ip(request) -> str:
     return get_remote_address(request)
 
 
+def _get_storage_uri() -> str:
+    """
+    Obtiene la URI de almacenamiento para rate limiting.
+    Usa Redis si está configurado, sino usa memoria.
+    """
+    # Intentar usar Redis si está configurado
+    if settings.REDIS_URL:
+        logger.info(f"✅ Usando Redis para rate limiting: {settings.REDIS_URL[:20]}...")
+        return settings.REDIS_URL
+    elif settings.REDIS_HOST and settings.REDIS_HOST != "localhost":
+        # Construir URL de Redis desde componentes
+        redis_url = "redis://"
+        if settings.REDIS_PASSWORD:
+            redis_url += f":{settings.REDIS_PASSWORD}@"
+        redis_url += f"{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
+        logger.info(f"✅ Usando Redis para rate limiting: {redis_url[:20]}...")
+        return redis_url
+    else:
+        # Usar memoria en desarrollo
+        logger.warning(
+            "⚠️ Redis no configurado. Usando memoria para rate limiting. "
+            "En producción distribuida, configure REDIS_URL para rate limiting distribuido."
+        )
+        return "memory://"
+
+
 # Inicializar limiter con función personalizada para obtener IP del cliente
 limiter = Limiter(
     key_func=get_client_ip,
     default_limits=["1000/hour"],  # Límite general por defecto
-    storage_uri="memory://",  # Usar memoria (para producción distribuida, usar Redis)
+    storage_uri=_get_storage_uri(),  # Usar Redis si está disponible, sino memoria
 )
 
 

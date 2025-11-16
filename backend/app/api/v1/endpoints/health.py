@@ -9,7 +9,7 @@ import time
 from typing import Any, Dict
 
 import psutil
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -94,8 +94,20 @@ def check_database_cached() -> Dict[str, Any]:
 
 
 @router.get("/cors-debug")
-async def cors_debug():
-    """Endpoint para debuggear CORS"""
+async def cors_debug(
+    current_user: User = Depends(get_current_user),
+):
+    """Endpoint para debuggear CORS
+
+    ⚠️ REQUIERE AUTENTICACIÓN
+    ⚠️ Solo disponible en desarrollo
+    """
+    # Solo permitir en desarrollo
+    if settings.ENVIRONMENT == "production":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Endpoint no disponible en producción",
+        )
     return {
         "message": "CORS debug endpoint",
         "origin": "allowed",
@@ -257,8 +269,18 @@ async def liveness_check():
 
 
 @router.get("/performance/summary")
-async def performance_summary():
-    """Obtener resumen general de performance de todos los endpoints"""
+async def performance_summary(
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener resumen general de performance de todos los endpoints
+
+    ⚠️ REQUIERE AUTENTICACIÓN Y PERMISOS DE ADMINISTRADOR
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden ver resumen de performance",
+        )
     try:
         summary = performance_monitor.get_summary()
         return {
@@ -276,14 +298,25 @@ async def performance_summary():
 
 
 @router.get("/performance/slow")
-async def performance_slow_endpoints(threshold_ms: float = 1000, limit: int = 20):
+async def performance_slow_endpoints(
+    threshold_ms: float = 1000,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+):
     """
     Obtener endpoints lentos ordenados por tiempo promedio
 
     Args:
         threshold_ms: Umbral mínimo de tiempo en ms (default: 1000ms)
         limit: Número máximo de resultados (default: 20)
+
+    ⚠️ REQUIERE AUTENTICACIÓN Y PERMISOS DE ADMINISTRADOR
     """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden ver endpoints lentos",
+        )
     try:
         slow_endpoints = performance_monitor.get_slow_endpoints(threshold_ms=threshold_ms, limit=limit)
 
@@ -304,14 +337,25 @@ async def performance_slow_endpoints(threshold_ms: float = 1000, limit: int = 20
 
 
 @router.get("/performance/endpoint/{method}/{path:path}")
-async def performance_endpoint_stats(method: str, path: str):
+async def performance_endpoint_stats(
+    method: str,
+    path: str,
+    current_user: User = Depends(get_current_user),
+):
     """
     Obtener estadísticas detalladas de un endpoint específico
 
     Args:
         method: Método HTTP (GET, POST, etc.)
         path: Ruta del endpoint
+
+    ⚠️ REQUIERE AUTENTICACIÓN Y PERMISOS DE ADMINISTRADOR
     """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden ver estadísticas de endpoints",
+        )
     try:
         stats = performance_monitor.get_endpoint_stats(method=method.upper(), path=path)
 
@@ -337,13 +381,23 @@ async def performance_endpoint_stats(method: str, path: str):
 
 
 @router.get("/performance/recent")
-async def performance_recent_requests(limit: int = 50):
+async def performance_recent_requests(
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+):
     """
     Obtener peticiones recientes
 
     Args:
         limit: Número máximo de peticiones a retornar (default: 50, max: 200)
+
+    ⚠️ REQUIERE AUTENTICACIÓN Y PERMISOS DE ADMINISTRADOR
     """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden ver peticiones recientes",
+        )
     try:
         limit = min(limit, 200)  # Limitar máximo a 200
         recent = performance_monitor.get_recent_requests(limit=limit)
@@ -364,7 +418,9 @@ async def performance_recent_requests(limit: int = 50):
 
 
 @router.get("/cache/status")
-async def cache_status():
+async def cache_status(
+    current_user: User = Depends(get_current_user),
+):
     """
     Verificar estado y operatividad del sistema de cache
 
@@ -373,7 +429,14 @@ async def cache_status():
     - Estado de conexión
     - Pruebas de lectura/escritura
     - Configuración de Redis (si aplica)
+
+    ⚠️ REQUIERE AUTENTICACIÓN Y PERMISOS DE ADMINISTRADOR
     """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden ver estado del cache",
+        )
     try:
         from app.core.cache import MemoryCache
 
@@ -448,9 +511,9 @@ async def cache_status():
         if cache_type == "RedisCache":
             all_tests_passed = all_tests_passed and redis_connected
 
-        status = "operational" if all_tests_passed else "degraded"
+        cache_status_value = "operational" if all_tests_passed else "degraded"
         if test_results["errors"]:
-            status = "error"
+            cache_status_value = "error"
 
         # Advertencias
         warnings = []
@@ -461,7 +524,7 @@ async def cache_status():
             warnings.append("⚠️ REDIS_URL no configurada - usando fallback MemoryCache")
 
         return {
-            "status": status,
+            "status": cache_status_value,
             "cache_type": cache_type,
             "redis_connected": redis_connected if cache_type == "RedisCache" else None,
             "config": config_info,
@@ -482,6 +545,7 @@ async def cache_status():
 @router.get("/database/indexes")
 async def verify_database_indexes(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Verificar que los índices críticos de performance estén creados correctamente
@@ -489,7 +553,15 @@ async def verify_database_indexes(
     Valida los índices creados por las migraciones:
     - 20251104_add_critical_performance_indexes
     - 20251104_add_group_by_indexes
+
+    ⚠️ REQUIERE AUTENTICACIÓN Y PERMISOS DE ADMINISTRADOR
     """
+    # Verificar que el usuario sea administrador
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden verificar índices de la base de datos",
+        )
     from sqlalchemy import inspect
 
     try:
@@ -698,13 +770,22 @@ async def verificar_tabla_documentos_ai(
 @router.post("/database/indexes/create")
 async def create_database_indexes(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Crear índices críticos de performance manualmente
 
     Útil si las migraciones de Alembic no se ejecutaron correctamente.
     Ejecuta la creación de índices usando SQL directo.
+
+    ⚠️ REQUIERE AUTENTICACIÓN Y PERMISOS DE ADMINISTRADOR
     """
+    # Verificar que el usuario sea administrador
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden crear índices en la base de datos",
+        )
     from sqlalchemy import inspect
 
     try:
@@ -894,13 +975,22 @@ async def create_database_indexes(
 @router.get("/database/indexes/performance")
 async def monitor_indexes_performance(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Monitorear el rendimiento de los endpoints del dashboard después de crear índices
 
     Ejecuta queries de prueba para medir tiempos de respuesta y comparar
     con los tiempos esperados después de crear los índices.
+
+    ⚠️ REQUIERE AUTENTICACIÓN Y PERMISOS DE ADMINISTRADOR
     """
+    # Verificar que el usuario sea administrador
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden monitorear performance de índices",
+        )
     try:
         results = {
             "status": "success",
