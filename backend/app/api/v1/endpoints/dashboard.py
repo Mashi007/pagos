@@ -41,21 +41,16 @@ router = APIRouter()
 # HELPERS DE NORMALIZACIÓN Y UTILIDADES
 # ============================================================================
 
+
 def _validar_rango_fechas(fecha_inicio: Optional[date], fecha_fin: Optional[date]) -> None:
     """Valida que el rango de fechas sea válido"""
     if fecha_inicio and fecha_fin:
         if fecha_inicio > fecha_fin:
-            raise HTTPException(
-                status_code=400,
-                detail="fecha_inicio no puede ser mayor que fecha_fin"
-            )
+            raise HTTPException(status_code=400, detail="fecha_inicio no puede ser mayor que fecha_fin")
         # Validar que el rango no sea mayor a 5 años
         dias_diferencia = (fecha_fin - fecha_inicio).days
         if dias_diferencia > 1825:  # 5 años
-            raise HTTPException(
-                status_code=400,
-                detail="El rango de fechas no puede ser mayor a 5 años"
-            )
+            raise HTTPException(status_code=400, detail="El rango de fechas no puede ser mayor a 5 años")
 
 
 def _validar_parametro_numerico(valor: Optional[int], nombre: str, min_val: int, max_val: int, default: int) -> int:
@@ -63,10 +58,7 @@ def _validar_parametro_numerico(valor: Optional[int], nombre: str, min_val: int,
     if valor is None:
         return default
     if valor < min_val or valor > max_val:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{nombre} debe estar entre {min_val} y {max_val}"
-        )
+        raise HTTPException(status_code=400, detail=f"{nombre} debe estar entre {min_val} y {max_val}")
     return valor
 
 
@@ -80,10 +72,7 @@ def _sanitizar_string(valor: Optional[str], max_length: int = 100) -> Optional[s
     peligrosos = ["'", '"', ";", "--", "/*", "*/", "xp_", "sp_"]
     for char in peligrosos:
         if char in valor.lower():
-            raise HTTPException(
-                status_code=400,
-                detail=f"Caracteres no permitidos en parámetro"
-            )
+            raise HTTPException(status_code=400, detail=f"Caracteres no permitidos en parámetro")
     return valor
 
 
@@ -94,7 +83,7 @@ def _manejar_error_dashboard(e: Exception, operacion: str, db: Session) -> HTTPE
         db.rollback()
     except Exception as rollback_error:
         logger.error(f"❌ [dashboard] Error en rollback: {rollback_error}")
-    
+
     # No exponer detalles internos del error al cliente
     error_message = f"Error interno en {operacion}"
     if isinstance(e, HTTPException):
@@ -3111,7 +3100,7 @@ def obtener_cobranza_fechas_especificas(
             )
 
         return {"dias": dias_data}
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -3355,7 +3344,7 @@ def obtener_prestamos_por_concesionario(
             func.sum(Prestamo.total_financiamiento).label("total_prestamos"),
             func.count(Prestamo.id).label("cantidad_prestamos"),
         ).filter(Prestamo.estado == "APROBADO")
-        
+
         # Aplicar filtros usando FiltrosDashboard (incluye OR entre fechas)
         query_concesionarios = FiltrosDashboard.aplicar_filtros_prestamo(
             query_concesionarios, analista, concesionario, modelo, fecha_inicio, fecha_fin
@@ -3435,7 +3424,7 @@ def obtener_prestamos_por_modelo(
             func.sum(Prestamo.total_financiamiento).label("total_prestamos"),
             func.count(Prestamo.id).label("cantidad_prestamos"),
         ).filter(Prestamo.estado == "APROBADO")
-        
+
         # Aplicar filtros usando FiltrosDashboard (incluye OR entre fechas)
         query_modelos = FiltrosDashboard.aplicar_filtros_prestamo(
             query_modelos, analista, concesionario, modelo, fecha_inicio, fecha_fin
@@ -3544,7 +3533,7 @@ def obtener_pagos_conciliados(
             "porcentaje_conciliacion": round(porcentaje_conciliacion, 2),
             "porcentaje_monto_conciliado": round(porcentaje_monto_conciliado, 2),
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -5204,45 +5193,35 @@ def obtener_cobranzas_semanales(
                 Prestamo.estado == "APROBADO",
                 Cuota.fecha_vencimiento >= fecha_inicio_query,
                 Cuota.fecha_vencimiento <= fecha_fin_query,
-                func.extract('dow', Cuota.fecha_vencimiento).between(1, 5)
+                func.extract("dow", Cuota.fecha_vencimiento).between(1, 5),
             ]
-            
+
             if analista:
-                condiciones.append(
-                    or_(
-                        Prestamo.analista == analista,
-                        Prestamo.producto_financiero == analista
-                    )
-                )
+                condiciones.append(or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista))
             if concesionario:
                 condiciones.append(Prestamo.concesionario == concesionario)
             if modelo:
-                condiciones.append(
-                    or_(
-                        Prestamo.producto == modelo,
-                        Prestamo.modelo_vehiculo == modelo
-                    )
-                )
-            
+                condiciones.append(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
+
             # Usar ORM en lugar de SQL crudo
             query_cobranzas_orm = (
                 db.query(
-                    func.date_trunc('week', Cuota.fecha_vencimiento).label('semana_inicio'),
-                    func.extract('year', Cuota.fecha_vencimiento).label('año'),
-                    func.extract('week', Cuota.fecha_vencimiento).label('semana_numero'),
-                    func.coalesce(func.sum(Cuota.monto_cuota), 0).label('cobranzas')
+                    func.date_trunc("week", Cuota.fecha_vencimiento).label("semana_inicio"),
+                    func.extract("year", Cuota.fecha_vencimiento).label("año"),
+                    func.extract("week", Cuota.fecha_vencimiento).label("semana_numero"),
+                    func.coalesce(func.sum(Cuota.monto_cuota), 0).label("cobranzas"),
                 )
                 .select_from(Cuota)
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .filter(and_(*condiciones))
                 .group_by(
-                    func.date_trunc('week', Cuota.fecha_vencimiento),
-                    func.extract('year', Cuota.fecha_vencimiento),
-                    func.extract('week', Cuota.fecha_vencimiento)
+                    func.date_trunc("week", Cuota.fecha_vencimiento),
+                    func.extract("year", Cuota.fecha_vencimiento),
+                    func.extract("week", Cuota.fecha_vencimiento),
                 )
-                .order_by(func.date_trunc('week', Cuota.fecha_vencimiento))
+                .order_by(func.date_trunc("week", Cuota.fecha_vencimiento))
             )
-            
+
             result_cobranzas = query_cobranzas_orm.all()
             cobranzas_por_semana = {}
             for row in result_cobranzas:
