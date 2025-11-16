@@ -943,12 +943,7 @@ async def entrenar_modelo_riesgo(
         from app.models.prestamo import Prestamo
 
         # Obtener préstamos aprobados con historial (cargar relación cliente)
-        prestamos = (
-            db.query(Prestamo)
-            .filter(Prestamo.estado == "APROBADO")
-            .options(joinedload(Prestamo.cliente))
-            .all()
-        )
+        prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").options(joinedload(Prestamo.cliente)).all()
 
         if len(prestamos) < 10:
             raise HTTPException(
@@ -988,9 +983,11 @@ async def entrenar_modelo_riesgo(
             try:
                 total_financiamiento = float(prestamo.total_financiamiento or 0)
                 if total_financiamiento <= 0:
-                    logger.warning(f"Préstamo {prestamo.id} tiene total_financiamiento inválido: {total_financiamiento}, omitiendo...")
+                    logger.warning(
+                        f"Préstamo {prestamo.id} tiene total_financiamiento inválido: {total_financiamiento}, omitiendo..."
+                    )
                     continue
-                
+
                 ingreso_estimado = total_financiamiento * 0.3  # Estimación
                 deuda_total = total_financiamiento - total_pagado
                 ratio_deuda_ingreso = deuda_total / ingreso_estimado if ingreso_estimado > 0 else 0
@@ -1020,8 +1017,7 @@ async def entrenar_modelo_riesgo(
             try:
                 cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).all()
                 cuotas_vencidas = [
-                    c for c in cuotas 
-                    if c.fecha_vencimiento and c.fecha_vencimiento < date.today() and c.estado != "PAGADA"
+                    c for c in cuotas if c.fecha_vencimiento and c.fecha_vencimiento < date.today() and c.estado != "PAGADA"
                 ]
             except Exception as e:
                 logger.warning(f"Error obteniendo cuotas del préstamo {prestamo.id}: {e}")
@@ -1108,7 +1104,7 @@ async def entrenar_modelo_riesgo(
         db.rollback()
         error_msg = str(e)
         logger.error(f"Error entrenando modelo de riesgo: {error_msg}", exc_info=True)
-        
+
         # Mensaje más descriptivo según el tipo de error
         if "scikit-learn" in error_msg.lower() or "sklearn" in error_msg.lower():
             detail_msg = "Error con scikit-learn. Verifica que esté instalado correctamente."
@@ -1118,7 +1114,7 @@ async def entrenar_modelo_riesgo(
             detail_msg = "Error accediendo a datos de clientes. Verifica la integridad de los datos."
         else:
             detail_msg = f"Error entrenando modelo: {error_msg}"
-        
+
         raise HTTPException(status_code=500, detail=detail_msg)
 
 
@@ -1409,17 +1405,13 @@ async def entrenar_modelo_impago(
                 # Determinar target: ¿El cliente pagó o no pagó sus cuotas?
                 # Usamos las cuotas vencidas para determinar si pagó o no
                 try:
-                    cuotas_vencidas = [
-                        c for c in cuotas 
-                        if c.fecha_vencimiento and c.fecha_vencimiento < fecha_actual
-                    ]
+                    cuotas_vencidas = [c for c in cuotas if c.fecha_vencimiento and c.fecha_vencimiento < fecha_actual]
                     if not cuotas_vencidas:
                         continue  # No hay cuotas vencidas aún, no podemos determinar target
 
                     # Target: 0 = Pagó (todas las cuotas vencidas están pagadas), 1 = No pagó (hay cuotas vencidas sin pagar)
                     cuotas_vencidas_sin_pagar = sum(
-                        1 for c in cuotas_vencidas 
-                        if c.estado and c.estado not in ["PAGADO", "PARCIAL"]
+                        1 for c in cuotas_vencidas if c.estado and c.estado not in ["PAGADO", "PARCIAL"]
                     )
                     target = 1 if cuotas_vencidas_sin_pagar > 0 else 0
 
@@ -1489,7 +1481,7 @@ async def entrenar_modelo_impago(
         db.rollback()
         error_msg = str(e)
         logger.error(f"Error entrenando modelo de impago: {error_msg}", exc_info=True)
-        
+
         # Mensaje más descriptivo según el tipo de error
         if "scikit-learn" in error_msg.lower() or "sklearn" in error_msg.lower():
             detail_msg = "Error con scikit-learn. Verifica que esté instalado correctamente."
@@ -1501,7 +1493,7 @@ async def entrenar_modelo_impago(
             detail_msg = "La tabla de modelos de impago no está creada. Ejecuta las migraciones: alembic upgrade head"
         else:
             detail_msg = f"Error entrenando modelo: {error_msg}"
-        
+
         raise HTTPException(status_code=500, detail=detail_msg)
 
 
@@ -1642,18 +1634,15 @@ async def listar_modelos_impago(
     except (ProgrammingError, OperationalError) as e:
         error_msg = str(e).lower()
         logger.error(f"Error de base de datos listando modelos de impago: {e}", exc_info=True)
-        
+
         # Verificar si es un error de tabla no encontrada
         if "does not exist" in error_msg or "no such table" in error_msg or "relation" in error_msg or "table" in error_msg:
             raise HTTPException(
                 status_code=503,
-                detail="La tabla 'modelos_impago_cuotas' no está creada. Ejecuta las migraciones: alembic upgrade head"
+                detail="La tabla 'modelos_impago_cuotas' no está creada. Ejecuta las migraciones: alembic upgrade head",
             )
-        
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error de base de datos listando modelos: {str(e)}"
-        )
+
+        raise HTTPException(status_code=500, detail=f"Error de base de datos listando modelos: {str(e)}")
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Error listando modelos de impago: {error_msg}", exc_info=True)
