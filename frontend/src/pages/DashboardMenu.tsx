@@ -663,82 +663,86 @@ export function DashboardMenu() {
           </motion.div>
         )}
 
-        {/* KPIs PRINCIPALES */}
+        {/* KPIs PRINCIPALES - OCULTAS */}
+        {false && (
+          <>
             {loadingKPIs ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-[180px] bg-gray-100 rounded-xl animate-pulse" />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-[180px] bg-gray-100 rounded-xl animate-pulse" />
                 ))}
               </div>
             ) : errorKPIs ? (
-          <Card className="border-red-200 bg-red-50">
+              <Card className="border-red-200 bg-red-50">
                 <CardContent className="p-6">
-              <div className="flex items-center gap-3 text-red-700">
-                <AlertTriangle className="h-5 w-5" />
-                <p>Error al cargar los KPIs principales. Por favor, intente nuevamente.</p>
+                  <div className="flex items-center gap-3 text-red-700">
+                    <AlertTriangle className="h-5 w-5" />
+                    <p>Error al cargar los KPIs principales. Por favor, intente nuevamente.</p>
                   </div>
                 </CardContent>
               </Card>
-        ) : kpisPrincipales ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
-          >
+            ) : kpisPrincipales ? (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+              >
                 <KpiCardLarge
-              title="Total Préstamos"
-              value={kpisPrincipales.total_prestamos.valor_actual}
-              variation={kpisPrincipales.total_prestamos.variacion_porcentual !== undefined ? {
-                percent: kpisPrincipales.total_prestamos.variacion_porcentual,
-                label: 'vs mes anterior'
-              } : undefined}
-              icon={FileText}
-              color="text-cyan-600"
-              bgColor="bg-cyan-100"
-              borderColor="border-cyan-500"
-              format="number"
-            />
-            <KpiCardLarge
-              title="Créditos Nuevos"
-              value={kpisPrincipales.creditos_nuevos_mes.valor_actual}
-              variation={kpisPrincipales.creditos_nuevos_mes.variacion_porcentual !== undefined ? {
-                percent: kpisPrincipales.creditos_nuevos_mes.variacion_porcentual,
-                label: 'vs mes anterior'
-              } : undefined}
+                  title="Total Préstamos"
+                  value={kpisPrincipales.total_prestamos.valor_actual}
+                  variation={kpisPrincipales.total_prestamos.variacion_porcentual !== undefined ? {
+                    percent: kpisPrincipales.total_prestamos.variacion_porcentual,
+                    label: 'vs mes anterior'
+                  } : undefined}
+                  icon={FileText}
+                  color="text-cyan-600"
+                  bgColor="bg-cyan-100"
+                  borderColor="border-cyan-500"
+                  format="number"
+                />
+                <KpiCardLarge
+                  title="Créditos Nuevos"
+                  value={kpisPrincipales.creditos_nuevos_mes.valor_actual}
+                  variation={kpisPrincipales.creditos_nuevos_mes.variacion_porcentual !== undefined ? {
+                    percent: kpisPrincipales.creditos_nuevos_mes.variacion_porcentual,
+                    label: 'vs mes anterior'
+                  } : undefined}
                   icon={TrendingUp}
                   color="text-green-600"
                   bgColor="bg-green-100"
                   borderColor="border-green-500"
                   format="number"
                 />
-            <KpiCardLarge
-              title="Cuotas Programadas"
-              value={kpisPrincipales.cuotas_programadas?.valor_actual || 0}
-              subtitle={kpisPrincipales.porcentaje_cuotas_pagadas !== undefined 
-                ? `% Cuotas pagadas: ${kpisPrincipales.porcentaje_cuotas_pagadas.toFixed(1)}%`
-                : undefined}
-              icon={FileText}
-              color="text-blue-600"
-              bgColor="bg-blue-100"
-              borderColor="border-blue-500"
-              format="currency"
-            />
-                  <KpiCardLarge
-                    title="Morosidad Total"
-              value={kpisPrincipales.total_morosidad_usd.valor_actual}
-              variation={kpisPrincipales.total_morosidad_usd.variacion_porcentual !== undefined ? {
-                percent: kpisPrincipales.total_morosidad_usd.variacion_porcentual,
-                label: 'vs mes anterior'
-              } : undefined}
-                    icon={AlertTriangle}
-                    color="text-red-600"
-                    bgColor="bg-red-100"
-                    borderColor="border-red-500"
-                    format="currency"
-                  />
-          </motion.div>
-        ) : null}
+                <KpiCardLarge
+                  title="Cuotas Programadas"
+                  value={kpisPrincipales.cuotas_programadas?.valor_actual || 0}
+                  subtitle={kpisPrincipales.porcentaje_cuotas_pagadas !== undefined 
+                    ? `% Cuotas pagadas: ${kpisPrincipales.porcentaje_cuotas_pagadas.toFixed(1)}%`
+                    : undefined}
+                  icon={FileText}
+                  color="text-blue-600"
+                  bgColor="bg-blue-100"
+                  borderColor="border-blue-500"
+                  format="currency"
+                />
+                <KpiCardLarge
+                  title="Morosidad Total"
+                  value={kpisPrincipales.total_morosidad_usd.valor_actual}
+                  variation={kpisPrincipales.total_morosidad_usd.variacion_porcentual !== undefined ? {
+                    percent: kpisPrincipales.total_morosidad_usd.variacion_porcentual,
+                    label: 'vs mes anterior'
+                  } : undefined}
+                  icon={AlertTriangle}
+                  color="text-red-600"
+                  bgColor="bg-red-100"
+                  borderColor="border-red-500"
+                  format="currency"
+                />
+              </motion.div>
+            ) : null}
+          </>
+        )}
 
         {/* GRÁFICOS PRINCIPALES */}
         {loadingDashboard ? (
@@ -992,19 +996,42 @@ export function DashboardMenu() {
                     </div>
                   ) : (
                     <ResponsiveContainer width="100%" height={450}>
-                      <BarChart data={datosCobranzaFechas.dias}>
+                      <BarChart data={datosCobranzaFechas.dias} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="nombre_fecha" />
+                        <XAxis 
+                          dataKey="nombre_fecha" 
+                          tick={{ fontSize: 12 }}
+                        />
                         <YAxis 
-                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
+                          domain={[0, 'dataMax']}
+                          tickCount={6}
+                          tick={{ fontSize: 11 }}
+                          tickFormatter={(value) => {
+                            if (value >= 1000) {
+                              return `$${(value / 1000).toFixed(1)}K`
+                            }
+                            return `$${value}`
+                          }}
+                          label={{ 
+                            value: 'Monto (USD)', 
+                            angle: -90, 
+                            position: 'insideLeft',
+                            style: { textAnchor: 'middle', fontSize: 12, fontWeight: 600 }
+                          }}
                         />
                         <Tooltip 
                           formatter={(value: number) => [formatCurrency(value), '']}
                           labelFormatter={(label) => `Fecha: ${label}`}
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                          }}
                         />
                         <Legend />
-                        <Bar dataKey="cobranza_planificada" fill="#3b82f6" name="Planificado" />
-                        <Bar dataKey="cobranza_real" fill="#10b981" name="Real" />
+                        <Bar dataKey="cobranza_planificada" fill="#3b82f6" name="Planificado" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="cobranza_real" fill="#10b981" name="Real" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
