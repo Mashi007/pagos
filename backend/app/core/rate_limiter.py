@@ -77,17 +77,35 @@ def _create_limiter_with_fallback():
     """
     storage_uri = _get_storage_uri()
 
-    # Si se intenta usar Redis, intentar inicializarlo y capturar errores
+    # Si se intenta usar Redis, verificar primero si el paquete está instalado
     if storage_uri.startswith("redis://"):
+        # Verificar si el paquete redis está instalado
+        try:
+            import redis
+            redis_version = getattr(redis, '__version__', 'unknown')
+            logger.info(f"✅ Paquete redis instalado: versión {redis_version}")
+        except ImportError:
+            logger.warning(
+                "⚠️ Paquete redis de Python no está instalado. "
+                "Instalar con: pip install 'redis>=5.0.0,<6.0.0'"
+            )
+            # Usar memoria directamente si el paquete no está instalado
+            return Limiter(
+                key_func=get_client_ip,
+                default_limits=["1000/hour"],
+                storage_uri="memory://",
+            )
+        
         try:
             # Intentar crear limiter con Redis
             # Esto puede fallar si Redis no está disponible o no cumple con los requisitos
+            logger.info(f"🔍 Intentando inicializar rate limiter con Redis: {storage_uri[:50]}...")
             limiter = Limiter(
                 key_func=get_client_ip,
                 default_limits=["1000/hour"],
                 storage_uri=storage_uri,
             )
-            logger.info("✅ Rate limiter inicializado con Redis")
+            logger.info("✅ Rate limiter inicializado con Redis correctamente")
             return limiter
         except LimitsConfigurationError as e:
             # Capturar específicamente el error de configuración de limits
