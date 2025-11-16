@@ -846,18 +846,27 @@ def obtener_resumen_cobranzas(
         monto_total_adeudado = monto_query.scalar() or Decimal("0.0")
 
         # Cantidad de clientes únicos atrasados
+        clientes_filters = [
+            Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Incluir ambos estados
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
+        ]
+        
+        if not incluir_admin:
+            clientes_filters.extend([
+                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
+            ])
+        
         clientes_query = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .outerjoin(User, User.email == Prestamo.usuario_proponente)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
-                Prestamo.usuario_proponente != settings.ADMIN_EMAIL,
-                or_(User.is_admin.is_(False), User.is_admin.is_(None)),
-            )
+            .filter(*clientes_filters)
         )
+        
+        if not incluir_admin:
+            clientes_query = clientes_query.filter(or_(User.is_admin.is_(False), User.is_admin.is_(None)))
+        
         clientes_unicos = clientes_query.scalar() or 0
 
         logger.info(

@@ -16,6 +16,7 @@ import {
   Link,
   X,
   Loader2,
+  Settings,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -90,18 +91,44 @@ const mapearEstadoConcesionario = (concesionario: Concesionario, prestamos: Pres
   return 'pendiente'
 }
 
+// Configuración de campos de tarjetas
+interface CamposTarjetaConfig {
+  mostrarNombre: boolean
+  mostrarEstado: boolean
+  mostrarClientes: boolean
+  mostrarPrestamos: boolean
+  mostrarMontoTotal: boolean
+  mostrarFechaRegistro: boolean
+}
+
+const CAMPOS_DEFAULT: CamposTarjetaConfig = {
+  mostrarNombre: true,
+  mostrarEstado: true,
+  mostrarClientes: true,
+  mostrarPrestamos: true,
+  mostrarMontoTotal: true,
+  mostrarFechaRegistro: true,
+}
+
 export function EmbudoConcesionarios() {
   const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
   const [concesionarioSeleccionadoId, setConcesionarioSeleccionadoId] = useState<string>('')
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [showConfigDialog, setShowConfigDialog] = useState(false)
   const [searchConcesionario, setSearchConcesionario] = useState('')
   const [concesionariosEnEmbudo, setConcesionariosEnEmbudo] = useState<Map<number, Concesionario>>(new Map())
   const [estadosManuales, setEstadosManuales] = useState<Map<number, string>>(new Map())
   const [nuevoConcesionario, setNuevoConcesionario] = useState<ConcesionarioCreate>({
     nombre: '',
     activo: true
+  })
+  
+  // Configuración de campos de tarjetas
+  const [camposTarjeta, setCamposTarjeta] = useState<CamposTarjetaConfig>(() => {
+    const saved = localStorage.getItem('embudo_concesionarios_campos')
+    return saved ? JSON.parse(saved) : CAMPOS_DEFAULT
   })
   
   const createConcesionarioMutation = useCreateConcesionario()
@@ -380,6 +407,10 @@ export function EmbudoConcesionarios() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowConfigDialog(true)}>
+            <Settings className="h-4 w-4 mr-2" />
+            Configurar Tarjetas
+          </Button>
           <Button variant="outline" onClick={() => navigate('/concesionarios')}>
             <Building className="h-4 w-4 mr-2" />
             Gestionar Concesionarios
@@ -498,6 +529,135 @@ export function EmbudoConcesionarios() {
                         Crear
                       </>
                     )}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+          
+          {/* Diálogo de Configuración de Tarjetas */}
+          <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Configurar Campos de Tarjetas
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <p className="text-sm text-gray-600">
+                  Selecciona qué campos deseas mostrar en las tarjetas del embudo:
+                </p>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="mostrarNombre"
+                      checked={camposTarjeta.mostrarNombre}
+                      onChange={(e) => {
+                        const nuevo = { ...camposTarjeta, mostrarNombre: e.target.checked }
+                        setCamposTarjeta(nuevo)
+                        localStorage.setItem('embudo_concesionarios_campos', JSON.stringify(nuevo))
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <Label htmlFor="mostrarNombre" className="cursor-pointer font-normal">
+                      Nombre del concesionario
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="mostrarEstado"
+                      checked={camposTarjeta.mostrarEstado}
+                      onChange={(e) => {
+                        const nuevo = { ...camposTarjeta, mostrarEstado: e.target.checked }
+                        setCamposTarjeta(nuevo)
+                        localStorage.setItem('embudo_concesionarios_campos', JSON.stringify(nuevo))
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <Label htmlFor="mostrarEstado" className="cursor-pointer font-normal">
+                      Estado (Venta asignada/Inactivo)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="mostrarClientes"
+                      checked={camposTarjeta.mostrarClientes}
+                      onChange={(e) => {
+                        const nuevo = { ...camposTarjeta, mostrarClientes: e.target.checked }
+                        setCamposTarjeta(nuevo)
+                        localStorage.setItem('embudo_concesionarios_campos', JSON.stringify(nuevo))
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <Label htmlFor="mostrarClientes" className="cursor-pointer font-normal">
+                      Clientes asignados
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="mostrarPrestamos"
+                      checked={camposTarjeta.mostrarPrestamos}
+                      onChange={(e) => {
+                        const nuevo = { ...camposTarjeta, mostrarPrestamos: e.target.checked }
+                        setCamposTarjeta(nuevo)
+                        localStorage.setItem('embudo_concesionarios_campos', JSON.stringify(nuevo))
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <Label htmlFor="mostrarPrestamos" className="cursor-pointer font-normal">
+                      Préstamos activos
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="mostrarMontoTotal"
+                      checked={camposTarjeta.mostrarMontoTotal}
+                      onChange={(e) => {
+                        const nuevo = { ...camposTarjeta, mostrarMontoTotal: e.target.checked }
+                        setCamposTarjeta(nuevo)
+                        localStorage.setItem('embudo_concesionarios_campos', JSON.stringify(nuevo))
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <Label htmlFor="mostrarMontoTotal" className="cursor-pointer font-normal">
+                      Monto total
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="mostrarFechaRegistro"
+                      checked={camposTarjeta.mostrarFechaRegistro}
+                      onChange={(e) => {
+                        const nuevo = { ...camposTarjeta, mostrarFechaRegistro: e.target.checked }
+                        setCamposTarjeta(nuevo)
+                        localStorage.setItem('embudo_concesionarios_campos', JSON.stringify(nuevo))
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <Label htmlFor="mostrarFechaRegistro" className="cursor-pointer font-normal">
+                      Fecha de registro
+                    </Label>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-4 border-t">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setCamposTarjeta(CAMPOS_DEFAULT)
+                      localStorage.setItem('embudo_concesionarios_campos', JSON.stringify(CAMPOS_DEFAULT))
+                    }}
+                  >
+                    Restaurar por defecto
+                  </Button>
+                  <Button onClick={() => setShowConfigDialog(false)}>
+                    Cerrar
                   </Button>
                 </div>
               </div>
@@ -771,10 +931,14 @@ export function EmbudoConcesionarios() {
                             <div className="space-y-3">
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
-                                  <h3 className="font-semibold text-gray-900 text-sm">{concesionario.nombre}</h3>
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    {concesionario.activo ? 'Venta asignada' : 'Inactivo'}
-                                  </p>
+                                  {camposTarjeta.mostrarNombre && (
+                                    <h3 className="font-semibold text-gray-900 text-sm">{concesionario.nombre}</h3>
+                                  )}
+                                  {camposTarjeta.mostrarEstado && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      {concesionario.activo ? 'Venta asignada' : 'Inactivo'}
+                                    </p>
+                                  )}
                                 </div>
                                 <div className="flex gap-1">
                                   <Button 
@@ -804,27 +968,37 @@ export function EmbudoConcesionarios() {
                                 </div>
                               </div>
                               
-                              <div className="space-y-2 pt-2 border-t border-gray-100">
-                                <div className="grid grid-cols-2 gap-2 pt-2">
-                                  <div className="bg-blue-50 rounded p-2">
-                                    <div className="text-xs text-gray-600">Clientes</div>
-                                    <div className="text-sm font-bold text-blue-700">{concesionario.clientesAsignados}</div>
-                                  </div>
-                                  <div className="bg-purple-50 rounded p-2">
-                                    <div className="text-xs text-gray-600">Préstamos</div>
-                                    <div className="text-sm font-bold text-purple-700">{concesionario.prestamosActivos}</div>
-                                  </div>
+                              {(camposTarjeta.mostrarClientes || camposTarjeta.mostrarPrestamos || camposTarjeta.mostrarMontoTotal || camposTarjeta.mostrarFechaRegistro) && (
+                                <div className="space-y-2 pt-2 border-t border-gray-100">
+                                  {(camposTarjeta.mostrarClientes || camposTarjeta.mostrarPrestamos) && (
+                                    <div className="grid grid-cols-2 gap-2 pt-2">
+                                      {camposTarjeta.mostrarClientes && (
+                                        <div className="bg-blue-50 rounded p-2">
+                                          <div className="text-xs text-gray-600">Clientes</div>
+                                          <div className="text-sm font-bold text-blue-700">{concesionario.clientesAsignados}</div>
+                                        </div>
+                                      )}
+                                      {camposTarjeta.mostrarPrestamos && (
+                                        <div className="bg-purple-50 rounded p-2">
+                                          <div className="text-xs text-gray-600">Préstamos</div>
+                                          <div className="text-sm font-bold text-purple-700">{concesionario.prestamosActivos}</div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  {camposTarjeta.mostrarMontoTotal && concesionario.montoTotal > 0 && (
+                                    <div className="flex items-center gap-2 text-xs pt-1">
+                                      <DollarSign className="h-3.5 w-3.5 text-green-600" />
+                                      <span className="font-semibold text-green-700">{formatCurrency(concesionario.montoTotal)}</span>
+                                    </div>
+                                  )}
+                                  {camposTarjeta.mostrarFechaRegistro && (
+                                    <div className="text-xs text-gray-500 pt-1">
+                                      Registro: {formatDate(new Date(concesionario.created_at))}
+                                    </div>
+                                  )}
                                 </div>
-                                {concesionario.montoTotal > 0 && (
-                                  <div className="flex items-center gap-2 text-xs pt-1">
-                                    <DollarSign className="h-3.5 w-3.5 text-green-600" />
-                                    <span className="font-semibold text-green-700">{formatCurrency(concesionario.montoTotal)}</span>
-                                  </div>
-                                )}
-                                <div className="text-xs text-gray-500 pt-1">
-                                  Registro: {formatDate(new Date(concesionario.created_at))}
-                                </div>
-                              </div>
+                              )}
                             </div>
                           </motion.div>
                         ))
