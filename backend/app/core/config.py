@@ -41,20 +41,20 @@ class Settings(BaseSettings):
     APP_NAME: str = "RapiCredit API"
     APP_VERSION: str = "1.0.0"
     DESCRIPTION: str = "API para sistema de préstamos RapiCredit"
-    ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
-    DEBUG: bool = Field(default=True, env="DEBUG")
+    ENVIRONMENT: str = Field(default="development")  # type: ignore[call-overload]
+    DEBUG: bool = Field(default=True)  # type: ignore[call-overload]
 
     # ============================================
     # BASE DE DATOS
     # ============================================
-    DATABASE_URL: str = Field(default="postgresql://user:password@localhost/pagos_db", env="DATABASE_URL")
+    DATABASE_URL: str = Field(default="postgresql://user:password@localhost/pagos_db")  # type: ignore[call-overload]
 
     # ============================================
     # SEGURIDAD
     # ============================================
     # SECRET_KEY debe configurarse mediante variable de entorno
     # En desarrollo, se genera automáticamente si no está configurado
-    SECRET_KEY: Optional[str] = Field(default=None, env="SECRET_KEY")
+    SECRET_KEY: Optional[str] = Field(default=None)  # type: ignore[call-overload]
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 240  # 4 horas
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -63,8 +63,7 @@ class Settings(BaseSettings):
     # CORS
     # ============================================
     CORS_ORIGINS: List[str] = Field(
-        default_factory=lambda: _get_default_cors_origins(),
-        env="CORS_ORIGINS",
+        default_factory=lambda: _get_default_cors_origins(),  # type: ignore[call-overload]
     )
 
     @model_validator(mode="before")
@@ -126,8 +125,8 @@ class Settings(BaseSettings):
     # ============================================
     # ADMIN_EMAIL y ADMIN_PASSWORD deben configurarse mediante variables de entorno
     # En desarrollo, se usan valores por defecto solo si no están configurados
-    ADMIN_EMAIL: Optional[str] = Field(default=None, env="ADMIN_EMAIL")
-    ADMIN_PASSWORD: Optional[str] = Field(default=None, env="ADMIN_PASSWORD")
+    ADMIN_EMAIL: Optional[str] = Field(default=None)  # type: ignore[call-overload]
+    ADMIN_PASSWORD: Optional[str] = Field(default=None)  # type: ignore[call-overload]
 
     # ============================================
     # AMORTIZACIÓN Y REGLAS DE NEGOCIO
@@ -177,13 +176,13 @@ class Settings(BaseSettings):
     # REDIS / CACHÉ
     # ============================================
     REDIS_URL: Optional[str] = Field(
-        default=None, env="REDIS_URL", description="URL completa de Redis (ej: redis://localhost:6379/0)"
+        default=None, description="URL completa de Redis (ej: redis://localhost:6379/0)"  # type: ignore[call-overload]
     )
-    REDIS_HOST: str = Field(default="localhost", env="REDIS_HOST", description="Host de Redis")
-    REDIS_PORT: int = Field(default=6379, env="REDIS_PORT", description="Puerto de Redis")
-    REDIS_DB: int = Field(default=0, env="REDIS_DB", description="Base de datos de Redis")
-    REDIS_PASSWORD: Optional[str] = Field(default=None, env="REDIS_PASSWORD", description="Contraseña de Redis (opcional)")
-    REDIS_SOCKET_TIMEOUT: int = Field(default=5, env="REDIS_SOCKET_TIMEOUT", description="Timeout de socket en segundos")
+    REDIS_HOST: str = Field(default="localhost", description="Host de Redis")  # type: ignore[call-overload]
+    REDIS_PORT: int = Field(default=6379, description="Puerto de Redis")  # type: ignore[call-overload]
+    REDIS_DB: int = Field(default=0, description="Base de datos de Redis")  # type: ignore[call-overload]
+    REDIS_PASSWORD: Optional[str] = Field(default=None, description="Contraseña de Redis (opcional)")  # type: ignore[call-overload]
+    REDIS_SOCKET_TIMEOUT: int = Field(default=5, description="Timeout de socket en segundos")  # type: ignore[call-overload]
 
     # ============================================
     # FILE UPLOADS
