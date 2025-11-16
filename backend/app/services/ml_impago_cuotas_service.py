@@ -378,7 +378,7 @@ class MLImpagoCuotasService:
             try:
                 # Asegurar que el directorio existe
                 self.model_path.mkdir(parents=True, exist_ok=True)
-                
+
                 with open(model_path, "wb") as f:
                     pickle.dump(model, f)
                 logger.info(f"💾 Modelo guardado en: {model_path.absolute()}")

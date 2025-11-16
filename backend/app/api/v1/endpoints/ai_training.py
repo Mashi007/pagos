@@ -1529,7 +1529,7 @@ async def entrenar_modelo_impago(
         ml_service = MLImpagoCuotasService()
         training_data = []
         fecha_actual = date.today()
-        
+
         logger.info(f"📅 Fecha actual para cálculo de features: {fecha_actual}")
 
         # Generar datos de entrenamiento
