@@ -772,9 +772,9 @@ export function EmbudoConcesionarios() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className={`grid grid-cols-1 gap-6 ${concesionarioDetalle ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
           {/* Kanban Board - Embudo Visual */}
-          <div className="lg:col-span-2 overflow-x-auto pb-4">
+          <div className={`overflow-x-auto pb-4 ${concesionarioDetalle ? 'lg:col-span-2' : 'lg:col-span-1'}`}>
             <div className="flex gap-4 min-w-max">
               {concesionariosPorEstado.map((columna) => {
               const EstadoIcon = columna.icon
@@ -784,7 +784,7 @@ export function EmbudoConcesionarios() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="flex-shrink-0 w-80"
+                  className={`flex-shrink-0 ${concesionarioDetalle ? 'w-80' : 'w-96'}`}
                 >
                   <Card className={`h-full ${columna.color} border-2`}>
                     <CardHeader className={`${columna.headerColor} pb-3`}>

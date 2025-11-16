@@ -41,6 +41,66 @@ router = APIRouter()
 # HELPERS DE NORMALIZACIÓN Y UTILIDADES
 # ============================================================================
 
+def _validar_rango_fechas(fecha_inicio: Optional[date], fecha_fin: Optional[date]) -> None:
+    """Valida que el rango de fechas sea válido"""
+    if fecha_inicio and fecha_fin:
+        if fecha_inicio > fecha_fin:
+            raise HTTPException(
+                status_code=400,
+                detail="fecha_inicio no puede ser mayor que fecha_fin"
+            )
+        # Validar que el rango no sea mayor a 5 años
+        dias_diferencia = (fecha_fin - fecha_inicio).days
+        if dias_diferencia > 1825:  # 5 años
+            raise HTTPException(
+                status_code=400,
+                detail="El rango de fechas no puede ser mayor a 5 años"
+            )
+
+
+def _validar_parametro_numerico(valor: Optional[int], nombre: str, min_val: int, max_val: int, default: int) -> int:
+    """Valida y normaliza parámetros numéricos"""
+    if valor is None:
+        return default
+    if valor < min_val or valor > max_val:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{nombre} debe estar entre {min_val} y {max_val}"
+        )
+    return valor
+
+
+def _sanitizar_string(valor: Optional[str], max_length: int = 100) -> Optional[str]:
+    """Sanitiza strings para prevenir inyección"""
+    if not valor:
+        return None
+    # Remover caracteres peligrosos
+    valor = valor.strip()[:max_length]
+    # Remover caracteres SQL peligrosos
+    peligrosos = ["'", '"', ";", "--", "/*", "*/", "xp_", "sp_"]
+    for char in peligrosos:
+        if char in valor.lower():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Caracteres no permitidos en parámetro"
+            )
+    return valor
+
+
+def _manejar_error_dashboard(e: Exception, operacion: str, db: Session) -> HTTPException:
+    """Función helper para manejo consistente de errores"""
+    logger.error(f"❌ [dashboard] Error en {operacion}: {e}", exc_info=True)
+    try:
+        db.rollback()
+    except Exception as rollback_error:
+        logger.error(f"❌ [dashboard] Error en rollback: {rollback_error}")
+    
+    # No exponer detalles internos del error al cliente
+    error_message = f"Error interno en {operacion}"
+    if isinstance(e, HTTPException):
+        raise e
+    raise HTTPException(status_code=500, detail=error_message)
+
 
 def normalize_to_date(fecha: Any) -> Optional[date]:
     """
@@ -1269,11 +1329,12 @@ def _generar_lista_fechas(fecha_inicio: date, fecha_fin: date) -> List[date]:
 
 
 @router.get("/cobros-diarios")
+@cache_result(ttl=300, key_prefix="dashboard")  # ✅ Agregar caché
 def obtener_cobros_diarios(
-    dias: Optional[int] = Query(30, description="Número de días a mostrar"),
-    analista: Optional[str] = Query(None, description="Filtrar por analista"),
-    concesionario: Optional[str] = Query(None, description="Filtrar por concesionario"),
-    modelo: Optional[str] = Query(None, description="Filtrar por modelo"),
+    dias: Optional[int] = Query(30, ge=1, le=365, description="Número de días a mostrar (1-365)"),
+    analista: Optional[str] = Query(None, max_length=100, description="Filtrar por analista"),
+    concesionario: Optional[str] = Query(None, max_length=100, description="Filtrar por concesionario"),
+    modelo: Optional[str] = Query(None, max_length=100, description="Filtrar por modelo"),
     fecha_inicio: Optional[date] = Query(None, description="Fecha inicio"),
     fecha_fin: Optional[date] = Query(None, description="Fecha fin"),
     db: Session = Depends(get_db),
@@ -1311,8 +1372,7 @@ def obtener_cobros_diarios(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error obteniendo cobros diarios: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        raise _manejar_error_dashboard(e, "obtener_cobros_diarios", db)
 
 
 @router.get("/admin")
@@ -2880,20 +2940,16 @@ def obtener_cobranzas_mensuales(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error obteniendo cobranzas mensuales: {e}", exc_info=True)
-        try:
-            db.rollback()  # ✅ Rollback para restaurar transacción después de error
-        except Exception:
-            pass
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        raise _manejar_error_dashboard(e, "obtener_cobranzas_mensuales", db)
 
 
 @router.get("/cobranza-por-dia")
+@cache_result(ttl=300, key_prefix="dashboard")  # ✅ Agregar caché
 def obtener_cobranza_por_dia(
-    dias: Optional[int] = Query(30, description="Número de días a mostrar"),
-    analista: Optional[str] = Query(None),
-    concesionario: Optional[str] = Query(None),
-    modelo: Optional[str] = Query(None),
+    dias: Optional[int] = Query(30, ge=1, le=365, description="Número de días a mostrar (1-365)"),
+    analista: Optional[str] = Query(None, max_length=100),
+    concesionario: Optional[str] = Query(None, max_length=100),
+    modelo: Optional[str] = Query(None, max_length=100),
     fecha_inicio: Optional[date] = Query(None),
     fecha_fin: Optional[date] = Query(None),
     db: Session = Depends(get_db),
@@ -2937,16 +2993,18 @@ def obtener_cobranza_por_dia(
 
         return {"dias": dias_data}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error obteniendo cobranza por día: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        raise _manejar_error_dashboard(e, "obtener_cobranza_por_dia", db)
 
 
 @router.get("/cobranza-fechas-especificas")
+@cache_result(ttl=300, key_prefix="dashboard")  # ✅ Agregar caché
 def obtener_cobranza_fechas_especificas(
-    analista: Optional[str] = Query(None),
-    concesionario: Optional[str] = Query(None),
-    modelo: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None, max_length=100),
+    concesionario: Optional[str] = Query(None, max_length=100),
+    modelo: Optional[str] = Query(None, max_length=100),
     fecha_inicio: Optional[date] = Query(None),
     fecha_fin: Optional[date] = Query(None),
     db: Session = Depends(get_db),
@@ -2959,6 +3017,11 @@ def obtener_cobranza_fechas_especificas(
     - Mañana (día de la semana, ej: Lunes)
     """
     try:
+        # ✅ VALIDACIÓN: Validar parámetros de entrada
+        analista = _sanitizar_string(analista)
+        concesionario = _sanitizar_string(concesionario)
+        modelo = _sanitizar_string(modelo)
+        _validar_rango_fechas(fecha_inicio, fecha_fin)
         hoy = date.today()
         mañana = hoy + timedelta(days=1)
         ayer = hoy - timedelta(days=1)
@@ -3048,10 +3111,11 @@ def obtener_cobranza_fechas_especificas(
             )
 
         return {"dias": dias_data}
-
+    
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error obteniendo cobranza fechas específicas: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        raise _manejar_error_dashboard(e, "obtener_cobranza_fechas_especificas", db)
 
 
 @router.get("/metricas-acumuladas")
@@ -3246,10 +3310,11 @@ def obtener_morosidad_por_analista(
 
 
 @router.get("/prestamos-por-concesionario")
+@cache_result(ttl=600, key_prefix="dashboard")  # ✅ Agregar caché
 def obtener_prestamos_por_concesionario(
-    analista: Optional[str] = Query(None),
-    concesionario: Optional[str] = Query(None),
-    modelo: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None, max_length=100),
+    concesionario: Optional[str] = Query(None, max_length=100),
+    modelo: Optional[str] = Query(None, max_length=100),
     fecha_inicio: Optional[date] = Query(None),
     fecha_fin: Optional[date] = Query(None),
     db: Session = Depends(get_db),
@@ -3259,13 +3324,19 @@ def obtener_prestamos_por_concesionario(
     Componente 4: Préstamos por Concesionario (expresado en porcentaje)
     """
     try:
+        # ✅ VALIDACIÓN: Validar parámetros de entrada
+        analista = _sanitizar_string(analista)
+        concesionario = _sanitizar_string(concesionario)
+        modelo = _sanitizar_string(modelo)
+        _validar_rango_fechas(fecha_inicio, fecha_fin)
         # Obtener total general de préstamos (cantidad y monto)
-        # Crear queries separadas para evitar conflictos
+        # Crear queries separadas porque with_entities() modifica la query
         query_base_cantidad = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
         query_base_cantidad = FiltrosDashboard.aplicar_filtros_prestamo(
             query_base_cantidad, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        total_general_cantidad = query_base_cantidad.count()
+        # Usar func.count() en lugar de query.count() para mayor compatibilidad con queries complejas
+        total_general_cantidad = query_base_cantidad.with_entities(func.count(Prestamo.id)).scalar() or 0
 
         query_base_monto = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
         query_base_monto = FiltrosDashboard.aplicar_filtros_prestamo(
@@ -3278,26 +3349,17 @@ def obtener_prestamos_por_concesionario(
         # Agrupar por concesionario
         concesionario_expr = func.coalesce(Prestamo.concesionario, "Sin Concesionario")
 
-        # Construir query con filtros ANTES del group_by
+        # ✅ CORRECCIÓN: Usar FiltrosDashboard para aplicar filtros consistentemente
         query_concesionarios = db.query(
             concesionario_expr.label("concesionario"),
             func.sum(Prestamo.total_financiamiento).label("total_prestamos"),
             func.count(Prestamo.id).label("cantidad_prestamos"),
         ).filter(Prestamo.estado == "APROBADO")
-
-        # Aplicar filtros ANTES del group_by
-        if analista:
-            query_concesionarios = query_concesionarios.filter(
-                or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
-            )
-        if modelo:
-            query_concesionarios = query_concesionarios.filter(
-                or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo)
-            )
-        if fecha_inicio:
-            query_concesionarios = query_concesionarios.filter(Prestamo.fecha_registro >= fecha_inicio)
-        if fecha_fin:
-            query_concesionarios = query_concesionarios.filter(Prestamo.fecha_registro <= fecha_fin)
+        
+        # Aplicar filtros usando FiltrosDashboard (incluye OR entre fechas)
+        query_concesionarios = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_concesionarios, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
 
         # Aplicar group_by después de todos los filtros
         query_concesionarios = query_concesionarios.group_by(concesionario_expr)
@@ -3325,9 +3387,10 @@ def obtener_prestamos_por_concesionario(
             "total_general": total_general_monto,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error obteniendo préstamos por concesionario: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        raise _manejar_error_dashboard(e, "obtener_prestamos_por_concesionario", db)
 
 
 @router.get("/prestamos-por-modelo")
@@ -3347,12 +3410,13 @@ def obtener_prestamos_por_modelo(
     """
     try:
         # Obtener total general de préstamos (cantidad y monto)
-        # Crear queries separadas para evitar conflictos
+        # Crear queries separadas porque with_entities() modifica la query
         query_base_cantidad = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
         query_base_cantidad = FiltrosDashboard.aplicar_filtros_prestamo(
             query_base_cantidad, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        total_general_cantidad = query_base_cantidad.count()
+        # Usar func.count() en lugar de query.count() para mayor compatibilidad con queries complejas
+        total_general_cantidad = query_base_cantidad.with_entities(func.count(Prestamo.id)).scalar() or 0
 
         query_base_monto = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
         query_base_monto = FiltrosDashboard.aplicar_filtros_prestamo(
@@ -3365,22 +3429,17 @@ def obtener_prestamos_por_modelo(
         # Agrupar por modelo (usar producto o modelo_vehiculo)
         modelo_expr = func.coalesce(func.coalesce(Prestamo.modelo_vehiculo, Prestamo.producto), "Sin Modelo")
 
-        # Construir query con filtros ANTES del group_by
+        # ✅ CORRECCIÓN: Usar FiltrosDashboard para aplicar filtros consistentemente
         query_modelos = db.query(
             modelo_expr.label("modelo"),
             func.sum(Prestamo.total_financiamiento).label("total_prestamos"),
             func.count(Prestamo.id).label("cantidad_prestamos"),
         ).filter(Prestamo.estado == "APROBADO")
-
-        # Aplicar filtros ANTES del group_by
-        if analista:
-            query_modelos = query_modelos.filter(or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista))
-        if concesionario:
-            query_modelos = query_modelos.filter(Prestamo.concesionario == concesionario)
-        if fecha_inicio:
-            query_modelos = query_modelos.filter(Prestamo.fecha_registro >= fecha_inicio)
-        if fecha_fin:
-            query_modelos = query_modelos.filter(Prestamo.fecha_registro <= fecha_fin)
+        
+        # Aplicar filtros usando FiltrosDashboard (incluye OR entre fechas)
+        query_modelos = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_modelos, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
 
         # Aplicar group_by después de todos los filtros
         query_modelos = query_modelos.group_by(modelo_expr)
@@ -3411,16 +3470,18 @@ def obtener_prestamos_por_modelo(
             "total_general": total_general_monto,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error obteniendo préstamos por modelo: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        raise _manejar_error_dashboard(e, "obtener_prestamos_por_modelo", db)
 
 
 @router.get("/pagos-conciliados")
+@cache_result(ttl=300, key_prefix="dashboard")  # ✅ Agregar caché
 def obtener_pagos_conciliados(
-    analista: Optional[str] = Query(None),
-    concesionario: Optional[str] = Query(None),
-    modelo: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None, max_length=100),
+    concesionario: Optional[str] = Query(None, max_length=100),
+    modelo: Optional[str] = Query(None, max_length=100),
     fecha_inicio: Optional[date] = Query(None),
     fecha_fin: Optional[date] = Query(None),
     db: Session = Depends(get_db),
@@ -3430,6 +3491,11 @@ def obtener_pagos_conciliados(
     Obtiene estadísticas de pagos totales vs pagos conciliados
     """
     try:
+        # ✅ VALIDACIÓN: Validar parámetros de entrada
+        analista = _sanitizar_string(analista)
+        concesionario = _sanitizar_string(concesionario)
+        modelo = _sanitizar_string(modelo)
+        _validar_rango_fechas(fecha_inicio, fecha_fin)
         # Query base para pagos (usar tabla Pago que tiene conciliado)
         query_base = db.query(Pago).filter(Pago.activo.is_(True))
 
@@ -3478,10 +3544,11 @@ def obtener_pagos_conciliados(
             "porcentaje_conciliacion": round(porcentaje_conciliacion, 2),
             "porcentaje_monto_conciliado": round(porcentaje_monto_conciliado, 2),
         }
-
+    
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error obteniendo estadísticas de pagos conciliados: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        raise _manejar_error_dashboard(e, "obtener_pagos_conciliados", db)
 
 
 @router.get("/financiamiento-por-rangos")
@@ -5129,30 +5196,58 @@ def obtener_cobranzas_semanales(
             filtros_cobranzas.append("(p.producto = :modelo OR p.modelo_vehiculo = :modelo)")
             params_cobranzas["modelo"] = modelo
 
-        where_clause_cobranzas = " AND ".join(filtros_cobranzas)
+        # ✅ SEGURIDAD: Construir query sin f-strings para prevenir SQL injection
+        # Usar SQLAlchemy ORM cuando sea posible, o construir WHERE con parámetros nombrados
         try:
-            query_cobranzas_sql = text(
-                f"""
-                SELECT
-                    DATE_TRUNC('week', c.fecha_vencimiento)::date as semana_inicio,
-                    EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
-                    EXTRACT(WEEK FROM c.fecha_vencimiento)::int as semana_numero,
-                    COALESCE(SUM(c.monto_cuota), 0) as cobranzas
-                FROM cuotas c
-                INNER JOIN prestamos p ON c.prestamo_id = p.id
-                WHERE {where_clause_cobranzas}
-                GROUP BY DATE_TRUNC('week', c.fecha_vencimiento)::date,
-                         EXTRACT(YEAR FROM c.fecha_vencimiento),
-                         EXTRACT(WEEK FROM c.fecha_vencimiento)
-                ORDER BY semana_inicio
-            """
-            ).bindparams(**params_cobranzas)
-
-            result_cobranzas = db.execute(query_cobranzas_sql)
+            # Construir condiciones WHERE de forma segura usando SQLAlchemy
+            condiciones = [
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_vencimiento >= fecha_inicio_query,
+                Cuota.fecha_vencimiento <= fecha_fin_query,
+                func.extract('dow', Cuota.fecha_vencimiento).between(1, 5)
+            ]
+            
+            if analista:
+                condiciones.append(
+                    or_(
+                        Prestamo.analista == analista,
+                        Prestamo.producto_financiero == analista
+                    )
+                )
+            if concesionario:
+                condiciones.append(Prestamo.concesionario == concesionario)
+            if modelo:
+                condiciones.append(
+                    or_(
+                        Prestamo.producto == modelo,
+                        Prestamo.modelo_vehiculo == modelo
+                    )
+                )
+            
+            # Usar ORM en lugar de SQL crudo
+            query_cobranzas_orm = (
+                db.query(
+                    func.date_trunc('week', Cuota.fecha_vencimiento).label('semana_inicio'),
+                    func.extract('year', Cuota.fecha_vencimiento).label('año'),
+                    func.extract('week', Cuota.fecha_vencimiento).label('semana_numero'),
+                    func.coalesce(func.sum(Cuota.monto_cuota), 0).label('cobranzas')
+                )
+                .select_from(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .filter(and_(*condiciones))
+                .group_by(
+                    func.date_trunc('week', Cuota.fecha_vencimiento),
+                    func.extract('year', Cuota.fecha_vencimiento),
+                    func.extract('week', Cuota.fecha_vencimiento)
+                )
+                .order_by(func.date_trunc('week', Cuota.fecha_vencimiento))
+            )
+            
+            result_cobranzas = query_cobranzas_orm.all()
             cobranzas_por_semana = {}
             for row in result_cobranzas:
-                semana_inicio = row[0] if row[0] is not None else None
-                cobranzas = float(row[3] or Decimal("0")) if row[3] is not None else 0.0
+                semana_inicio = row.semana_inicio if row.semana_inicio else None
+                cobranzas = float(row.cobranzas or Decimal("0"))
                 cobranzas_por_semana[semana_inicio] = cobranzas
                 if cobranzas > 0:
                     logger.debug(f"📊 [cobranzas-semanales] Semana {semana_inicio}: ${cobranzas:,.2f}")
