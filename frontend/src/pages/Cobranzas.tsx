@@ -21,7 +21,7 @@ import {
   ChevronUp,
   Save,
   X,
-  Pencil
+  Edit
 } from 'lucide-react'
 import { cobranzasService } from '@/services/cobranzasService'
 import { useQuery } from '@tanstack/react-query'
@@ -907,7 +907,7 @@ export function Cobranzas() {
                                           className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:opacity-100"
                                           title="Editar analista"
                                         >
-                                          <Pencil className="h-3 w-3" />
+                                          <Edit className="h-3 w-3" />
                                         </Button>
                                       </div>
                                     )}
@@ -1346,7 +1346,7 @@ export function Cobranzas() {
                                                       className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:opacity-100"
                                                       title="Editar analista"
                                                     >
-                                                      <Pencil className="h-3 w-3" />
+                                                      <Edit className="h-3 w-3" />
                                                     </Button>
                                                   </div>
                                                 )}

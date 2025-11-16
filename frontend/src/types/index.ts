@@ -124,6 +124,7 @@ export interface PrestamoForm {
   fecha_base_calculo?: string
   observaciones?: string
   usuario_autoriza?: string  // Email del usuario que autoriza crear nuevo préstamo
+  usuario_proponente?: string  // Email del analista asignado
 }
 
 // Tipos para respuestas de API
