@@ -129,7 +129,34 @@ def _create_limiter_with_fallback():
 
 # Inicializar limiter con función personalizada para obtener IP del cliente
 # Usa fallback a memoria si Redis no está disponible
-limiter = _create_limiter_with_fallback()
+# Envolver en try-except para capturar cualquier error durante la inicialización
+try:
+    limiter = _create_limiter_with_fallback()
+except LimitsConfigurationError as e:
+    # Si falla por configuración de Redis, usar memoria
+    logger.warning(
+        f"⚠️ Error de configuración de Redis al inicializar rate limiter: {e}")
+    logger.warning(
+        "⚠️ Usando memoria para rate limiting como fallback. "
+        "En producción distribuida, configure Redis correctamente (requiere redis >= 3.0) para rate limiting distribuido."
+    )
+    limiter = Limiter(
+        key_func=get_client_ip,
+        default_limits=["1000/hour"],
+        storage_uri="memory://",
+    )
+except Exception as e:
+    # Capturar cualquier otro error durante la inicialización
+    logger.error(
+        f"❌ Error inesperado al inicializar rate limiter: {type(e).__name__}: {e}")
+    logger.warning(
+        "⚠️ Usando memoria para rate limiting como fallback debido a error inesperado."
+    )
+    limiter = Limiter(
+        key_func=get_client_ip,
+        default_limits=["1000/hour"],
+        storage_uri="memory://",
+    )
 
 
 def get_rate_limiter() -> Limiter:
