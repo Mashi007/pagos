@@ -3271,7 +3271,9 @@ def obtener_prestamos_por_concesionario(
         query_base_monto = FiltrosDashboard.aplicar_filtros_prestamo(
             query_base_monto, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        total_general_monto = float(query_base_monto.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
+        total_general_monto = float(
+            query_base_monto.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0")
+        )
 
         # Agrupar por concesionario
         concesionario_expr = func.coalesce(Prestamo.concesionario, "Sin Concesionario")
@@ -3356,7 +3358,9 @@ def obtener_prestamos_por_modelo(
         query_base_monto = FiltrosDashboard.aplicar_filtros_prestamo(
             query_base_monto, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        total_general_monto = float(query_base_monto.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
+        total_general_monto = float(
+            query_base_monto.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0")
+        )
 
         # Agrupar por modelo (usar producto o modelo_vehiculo)
         modelo_expr = func.coalesce(func.coalesce(Prestamo.modelo_vehiculo, Prestamo.producto), "Sin Modelo")
