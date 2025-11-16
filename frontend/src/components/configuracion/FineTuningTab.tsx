@@ -255,11 +255,19 @@ export function FineTuningTab() {
         const conversacionesCalificadas = conversaciones.filter(
           (c) => c.calificacion && c.calificacion >= 4
         ).length + 1 // +1 porque acabamos de calificar una
+        const MINIMO_REQUERIDO = 10
         
-        toast.success(
-          `✅ Conversación calificada (${calificacion} estrellas) - Lista para entrenamiento. ` +
-          `Total listas: ${conversacionesCalificadas}${conversacionesCalificadas >= 1 ? ' - ¡Ya puedes preparar datos!' : ` (necesitas ${1 - conversacionesCalificadas} más)`}`
-        )
+        if (conversacionesCalificadas >= MINIMO_REQUERIDO) {
+          toast.success(
+            `✅ Conversación calificada (${calificacion} estrellas) - Lista para entrenamiento. ` +
+            `Total listas: ${conversacionesCalificadas} - ¡Ya puedes preparar datos! (Mínimo ${MINIMO_REQUERIDO} requerido)`
+          )
+        } else {
+          toast.success(
+            `✅ Conversación calificada (${calificacion} estrellas) - Lista para entrenamiento. ` +
+            `Total listas: ${conversacionesCalificadas} (necesitas ${MINIMO_REQUERIDO - conversacionesCalificadas} más para entrenar)`
+          )
+        }
       } else {
         toast.success(`Conversación calificada (${calificacion} estrellas)`)
       }
@@ -294,12 +302,12 @@ export function FineTuningTab() {
         .filter((c) => c.calificacion && c.calificacion >= 4)
         .map((c) => c.id)
 
-      // Mínimo requerido para fine-tuning (permitir desde 1 conversación)
-      const MINIMO_CONVERSACIONES = 1
+      // Mínimo requerido por OpenAI para fine-tuning: 10 conversaciones
+      const MINIMO_CONVERSACIONES = 10
 
       if (conversacionesSeleccionadas.length < MINIMO_CONVERSACIONES) {
         toast.error(
-          `Se necesita al menos ${MINIMO_CONVERSACIONES} conversación calificada (4+ estrellas) para entrenar un modelo. Actualmente tienes ${conversacionesSeleccionadas.length}.`
+          `Se necesita al menos ${MINIMO_CONVERSACIONES} conversaciones calificadas (4+ estrellas) para entrenar un modelo. OpenAI requiere mínimo 10 ejemplos. Actualmente tienes ${conversacionesSeleccionadas.length}.`
         )
         return
       }
@@ -1226,14 +1234,15 @@ export function FineTuningTab() {
               {(() => {
                 const conversacionesListas = conversaciones.filter((c) => c.calificacion && c.calificacion >= 4)
                 const totalListas = conversacionesListas.length
-                const puedePreparar = totalListas >= 1
+                const MINIMO_REQUERIDO = 10
+                const puedePreparar = totalListas >= MINIMO_REQUERIDO
                 
                 return (
                   <div className="flex items-center gap-2 flex-wrap">
                     {totalListas > 0 && (
                       <Badge variant={puedePreparar ? "default" : "secondary"} className="mr-2">
                         {totalListas} lista{totalListas !== 1 ? 's' : ''} para entrenamiento
-                        {!puedePreparar && totalListas < 1 && ` (${1 - totalListas} más necesaria)`}
+                        {!puedePreparar && totalListas < MINIMO_REQUERIDO && ` (${MINIMO_REQUERIDO - totalListas} más necesaria${MINIMO_REQUERIDO - totalListas !== 1 ? 's' : ''})`}
                       </Badge>
                     )}
                     <div className="flex items-center gap-2">

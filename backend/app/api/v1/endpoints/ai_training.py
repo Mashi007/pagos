@@ -484,10 +484,12 @@ async def preparar_datos_entrenamiento(
 
         conversaciones = query.all()
 
-        if len(conversaciones) < 1:
+        # OpenAI requiere mínimo 10 conversaciones para fine-tuning
+        MINIMO_CONVERSACIONES = 10
+        if len(conversaciones) < MINIMO_CONVERSACIONES:
             raise HTTPException(
                 status_code=400,
-                detail=f"Se necesita al menos 1 conversación calificada (4+ estrellas). Actualmente hay {len(conversaciones)}.",
+                detail=f"Se necesita al menos {MINIMO_CONVERSACIONES} conversaciones calificadas (4+ estrellas) para entrenar un modelo. OpenAI requiere mínimo 10 ejemplos. Actualmente hay {len(conversaciones)}.",
             )
 
         # Obtener API key

@@ -212,10 +212,13 @@ Por favor, mejora la respuesta incorporando el feedback. Responde SOLO con el JS
 
                 conversaciones_filtradas.append(conv)
 
-            if len(conversaciones_filtradas) < 1:
+            # OpenAI requiere mínimo 10 conversaciones para fine-tuning
+            MINIMO_CONVERSACIONES = 10
+            if len(conversaciones_filtradas) < MINIMO_CONVERSACIONES:
                 raise Exception(
                     f"Después del filtrado, solo quedan {len(conversaciones_filtradas)} conversaciones. "
-                    f"Se necesita al menos 1. Se excluyeron {len(conversaciones_excluidas)} conversaciones con feedback negativo."
+                    f"Se necesita al menos {MINIMO_CONVERSACIONES} (OpenAI requiere mínimo 10 ejemplos). "
+                    f"Se excluyeron {len(conversaciones_excluidas)} conversaciones con feedback negativo."
                 )
 
             # Convertir conversaciones a formato JSONL
