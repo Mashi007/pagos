@@ -394,7 +394,7 @@ async def obtener_estadisticas_feedback(
                 "total": len(conversaciones_listas),
                 "sin_feedback_negativo": listas_sin_feedback_negativo,
                 "con_feedback_negativo": listas_con_feedback_negativo,
-                "puede_preparar": listas_sin_feedback_negativo >= 10,
+                "puede_preparar": listas_sin_feedback_negativo >= 1,
             },
         }
 
@@ -484,10 +484,10 @@ async def preparar_datos_entrenamiento(
 
         conversaciones = query.all()
 
-        if len(conversaciones) < 10:
+        if len(conversaciones) < 1:
             raise HTTPException(
                 status_code=400,
-                detail=f"Se necesitan al menos 10 conversaciones calificadas (4+ estrellas). Actualmente hay {len(conversaciones)}.",
+                detail=f"Se necesita al menos 1 conversación calificada (4+ estrellas). Actualmente hay {len(conversaciones)}.",
             )
 
         # Obtener API key

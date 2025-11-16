@@ -17,9 +17,11 @@ from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.configuracion_sistema import ConfiguracionSistema
 from app.models.documento_ai import DocumentoAI
+from app.models.documento_embedding import DocumentoEmbedding
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
+from app.services.rag_service import RAGService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -5798,67 +5800,159 @@ async def chat_ai(
             logger.error(f"Error obteniendo inventario de campos: {e}")
             info_esquema = "\n\n[Inventario de campos no disponible en este momento]"
 
-        # Buscar contexto en documentos si están disponibles
+        # Buscar contexto en documentos usando embeddings (búsqueda semántica)
         contexto_documentos = ""
+        documentos_activos = []
+        
         try:
-            documentos_activos = (
-                db.query(DocumentoAI)
-                .filter(DocumentoAI.activo.is_(True), DocumentoAI.contenido_procesado.is_(True))
-                .limit(3)
-                .all()
-            )
-            logger.info(f"📄 Documentos AI encontrados: {len(documentos_activos)} documentos activos y procesados")
-        except Exception as doc_error:
-            error_str = str(doc_error)
-            error_type = type(doc_error).__name__
-            # Verificar si es un error de transacción abortada
-            is_transaction_aborted = (
-                "aborted" in error_str.lower()
-                or "InFailedSqlTransaction" in error_type
-                or "current transaction is aborted" in error_str.lower()
-            )
-
-            if is_transaction_aborted:
-                # Hacer rollback antes de reintentar
+            # Verificar si hay embeddings disponibles
+            total_embeddings = db.query(DocumentoEmbedding).count()
+            documentos_con_embeddings = db.query(DocumentoEmbedding.documento_id).distinct().count()
+            
+            if total_embeddings > 0 and documentos_con_embeddings > 0:
+                # Usar búsqueda semántica con embeddings
+                logger.info(f"🔍 Usando búsqueda semántica: {total_embeddings} embeddings en {documentos_con_embeddings} documentos")
+                
                 try:
-                    db.rollback()
-                    logger.debug("✅ Rollback realizado antes de consultar documentos AI (transacción abortada)")
-                    # Reintentar la consulta
+                    # Inicializar servicio RAG
+                    service = RAGService(openai_api_key)
+                    
+                    # Generar embedding de la pregunta
+                    query_embedding = await service.generar_embedding(pregunta)
+                    
+                    # Obtener todos los embeddings de documentos activos
+                    documentos_activos_ids = [
+                        doc_id for doc_id, in (
+                            db.query(DocumentoAI.id)
+                            .filter(DocumentoAI.activo.is_(True), DocumentoAI.contenido_procesado.is_(True))
+                            .all()
+                        )
+                    ]
+                    
+                    if documentos_activos_ids:
+                        # Obtener embeddings solo de documentos activos
+                        embeddings_db = (
+                            db.query(DocumentoEmbedding)
+                            .filter(DocumentoEmbedding.documento_id.in_(documentos_activos_ids))
+                            .all()
+                        )
+                        
+                        if embeddings_db:
+                            documento_embeddings = [
+                                {
+                                    "documento_id": emb.documento_id,
+                                    "chunk_index": emb.chunk_index,
+                                    "texto_chunk": emb.texto_chunk,
+                                    "embedding": emb.embedding,
+                                }
+                                for emb in embeddings_db
+                            ]
+                            
+                            # Buscar documentos relevantes usando similitud coseno
+                            resultados = service.buscar_documentos_relevantes(
+                                query_embedding, 
+                                documento_embeddings, 
+                                top_k=3,
+                                umbral_similitud=0.7
+                            )
+                            
+                            if resultados:
+                                # Obtener los documentos completos ordenados por relevancia
+                                documento_ids_relevantes = [r["documento_id"] for r in resultados]
+                                documentos_activos = (
+                                    db.query(DocumentoAI)
+                                    .filter(DocumentoAI.id.in_(documento_ids_relevantes))
+                                    .all()
+                                )
+                                
+                                # Ordenar según la relevancia de los resultados
+                                orden_relevancia = {r["documento_id"]: idx for idx, r in enumerate(resultados)}
+                                documentos_activos.sort(key=lambda d: orden_relevancia.get(d.id, 999))
+                                
+                                logger.info(
+                                    f"✅ Búsqueda semántica: {len(documentos_activos)} documentos relevantes encontrados "
+                                    f"(similitud: {[f'{r[\"similitud\"]:.2f}' for r in resultados]})"
+                                )
+                            else:
+                                logger.info("ℹ️ Búsqueda semántica: No se encontraron documentos con similitud suficiente (umbral: 0.7)")
+                        else:
+                            logger.info("ℹ️ No hay embeddings para documentos activos, usando fallback")
+                    else:
+                        logger.info("ℹ️ No hay documentos activos, usando fallback")
+                        
+                except Exception as embedding_error:
+                    logger.warning(f"⚠️ Error en búsqueda semántica: {embedding_error}, usando método fallback")
+                    # Continuar con método fallback
+            else:
+                logger.info(f"ℹ️ No hay embeddings disponibles ({total_embeddings} embeddings, {documentos_con_embeddings} documentos), usando método fallback")
+            
+            # Fallback: método simple si no hay embeddings o falló la búsqueda semántica
+            if not documentos_activos:
+                try:
                     documentos_activos = (
                         db.query(DocumentoAI)
                         .filter(DocumentoAI.activo.is_(True), DocumentoAI.contenido_procesado.is_(True))
                         .limit(3)
                         .all()
                     )
-                    logger.info(f"📄 Documentos AI encontrados (después de rollback): {len(documentos_activos)} documentos")
-                except Exception as retry_error:
-                    logger.error(f"❌ Error al reintentar consulta de documentos AI: {retry_error}")
-                    # Continuar sin documentos si falla
-                    documentos_activos = []
-            else:
-                logger.error(f"❌ Error consultando documentos AI: {doc_error}")
-                # Continuar sin documentos si falla
-                documentos_activos = []
+                    logger.info(f"📄 Fallback: {len(documentos_activos)} documentos activos encontrados")
+                except Exception as doc_error:
+                    error_str = str(doc_error)
+                    error_type = type(doc_error).__name__
+                    # Verificar si es un error de transacción abortada
+                    is_transaction_aborted = (
+                        "aborted" in error_str.lower()
+                        or "InFailedSqlTransaction" in error_type
+                        or "current transaction is aborted" in error_str.lower()
+                    )
 
-        if documentos_activos:
-            contextos = []
-            for doc in documentos_activos:
-                if doc.contenido_texto and doc.contenido_texto.strip():
-                    contenido_limpiado = doc.contenido_texto.strip()[:1500]
-                    if len(doc.contenido_texto) > 1500:
-                        contenido_limpiado += "..."
-                    contextos.append(f"Documento: {doc.titulo}\n{contenido_limpiado}")
-                    logger.debug(f"📄 Documento agregado al contexto: {doc.titulo} ({len(contenido_limpiado)} caracteres)")
+                    if is_transaction_aborted:
+                        # Hacer rollback antes de reintentar
+                        try:
+                            db.rollback()
+                            logger.debug("✅ Rollback realizado antes de consultar documentos AI (transacción abortada)")
+                            # Reintentar la consulta
+                            documentos_activos = (
+                                db.query(DocumentoAI)
+                                .filter(DocumentoAI.activo.is_(True), DocumentoAI.contenido_procesado.is_(True))
+                                .limit(3)
+                                .all()
+                            )
+                            logger.info(f"📄 Documentos AI encontrados (después de rollback): {len(documentos_activos)} documentos")
+                        except Exception as retry_error:
+                            logger.error(f"❌ Error al reintentar consulta de documentos AI: {retry_error}")
+                            # Continuar sin documentos si falla
+                            documentos_activos = []
+                    else:
+                        logger.error(f"❌ Error consultando documentos AI: {doc_error}")
+                        # Continuar sin documentos si falla
+                        documentos_activos = []
 
-            if contextos:
-                contexto_documentos = "\n\n=== DOCUMENTOS DE CONTEXTO ===\n" + "\n\n---\n\n".join(contextos)
-                logger.info(
-                    f"✅ Contexto de documentos preparado: {len(contextos)} documentos, {len(contexto_documentos)} caracteres totales"
-                )
+            # Preparar contexto de documentos
+            if documentos_activos:
+                contextos = []
+                for doc in documentos_activos:
+                    if doc.contenido_texto and doc.contenido_texto.strip():
+                        contenido_limpiado = doc.contenido_texto.strip()[:1500]
+                        if len(doc.contenido_texto) > 1500:
+                            contenido_limpiado += "..."
+                        contextos.append(f"Documento: {doc.titulo}\n{contenido_limpiado}")
+                        logger.debug(f"📄 Documento agregado al contexto: {doc.titulo} ({len(contenido_limpiado)} caracteres)")
+
+                if contextos:
+                    contexto_documentos = "\n\n=== DOCUMENTOS DE CONTEXTO ===\n" + "\n\n---\n\n".join(contextos)
+                    logger.info(
+                        f"✅ Contexto de documentos preparado: {len(contextos)} documentos, {len(contexto_documentos)} caracteres totales"
+                    )
+                else:
+                    logger.warning("⚠️ Documentos encontrados pero sin contenido_texto válido")
             else:
-                logger.warning("⚠️ Documentos encontrados pero sin contenido_texto válido")
-        else:
-            logger.debug("ℹ️ No hay documentos AI activos y procesados disponibles para contexto")
+                logger.debug("ℹ️ No hay documentos AI activos y procesados disponibles para contexto")
+                
+        except Exception as e:
+            logger.error(f"❌ Error general buscando documentos: {e}", exc_info=True)
+            # Continuar sin documentos si hay error general
+            documentos_activos = []
 
         # Detectar si la pregunta es una búsqueda por cédula/documento
         import re

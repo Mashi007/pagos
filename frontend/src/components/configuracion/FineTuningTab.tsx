@@ -258,7 +258,7 @@ export function FineTuningTab() {
         
         toast.success(
           `✅ Conversación calificada (${calificacion} estrellas) - Lista para entrenamiento. ` +
-          `Total listas: ${conversacionesCalificadas}${conversacionesCalificadas >= 10 ? ' - ¡Ya puedes preparar datos!' : ` (necesitas ${10 - conversacionesCalificadas} más)`}`
+          `Total listas: ${conversacionesCalificadas}${conversacionesCalificadas >= 1 ? ' - ¡Ya puedes preparar datos!' : ` (necesitas ${1 - conversacionesCalificadas} más)`}`
         )
       } else {
         toast.success(`Conversación calificada (${calificacion} estrellas)`)
@@ -294,12 +294,12 @@ export function FineTuningTab() {
         .filter((c) => c.calificacion && c.calificacion >= 4)
         .map((c) => c.id)
 
-      // Mínimo recomendado por OpenAI para fine-tuning
-      const MINIMO_CONVERSACIONES = 10
+      // Mínimo requerido para fine-tuning (permitir desde 1 conversación)
+      const MINIMO_CONVERSACIONES = 1
 
       if (conversacionesSeleccionadas.length < MINIMO_CONVERSACIONES) {
         toast.error(
-          `Se necesitan al menos ${MINIMO_CONVERSACIONES} conversaciones calificadas (4+ estrellas) para entrenar un modelo. Actualmente tienes ${conversacionesSeleccionadas.length}.`
+          `Se necesita al menos ${MINIMO_CONVERSACIONES} conversación calificada (4+ estrellas) para entrenar un modelo. Actualmente tienes ${conversacionesSeleccionadas.length}.`
         )
         return
       }
@@ -866,7 +866,7 @@ export function FineTuningTab() {
             <div className="flex items-start gap-2">
               <span className="font-semibold text-blue-600">3.</span>
               <div>
-                <strong>Preparar datos:</strong> Necesitas al menos 10 conversaciones calificadas (4+ estrellas). Luego haz clic en "Preparar Datos para Entrenamiento".
+                <strong>Preparar datos:</strong> Necesitas al menos 1 conversación calificada (4+ estrellas). Luego haz clic en "Preparar Datos para Entrenamiento".
               </div>
             </div>
             <div className="flex items-start gap-2">
@@ -1226,14 +1226,14 @@ export function FineTuningTab() {
               {(() => {
                 const conversacionesListas = conversaciones.filter((c) => c.calificacion && c.calificacion >= 4)
                 const totalListas = conversacionesListas.length
-                const puedePreparar = totalListas >= 10
+                const puedePreparar = totalListas >= 1
                 
                 return (
                   <div className="flex items-center gap-2 flex-wrap">
                     {totalListas > 0 && (
                       <Badge variant={puedePreparar ? "default" : "secondary"} className="mr-2">
                         {totalListas} lista{totalListas !== 1 ? 's' : ''} para entrenamiento
-                        {!puedePreparar && ` (${10 - totalListas} más necesarias)`}
+                        {!puedePreparar && totalListas < 1 && ` (${1 - totalListas} más necesaria)`}
                       </Badge>
                     )}
                     <div className="flex items-center gap-2">
