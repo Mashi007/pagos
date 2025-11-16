@@ -937,6 +937,13 @@ async def entrenar_modelo_riesgo(
 ):
     """Entrenar modelo de riesgo"""
     try:
+        # Verificar que MLService esté disponible
+        if not ML_SERVICE_AVAILABLE or MLService is None:
+            raise HTTPException(
+                status_code=503,
+                detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
+            )
+        
         # Obtener datos históricos de préstamos y pagos para entrenamiento
         from datetime import date
 
@@ -1049,13 +1056,6 @@ async def entrenar_modelo_riesgo(
             raise HTTPException(
                 status_code=400,
                 detail=f"Se necesitan al menos 10 muestras válidas para entrenar. Se generaron {len(training_data)}.",
-            )
-
-        # Verificar que MLService esté disponible
-        if not ML_SERVICE_AVAILABLE or MLService is None:
-            raise HTTPException(
-                status_code=503,
-                detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
             )
 
         # Entrenar modelo
