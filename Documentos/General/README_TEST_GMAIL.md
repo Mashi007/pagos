@@ -22,18 +22,9 @@ El script te pedirá:
 - Email (Usuario Gmail / Google Workspace)
 - Contraseña de Aplicación (no se mostrará en pantalla)
 
-### Opción 2: Script Simple
+### Opción 2: Script con Argumentos
 
-1. Edita `test_gmail_connection_simple.py`
-2. Cambia las variables:
-   ```python
-   SMTP_USER = "tu_email@rapicreditca.com"
-   SMTP_PASSWORD = "tu_app_password"
-   ```
-3. Ejecuta:
-   ```bash
-   python test_gmail_connection_simple.py
-   ```
+El script también puede recibir argumentos desde la línea de comandos (ver código fuente para más detalles).
 
 ## 📊 Qué verás
 
