@@ -1148,6 +1148,7 @@ async def check_pending_processes(
 
     try:
         from datetime import date, datetime, timedelta
+
         from sqlalchemy import and_, func, or_
 
         from app.models.amortizacion import Cuota
@@ -1369,9 +1370,9 @@ async def check_duplicate_files(
         )
 
     try:
-        from pathlib import Path
         import os
         from collections import defaultdict
+        from pathlib import Path
 
         resultado = {
             "timestamp": time.time(),
