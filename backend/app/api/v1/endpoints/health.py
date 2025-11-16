@@ -1359,3 +1359,183 @@ async def check_pending_processes(
             "message": str(e),
             "timestamp": time.time(),
         }
+
+
+@router.get("/files/duplicates")
+async def check_duplicate_files(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Verifica archivos duplicados o que puedan generar interferencia
+    
+    Revisa:
+    - Archivos con nombres similares
+    - Funciones/clases duplicadas
+    - Imports conflictivos
+    - Archivos no registrados
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden verificar archivos duplicados",
+        )
+    
+    try:
+        from pathlib import Path
+        import os
+        from collections import defaultdict
+        
+        resultado = {
+            "timestamp": time.time(),
+            "archivos_duplicados": {},
+            "archivos_similares": {},
+            "posibles_conflictos": {},
+            "archivos_no_registrados": [],
+            "resumen": {
+                "total_duplicados": 0,
+                "total_similares": 0,
+                "total_conflictos": 0,
+                "total_no_registrados": 0,
+            },
+        }
+        
+        # Obtener ruta del backend
+        backend_path = Path(__file__).parent.parent.parent.parent / "backend"
+        app_path = backend_path / "app"
+        
+        # 1. Buscar archivos con nombres similares o duplicados
+        archivos_por_nombre = defaultdict(list)
+        
+        for root, dirs, files in os.walk(app_path):
+            # Ignorar __pycache__ y .pyc
+            dirs[:] = [d for d in dirs if d != "__pycache__"]
+            for file in files:
+                if file.endswith(".py"):
+                    nombre_base = file.replace(".py", "")
+                    ruta_completa = Path(root) / file
+                    ruta_relativa = ruta_completa.relative_to(backend_path)
+                    archivos_por_nombre[nombre_base].append(str(ruta_relativa))
+        
+        # Identificar duplicados exactos y similares
+        for nombre, rutas in archivos_por_nombre.items():
+            if len(rutas) > 1:
+                # Verificar si son realmente duplicados o solo nombres similares
+                rutas_unicas = list(set(rutas))
+                if len(rutas_unicas) > 1:
+                    resultado["archivos_similares"][nombre] = {
+                        "cantidad": len(rutas_unicas),
+                        "ubicaciones": rutas_unicas,
+                        "tipo": "similar" if len(rutas_unicas) == 2 else "multiple",
+                    }
+                    resultado["resumen"]["total_similares"] += len(rutas_unicas)
+        
+        # 2. Verificar servicios ML (posible duplicación)
+        servicios_ml = []
+        if (app_path / "services" / "ml_service.py").exists():
+            servicios_ml.append("services/ml_service.py")
+        if (app_path / "services" / "ml_impago_cuotas_service.py").exists():
+            servicios_ml.append("services/ml_impago_cuotas_service.py")
+        
+        if len(servicios_ml) > 1:
+            resultado["posibles_conflictos"]["servicios_ml"] = {
+                "descripcion": "Múltiples servicios ML encontrados",
+                "archivos": servicios_ml,
+                "recomendacion": "Verificar que no haya funciones duplicadas o conflictos de nombres",
+                "severidad": "media",
+            }
+            resultado["resumen"]["total_conflictos"] += 1
+        
+        # 3. Verificar archivos de notificaciones (muchos archivos similares)
+        archivos_notificaciones = [
+            str(p.relative_to(backend_path))
+            for p in app_path.rglob("*notificacion*.py")
+            if p.is_file()
+        ]
+        
+        if len(archivos_notificaciones) > 10:
+            resultado["posibles_conflictos"]["notificaciones"] = {
+                "descripcion": f"Muchos archivos de notificaciones ({len(archivos_notificaciones)})",
+                "archivos": archivos_notificaciones[:15],  # Limitar a 15
+                "total": len(archivos_notificaciones),
+                "recomendacion": "Verificar si hay funcionalidad duplicada o si se pueden consolidar",
+                "severidad": "baja",
+            }
+            resultado["resumen"]["total_conflictos"] += 1
+        
+        # 4. Verificar endpoints no registrados en __init__.py
+        try:
+            endpoints_path = app_path / "api" / "v1" / "endpoints"
+            endpoints_registrados = set()
+            
+            # Leer __init__.py para ver qué está registrado
+            init_file = endpoints_path / "__init__.py"
+            if init_file.exists():
+                with open(init_file, "r", encoding="utf-8") as f:
+                    contenido = f.read()
+                    # Buscar imports en el archivo
+                    import re
+                    imports = re.findall(r"from \. import (\w+)", contenido)
+                    imports += re.findall(r"import (\w+)", contenido)
+                    endpoints_registrados = set(imports)
+            
+            # Buscar archivos .py en endpoints
+            archivos_endpoints = [
+                f.stem
+                for f in endpoints_path.glob("*.py")
+                if f.name != "__init__.py" and f.name != "__pycache__"
+            ]
+            
+            endpoints_no_registrados = [
+                archivo
+                for archivo in archivos_endpoints
+                if archivo not in endpoints_registrados
+            ]
+            
+            if endpoints_no_registrados:
+                resultado["archivos_no_registrados"] = endpoints_no_registrados
+                resultado["resumen"]["total_no_registrados"] = len(endpoints_no_registrados)
+        except Exception as e:
+            logger.warning(f"Error verificando endpoints no registrados: {e}")
+            resultado["archivos_no_registrados"] = []
+        
+        # 5. Verificar posibles conflictos de imports
+        posibles_conflictos_imports = []
+        
+        # Verificar si hay imports circulares potenciales
+        archivos_imports_ml = []
+        for archivo in app_path.rglob("*.py"):
+            try:
+                with open(archivo, "r", encoding="utf-8") as f:
+                    contenido = f.read()
+                    if "ml_service" in contenido or "ml_impago" in contenido:
+                        archivos_imports_ml.append(str(archivo.relative_to(backend_path)))
+            except Exception:
+                pass
+        
+        if len(archivos_imports_ml) > 5:
+            resultado["posibles_conflictos"]["imports_ml"] = {
+                "descripcion": "Muchos archivos importan servicios ML",
+                "archivos": archivos_imports_ml[:10],  # Limitar a 10
+                "total": len(archivos_imports_ml),
+                "recomendacion": "Verificar que no haya imports circulares",
+                "severidad": "baja",
+            }
+            resultado["resumen"]["total_conflictos"] += 1
+        
+        # Determinar estado general
+        if resultado["resumen"]["total_conflictos"] > 0 or resultado["resumen"]["total_no_registrados"] > 0:
+            resultado["estado_general"] = "advertencia"
+        elif resultado["resumen"]["total_similares"] > 0:
+            resultado["estado_general"] = "info"
+        else:
+            resultado["estado_general"] = "ok"
+        
+        return resultado
+        
+    except Exception as e:
+        logger.error(f"Error verificando archivos duplicados: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "message": str(e),
+            "timestamp": time.time(),
+        }
