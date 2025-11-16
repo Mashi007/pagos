@@ -2977,8 +2977,18 @@ def obtener_cobranza_fechas_especificas(
 
         # Meses abreviados en español
         meses_abrev = {
-            1: "Ene", 2: "Feb", 3: "Mar", 4: "Abr", 5: "May", 6: "Jun",
-            7: "Jul", 8: "Ago", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dic",
+            1: "Ene",
+            2: "Feb",
+            3: "Mar",
+            4: "Abr",
+            5: "May",
+            6: "Jun",
+            7: "Jul",
+            8: "Ago",
+            9: "Sep",
+            10: "Oct",
+            11: "Nov",
+            12: "Dic",
         }
 
         # Formatear fecha de hoy: día/mes (ej: 11/Nov)
@@ -2990,24 +3000,24 @@ def obtener_cobranza_fechas_especificas(
 
         # Preparar fechas: Sábado y Viernes (últimos 2 días)
         fechas = []
-        
+
         # Buscar los últimos Viernes y Sábado (hasta 7 días atrás)
         viernes_encontrado = None
         sabado_encontrado = None
-        
+
         for i in range(1, 8):  # Buscar hasta 7 días atrás
             fecha_buscar = hoy - timedelta(days=i)
             dia_semana = fecha_buscar.weekday()
-            
+
             if dia_semana == 4 and viernes_encontrado is None:  # Viernes
                 viernes_encontrado = fecha_buscar
             elif dia_semana == 5 and sabado_encontrado is None:  # Sábado
                 sabado_encontrado = fecha_buscar
-            
+
             # Si ya encontramos ambos, salir
             if viernes_encontrado and sabado_encontrado:
                 break
-        
+
         # Agregar Viernes y Sábado si se encontraron
         if viernes_encontrado:
             fechas.append((dias_semana[4], viernes_encontrado))
