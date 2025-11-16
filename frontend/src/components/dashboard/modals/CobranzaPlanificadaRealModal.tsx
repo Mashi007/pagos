@@ -202,11 +202,12 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
       value?: number
       color?: string
       dataKey?: string
+      payload?: any
     }>
     label?: string | number 
   }) => {
     if (active && payload && payload.length) {
-      const data = payload[0]?.payload
+      const data = payload[0]?.payload || payload[0]
       return (
         <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg min-w-[200px]">
           <p className="font-semibold mb-3 text-gray-800">{label}</p>
