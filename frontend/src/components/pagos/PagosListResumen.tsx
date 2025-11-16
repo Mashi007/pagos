@@ -142,7 +142,6 @@ export function PagosListResumen() {
                     <tr className="border-b">
                       <th className="px-4 py-3 text-left">Cédula</th>
                       <th className="px-4 py-3 text-left">ID Último Pago</th>
-                      <th className="px-4 py-3 text-left">ID Crédito</th>
                       <th className="px-4 py-3 text-left">Estado</th>
                       <th className="px-4 py-3 text-right">Monto Último Pago</th>
                       <th className="px-4 py-3 text-left">Fecha Último Pago</th>
@@ -161,7 +160,6 @@ export function PagosListResumen() {
                       >
                         <td className="px-4 py-3 font-medium">{item.cedula}</td>
                         <td className="px-4 py-3">{item.pago_id}</td>
-                        <td className="px-4 py-3">{item.prestamo_id || 'N/A'}</td>
                         <td className="px-4 py-3">{getEstadoBadge(item.estado_pago)}</td>
                         <td className="px-4 py-3 text-right">
                           ${item.monto_ultimo_pago.toFixed(2)}

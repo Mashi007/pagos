@@ -259,7 +259,6 @@ export function PagosList() {
                         <tr className="border-b">
                           <th className="px-4 py-3 text-left">ID</th>
                           <th className="px-4 py-3 text-left">Cédula</th>
-                          <th className="px-4 py-3 text-left">ID Crédito</th>
                           <th className="px-4 py-3 text-left">Estado</th>
                           <th className="px-4 py-3 text-left">Cuotas Atrasadas</th>
                           <th className="px-4 py-3 text-left">Monto</th>
@@ -273,7 +272,6 @@ export function PagosList() {
                           <tr key={pago.id} className="border-b hover:bg-gray-50">
                             <td className="px-4 py-3">{pago.id}</td>
                             <td className="px-4 py-3">{pago.cedula_cliente}</td>
-                            <td className="px-4 py-3">{pago.prestamo_id || 'N/A'}</td>
                             <td className="px-4 py-3">{getEstadoBadge(pago.estado)}</td>
                             <td className="px-4 py-3">
                               <span className={pago.cuotas_atrasadas && pago.cuotas_atrasadas > 0 ? 'text-red-600 font-semibold' : ''}>
