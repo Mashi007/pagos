@@ -3260,15 +3260,18 @@ def obtener_prestamos_por_concesionario(
     """
     try:
         # Obtener total general de préstamos (cantidad y monto)
-        query_base = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
-        query_base = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        # Crear queries separadas para evitar conflictos
+        query_base_cantidad = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
+        query_base_cantidad = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_base_cantidad, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
+        total_general_cantidad = query_base_cantidad.count()
 
-        # Obtener cantidad primero (antes de modificar la query)
-        total_general_cantidad = query_base.count()
-        # Luego obtener el monto
-        total_general_monto = float(query_base.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
+        query_base_monto = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
+        query_base_monto = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_base_monto, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+        total_general_monto = float(query_base_monto.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
 
         # Agrupar por concesionario
         concesionario_expr = func.coalesce(Prestamo.concesionario, "Sin Concesionario")
@@ -3342,15 +3345,18 @@ def obtener_prestamos_por_modelo(
     """
     try:
         # Obtener total general de préstamos (cantidad y monto)
-        query_base = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
-        query_base = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        # Crear queries separadas para evitar conflictos
+        query_base_cantidad = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
+        query_base_cantidad = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_base_cantidad, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
+        total_general_cantidad = query_base_cantidad.count()
 
-        # Obtener cantidad primero (antes de modificar la query)
-        total_general_cantidad = query_base.count()
-        # Luego obtener el monto
-        total_general_monto = float(query_base.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
+        query_base_monto = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
+        query_base_monto = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_base_monto, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+        total_general_monto = float(query_base_monto.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
 
         # Agrupar por modelo (usar producto o modelo_vehiculo)
         modelo_expr = func.coalesce(func.coalesce(Prestamo.modelo_vehiculo, Prestamo.producto), "Sin Modelo")
