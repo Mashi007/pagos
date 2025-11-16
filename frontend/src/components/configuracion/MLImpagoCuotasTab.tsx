@@ -41,15 +41,23 @@ export function MLImpagoCuotasTab() {
   const cargarModelos = async () => {
     setCargando(true)
     try {
-      const [modelosData, activoData] = await Promise.all([
-        aiTrainingService.listarModelosImpago(),
-        aiTrainingService.getModeloImpagoActivo(),
-      ])
-      setModelos(modelosData || [])
+      const modelosResponse = await aiTrainingService.listarModelosImpago()
+      const activoData = await aiTrainingService.getModeloImpagoActivo().catch(() => null)
+      
+      // Manejar respuesta que puede ser array o objeto con error
+      if (Array.isArray(modelosResponse)) {
+        setModelos(modelosResponse)
+      } else {
+        setModelos(modelosResponse.modelos || [])
+        if (modelosResponse.error) {
+          toast.warning(modelosResponse.error)
+        }
+      }
       setModeloActivo(activoData)
     } catch (error: any) {
       console.error('Error cargando modelos:', error)
-      toast.error('Error al cargar modelos')
+      const mensajeError = error?.response?.data?.detail || error?.message || 'Error al cargar modelos'
+      toast.error(mensajeError)
     } finally {
       setCargando(false)
     }

@@ -13,6 +13,7 @@ from app.models.conversacion_ai import ConversacionAI
 from app.models.documento_ai import DocumentoAI
 from app.models.documento_embedding import DocumentoEmbedding
 from app.models.fine_tuning_job import FineTuningJob
+from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
 from app.models.modelo_riesgo import ModeloRiesgo
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.notificacion import Notificacion
@@ -40,6 +41,7 @@ __all__ = [
     "DocumentoEmbedding",
     "FineTuningJob",
     "ModeloRiesgo",
+    "ModeloImpagoCuotas",
     "AIPromptVariable",
     "ConversacionAI",
     "Auditoria",

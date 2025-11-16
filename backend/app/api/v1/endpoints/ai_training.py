@@ -900,8 +900,22 @@ async def listar_modelos_riesgo(
 ):
     """Listar modelos de riesgo disponibles"""
     try:
-        modelos = db.query(ModeloRiesgo).order_by(ModeloRiesgo.entrenado_en.desc()).all()
-        return {"modelos": [m.to_dict() for m in modelos]}
+        # Intentar verificar si la tabla existe primero
+        try:
+            modelos = db.query(ModeloRiesgo).order_by(ModeloRiesgo.entrenado_en.desc()).all()
+            return {"modelos": [m.to_dict() for m in modelos]}
+        except (ProgrammingError, OperationalError) as db_error:
+            error_msg = str(db_error).lower()
+            logger.error(f"Error de base de datos listando modelos de riesgo: {db_error}", exc_info=True)
+
+            # Verificar si es un error de tabla no encontrada
+            if any(term in error_msg for term in ["does not exist", "no such table", "relation", "table"]):
+                # Retornar respuesta vacía en lugar de error para que el frontend pueda manejar
+                return {
+                    "modelos": [],
+                    "error": "La tabla 'modelos_riesgo' no está creada. Ejecuta las migraciones: alembic upgrade head",
+                }
+            raise
 
     except HTTPException:
         raise
@@ -943,6 +957,18 @@ async def entrenar_modelo_riesgo(
                 status_code=503,
                 detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
             )
+        
+        # Verificar que la tabla existe
+        try:
+            db.query(ModeloRiesgo).limit(1).all()
+        except (ProgrammingError, OperationalError) as db_error:
+            error_msg = str(db_error).lower()
+            if any(term in error_msg for term in ["does not exist", "no such table", "relation", "table"]):
+                raise HTTPException(
+                    status_code=503,
+                    detail="La tabla 'modelos_riesgo' no está creada. Ejecuta las migraciones: alembic upgrade head",
+                )
+            raise
 
         # Obtener datos históricos de préstamos y pagos para entrenamiento
         from datetime import date
@@ -1251,6 +1277,85 @@ async def predecir_riesgo(
 # ============================================
 
 
+@router.get("/verificar-bd")
+async def verificar_conexion_bd_modelos_ml(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Verificar si las tablas de modelos ML están conectadas a la base de datos"""
+    try:
+        from sqlalchemy import inspect, text
+        
+        inspector = inspect(db.bind)
+        tablas_existentes = inspector.get_table_names()
+        
+        tablas_requeridas = {
+            'modelos_riesgo': 'Modelos de Riesgo ML',
+            'modelos_impago_cuotas': 'Modelos de Impago de Cuotas ML',
+        }
+        
+        resultado = {
+            "conexion_bd": True,
+            "tablas": {},
+            "todas_existen": True,
+            "servicios_ml": {
+                "scikit_learn_disponible": ML_SERVICE_AVAILABLE,
+                "ml_impago_disponible": ML_IMPAGO_SERVICE_AVAILABLE,
+            },
+        }
+        
+        for tabla, nombre in tablas_requeridas.items():
+            existe = tabla in tablas_existentes
+            resultado["tablas"][tabla] = {
+                "existe": existe,
+                "nombre": nombre,
+                "columnas": [],
+                "indices": [],
+                "total_registros": 0,
+            }
+            
+            if existe:
+                try:
+                    # Obtener información de columnas
+                    columnas = inspector.get_columns(tabla)
+                    resultado["tablas"][tabla]["columnas"] = [
+                        {
+                            "nombre": col["name"],
+                            "tipo": str(col["type"]),
+                            "nullable": col["nullable"],
+                        }
+                        for col in columnas
+                    ]
+                    
+                    # Obtener índices
+                    indices = inspector.get_indexes(tabla)
+                    resultado["tablas"][tabla]["indices"] = [
+                        {
+                            "nombre": idx["name"],
+                            "columnas": idx["column_names"],
+                            "unique": idx.get("unique", False),
+                        }
+                        for idx in indices
+                    ]
+                    
+                    # Contar registros
+                    count_result = db.execute(text(f"SELECT COUNT(*) FROM {tabla}"))
+                    resultado["tablas"][tabla]["total_registros"] = count_result.scalar() or 0
+                except Exception as e:
+                    resultado["tablas"][tabla]["error"] = str(e)
+            else:
+                resultado["todas_existen"] = False
+        
+        return resultado
+        
+    except Exception as e:
+        logger.error(f"Error verificando conexión BD modelos ML: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error verificando conexión a base de datos: {str(e)}"
+        )
+
+
 @router.get("/metricas")
 async def obtener_metricas_entrenamiento(
     db: Session = Depends(get_db),
@@ -1301,10 +1406,27 @@ async def obtener_metricas_entrenamiento(
         total_embeddings = db.query(DocumentoEmbedding).count()
         ultima_actualizacion_rag = db.query(func.max(DocumentoEmbedding.creado_en)).scalar()
 
-        # Métricas de ML
-        modelos_disponibles = db.query(ModeloRiesgo).count()
-        modelo_activo_ml = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo == True).first()
-        ultimo_modelo = db.query(ModeloRiesgo).order_by(ModeloRiesgo.entrenado_en.desc()).first()
+        # Métricas de ML Riesgo
+        try:
+            modelos_riesgo_disponibles = db.query(ModeloRiesgo).count()
+            modelo_activo_riesgo = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo == True).first()
+            ultimo_modelo_riesgo = db.query(ModeloRiesgo).order_by(ModeloRiesgo.entrenado_en.desc()).first()
+        except Exception as e:
+            logger.warning(f"Error obteniendo métricas ML Riesgo: {e}")
+            modelos_riesgo_disponibles = 0
+            modelo_activo_riesgo = None
+            ultimo_modelo_riesgo = None
+
+        # Métricas de ML Impago
+        try:
+            modelos_impago_disponibles = db.query(ModeloImpagoCuotas).count()
+            modelo_activo_impago = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
+            ultimo_modelo_impago = db.query(ModeloImpagoCuotas).order_by(ModeloImpagoCuotas.entrenado_en.desc()).first()
+        except Exception as e:
+            logger.warning(f"Error obteniendo métricas ML Impago: {e}")
+            modelos_impago_disponibles = 0
+            modelo_activo_impago = None
+            ultimo_modelo_impago = None
 
         return {
             "conversaciones": {
@@ -1326,11 +1448,19 @@ async def obtener_metricas_entrenamiento(
                 "ultima_actualizacion": (ultima_actualizacion_rag.isoformat() if ultima_actualizacion_rag else None),
             },
             "ml_riesgo": {
-                "modelos_disponibles": modelos_disponibles,
-                "modelo_activo": modelo_activo_ml.nombre if modelo_activo_ml else None,
-                "ultimo_entrenamiento": (ultimo_modelo.entrenado_en.isoformat() if ultimo_modelo else None),
+                "modelos_disponibles": modelos_riesgo_disponibles,
+                "modelo_activo": modelo_activo_riesgo.nombre if modelo_activo_riesgo else None,
+                "ultimo_entrenamiento": (ultimo_modelo_riesgo.entrenado_en.isoformat() if ultimo_modelo_riesgo else None),
                 "accuracy_promedio": (
-                    float(modelo_activo_ml.accuracy) if modelo_activo_ml and modelo_activo_ml.accuracy else None
+                    float(modelo_activo_riesgo.accuracy) if modelo_activo_riesgo and modelo_activo_riesgo.accuracy else None
+                ),
+            },
+            "ml_impago": {
+                "modelos_disponibles": modelos_impago_disponibles,
+                "modelo_activo": modelo_activo_impago.nombre if modelo_activo_impago else None,
+                "ultimo_entrenamiento": (ultimo_modelo_impago.entrenado_en.isoformat() if ultimo_modelo_impago else None),
+                "accuracy_promedio": (
+                    float(modelo_activo_impago.accuracy) if modelo_activo_impago and modelo_activo_impago.accuracy else None
                 ),
             },
         }
@@ -1360,6 +1490,25 @@ async def entrenar_modelo_impago(
         raise HTTPException(status_code=403, detail="Solo administradores pueden entrenar modelos ML")
 
     try:
+        # Verificar que MLImpagoCuotasService esté disponible PRIMERO
+        if not ML_IMPAGO_SERVICE_AVAILABLE or MLImpagoCuotasService is None:
+            raise HTTPException(
+                status_code=503,
+                detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
+            )
+        
+        # Verificar que la tabla existe
+        try:
+            db.query(ModeloImpagoCuotas).limit(1).all()
+        except (ProgrammingError, OperationalError) as db_error:
+            error_msg = str(db_error).lower()
+            if any(term in error_msg for term in ["does not exist", "no such table", "relation", "table"]):
+                raise HTTPException(
+                    status_code=503,
+                    detail="La tabla 'modelos_impago_cuotas' no está creada. Ejecuta las migraciones: alembic upgrade head",
+                )
+            raise
+        
         from datetime import date
 
         from app.models.amortizacion import Cuota
@@ -1376,13 +1525,6 @@ async def entrenar_modelo_impago(
 
         if not prestamos:
             raise HTTPException(status_code=400, detail="No hay préstamos aprobados para entrenar el modelo")
-
-        # Verificar que MLImpagoCuotasService esté disponible
-        if not ML_IMPAGO_SERVICE_AVAILABLE or MLImpagoCuotasService is None:
-            raise HTTPException(
-                status_code=503,
-                detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
-            )
 
         ml_service = MLImpagoCuotasService()
         training_data = []
@@ -1624,27 +1766,33 @@ async def listar_modelos_impago(
 ):
     """Listar todos los modelos de predicción de impago"""
     try:
-        modelos = db.query(ModeloImpagoCuotas).order_by(ModeloImpagoCuotas.entrenado_en.desc()).all()
-        modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
+        # Intentar verificar si la tabla existe primero
+        try:
+            modelos = db.query(ModeloImpagoCuotas).order_by(ModeloImpagoCuotas.entrenado_en.desc()).all()
+            modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
 
-        return {
-            "modelos": [modelo.to_dict() for modelo in modelos],
-            "modelo_activo": modelo_activo.to_dict() if modelo_activo else None,
-            "total": len(modelos),
-        }
+            return {
+                "modelos": [modelo.to_dict() for modelo in modelos],
+                "modelo_activo": modelo_activo.to_dict() if modelo_activo else None,
+                "total": len(modelos),
+            }
+        except (ProgrammingError, OperationalError) as db_error:
+            error_msg = str(db_error).lower()
+            logger.error(f"Error de base de datos listando modelos de impago: {db_error}", exc_info=True)
 
-    except (ProgrammingError, OperationalError) as e:
-        error_msg = str(e).lower()
-        logger.error(f"Error de base de datos listando modelos de impago: {e}", exc_info=True)
+            # Verificar si es un error de tabla no encontrada
+            if any(term in error_msg for term in ["does not exist", "no such table", "relation", "table"]):
+                # Retornar respuesta vacía en lugar de error 503 para que el frontend pueda manejar
+                return {
+                    "modelos": [],
+                    "modelo_activo": None,
+                    "total": 0,
+                    "error": "La tabla 'modelos_impago_cuotas' no está creada. Ejecuta las migraciones: alembic upgrade head",
+                }
+            raise
 
-        # Verificar si es un error de tabla no encontrada
-        if "does not exist" in error_msg or "no such table" in error_msg or "relation" in error_msg or "table" in error_msg:
-            raise HTTPException(
-                status_code=503,
-                detail="La tabla 'modelos_impago_cuotas' no está creada. Ejecuta las migraciones: alembic upgrade head",
-            )
-
-        raise HTTPException(status_code=500, detail=f"Error de base de datos listando modelos: {str(e)}")
+    except HTTPException:
+        raise
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Error listando modelos de impago: {error_msg}", exc_info=True)

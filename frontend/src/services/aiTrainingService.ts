@@ -355,8 +355,12 @@ class AITrainingService {
   /**
    * Listar modelos de riesgo disponibles
    */
-  async listarModelosRiesgo(): Promise<ModeloRiesgo[]> {
-    const response = await apiClient.get<{ modelos: ModeloRiesgo[] }>(`${this.baseUrl}/ml-riesgo/modelos`)
+  async listarModelosRiesgo(): Promise<ModeloRiesgo[] | { modelos: ModeloRiesgo[]; error?: string }> {
+    const response = await apiClient.get<{ modelos: ModeloRiesgo[]; error?: string }>(`${this.baseUrl}/ml-riesgo/modelos`)
+    // Si hay un error en la respuesta, retornar el objeto completo para que el frontend pueda manejarlo
+    if (response.error) {
+      return { modelos: response.modelos || [], error: response.error }
+    }
     return response.modelos || []
   }
 
@@ -440,8 +444,12 @@ class AITrainingService {
   /**
    * Listar modelos de impago disponibles
    */
-  async listarModelosImpago(): Promise<ModeloImpagoCuotas[]> {
-    const response = await apiClient.get<{ modelos: ModeloImpagoCuotas[]; modelo_activo: ModeloImpagoCuotas | null }>(`${this.baseUrl}/ml-impago/modelos`)
+  async listarModelosImpago(): Promise<ModeloImpagoCuotas[] | { modelos: ModeloImpagoCuotas[]; error?: string }> {
+    const response = await apiClient.get<{ modelos: ModeloImpagoCuotas[]; modelo_activo: ModeloImpagoCuotas | null; total: number; error?: string }>(`${this.baseUrl}/ml-impago/modelos`)
+    // Si hay un error en la respuesta, retornar el objeto completo para que el frontend pueda manejarlo
+    if (response.error) {
+      return { modelos: response.modelos || [], error: response.error }
+    }
     return response.modelos || []
   }
 
