@@ -54,7 +54,7 @@ const ESTADOS_EMBUDO = [
   },
   { 
     id: 'inactivo', 
-    label: 'Agregar embudo (agregar otro)', 
+    label: 'Agregar embudo', 
     color: 'bg-gray-50 border-gray-200', 
     headerColor: 'bg-gray-100 text-gray-800',
     icon: XCircle,
@@ -308,30 +308,37 @@ export function EmbudoConcesionarios() {
   }
 
   // Agrupar concesionarios por estado
-  const concesionariosPorEstado = ESTADOS_EMBUDO.map(estado => ({
-    ...estado,
-    concesionarios: concesionariosFiltrados.filter(c => c.estado === estado.id),
-    count: concesionariosFiltrados.filter(c => c.estado === estado.id).length
-  }))
+  const concesionariosPorEstado = useMemo(() => {
+    return ESTADOS_EMBUDO.map(estado => ({
+      ...estado,
+      concesionarios: concesionariosFiltrados.filter(c => c.estado === estado.id),
+      count: concesionariosFiltrados.filter(c => c.estado === estado.id).length
+    }))
+  }, [concesionariosFiltrados])
 
-  // Estadísticas (generales o del concesionario seleccionado)
+  // Estadísticas basadas en los embudos (deben coincidir exactamente)
   const estadisticas = useMemo(() => {
     const concesionariosParaEstadisticas = concesionarioSeleccionado
       ? concesionariosConEstadisticas.filter(c => c.id === concesionarioSeleccionado)
       : concesionariosConEstadisticas
     
+    // Usar los mismos datos que concesionariosPorEstado para garantizar coincidencia
+    const activos = concesionariosPorEstado.find(e => e.id === 'activo')?.count || 0
+    const pendientes = concesionariosPorEstado.find(e => e.id === 'pendiente')?.count || 0
+    const inactivos = concesionariosPorEstado.find(e => e.id === 'inactivo')?.count || 0
+    
     return {
       total: concesionariosParaEstadisticas.length,
-      activos: concesionariosParaEstadisticas.filter(c => c.estado === 'activo').length,
-      pendientes: concesionariosParaEstadisticas.filter(c => c.estado === 'pendiente').length,
-      inactivos: concesionariosParaEstadisticas.filter(c => c.estado === 'inactivo').length,
+      activos,
+      pendientes,
+      inactivos,
       totalClientes: new Set(
         concesionariosParaEstadisticas.flatMap(c => c.prestamos.map(p => p.cliente_id))
       ).size,
       totalPrestamos: concesionariosParaEstadisticas.reduce((sum, c) => sum + c.prestamosActivos, 0),
       montoTotal: concesionariosParaEstadisticas.reduce((sum, c) => sum + c.montoTotal, 0),
     }
-  }, [concesionariosConEstadisticas, concesionarioSeleccionado])
+  }, [concesionariosConEstadisticas, concesionarioSeleccionado, concesionariosPorEstado])
 
   // Clientes y préstamos del concesionario seleccionado
   const clientesYprestamosDetalle = useMemo(() => {
@@ -666,7 +673,7 @@ export function EmbudoConcesionarios() {
         </div>
       </motion.div>
 
-      {/* Estadísticas */}
+      {/* Estadísticas - Deben coincidir exactamente con los embudos */}
       <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -674,24 +681,24 @@ export function EmbudoConcesionarios() {
             <p className="text-xs text-gray-600 mt-1">Total Concesionarios</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-green-600">{estadisticas.activos}</div>
-            <p className="text-xs text-gray-600 mt-1">Venta asignada</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-yellow-600">{estadisticas.pendientes}</div>
-            <p className="text-xs text-gray-600 mt-1">Pendiente requisitos</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-gray-600">{estadisticas.inactivos}</div>
-            <p className="text-xs text-gray-600 mt-1">Agregar embudo</p>
-          </CardContent>
-        </Card>
+        {concesionariosPorEstado.map((estado) => {
+          const EstadoIcon = estado.icon
+          const colorMap: Record<string, string> = {
+            'activo': 'text-green-600',
+            'pendiente': 'text-yellow-600',
+            'inactivo': 'text-gray-600'
+          }
+          const color = colorMap[estado.id] || 'text-gray-600'
+          
+          return (
+            <Card key={estado.id}>
+              <CardContent className="pt-6">
+                <div className={`text-2xl font-bold ${color}`}>{estado.count}</div>
+                <p className="text-xs text-gray-600 mt-1">{estado.label}</p>
+              </CardContent>
+            </Card>
+          )
+        })}
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-blue-600">{estadisticas.totalClientes}</div>
