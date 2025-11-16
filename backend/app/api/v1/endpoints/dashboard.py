@@ -3270,6 +3270,8 @@ def obtener_prestamos_por_concesionario(
 
         # Agrupar por concesionario
         concesionario_expr = func.coalesce(Prestamo.concesionario, "Sin Concesionario")
+        
+        # Construir query con filtros ANTES del group_by
         query_concesionarios = (
             db.query(
                 concesionario_expr.label("concesionario"),
@@ -3277,10 +3279,9 @@ def obtener_prestamos_por_concesionario(
                 func.count(Prestamo.id).label("cantidad_prestamos"),
             )
             .filter(Prestamo.estado == "APROBADO")
-            .group_by(concesionario_expr)
         )
-
-        # Aplicar filtros
+        
+        # Aplicar filtros ANTES del group_by
         if analista:
             query_concesionarios = query_concesionarios.filter(
                 or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
@@ -3293,6 +3294,9 @@ def obtener_prestamos_por_concesionario(
             query_concesionarios = query_concesionarios.filter(Prestamo.fecha_registro >= fecha_inicio)
         if fecha_fin:
             query_concesionarios = query_concesionarios.filter(Prestamo.fecha_registro <= fecha_fin)
+        
+        # Aplicar group_by después de todos los filtros
+        query_concesionarios = query_concesionarios.group_by(concesionario_expr)
 
         resultados = query_concesionarios.all()
 
@@ -3349,6 +3353,8 @@ def obtener_prestamos_por_modelo(
 
         # Agrupar por modelo (usar producto o modelo_vehiculo)
         modelo_expr = func.coalesce(func.coalesce(Prestamo.modelo_vehiculo, Prestamo.producto), "Sin Modelo")
+        
+        # Construir query con filtros ANTES del group_by
         query_modelos = (
             db.query(
                 modelo_expr.label("modelo"),
@@ -3356,18 +3362,22 @@ def obtener_prestamos_por_modelo(
                 func.count(Prestamo.id).label("cantidad_prestamos"),
             )
             .filter(Prestamo.estado == "APROBADO")
-            .group_by(modelo_expr)
         )
-
-        # Aplicar filtros
+        
+        # Aplicar filtros ANTES del group_by
         if analista:
-            query_modelos = query_modelos.filter(or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista))
+            query_modelos = query_modelos.filter(
+                or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
+            )
         if concesionario:
             query_modelos = query_modelos.filter(Prestamo.concesionario == concesionario)
         if fecha_inicio:
             query_modelos = query_modelos.filter(Prestamo.fecha_registro >= fecha_inicio)
         if fecha_fin:
             query_modelos = query_modelos.filter(Prestamo.fecha_registro <= fecha_fin)
+        
+        # Aplicar group_by después de todos los filtros
+        query_modelos = query_modelos.group_by(modelo_expr)
 
         resultados = query_modelos.all()
 
