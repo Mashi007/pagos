@@ -127,10 +127,7 @@ def create_admin_user() -> None:
         admin_password = settings.ADMIN_PASSWORD
 
         if not admin_email or not admin_password:
-            logger.warning(
-                "⚠️ ADMIN_EMAIL o ADMIN_PASSWORD no configurados. "
-                "Omitiendo creación de usuario admin."
-            )
+            logger.warning("⚠️ ADMIN_EMAIL o ADMIN_PASSWORD no configurados. " "Omitiendo creación de usuario admin.")
             return
 
         # Check if admin user exists
