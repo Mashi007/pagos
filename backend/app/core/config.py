@@ -52,7 +52,9 @@ class Settings(BaseSettings):
     # ============================================
     # SEGURIDAD
     # ============================================
-    SECRET_KEY: str = Field(default="your-secret-key-here-change-in-production", env="SECRET_KEY")
+    # SECRET_KEY debe configurarse mediante variable de entorno
+    # En desarrollo, se genera automáticamente si no está configurado
+    SECRET_KEY: Optional[str] = Field(default=None, env="SECRET_KEY")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 240  # 4 horas
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -109,14 +111,23 @@ class Settings(BaseSettings):
         return data
 
     CORS_ALLOW_CREDENTIALS: bool = True
-    CORS_ALLOW_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    CORS_ALLOW_HEADERS: List[str] = ["*"]
+    CORS_ALLOW_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+    CORS_ALLOW_HEADERS: List[str] = [
+        "Content-Type",
+        "Authorization",
+        "X-Request-ID",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+    ]
 
     # ============================================
     # USUARIO ADMINISTRADOR INICIAL
     # ============================================
-    ADMIN_EMAIL: str = "itmaster@rapicreditca.com"
-    ADMIN_PASSWORD: str = Field(default="R@pi_2025**", env="ADMIN_PASSWORD")
+    # ADMIN_EMAIL y ADMIN_PASSWORD deben configurarse mediante variables de entorno
+    # En desarrollo, se usan valores por defecto solo si no están configurados
+    ADMIN_EMAIL: Optional[str] = Field(default=None, env="ADMIN_EMAIL")
+    ADMIN_PASSWORD: Optional[str] = Field(default=None, env="ADMIN_PASSWORD")
 
     # ============================================
     # AMORTIZACIÓN Y REGLAS DE NEGOCIO
