@@ -166,3 +166,22 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+def check_database_connection() -> bool:
+    """
+    Verifica la conexión a la base de datos con timeout.
+    
+    Returns:
+        True si la conexión es exitosa, False en caso contrario
+    """
+    try:
+        from app.db.session import engine
+        
+        # Intentar conexión simple con timeout implícito del pool
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception as e:
+        logger.error(f"Error verificando conexión a DB: {e}")
+        return False

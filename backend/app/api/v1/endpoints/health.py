@@ -225,16 +225,12 @@ async def detailed_health_check(response: Response):
 
 @router.get("/health/ready")
 async def readiness_check():
-    """Readiness check para Kubernetes/Docker"""
+    """Readiness check para Kubernetes/Docker con timeout"""
     try:
-        # Verificar conexión a DB
-        db_status = True
-        try:
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-        except Exception as e:
-            logger.error(f"Readiness check failed: {e}")
-            db_status = False
+        # Verificar conexión a DB con timeout usando check_database_cached
+        # que ya tiene cache y manejo de errores
+        db_check = check_database_cached()
+        db_status = db_check.get("status", False)
 
         if not db_status:
             return Response(

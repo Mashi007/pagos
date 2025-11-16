@@ -237,8 +237,8 @@ class MLImpagoCuotasService:
                 X.append(features)
                 y.append(sample.get("target", 0))  # 0=Pagó, 1=No pagó
 
-            X = np.array(X)
-            y = np.array(y)
+            X = np.array(X)  # type: ignore[assignment]
+            y = np.array(y)  # type: ignore[assignment]
 
             # Dividir en train y test
             # Usar stratify solo si hay suficientes muestras por clase
@@ -439,7 +439,7 @@ class MLImpagoCuotasService:
                 "monto_total_pendiente",
             ]
 
-            features = np.array([[payment_features.get(feature, 0.0) for feature in feature_order]])
+            features = np.array([[payment_features.get(feature, 0.0) for feature in feature_order]])  # type: ignore[assignment]
 
             # Escalar features
             if "impago_cuotas_scaler" in self.scalers:
