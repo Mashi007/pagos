@@ -22,17 +22,21 @@ class NotificacionesPrejudicialService:
     def calcular_notificaciones_prejudiciales(self) -> List[dict]:
         """
         Calcula clientes con 3 o más cuotas atrasadas (prejudiciales)
+        
+        IMPORTANTE: Devuelve solo UNA notificación por cliente, usando la cuota más antigua como referencia.
+        Esto evita duplicados cuando un cliente tiene múltiples cuotas atrasadas.
 
         Condiciones:
         - Préstamos con estado = 'APROBADO'
-        - Clientes con 3 o más cuotas impagas (atrasadas o parciales)
+        - Clientes con 3 o más cuotas impagas (atrasadas o parciales) en total (pueden ser de múltiples préstamos)
         - Cuotas con estado ATRASADO, PENDIENTE o PARCIAL que están vencidas e incompletas
         - Cuotas con fecha_vencimiento < hoy y total_pagado < monto_cuota
         - Clientes activos (estado != 'INACTIVO')
         - Ordenado por fecha de vencimiento más antigua primero
+        - total_cuotas_atrasadas cuenta TODAS las cuotas atrasadas del cliente (no solo del préstamo)
 
         Returns:
-            Lista de diccionarios con información de clientes y préstamos
+            Lista de diccionarios con información de clientes y préstamos (una entrada por cliente)
         """
         hoy = date.today()
 
@@ -40,6 +44,7 @@ class NotificacionesPrejudicialService:
             logger.info("🔍 [NotificacionesPrejudicial] Iniciando cálculo de notificaciones prejudiciales...")
 
             # Query optimizada: clientes con 3+ cuotas impagas (atrasadas o parciales)
+            # IMPORTANTE: Devuelve solo UNA notificación por cliente (usando la cuota más antigua)
             # Ordenado por fecha de vencimiento más antigua primero
             query_optimizada = text(
                 """WITH cuotas_atrasadas AS (
@@ -53,7 +58,8 @@ class NotificacionesPrejudicialService:
                         cl.telefono,
                         c.fecha_vencimiento,
                         c.numero_cuota,
-                        c.monto_cuota
+                        c.monto_cuota,
+                        ROW_NUMBER() OVER (PARTITION BY p.cliente_id ORDER BY c.fecha_vencimiento ASC, c.numero_cuota ASC) as rn
                     FROM prestamos p
                     INNER JOIN cuotas c ON c.prestamo_id = p.id
                     INNER JOIN clientes cl ON cl.id = p.cliente_id
@@ -68,28 +74,44 @@ class NotificacionesPrejudicialService:
                     FROM cuotas_atrasadas
                     GROUP BY cliente_id
                     HAVING COUNT(*) >= 3
+                ),
+                cuotas_seleccionadas AS (
+                    SELECT
+                        ca.prestamo_id,
+                        ca.cliente_id,
+                        ca.nombre_cliente,
+                        ca.cedula,
+                        ca.modelo_vehiculo,
+                        ca.correo,
+                        ca.telefono,
+                        ca.fecha_vencimiento,
+                        ca.numero_cuota,
+                        ca.monto_cuota
+                    FROM cuotas_atrasadas ca
+                    INNER JOIN clientes_prejudiciales cp ON cp.cliente_id = ca.cliente_id
+                    WHERE ca.rn = 1
                 )
                 SELECT
-                    ca.prestamo_id,
-                    ca.cliente_id,
-                    ca.nombre_cliente,
-                    ca.cedula,
-                    ca.modelo_vehiculo,
-                    ca.correo,
-                    ca.telefono,
-                    ca.fecha_vencimiento,
-                    ca.numero_cuota,
-                    ca.monto_cuota,
+                    cs.prestamo_id,
+                    cs.cliente_id,
+                    cs.nombre_cliente,
+                    cs.cedula,
+                    cs.modelo_vehiculo,
+                    cs.correo,
+                    cs.telefono,
+                    cs.fecha_vencimiento,
+                    cs.numero_cuota,
+                    cs.monto_cuota,
                     (SELECT COUNT(*)
                      FROM cuotas c2
-                     WHERE c2.prestamo_id = ca.prestamo_id
+                     INNER JOIN prestamos p2 ON p2.id = c2.prestamo_id
+                     WHERE p2.cliente_id = cs.cliente_id
                        AND c2.estado IN ('ATRASADO', 'PENDIENTE', 'PARCIAL')
                        AND c2.fecha_vencimiento < :hoy
                        AND c2.total_pagado < c2.monto_cuota) as total_cuotas_atrasadas,
                     'PREJUDICIAL' as tipo_notificacion
-                FROM cuotas_atrasadas ca
-                INNER JOIN clientes_prejudiciales cp ON cp.cliente_id = ca.cliente_id
-                ORDER BY ca.fecha_vencimiento ASC, ca.cliente_id, ca.numero_cuota"""
+                FROM cuotas_seleccionadas cs
+                ORDER BY cs.fecha_vencimiento ASC, cs.cliente_id, cs.numero_cuota"""
             )
 
             import time

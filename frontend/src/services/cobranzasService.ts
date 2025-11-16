@@ -315,6 +315,21 @@ class CobranzasService {
       throw error
     }
   }
+
+  // Actualizar analista de un préstamo
+  // Si el valor contiene @ es un email (usuario_proponente), si no es un nombre (analista)
+  async actualizarAnalista(prestamoId: number, analistaValue: string): Promise<any> {
+    const { prestamoService } = await import('./prestamoService')
+    const isEmail = analistaValue.includes('@')
+    
+    if (isEmail) {
+      // Es un email, actualizar usuario_proponente
+      return await prestamoService.updatePrestamo(prestamoId, { usuario_proponente: analistaValue })
+    } else {
+      // Es un nombre, actualizar analista
+      return await prestamoService.updatePrestamo(prestamoId, { analista: analistaValue })
+    }
+  }
 }
 
 export const cobranzasService = new CobranzasService()

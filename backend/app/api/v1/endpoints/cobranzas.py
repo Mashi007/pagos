@@ -331,7 +331,7 @@ def obtener_clientes_atrasados(
             db.query(
                 Cliente.cedula,
                 Cliente.nombres,
-                Prestamo.usuario_proponente.label("analista"),
+                func.coalesce(Prestamo.analista, Prestamo.usuario_proponente).label("analista"),
                 Prestamo.id.label("prestamo_id"),
                 cuotas_vencidas_subq.c.cuotas_vencidas,
                 cuotas_vencidas_subq.c.total_adeudado,
@@ -398,7 +398,7 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
             db.query(
                 Cliente.cedula,
                 Cliente.nombres,
-                Prestamo.usuario_proponente.label("analista"),
+                func.coalesce(Prestamo.analista, Prestamo.usuario_proponente).label("analista"),
                 Prestamo.id.label("prestamo_id"),
                 func.sum(Cuota.monto_cuota).label("total_adeudado"),
             )
@@ -411,6 +411,7 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
             .group_by(
                 Cliente.cedula,
                 Cliente.nombres,
+                Prestamo.analista,
                 Prestamo.usuario_proponente,
                 Prestamo.id,
             )
@@ -487,7 +488,7 @@ def obtener_cobranzas_por_analista(
 
         query = (
             db.query(
-                Prestamo.usuario_proponente.label("nombre_analista"),
+                func.coalesce(Prestamo.analista, Prestamo.usuario_proponente).label("nombre_analista"),
                 func.count(func.distinct(Cliente.cedula)).label("cantidad_clientes"),
                 func.sum(Cuota.monto_cuota).label("monto_total"),
             )
@@ -501,7 +502,7 @@ def obtener_cobranzas_por_analista(
         if not incluir_admin:
             query = query.filter(or_(User.is_admin.is_(False), User.is_admin.is_(None)))  # Excluir admins
 
-        query = query.group_by(Prestamo.usuario_proponente).having(func.count(func.distinct(Cliente.cedula)) > 0)
+        query = query.group_by(Prestamo.analista, Prestamo.usuario_proponente).having(func.count(func.distinct(Cliente.cedula)) > 0)
 
         resultados = query.all()
 
@@ -530,6 +531,7 @@ def obtener_clientes_por_analista(
 ):
     """
     Obtener detalle de clientes atrasados para un analista específico
+    Busca tanto por nombre (analista) como por email (usuario_proponente)
     """
     try:
         hoy = date.today()
@@ -539,6 +541,7 @@ def obtener_clientes_por_analista(
                 Cliente.cedula,
                 Cliente.nombres,
                 Cliente.telefono,
+                func.coalesce(Prestamo.analista, Prestamo.usuario_proponente).label("analista"),
                 Prestamo.id.label("prestamo_id"),
                 func.count(Cuota.id).label("cuotas_vencidas"),
                 func.sum(Cuota.monto_cuota).label("total_adeudado"),
@@ -548,11 +551,14 @@ def obtener_clientes_por_analista(
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
-                Prestamo.usuario_proponente == analista,
+                or_(
+                    Prestamo.analista == analista,
+                    Prestamo.usuario_proponente == analista
+                ),
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
             )
-            .group_by(Cliente.cedula, Cliente.nombres, Cliente.telefono, Prestamo.id)
+            .group_by(Cliente.cedula, Cliente.nombres, Cliente.telefono, Prestamo.analista, Prestamo.usuario_proponente, Prestamo.id)
         )
 
         resultados = query.all()
@@ -564,6 +570,7 @@ def obtener_clientes_por_analista(
                     "cedula": row.cedula,
                     "nombres": row.nombres,
                     "telefono": row.telefono,
+                    "analista": row.analista,
                     "prestamo_id": row.prestamo_id,
                     "cuotas_vencidas": row.cuotas_vencidas,
                     "total_adeudado": (float(row.total_adeudado) if row.total_adeudado else 0.0),
@@ -935,7 +942,7 @@ def _construir_query_clientes_atrasados(db: Session, hoy: date, analista: Option
             Cliente.cedula,
             Cliente.nombres,
             Cliente.telefono,
-            Prestamo.usuario_proponente.label("analista"),
+            func.coalesce(Prestamo.analista, Prestamo.usuario_proponente).label("analista"),
             Prestamo.id.label("prestamo_id"),
             Prestamo.total_financiamiento,
             func.count(Cuota.id).label("cuotas_vencidas"),
@@ -965,12 +972,19 @@ def _construir_query_clientes_atrasados(db: Session, hoy: date, analista: Option
     )
 
     if analista:
-        query = query.filter(Prestamo.usuario_proponente == analista)
+        # Buscar tanto en analista (nombre) como en usuario_proponente (email)
+        query = query.filter(
+            or_(
+                Prestamo.analista == analista,
+                Prestamo.usuario_proponente == analista
+            )
+        )
 
     return query.group_by(
         Cliente.cedula,
         Cliente.nombres,
         Cliente.telefono,
+        Prestamo.analista,
         Prestamo.usuario_proponente,
         Prestamo.id,
         Prestamo.total_financiamiento,
@@ -1075,7 +1089,7 @@ def informe_rendimiento_analista(
 
         query = (
             db.query(
-                Prestamo.usuario_proponente.label("analista"),
+                func.coalesce(Prestamo.analista, Prestamo.usuario_proponente).label("analista"),
                 func.count(func.distinct(Cliente.cedula)).label("total_clientes"),
                 func.count(func.distinct(Prestamo.id)).label("total_prestamos"),
                 func.sum(Cuota.monto_cuota).label("monto_total_adeudado"),
@@ -1248,7 +1262,7 @@ def _obtener_cuotas_categoria_dias(db: Session, analista: Optional[str], hoy: da
         db.query(
             Cliente.cedula,
             Cliente.nombres,
-            Prestamo.usuario_proponente.label("analista"),
+            func.coalesce(Prestamo.analista, Prestamo.usuario_proponente).label("analista"),
             Cuota.id.label("cuota_id"),
             Cuota.numero_cuota,
             Cuota.fecha_vencimiento,
@@ -1267,7 +1281,13 @@ def _obtener_cuotas_categoria_dias(db: Session, analista: Optional[str], hoy: da
     )
 
     if analista:
-        cuotas_query = cuotas_query.filter(Prestamo.usuario_proponente == analista)
+        # Buscar tanto en analista (nombre) como en usuario_proponente (email)
+        cuotas_query = cuotas_query.filter(
+            or_(
+                Prestamo.analista == analista,
+                Prestamo.usuario_proponente == analista
+            )
+        )
 
     return cuotas_query.all()
 
@@ -1626,7 +1646,7 @@ def informe_resumen_ejecutivo(
 
         top_analistas = (
             db.query(
-                Prestamo.usuario_proponente.label("analista"),
+                func.coalesce(Prestamo.analista, Prestamo.usuario_proponente).label("analista"),
                 func.sum(Cuota.monto_cuota).label("monto_total"),
             )
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
@@ -1639,7 +1659,7 @@ def informe_resumen_ejecutivo(
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
                 or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
             )
-            .group_by(Prestamo.usuario_proponente)
+            .group_by(Prestamo.analista, Prestamo.usuario_proponente)
             .order_by(func.sum(Cuota.monto_cuota).desc())
             .limit(5)
             .all()

@@ -136,6 +136,12 @@ def aplicar_cambios_prestamo(prestamo: Prestamo, prestamo_data: PrestamoUpdate):
     if prestamo_data.observaciones is not None:
         prestamo.observaciones = prestamo_data.observaciones  # type: ignore[assignment]
 
+    if prestamo_data.usuario_proponente is not None:
+        prestamo.usuario_proponente = prestamo_data.usuario_proponente  # type: ignore[assignment]
+
+    if prestamo_data.analista is not None:
+        prestamo.analista = prestamo_data.analista  # type: ignore[assignment]
+
 
 def actualizar_monto_y_cuotas(prestamo: Prestamo, monto: Decimal):
     """Actualiza monto y recalcula cuotas"""

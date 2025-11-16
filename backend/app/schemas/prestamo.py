@@ -68,6 +68,7 @@ class PrestamoUpdate(BaseModel):
     concesionario: Optional[str] = Field(None, max_length=100)
     analista: Optional[str] = Field(None, max_length=100)
     modelo_vehiculo: Optional[str] = Field(None, max_length=100)
+    usuario_proponente: Optional[str] = Field(None, max_length=100, description="Email del analista asignado")
 
 
 # ============================================

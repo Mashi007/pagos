@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { 
   AlertTriangle, 
   TrendingDown, 
@@ -17,13 +18,17 @@ import {
   Eye,
   Search,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Save,
+  X,
+  Pencil
 } from 'lucide-react'
 import { cobranzasService } from '@/services/cobranzasService'
 import { useQuery } from '@tanstack/react-query'
 import type { ClienteAtrasado, CobranzasPorAnalista } from '@/services/cobranzasService'
 import { InformesCobranzas } from '@/components/cobranzas/InformesCobranzas'
 import { toast } from 'sonner'
+import { userService } from '@/services/userService'
 
 export function Cobranzas() {
   const [tabActiva, setTabActiva] = useState('cuotas')
@@ -40,6 +45,9 @@ export function Cobranzas() {
   const [clientesPorAnalista, setClientesPorAnalista] = useState<Record<string, ClienteAtrasado[]>>({})
   const [cargandoClientesAnalista, setCargandoClientesAnalista] = useState<Record<string, boolean>>({})
   const [busquedaPorAnalista, setBusquedaPorAnalista] = useState<Record<string, string>>({})
+  const [editandoAnalista, setEditandoAnalista] = useState<number | null>(null)
+  const [analistaTemporal, setAnalistaTemporal] = useState<string>('')
+  const [guardandoAnalista, setGuardandoAnalista] = useState<number | null>(null)
 
   // Query para resumen
   const { 
@@ -83,6 +91,34 @@ export function Cobranzas() {
   } = useQuery({
     queryKey: ['cobranzas-por-analista'],
     queryFn: () => cobranzasService.getCobranzasPorAnalista(),
+    retry: 2,
+    retryDelay: 1000,
+  })
+
+  // Query para obtener usuarios activos (para el dropdown de analistas)
+  const { 
+    data: usuariosData, 
+    isLoading: cargandoUsuarios 
+  } = useQuery({
+    queryKey: ['usuarios-activos'],
+    queryFn: async () => {
+      const response = await userService.listarUsuarios(1, 1000, true)
+      return response.items.filter((u: any) => u.is_active && !u.is_admin)
+    },
+    retry: 2,
+    retryDelay: 1000,
+  })
+
+  // Query para obtener analistas activos (para el dropdown de analistas)
+  const { 
+    data: analistasData, 
+    isLoading: cargandoAnalistasData 
+  } = useQuery({
+    queryKey: ['analistas-activos'],
+    queryFn: async () => {
+      const { analistaService } = await import('@/services/analistaService')
+      return await analistaService.listarAnalistasActivos()
+    },
     retry: 2,
     retryDelay: 1000,
   })
@@ -164,6 +200,45 @@ export function Cobranzas() {
           setCargandoClientesAnalista(prev => ({ ...prev, [nombreAnalista]: false }))
         }
       }
+    }
+  }
+
+  // Función para iniciar edición del analista
+  const iniciarEdicionAnalista = (prestamoId: number, analistaActual: string) => {
+    setEditandoAnalista(prestamoId)
+    setAnalistaTemporal(analistaActual || '')
+  }
+
+  // Función para cancelar edición del analista
+  const cancelarEdicionAnalista = () => {
+    setEditandoAnalista(null)
+    setAnalistaTemporal('')
+  }
+
+  // Función para guardar el analista actualizado
+  const guardarAnalista = async (prestamoId: number) => {
+    if (!analistaTemporal || analistaTemporal.trim() === '') {
+      toast.error('Debe seleccionar un analista')
+      return
+    }
+
+    setGuardandoAnalista(prestamoId)
+    try {
+      await cobranzasService.actualizarAnalista(prestamoId, analistaTemporal)
+      toast.success('Analista actualizado correctamente')
+      setEditandoAnalista(null)
+      setAnalistaTemporal('')
+      // Refrescar los datos de ambas secciones
+      refetchClientes()
+      refetchAnalistas()
+      // Si estamos en la sección "Por Analista", también refrescar los clientes de cada analista
+      // Limpiar los clientes cargados para forzar recarga
+      setClientesPorAnalista({})
+    } catch (error: any) {
+      console.error('Error actualizando analista:', error)
+      toast.error(error?.response?.data?.detail || 'Error al actualizar el analista')
+    } finally {
+      setGuardandoAnalista(null)
     }
   }
 
@@ -767,11 +842,76 @@ export function Cobranzas() {
                           <tbody>
                             {clientesFiltrados.map((cliente, index) => {
                               const cuotasImpagas = cliente.cuotas_vencidas || 0
+                              const estaEditando = editandoAnalista === cliente.prestamo_id
+                              const estaGuardando = guardandoAnalista === cliente.prestamo_id
                               return (
-                                <tr key={index} className="border-b hover:bg-gray-50 transition-colors">
+                                <tr key={`${cliente.prestamo_id}-${index}`} className="border-b hover:bg-gray-50 transition-colors group">
                                   <td className="p-2 font-mono text-xs">{cliente.cedula}</td>
                                   <td className="p-2">{cliente.nombres}</td>
-                                  <td className="p-2">{cliente.analista}</td>
+                                  <td className="p-2">
+                                    {estaEditando ? (
+                                      <div className="flex items-center gap-2">
+                                        <Select
+                                          value={analistaTemporal}
+                                          onValueChange={setAnalistaTemporal}
+                                          disabled={estaGuardando}
+                                        >
+                                          <SelectTrigger className="w-[200px] h-8">
+                                            <SelectValue placeholder="Seleccionar analista" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {/* Mostrar analistas primero (por nombre) */}
+                                            {analistasData?.map((analista: any) => (
+                                              <SelectItem key={`analista-${analista.id}`} value={analista.nombre}>
+                                                {analista.nombre} (Analista)
+                                              </SelectItem>
+                                            ))}
+                                            {/* Luego mostrar usuarios (por email) */}
+                                            {usuariosData?.map((usuario: any) => (
+                                              <SelectItem key={`usuario-${usuario.id}`} value={usuario.email}>
+                                                {usuario.email} (Usuario)
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => guardarAnalista(cliente.prestamo_id)}
+                                          disabled={estaGuardando}
+                                          className="h-8 w-8 p-0"
+                                        >
+                                          {estaGuardando ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                          ) : (
+                                            <Save className="h-4 w-4 text-green-600" />
+                                          )}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={cancelarEdicionAnalista}
+                                          disabled={estaGuardando}
+                                          className="h-8 w-8 p-0"
+                                        >
+                                          <X className="h-4 w-4 text-red-600" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm">{cliente.analista || 'N/A'}</span>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => iniciarEdicionAnalista(cliente.prestamo_id, cliente.analista || '')}
+                                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:opacity-100"
+                                          title="Editar analista"
+                                        >
+                                          <Pencil className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </td>
                                   <td className="p-2 text-center">
                                     <Badge 
                                       variant="outline" 
@@ -1137,6 +1277,7 @@ export function Cobranzas() {
                                         <tr className="border-b bg-gray-50">
                                           <th className="text-left p-2 font-semibold">Cédula</th>
                                           <th className="text-left p-2 font-semibold">Nombres</th>
+                                          <th className="text-left p-2 font-semibold">Analista</th>
                                           <th className="text-left p-2 font-semibold">Teléfono</th>
                                           <th className="text-right p-2 font-semibold">Cuotas Vencidas</th>
                                           <th className="text-right p-2 font-semibold">Total Adeudado</th>
@@ -1144,26 +1285,89 @@ export function Cobranzas() {
                                         </tr>
                                       </thead>
                                       <tbody>
-                                        {clientesOrdenados.map((cliente, idx) => (
-                                          <tr key={idx} className="border-b hover:bg-gray-50 transition-colors">
-                                            <td className="p-2 font-mono text-xs">{cliente.cedula}</td>
-                                            <td className="p-2">{cliente.nombres}</td>
-                                            <td className="p-2">{cliente.telefono || 'N/A'}</td>
-                                            <td className="p-2 text-right">
-                                              <Badge variant="outline" className="bg-red-50 text-red-700">
-                                                {cliente.cuotas_vencidas}
-                                              </Badge>
-                                            </td>
-                                            <td className="p-2 text-right font-semibold text-red-600">
-                                              ${(cliente.total_adeudado || 0).toLocaleString('es-VE')}
-                                            </td>
-                                            <td className="p-2">
-                                              {cliente.fecha_primera_vencida
-                                                ? new Date(cliente.fecha_primera_vencida).toLocaleDateString('es-VE')
-                                                : 'N/A'}
-                                            </td>
-                                          </tr>
-                                        ))}
+                                        {clientesOrdenados.map((cliente, idx) => {
+                                          const estaEditando = editandoAnalista === cliente.prestamo_id
+                                          const estaGuardando = guardandoAnalista === cliente.prestamo_id
+                                          // Obtener el analista del cliente o usar el analista del grupo
+                                          const analistaCliente = cliente.analista || analista.nombre
+                                          return (
+                                            <tr key={`${cliente.prestamo_id}-${idx}`} className="border-b hover:bg-gray-50 transition-colors group">
+                                              <td className="p-2 font-mono text-xs">{cliente.cedula}</td>
+                                              <td className="p-2">{cliente.nombres}</td>
+                                              <td className="p-2">
+                                                {estaEditando ? (
+                                                  <div className="flex items-center gap-2">
+                                                    <Select
+                                                      value={analistaTemporal}
+                                                      onValueChange={setAnalistaTemporal}
+                                                      disabled={estaGuardando}
+                                                    >
+                                                      <SelectTrigger className="w-[200px] h-8">
+                                                        <SelectValue placeholder="Seleccionar analista" />
+                                                      </SelectTrigger>
+                                                      <SelectContent>
+                                                        {usuariosData?.map((usuario: any) => (
+                                                          <SelectItem key={usuario.id} value={usuario.email}>
+                                                            {usuario.email}
+                                                          </SelectItem>
+                                                        ))}
+                                                      </SelectContent>
+                                                    </Select>
+                                                    <Button
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      onClick={() => guardarAnalista(cliente.prestamo_id)}
+                                                      disabled={estaGuardando}
+                                                      className="h-8 w-8 p-0"
+                                                    >
+                                                      {estaGuardando ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                      ) : (
+                                                        <Save className="h-4 w-4 text-green-600" />
+                                                      )}
+                                                    </Button>
+                                                    <Button
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      onClick={cancelarEdicionAnalista}
+                                                      disabled={estaGuardando}
+                                                      className="h-8 w-8 p-0"
+                                                    >
+                                                      <X className="h-4 w-4 text-red-600" />
+                                                    </Button>
+                                                  </div>
+                                                ) : (
+                                                  <div className="flex items-center gap-2">
+                                                    <span className="text-sm">{analistaCliente || 'N/A'}</span>
+                                                    <Button
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      onClick={() => iniciarEdicionAnalista(cliente.prestamo_id, analistaCliente || '')}
+                                                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:opacity-100"
+                                                      title="Editar analista"
+                                                    >
+                                                      <Pencil className="h-3 w-3" />
+                                                    </Button>
+                                                  </div>
+                                                )}
+                                              </td>
+                                              <td className="p-2">{cliente.telefono || 'N/A'}</td>
+                                              <td className="p-2 text-right">
+                                                <Badge variant="outline" className="bg-red-50 text-red-700">
+                                                  {cliente.cuotas_vencidas}
+                                                </Badge>
+                                              </td>
+                                              <td className="p-2 text-right font-semibold text-red-600">
+                                                ${(cliente.total_adeudado || 0).toLocaleString('es-VE')}
+                                              </td>
+                                              <td className="p-2">
+                                                {cliente.fecha_primera_vencida
+                                                  ? new Date(cliente.fecha_primera_vencida).toLocaleDateString('es-VE')
+                                                  : 'N/A'}
+                                              </td>
+                                            </tr>
+                                          )
+                                        })}
                                       </tbody>
                                     </table>
                                   </div>

@@ -901,11 +901,13 @@ export function Notificaciones() {
                                         <span className="font-medium">Préstamo ID:</span> {notificacion.prestamo_id}
                                       </div>
                                     )}
-                                    {notificacion.total_cuotas_atrasadas && (
-                                      <div className="text-gray-700">
-                                        <span className="font-medium">Total cuotas atrasadas:</span> <span className="text-red-600 font-semibold">{notificacion.total_cuotas_atrasadas}</span>
-                                      </div>
-                                    )}
+                                    {/* Total cuotas atrasadas - siempre visible y destacado */}
+                                    <div className="text-gray-700 col-span-1 md:col-span-2 mt-2 pt-2 border-t border-gray-200">
+                                      <span className="font-semibold text-base">Total cuotas atrasadas:</span>{' '}
+                                      <Badge className="bg-red-500 text-white font-bold text-base px-3 py-1 ml-2">
+                                        {notificacion.total_cuotas_atrasadas || 0}
+                                      </Badge>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
