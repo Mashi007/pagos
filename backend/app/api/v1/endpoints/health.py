@@ -1132,7 +1132,7 @@ async def check_pending_processes(
 ):
     """
     Verifica procesos pendientes o incompletos en el sistema
-    
+
     Revisa:
     - Fine-tuning jobs pendientes o en ejecución
     - Notificaciones pendientes
@@ -1145,16 +1145,16 @@ async def check_pending_processes(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden ver procesos pendientes",
         )
-    
+
     try:
         from datetime import date, datetime, timedelta
         from sqlalchemy import and_, func, or_
-        
+
         from app.models.amortizacion import Cuota
         from app.models.notificacion import Notificacion
         from app.models.pago import Pago
         from app.models.prestamo import Prestamo
-        
+
         resultado = {
             "timestamp": time.time(),
             "fecha_revision": datetime.now().isoformat(),
@@ -1166,17 +1166,13 @@ async def check_pending_processes(
                 "prioridad_baja": 0,
             },
         }
-        
+
         # 1. Fine-tuning jobs pendientes o en ejecución
         try:
             from app.models.fine_tuning_job import FineTuningJob
-            
-            jobs_pendientes = (
-                db.query(FineTuningJob)
-                .filter(FineTuningJob.status.in_(["pending", "running"]))
-                .all()
-            )
-            
+
+            jobs_pendientes = db.query(FineTuningJob).filter(FineTuningJob.status.in_(["pending", "running"])).all()
+
             jobs_antiguos = (
                 db.query(FineTuningJob)
                 .filter(
@@ -1185,7 +1181,7 @@ async def check_pending_processes(
                 )
                 .count()
             )
-            
+
             resultado["procesos_pendientes"]["fine_tuning_jobs"] = {
                 "total_pendientes": len(jobs_pendientes),
                 "jobs_antiguos_7_dias": jobs_antiguos,
@@ -1202,7 +1198,7 @@ async def check_pending_processes(
                 ],
                 "prioridad": "media" if len(jobs_pendientes) > 0 else "baja",
             }
-            
+
             if len(jobs_pendientes) > 0:
                 resultado["resumen"]["total_procesos_pendientes"] += len(jobs_pendientes)
                 resultado["resumen"]["prioridad_media"] += len(jobs_pendientes)
@@ -1212,15 +1208,11 @@ async def check_pending_processes(
                 "error": str(e),
                 "total_pendientes": 0,
             }
-        
+
         # 2. Notificaciones pendientes
         try:
-            notificaciones_pendientes = (
-                db.query(Notificacion)
-                .filter(Notificacion.estado == "PENDIENTE")
-                .count()
-            )
-            
+            notificaciones_pendientes = db.query(Notificacion).filter(Notificacion.estado == "PENDIENTE").count()
+
             notificaciones_antiguas = (
                 db.query(Notificacion)
                 .filter(
@@ -1229,13 +1221,13 @@ async def check_pending_processes(
                 )
                 .count()
             )
-            
+
             resultado["procesos_pendientes"]["notificaciones"] = {
                 "total_pendientes": notificaciones_pendientes,
                 "antiguas_3_dias": notificaciones_antiguas,
                 "prioridad": "alta" if notificaciones_antiguas > 0 else "media" if notificaciones_pendientes > 0 else "baja",
             }
-            
+
             if notificaciones_pendientes > 0:
                 resultado["resumen"]["total_procesos_pendientes"] += notificaciones_pendientes
                 if notificaciones_antiguas > 0:
@@ -1248,7 +1240,7 @@ async def check_pending_processes(
                 "error": str(e),
                 "total_pendientes": 0,
             }
-        
+
         # 3. Pagos no conciliados
         try:
             pagos_no_conciliados = (
@@ -1259,7 +1251,7 @@ async def check_pending_processes(
                 )
                 .count()
             )
-            
+
             pagos_antiguos_no_conciliados = (
                 db.query(Pago)
                 .filter(
@@ -1269,13 +1261,13 @@ async def check_pending_processes(
                 )
                 .count()
             )
-            
+
             resultado["procesos_pendientes"]["pagos_no_conciliados"] = {
                 "total_no_conciliados": pagos_no_conciliados,
                 "antiguos_7_dias": pagos_antiguos_no_conciliados,
                 "prioridad": "alta" if pagos_antiguos_no_conciliados > 0 else "media" if pagos_no_conciliados > 0 else "baja",
             }
-            
+
             if pagos_no_conciliados > 0:
                 resultado["resumen"]["total_procesos_pendientes"] += pagos_no_conciliados
                 if pagos_antiguos_no_conciliados > 0:
@@ -1288,7 +1280,7 @@ async def check_pending_processes(
                 "error": str(e),
                 "total_no_conciliados": 0,
             }
-        
+
         # 4. Cuotas con estados inconsistentes (total_pagado >= monto_cuota pero estado != PAGADO)
         try:
             hoy = date.today()
@@ -1300,13 +1292,13 @@ async def check_pending_processes(
                 )
                 .count()
             )
-            
+
             resultado["procesos_pendientes"]["cuotas_inconsistentes"] = {
                 "total_inconsistentes": cuotas_inconsistentes,
                 "descripcion": "Cuotas con total_pagado >= monto_cuota pero estado != PAGADO",
                 "prioridad": "alta" if cuotas_inconsistentes > 0 else "baja",
             }
-            
+
             if cuotas_inconsistentes > 0:
                 resultado["resumen"]["total_procesos_pendientes"] += cuotas_inconsistentes
                 resultado["resumen"]["prioridad_alta"] += cuotas_inconsistentes
@@ -1316,20 +1308,16 @@ async def check_pending_processes(
                 "error": str(e),
                 "total_inconsistentes": 0,
             }
-        
+
         # 5. Préstamos pendientes (si aplica)
         try:
-            prestamos_pendientes = (
-                db.query(Prestamo)
-                .filter(Prestamo.estado == "PENDIENTE")
-                .count()
-            )
-            
+            prestamos_pendientes = db.query(Prestamo).filter(Prestamo.estado == "PENDIENTE").count()
+
             resultado["procesos_pendientes"]["prestamos_pendientes"] = {
                 "total_pendientes": prestamos_pendientes,
                 "prioridad": "media" if prestamos_pendientes > 0 else "baja",
             }
-            
+
             if prestamos_pendientes > 0:
                 resultado["resumen"]["total_procesos_pendientes"] += prestamos_pendientes
                 resultado["resumen"]["prioridad_media"] += prestamos_pendientes
@@ -1339,7 +1327,7 @@ async def check_pending_processes(
                 "error": str(e),
                 "total_pendientes": 0,
             }
-        
+
         # Determinar estado general
         if resultado["resumen"]["prioridad_alta"] > 0:
             resultado["estado_general"] = "critico"
@@ -1349,9 +1337,9 @@ async def check_pending_processes(
             resultado["estado_general"] = "info"
         else:
             resultado["estado_general"] = "ok"
-        
+
         return resultado
-        
+
     except Exception as e:
         logger.error(f"Error verificando procesos pendientes: {e}", exc_info=True)
         return {
@@ -1367,7 +1355,7 @@ async def check_duplicate_files(
 ):
     """
     Verifica archivos duplicados o que puedan generar interferencia
-    
+
     Revisa:
     - Archivos con nombres similares
     - Funciones/clases duplicadas
@@ -1379,12 +1367,12 @@ async def check_duplicate_files(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores pueden verificar archivos duplicados",
         )
-    
+
     try:
         from pathlib import Path
         import os
         from collections import defaultdict
-        
+
         resultado = {
             "timestamp": time.time(),
             "archivos_duplicados": {},
@@ -1398,14 +1386,14 @@ async def check_duplicate_files(
                 "total_no_registrados": 0,
             },
         }
-        
+
         # Obtener ruta del backend
         backend_path = Path(__file__).parent.parent.parent.parent / "backend"
         app_path = backend_path / "app"
-        
+
         # 1. Buscar archivos con nombres similares o duplicados
         archivos_por_nombre = defaultdict(list)
-        
+
         for root, dirs, files in os.walk(app_path):
             # Ignorar __pycache__ y .pyc
             dirs[:] = [d for d in dirs if d != "__pycache__"]
@@ -1415,7 +1403,7 @@ async def check_duplicate_files(
                     ruta_completa = Path(root) / file
                     ruta_relativa = ruta_completa.relative_to(backend_path)
                     archivos_por_nombre[nombre_base].append(str(ruta_relativa))
-        
+
         # Identificar duplicados exactos y similares
         for nombre, rutas in archivos_por_nombre.items():
             if len(rutas) > 1:
@@ -1428,14 +1416,14 @@ async def check_duplicate_files(
                         "tipo": "similar" if len(rutas_unicas) == 2 else "multiple",
                     }
                     resultado["resumen"]["total_similares"] += len(rutas_unicas)
-        
+
         # 2. Verificar servicios ML (posible duplicación)
         servicios_ml = []
         if (app_path / "services" / "ml_service.py").exists():
             servicios_ml.append("services/ml_service.py")
         if (app_path / "services" / "ml_impago_cuotas_service.py").exists():
             servicios_ml.append("services/ml_impago_cuotas_service.py")
-        
+
         if len(servicios_ml) > 1:
             resultado["posibles_conflictos"]["servicios_ml"] = {
                 "descripcion": "Múltiples servicios ML encontrados",
@@ -1444,14 +1432,12 @@ async def check_duplicate_files(
                 "severidad": "media",
             }
             resultado["resumen"]["total_conflictos"] += 1
-        
+
         # 3. Verificar archivos de notificaciones (muchos archivos similares)
         archivos_notificaciones = [
-            str(p.relative_to(backend_path))
-            for p in app_path.rglob("*notificacion*.py")
-            if p.is_file()
+            str(p.relative_to(backend_path)) for p in app_path.rglob("*notificacion*.py") if p.is_file()
         ]
-        
+
         if len(archivos_notificaciones) > 10:
             resultado["posibles_conflictos"]["notificaciones"] = {
                 "descripcion": f"Muchos archivos de notificaciones ({len(archivos_notificaciones)})",
@@ -1461,12 +1447,12 @@ async def check_duplicate_files(
                 "severidad": "baja",
             }
             resultado["resumen"]["total_conflictos"] += 1
-        
+
         # 4. Verificar endpoints no registrados en __init__.py
         try:
             endpoints_path = app_path / "api" / "v1" / "endpoints"
             endpoints_registrados = set()
-            
+
             # Leer __init__.py para ver qué está registrado
             init_file = endpoints_path / "__init__.py"
             if init_file.exists():
@@ -1474,33 +1460,28 @@ async def check_duplicate_files(
                     contenido = f.read()
                     # Buscar imports en el archivo
                     import re
+
                     imports = re.findall(r"from \. import (\w+)", contenido)
                     imports += re.findall(r"import (\w+)", contenido)
                     endpoints_registrados = set(imports)
-            
+
             # Buscar archivos .py en endpoints
             archivos_endpoints = [
-                f.stem
-                for f in endpoints_path.glob("*.py")
-                if f.name != "__init__.py" and f.name != "__pycache__"
+                f.stem for f in endpoints_path.glob("*.py") if f.name != "__init__.py" and f.name != "__pycache__"
             ]
-            
-            endpoints_no_registrados = [
-                archivo
-                for archivo in archivos_endpoints
-                if archivo not in endpoints_registrados
-            ]
-            
+
+            endpoints_no_registrados = [archivo for archivo in archivos_endpoints if archivo not in endpoints_registrados]
+
             if endpoints_no_registrados:
                 resultado["archivos_no_registrados"] = endpoints_no_registrados
                 resultado["resumen"]["total_no_registrados"] = len(endpoints_no_registrados)
         except Exception as e:
             logger.warning(f"Error verificando endpoints no registrados: {e}")
             resultado["archivos_no_registrados"] = []
-        
+
         # 5. Verificar posibles conflictos de imports
         posibles_conflictos_imports = []
-        
+
         # Verificar si hay imports circulares potenciales
         archivos_imports_ml = []
         for archivo in app_path.rglob("*.py"):
@@ -1511,7 +1492,7 @@ async def check_duplicate_files(
                         archivos_imports_ml.append(str(archivo.relative_to(backend_path)))
             except Exception:
                 pass
-        
+
         if len(archivos_imports_ml) > 5:
             resultado["posibles_conflictos"]["imports_ml"] = {
                 "descripcion": "Muchos archivos importan servicios ML",
@@ -1521,7 +1502,7 @@ async def check_duplicate_files(
                 "severidad": "baja",
             }
             resultado["resumen"]["total_conflictos"] += 1
-        
+
         # Determinar estado general
         if resultado["resumen"]["total_conflictos"] > 0 or resultado["resumen"]["total_no_registrados"] > 0:
             resultado["estado_general"] = "advertencia"
@@ -1529,9 +1510,9 @@ async def check_duplicate_files(
             resultado["estado_general"] = "info"
         else:
             resultado["estado_general"] = "ok"
-        
+
         return resultado
-        
+
     except Exception as e:
         logger.error(f"Error verificando archivos duplicados: {e}", exc_info=True)
         return {
