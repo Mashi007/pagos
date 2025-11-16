@@ -260,7 +260,7 @@ export function PagosList() {
                           <th className="px-4 py-3 text-left">ID</th>
                           <th className="px-4 py-3 text-left">Cédula</th>
                           <th className="px-4 py-3 text-left">Estado</th>
-                          <th className="px-4 py-3 text-left">Cuotas Atrasadas</th>
+                          <th className="px-4 py-3 text-center">Cuotas Atrasadas</th>
                           <th className="px-4 py-3 text-left">Monto</th>
                           <th className="px-4 py-3 text-left">Fecha Pago</th>
                           <th className="px-4 py-3 text-left">Conciliado</th>
@@ -273,7 +273,7 @@ export function PagosList() {
                             <td className="px-4 py-3">{pago.id}</td>
                             <td className="px-4 py-3">{pago.cedula_cliente}</td>
                             <td className="px-4 py-3">{getEstadoBadge(pago.estado)}</td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 text-center">
                               <span className={pago.cuotas_atrasadas && pago.cuotas_atrasadas > 0 ? 'text-red-600 font-semibold' : ''}>
                                 {pago.cuotas_atrasadas ?? 0}
                               </span>
