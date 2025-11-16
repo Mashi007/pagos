@@ -3269,14 +3269,15 @@ def obtener_prestamos_por_concesionario(
         total_general_cantidad = query_base.count()
 
         # Agrupar por concesionario
+        concesionario_expr = func.coalesce(Prestamo.concesionario, "Sin Concesionario")
         query_concesionarios = (
             db.query(
-                func.coalesce(Prestamo.concesionario, "Sin Concesionario").label("concesionario"),
+                concesionario_expr.label("concesionario"),
                 func.sum(Prestamo.total_financiamiento).label("total_prestamos"),
                 func.count(Prestamo.id).label("cantidad_prestamos"),
             )
             .filter(Prestamo.estado == "APROBADO")
-            .group_by("concesionario")
+            .group_by(concesionario_expr)
         )
 
         # Aplicar filtros
@@ -3347,14 +3348,15 @@ def obtener_prestamos_por_modelo(
         total_general_cantidad = query_base.count()
 
         # Agrupar por modelo (usar producto o modelo_vehiculo)
+        modelo_expr = func.coalesce(func.coalesce(Prestamo.modelo_vehiculo, Prestamo.producto), "Sin Modelo")
         query_modelos = (
             db.query(
-                func.coalesce(func.coalesce(Prestamo.modelo_vehiculo, Prestamo.producto), "Sin Modelo").label("modelo"),
+                modelo_expr.label("modelo"),
                 func.sum(Prestamo.total_financiamiento).label("total_prestamos"),
                 func.count(Prestamo.id).label("cantidad_prestamos"),
             )
             .filter(Prestamo.estado == "APROBADO")
-            .group_by("modelo")
+            .group_by(modelo_expr)
         )
 
         # Aplicar filtros
