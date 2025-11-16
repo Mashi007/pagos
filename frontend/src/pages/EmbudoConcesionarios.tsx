@@ -838,24 +838,19 @@ export function EmbudoConcesionarios() {
         </div>
 
         {/* Panel de Clientes y Préstamos del Concesionario Seleccionado */}
-        <div className="lg:col-span-1">
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle className="text-lg">
-                {concesionarioDetalle
-                  ? `${concesionarioDetalle.nombre}`
-                  : 'Seleccione un concesionario'}
-              </CardTitle>
-              <CardDescription>
-                {concesionarioDetalle
-                  ? `${concesionarioDetalle.clientesAsignados} clientes, ${concesionarioDetalle.prestamosActivos} préstamos activos`
-                  : 'Haga clic en un concesionario para ver sus clientes y préstamos'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 max-h-[calc(100vh-400px)] overflow-y-auto">
-              {!concesionarioDetalle ? (
-                null
-              ) : clientesYprestamosDetalle.length === 0 ? (
+        {concesionarioDetalle && (
+          <div className="lg:col-span-1">
+            <Card className="h-full">
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  {concesionarioDetalle.nombre}
+                </CardTitle>
+                <CardDescription>
+                  {concesionarioDetalle.clientesAsignados} clientes, {concesionarioDetalle.prestamosActivos} préstamos activos
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 max-h-[calc(100vh-400px)] overflow-y-auto">
+                {clientesYprestamosDetalle.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   <Users className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                   <p className="text-sm">Este concesionario no tiene clientes asignados</p>
@@ -958,9 +953,10 @@ export function EmbudoConcesionarios() {
                   </motion.div>
                 ))
               )}
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
         </div>
       )}
     </div>
