@@ -41,7 +41,7 @@ interface CobranzaPorDiaResponse {
   dias: DiaData[]
 }
 
-type TipoGrafico = 'line' | 'bar' | 'area''
+type TipoGrafico = 'line' | 'bar' | 'area'
 
 type VistaRapida = 'hoy' | 'manana' | 'ultimos3' | 'personalizado'
 

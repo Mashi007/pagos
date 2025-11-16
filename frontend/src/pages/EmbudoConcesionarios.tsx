@@ -565,11 +565,11 @@ export function EmbudoConcesionarios() {
                 }}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Seleccione un concesionario" />
+                  <SelectValue placeholder="Todos los concesionarios" />
                 </SelectTrigger>
                 <SelectContent className="max-h-[300px]">
                   <SelectItem value="todos">Todos los concesionarios</SelectItem>
-                  {concesionarios.map((concesionario) => (
+                  {todosConcesionarios.map((concesionario) => (
                     <SelectItem key={concesionario.id} value={String(concesionario.id)}>
                       {concesionario.nombre}
                     </SelectItem>
@@ -594,7 +594,7 @@ export function EmbudoConcesionarios() {
         </CardContent>
       </Card>
 
-      {/* Mensaje si no hay concesionarios */}
+      {/* Embudo Visual - Siempre visible */}
       {concesionarios.length === 0 ? (
         <Card>
           <CardContent className="py-12">
@@ -608,21 +608,6 @@ export function EmbudoConcesionarios() {
                 <Plus className="h-4 w-4 mr-2" />
                 Crear Concesionario
               </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : !concesionarioSeleccionado ? (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center">
-              <Building className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Seleccione un concesionario</h3>
-              <p className="text-sm text-gray-600 mb-2">
-                Haga clic en un concesionario para ver sus clientes y préstamos
-              </p>
-              <p className="text-xs text-gray-500">
-                Seleccione un concesionario para ver sus clientes y préstamos
-              </p>
             </div>
           </CardContent>
         </Card>
@@ -870,8 +855,14 @@ export function EmbudoConcesionarios() {
             <CardContent className="space-y-3 max-h-[calc(100vh-400px)] overflow-y-auto">
               {!concesionarioDetalle ? (
                 <div className="text-center py-12 text-gray-500">
-                  <Building className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                  <p className="text-sm">Seleccione un concesionario para ver sus clientes y préstamos</p>
+                  <Building className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Seleccione un concesionario</h3>
+                  <p className="text-sm text-gray-600 mb-2">
+                    Haga clic en un concesionario para ver sus clientes y préstamos
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Seleccione un concesionario para ver sus clientes y préstamos
+                  </p>
                 </div>
               ) : clientesYprestamosDetalle.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
