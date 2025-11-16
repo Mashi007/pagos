@@ -1076,81 +1076,78 @@ export function DashboardMenu() {
           )}
         </div>
 
-        {/* GRÁFICOS DE COBRANZAS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Cobranzas Mensuales */}
-          {datosCobranzas && datosCobranzas.meses && datosCobranzas.meses.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7 }}
-                >
-                  <Card className="shadow-lg border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
-                      <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <BarChart3 className="h-6 w-6 text-emerald-600" />
-                    <span>Cobranzas Mensuales</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-6">
-                    <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={datosCobranzas.meses}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="nombre_mes" />
-                      <YAxis />
-                      <Tooltip />
-                            <Legend />
-                      <Bar dataKey="cobranzas_planificadas" fill="#3b82f6" name="Planificadas" />
-                      <Bar dataKey="pagos_reales" fill="#10b981" name="Reales" />
-                          </BarChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-          )}
+        {/* GRÁFICO DE COBRANZAS MENSUALES - FILA COMPLETA */}
+        {datosCobranzas && datosCobranzas.meses && datosCobranzas.meses.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+          >
+            <Card className="shadow-lg border-2 border-gray-200">
+              <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
+                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                  <BarChart3 className="h-6 w-6 text-emerald-600" />
+                  <span>Cobranzas Mensuales</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={datosCobranzas.meses}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="nombre_mes" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="cobranzas_planificadas" fill="#3b82f6" name="Planificadas" />
+                    <Bar dataKey="pagos_reales" fill="#10b981" name="Reales" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
-          {/* Cobranza Fechas Específicas */}
-          {datosCobranzaFechas && datosCobranzaFechas.dias && datosCobranzaFechas.dias.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.75 }}
-            >
-              <Card className="shadow-lg border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <BarChart3 className="h-6 w-6 text-blue-600" />
-                    <span>Cobranza Planificada vs Real</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  {loadingCobranzaFechas ? (
-                    <div className="h-[300px] flex items-center justify-center">
-                      <div className="animate-pulse text-gray-400">Cargando...</div>
-                    </div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={datosCobranzaFechas.dias}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="nombre_fecha" />
-                        <YAxis 
-                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
-                        />
-                        <Tooltip 
-                          formatter={(value: number) => [formatCurrency(value), '']}
-                          labelFormatter={(label) => `Fecha: ${label}`}
-                        />
-                        <Legend />
-                        <Bar dataKey="cobranza_planificada" fill="#3b82f6" name="Planificado" />
-                        <Bar dataKey="cobranza_real" fill="#10b981" name="Real" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-        </div>
+        {/* GRÁFICO DE COBRANZA FECHAS ESPECÍFICAS */}
+        {datosCobranzaFechas && datosCobranzaFechas.dias && datosCobranzaFechas.dias.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.75 }}
+          >
+            <Card className="shadow-lg border-2 border-gray-200">
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                  <BarChart3 className="h-6 w-6 text-blue-600" />
+                  <span>Cobranza Planificada vs Real</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                {loadingCobranzaFechas ? (
+                  <div className="h-[300px] flex items-center justify-center">
+                    <div className="animate-pulse text-gray-400">Cargando...</div>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={datosCobranzaFechas.dias}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="nombre_fecha" />
+                      <YAxis 
+                        tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
+                      />
+                      <Tooltip 
+                        formatter={(value: number) => [formatCurrency(value), '']}
+                        labelFormatter={(label) => `Fecha: ${label}`}
+                      />
+                      <Legend />
+                      <Bar dataKey="cobranza_planificada" fill="#3b82f6" name="Planificado" />
+                      <Bar dataKey="cobranza_real" fill="#10b981" name="Real" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         {/* GRÁFICOS DE MOROSIDAD */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

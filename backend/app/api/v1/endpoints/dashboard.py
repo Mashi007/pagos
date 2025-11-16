@@ -2954,20 +2954,72 @@ def obtener_cobranza_fechas_especificas(
 ):
     """
     Obtiene datos de cobranza planificada y real para fechas específicas:
-    - Mañana
-    - Hoy
-    - 3 días atrás
+    - Sábado y Viernes (últimos 2 días)
+    - Hoy (formato: día/mes abreviado, ej: 11/Nov)
+    - Mañana (día de la semana, ej: Lunes)
     """
     try:
         hoy = date.today()
         mañana = hoy + timedelta(days=1)
-        tres_dias_atras = hoy - timedelta(days=3)
+        ayer = hoy - timedelta(days=1)
+        anteayer = hoy - timedelta(days=2)
 
-        fechas = [
-            ("3 días atrás", tres_dias_atras),
-            ("Hoy", hoy),
-            ("Mañana", mañana),
-        ]
+        # Nombres de días de la semana en español
+        dias_semana = {
+            0: "Lunes",
+            1: "Martes",
+            2: "Miércoles",
+            3: "Jueves",
+            4: "Viernes",
+            5: "Sábado",
+            6: "Domingo",
+        }
+
+        # Meses abreviados en español
+        meses_abrev = {
+            1: "Ene", 2: "Feb", 3: "Mar", 4: "Abr", 5: "May", 6: "Jun",
+            7: "Jul", 8: "Ago", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dic",
+        }
+
+        # Formatear fecha de hoy: día/mes (ej: 11/Nov)
+        nombre_hoy = f"{hoy.day}/{meses_abrev[hoy.month]}"
+
+        # Obtener día de la semana de mañana
+        dia_semana_mañana = mañana.weekday()  # 0=Lunes, 6=Domingo
+        nombre_mañana = dias_semana[dia_semana_mañana]
+
+        # Preparar fechas: Sábado y Viernes (últimos 2 días)
+        fechas = []
+        
+        # Buscar los últimos Viernes y Sábado (hasta 7 días atrás)
+        viernes_encontrado = None
+        sabado_encontrado = None
+        
+        for i in range(1, 8):  # Buscar hasta 7 días atrás
+            fecha_buscar = hoy - timedelta(days=i)
+            dia_semana = fecha_buscar.weekday()
+            
+            if dia_semana == 4 and viernes_encontrado is None:  # Viernes
+                viernes_encontrado = fecha_buscar
+            elif dia_semana == 5 and sabado_encontrado is None:  # Sábado
+                sabado_encontrado = fecha_buscar
+            
+            # Si ya encontramos ambos, salir
+            if viernes_encontrado and sabado_encontrado:
+                break
+        
+        # Agregar Viernes y Sábado si se encontraron
+        if viernes_encontrado:
+            fechas.append((dias_semana[4], viernes_encontrado))
+        if sabado_encontrado:
+            fechas.append((dias_semana[5], sabado_encontrado))
+
+        # Ordenar: Viernes primero, luego Sábado
+        fechas.sort(key=lambda x: x[1])
+
+        # Agregar Hoy y Mañana
+        fechas.append((nombre_hoy, hoy))
+        fechas.append((nombre_mañana, mañana))
 
         dias_data = []
         for nombre_fecha, fecha_dia in fechas:
