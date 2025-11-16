@@ -5803,32 +5803,35 @@ async def chat_ai(
         # Buscar contexto en documentos usando embeddings (búsqueda semántica)
         contexto_documentos = ""
         documentos_activos = []
-        
+
         try:
             # Verificar si hay embeddings disponibles
             total_embeddings = db.query(DocumentoEmbedding).count()
             documentos_con_embeddings = db.query(DocumentoEmbedding.documento_id).distinct().count()
-            
+
             if total_embeddings > 0 and documentos_con_embeddings > 0:
                 # Usar búsqueda semántica con embeddings
-                logger.info(f"🔍 Usando búsqueda semántica: {total_embeddings} embeddings en {documentos_con_embeddings} documentos")
-                
+                logger.info(
+                    f"🔍 Usando búsqueda semántica: {total_embeddings} embeddings en {documentos_con_embeddings} documentos"
+                )
+
                 try:
                     # Inicializar servicio RAG
                     service = RAGService(openai_api_key)
-                    
+
                     # Generar embedding de la pregunta
                     query_embedding = await service.generar_embedding(pregunta)
-                    
+
                     # Obtener todos los embeddings de documentos activos
                     documentos_activos_ids = [
-                        doc_id for doc_id, in (
+                        doc_id
+                        for doc_id, in (
                             db.query(DocumentoAI.id)
                             .filter(DocumentoAI.activo.is_(True), DocumentoAI.contenido_procesado.is_(True))
                             .all()
                         )
                     ]
-                    
+
                     if documentos_activos_ids:
                         # Obtener embeddings solo de documentos activos
                         embeddings_db = (
@@ -5836,7 +5839,7 @@ async def chat_ai(
                             .filter(DocumentoEmbedding.documento_id.in_(documentos_activos_ids))
                             .all()
                         )
-                        
+
                         if embeddings_db:
                             documento_embeddings = [
                                 {
@@ -5847,28 +5850,23 @@ async def chat_ai(
                                 }
                                 for emb in embeddings_db
                             ]
-                            
+
                             # Buscar documentos relevantes usando similitud coseno
                             resultados = service.buscar_documentos_relevantes(
-                                query_embedding, 
-                                documento_embeddings, 
-                                top_k=3,
-                                umbral_similitud=0.7
+                                query_embedding, documento_embeddings, top_k=3, umbral_similitud=0.7
                             )
-                            
+
                             if resultados:
                                 # Obtener los documentos completos ordenados por relevancia
                                 documento_ids_relevantes = [r["documento_id"] for r in resultados]
                                 documentos_activos = (
-                                    db.query(DocumentoAI)
-                                    .filter(DocumentoAI.id.in_(documento_ids_relevantes))
-                                    .all()
+                                    db.query(DocumentoAI).filter(DocumentoAI.id.in_(documento_ids_relevantes)).all()
                                 )
-                                
+
                                 # Ordenar según la relevancia de los resultados
                                 orden_relevancia = {r["documento_id"]: idx for idx, r in enumerate(resultados)}
                                 documentos_activos.sort(key=lambda d: orden_relevancia.get(d.id, 999))
-                                
+
                                 # Formatear similitudes antes del f-string (no se pueden usar backslashes en f-strings)
                                 similitudes = [f'{r["similitud"]:.2f}' for r in resultados]
                                 logger.info(
@@ -5876,18 +5874,22 @@ async def chat_ai(
                                     f"(similitud: {similitudes})"
                                 )
                             else:
-                                logger.info("ℹ️ Búsqueda semántica: No se encontraron documentos con similitud suficiente (umbral: 0.7)")
+                                logger.info(
+                                    "ℹ️ Búsqueda semántica: No se encontraron documentos con similitud suficiente (umbral: 0.7)"
+                                )
                         else:
                             logger.info("ℹ️ No hay embeddings para documentos activos, usando fallback")
                     else:
                         logger.info("ℹ️ No hay documentos activos, usando fallback")
-                        
+
                 except Exception as embedding_error:
                     logger.warning(f"⚠️ Error en búsqueda semántica: {embedding_error}, usando método fallback")
                     # Continuar con método fallback
             else:
-                logger.info(f"ℹ️ No hay embeddings disponibles ({total_embeddings} embeddings, {documentos_con_embeddings} documentos), usando método fallback")
-            
+                logger.info(
+                    f"ℹ️ No hay embeddings disponibles ({total_embeddings} embeddings, {documentos_con_embeddings} documentos), usando método fallback"
+                )
+
             # Fallback: método simple si no hay embeddings o falló la búsqueda semántica
             if not documentos_activos:
                 try:
@@ -5920,7 +5922,9 @@ async def chat_ai(
                                 .limit(3)
                                 .all()
                             )
-                            logger.info(f"📄 Documentos AI encontrados (después de rollback): {len(documentos_activos)} documentos")
+                            logger.info(
+                                f"📄 Documentos AI encontrados (después de rollback): {len(documentos_activos)} documentos"
+                            )
                         except Exception as retry_error:
                             logger.error(f"❌ Error al reintentar consulta de documentos AI: {retry_error}")
                             # Continuar sin documentos si falla
@@ -5950,7 +5954,7 @@ async def chat_ai(
                     logger.warning("⚠️ Documentos encontrados pero sin contenido_texto válido")
             else:
                 logger.debug("ℹ️ No hay documentos AI activos y procesados disponibles para contexto")
-                
+
         except Exception as e:
             logger.error(f"❌ Error general buscando documentos: {e}", exc_info=True)
             # Continuar sin documentos si hay error general
