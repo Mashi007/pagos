@@ -22,7 +22,7 @@ class NotificacionesPrejudicialService:
     def calcular_notificaciones_prejudiciales(self) -> List[dict]:
         """
         Calcula clientes con 3 o más cuotas atrasadas (prejudiciales)
-        
+
         IMPORTANTE: Devuelve solo UNA notificación por cliente, usando la cuota más antigua como referencia.
         Esto evita duplicados cuando un cliente tiene múltiples cuotas atrasadas.
 

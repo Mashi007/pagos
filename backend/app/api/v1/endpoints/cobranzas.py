@@ -502,7 +502,9 @@ def obtener_cobranzas_por_analista(
         if not incluir_admin:
             query = query.filter(or_(User.is_admin.is_(False), User.is_admin.is_(None)))  # Excluir admins
 
-        query = query.group_by(Prestamo.analista, Prestamo.usuario_proponente).having(func.count(func.distinct(Cliente.cedula)) > 0)
+        query = query.group_by(Prestamo.analista, Prestamo.usuario_proponente).having(
+            func.count(func.distinct(Cliente.cedula)) > 0
+        )
 
         resultados = query.all()
 
@@ -551,14 +553,13 @@ def obtener_clientes_por_analista(
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado.in_(["APROBADO", "ACTIVO"]),  # Préstamos aprobados o activos
-                or_(
-                    Prestamo.analista == analista,
-                    Prestamo.usuario_proponente == analista
-                ),
+                or_(Prestamo.analista == analista, Prestamo.usuario_proponente == analista),
                 Cuota.fecha_vencimiento < hoy,
                 Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto
             )
-            .group_by(Cliente.cedula, Cliente.nombres, Cliente.telefono, Prestamo.analista, Prestamo.usuario_proponente, Prestamo.id)
+            .group_by(
+                Cliente.cedula, Cliente.nombres, Cliente.telefono, Prestamo.analista, Prestamo.usuario_proponente, Prestamo.id
+            )
         )
 
         resultados = query.all()
@@ -973,12 +974,7 @@ def _construir_query_clientes_atrasados(db: Session, hoy: date, analista: Option
 
     if analista:
         # Buscar tanto en analista (nombre) como en usuario_proponente (email)
-        query = query.filter(
-            or_(
-                Prestamo.analista == analista,
-                Prestamo.usuario_proponente == analista
-            )
-        )
+        query = query.filter(or_(Prestamo.analista == analista, Prestamo.usuario_proponente == analista))
 
     return query.group_by(
         Cliente.cedula,
@@ -1282,12 +1278,7 @@ def _obtener_cuotas_categoria_dias(db: Session, analista: Optional[str], hoy: da
 
     if analista:
         # Buscar tanto en analista (nombre) como en usuario_proponente (email)
-        cuotas_query = cuotas_query.filter(
-            or_(
-                Prestamo.analista == analista,
-                Prestamo.usuario_proponente == analista
-            )
-        )
+        cuotas_query = cuotas_query.filter(or_(Prestamo.analista == analista, Prestamo.usuario_proponente == analista))
 
     return cuotas_query.all()
 
