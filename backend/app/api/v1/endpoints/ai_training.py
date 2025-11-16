@@ -957,7 +957,7 @@ async def entrenar_modelo_riesgo(
                 status_code=503,
                 detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
             )
-        
+
         # Verificar que la tabla existe
         try:
             db.query(ModeloRiesgo).limit(1).all()
@@ -1285,15 +1285,15 @@ async def verificar_conexion_bd_modelos_ml(
     """Verificar si las tablas de modelos ML están conectadas a la base de datos"""
     try:
         from sqlalchemy import inspect, text
-        
+
         inspector = inspect(db.bind)
         tablas_existentes = inspector.get_table_names()
-        
+
         tablas_requeridas = {
-            'modelos_riesgo': 'Modelos de Riesgo ML',
-            'modelos_impago_cuotas': 'Modelos de Impago de Cuotas ML',
+            "modelos_riesgo": "Modelos de Riesgo ML",
+            "modelos_impago_cuotas": "Modelos de Impago de Cuotas ML",
         }
-        
+
         resultado = {
             "conexion_bd": True,
             "tablas": {},
@@ -1303,7 +1303,7 @@ async def verificar_conexion_bd_modelos_ml(
                 "ml_impago_disponible": ML_IMPAGO_SERVICE_AVAILABLE,
             },
         }
-        
+
         for tabla, nombre in tablas_requeridas.items():
             existe = tabla in tablas_existentes
             resultado["tablas"][tabla] = {
@@ -1313,7 +1313,7 @@ async def verificar_conexion_bd_modelos_ml(
                 "indices": [],
                 "total_registros": 0,
             }
-            
+
             if existe:
                 try:
                     # Obtener información de columnas
@@ -1326,7 +1326,7 @@ async def verificar_conexion_bd_modelos_ml(
                         }
                         for col in columnas
                     ]
-                    
+
                     # Obtener índices
                     indices = inspector.get_indexes(tabla)
                     resultado["tablas"][tabla]["indices"] = [
@@ -1337,7 +1337,7 @@ async def verificar_conexion_bd_modelos_ml(
                         }
                         for idx in indices
                     ]
-                    
+
                     # Contar registros
                     count_result = db.execute(text(f"SELECT COUNT(*) FROM {tabla}"))
                     resultado["tablas"][tabla]["total_registros"] = count_result.scalar() or 0
@@ -1345,15 +1345,12 @@ async def verificar_conexion_bd_modelos_ml(
                     resultado["tablas"][tabla]["error"] = str(e)
             else:
                 resultado["todas_existen"] = False
-        
+
         return resultado
-        
+
     except Exception as e:
         logger.error(f"Error verificando conexión BD modelos ML: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error verificando conexión a base de datos: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error verificando conexión a base de datos: {str(e)}")
 
 
 @router.get("/metricas")
@@ -1496,7 +1493,7 @@ async def entrenar_modelo_impago(
                 status_code=503,
                 detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
             )
-        
+
         # Verificar que la tabla existe
         try:
             db.query(ModeloImpagoCuotas).limit(1).all()
@@ -1508,7 +1505,7 @@ async def entrenar_modelo_impago(
                     detail="La tabla 'modelos_impago_cuotas' no está creada. Ejecuta las migraciones: alembic upgrade head",
                 )
             raise
-        
+
         from datetime import date
 
         from app.models.amortizacion import Cuota
