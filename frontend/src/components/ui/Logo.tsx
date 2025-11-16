@@ -23,7 +23,7 @@ const uniqueId = `logo-${Math.random().toString(36).substr(2, 9)}`
 const LOGO_EXTENSIONS = ['.svg', '.png', '.jpg', '.jpeg']
 
 // Cache compartido en memoria para evitar múltiples peticiones
-// ✅ MEJORADO: Ahora persiste metadatos en localStorage para evitar placeholder al recargar
+// ✅ MEJORADO: Ahora persiste metadatos en localStorage para evitar recargas innecesarias
 interface LogoCache {
   logoUrl: string | null
   isChecking: boolean
@@ -105,29 +105,14 @@ export function Logo({ className, size = 'md' }: LogoProps) {
       return
     }
 
-    // ✅ PRIORIDAD 2: Si ya tenemos el logo cacheado, usarlo temporalmente PERO verificar si hay actualización
-    // Esto evita mostrar el logo antiguo mientras se verifica el nuevo
+    // ✅ PRIORIDAD 2: Si ya tenemos el logo cacheado, usarlo directamente
+    // Si el logo está disponible, mostrarlo inmediatamente
     if (logoCache.logoUrl && logoCache.hasChecked) {
       setCustomLogoUrl(logoCache.logoUrl)
       setHasChecked(true)
-      // ✅ Si el logo está cacheado desde localStorage, precargarlo ANTES de mostrarlo
-      // Esto asegura que primero se muestre el placeholder (imagen 1) y luego el logo personalizado (imagen 2)
+      // ✅ Si el logo está cacheado, marcarlo como cargado inmediatamente
       if (logoCache.logoFilename && !logoCache.logoNotFound) {
-        // ✅ Resetear estado de carga para mostrar placeholder primero
-        setImageLoaded(false)
-        const img = new Image()
-        img.onload = () => {
-          // ✅ Solo marcar como cargado si el componente sigue montado
-          if (isMounted()) {
-            setImageLoaded(true)
-          }
-        }
-        img.onerror = () => {
-          if (isMounted()) {
-            setImageLoaded(false)
-          }
-        }
-        img.src = logoCache.logoUrl
+        setImageLoaded(true) // ✅ Mostrar logo directamente
       }
       // ✅ NO retornar aquí - continuar para verificar si hay una versión más reciente en el servidor
       // Esto asegura que si el logo cambió, se actualice inmediatamente sin mostrar la versión antigua
@@ -232,13 +217,12 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                     // Si el logo no cambió, mantener el URL cacheado pero actualizar el timestamp para evitar caché del navegador
                     if (logoChanged) {
                       setCustomLogoUrl(logoUrl)
-                      setImageLoaded(false) // ✅ Resetear estado de carga cuando cambia el URL - mostrar placeholder primero
                       setLogoVersion(logoCache.version)
-                      // ✅ Precargar el nuevo logo para mostrar transición suave
+                      // ✅ Precargar el nuevo logo y mostrarlo directamente cuando esté listo
                       const img = new Image()
                       img.onload = () => {
                         if (isMounted()) {
-                          setImageLoaded(true) // ✅ Mostrar logo personalizado cuando esté cargado
+                          setImageLoaded(true) // ✅ Mostrar logo personalizado directamente
                         }
                       }
                       img.onerror = () => {
@@ -247,26 +231,18 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                         }
                       }
                       img.src = logoUrl
+                      // ✅ Si hay logo anterior, mantenerlo visible hasta que el nuevo esté listo
+                      if (logoCache.logoUrl) {
+                        setImageLoaded(true)
+                      }
                     } else if (logoCache.logoUrl) {
                       // ✅ Mismo logo, pero actualizar URL con nuevo timestamp para evitar caché del navegador
                       // Solo actualizar si el URL actual no tiene timestamp (para forzar recarga si es necesario)
                       const currentUrl = logoCache.logoUrl
                       if (!currentUrl.includes('?t=')) {
                         setCustomLogoUrl(logoUrl)
-                        // ✅ Precargar el logo actualizado
-                        setImageLoaded(false)
-                        const img = new Image()
-                        img.onload = () => {
-                          if (isMounted()) {
-                            setImageLoaded(true)
-                          }
-                        }
-                        img.onerror = () => {
-                          if (isMounted()) {
-                            setImageLoaded(false)
-                          }
-                        }
-                        img.src = logoUrl
+                        // ✅ Mantener logo visible mientras se actualiza
+                        setImageLoaded(true)
                       }
                       // Si ya tiene timestamp, mantener el URL actual para evitar cambios visuales innecesarios
                     }
@@ -391,15 +367,18 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           console.debug('🔄 Actualizando logo desde caché compartido, versión:', version, 'filename:', newFilename)
         }
         setCustomLogoUrl(url)
-        setImageLoaded(false) // ✅ Resetear estado de carga cuando se actualiza desde caché - mostrar placeholder primero
         setLogoVersion(version)
         setHasChecked(true)
-        // ✅ Precargar el logo para mostrar transición suave (imagen 1 -> imagen 2)
+        // ✅ Precargar el logo y mostrarlo directamente cuando esté listo
         if (url) {
+          // ✅ Si hay logo anterior, mantenerlo visible hasta que el nuevo esté listo
+          if (customLogoUrl) {
+            setImageLoaded(true)
+          }
           const img = new Image()
           img.onload = () => {
             if (isMounted()) {
-              setImageLoaded(true) // ✅ Mostrar logo personalizado cuando esté cargado
+              setImageLoaded(true) // ✅ Mostrar logo personalizado directamente
             }
           }
           img.onerror = () => {
@@ -408,6 +387,8 @@ export function Logo({ className, size = 'md' }: LogoProps) {
             }
           }
           img.src = url
+        } else {
+          setImageLoaded(false)
         }
       } else if (version > logoVersion) {
         // ✅ Mismo logo, solo actualizar versión sin cambiar el URL (evita parpadeo)
@@ -519,16 +500,15 @@ export function Logo({ className, size = 'md' }: LogoProps) {
               if (logoFilename) {
                 saveLogoMetadata(logoFilename)
               }
-              // ✅ Actualizar estado local para mostrar placeholder primero, luego el logo personalizado
+              // ✅ Actualizar estado local para mostrar logo directamente
               if (isMounted()) {
                 setCustomLogoUrl(newLogoUrl)
-                setImageLoaded(false) // ✅ Mostrar placeholder (imagen 1) primero
                 setLogoVersion(logoCache.version)
-                // ✅ Precargar el logo para mostrar transición suave
+                // ✅ Precargar el logo y mostrarlo directamente cuando esté listo
                 const img = new Image()
                 img.onload = () => {
                   if (isMounted()) {
-                    setImageLoaded(true) // ✅ Mostrar logo personalizado (imagen 2) cuando esté cargado
+                    setImageLoaded(true) // ✅ Mostrar logo personalizado directamente
                   }
                 }
                 img.onerror = () => {
@@ -537,6 +517,10 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                   }
                 }
                 img.src = newLogoUrl
+                // ✅ Si hay logo anterior, mantenerlo visible hasta que el nuevo esté listo
+                if (customLogoUrl) {
+                  setImageLoaded(true)
+                }
               }
               notifyLogoListeners(newLogoUrl, logoCache.version)
             }
@@ -628,16 +612,15 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         if (logoFilename) {
           saveLogoMetadata(logoFilename)
         }
-        // ✅ Actualizar estado local para mostrar placeholder primero, luego el logo personalizado
+        // ✅ Actualizar estado local para mostrar logo directamente
         if (isMounted()) {
           setCustomLogoUrl(newLogoUrl)
-          setImageLoaded(false) // ✅ Mostrar placeholder (imagen 1) primero
           setLogoVersion(logoCache.version)
-          // ✅ Precargar el logo para mostrar transición suave
+          // ✅ Precargar el logo y mostrarlo directamente cuando esté listo
           const img = new Image()
           img.onload = () => {
             if (isMounted()) {
-              setImageLoaded(true) // ✅ Mostrar logo personalizado (imagen 2) cuando esté cargado
+              setImageLoaded(true) // ✅ Mostrar logo personalizado directamente
             }
           }
           img.onerror = () => {
@@ -646,6 +629,10 @@ export function Logo({ className, size = 'md' }: LogoProps) {
             }
           }
           img.src = newLogoUrl
+          // ✅ Si hay logo anterior, mantenerlo visible hasta que el nuevo esté listo
+          if (customLogoUrl) {
+            setImageLoaded(true)
+          }
         }
         notifyLogoListeners(newLogoUrl, logoCache.version)
       }
@@ -667,89 +654,36 @@ export function Logo({ className, size = 'md' }: LogoProps) {
   }, [])
 
   // ✅ PRIORIDAD: Si el logo está marcado como no encontrado, NO renderizar <img> (evitar GET requests)
-  // Si hay logo personalizado Y NO está marcado como no encontrado, mostrar imagen
+  // Si hay logo personalizado Y NO está marcado como no encontrado, mostrar imagen directamente
   if (customLogoUrl && !logoCache.logoNotFound) {
     return (
-      <div className={cn(sizeMap[size], className, 'relative')}>
-        {/* Mostrar SVG por defecto mientras la imagen se carga */}
-        {!imageLoaded && (
-          <svg 
-            className={cn(sizeMap[size], 'absolute inset-0')}
-            viewBox="0 0 48 48" 
-            xmlns="http://www.w3.org/2000/svg"
-            role="img"
-            aria-label="RAPICREDIT Logo"
-          >
-            <defs>
-              <filter id={`shadowR-${uniqueId}`} x="-50%" y="-50%" width="200%" height="200%">
-                <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="#000000" floodOpacity="0.25"/>
-              </filter>
-              <filter id={`shadowDot-${uniqueId}`} x="-50%" y="-50%" width="200%" height="200%">
-                <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#000000" floodOpacity="0.3"/>
-              </filter>
-              <filter id={`glowDot-${uniqueId}`}>
-                <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
-                <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-            </defs>
-            <g filter={`url(#shadowR-${uniqueId})`}>
-              <rect x="7" y="5" width="9" height="28" rx="1.5" className="fill-slate-900"/>
-              <rect x="7" y="5" width="9" height="28" rx="1.5" fill="none" stroke="#E0E7FF" strokeWidth="0.5" opacity="0.6"/>
-              <path d="M 16 5 L 16 14 Q 16 9 21 9 Q 26 9 27.5 11.5 L 27.5 17 Q 27.5 14.5 25 14.5 L 22 14.5 Q 20 14.5 18.5 15.5 L 16 18 Z" 
-                    className="fill-slate-900"/>
-              <path d="M 16 5 L 16 14 Q 16 9 21 9 Q 26 9 27.5 11.5 L 27.5 17 Q 27.5 14.5 25 14.5 L 22 14.5 Q 20 14.5 18.5 15.5 L 16 18 Z" 
-                    fill="none" stroke="#E0E7FF" strokeWidth="0.5" opacity="0.6"/>
-              <path d="M 16 19 L 24 11 L 30 11 L 21 19 L 21 21 L 28 27 L 34 27 L 25 21 L 23 21 Z" 
-                    className="fill-slate-900"/>
-              <path d="M 16 19 L 24 11 L 30 11 L 21 19 L 21 21 L 28 27 L 34 27 L 25 21 L 23 21 Z" 
-                    fill="none" stroke="#E0E7FF" strokeWidth="0.5" opacity="0.6"/>
-              <path d="M 28 27 L 34 27 L 32 24 L 30 24 Z" 
-                    className="fill-slate-900"/>
-            </g>
-            <g filter={`url(#shadowDot-${uniqueId})`}>
-              <circle cx="11" cy="41" r="6" className="fill-orange-600" filter={`url(#glowDot-${uniqueId})`}/>
-              <circle cx="11" cy="41" r="4.5" className="fill-orange-500"/>
-              <circle cx="10" cy="40" r="1.5" className="fill-orange-400" opacity="0.8"/>
-            </g>
-          </svg>
-        )}
-        {/* Imagen del logo personalizado - se muestra cuando está completamente cargada */}
-        <img
-          key={`logo-${logoVersion}-${customLogoUrl}`}
-          src={customLogoUrl}
-          alt="Logo de la empresa"
-          className={cn(
-            sizeMap[size], 
-            'object-contain transition-opacity duration-300',
-            imageLoaded ? 'opacity-100' : 'opacity-0'
-          )}
-          role="img"
-          loading="eager"
-          onLoad={() => {
-            // ✅ Cuando la imagen se carga completamente, marcarla como cargada
-            // Esto hace que se muestre la imagen 2 (logo personalizado) después del placeholder (imagen 1)
-            if (isMounted()) {
-              setImageLoaded(true)
-            }
-          }}
-          onError={(e) => {
-            // ✅ Si falla la carga (404), marcar como no encontrado y evitar más intentos
-            console.warn('⚠️ Error cargando logo (GET falló), marcando como no encontrado:', customLogoUrl)
-            logoCache.logoNotFound = true
-            logoCache.logoUrl = null
-            logoCache.version += 1
-            setCustomLogoUrl(null)
-            setHasChecked(true)
-            setImageLoaded(false)
-            setLogoVersion(logoCache.version)
-            notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
-            // No intentar recargar - el logo no existe
-          }}
-        />
-      </div>
+      <img
+        key={`logo-${logoVersion}-${customLogoUrl}`}
+        src={customLogoUrl}
+        alt="Logo de la empresa"
+        className={cn(sizeMap[size], className, 'object-contain')}
+        role="img"
+        loading="eager"
+        onLoad={() => {
+          // ✅ Cuando la imagen se carga completamente, marcarla como cargada
+          if (isMounted()) {
+            setImageLoaded(true)
+          }
+        }}
+        onError={(e) => {
+          // ✅ Si falla la carga (404), marcar como no encontrado y evitar más intentos
+          console.warn('⚠️ Error cargando logo (GET falló), marcando como no encontrado:', customLogoUrl)
+          logoCache.logoNotFound = true
+          logoCache.logoUrl = null
+          logoCache.version += 1
+          setCustomLogoUrl(null)
+          setHasChecked(true)
+          setImageLoaded(false)
+          setLogoVersion(logoCache.version)
+          notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
+          // No intentar recargar - el logo no existe
+        }}
+      />
     )
   }
 

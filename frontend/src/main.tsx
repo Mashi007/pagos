@@ -35,44 +35,81 @@ const queryClient = new QueryClient({
   },
 })
 
-const rootElement = document.getElementById('root')!
+const rootElement = document.getElementById('root')
 
-// Renderizar la aplicación
-ReactDOM.createRoot(rootElement).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-        <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: TOAST_DURATION_MS,
-          style: {
-            background: 'hsl(var(--card))',
-            color: 'hsl(var(--card-foreground))',
-            border: '1px solid hsl(var(--border))',
-          },
-          success: {
-            iconTheme: {
-              primary: `hsl(${SUCCESS_COLOR_HUE} ${SUCCESS_COLOR_SATURATION}% ${SUCCESS_COLOR_LIGHTNESS}%)`,
-              secondary: 'white',
-            },
-          },
-          error: {
-            iconTheme: {
-              primary: `hsl(${ERROR_COLOR_HUE} ${ERROR_COLOR_SATURATION}% ${ERROR_COLOR_LIGHTNESS}%)`,
-              secondary: 'white',
-            },
-          },
-        }}
-      />
-      </BrowserRouter>
-    </QueryClientProvider>
-  </React.StrictMode>,
-)
+// ✅ Verificar que el elemento root existe antes de renderizar
+if (!rootElement) {
+  console.error('❌ Error: No se encontró el elemento #root')
+  document.body.innerHTML = '<div style="padding: 20px; font-family: sans-serif;"><h1>Error de inicialización</h1><p>No se pudo encontrar el elemento raíz de la aplicación.</p></div>'
+} else {
+  // Renderizar la aplicación
+  try {
+    ReactDOM.createRoot(rootElement).render(
+      <React.StrictMode>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <App />
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                duration: TOAST_DURATION_MS,
+                style: {
+                  background: 'hsl(var(--card))',
+                  color: 'hsl(var(--card-foreground))',
+                  border: '1px solid hsl(var(--border))',
+                },
+                success: {
+                  iconTheme: {
+                    primary: `hsl(${SUCCESS_COLOR_HUE} ${SUCCESS_COLOR_SATURATION}% ${SUCCESS_COLOR_LIGHTNESS}%)`,
+                    secondary: 'white',
+                  },
+                },
+                error: {
+                  iconTheme: {
+                    primary: `hsl(${ERROR_COLOR_HUE} ${ERROR_COLOR_SATURATION}% ${ERROR_COLOR_LIGHTNESS}%)`,
+                    secondary: 'white',
+                  },
+                },
+              }}
+            />
+          </BrowserRouter>
+        </QueryClientProvider>
+      </React.StrictMode>
+    )
+  } catch (error) {
+    console.error('❌ Error al renderizar la aplicación:', error)
+    rootElement.innerHTML = `
+      <div style="padding: 20px; font-family: sans-serif; text-align: center;">
+        <h1 style="color: #dc2626;">Error al cargar la aplicación</h1>
+        <p style="color: #6b7280; margin: 10px 0;">Ha ocurrido un error al inicializar la aplicación.</p>
+        <button 
+          onclick="window.location.reload()" 
+          style="padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; margin-top: 10px;"
+        >
+          Recargar página
+        </button>
+      </div>
+    `
+  }
+}
 
-// Manejador global de errores para capturar NS_ERROR_FAILURE y otros errores de React
+// ✅ Manejador para capturar errores críticos que impiden el renderizado
 window.addEventListener('error', (event) => {
+  // ✅ Loggear errores críticos para debugging (pero no bloquear el renderizado)
+  if (event.error && !event.error.name?.includes('NS_ERROR_FAILURE')) {
+    // Solo loggear si no es un error conocido que ya estamos manejando
+    const errorMessage = event.error?.message || event.message || ''
+    const isKnownError = errorMessage.includes('radix-ui') || 
+                        errorMessage.includes('exceljs') ||
+                        errorMessage.includes('useState') ||
+                        errorMessage.includes('form-libs')
+    
+    if (!isKnownError && process.env.NODE_ENV === 'development') {
+      console.error('⚠️ Error capturado:', event.error || event.message)
+    }
+  }
+  
+  // Manejador global de errores para capturar NS_ERROR_FAILURE y otros errores de React
   // ✅ Capturar errores NS_ERROR_FAILURE que ocurren en Firefox (especialmente con ExcelJS y Radix UI)
   if (event.error && event.error.name === 'NS_ERROR_FAILURE') {
     // Este error generalmente ocurre cuando se intenta actualizar el estado después del desmontaje

@@ -35,6 +35,41 @@
     <!-- Script para suprimir warnings de CSS conocidos (selectores malformados) -->
     <!-- IMPORTANTE: Este script debe ejecutarse ANTES de cualquier otro para interceptar warnings tempranos -->
     <script>
+      // ✅ Interceptar errores de CSS ANTES de que se muestren en consola
+      // Esto debe ejecutarse lo más temprano posible
+      (function() {
+        'use strict';
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        
+        // Interceptar console.warn inmediatamente
+        console.warn = function(...args) {
+          const message = args.map(arg => String(arg)).join(' ').toLowerCase();
+          if (message.includes('juego de reglas') || 
+              message.includes('ignoradas') || 
+              message.includes('mal selector') ||
+              message.includes('bad selector') ||
+              message.includes('index-') && message.includes('.css:')) {
+            return; // Suprimir el warning
+          }
+          originalWarn.apply(console, args);
+        };
+        
+        // Interceptar console.error inmediatamente
+        console.error = function(...args) {
+          const message = args.map(arg => String(arg)).join(' ').toLowerCase();
+          if (message.includes('juego de reglas') || 
+              message.includes('ignoradas') || 
+              message.includes('mal selector') ||
+              message.includes('bad selector') ||
+              message.includes('index-') && message.includes('.css:')) {
+            return; // Suprimir el error
+          }
+          originalError.apply(console, args);
+        };
+      })();
+    </script>
+    <script>
       (function() {
         'use strict';
         // ✅ Interceptar console.warn INMEDIATAMENTE (antes de que se cargue cualquier CSS)
@@ -67,7 +102,7 @@
             'invalid selector',
             'unknown property',
             'declaration dropped',
-            // Patrones de archivos CSS
+            // Patrones de archivos CSS (con hash y números de línea)
             '.css:',
             'index-',
             // Patrones de propiedades CSS problemáticas
@@ -94,6 +129,21 @@
             }
           }
           
+          // ✅ Verificar combinaciones específicas (archivo CSS con hash + ignored/mal selector)
+          // Captura formatos como: "index-C7ALWOJe.css:1:53929" o "menu:148:25"
+          const cssFilePattern = /(index-[a-z0-9]+\.css|menu|\.css):\d+:\d+/i;
+          if (cssFilePattern.test(message) && (
+            lowerMessage.includes('ignored') ||
+            lowerMessage.includes('ignoradas') ||
+            lowerMessage.includes('bad selector') ||
+            lowerMessage.includes('mal selector') ||
+            lowerMessage.includes('malformed') ||
+            lowerMessage.includes('debido') ||
+            lowerMessage.includes('juego de reglas')
+          )) {
+            return true;
+          }
+          
           // ✅ Verificar combinaciones específicas (archivo CSS + ignored/mal selector)
           if ((lowerMessage.includes('.css:') || lowerMessage.includes('index-') || lowerMessage.includes('menu:')) && (
             lowerMessage.includes('ignored') ||
@@ -107,8 +157,16 @@
           }
           
           // ✅ Verificar el patrón específico "Juego de reglas ignoradas debido a un mal selector"
+          // Con o sin información de archivo y línea
           if (lowerMessage.includes('juego de reglas') && lowerMessage.includes('ignoradas') && 
               (lowerMessage.includes('debido') || lowerMessage.includes('mal selector'))) {
+            return true;
+          }
+          
+          // ✅ Capturar mensajes que contienen "ignoradas" o "ignored" junto con "selector" y un archivo CSS
+          if ((lowerMessage.includes('ignoradas') || lowerMessage.includes('ignored')) && 
+              (lowerMessage.includes('selector') || lowerMessage.includes('mal selector') || lowerMessage.includes('bad selector')) &&
+              (lowerMessage.includes('.css') || lowerMessage.includes('index-') || cssFilePattern.test(message))) {
             return true;
           }
           
