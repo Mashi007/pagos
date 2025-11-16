@@ -854,16 +854,7 @@ export function EmbudoConcesionarios() {
             </CardHeader>
             <CardContent className="space-y-3 max-h-[calc(100vh-400px)] overflow-y-auto">
               {!concesionarioDetalle ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Building className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Seleccione un concesionario</h3>
-                  <p className="text-sm text-gray-600 mb-2">
-                    Haga clic en un concesionario para ver sus clientes y préstamos
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Seleccione un concesionario para ver sus clientes y préstamos
-                  </p>
-                </div>
+                null
               ) : clientesYprestamosDetalle.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   <Users className="h-12 w-12 mx-auto mb-4 text-gray-400" />

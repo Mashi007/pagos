@@ -883,91 +883,136 @@ export function DashboardMenu() {
           </div>
         ) : null}
 
-        {/* GRÁFICO DE BANDAS DE $200 USD */}
-        {datosBandas200 && datosBandas200.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="w-full lg:w-1/2"
-          >
-            <Card className="shadow-lg border-2 border-gray-200">
-              <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b-2 border-indigo-200">
-                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                  <BarChart3 className="h-6 w-6 text-indigo-600" />
-                  <span>Distribución por Bandas de $200 USD</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <ResponsiveContainer width="100%" height={450}>
-                  <BarChart 
-                    data={datosBandas200} 
-                    layout="vertical"
-                    margin={{ top: 10, right: 40, left: 120, bottom: 20 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
-                    <XAxis 
-                      type="number"
-                      domain={[0, 'dataMax']}
-                      tick={{ fontSize: 11, fill: '#6b7280' }}
-                      tickFormatter={(value) => value.toLocaleString('es-EC')}
-                      label={{ 
-                        value: 'Cantidad de Préstamos', 
-                        position: 'insideBottom', 
-                        offset: -10,
-                        style: { textAnchor: 'middle', fill: '#374151', fontSize: 12, fontWeight: 600 }
-                      }}
-                      allowDecimals={false}
-                    />
-                    <YAxis 
-                      type="category"
-                      dataKey="categoriaFormateada"
-                      width={115}
-                      tick={{ fontSize: 10, fill: '#4b5563', fontWeight: 500 }}
-                      interval={0}
-                      tickLine={false}
-                    />
-                    <Tooltip 
-                      formatter={(value: number) => [
-                        `${value.toLocaleString('es-EC')} préstamos`, 
-                        'Cantidad'
-                      ]}
-                      labelFormatter={(label) => `Banda: ${label}`}
-                      contentStyle={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-                      }}
-                      cursor={{ fill: 'rgba(99, 102, 241, 0.1)' }}
-                    />
-                    <Legend 
-                      wrapperStyle={{ paddingTop: '10px' }}
-                      iconType="rect"
-                    />
-                    <Bar 
-                      dataKey="cantidad" 
-                      radius={[0, 6, 6, 0]}
-                      name="Cantidad de Préstamos"
+        {/* GRÁFICOS: BANDAS DE $200 USD Y COBRANZA PLANIFICADA VS REAL */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* GRÁFICO DE BANDAS DE $200 USD */}
+          {datosBandas200 && datosBandas200.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card className="shadow-lg border-2 border-gray-200 h-full flex flex-col">
+                <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b-2 border-indigo-200">
+                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <BarChart3 className="h-6 w-6 text-indigo-600" />
+                    <span>Distribución por Bandas de $200 USD</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 flex-1">
+                  <ResponsiveContainer width="100%" height={450}>
+                    <BarChart 
+                      data={datosBandas200} 
+                      layout="vertical"
+                      margin={{ top: 10, right: 40, left: 120, bottom: 20 }}
                     >
-                      {datosBandas200.map((entry, index) => {
-                        // Gradiente de color según la posición (más oscuro para valores más altos)
-                        const intensity = entry.cantidad / Math.max(...datosBandas200.map(d => d.cantidad))
-                        const opacity = 0.6 + (intensity * 0.4)
-                        return (
-                          <Cell 
-                            key={`cell-${index}`} 
-                            fill={`rgba(99, 102, 241, ${opacity})`}
-                          />
-                        )
-                      })}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                      <XAxis 
+                        type="number"
+                        domain={[0, 'dataMax']}
+                        tick={{ fontSize: 11, fill: '#6b7280' }}
+                        tickFormatter={(value) => value.toLocaleString('es-EC')}
+                        label={{ 
+                          value: 'Cantidad de Préstamos', 
+                          position: 'insideBottom', 
+                          offset: -10,
+                          style: { textAnchor: 'middle', fill: '#374151', fontSize: 12, fontWeight: 600 }
+                        }}
+                        allowDecimals={false}
+                      />
+                      <YAxis 
+                        type="category"
+                        dataKey="categoriaFormateada"
+                        width={115}
+                        tick={{ fontSize: 10, fill: '#4b5563', fontWeight: 500 }}
+                        interval={0}
+                        tickLine={false}
+                      />
+                      <Tooltip 
+                        formatter={(value: number) => [
+                          `${value.toLocaleString('es-EC')} préstamos`, 
+                          'Cantidad'
+                        ]}
+                        labelFormatter={(label) => `Banda: ${label}`}
+                        contentStyle={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                        }}
+                        cursor={{ fill: 'rgba(99, 102, 241, 0.1)' }}
+                      />
+                      <Legend 
+                        wrapperStyle={{ paddingTop: '10px' }}
+                        iconType="rect"
+                      />
+                      <Bar 
+                        dataKey="cantidad" 
+                        radius={[0, 6, 6, 0]}
+                        name="Cantidad de Préstamos"
+                      >
+                        {datosBandas200.map((entry, index) => {
+                          // Gradiente de color según la posición (más oscuro para valores más altos)
+                          const intensity = entry.cantidad / Math.max(...datosBandas200.map(d => d.cantidad))
+                          const opacity = 0.6 + (intensity * 0.4)
+                          return (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={`rgba(99, 102, 241, ${opacity})`}
+                            />
+                          )
+                        })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {/* GRÁFICO DE COBRANZA FECHAS ESPECÍFICAS */}
+          {datosCobranzaFechas && datosCobranzaFechas.dias && datosCobranzaFechas.dias.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.45 }}
+              className="h-full"
+            >
+              <Card className="shadow-lg border-2 border-gray-200 h-full flex flex-col">
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <BarChart3 className="h-6 w-6 text-blue-600" />
+                    <span>Cobranza Planificada vs Real</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 flex-1">
+                  {loadingCobranzaFechas ? (
+                    <div className="h-[450px] flex items-center justify-center">
+                      <div className="animate-pulse text-gray-400">Cargando...</div>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={450}>
+                      <BarChart data={datosCobranzaFechas.dias}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="nombre_fecha" />
+                        <YAxis 
+                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
+                        />
+                        <Tooltip 
+                          formatter={(value: number) => [formatCurrency(value), '']}
+                          labelFormatter={(label) => `Fecha: ${label}`}
+                        />
+                        <Legend />
+                        <Bar dataKey="cobranza_planificada" fill="#3b82f6" name="Planificado" />
+                        <Bar dataKey="cobranza_real" fill="#10b981" name="Real" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </div>
 
         {/* GRÁFICOS DE DISTRIBUCIÓN */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1107,47 +1152,6 @@ export function DashboardMenu() {
           </motion.div>
         )}
 
-        {/* GRÁFICO DE COBRANZA FECHAS ESPECÍFICAS */}
-        {datosCobranzaFechas && datosCobranzaFechas.dias && datosCobranzaFechas.dias.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.75 }}
-          >
-            <Card className="shadow-lg border-2 border-gray-200">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
-                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                  <BarChart3 className="h-6 w-6 text-blue-600" />
-                  <span>Cobranza Planificada vs Real</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                {loadingCobranzaFechas ? (
-                  <div className="h-[300px] flex items-center justify-center">
-                    <div className="animate-pulse text-gray-400">Cargando...</div>
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={datosCobranzaFechas.dias}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="nombre_fecha" />
-                      <YAxis 
-                        tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
-                      />
-                      <Tooltip 
-                        formatter={(value: number) => [formatCurrency(value), '']}
-                        labelFormatter={(label) => `Fecha: ${label}`}
-                      />
-                      <Legend />
-                      <Bar dataKey="cobranza_planificada" fill="#3b82f6" name="Planificado" />
-                      <Bar dataKey="cobranza_real" fill="#10b981" name="Real" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
 
         {/* GRÁFICOS DE MOROSIDAD */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -1111,7 +1111,7 @@ def informe_rendimiento_analista(
                 Prestamo.usuario_proponente != settings.ADMIN_EMAIL,  # Excluir admin
                 or_(User.is_admin.is_(False), User.is_admin.is_(None)),  # Excluir admins
             )
-            .group_by(Prestamo.usuario_proponente)
+            .group_by(Prestamo.analista, Prestamo.usuario_proponente)
         )
 
         resultados = query.all()
@@ -1120,14 +1120,32 @@ def informe_rendimiento_analista(
         for row in resultados:
             datos_analistas.append(
                 {
-                    "analista": row.analista,
-                    "total_clientes": row.total_clientes,
-                    "total_prestamos": row.total_prestamos,
+                    "analista": row.analista or "Sin analista",
+                    "total_clientes": row.total_clientes or 0,
+                    "total_prestamos": row.total_prestamos or 0,
                     "monto_total_adeudado": (float(row.monto_total_adeudado) if row.monto_total_adeudado else 0.0),
-                    "total_cuotas_vencidas": row.total_cuotas_vencidas,
+                    "total_cuotas_vencidas": row.total_cuotas_vencidas or 0,
                     "promedio_dias_retraso": (float(row.promedio_dias_retraso) if row.promedio_dias_retraso else 0.0),
                 }
             )
+
+        # Si no hay datos, retornar estructura vacía pero válida
+        if not datos_analistas:
+            logger.warning("[informe_rendimiento_analista] No se encontraron datos de analistas")
+            if formato.lower() == "json":
+                return {
+                    "titulo": "Informe de Rendimiento por Analista",
+                    "fecha_generacion": datetime.now().isoformat(),
+                    "total_analistas": 0,
+                    "datos": [],
+                    "mensaje": "No se encontraron datos de analistas con cuotas vencidas",
+                }
+            elif formato.lower() == "excel":
+                return _generar_excel_rendimiento_analista([])
+            elif formato.lower() == "pdf":
+                return _generar_pdf_rendimiento_analista([])
+            else:
+                raise HTTPException(status_code=400, detail="Formato no válido")
 
         if formato.lower() == "json":
             return {
@@ -1143,8 +1161,10 @@ def informe_rendimiento_analista(
         else:
             raise HTTPException(status_code=400, detail="Formato no válido")
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error generando informe rendimiento analista: {e}")
+        logger.error(f"Error generando informe rendimiento analista: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
@@ -1835,54 +1855,62 @@ def _generar_excel_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
 
 def _generar_excel_rendimiento_analista(datos: List[Dict]) -> StreamingResponse:
     """Genera archivo Excel para informe de rendimiento por analista"""
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Rendimiento Analista"
+    try:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Rendimiento Analista"
 
-    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-    header_font = Font(bold=True, color="FFFFFF", size=12)
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=12)
 
-    headers = [
-        "Analista",
-        "Total Clientes",
-        "Total Préstamos",
-        "Monto Total Adeudado",
-        "Cuotas Vencidas",
-        "Promedio Días Retraso",
-    ]
+        headers = [
+            "Analista",
+            "Total Clientes",
+            "Total Préstamos",
+            "Monto Total Adeudado",
+            "Cuotas Vencidas",
+            "Promedio Días Retraso",
+        ]
 
-    for col, header in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col)
-        cell.value = header
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal="center")
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col)
+            cell.value = header
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
 
-    for row_idx, registro in enumerate(datos, 2):
-        ws.cell(row=row_idx, column=1, value=registro.get("analista"))
-        ws.cell(row=row_idx, column=2, value=registro.get("total_clientes"))
-        ws.cell(row=row_idx, column=3, value=registro.get("total_prestamos"))
-        ws.cell(row=row_idx, column=4, value=registro.get("monto_total_adeudado"))
-        ws.cell(row=row_idx, column=5, value=registro.get("total_cuotas_vencidas"))
-        ws.cell(
-            row=row_idx,
-            column=6,
-            value=round(registro.get("promedio_dias_retraso", 0), 2),
+        if datos and len(datos) > 0:
+            for row_idx, registro in enumerate(datos, 2):
+                ws.cell(row=row_idx, column=1, value=str(registro.get("analista", "Sin analista")))
+                ws.cell(row=row_idx, column=2, value=registro.get("total_clientes", 0))
+                ws.cell(row=row_idx, column=3, value=registro.get("total_prestamos", 0))
+                ws.cell(row=row_idx, column=4, value=registro.get("monto_total_adeudado", 0))
+                ws.cell(row=row_idx, column=5, value=registro.get("total_cuotas_vencidas", 0))
+                ws.cell(
+                    row=row_idx,
+                    column=6,
+                    value=round(registro.get("promedio_dias_retraso", 0), 2),
+                )
+        else:
+            # Mensaje cuando no hay datos
+            ws.cell(row=2, column=1, value="No se encontraron datos de analistas con cuotas vencidas")
+
+        for col in range(1, 7):
+            ws.column_dimensions[chr(64 + col)].width = 20
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        fecha = datetime.now().strftime("%Y%m%d")
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=informe_rendimiento_analista_{fecha}.xlsx"},
         )
-
-    for col in range(1, 7):
-        ws.column_dimensions[chr(64 + col)].width = 20
-
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
-
-    fecha = datetime.now().strftime("%Y%m%d")
-    return StreamingResponse(
-        output,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=informe_rendimiento_analista_{fecha}.xlsx"},
-    )
+    except Exception as e:
+        logger.error(f"Error generando Excel rendimiento analista: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error generando Excel: {str(e)}")
 
 
 def _generar_excel_montos_periodo(datos: List[Dict]) -> StreamingResponse:
@@ -2109,51 +2137,67 @@ def _generar_pdf_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
 
 def _generar_pdf_rendimiento_analista(datos: List[Dict]) -> StreamingResponse:
     """Genera archivo PDF para informe de rendimiento por analista"""
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    story = []
-    styles = getSampleStyleSheet()
+    try:
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        story = []
+        styles = getSampleStyleSheet()
 
-    title = Paragraph("Informe de Rendimiento por Analista", styles["Title"])
-    story.append(title)
-    story.append(Spacer(1, 0.2 * inch))
+        title = Paragraph("Informe de Rendimiento por Analista", styles["Title"])
+        story.append(title)
+        story.append(Spacer(1, 0.2 * inch))
 
-    if datos:
-        table_data = [["Analista", "Clientes", "Préstamos", "Monto Adeudado", "Promedio Días"]]
-        for registro in datos:
-            table_data.append(
-                [
-                    registro.get("analista", "")[:30],
-                    str(registro.get("total_clientes", 0)),
-                    str(registro.get("total_prestamos", 0)),
-                    f"${registro.get('monto_total_adeudado', 0):,.2f}",
-                    f"{registro.get('promedio_dias_retraso', 0):.1f}",
-                ]
+        # Fecha de generación
+        fecha_gen = Paragraph(f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M')}", styles["Normal"])
+        story.append(fecha_gen)
+        story.append(Spacer(1, 0.3 * inch))
+
+        if datos and len(datos) > 0:
+            table_data = [["Analista", "Clientes", "Préstamos", "Monto Adeudado", "Promedio Días"]]
+            for registro in datos:
+                table_data.append(
+                    [
+                        str(registro.get("analista", "Sin analista"))[:30],
+                        str(registro.get("total_clientes", 0)),
+                        str(registro.get("total_prestamos", 0)),
+                        f"${registro.get('monto_total_adeudado', 0):,.2f}",
+                        f"{registro.get('promedio_dias_retraso', 0):.1f}",
+                    ]
+                )
+
+            table = Table(table_data)
+            table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#366092")),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                    ]
+                )
             )
-
-        table = Table(table_data)
-        table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#366092")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("GRID", (0, 0), (-1, -1), 1, colors.black),
-                ]
+            story.append(table)
+        else:
+            # Mensaje cuando no hay datos
+            mensaje = Paragraph(
+                "<i>No se encontraron datos de analistas con cuotas vencidas para el período seleccionado.</i>",
+                styles["Normal"],
             )
+            story.append(mensaje)
+
+        doc.build(story)
+        buffer.seek(0)
+
+        fecha = datetime.now().strftime("%Y%m%d")
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=informe_rendimiento_analista_{fecha}.pdf"},
         )
-        story.append(table)
-
-    doc.build(story)
-    buffer.seek(0)
-
-    fecha = datetime.now().strftime("%Y%m%d")
-    return StreamingResponse(
-        buffer,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=informe_rendimiento_analista_{fecha}.pdf"},
-    )
+    except Exception as e:
+        logger.error(f"Error generando PDF rendimiento analista: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error generando PDF: {str(e)}")
 
 
 def _generar_pdf_montos_periodo(datos: List[Dict]) -> StreamingResponse:

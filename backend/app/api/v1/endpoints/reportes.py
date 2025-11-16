@@ -1309,27 +1309,36 @@ def _generar_excel_completo(reporte, db: Session, cantidad_prestamos_activos, ca
 
 def _generar_pdf_completo(reporte):
     """Genera el archivo PDF completo"""
-    output = BytesIO()
-    c = canvas.Canvas(output, pagesize=A4)
+    try:
+        output = BytesIO()
+        c = canvas.Canvas(output, pagesize=A4)
 
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(100, 750, "REPORTE DE CARTERA")
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(100, 750, "REPORTE DE CARTERA")
 
-    c.setFont("Helvetica", 12)
-    c.drawString(100, 720, f"Fecha de Corte: {reporte.fecha_corte}")
+        c.setFont("Helvetica", 12)
+        c.drawString(100, 720, f"Fecha de Corte: {reporte.fecha_corte}")
+        c.drawString(100, 700, f"Generado el: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
-    y = 680
-    c.drawString(100, y, f"Cartera Total: ${reporte.cartera_total:,.2f}")
-    y -= 20
-    c.drawString(100, y, f"Capital Pendiente: ${reporte.capital_pendiente:,.2f}")
-    y -= 20
-    c.drawString(100, y, f"Intereses Pendientes: ${reporte.intereses_pendientes:,.2f}")
-    y -= 20
-    c.drawString(100, y, f"Mora Total: ${reporte.mora_total:,.2f}")
+        y = 680
+        c.drawString(100, y, f"Cartera Total: ${float(reporte.cartera_total):,.2f}")
+        y -= 20
+        c.drawString(100, y, f"Capital Pendiente: ${float(reporte.capital_pendiente):,.2f}")
+        y -= 20
+        c.drawString(100, y, f"Intereses Pendientes: ${float(reporte.intereses_pendientes):,.2f}")
+        y -= 20
+        c.drawString(100, y, f"Mora Total: ${float(reporte.mora_total):,.2f}")
+        y -= 20
+        c.drawString(100, y, f"Préstamos Activos: {reporte.cantidad_prestamos_activos}")
+        y -= 20
+        c.drawString(100, y, f"Préstamos en Mora: {reporte.cantidad_prestamos_mora}")
 
-    c.save()
-    output.seek(0)
-    return output
+        c.save()
+        output.seek(0)
+        return output
+    except Exception as e:
+        logger.error(f"Error generando PDF completo: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error generando PDF: {str(e)}")
 
 
 def _registrar_auditoria_exportacion(db: Session, current_user: User, formato: str, fecha_corte: date):
@@ -1377,7 +1386,10 @@ def exportar_reporte_cartera(
                 headers={"Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.xlsx"},
             )
             logger.info("[reportes.exportar] Excel generado correctamente")
-            _registrar_auditoria_exportacion(db, current_user, "excel", reporte.fecha_corte)
+            try:
+                _registrar_auditoria_exportacion(db, current_user, "excel", reporte.fecha_corte)
+            except Exception as audit_error:
+                logger.warning(f"No se pudo registrar auditoría: {audit_error}")
             return response
 
         elif formato.lower() == "pdf":
@@ -1388,14 +1400,19 @@ def exportar_reporte_cartera(
                 headers={"Content-Disposition": f"attachment; filename=reporte_cartera_{reporte.fecha_corte}.pdf"},
             )
             logger.info("[reportes.exportar] PDF generado correctamente")
-            _registrar_auditoria_exportacion(db, current_user, "pdf", reporte.fecha_corte)
+            try:
+                _registrar_auditoria_exportacion(db, current_user, "pdf", reporte.fecha_corte)
+            except Exception as audit_error:
+                logger.warning(f"No se pudo registrar auditoría: {audit_error}")
             return response
 
         else:
             raise HTTPException(status_code=400, detail="Formato no soportado. Use 'excel' o 'pdf'")
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error exportando reporte: {e}")
+        logger.error(f"Error exportando reporte: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
