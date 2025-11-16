@@ -797,37 +797,6 @@ export function Cobranzas() {
                           </div>
                         )}
                         
-                        {/* Resumen de cuotas impagas */}
-                        {clientesFiltrados.length > 0 && (
-                          <div className="mb-4 p-3 bg-gray-50 rounded-lg border">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                              <div>
-                                <p className="text-gray-600">Total Clientes</p>
-                                <p className="text-lg font-bold text-gray-900">{clientesFiltrados.length}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-600">Total Cuotas Impagas</p>
-                                <p className="text-lg font-bold text-red-600">
-                                  {clientesFiltrados.reduce((sum, c) => sum + (c.cuotas_vencidas || 0), 0)}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-gray-600">Promedio por Cliente</p>
-                                <p className="text-lg font-bold text-blue-600">
-                                  {clientesFiltrados.length > 0
-                                    ? (clientesFiltrados.reduce((sum, c) => sum + (c.cuotas_vencidas || 0), 0) / clientesFiltrados.length).toFixed(1)
-                                    : '0'}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-gray-600">Monto Total Adeudado</p>
-                                <p className="text-lg font-bold text-red-600">
-                                  ${clientesFiltrados.reduce((sum, c) => sum + (c.total_adeudado || 0), 0).toLocaleString('es-VE')}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b bg-gray-50">

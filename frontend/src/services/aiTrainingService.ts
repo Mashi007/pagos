@@ -469,7 +469,17 @@ class AITrainingService {
    * Activar modelo de impago
    */
   async activarModeloImpago(modeloId: number): Promise<{ mensaje: string; modelo_activo: ModeloImpagoCuotas }> {
-    return await apiClient.post(`${this.baseUrl}/ml-impago/activar`, { modelo_id: modeloId })
+    try {
+      console.log('🔄 [aiTrainingService] Activando modelo impago:', modeloId)
+      const resultado = await apiClient.post(`${this.baseUrl}/ml-impago/activar`, { modelo_id: modeloId })
+      console.log('✅ [aiTrainingService] Modelo activado:', resultado)
+      return resultado
+    } catch (error: any) {
+      console.error('❌ [aiTrainingService] Error activando modelo impago:', error)
+      console.error('Error response:', error?.response)
+      console.error('Error data:', error?.response?.data)
+      throw error
+    }
   }
 
   /**

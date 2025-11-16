@@ -1649,6 +1649,13 @@ async def activar_modelo_impago(
         raise HTTPException(status_code=403, detail="Solo administradores pueden activar modelos ML")
 
     try:
+        # Verificar que MLImpagoCuotasService esté disponible
+        if not ML_IMPAGO_SERVICE_AVAILABLE or MLImpagoCuotasService is None:
+            raise HTTPException(
+                status_code=503,
+                detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
+            )
+
         # Desactivar todos los modelos
         db.query(ModeloImpagoCuotas).update({ModeloImpagoCuotas.activo: False})
 
@@ -1657,6 +1664,14 @@ async def activar_modelo_impago(
 
         if not modelo:
             raise HTTPException(status_code=404, detail="Modelo no encontrado")
+
+        # Cargar modelo en servicio ML antes de activar
+        ml_service = MLImpagoCuotasService()
+        if not ml_service.load_model_from_path(modelo.ruta_archivo):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error cargando modelo desde {modelo.ruta_archivo}. Verifica que el archivo exista.",
+            )
 
         modelo.activo = True
         modelo.activado_en = datetime.now()

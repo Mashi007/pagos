@@ -70,15 +70,18 @@ export function MLImpagoCuotasTab() {
   const handleEntrenar = async () => {
     setEntrenando(true)
     try {
-      await aiTrainingService.entrenarModeloImpago({
+      const resultado = await aiTrainingService.entrenarModeloImpago({
         algoritmo,
         test_size: testSize,
       })
+      console.log('✅ Modelo entrenado exitosamente:', resultado)
       toast.success('Modelo entrenado exitosamente')
       setMostrarFormEntrenamiento(false)
       await cargarModelos()
     } catch (error: any) {
-      const mensajeError = error?.response?.data?.detail || 'Error al entrenar modelo'
+      console.error('❌ Error entrenando modelo ML Impago:', error)
+      console.error('Error completo:', JSON.stringify(error, null, 2))
+      const mensajeError = error?.response?.data?.detail || error?.message || error?.error?.detail || 'Error al entrenar modelo'
       toast.error(mensajeError)
     } finally {
       setEntrenando(false)
@@ -102,11 +105,15 @@ export function MLImpagoCuotasTab() {
     }
 
     try {
-      await aiTrainingService.activarModeloImpago(modeloId)
+      console.log('🔄 Activando modelo ML Impago:', modeloId)
+      const resultado = await aiTrainingService.activarModeloImpago(modeloId)
+      console.log('✅ Modelo activado exitosamente:', resultado)
       toast.success(esDesactivacion ? 'Modelo desactivado' : 'Modelo activado exitosamente')
       await cargarModelos()
     } catch (error: any) {
-      const mensajeError = error?.response?.data?.detail || 'Error al activar modelo'
+      console.error('❌ Error activando modelo ML Impago:', error)
+      console.error('Error completo:', JSON.stringify(error, null, 2))
+      const mensajeError = error?.response?.data?.detail || error?.message || error?.error?.detail || 'Error al activar modelo'
       toast.error(mensajeError)
     }
   }
