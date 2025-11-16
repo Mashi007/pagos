@@ -290,29 +290,36 @@ class Settings(BaseSettings):
                 )
         else:
             # En producción, usar valores por defecto si no están configurados (con advertencia crítica)
+            # Si no hay variable de entorno, siempre usar valor por defecto (sin importar el valor actual)
             if not admin_email_from_env:
-                if not self.ADMIN_EMAIL:
-                    self.ADMIN_EMAIL = "itmaster@rapicreditca.com"
+                self.ADMIN_EMAIL = "itmaster@rapicreditca.com"
                 logger.critical(
                     "🚨🚨🚨 CRÍTICO: ADMIN_EMAIL no está configurado como variable de entorno en producción. "
                     "ESTO ES UNA GRAVE FALTA DE SEGURIDAD. "
                     "Usando valor por defecto temporalmente. "
                     "Configure ADMIN_EMAIL en Render Dashboard inmediatamente. 🚨🚨🚨"
                 )
+            elif not self.ADMIN_EMAIL:
+                # Si hay variable de entorno pero self.ADMIN_EMAIL está vacío, usar el valor de la variable
+                self.ADMIN_EMAIL = admin_email_from_env
+                
             if not admin_password_from_env:
-                if not self.ADMIN_PASSWORD:
-                    self.ADMIN_PASSWORD = "R@pi_2025**"
+                self.ADMIN_PASSWORD = "R@pi_2025**"
                 logger.critical(
                     "🚨🚨🚨 CRÍTICO: ADMIN_PASSWORD no está configurado como variable de entorno en producción. "
                     "ESTO ES UNA GRAVE FALTA DE SEGURIDAD. "
                     "Usando valor por defecto temporalmente. "
                     "Configure ADMIN_PASSWORD en Render Dashboard inmediatamente. 🚨🚨🚨"
                 )
+            elif not self.ADMIN_PASSWORD:
+                # Si hay variable de entorno pero self.ADMIN_PASSWORD está vacío, usar el valor de la variable
+                self.ADMIN_PASSWORD = admin_password_from_env
 
         # Validaciones básicas (después de asignar valores por defecto)
-        if not self.ADMIN_EMAIL:
+        # Asegurarse de que siempre tengan un valor válido
+        if not self.ADMIN_EMAIL or (isinstance(self.ADMIN_EMAIL, str) and not self.ADMIN_EMAIL.strip()):
             raise ValueError("ADMIN_EMAIL debe estar configurado")
-        if not self.ADMIN_PASSWORD:
+        if not self.ADMIN_PASSWORD or (isinstance(self.ADMIN_PASSWORD, str) and not self.ADMIN_PASSWORD.strip()):
             raise ValueError("ADMIN_PASSWORD debe estar configurado")
 
         if len(self.ADMIN_PASSWORD) < 8:
