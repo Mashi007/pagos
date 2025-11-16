@@ -212,29 +212,33 @@ export function EmbudoClientes() {
     return matchSearch
   })
 
-  // Agrupar clientes por estado
-  const clientesPorEstado = ESTADOS_EMBUDO.map(estado => ({
-    ...estado,
-    clientes: clientesFiltrados.filter(c => c.estado === estado.id),
-    count: clientesFiltrados.filter(c => c.estado === estado.id).length
-  }))
+  // Agrupar clientes por estado (debe coincidir con los embudos)
+  const clientesPorEstado = useMemo(() => {
+    return ESTADOS_EMBUDO.map(estado => ({
+      ...estado,
+      clientes: clientesFiltrados.filter(c => c.estado === estado.id),
+      count: clientesFiltrados.filter(c => c.estado === estado.id).length
+    }))
+  }, [clientesFiltrados])
 
-  // Usar estadísticas de la API si están disponibles, sino calcular desde clientesEmbudo
-  const estadisticas = estadisticasEmbudo ? {
-    total: estadisticasEmbudo.total,
-    prospectos: estadisticasEmbudo.prospectos,
-    evaluacion: estadisticasEmbudo.evaluacion,
-    aprobados: estadisticasEmbudo.aprobados,
-    rechazados: estadisticasEmbudo.rechazados,
-    agregarOtro: clientesEmbudo.filter(c => c.estado === 'agregar_otro').length,
-  } : {
-    total: clientesEmbudo.length,
-    prospectos: clientesEmbudo.filter(c => c.estado === 'prospecto').length,
-    evaluacion: clientesEmbudo.filter(c => c.estado === 'evaluacion').length,
-    aprobados: clientesEmbudo.filter(c => c.estado === 'aprobado').length,
-    rechazados: clientesEmbudo.filter(c => c.estado === 'rechazado').length,
-    agregarOtro: clientesEmbudo.filter(c => c.estado === 'agregar_otro').length,
-  }
+  // Estadísticas basadas en los embudos (deben coincidir exactamente)
+  const estadisticas = useMemo(() => {
+    // Usar los mismos datos que clientesPorEstado para garantizar coincidencia
+    const prospectos = clientesPorEstado.find(e => e.id === 'prospecto')?.count || 0
+    const evaluacion = clientesPorEstado.find(e => e.id === 'evaluacion')?.count || 0
+    const aprobados = clientesPorEstado.find(e => e.id === 'aprobado')?.count || 0
+    const rechazados = clientesPorEstado.find(e => e.id === 'rechazado')?.count || 0
+    const agregarOtro = clientesPorEstado.find(e => e.id === 'agregar_otro')?.count || 0
+    
+    return {
+      total: clientesFiltrados.length,
+      prospectos,
+      evaluacion,
+      aprobados,
+      rechazados,
+      agregarOtro,
+    }
+  }, [clientesFiltrados, clientesPorEstado])
 
   const handleAgregarCliente = (cliente: Cliente) => {
     setClientesEnEmbudo(prev => new Map(prev).set(cliente.id, cliente))
@@ -466,7 +470,7 @@ export function EmbudoClientes() {
         </div>
       </motion.div>
 
-      {/* Estadísticas */}
+      {/* Estadísticas - Deben coincidir exactamente con los embudos */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -474,30 +478,25 @@ export function EmbudoClientes() {
             <p className="text-xs text-gray-600 mt-1">Total Clientes</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-gray-600">{estadisticas.prospectos}</div>
-            <p className="text-xs text-gray-600 mt-1">Prospectos</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-blue-600">{estadisticas.evaluacion}</div>
-            <p className="text-xs text-gray-600 mt-1">En Evaluación</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-green-600">{estadisticas.aprobados}</div>
-            <p className="text-xs text-gray-600 mt-1">Aprobados</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-red-600">{estadisticas.rechazados}</div>
-            <p className="text-xs text-gray-600 mt-1">Rechazados</p>
-          </CardContent>
-        </Card>
+        {clientesPorEstado.filter(e => e.id !== 'agregar_otro').map((estado) => {
+          const EstadoIcon = estado.icon
+          const colorMap: Record<string, string> = {
+            'prospecto': 'text-gray-600',
+            'evaluacion': 'text-blue-600',
+            'aprobado': 'text-green-600',
+            'rechazado': 'text-red-600'
+          }
+          const color = colorMap[estado.id] || 'text-gray-600'
+          
+          return (
+            <Card key={estado.id}>
+              <CardContent className="pt-6">
+                <div className={`text-2xl font-bold ${color}`}>{estado.count}</div>
+                <p className="text-xs text-gray-600 mt-1">{estado.label}</p>
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
       {/* Filtros */}

@@ -1539,8 +1539,12 @@ async def entrenar_modelo_impago(
                 # Extraer features del historial de pagos
                 try:
                     features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
+                    # Validar que features no esté vacío
+                    if not features or len(features) == 0:
+                        logger.warning(f"Features vacías para préstamo {prestamo.id}, omitiendo...")
+                        continue
                 except Exception as e:
-                    logger.warning(f"Error extrayendo features del préstamo {prestamo.id}: {e}, omitiendo...")
+                    logger.warning(f"Error extrayendo features del préstamo {prestamo.id}: {e}, omitiendo...", exc_info=True)
                     continue
 
                 # Determinar target: ¿El cliente pagó o no pagó sus cuotas?
@@ -1559,10 +1563,10 @@ async def entrenar_modelo_impago(
                     # Agregar a datos de entrenamiento
                     training_data.append({**features, "target": target})
                 except Exception as e:
-                    logger.warning(f"Error determinando target del préstamo {prestamo.id}: {e}, omitiendo...")
+                    logger.warning(f"Error determinando target del préstamo {prestamo.id}: {e}, omitiendo...", exc_info=True)
                     continue
             except Exception as e:
-                logger.warning(f"Error procesando préstamo {prestamo.id}: {e}, omitiendo...")
+                logger.warning(f"Error procesando préstamo {prestamo.id}: {e}, omitiendo...", exc_info=True)
                 continue
 
         if len(training_data) < 10:
@@ -1621,19 +1625,29 @@ async def entrenar_modelo_impago(
     except Exception as e:
         db.rollback()
         error_msg = str(e)
-        logger.error(f"Error entrenando modelo de impago: {error_msg}", exc_info=True)
+        error_type = type(e).__name__
+        logger.error(f"Error entrenando modelo de impago: {error_type}: {error_msg}", exc_info=True)
 
         # Mensaje más descriptivo según el tipo de error
-        if "scikit-learn" in error_msg.lower() or "sklearn" in error_msg.lower():
+        if "scikit-learn" in error_msg.lower() or "sklearn" in error_msg.lower() or "SKLEARN" in error_msg:
             detail_msg = "Error con scikit-learn. Verifica que esté instalado correctamente."
         elif "stratify" in error_msg.lower():
             detail_msg = "Error al dividir datos. Puede ser por pocas muestras de alguna clase."
-        elif "cuota" in error_msg.lower() or "fecha_vencimiento" in error_msg.lower():
+        elif "cuota" in error_msg.lower() or "fecha_vencimiento" in error_msg.lower() or "Cuota" in error_msg:
             detail_msg = "Error accediendo a datos de cuotas. Verifica la integridad de los datos."
         elif "does not exist" in error_msg.lower() or "no such table" in error_msg.lower():
             detail_msg = "La tabla de modelos de impago no está creada. Ejecuta las migraciones: alembic upgrade head"
+        elif "AttributeError" in error_type or "'NoneType' object has no attribute" in error_msg:
+            detail_msg = f"Error de datos: {error_msg[:200]}. Verifica que los préstamos tengan cuotas y datos válidos."
+        elif "KeyError" in error_type:
+            detail_msg = f"Error de estructura de datos: {error_msg[:200]}. Verifica que las features estén completas."
+        elif "ValueError" in error_type:
+            detail_msg = f"Error de validación: {error_msg[:200]}"
+        elif "TypeError" in error_type:
+            detail_msg = f"Error de tipo de dato: {error_msg[:200]}. Verifica que los datos sean numéricos."
         else:
-            detail_msg = f"Error entrenando modelo: {error_msg}"
+            # Incluir más información del error para debugging
+            detail_msg = f"Error entrenando modelo ({error_type}): {error_msg[:300]}"
 
         raise HTTPException(status_code=500, detail=detail_msg)
 

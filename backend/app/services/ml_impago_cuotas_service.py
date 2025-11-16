@@ -104,12 +104,12 @@ class MLImpagoCuotasService:
         # Ordenar cuotas por número
         cuotas_ordenadas = sorted(cuotas, key=lambda c: c.numero_cuota)
 
-        # Features básicas
+        # Features básicas (manejar None en estado)
         total_cuotas = len(cuotas_ordenadas)
-        cuotas_pagadas = sum(1 for c in cuotas_ordenadas if c.estado == "PAGADO")
-        cuotas_atrasadas = sum(1 for c in cuotas_ordenadas if c.estado == "ATRASADO")
-        cuotas_parciales = sum(1 for c in cuotas_ordenadas if c.estado == "PARCIAL")
-        cuotas_pendientes = sum(1 for c in cuotas_ordenadas if c.estado == "PENDIENTE")
+        cuotas_pagadas = sum(1 for c in cuotas_ordenadas if c.estado and c.estado == "PAGADO")
+        cuotas_atrasadas = sum(1 for c in cuotas_ordenadas if c.estado and c.estado == "ATRASADO")
+        cuotas_parciales = sum(1 for c in cuotas_ordenadas if c.estado and c.estado == "PARCIAL")
+        cuotas_pendientes = sum(1 for c in cuotas_ordenadas if c.estado and c.estado == "PENDIENTE")
 
         # Porcentaje de cuotas pagadas
         porcentaje_cuotas_pagadas = (cuotas_pagadas / total_cuotas * 100) if total_cuotas > 0 else 0.0
@@ -119,7 +119,7 @@ class MLImpagoCuotasService:
         promedio_dias_mora = np.mean(dias_mora_list) if dias_mora_list else 0.0
 
         # Tasa de cumplimiento (cuotas pagadas a tiempo / total de cuotas vencidas)
-        cuotas_vencidas = [c for c in cuotas_ordenadas if c.fecha_vencimiento < fecha_actual]
+        cuotas_vencidas = [c for c in cuotas_ordenadas if c.fecha_vencimiento and c.fecha_vencimiento < fecha_actual]
         cuotas_vencidas_pagadas = sum(1 for c in cuotas_vencidas if c.estado == "PAGADO")
         tasa_cumplimiento = (cuotas_vencidas_pagadas / len(cuotas_vencidas) * 100) if cuotas_vencidas else 100.0
 
@@ -133,18 +133,39 @@ class MLImpagoCuotasService:
 
         # Número de cuotas restantes (pendientes o futuras)
         cuotas_restantes = cuotas_pendientes + sum(
-            1 for c in cuotas_ordenadas if c.fecha_vencimiento > fecha_actual and c.estado != "PAGADO"
+            1 for c in cuotas_ordenadas if c.fecha_vencimiento and c.fecha_vencimiento > fecha_actual and c.estado != "PAGADO"
         )
 
-        # Monto promedio de cuota
-        montos_cuota = [float(c.monto_cuota) for c in cuotas_ordenadas]
-        monto_promedio_cuota = np.mean(montos_cuota) if montos_cuota else 0.0
+        # Monto promedio de cuota (manejar None y Decimal)
+        try:
+            montos_cuota = []
+            for c in cuotas_ordenadas:
+                if c.monto_cuota is not None:
+                    try:
+                        montos_cuota.append(float(c.monto_cuota))
+                    except (ValueError, TypeError):
+                        continue
+            monto_promedio_cuota = np.mean(montos_cuota) if montos_cuota else 0.0
+        except Exception as e:
+            logger.warning(f"Error calculando monto promedio de cuota: {e}, usando 0.0")
+            monto_promedio_cuota = 0.0
 
-        # Ratio de monto pendiente vs monto total
-        monto_total_prestamo = float(prestamo.total_financiamiento)
-        monto_total_pagado = sum(float(c.total_pagado) for c in cuotas_ordenadas)
-        monto_total_pendiente = monto_total_prestamo - monto_total_pagado
-        ratio_monto_pendiente = (monto_total_pendiente / monto_total_prestamo * 100) if monto_total_prestamo > 0 else 0.0
+        # Ratio de monto pendiente vs monto total (manejar None y Decimal)
+        try:
+            monto_total_prestamo = float(prestamo.total_financiamiento or 0) if prestamo.total_financiamiento is not None else 0.0
+            monto_total_pagado = 0.0
+            for c in cuotas_ordenadas:
+                if c.total_pagado is not None:
+                    try:
+                        monto_total_pagado += float(c.total_pagado)
+                    except (ValueError, TypeError):
+                        continue
+            monto_total_pendiente = monto_total_prestamo - monto_total_pagado
+            ratio_monto_pendiente = (monto_total_pendiente / monto_total_prestamo * 100) if monto_total_prestamo > 0 else 0.0
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.warning(f"Error calculando ratio monto pendiente: {e}, usando 0.0")
+            monto_total_pendiente = 0.0
+            ratio_monto_pendiente = 0.0
 
         # Tendencia de pagos (comparar primeras vs últimas cuotas)
         if len(cuotas_ordenadas) >= 4:
@@ -165,7 +186,9 @@ class MLImpagoCuotasService:
 
         # Cuotas vencidas sin pagar
         cuotas_vencidas_sin_pagar = sum(
-            1 for c in cuotas_ordenadas if c.fecha_vencimiento < fecha_actual and c.estado not in ["PAGADO", "PARCIAL"]
+            1 for c in cuotas_ordenadas 
+            if c.fecha_vencimiento and c.fecha_vencimiento < fecha_actual 
+            and c.estado and c.estado not in ["PAGADO", "PARCIAL"]
         )
 
         return {
