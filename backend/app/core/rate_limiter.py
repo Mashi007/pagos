@@ -49,6 +49,7 @@ def get_client_ip(request) -> str:
 _redis_warning_logged = False
 _redis_info_logged = False
 
+
 def _get_storage_uri() -> str:
     """
     Obtiene la URI de almacenamiento para rate limiting.
