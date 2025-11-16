@@ -13,6 +13,10 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Variables de módulo para evitar warnings duplicados
+_sklearn_warning_logged = False
+_xgboost_warning_logged = False
+
 # Imports condicionales de scikit-learn
 try:
     from sklearn.ensemble import RandomForestClassifier
@@ -24,7 +28,9 @@ try:
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
-    logger.warning("scikit-learn no está disponible. Funcionalidades de ML estarán limitadas.")
+    if not _sklearn_warning_logged:
+        logger.warning("scikit-learn no está disponible. Funcionalidades de ML estarán limitadas.")
+        _sklearn_warning_logged = True
     RandomForestClassifier = None
     LogisticRegression = None
     accuracy_score = None
@@ -42,7 +48,9 @@ try:
     XGBOOST_AVAILABLE = True
 except ImportError:
     XGBOOST_AVAILABLE = False
-    logger.warning("xgboost no está disponible. XGBoost no podrá ser usado.")
+    if not _xgboost_warning_logged:
+        logger.warning("xgboost no está disponible. XGBoost no podrá ser usado.")
+        _xgboost_warning_logged = True
     XGBClassifier = None
 
 

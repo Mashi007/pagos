@@ -45,14 +45,21 @@ def get_client_ip(request) -> str:
     return get_remote_address(request)
 
 
+# Variable de módulo para evitar logs duplicados
+_redis_warning_logged = False
+_redis_info_logged = False
+
 def _get_storage_uri() -> str:
     """
     Obtiene la URI de almacenamiento para rate limiting.
     Usa Redis si está configurado, sino usa memoria.
     """
+    global _redis_info_logged
     # Intentar usar Redis si está configurado
     if settings.REDIS_URL:
-        logger.info(f"✅ Usando Redis para rate limiting: {settings.REDIS_URL[:20]}...")
+        if not _redis_info_logged:
+            logger.info(f"✅ Usando Redis para rate limiting: {settings.REDIS_URL[:20]}...")
+            _redis_info_logged = True
         return settings.REDIS_URL
     elif settings.REDIS_HOST and settings.REDIS_HOST != "localhost":
         # Construir URL de Redis desde componentes
@@ -60,14 +67,19 @@ def _get_storage_uri() -> str:
         if settings.REDIS_PASSWORD:
             redis_url += f":{settings.REDIS_PASSWORD}@"
         redis_url += f"{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
-        logger.info(f"✅ Usando Redis para rate limiting: {redis_url[:20]}...")
+        if not _redis_info_logged:
+            logger.info(f"✅ Usando Redis para rate limiting: {redis_url[:20]}...")
+            _redis_info_logged = True
         return redis_url
     else:
         # Usar memoria en desarrollo
-        logger.warning(
-            "⚠️ Redis no configurado. Usando memoria para rate limiting. "
-            "En producción distribuida, configure REDIS_URL para rate limiting distribuido."
-        )
+        global _redis_warning_logged
+        if not _redis_warning_logged:
+            logger.warning(
+                "⚠️ Redis no configurado. Usando memoria para rate limiting. "
+                "En producción distribuida, configure REDIS_URL para rate limiting distribuido."
+            )
+            _redis_warning_logged = True
         return "memory://"
 
 
@@ -80,13 +92,19 @@ def _create_limiter_with_fallback():
     # Si se intenta usar Redis, verificar primero si el paquete está instalado
     if storage_uri.startswith("redis://"):
         # Verificar si el paquete redis está instalado
+        global _redis_warning_logged
         try:
             import redis
 
             redis_version = getattr(redis, "__version__", "unknown")
-            logger.info(f"✅ Paquete redis instalado: versión {redis_version}")
+            global _redis_info_logged
+            if not _redis_info_logged:
+                logger.info(f"✅ Paquete redis instalado: versión {redis_version}")
+                _redis_info_logged = True
         except ImportError:
-            logger.warning("⚠️ Paquete redis de Python no está instalado. " "Instalar con: pip install 'redis>=5.0.0,<6.0.0'")
+            if not _redis_warning_logged:
+                logger.warning("⚠️ Paquete redis de Python no está instalado. Instalar con: pip install 'redis>=5.0.0,<6.0.0'")
+                _redis_warning_logged = True
             # Usar memoria directamente si el paquete no está instalado
             return Limiter(
                 key_func=get_client_ip,
