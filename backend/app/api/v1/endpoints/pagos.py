@@ -196,7 +196,7 @@ def _serializar_pago(pago, _hoy: date, cuotas_atrasadas_cache: Optional[dict[str
 
         pago_dict = {
             "id": pago.id,
-            "cedula": cedula_cliente,
+            "cedula_cliente": cedula_cliente,
             "prestamo_id": getattr(pago, "prestamo_id", None),
             "fecha_pago": fecha_pago_dt,
             "monto_pagado": float(monto_pagado_decimal),
