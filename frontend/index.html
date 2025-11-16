@@ -69,6 +69,7 @@
             'declaration dropped',
             // Patrones de archivos CSS
             '.css:',
+            'index-',
             // Patrones de propiedades CSS problemáticas
             'webkit-text-size-adjust',
             'moz-text-size-adjust',
@@ -81,6 +82,9 @@
             'after\\:left-\\[',
             'after\\:top-\\[',
             'placeholder\\:text-',
+            // Patrones adicionales para el mensaje específico
+            'menu:',
+            'ignoradas debido',
           ];
           
           // Verificar si el mensaje contiene alguno de los patrones
@@ -91,13 +95,20 @@
           }
           
           // ✅ Verificar combinaciones específicas (archivo CSS + ignored/mal selector)
-          if (lowerMessage.includes('.css:') && (
+          if ((lowerMessage.includes('.css:') || lowerMessage.includes('index-') || lowerMessage.includes('menu:')) && (
             lowerMessage.includes('ignored') ||
             lowerMessage.includes('ignoradas') ||
             lowerMessage.includes('bad selector') ||
             lowerMessage.includes('mal selector') ||
-            lowerMessage.includes('malformed')
+            lowerMessage.includes('malformed') ||
+            lowerMessage.includes('debido')
           )) {
+            return true;
+          }
+          
+          // ✅ Verificar el patrón específico "Juego de reglas ignoradas debido a un mal selector"
+          if (lowerMessage.includes('juego de reglas') && lowerMessage.includes('ignoradas') && 
+              (lowerMessage.includes('debido') || lowerMessage.includes('mal selector'))) {
             return true;
           }
           
