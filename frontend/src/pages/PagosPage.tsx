@@ -1,5 +1,7 @@
 import { PagosList } from '@/components/pagos/PagosList'
 
-export function PagosPage() {
+function PagosPage() {
   return <PagosList />
 }
+
+export default PagosPage
