@@ -943,7 +943,7 @@ async def entrenar_modelo_riesgo(
                 status_code=503,
                 detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
             )
-        
+
         # Obtener datos históricos de préstamos y pagos para entrenamiento
         from datetime import date
 
