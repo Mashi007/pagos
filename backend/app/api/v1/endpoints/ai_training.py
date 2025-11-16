@@ -1512,6 +1512,7 @@ async def entrenar_modelo_impago(
         from app.models.prestamo import Prestamo
 
         # Obtener todos los préstamos aprobados con cuotas (cargar relación cliente si existe)
+        logger.info("🔍 Buscando préstamos aprobados para entrenamiento...")
         prestamos = (
             db.query(Prestamo)
             .filter(Prestamo.estado == "APROBADO")
@@ -1520,12 +1521,16 @@ async def entrenar_modelo_impago(
             .all()
         )
 
+        logger.info(f"📊 Encontrados {len(prestamos)} préstamos aprobados")
+
         if not prestamos:
             raise HTTPException(status_code=400, detail="No hay préstamos aprobados para entrenar el modelo")
 
         ml_service = MLImpagoCuotasService()
         training_data = []
         fecha_actual = date.today()
+        
+        logger.info(f"📅 Fecha actual para cálculo de features: {fecha_actual}")
 
         # Generar datos de entrenamiento
         for prestamo in prestamos:
@@ -1575,16 +1580,29 @@ async def entrenar_modelo_impago(
                 detail=f"Se necesitan al menos 10 muestras válidas para entrenar. Se generaron {len(training_data)}.",
             )
 
+        logger.info(f"📊 Iniciando entrenamiento con {len(training_data)} muestras, algoritmo: {request.algoritmo}")
+
         # Entrenar modelo
-        resultado = ml_service.train_impago_model(
-            training_data,
-            algoritmo=request.algoritmo,
-            test_size=request.test_size,
-            random_state=request.random_state,
-        )
+        try:
+            resultado = ml_service.train_impago_model(
+                training_data,
+                algoritmo=request.algoritmo,
+                test_size=request.test_size,
+                random_state=request.random_state,
+            )
+        except Exception as train_error:
+            error_msg = str(train_error)
+            error_type = type(train_error).__name__
+            logger.error(f"Error durante train_impago_model: {error_type}: {error_msg}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error durante entrenamiento del modelo ({error_type}): {error_msg[:200]}",
+            )
 
         if not resultado.get("success"):
-            raise HTTPException(status_code=500, detail=resultado.get("error", "Error entrenando modelo"))
+            error_msg = resultado.get("error", "Error desconocido entrenando modelo")
+            logger.error(f"train_impago_model retornó success=False: {error_msg}")
+            raise HTTPException(status_code=500, detail=f"Error entrenando modelo: {error_msg}")
 
         # Guardar modelo en BD
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

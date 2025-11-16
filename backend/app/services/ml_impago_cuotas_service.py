@@ -61,8 +61,13 @@ class MLImpagoCuotasService:
         """Inicializar servicio ML"""
         self.models = {}
         self.scalers = {}
-        self.model_path = Path("ml_models")
-        self.model_path.mkdir(exist_ok=True)
+        try:
+            self.model_path = Path("ml_models")
+            self.model_path.mkdir(exist_ok=True)
+            logger.info(f"📁 Directorio de modelos ML: {self.model_path.absolute()}")
+        except Exception as e:
+            logger.error(f"Error creando directorio de modelos: {e}", exc_info=True)
+            raise
 
     def extract_payment_features(
         self,
@@ -370,11 +375,21 @@ class MLImpagoCuotasService:
             model_path = self.model_path / model_filename
             scaler_path = self.model_path / scaler_filename
 
-            with open(model_path, "wb") as f:
-                pickle.dump(model, f)
+            try:
+                # Asegurar que el directorio existe
+                self.model_path.mkdir(parents=True, exist_ok=True)
+                
+                with open(model_path, "wb") as f:
+                    pickle.dump(model, f)
+                logger.info(f"💾 Modelo guardado en: {model_path.absolute()}")
 
-            with open(scaler_path, "wb") as f:
-                pickle.dump(scaler, f)
+                with open(scaler_path, "wb") as f:
+                    pickle.dump(scaler, f)
+                logger.info(f"💾 Scaler guardado en: {scaler_path.absolute()}")
+            except (IOError, OSError, PermissionError) as e:
+                error_msg = f"Error guardando modelo en disco: {e}"
+                logger.error(error_msg, exc_info=True)
+                raise ValueError(error_msg)
 
             # Actualizar modelos en memoria
             self.models["impago_cuotas_model"] = model
@@ -400,10 +415,12 @@ class MLImpagoCuotasService:
             }
 
         except Exception as e:
-            logger.error(f"Error entrenando modelo de impago: {e}", exc_info=True)
+            error_type = type(e).__name__
+            error_msg = str(e)
+            logger.error(f"Error entrenando modelo de impago: {error_type}: {error_msg}", exc_info=True)
             return {
                 "success": False,
-                "error": str(e),
+                "error": f"{error_type}: {error_msg}",
             }
 
     def predict_impago(
