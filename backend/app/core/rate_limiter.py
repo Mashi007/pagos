@@ -82,20 +82,18 @@ def _create_limiter_with_fallback():
         # Verificar si el paquete redis está instalado
         try:
             import redis
-            redis_version = getattr(redis, '__version__', 'unknown')
+
+            redis_version = getattr(redis, "__version__", "unknown")
             logger.info(f"✅ Paquete redis instalado: versión {redis_version}")
         except ImportError:
-            logger.warning(
-                "⚠️ Paquete redis de Python no está instalado. "
-                "Instalar con: pip install 'redis>=5.0.0,<6.0.0'"
-            )
+            logger.warning("⚠️ Paquete redis de Python no está instalado. " "Instalar con: pip install 'redis>=5.0.0,<6.0.0'")
             # Usar memoria directamente si el paquete no está instalado
             return Limiter(
                 key_func=get_client_ip,
                 default_limits=["1000/hour"],
                 storage_uri="memory://",
             )
-        
+
         try:
             # Intentar crear limiter con Redis
             # Esto puede fallar si Redis no está disponible o no cumple con los requisitos
