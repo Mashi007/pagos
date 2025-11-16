@@ -76,7 +76,7 @@ def _create_limiter_with_fallback():
     Crea el limiter con fallback a memoria si Redis no está disponible.
     """
     storage_uri = _get_storage_uri()
-    
+
     # Si se intenta usar Redis, intentar inicializarlo y capturar errores
     if storage_uri.startswith("redis://"):
         try:
@@ -92,8 +92,7 @@ def _create_limiter_with_fallback():
         except LimitsConfigurationError as e:
             # Capturar específicamente el error de configuración de limits
             # Esto ocurre cuando Redis no está disponible o no cumple con los requisitos (requiere redis >= 3.0)
-            logger.warning(
-                f"⚠️ No se pudo inicializar rate limiter con Redis (ConfigurationError): {e}")
+            logger.warning(f"⚠️ No se pudo inicializar rate limiter con Redis (ConfigurationError): {e}")
             logger.warning(
                 "⚠️ Usando memoria para rate limiting como fallback. "
                 "En producción distribuida, configure Redis correctamente (requiere redis >= 3.0) para rate limiting distribuido."
@@ -106,8 +105,7 @@ def _create_limiter_with_fallback():
             )
         except Exception as e:
             # Capturar cualquier otro error relacionado con Redis
-            logger.warning(
-                f"⚠️ No se pudo inicializar rate limiter con Redis: {type(e).__name__}: {e}")
+            logger.warning(f"⚠️ No se pudo inicializar rate limiter con Redis: {type(e).__name__}: {e}")
             logger.warning(
                 "⚠️ Usando memoria para rate limiting como fallback. "
                 "En producción distribuida, configure Redis correctamente para rate limiting distribuido."
@@ -134,8 +132,7 @@ try:
     limiter = _create_limiter_with_fallback()
 except LimitsConfigurationError as e:
     # Si falla por configuración de Redis, usar memoria
-    logger.warning(
-        f"⚠️ Error de configuración de Redis al inicializar rate limiter: {e}")
+    logger.warning(f"⚠️ Error de configuración de Redis al inicializar rate limiter: {e}")
     logger.warning(
         "⚠️ Usando memoria para rate limiting como fallback. "
         "En producción distribuida, configure Redis correctamente (requiere redis >= 3.0) para rate limiting distribuido."
@@ -147,11 +144,8 @@ except LimitsConfigurationError as e:
     )
 except Exception as e:
     # Capturar cualquier otro error durante la inicialización
-    logger.error(
-        f"❌ Error inesperado al inicializar rate limiter: {type(e).__name__}: {e}")
-    logger.warning(
-        "⚠️ Usando memoria para rate limiting como fallback debido a error inesperado."
-    )
+    logger.error(f"❌ Error inesperado al inicializar rate limiter: {type(e).__name__}: {e}")
+    logger.warning("⚠️ Usando memoria para rate limiting como fallback debido a error inesperado.")
     limiter = Limiter(
         key_func=get_client_ip,
         default_limits=["1000/hour"],

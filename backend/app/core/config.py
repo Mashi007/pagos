@@ -303,7 +303,7 @@ class Settings(BaseSettings):
                     "Usando valor por defecto temporalmente. "
                     "Configure ADMIN_EMAIL en Render Dashboard inmediatamente. 🚨🚨🚨"
                 )
-                
+
             if admin_password_from_env and isinstance(admin_password_from_env, str) and admin_password_from_env.strip():
                 # Si hay variable de entorno y no está vacía, usarla (incluso si self.ADMIN_PASSWORD ya tiene valor)
                 self.ADMIN_PASSWORD = admin_password_from_env.strip()
