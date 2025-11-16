@@ -152,7 +152,9 @@ class MLImpagoCuotasService:
 
         # Ratio de monto pendiente vs monto total (manejar None y Decimal)
         try:
-            monto_total_prestamo = float(prestamo.total_financiamiento or 0) if prestamo.total_financiamiento is not None else 0.0
+            monto_total_prestamo = (
+                float(prestamo.total_financiamiento or 0) if prestamo.total_financiamiento is not None else 0.0
+            )
             monto_total_pagado = 0.0
             for c in cuotas_ordenadas:
                 if c.total_pagado is not None:
@@ -186,9 +188,12 @@ class MLImpagoCuotasService:
 
         # Cuotas vencidas sin pagar
         cuotas_vencidas_sin_pagar = sum(
-            1 for c in cuotas_ordenadas 
-            if c.fecha_vencimiento and c.fecha_vencimiento < fecha_actual 
-            and c.estado and c.estado not in ["PAGADO", "PARCIAL"]
+            1
+            for c in cuotas_ordenadas
+            if c.fecha_vencimiento
+            and c.fecha_vencimiento < fecha_actual
+            and c.estado
+            and c.estado not in ["PAGADO", "PARCIAL"]
         )
 
         return {
