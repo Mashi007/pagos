@@ -86,7 +86,9 @@ class MemoryCache(CacheBackend):
 _cache_logs_shown = False
 
 # Intentar inicializar Redis, usar MemoryCache como fallback
-cache_backend: CacheBackend = MemoryCache()
+# NO inicializar MemoryCache aquí para evitar warning innecesario
+# Se inicializará solo si Redis no está disponible
+cache_backend: CacheBackend = None  # type: ignore
 
 # Logs de diagnóstico más concisos - solo mostrar resumen en producción
 try:
@@ -297,6 +299,9 @@ except ImportError as import_err:
         _cache_logs_shown = True
     else:
         logger.debug("Redis no instalado - usando MemoryCache")
+    # Inicializar MemoryCache como fallback
+    if cache_backend is None:
+        cache_backend = MemoryCache()
 except Exception as e:
     logger.error("=" * 80)
     logger.error("❌ ERROR: NO SE PUDO INICIALIZAR REDIS")
@@ -353,6 +358,9 @@ except Exception as e:
         logger.info(f"   - Error final: {type(e).__name__}: {str(e)[:200]}")
         logger.info("=" * 80)
         _cache_logs_shown = True
+    # Inicializar MemoryCache como fallback si Redis falló
+    if cache_backend is None:
+        cache_backend = MemoryCache()
 
 
 def cache_result(ttl: int = 300, key_prefix: Optional[str] = None):
