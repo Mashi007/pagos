@@ -22,11 +22,15 @@ export default function removeTextSizeAdjust() {
           // Lista de pseudo-elementos válidos (incluyendo variantes de navegador)
           const validPseudoElements = ['before', 'after', 'first-line', 'first-letter', 
             'selection', 'placeholder', 'backdrop', 'marker', 'spelling-error', 'grammar-error',
-            'webkit-scrollbar', 'webkit-scrollbar-thumb', 'webkit-scrollbar-track'];
+            'webkit-scrollbar', 'webkit-scrollbar-thumb', 'webkit-scrollbar-track', 
+            'webkit-scrollbar-button', 'webkit-scrollbar-corner'];
           
           // Detectar selectores problemáticos comunes
           let shouldRemove = false;
           let correctedSelector = rule.selector.trim();
+          
+          // Selectores de webkit-scrollbar son válidos incluso con pseudo-clases como :hover
+          const isWebkitScrollbarSelector = correctedSelector.includes('webkit-scrollbar');
           
           // Validación básica: selector no puede estar vacío
           if (!correctedSelector || correctedSelector.length === 0) {
@@ -59,24 +63,27 @@ export default function removeTextSizeAdjust() {
           }
           
           // 2. Selectores con pseudo-elementos inválidos (:: seguido de algo inválido)
-          const pseudoElementMatches = correctedSelector.match(/::([a-zA-Z-]+)/g);
-          if (pseudoElementMatches) {
-            for (const match of pseudoElementMatches) {
-              const pseudoElement = match.replace('::', '');
-              // Verificar si es un pseudo-elemento válido o un prefijo de navegador válido
-              const isValid = validPseudoElements.includes(pseudoElement) || 
-                            pseudoElement.startsWith('-webkit-') || 
-                            pseudoElement.startsWith('-moz-') ||
-                            pseudoElement.startsWith('webkit-') ||
-                            pseudoElement.startsWith('moz-');
-              if (!isValid) {
-                // Pseudo-elemento inválido detectado - intentar corregir o eliminar
-                // Si es un pseudo-elemento común mal escrito, intentar corregirlo
-                if (pseudoElement.toLowerCase() === 'webkit-scrollbar') {
-                  // Ya está en la lista, no debería llegar aquí
-                } else {
-                  shouldRemove = true;
-                  break;
+          // ✅ EXCEPCIÓN: Selectores de webkit-scrollbar son válidos incluso con pseudo-clases
+          if (!isWebkitScrollbarSelector) {
+            const pseudoElementMatches = correctedSelector.match(/::([a-zA-Z-]+)/g);
+            if (pseudoElementMatches) {
+              for (const match of pseudoElementMatches) {
+                const pseudoElement = match.replace('::', '');
+                // Verificar si es un pseudo-elemento válido o un prefijo de navegador válido
+                const isValid = validPseudoElements.includes(pseudoElement) || 
+                              pseudoElement.startsWith('-webkit-') || 
+                              pseudoElement.startsWith('-moz-') ||
+                              pseudoElement.startsWith('webkit-') ||
+                              pseudoElement.startsWith('moz-');
+                if (!isValid) {
+                  // Pseudo-elemento inválido detectado - intentar corregir o eliminar
+                  // Si es un pseudo-elemento común mal escrito, intentar corregirlo
+                  if (pseudoElement.toLowerCase() === 'webkit-scrollbar') {
+                    // Ya está en la lista, no debería llegar aquí
+                  } else {
+                    shouldRemove = true;
+                    break;
+                  }
                 }
               }
             }
@@ -84,7 +91,8 @@ export default function removeTextSizeAdjust() {
           
           // 2.1. Detectar pseudo-clases/pseudo-elementos con sintaxis incorrecta
           // Ejemplo: :::before (triple dos puntos) o :: :before (espacio)
-          if (correctedSelector.match(/:::\w+/) || correctedSelector.match(/::\s+:/)) {
+          // ✅ EXCEPCIÓN: Selectores de webkit-scrollbar con :hover son válidos
+          if (!isWebkitScrollbarSelector && (correctedSelector.match(/:::\w+/) || correctedSelector.match(/::\s+:/))) {
             shouldRemove = true;
           }
           
