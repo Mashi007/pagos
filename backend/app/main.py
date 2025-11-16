@@ -42,10 +42,7 @@ if use_json_logging:
                 log_record["logger"] = record.name
                 log_record["environment"] = settings.ENVIRONMENT
 
-        json_formatter = CustomJsonFormatter(
-            "%(timestamp)s %(level)s %(logger)s %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
+        json_formatter = CustomJsonFormatter("%(timestamp)s %(level)s %(logger)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(json_formatter)

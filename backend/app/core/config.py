@@ -217,6 +217,7 @@ class Settings(BaseSettings):
         Solo para uso en desarrollo.
         """
         import secrets
+
         return secrets.token_urlsafe(32)
 
     def validate_secret_key(self) -> bool:
@@ -268,11 +269,11 @@ class Settings(BaseSettings):
         En producción, usa valores por defecto con advertencia crítica si no están configurados.
         """
         import os
-        
+
         # Verificar si fueron configurados desde variables de entorno
         admin_email_from_env = os.getenv("ADMIN_EMAIL")
         admin_password_from_env = os.getenv("ADMIN_PASSWORD")
-        
+
         # En desarrollo, usar valores por defecto si no están configurados
         if self.ENVIRONMENT != "production":
             if not self.ADMIN_EMAIL:
