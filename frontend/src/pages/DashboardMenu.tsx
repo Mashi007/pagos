@@ -199,10 +199,10 @@ export function DashboardMenu() {
       })
       const response = await apiClient.get(
         `/api/v1/dashboard/prestamos-por-concesionario?${queryParams.toString()}`
-      ) as { concesionarios: Array<{ concesionario: string; total_prestamos: number; porcentaje: number }> }
-      // ✅ Ordenar de mayor a menor por total_prestamos
+      ) as { concesionarios: Array<{ concesionario: string; total_prestamos: number; cantidad_prestamos: number; porcentaje: number }> }
+      // ✅ Ordenar de mayor a menor por cantidad_prestamos (cantidad real, no monto)
       const concesionariosOrdenados = response.concesionarios
-        .sort((a, b) => b.total_prestamos - a.total_prestamos)
+        .sort((a, b) => b.cantidad_prestamos - a.cantidad_prestamos)
         .slice(0, 10) // Top 10
       return concesionariosOrdenados
     },
@@ -221,10 +221,10 @@ export function DashboardMenu() {
       })
       const response = await apiClient.get(
         `/api/v1/dashboard/prestamos-por-modelo?${queryParams.toString()}`
-      ) as { modelos: Array<{ modelo: string; total_prestamos: number; porcentaje: number }> }
-      // ✅ Ordenar de mayor a menor por total_prestamos
+      ) as { modelos: Array<{ modelo: string; total_prestamos: number; cantidad_prestamos: number; porcentaje: number }> }
+      // ✅ Ordenar de mayor a menor por cantidad_prestamos (cantidad real, no monto)
       const modelosOrdenados = response.modelos
-        .sort((a, b) => b.total_prestamos - a.total_prestamos)
+        .sort((a, b) => b.cantidad_prestamos - a.cantidad_prestamos)
         .slice(0, 10) // Top 10
       return modelosOrdenados
     },
@@ -333,6 +333,30 @@ export function DashboardMenu() {
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
+  })
+
+  // Datos de cobranza para fechas específicas (mañana, hoy, 3 días atrás)
+  const { data: datosCobranzaFechas, isLoading: loadingCobranzaFechas } = useQuery({
+    queryKey: ['cobranza-fechas-especificas', JSON.stringify(filtros)],
+    queryFn: async () => {
+      const params = construirFiltrosObject()
+      const queryParams = new URLSearchParams()
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString())
+      })
+      const response = await apiClient.get<{
+        dias: Array<{
+          fecha: string
+          nombre_fecha: string
+          cobranza_planificada: number
+          cobranza_real: number
+        }>
+      }>(`/api/v1/dashboard/cobranza-fechas-especificas?${queryParams.toString()}`)
+      return response
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutos - datos más dinámicos
+    refetchOnWindowFocus: true, // Recargar al enfocar ventana para datos actuales
+    enabled: true,
   })
 
   const { data: datosCobranzasSemanales, isLoading: loadingCobranzasSemanales } = useQuery({
@@ -604,38 +628,40 @@ export function DashboardMenu() {
           </div>
         </motion.div>
 
-        {/* BARRA DE FILTROS Y BOTONES ARRIBA */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <Card className="shadow-md border-2 border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center space-x-2">
-                  <div className="flex items-center space-x-2 text-sm font-semibold text-gray-700">
-                    <Filter className="h-4 w-4 text-cyan-600" />
-                    <span>Filtros Rápidos</span>
+        {/* BARRA DE FILTROS Y BOTONES ARRIBA - OCULTA */}
+        {false && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <Card className="shadow-md border-2 border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 text-sm font-semibold text-gray-700">
+                      <Filter className="h-4 w-4 text-cyan-600" />
+                      <span>Filtros Rápidos</span>
+                    </div>
                   </div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <DashboardFiltrosPanel
+                      filtros={filtros}
+                      setFiltros={setFiltros}
+                      periodo={periodo}
+                      setPeriodo={setPeriodo}
+                      onRefresh={handleRefresh}
+                      isRefreshing={isRefreshing}
+                      opcionesFiltros={opcionesFiltros}
+                      loadingOpcionesFiltros={loadingOpcionesFiltros}
+                      errorOpcionesFiltros={errorOpcionesFiltros}
+                    />
+                            </div>
                 </div>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <DashboardFiltrosPanel
-                    filtros={filtros}
-                    setFiltros={setFiltros}
-                    periodo={periodo}
-                    setPeriodo={setPeriodo}
-                    onRefresh={handleRefresh}
-                    isRefreshing={isRefreshing}
-                    opcionesFiltros={opcionesFiltros}
-                    loadingOpcionesFiltros={loadingOpcionesFiltros}
-                    errorOpcionesFiltros={errorOpcionesFiltros}
-                  />
-                          </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         {/* KPIs PRINCIPALES */}
             {loadingKPIs ? (
@@ -963,7 +989,11 @@ export function DashboardMenu() {
                   <ResponsiveContainer width="100%" height={400}>
                     <BarChart data={datosConcesionarios} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" />
+                      <XAxis 
+                        type="number" 
+                        allowDecimals={false}
+                        tickFormatter={(value) => value.toLocaleString('es-EC')}
+                      />
                       <YAxis 
                         type="category" 
                         dataKey="concesionario" 
@@ -972,13 +1002,13 @@ export function DashboardMenu() {
                       />
                       <Tooltip 
                         formatter={(value: number, name: string) => [
-                          `${value} préstamos`,
-                          'Total'
+                          `${Math.round(value).toLocaleString('es-EC')} préstamos`,
+                          'Cantidad'
                         ]}
                         labelFormatter={(label) => `Concesionario: ${label}`}
                       />
                       <Bar 
-                        dataKey="total_prestamos" 
+                        dataKey="cantidad_prestamos" 
                         fill="#8b5cf6"
                         radius={[0, 4, 4, 0]}
                       >
@@ -1011,7 +1041,11 @@ export function DashboardMenu() {
                   <ResponsiveContainer width="100%" height={400}>
                     <BarChart data={datosModelos} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" />
+                      <XAxis 
+                        type="number" 
+                        allowDecimals={false}
+                        tickFormatter={(value) => value.toLocaleString('es-EC')}
+                      />
                         <YAxis 
                         type="category" 
                         dataKey="modelo" 
@@ -1020,13 +1054,13 @@ export function DashboardMenu() {
                         />
                             <Tooltip 
                         formatter={(value: number, name: string) => [
-                          `${value} préstamos`,
-                          'Total'
+                          `${Math.round(value).toLocaleString('es-EC')} préstamos`,
+                          'Cantidad'
                         ]}
                         labelFormatter={(label) => `Modelo: ${label}`}
                       />
                       <Bar 
-                        dataKey="total_prestamos" 
+                        dataKey="cantidad_prestamos" 
                         fill="#f59e0b"
                         radius={[0, 4, 4, 0]}
                       >
@@ -1043,36 +1077,80 @@ export function DashboardMenu() {
         </div>
 
         {/* GRÁFICOS DE COBRANZAS */}
-        {datosCobranzas && datosCobranzas.meses && datosCobranzas.meses.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-              >
-                <Card className="shadow-lg border-2 border-gray-200">
-              <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                  <BarChart3 className="h-6 w-6 text-emerald-600" />
-                  <span>Cobranzas Mensuales</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={datosCobranzas.meses}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="nombre_mes" />
-                    <YAxis />
-                    <Tooltip />
-                          <Legend />
-                    <Bar dataKey="cobranzas_planificadas" fill="#3b82f6" name="Planificadas" />
-                    <Bar dataKey="pagos_reales" fill="#10b981" name="Reales" />
-                    <Bar dataKey="meta_mensual" fill="#f59e0b" name="Meta" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              </motion.div>
-        )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Cobranzas Mensuales */}
+          {datosCobranzas && datosCobranzas.meses && datosCobranzas.meses.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+                >
+                  <Card className="shadow-lg border-2 border-gray-200">
+                <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
+                      <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <BarChart3 className="h-6 w-6 text-emerald-600" />
+                    <span>Cobranzas Mensuales</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6">
+                    <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={datosCobranzas.meses}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="nombre_mes" />
+                      <YAxis />
+                      <Tooltip />
+                            <Legend />
+                      <Bar dataKey="cobranzas_planificadas" fill="#3b82f6" name="Planificadas" />
+                      <Bar dataKey="pagos_reales" fill="#10b981" name="Reales" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+          )}
+
+          {/* Cobranza Fechas Específicas */}
+          {datosCobranzaFechas && datosCobranzaFechas.dias && datosCobranzaFechas.dias.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.75 }}
+            >
+              <Card className="shadow-lg border-2 border-gray-200">
+                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <BarChart3 className="h-6 w-6 text-blue-600" />
+                    <span>Cobranza Planificada vs Real</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                  {loadingCobranzaFechas ? (
+                    <div className="h-[300px] flex items-center justify-center">
+                      <div className="animate-pulse text-gray-400">Cargando...</div>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={datosCobranzaFechas.dias}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="nombre_fecha" />
+                        <YAxis 
+                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
+                        />
+                        <Tooltip 
+                          formatter={(value: number) => [formatCurrency(value), '']}
+                          labelFormatter={(label) => `Fecha: ${label}`}
+                        />
+                        <Legend />
+                        <Bar dataKey="cobranza_planificada" fill="#3b82f6" name="Planificado" />
+                        <Bar dataKey="cobranza_real" fill="#10b981" name="Real" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </div>
 
         {/* GRÁFICOS DE MOROSIDAD */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1082,16 +1160,17 @@ export function DashboardMenu() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.8 }}
+              className="h-full"
             >
-              <Card className="shadow-lg border-2 border-gray-200">
+              <Card className="shadow-lg border-2 border-gray-200 h-full flex flex-col">
                 <CardHeader className="bg-gradient-to-r from-red-50 to-rose-50 border-b-2 border-red-200">
                   <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                     <BarChart3 className="h-6 w-6 text-red-600" />
                     <span>Composición de Morosidad</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-6">
-                  <ResponsiveContainer width="100%" height={300}>
+                <CardContent className="p-6 flex-1">
+                  <ResponsiveContainer width="100%" height={400}>
                     <BarChart data={datosComposicionMorosidad.puntos}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="categoria" />
@@ -1112,15 +1191,16 @@ export function DashboardMenu() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.9 }}
+              className="h-full"
             >
-              <Card className="shadow-lg border-2 border-gray-200">
+              <Card className="shadow-lg border-2 border-gray-200 h-full flex flex-col">
                 <CardHeader className="bg-gradient-to-r from-orange-50 to-amber-50 border-b-2 border-orange-200">
                   <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                     <Users className="h-6 w-6 text-orange-600" />
                     <span>Morosidad por Analista</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-6">
+                <CardContent className="p-6 flex-1">
                   <ResponsiveContainer width="100%" height={400}>
                     <BarChart data={datosMorosidadAnalista} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
                       <CartesianGrid strokeDasharray="3 3" />

@@ -3,15 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import {
   AreaChart,
   Area,
-  Line,
-  LineChart,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
-  ReferenceLine,
 } from 'recharts'
 import { BaseModal } from '../BaseModal'
 import { DashboardFiltrosPanel } from '../DashboardFiltrosPanel'
@@ -101,7 +98,7 @@ export function CobranzasMensualesModal({ isOpen, onClose }: CobranzasMensualesM
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Cobranzas Mensuales vs Pagos y Meta Mensual"
+      title="Cobranzas Mensuales vs Pagos"
       size="xlarge"
     >
       <div className="space-y-6">
@@ -127,7 +124,7 @@ export function CobranzasMensualesModal({ isOpen, onClose }: CobranzasMensualesM
           <div className="lg:col-span-3">
             <Card>
               <CardHeader>
-                <CardTitle>Cobranzas Mensuales vs Pagos y Meta Mensual</CardTitle>
+                <CardTitle>Cobranzas Mensuales vs Pagos</CardTitle>
               </CardHeader>
               <CardContent>
                 {loadingCobranzas ? (
@@ -181,21 +178,6 @@ export function CobranzasMensualesModal({ isOpen, onClose }: CobranzasMensualesM
                         fillOpacity={1}
                         fill="url(#colorPagos)"
                         strokeWidth={2}
-                      />
-                      <ReferenceLine
-                        y={cobranzasData?.meta_actual}
-                        stroke="#f59e0b"
-                        strokeDasharray="5 5"
-                        label={{ value: 'Meta Mensual', position: 'top', fill: '#f59e0b' }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="meta_mensual"
-                        name="Meta Mensual"
-                        stroke="#f59e0b"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        dot={false}
                       />
                     </AreaChart>
                   </ResponsiveContainer>

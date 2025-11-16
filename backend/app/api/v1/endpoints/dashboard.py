@@ -2942,6 +2942,56 @@ def obtener_cobranza_por_dia(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
+@router.get("/cobranza-fechas-especificas")
+def obtener_cobranza_fechas_especificas(
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obtiene datos de cobranza planificada y real para fechas específicas:
+    - Mañana
+    - Hoy
+    - 3 días atrás
+    """
+    try:
+        hoy = date.today()
+        mañana = hoy + timedelta(days=1)
+        tres_dias_atras = hoy - timedelta(days=3)
+
+        fechas = [
+            ("3 días atrás", tres_dias_atras),
+            ("Hoy", hoy),
+            ("Mañana", mañana),
+        ]
+
+        dias_data = []
+        for nombre_fecha, fecha_dia in fechas:
+            cobranza_planificada = _calcular_total_a_cobrar_fecha(
+                db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            )
+            cobranza_real = _calcular_pagos_fecha(db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin)
+
+            dias_data.append(
+                {
+                    "fecha": fecha_dia.isoformat(),
+                    "nombre_fecha": nombre_fecha,
+                    "cobranza_planificada": cobranza_planificada,
+                    "cobranza_real": cobranza_real,
+                }
+            )
+
+        return {"dias": dias_data}
+
+    except Exception as e:
+        logger.error(f"Error obteniendo cobranza fechas específicas: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
 @router.get("/metricas-acumuladas")
 def obtener_metricas_acumuladas(
     analista: Optional[str] = Query(None),
@@ -3147,13 +3197,14 @@ def obtener_prestamos_por_concesionario(
     Componente 4: Préstamos por Concesionario (expresado en porcentaje)
     """
     try:
-        # Obtener total general de préstamos
+        # Obtener total general de préstamos (cantidad y monto)
         query_base = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
         query_base = FiltrosDashboard.aplicar_filtros_prestamo(
             query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
 
-        total_general = float(query_base.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
+        total_general_monto = float(query_base.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
+        total_general_cantidad = query_base.count()
 
         # Agrupar por concesionario
         query_concesionarios = (
@@ -3185,20 +3236,22 @@ def obtener_prestamos_por_concesionario(
         concesionarios_data = []
         for row in resultados:
             total_prestamos = float(row.total_prestamos or Decimal("0"))
-            porcentaje = (total_prestamos / total_general * 100) if total_general > 0 else 0
+            cantidad_prestamos = row.cantidad_prestamos or 0
+            # Calcular porcentaje basado en cantidad de préstamos (no en monto)
+            porcentaje = (cantidad_prestamos / total_general_cantidad * 100) if total_general_cantidad > 0 else 0
 
             concesionarios_data.append(
                 {
                     "concesionario": row.concesionario or "Sin Concesionario",
                     "total_prestamos": total_prestamos,
-                    "cantidad_prestamos": row.cantidad_prestamos or 0,
+                    "cantidad_prestamos": cantidad_prestamos,
                     "porcentaje": round(porcentaje, 2),
                 }
             )
 
         return {
             "concesionarios": concesionarios_data,
-            "total_general": total_general,
+            "total_general": total_general_monto,
         }
 
     except Exception as e:
@@ -3222,13 +3275,14 @@ def obtener_prestamos_por_modelo(
     Agrupa por producto y modelo_vehiculo
     """
     try:
-        # Obtener total general de préstamos
+        # Obtener total general de préstamos (cantidad y monto)
         query_base = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
         query_base = FiltrosDashboard.aplicar_filtros_prestamo(
             query_base, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
 
-        total_general = float(query_base.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
+        total_general_monto = float(query_base.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0"))
+        total_general_cantidad = query_base.count()
 
         # Agrupar por modelo (usar producto o modelo_vehiculo)
         query_modelos = (
@@ -3256,23 +3310,25 @@ def obtener_prestamos_por_modelo(
         modelos_data = []
         for row in resultados:
             total_prestamos = float(row.total_prestamos or Decimal("0"))
-            porcentaje = (total_prestamos / total_general * 100) if total_general > 0 else 0
+            cantidad_prestamos = row.cantidad_prestamos or 0
+            # Calcular porcentaje basado en cantidad de préstamos (no en monto)
+            porcentaje = (cantidad_prestamos / total_general_cantidad * 100) if total_general_cantidad > 0 else 0
 
             modelos_data.append(
                 {
                     "modelo": row.modelo or "Sin Modelo",
                     "total_prestamos": total_prestamos,
-                    "cantidad_prestamos": row.cantidad_prestamos or 0,
+                    "cantidad_prestamos": cantidad_prestamos,
                     "porcentaje": round(porcentaje, 2),
                 }
             )
 
-        # Ordenar por total_prestamos descendente
-        modelos_data.sort(key=lambda x: x["total_prestamos"], reverse=True)
+        # Ordenar por cantidad_prestamos descendente (cantidad real, no monto)
+        modelos_data.sort(key=lambda x: x["cantidad_prestamos"], reverse=True)
 
         return {
             "modelos": modelos_data,
-            "total_general": total_general,
+            "total_general": total_general_monto,
         }
 
     except Exception as e:
