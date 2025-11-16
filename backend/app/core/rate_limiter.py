@@ -13,6 +13,13 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Intentar importar ConfigurationError de limits para capturarlo específicamente
+try:
+    from limits.errors import ConfigurationError as LimitsConfigurationError
+except ImportError:
+    # Si no se puede importar, usar Exception genérico
+    LimitsConfigurationError = Exception
+
 
 # Función personalizada para obtener IP del cliente
 # Considera proxies y headers X-Forwarded-For
@@ -64,12 +71,65 @@ def _get_storage_uri() -> str:
         return "memory://"
 
 
+def _create_limiter_with_fallback():
+    """
+    Crea el limiter con fallback a memoria si Redis no está disponible.
+    """
+    storage_uri = _get_storage_uri()
+    
+    # Si se intenta usar Redis, intentar inicializarlo y capturar errores
+    if storage_uri.startswith("redis://"):
+        try:
+            # Intentar crear limiter con Redis
+            # Esto puede fallar si Redis no está disponible o no cumple con los requisitos
+            limiter = Limiter(
+                key_func=get_client_ip,
+                default_limits=["1000/hour"],
+                storage_uri=storage_uri,
+            )
+            logger.info("✅ Rate limiter inicializado con Redis")
+            return limiter
+        except LimitsConfigurationError as e:
+            # Capturar específicamente el error de configuración de limits
+            # Esto ocurre cuando Redis no está disponible o no cumple con los requisitos (requiere redis >= 3.0)
+            logger.warning(
+                f"⚠️ No se pudo inicializar rate limiter con Redis (ConfigurationError): {e}")
+            logger.warning(
+                "⚠️ Usando memoria para rate limiting como fallback. "
+                "En producción distribuida, configure Redis correctamente (requiere redis >= 3.0) para rate limiting distribuido."
+            )
+            # Crear limiter con memoria
+            return Limiter(
+                key_func=get_client_ip,
+                default_limits=["1000/hour"],
+                storage_uri="memory://",
+            )
+        except Exception as e:
+            # Capturar cualquier otro error relacionado con Redis
+            logger.warning(
+                f"⚠️ No se pudo inicializar rate limiter con Redis: {type(e).__name__}: {e}")
+            logger.warning(
+                "⚠️ Usando memoria para rate limiting como fallback. "
+                "En producción distribuida, configure Redis correctamente para rate limiting distribuido."
+            )
+            # Crear limiter con memoria
+            return Limiter(
+                key_func=get_client_ip,
+                default_limits=["1000/hour"],
+                storage_uri="memory://",
+            )
+    else:
+        # Usar memoria directamente
+        return Limiter(
+            key_func=get_client_ip,
+            default_limits=["1000/hour"],
+            storage_uri=storage_uri,
+        )
+
+
 # Inicializar limiter con función personalizada para obtener IP del cliente
-limiter = Limiter(
-    key_func=get_client_ip,
-    default_limits=["1000/hour"],  # Límite general por defecto
-    storage_uri=_get_storage_uri(),  # Usar Redis si está disponible, sino memoria
-)
+# Usa fallback a memoria si Redis no está disponible
+limiter = _create_limiter_with_fallback()
 
 
 def get_rate_limiter() -> Limiter:
