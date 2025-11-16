@@ -42,10 +42,10 @@ try:
 except Exception as e:
     # Mensajes de error más concisos para evitar problemas de serialización
     error_msg = str(e)[:200]  # Limitar longitud del mensaje
-    print(f"❌ Error al importar: {error_msg}")
-    print(f"📁 Dir: {os.getcwd()}")
+    print(f"[ERROR] Error al importar: {error_msg}")
+    print(f"[INFO] Dir: {os.getcwd()}")
     db_url_preview = os.getenv('DATABASE_URL', 'NO CONFIGURADA')[:30] if os.getenv('DATABASE_URL') else 'NO CONFIGURADA'
-    print(f"🔍 DB: {db_url_preview}...")
+    print(f"[INFO] DB: {db_url_preview}...")
     raise
 
 # Configurar logging

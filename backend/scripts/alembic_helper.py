@@ -24,12 +24,37 @@ if not alembic_ini.exists():
     print(f"[ERROR] No se encontro alembic.ini en {alembic_ini}")
     sys.exit(1)
 
+# Cargar variables de entorno desde .env si existe
+env_file = backend_dir / ".env"
+if env_file.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(env_file)
+    except ImportError:
+        # Si python-dotenv no está instalado, intentar cargar manualmente
+        try:
+            with open(env_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        os.environ[key.strip()] = value.strip().strip('"').strip("'")
+        except Exception:
+            pass  # Si falla, continuar sin cargar .env
+
 # Ejecutar comando de Alembic
 try:
     from alembic import command
     from alembic.config import Config
     
     cfg = Config(str(alembic_ini))
+    
+    # Configurar DATABASE_URL si está disponible
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        cfg.set_main_option("sqlalchemy.url", database_url)
+    elif not cfg.get_main_option("sqlalchemy.url"):
+        print("[WARNING] DATABASE_URL no está configurada. Algunos comandos pueden fallar.")
     
     # Obtener comando y argumentos
     if len(sys.argv) < 2:

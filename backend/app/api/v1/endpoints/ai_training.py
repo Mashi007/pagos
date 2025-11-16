@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func
 from sqlalchemy.exc import OperationalError, ProgrammingError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user, get_db
 from app.models.conversacion_ai import ConversacionAI
@@ -942,8 +942,13 @@ async def entrenar_modelo_riesgo(
         from app.models.pago import Pago
         from app.models.prestamo import Prestamo
 
-        # Obtener préstamos aprobados con historial
-        prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").all()
+        # Obtener préstamos aprobados con historial (cargar relación cliente)
+        prestamos = (
+            db.query(Prestamo)
+            .filter(Prestamo.estado == "APROBADO")
+            .options(joinedload(Prestamo.cliente))
+            .all()
+        )
 
         if len(prestamos) < 10:
             raise HTTPException(
@@ -956,8 +961,13 @@ async def entrenar_modelo_riesgo(
 
         for prestamo in prestamos:
             # Calcular features
-            cliente = prestamo.cliente
-            if not cliente:
+            try:
+                cliente = prestamo.cliente
+                if not cliente:
+                    logger.warning(f"Préstamo {prestamo.id} no tiene cliente asociado, omitiendo...")
+                    continue
+            except Exception as e:
+                logger.warning(f"Error accediendo a cliente del préstamo {prestamo.id}: {e}, omitiendo...")
                 continue
 
             # Calcular edad
@@ -967,16 +977,29 @@ async def entrenar_modelo_riesgo(
                 edad = 0
 
             # Obtener pagos del préstamo
-            pagos = db.query(Pago).filter(Pago.prestamo_id == prestamo.id).all()
-            total_pagado = sum(float(p.monto_pagado) for p in pagos if p.monto_pagado)
+            try:
+                pagos = db.query(Pago).filter(Pago.prestamo_id == prestamo.id).all()
+                total_pagado = sum(float(p.monto_pagado or 0) for p in pagos if p.monto_pagado is not None)
+            except Exception as e:
+                logger.warning(f"Error obteniendo pagos del préstamo {prestamo.id}: {e}")
+                total_pagado = 0
 
             # Calcular ratio deuda/ingreso (simplificado)
-            ingreso_estimado = float(prestamo.total_financiamiento) * 0.3  # Estimación
-            deuda_total = float(prestamo.total_financiamiento) - total_pagado
-            ratio_deuda_ingreso = deuda_total / ingreso_estimado if ingreso_estimado > 0 else 0
+            try:
+                total_financiamiento = float(prestamo.total_financiamiento or 0)
+                if total_financiamiento <= 0:
+                    logger.warning(f"Préstamo {prestamo.id} tiene total_financiamiento inválido: {total_financiamiento}, omitiendo...")
+                    continue
+                
+                ingreso_estimado = total_financiamiento * 0.3  # Estimación
+                deuda_total = total_financiamiento - total_pagado
+                ratio_deuda_ingreso = deuda_total / ingreso_estimado if ingreso_estimado > 0 else 0
 
-            # Historial de pagos (porcentaje pagado)
-            historial_pagos = total_pagado / float(prestamo.total_financiamiento) if prestamo.total_financiamiento > 0 else 0
+                # Historial de pagos (porcentaje pagado)
+                historial_pagos = total_pagado / total_financiamiento if total_financiamiento > 0 else 0
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Error calculando métricas financieras del préstamo {prestamo.id}: {e}, omitiendo...")
+                continue
 
             # Días desde último préstamo
             dias_ultimo_prestamo = (date.today() - prestamo.fecha_registro.date()).days if prestamo.fecha_registro else 0
@@ -994,8 +1017,15 @@ async def entrenar_modelo_riesgo(
             )
 
             # Determinar target (riesgo) basado en morosidad
-            cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).all()
-            cuotas_vencidas = [c for c in cuotas if c.fecha_vencimiento < date.today() and c.estado != "PAGADA"]
+            try:
+                cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).all()
+                cuotas_vencidas = [
+                    c for c in cuotas 
+                    if c.fecha_vencimiento and c.fecha_vencimiento < date.today() and c.estado != "PAGADA"
+                ]
+            except Exception as e:
+                logger.warning(f"Error obteniendo cuotas del préstamo {prestamo.id}: {e}")
+                cuotas_vencidas = []
 
             if len(cuotas_vencidas) > 3:
                 target = 2  # Alto riesgo
@@ -1076,8 +1106,20 @@ async def entrenar_modelo_riesgo(
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error entrenando modelo: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error entrenando modelo: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Error entrenando modelo de riesgo: {error_msg}", exc_info=True)
+        
+        # Mensaje más descriptivo según el tipo de error
+        if "scikit-learn" in error_msg.lower() or "sklearn" in error_msg.lower():
+            detail_msg = "Error con scikit-learn. Verifica que esté instalado correctamente."
+        elif "stratify" in error_msg.lower():
+            detail_msg = "Error al dividir datos. Puede ser por pocas muestras de alguna clase."
+        elif "cliente" in error_msg.lower() or "relationship" in error_msg.lower():
+            detail_msg = "Error accediendo a datos de clientes. Verifica la integridad de los datos."
+        else:
+            detail_msg = f"Error entrenando modelo: {error_msg}"
+        
+        raise HTTPException(status_code=500, detail=detail_msg)
 
 
 @router.get("/ml-riesgo/jobs/{job_id}")
@@ -1325,9 +1367,13 @@ async def entrenar_modelo_impago(
         from app.models.amortizacion import Cuota
         from app.models.prestamo import Prestamo
 
-        # Obtener todos los préstamos aprobados con cuotas
+        # Obtener todos los préstamos aprobados con cuotas (cargar relación cliente si existe)
         prestamos = (
-            db.query(Prestamo).filter(Prestamo.estado == "APROBADO").filter(Prestamo.fecha_aprobacion.isnot(None)).all()
+            db.query(Prestamo)
+            .filter(Prestamo.estado == "APROBADO")
+            .filter(Prestamo.fecha_aprobacion.isnot(None))
+            .options(joinedload(Prestamo.cliente))
+            .all()
         )
 
         if not prestamos:
@@ -1346,27 +1392,45 @@ async def entrenar_modelo_impago(
 
         # Generar datos de entrenamiento
         for prestamo in prestamos:
-            # Obtener cuotas del préstamo
-            cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
+            try:
+                # Obtener cuotas del préstamo
+                cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
 
-            if not cuotas or len(cuotas) < 2:
-                continue  # Necesitamos al menos 2 cuotas para tener historial
+                if not cuotas or len(cuotas) < 2:
+                    continue  # Necesitamos al menos 2 cuotas para tener historial
 
-            # Extraer features del historial de pagos
-            features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
+                # Extraer features del historial de pagos
+                try:
+                    features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
+                except Exception as e:
+                    logger.warning(f"Error extrayendo features del préstamo {prestamo.id}: {e}, omitiendo...")
+                    continue
 
-            # Determinar target: ¿El cliente pagó o no pagó sus cuotas?
-            # Usamos las cuotas vencidas para determinar si pagó o no
-            cuotas_vencidas = [c for c in cuotas if c.fecha_vencimiento < fecha_actual]
-            if not cuotas_vencidas:
-                continue  # No hay cuotas vencidas aún, no podemos determinar target
+                # Determinar target: ¿El cliente pagó o no pagó sus cuotas?
+                # Usamos las cuotas vencidas para determinar si pagó o no
+                try:
+                    cuotas_vencidas = [
+                        c for c in cuotas 
+                        if c.fecha_vencimiento and c.fecha_vencimiento < fecha_actual
+                    ]
+                    if not cuotas_vencidas:
+                        continue  # No hay cuotas vencidas aún, no podemos determinar target
 
-            # Target: 0 = Pagó (todas las cuotas vencidas están pagadas), 1 = No pagó (hay cuotas vencidas sin pagar)
-            cuotas_vencidas_sin_pagar = sum(1 for c in cuotas_vencidas if c.estado not in ["PAGADO", "PARCIAL"])
-            target = 1 if cuotas_vencidas_sin_pagar > 0 else 0
+                    # Target: 0 = Pagó (todas las cuotas vencidas están pagadas), 1 = No pagó (hay cuotas vencidas sin pagar)
+                    cuotas_vencidas_sin_pagar = sum(
+                        1 for c in cuotas_vencidas 
+                        if c.estado and c.estado not in ["PAGADO", "PARCIAL"]
+                    )
+                    target = 1 if cuotas_vencidas_sin_pagar > 0 else 0
 
-            # Agregar a datos de entrenamiento
-            training_data.append({**features, "target": target})
+                    # Agregar a datos de entrenamiento
+                    training_data.append({**features, "target": target})
+                except Exception as e:
+                    logger.warning(f"Error determinando target del préstamo {prestamo.id}: {e}, omitiendo...")
+                    continue
+            except Exception as e:
+                logger.warning(f"Error procesando préstamo {prestamo.id}: {e}, omitiendo...")
+                continue
 
         if len(training_data) < 10:
             raise HTTPException(
@@ -1423,8 +1487,22 @@ async def entrenar_modelo_impago(
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error entrenando modelo de impago: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error entrenando modelo: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Error entrenando modelo de impago: {error_msg}", exc_info=True)
+        
+        # Mensaje más descriptivo según el tipo de error
+        if "scikit-learn" in error_msg.lower() or "sklearn" in error_msg.lower():
+            detail_msg = "Error con scikit-learn. Verifica que esté instalado correctamente."
+        elif "stratify" in error_msg.lower():
+            detail_msg = "Error al dividir datos. Puede ser por pocas muestras de alguna clase."
+        elif "cuota" in error_msg.lower() or "fecha_vencimiento" in error_msg.lower():
+            detail_msg = "Error accediendo a datos de cuotas. Verifica la integridad de los datos."
+        elif "does not exist" in error_msg.lower() or "no such table" in error_msg.lower():
+            detail_msg = "La tabla de modelos de impago no está creada. Ejecuta las migraciones: alembic upgrade head"
+        else:
+            detail_msg = f"Error entrenando modelo: {error_msg}"
+        
+        raise HTTPException(status_code=500, detail=detail_msg)
 
 
 @router.post("/ml-impago/activar")
@@ -1561,6 +1639,22 @@ async def listar_modelos_impago(
             "total": len(modelos),
         }
 
+    except (ProgrammingError, OperationalError) as e:
+        error_msg = str(e).lower()
+        logger.error(f"Error de base de datos listando modelos de impago: {e}", exc_info=True)
+        
+        # Verificar si es un error de tabla no encontrada
+        if "does not exist" in error_msg or "no such table" in error_msg or "relation" in error_msg or "table" in error_msg:
+            raise HTTPException(
+                status_code=503,
+                detail="La tabla 'modelos_impago_cuotas' no está creada. Ejecuta las migraciones: alembic upgrade head"
+            )
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error de base de datos listando modelos: {str(e)}"
+        )
     except Exception as e:
-        logger.error(f"Error listando modelos: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error listando modelos: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Error listando modelos de impago: {error_msg}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error listando modelos: {error_msg}")

@@ -6,6 +6,31 @@ import re
 import sys
 from pathlib import Path
 
+# Configurar codificación UTF-8 para Windows
+if sys.platform == "win32":
+    import io
+    # Forzar UTF-8 en stdout y stderr con manejo robusto de errores
+    try:
+        if hasattr(sys.stdout, 'buffer'):
+            if sys.stdout.encoding != 'utf-8':
+                sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+        elif hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except (AttributeError, ValueError):
+        pass  # Si falla, continuar sin cambiar
+    
+    try:
+        if hasattr(sys.stderr, 'buffer'):
+            if sys.stderr.encoding != 'utf-8':
+                sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+        elif hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except (AttributeError, ValueError):
+        pass  # Si falla, continuar sin cambiar
+    
+    # También configurar la variable de entorno para Python
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+
 def check_syntax_errors():
     """Verificar errores de sintaxis en todas las migraciones"""
     print("=" * 80)
@@ -184,11 +209,11 @@ def check_table_operations():
                                     warnings.append(f"[WARNING] {file.name}:{i}: {op} sin verificación previa")
 
     if warnings:
-        print(f"\n⚠️ Se encontraron {len(warnings)} posibles problemas:\n")
+        print(f"\n[WARNING] Se encontraron {len(warnings)} posibles problemas:\n")
         for warning in warnings[:20]:  # Limitar a 20
             print(f"  {warning}")
         if len(warnings) > 20:
-            print(f"  ... y {len(warnings) - 20} más")
+            print(f"  ... y {len(warnings) - 20} mas")
         return False
     else:
         print("\n[OK] Todas las operaciones parecen tener verificaciones")

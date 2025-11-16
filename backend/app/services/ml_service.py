@@ -254,9 +254,28 @@ class MLService:
             y = np.array(y)
 
             # Dividir en train y test
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=random_state, stratify=y
-            )
+            # Usar stratify solo si hay suficientes muestras por clase
+            unique_classes, counts = np.unique(y, return_counts=True)
+            min_samples_per_class = min(counts) if len(counts) > 0 else 0
+            
+            # Stratify requiere al menos 2 muestras por clase en cada split
+            use_stratify = min_samples_per_class >= 2 and len(unique_classes) > 1
+            
+            if use_stratify:
+                try:
+                    X_train, X_test, y_train, y_test = train_test_split(
+                        X, y, test_size=test_size, random_state=random_state, stratify=y
+                    )
+                except ValueError as e:
+                    # Si falla stratify, usar sin stratify
+                    logger.warning(f"No se pudo usar stratify: {e}. Usando división sin stratify.")
+                    X_train, X_test, y_train, y_test = train_test_split(
+                        X, y, test_size=test_size, random_state=random_state
+                    )
+            else:
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=test_size, random_state=random_state
+                )
 
             # Escalar features
             scaler = StandardScaler()
