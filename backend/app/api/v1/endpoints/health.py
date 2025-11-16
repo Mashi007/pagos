@@ -1123,3 +1123,239 @@ async def monitor_indexes_performance(
             "message": str(e),
             "timestamp": time.time(),
         }
+
+
+@router.get("/processes/pending")
+async def check_pending_processes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Verifica procesos pendientes o incompletos en el sistema
+    
+    Revisa:
+    - Fine-tuning jobs pendientes o en ejecución
+    - Notificaciones pendientes
+    - Pagos no conciliados
+    - Cuotas con estados inconsistentes
+    - Préstamos pendientes
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden ver procesos pendientes",
+        )
+    
+    try:
+        from datetime import date, datetime, timedelta
+        from sqlalchemy import and_, func, or_
+        
+        from app.models.amortizacion import Cuota
+        from app.models.notificacion import Notificacion
+        from app.models.pago import Pago
+        from app.models.prestamo import Prestamo
+        
+        resultado = {
+            "timestamp": time.time(),
+            "fecha_revision": datetime.now().isoformat(),
+            "procesos_pendientes": {},
+            "resumen": {
+                "total_procesos_pendientes": 0,
+                "prioridad_alta": 0,
+                "prioridad_media": 0,
+                "prioridad_baja": 0,
+            },
+        }
+        
+        # 1. Fine-tuning jobs pendientes o en ejecución
+        try:
+            from app.models.fine_tuning_job import FineTuningJob
+            
+            jobs_pendientes = (
+                db.query(FineTuningJob)
+                .filter(FineTuningJob.status.in_(["pending", "running"]))
+                .all()
+            )
+            
+            jobs_antiguos = (
+                db.query(FineTuningJob)
+                .filter(
+                    FineTuningJob.status.in_(["pending", "running"]),
+                    FineTuningJob.creado_en < datetime.now() - timedelta(days=7),
+                )
+                .count()
+            )
+            
+            resultado["procesos_pendientes"]["fine_tuning_jobs"] = {
+                "total_pendientes": len(jobs_pendientes),
+                "jobs_antiguos_7_dias": jobs_antiguos,
+                "detalles": [
+                    {
+                        "id": job.id,
+                        "openai_job_id": job.openai_job_id,
+                        "status": job.status,
+                        "creado_en": job.creado_en.isoformat() if job.creado_en else None,
+                        "progreso": job.progreso,
+                        "error": job.error,
+                    }
+                    for job in jobs_pendientes[:10]  # Limitar a 10 para no sobrecargar
+                ],
+                "prioridad": "media" if len(jobs_pendientes) > 0 else "baja",
+            }
+            
+            if len(jobs_pendientes) > 0:
+                resultado["resumen"]["total_procesos_pendientes"] += len(jobs_pendientes)
+                resultado["resumen"]["prioridad_media"] += len(jobs_pendientes)
+        except Exception as e:
+            logger.warning(f"Error verificando fine-tuning jobs: {e}")
+            resultado["procesos_pendientes"]["fine_tuning_jobs"] = {
+                "error": str(e),
+                "total_pendientes": 0,
+            }
+        
+        # 2. Notificaciones pendientes
+        try:
+            notificaciones_pendientes = (
+                db.query(Notificacion)
+                .filter(Notificacion.estado == "PENDIENTE")
+                .count()
+            )
+            
+            notificaciones_antiguas = (
+                db.query(Notificacion)
+                .filter(
+                    Notificacion.estado == "PENDIENTE",
+                    Notificacion.fecha_creacion < datetime.now() - timedelta(days=3),
+                )
+                .count()
+            )
+            
+            resultado["procesos_pendientes"]["notificaciones"] = {
+                "total_pendientes": notificaciones_pendientes,
+                "antiguas_3_dias": notificaciones_antiguas,
+                "prioridad": "alta" if notificaciones_antiguas > 0 else "media" if notificaciones_pendientes > 0 else "baja",
+            }
+            
+            if notificaciones_pendientes > 0:
+                resultado["resumen"]["total_procesos_pendientes"] += notificaciones_pendientes
+                if notificaciones_antiguas > 0:
+                    resultado["resumen"]["prioridad_alta"] += notificaciones_antiguas
+                else:
+                    resultado["resumen"]["prioridad_media"] += notificaciones_pendientes
+        except Exception as e:
+            logger.warning(f"Error verificando notificaciones: {e}")
+            resultado["procesos_pendientes"]["notificaciones"] = {
+                "error": str(e),
+                "total_pendientes": 0,
+            }
+        
+        # 3. Pagos no conciliados
+        try:
+            pagos_no_conciliados = (
+                db.query(Pago)
+                .filter(
+                    Pago.conciliado.is_(False),
+                    Pago.activo.is_(True),
+                )
+                .count()
+            )
+            
+            pagos_antiguos_no_conciliados = (
+                db.query(Pago)
+                .filter(
+                    Pago.conciliado.is_(False),
+                    Pago.activo.is_(True),
+                    Pago.fecha_registro < datetime.now() - timedelta(days=7),
+                )
+                .count()
+            )
+            
+            resultado["procesos_pendientes"]["pagos_no_conciliados"] = {
+                "total_no_conciliados": pagos_no_conciliados,
+                "antiguos_7_dias": pagos_antiguos_no_conciliados,
+                "prioridad": "alta" if pagos_antiguos_no_conciliados > 0 else "media" if pagos_no_conciliados > 0 else "baja",
+            }
+            
+            if pagos_no_conciliados > 0:
+                resultado["resumen"]["total_procesos_pendientes"] += pagos_no_conciliados
+                if pagos_antiguos_no_conciliados > 0:
+                    resultado["resumen"]["prioridad_alta"] += pagos_antiguos_no_conciliados
+                else:
+                    resultado["resumen"]["prioridad_media"] += pagos_no_conciliados
+        except Exception as e:
+            logger.warning(f"Error verificando pagos no conciliados: {e}")
+            resultado["procesos_pendientes"]["pagos_no_conciliados"] = {
+                "error": str(e),
+                "total_no_conciliados": 0,
+            }
+        
+        # 4. Cuotas con estados inconsistentes (total_pagado >= monto_cuota pero estado != PAGADO)
+        try:
+            hoy = date.today()
+            cuotas_inconsistentes = (
+                db.query(Cuota)
+                .filter(
+                    Cuota.total_pagado >= Cuota.monto_cuota,
+                    Cuota.estado != "PAGADO",
+                )
+                .count()
+            )
+            
+            resultado["procesos_pendientes"]["cuotas_inconsistentes"] = {
+                "total_inconsistentes": cuotas_inconsistentes,
+                "descripcion": "Cuotas con total_pagado >= monto_cuota pero estado != PAGADO",
+                "prioridad": "alta" if cuotas_inconsistentes > 0 else "baja",
+            }
+            
+            if cuotas_inconsistentes > 0:
+                resultado["resumen"]["total_procesos_pendientes"] += cuotas_inconsistentes
+                resultado["resumen"]["prioridad_alta"] += cuotas_inconsistentes
+        except Exception as e:
+            logger.warning(f"Error verificando cuotas inconsistentes: {e}")
+            resultado["procesos_pendientes"]["cuotas_inconsistentes"] = {
+                "error": str(e),
+                "total_inconsistentes": 0,
+            }
+        
+        # 5. Préstamos pendientes (si aplica)
+        try:
+            prestamos_pendientes = (
+                db.query(Prestamo)
+                .filter(Prestamo.estado == "PENDIENTE")
+                .count()
+            )
+            
+            resultado["procesos_pendientes"]["prestamos_pendientes"] = {
+                "total_pendientes": prestamos_pendientes,
+                "prioridad": "media" if prestamos_pendientes > 0 else "baja",
+            }
+            
+            if prestamos_pendientes > 0:
+                resultado["resumen"]["total_procesos_pendientes"] += prestamos_pendientes
+                resultado["resumen"]["prioridad_media"] += prestamos_pendientes
+        except Exception as e:
+            logger.warning(f"Error verificando préstamos pendientes: {e}")
+            resultado["procesos_pendientes"]["prestamos_pendientes"] = {
+                "error": str(e),
+                "total_pendientes": 0,
+            }
+        
+        # Determinar estado general
+        if resultado["resumen"]["prioridad_alta"] > 0:
+            resultado["estado_general"] = "critico"
+        elif resultado["resumen"]["prioridad_media"] > 0:
+            resultado["estado_general"] = "advertencia"
+        elif resultado["resumen"]["total_procesos_pendientes"] > 0:
+            resultado["estado_general"] = "info"
+        else:
+            resultado["estado_general"] = "ok"
+        
+        return resultado
+        
+    except Exception as e:
+        logger.error(f"Error verificando procesos pendientes: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "message": str(e),
+            "timestamp": time.time(),
+        }
