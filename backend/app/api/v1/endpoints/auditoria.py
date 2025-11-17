@@ -263,7 +263,7 @@ def listar_auditoria(
                 # Ejecutar consultas con límite optimizado
                 registros_general = query.limit(max_to_load).all()
                 logger.info(f"Registros de auditoría general cargados: {len(registros_general)}")
-            except (ProgrammingError, Exception) as e:
+            except Exception as e:
                 logger.warning(f"Error consultando tabla auditoria: {e}, usando lista vacía")
                 try:
                     db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -302,7 +302,7 @@ def listar_auditoria(
             else:
                 registros_prestamos = []
                 logger.info("Tabla prestamos_auditoria no existe, omitiendo")
-        except (ProgrammingError, Exception) as e:
+        except Exception as e:
             logger.warning(f"Error consultando tabla prestamo_auditoria: {e}, usando lista vacía")
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -337,7 +337,7 @@ def listar_auditoria(
             else:
                 registros_pagos = []
                 logger.info("Tabla pagos_auditoria no existe, omitiendo")
-        except (ProgrammingError, Exception) as e:
+        except Exception as e:
             logger.warning(f"Error consultando tabla pago_auditoria: {e}, usando lista vacía")
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -622,7 +622,7 @@ def estadisticas_auditoria(
         # Totales (sumando fuentes detalladas)
         try:
             total_auditoria = db.query(func.count(Auditoria.id)).scalar() or 0
-        except (ProgrammingError, Exception) as e:
+        except Exception as e:
             total_auditoria = 0
             logger.warning(f"Error consultando tabla auditoria: {e}, usando 0")
             try:
@@ -632,7 +632,7 @@ def estadisticas_auditoria(
 
         try:
             total_prestamos = db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
-        except (ProgrammingError, Exception):
+        except Exception:
             total_prestamos = 0
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -641,7 +641,7 @@ def estadisticas_auditoria(
 
         try:
             total_pagos = db.query(func.count(PagoAuditoria.id)).scalar() or 0
-        except (ProgrammingError, Exception):
+        except Exception:
             total_pagos = 0
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -663,7 +663,7 @@ def estadisticas_auditoria(
                 (row[0] if row[0] is not None else "DESCONOCIDO"): (row[1] if row[1] is not None else 0)
                 for row in acciones_por_modulo_rows
             }
-        except (ProgrammingError, Exception) as e:
+        except Exception as e:
             logger.warning(f"Error consultando acciones por módulo de auditoria: {e}")
             acciones_por_modulo = {}
             try:
@@ -676,7 +676,7 @@ def estadisticas_auditoria(
             acciones_por_modulo["PRESTAMOS"] = acciones_por_modulo.get("PRESTAMOS", 0) + (
                 db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
             )
-        except (ProgrammingError, Exception):
+        except Exception:
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
             except Exception:
@@ -686,7 +686,7 @@ def estadisticas_auditoria(
             acciones_por_modulo["PAGOS"] = acciones_por_modulo.get("PAGOS", 0) + (
                 db.query(func.count(PagoAuditoria.id)).scalar() or 0
             )
-        except (ProgrammingError, Exception):
+        except Exception:
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
             except Exception:
@@ -704,7 +704,7 @@ def estadisticas_auditoria(
                 (row[0] if row[0] is not None else ""): (row[1] if row[1] is not None else 0)
                 for row in acciones_por_usuario_rows
             }
-        except (ProgrammingError, Exception) as e:
+        except Exception as e:
             logger.warning(f"Error consultando acciones por usuario de auditoria: {e}")
             acciones_por_usuario = {}
             try:
@@ -739,7 +739,7 @@ def estadisticas_auditoria(
         # Calcular acciones por período de forma segura
         try:
             acciones_hoy_aud = db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_hoy).scalar() or 0
-        except (ProgrammingError, Exception):
+        except Exception:
             acciones_hoy_aud = 0
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -750,7 +750,7 @@ def estadisticas_auditoria(
             acciones_hoy_prest = (
                 db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0
             )
-        except (ProgrammingError, Exception):
+        except Exception:
             acciones_hoy_prest = 0
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -761,7 +761,7 @@ def estadisticas_auditoria(
             acciones_hoy_pagos = (
                 db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0
             )
-        except (ProgrammingError, Exception):
+        except Exception:
             acciones_hoy_pagos = 0
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -772,7 +772,7 @@ def estadisticas_auditoria(
 
         try:
             acciones_semana_aud = db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_semana).scalar() or 0
-        except (ProgrammingError, Exception):
+        except Exception:
             acciones_semana_aud = 0
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -784,7 +784,7 @@ def estadisticas_auditoria(
                 db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_semana).scalar()
                 or 0
             )
-        except (ProgrammingError, Exception):
+        except Exception:
             acciones_semana_prest = 0
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -795,7 +795,7 @@ def estadisticas_auditoria(
             acciones_semana_pagos = (
                 db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_semana).scalar() or 0
             )
-        except (ProgrammingError, Exception):
+        except Exception:
             acciones_semana_pagos = 0
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -806,7 +806,7 @@ def estadisticas_auditoria(
 
         try:
             acciones_mes_aud = db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_mes).scalar() or 0
-        except (ProgrammingError, Exception):
+        except Exception:
             acciones_mes_aud = 0
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -817,7 +817,7 @@ def estadisticas_auditoria(
             acciones_mes_prest = (
                 db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0
             )
-        except (ProgrammingError, Exception):
+        except Exception:
             acciones_mes_prest = 0
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -828,7 +828,7 @@ def estadisticas_auditoria(
             acciones_mes_pagos = (
                 db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0
             )
-        except (ProgrammingError, Exception):
+        except Exception:
             acciones_mes_pagos = 0
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
