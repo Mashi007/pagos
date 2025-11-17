@@ -884,6 +884,91 @@ export function DashboardMenu() {
                 </Card>
               </motion.div>
             )}
+
+            {/* Gráfico de Líneas - Morosidad, Cuotas Programadas y Pagos Realizados - Ancho Completo */}
+            {datosTendencia && datosTendencia.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.36 }}
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
+                  <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b-2 border-cyan-200">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                      <LineChart className="h-6 w-6 text-cyan-600" />
+                      <span>Evolución Mensual: Morosidad, Cuotas Programadas y Pagos Realizados</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <ResponsiveContainer width="100%" height={400}>
+                      <RechartsLineChart data={datosTendencia} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis
+                          dataKey="mes"
+                          tick={{ fontSize: 12, fill: '#6b7280' }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 12, fill: '#6b7280' }}
+                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
+                          label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fill: '#374151', fontSize: 12, fontWeight: 600 } }}
+                        />
+                        <Tooltip
+                          formatter={(value: number, name: string) => {
+                            const labels: Record<string, string> = {
+                              'morosidad_mensual': 'Morosidad',
+                              'monto_cuotas_programadas': 'Cuotas Programadas',
+                              'monto_pagado': 'Pagos Realizados'
+                            }
+                            return [formatCurrency(value), labels[name] || name]
+                          }}
+                          labelFormatter={(label) => `Mes: ${label}`}
+                          contentStyle={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                          }}
+                        />
+                        <Legend 
+                          wrapperStyle={{ paddingTop: '10px' }}
+                          iconType="line"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="morosidad_mensual"
+                          stroke="#ef4444"
+                          strokeWidth={3}
+                          dot={{ r: 5, fill: '#ef4444' }}
+                          activeDot={{ r: 7 }}
+                          name="Morosidad"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="monto_cuotas_programadas"
+                          stroke="#10b981"
+                          strokeWidth={3}
+                          dot={{ r: 5, fill: '#10b981' }}
+                          activeDot={{ r: 7 }}
+                          name="Cuotas Programadas"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="monto_pagado"
+                          stroke="#f59e0b"
+                          strokeWidth={3}
+                          dot={{ r: 5, fill: '#f59e0b' }}
+                          activeDot={{ r: 7 }}
+                          name="Pagos Realizados"
+                        />
+                      </RechartsLineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
           </div>
         ) : null}
 
