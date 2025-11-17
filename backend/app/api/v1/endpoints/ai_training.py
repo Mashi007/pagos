@@ -9,7 +9,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session, joinedload
 
@@ -1513,17 +1513,36 @@ async def entrenar_modelo_impago(
         from app.models.amortizacion import Cuota
         from app.models.prestamo import Prestamo
 
+        # Validar conexión a la base de datos
+        try:
+            logger.info("🔍 Verificando conexión a la base de datos...")
+            # Test de conexión ejecutando una query simple
+            db.execute(text("SELECT 1"))
+            logger.info("✅ Conexión a la base de datos verificada")
+        except Exception as db_conn_error:
+            logger.error(f"❌ Error de conexión a la base de datos: {db_conn_error}", exc_info=True)
+            raise HTTPException(
+                status_code=503,
+                detail=f"Error de conexión a la base de datos: {str(db_conn_error)[:200]}",
+            )
+
         # Obtener todos los préstamos aprobados con cuotas (cargar relación cliente si existe)
         logger.info("🔍 Buscando préstamos aprobados para entrenamiento...")
-        prestamos = (
-            db.query(Prestamo)
-            .filter(Prestamo.estado == "APROBADO")
-            .filter(Prestamo.fecha_aprobacion.isnot(None))
-            .options(joinedload(Prestamo.cliente))
-            .all()
-        )
-
-        logger.info(f"📊 Encontrados {len(prestamos)} préstamos aprobados")
+        try:
+            prestamos = (
+                db.query(Prestamo)
+                .filter(Prestamo.estado == "APROBADO")
+                .filter(Prestamo.fecha_aprobacion.isnot(None))
+                .options(joinedload(Prestamo.cliente))
+                .all()
+            )
+            logger.info(f"📊 Encontrados {len(prestamos)} préstamos aprobados")
+        except Exception as query_error:
+            logger.error(f"❌ Error consultando préstamos: {query_error}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error consultando préstamos de la base de datos: {str(query_error)[:200]}",
+            )
 
         if not prestamos:
             raise HTTPException(status_code=400, detail="No hay préstamos aprobados para entrenar el modelo")
@@ -1535,13 +1554,27 @@ async def entrenar_modelo_impago(
         logger.info(f"📅 Fecha actual para cálculo de features: {fecha_actual}")
 
         # Generar datos de entrenamiento
+        logger.info(f"🔄 Procesando {len(prestamos)} préstamos para generar datos de entrenamiento...")
+        prestamos_procesados = 0
+        prestamos_con_cuotas = 0
+        prestamos_con_features = 0
+        
         for prestamo in prestamos:
+            prestamos_procesados += 1
             try:
                 # Obtener cuotas del préstamo
-                cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
+                try:
+                    cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
+                except Exception as cuota_query_error:
+                    logger.warning(f"Error consultando cuotas del préstamo {prestamo.id}: {cuota_query_error}")
+                    continue
 
                 if not cuotas or len(cuotas) < 2:
+                    if prestamos_procesados % 10 == 0:  # Log cada 10 préstamos
+                        logger.debug(f"Préstamo {prestamo.id}: {len(cuotas) if cuotas else 0} cuotas (necesita mínimo 2)")
                     continue  # Necesitamos al menos 2 cuotas para tener historial
+                
+                prestamos_con_cuotas += 1
 
                 # Extraer features del historial de pagos
                 try:
@@ -1569,6 +1602,10 @@ async def entrenar_modelo_impago(
 
                     # Agregar a datos de entrenamiento
                     training_data.append({**features, "target": target})
+                    prestamos_con_features += 1
+                    
+                    if prestamos_con_features % 5 == 0:  # Log cada 5 muestras generadas
+                        logger.info(f"✅ Generadas {prestamos_con_features} muestras de entrenamiento...")
                 except Exception as e:
                     logger.warning(f"Error determinando target del préstamo {prestamo.id}: {e}, omitiendo...", exc_info=True)
                     continue
@@ -1576,10 +1613,22 @@ async def entrenar_modelo_impago(
                 logger.warning(f"Error procesando préstamo {prestamo.id}: {e}, omitiendo...", exc_info=True)
                 continue
 
+        logger.info(
+            f"📊 Resumen de procesamiento:\n"
+            f"   - Préstamos procesados: {prestamos_procesados}/{len(prestamos)}\n"
+            f"   - Préstamos con cuotas (≥2): {prestamos_con_cuotas}\n"
+            f"   - Préstamos con features válidas: {prestamos_con_features}\n"
+            f"   - Muestras de entrenamiento generadas: {len(training_data)}"
+        )
+        
         if len(training_data) < 10:
             raise HTTPException(
                 status_code=400,
-                detail=f"Se necesitan al menos 10 muestras válidas para entrenar. Se generaron {len(training_data)}.",
+                detail=(
+                    f"Se necesitan al menos 10 muestras válidas para entrenar. "
+                    f"Se generaron {len(training_data)} muestras de {prestamos_procesados} préstamos procesados. "
+                    f"Posibles causas: préstamos sin cuotas suficientes, sin cuotas vencidas, o errores al extraer features."
+                ),
             )
 
         logger.info(f"📊 Iniciando entrenamiento con {len(training_data)} muestras, algoritmo: {request.algoritmo}")
