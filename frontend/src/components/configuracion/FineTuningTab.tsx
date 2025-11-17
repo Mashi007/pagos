@@ -295,12 +295,36 @@ export function FineTuningTab() {
     }
   }
 
+  // Función para detectar feedback negativo (similar a la del backend)
+  const detectarFeedbackNegativo = (feedback: string | null | undefined): boolean => {
+    if (!feedback) return false
+    
+    const feedbackLower = feedback.toLowerCase()
+    
+    // Palabras clave que indican feedback negativo (mismo que backend)
+    const palabrasNegativas = [
+      "mal", "malo", "incorrecto", "error", "equivocado", "confuso",
+      "no entendí", "no entiendo", "poco claro", "poco clara",
+      "incompleto", "incompleta", "faltante", "falta", "deficiente",
+      "mejorar", "debería", "deberia", "podría", "podria",
+      "sería mejor", "no me gusta", "no me sirve", "no ayuda",
+      "no es útil", "muy técnico", "muy técnica", "demasiado complejo",
+      "compleja", "no responde", "no contesta", "no es lo que busco",
+      "no es lo que necesito",
+    ]
+    
+    // Contar palabras negativas
+    const conteoNegativo = palabrasNegativas.filter(palabra => feedbackLower.includes(palabra)).length
+    
+    // Si hay 2 o más palabras negativas, considerar feedback negativo
+    return conteoNegativo >= 2
+  }
+
   const handlePrepararDatos = async () => {
     setPreparando(true)
     try {
-      const conversacionesSeleccionadas = conversaciones
-        .filter((c) => c.calificacion && c.calificacion >= 4)
-        .map((c) => c.id)
+      const conversacionesCalificadas = conversaciones.filter((c) => c.calificacion && c.calificacion >= 4)
+      const conversacionesSeleccionadas = conversacionesCalificadas.map((c) => c.id)
 
       // Mínimo requerido por OpenAI para fine-tuning: 10 conversaciones
       const MINIMO_CONVERSACIONES = 10
@@ -309,7 +333,32 @@ export function FineTuningTab() {
         toast.error(
           `Se necesita al menos ${MINIMO_CONVERSACIONES} conversaciones calificadas (4+ estrellas) para entrenar un modelo. OpenAI requiere mínimo 10 ejemplos. Actualmente tienes ${conversacionesSeleccionadas.length}.`
         )
+        setPreparando(false)
         return
+      }
+
+      // Validación temprana: simular filtrado de feedback negativo
+      if (filtrarFeedbackNegativo) {
+        const conversacionesConFeedbackNegativo = conversacionesCalificadas.filter(c => 
+          detectarFeedbackNegativo(c.feedback || null)
+        )
+        const conversacionesDespuesFiltrado = conversacionesCalificadas.length - conversacionesConFeedbackNegativo.length
+        
+        if (conversacionesDespuesFiltrado < MINIMO_CONVERSACIONES) {
+          const mensaje = `⚠️ Advertencia: Después de filtrar feedback negativo, solo quedarían ${conversacionesDespuesFiltrado} conversaciones (se excluirían ${conversacionesConFeedbackNegativo.length}). Se necesitan al menos ${MINIMO_CONVERSACIONES} conversaciones.\n\n¿Deseas continuar de todas formas? El proceso fallará si quedan menos de ${MINIMO_CONVERSACIONES} conversaciones.`
+          
+          const continuar = window.confirm(mensaje)
+          if (!continuar) {
+            setPreparando(false)
+            return
+          }
+        } else if (conversacionesConFeedbackNegativo.length > 0) {
+          // Mostrar información pero permitir continuar
+          toast.info(
+            `Se excluirán ${conversacionesConFeedbackNegativo.length} conversaciones con feedback negativo. Quedarán ${conversacionesDespuesFiltrado} conversaciones para entrenar.`,
+            { duration: 5000 }
+          )
+        }
       }
 
       const result = await aiTrainingService.prepararDatosEntrenamiento(
