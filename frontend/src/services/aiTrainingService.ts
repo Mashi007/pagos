@@ -528,6 +528,24 @@ class AITrainingService {
   }
 
   /**
+   * Eliminar modelo de impago (solo inactivos)
+   */
+  async eliminarModeloImpago(modeloId: number, eliminarArchivo: boolean = false): Promise<{ mensaje: string; modelo_id: number; archivo_eliminado?: boolean }> {
+    try {
+      console.log('🔄 [aiTrainingService] Eliminando modelo impago:', modeloId, 'eliminarArchivo:', eliminarArchivo)
+      const resultado = await apiClient.delete<{ mensaje: string; modelo_id: number; archivo_eliminado?: boolean }>(
+        `${this.baseUrl}/ml-impago/modelos/${modeloId}${eliminarArchivo ? '?eliminar_archivo=true' : ''}`
+      )
+      console.log('✅ [aiTrainingService] Modelo eliminado:', resultado)
+      return resultado
+    } catch (error: any) {
+      console.error('❌ [aiTrainingService] Error eliminando modelo impago:', error)
+      console.error('Error response:', error?.response)
+      throw error
+    }
+  }
+
+  /**
    * Predecir impago de cuotas para un préstamo
    */
   async predecirImpago(prestamoId: number): Promise<{

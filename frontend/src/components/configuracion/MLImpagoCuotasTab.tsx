@@ -12,6 +12,7 @@ import {
   Shield,
   DollarSign,
   Calendar,
+  Trash2,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -210,6 +211,22 @@ export function MLImpagoCuotasTab() {
       })
     } finally {
       setEntrenando(false)
+    }
+  }
+
+  const handleEliminarModelo = async (modeloId: number) => {
+    if (!confirm('¿Estás seguro de que deseas eliminar este modelo? Esta acción no se puede deshacer.')) {
+      return
+    }
+
+    try {
+      const resultado = await aiTrainingService.eliminarModeloImpago(modeloId, false)
+      toast.success(resultado.mensaje)
+      await cargarModelos() // Recargar lista
+    } catch (error: any) {
+      console.error('Error eliminando modelo:', error)
+      const mensajeError = error?.response?.data?.detail || error?.message || 'Error al eliminar modelo'
+      toast.error(mensajeError)
     }
   }
 
@@ -676,14 +693,25 @@ export function MLImpagoCuotasTab() {
                       </div>
                       <div className="flex gap-2">
                         {!modelo.activo && (
-                          <Button
-                            onClick={() => handleActivarModelo(modelo.id)}
-                            variant="outline"
-                            size="sm"
-                          >
-                            <Zap className="h-4 w-4 mr-1" />
-                            Activar
-                          </Button>
+                          <>
+                            <Button
+                              onClick={() => handleActivarModelo(modelo.id)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              <Zap className="h-4 w-4 mr-1" />
+                              Activar
+                            </Button>
+                            <Button
+                              onClick={() => handleEliminarModelo(modelo.id)}
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Eliminar modelo inactivo"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
                         )}
                         {modelo.activo && (
                           <Button

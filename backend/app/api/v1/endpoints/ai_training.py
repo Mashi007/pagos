@@ -2282,6 +2282,72 @@ async def entrenar_modelo_impago(
         raise HTTPException(status_code=500, detail=detail_msg)
 
 
+@router.post("/ml-impago/corregir-activos")
+async def corregir_modelos_activos_impago(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Endpoint para corregir si hay múltiples modelos activos.
+    Desactiva todos excepto el más reciente.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden corregir modelos ML")
+    
+    try:
+        # Contar modelos activos
+        modelos_activos = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).all()
+        total_activos = len(modelos_activos)
+        
+        if total_activos == 0:
+            return {
+                "mensaje": "No hay modelos activos",
+                "modelos_corregidos": 0,
+            }
+        
+        if total_activos == 1:
+            return {
+                "mensaje": "Ya hay solo un modelo activo. No se requiere corrección.",
+                "modelo_activo": modelos_activos[0].to_dict(),
+                "modelos_corregidos": 0,
+            }
+        
+        # Hay múltiples activos, corregir
+        logger.warning(f"⚠️ Detectados {total_activos} modelos activos. Corrigiendo...")
+        
+        # Encontrar el más reciente (por activado_en, o si es NULL, por entrenado_en)
+        modelo_mas_reciente = max(
+            modelos_activos,
+            key=lambda m: m.activado_en if m.activado_en else m.entrenado_en
+        )
+        
+        # Desactivar todos
+        db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).update({"activo": False}, synchronize_session=False)
+        db.flush()
+        
+        # Activar solo el más reciente
+        modelo_mas_reciente.activo = True
+        if not modelo_mas_reciente.activado_en:
+            modelo_mas_reciente.activado_en = datetime.now()
+        
+        db.commit()
+        db.refresh(modelo_mas_reciente)
+        
+        logger.info(f"✅ Corregido: Solo el modelo {modelo_mas_reciente.id} ({modelo_mas_reciente.nombre}) está activo ahora")
+        
+        return {
+            "mensaje": f"Corregido: {total_activos - 1} modelo(s) desactivado(s). Solo queda activo el más reciente.",
+            "modelo_activo": modelo_mas_reciente.to_dict(),
+            "modelos_desactivados": total_activos - 1,
+            "modelos_corregidos": total_activos - 1,
+        }
+    
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error corrigiendo modelos activos: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error corrigiendo modelos activos: {str(e)}")
+
+
 @router.post("/ml-impago/activar")
 async def activar_modelo_impago(
     request: ActivarModeloImpagoRequest,
@@ -2300,8 +2366,13 @@ async def activar_modelo_impago(
                 detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
             )
 
-        # Desactivar todos los modelos
-        db.query(ModeloImpagoCuotas).update({ModeloImpagoCuotas.activo: False})
+        # Desactivar todos los modelos (CORREGIDO: usar sintaxis correcta de SQLAlchemy)
+        # Usar synchronize_session=False para evitar problemas con la sesión
+        modelos_desactivados = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).update({"activo": False}, synchronize_session=False)
+        db.flush()  # Asegurar que el update se ejecute antes de activar el nuevo
+        
+        if modelos_desactivados > 0:
+            logger.info(f"✅ Desactivados {modelos_desactivados} modelo(s) anterior(es)")
 
         # Activar el modelo solicitado
         modelo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.id == request.modelo_id).first()
@@ -2326,8 +2397,21 @@ async def activar_modelo_impago(
         modelo.activado_en = datetime.now()
         db.commit()
         db.refresh(modelo)
+        
+        # Verificar que solo este modelo esté activo (doble verificación)
+        modelos_activos = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).count()
+        if modelos_activos > 1:
+            logger.error(f"❌ ERROR: Hay {modelos_activos} modelos activos después de activar. Esto no debería ocurrir.")
+            # Corregir: desactivar todos excepto el que acabamos de activar
+            db.query(ModeloImpagoCuotas).filter(
+                ModeloImpagoCuotas.activo.is_(True),
+                ModeloImpagoCuotas.id != modelo.id
+            ).update({"activo": False}, synchronize_session=False)
+            db.commit()
+            logger.warning(f"⚠️ Corregido: Desactivados modelos adicionales. Solo queda activo el modelo {modelo.id}")
 
         logger.info(f"✅ Modelo de impago activado: {modelo.nombre} (ID: {modelo.id})")
+        logger.info(f"   Verificación: {modelos_activos} modelo(s) activo(s) en total")
 
         return {
             "mensaje": "Modelo activado exitosamente",
@@ -2589,6 +2673,114 @@ async def predecir_impago(
     except Exception as e:
         logger.error(f"Error prediciendo impago: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error prediciendo impago: {str(e)}")
+
+
+@router.delete("/ml-impago/modelos/{modelo_id}")
+async def eliminar_modelo_impago(
+    modelo_id: int,
+    eliminar_archivo: bool = Query(False, description="Eliminar también el archivo .pkl del modelo"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Eliminar un modelo de predicción de impago.
+    Solo se pueden eliminar modelos INACTIVOS. El modelo activo no se puede eliminar.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar modelos ML")
+    
+    try:
+        # Buscar el modelo
+        modelo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.id == modelo_id).first()
+        
+        if not modelo:
+            raise HTTPException(status_code=404, detail="Modelo no encontrado")
+        
+        # Verificar que el modelo NO esté activo
+        if modelo.activo:
+            raise HTTPException(
+                status_code=400,
+                detail="No se puede eliminar un modelo activo. Primero desactívalo o activa otro modelo."
+            )
+        
+        # Guardar información del modelo antes de eliminarlo
+        nombre_modelo = modelo.nombre
+        ruta_archivo = modelo.ruta_archivo
+        
+        # Eliminar el modelo de la base de datos
+        db.delete(modelo)
+        db.commit()
+        
+        logger.info(f"✅ Modelo eliminado: {nombre_modelo} (ID: {modelo_id}) por {current_user.email}")
+        
+        # Opcionalmente eliminar el archivo .pkl
+        archivo_eliminado = False
+        if eliminar_archivo and ruta_archivo:
+            try:
+                from pathlib import Path
+                ruta = Path(ruta_archivo)
+                
+                # Buscar el archivo en diferentes ubicaciones
+                archivos_a_eliminar = []
+                if ruta.is_absolute():
+                    if ruta.exists():
+                        archivos_a_eliminar.append(ruta)
+                else:
+                    # Buscar en ubicaciones comunes
+                    posibles_rutas = [
+                        Path(ruta_archivo),
+                        Path("ml_models") / ruta_archivo,
+                        Path("ml_models") / Path(ruta_archivo).name,
+                    ]
+                    try:
+                        project_root = Path(__file__).parent.parent.parent.parent
+                        posibles_rutas.extend([
+                            project_root / "ml_models" / ruta_archivo,
+                            project_root / "ml_models" / Path(ruta_archivo).name,
+                        ])
+                    except Exception:
+                        pass
+                    
+                    for posible_ruta in posibles_rutas:
+                        if posible_ruta.exists() and posible_ruta.is_file():
+                            archivos_a_eliminar.append(posible_ruta)
+                            break
+                
+                # Eliminar archivos encontrados
+                for archivo in archivos_a_eliminar:
+                    try:
+                        archivo.unlink()
+                        logger.info(f"✅ Archivo eliminado: {archivo.absolute()}")
+                        archivo_eliminado = True
+                    except Exception as e:
+                        logger.warning(f"⚠️ No se pudo eliminar el archivo {archivo}: {e}")
+                
+                # También intentar eliminar el scaler si existe
+                if ruta_archivo and "impago_cuotas_model_" in ruta_archivo:
+                    timestamp = Path(ruta_archivo).stem.replace("impago_cuotas_model_", "")
+                    scaler_path = Path("ml_models") / f"impago_cuotas_scaler_{timestamp}.pkl"
+                    if scaler_path.exists():
+                        try:
+                            scaler_path.unlink()
+                            logger.info(f"✅ Scaler eliminado: {scaler_path.absolute()}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ No se pudo eliminar el scaler {scaler_path}: {e}")
+                            
+            except Exception as e:
+                logger.warning(f"⚠️ Error intentando eliminar archivo del modelo: {e}")
+        
+        return {
+            "mensaje": f"Modelo '{nombre_modelo}' eliminado exitosamente",
+            "modelo_id": modelo_id,
+            "archivo_eliminado": archivo_eliminado if eliminar_archivo else None,
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error eliminando modelo {modelo_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error eliminando modelo: {str(e)}")
 
 
 @router.get("/ml-impago/modelos")
