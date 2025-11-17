@@ -263,8 +263,8 @@ def listar_auditoria(
                 # Ejecutar consultas con límite optimizado
                 registros_general = query.limit(max_to_load).all()
                 logger.info(f"Registros de auditoría general cargados: {len(registros_general)}")
-            except (ProgrammingError, Exception):
-                logger.warning(f"Error consultando tabla auditoria: {e}, usando lista vacía")
+        except (ProgrammingError, Exception) as e:
+            logger.warning(f"Error consultando tabla auditoria: {e}, usando lista vacía")
                 try:
                     db.rollback()  # ✅ Rollback para restaurar transacción después de error
                 except Exception:
@@ -302,7 +302,7 @@ def listar_auditoria(
             else:
                 registros_prestamos = []
                 logger.info("Tabla prestamos_auditoria no existe, omitiendo")
-        except (ProgrammingError, Exception):
+        except (ProgrammingError, Exception) as e:
             logger.warning(f"Error consultando tabla prestamo_auditoria: {e}, usando lista vacía")
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -337,7 +337,7 @@ def listar_auditoria(
             else:
                 registros_pagos = []
                 logger.info("Tabla pagos_auditoria no existe, omitiendo")
-        except (ProgrammingError, Exception):
+        except (ProgrammingError, Exception) as e:
             logger.warning(f"Error consultando tabla pago_auditoria: {e}, usando lista vacía")
             try:
                 db.rollback()  # ✅ Rollback para restaurar transacción después de error
@@ -622,7 +622,7 @@ def estadisticas_auditoria(
         # Totales (sumando fuentes detalladas)
         try:
             total_auditoria = db.query(func.count(Auditoria.id)).scalar() or 0
-        except (ProgrammingError, Exception):
+        except (ProgrammingError, Exception) as e:
             total_auditoria = 0
             logger.warning(f"Error consultando tabla auditoria: {e}, usando 0")
             try:
@@ -663,7 +663,7 @@ def estadisticas_auditoria(
                 (row[0] if row[0] is not None else "DESCONOCIDO"): (row[1] if row[1] is not None else 0)
                 for row in acciones_por_modulo_rows
             }
-        except (ProgrammingError, Exception):
+        except (ProgrammingError, Exception) as e:
             logger.warning(f"Error consultando acciones por módulo de auditoria: {e}")
             acciones_por_modulo = {}
             try:
@@ -704,7 +704,7 @@ def estadisticas_auditoria(
                 (row[0] if row[0] is not None else ""): (row[1] if row[1] is not None else 0)
                 for row in acciones_por_usuario_rows
             }
-        except (ProgrammingError, Exception):
+        except (ProgrammingError, Exception) as e:
             logger.warning(f"Error consultando acciones por usuario de auditoria: {e}")
             acciones_por_usuario = {}
             try:

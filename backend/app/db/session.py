@@ -6,7 +6,8 @@ import logging
 import os
 from typing import Generator
 
-from fastapi import HTTPException, RequestValidationError  # type: ignore[import-untyped]
+from fastapi import HTTPException  # type: ignore[import-untyped]
+from fastapi.exceptions import RequestValidationError  # type: ignore[import-untyped]
 from sqlalchemy import create_engine, text  # type: ignore[import-untyped]
 from sqlalchemy.ext.declarative import declarative_base  # type: ignore[import-untyped]
 from sqlalchemy.orm import sessionmaker  # type: ignore[import-untyped]
