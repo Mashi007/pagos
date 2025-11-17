@@ -27,6 +27,7 @@ import {
   Menu,
   Briefcase,
   Target,
+  ShoppingCart,
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -105,7 +106,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
       children: [
         { title: 'Clientes', href: '/clientes', icon: Users },
-        { title: 'Venta Servicios', href: '/crm/embudo-clientes', icon: Target },
         { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
         {
           title: 'Notificaciones',
@@ -113,8 +113,16 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Bell,
           badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
         },
-        { title: 'Conversaciones WhatsApp', href: '/conversaciones-whatsapp', icon: MessageSquare },
-        { title: 'Seguimiento Concesionarios', href: '/crm/embudo-concesionarios', icon: Building },
+        { title: 'Comunicaciones', href: '/comunicaciones', icon: MessageSquare },
+      ],
+    },
+    {
+      title: 'Ventas',
+      icon: ShoppingCart,
+      isSubmenu: true,
+      children: [
+        { title: 'Venta Servicios', href: '/ventas?tab=venta-servicios', icon: Target },
+        { title: 'Seguimiento Concesionarios', href: '/ventas?tab=seguimiento-concesionarios', icon: Building },
       ],
     },
     {

@@ -29,6 +29,9 @@ class Ticket(Base):
 
     # Relación con conversación de WhatsApp (opcional)
     conversacion_whatsapp_id = Column(Integer, ForeignKey("conversaciones_whatsapp.id"), nullable=True, index=True)
+    
+    # Relación con comunicación de Email (opcional)
+    comunicacion_email_id = Column(Integer, ForeignKey("comunicaciones_email.id"), nullable=True, index=True)
 
     # Estado y prioridad
     estado = Column(String(20), nullable=False, default="abierto", index=True)  # abierto, en_proceso, resuelto, cerrado
@@ -50,6 +53,9 @@ class Ticket(Base):
     cliente = relationship("Cliente", foreign_keys=[cliente_id])
     conversacion_whatsapp = relationship(
         "ConversacionWhatsApp", foreign_keys=[conversacion_whatsapp_id], back_populates="tickets"
+    )
+    comunicacion_email = relationship(
+        "ComunicacionEmail", foreign_keys=[comunicacion_email_id], back_populates="tickets"
     )
     asignado_a_usuario = relationship("User", foreign_keys=[asignado_a_id])
     creado_por = relationship("User", foreign_keys=[creado_por_id])
@@ -78,6 +84,7 @@ class Ticket(Base):
                 else None
             ),
             "conversacion_whatsapp_id": self.conversacion_whatsapp_id,
+            "comunicacion_email_id": self.comunicacion_email_id,
             "estado": self.estado,
             "prioridad": self.prioridad,
             "tipo": self.tipo,

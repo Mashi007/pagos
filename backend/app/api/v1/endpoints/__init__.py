@@ -13,6 +13,7 @@ from . import (  # aprobaciones,  # MODULO DESHABILITADO - Ver main.py
     cobranzas,
     concesionarios,
     conciliacion_bancaria,
+    comunicaciones,
     configuracion,
     conversaciones_whatsapp,
     dashboard,
@@ -70,5 +71,6 @@ __all__ = [
     "cobranzas",
     "whatsapp_webhook",
     "conversaciones_whatsapp",
+    "comunicaciones",
     "tickets",
 ]

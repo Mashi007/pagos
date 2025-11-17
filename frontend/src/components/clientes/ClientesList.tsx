@@ -13,7 +13,8 @@ import {
   User,
   AlertCircle,
   Calendar,
-  MessageSquare
+  MessageSquare,
+  MessageCircle
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -453,10 +454,28 @@ export function ClientesList() {
                         <div className="flex items-center text-sm text-gray-600">
                           <Mail className="w-3 h-3 mr-2" />
                           {cliente.email}
+                          {cliente.email && (
+                            <a
+                              href={`/comunicaciones?cliente_id=${cliente.id}&tipo=email`}
+                              className="ml-2 text-green-600 hover:text-green-800"
+                              title="Ver comunicaciones de Email"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                            </a>
+                          )}
                         </div>
                         <div className="flex items-center text-sm text-gray-600">
                           <Phone className="w-3 h-3 mr-2" />
                           {cliente.telefono}
+                          {cliente.telefono && (
+                            <a
+                              href={`/comunicaciones?cliente_id=${cliente.id}&tipo=whatsapp`}
+                              className="ml-2 text-green-600 hover:text-green-800"
+                              title="Ver comunicaciones de WhatsApp"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                            </a>
+                          )}
                         </div>
                       </div>
                     </TableCell>
@@ -478,18 +497,18 @@ export function ClientesList() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {/* ✅ BOTÓN VER CONVERSACIONES WHATSAPP */}
+                        {/* ✅ BOTÓN VER COMUNICACIONES */}
                         <Button
                           variant="outline"
                           size="sm"
-                          title="Ver conversaciones de WhatsApp"
+                          title="Ver comunicaciones"
                           className="text-blue-600 border-blue-400 bg-blue-50 hover:text-white hover:bg-blue-600 hover:border-blue-600 font-medium cursor-pointer transition-colors"
                           onClick={() => {
-                            navigate(`/conversaciones-whatsapp?cliente_id=${cliente.id}`)
+                            navigate(`/comunicaciones?cliente_id=${cliente.id}`)
                           }}
                         >
                           <MessageSquare className="w-4 h-4 mr-1" />
-                          WhatsApp
+                          Comunicaciones
                         </Button>
 
                         {/* ✅ BOTÓN EDITAR - ACTIVO Y FUNCIONAL */}

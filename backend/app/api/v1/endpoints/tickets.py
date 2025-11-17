@@ -86,6 +86,7 @@ class TicketCreate(BaseModel):
     descripcion: str
     cliente_id: Optional[int] = None
     conversacion_whatsapp_id: Optional[int] = None
+    comunicacion_email_id: Optional[int] = None
     estado: str = "abierto"
     prioridad: str = "media"
     tipo: str = "consulta"
@@ -289,12 +290,22 @@ async def crear_ticket(
             if not conversacion:
                 raise HTTPException(status_code=404, detail="Conversación de WhatsApp no encontrada")
 
+        # Verificar que la comunicación de email existe si se proporciona
+        if ticket_data.comunicacion_email_id:
+            from app.models.comunicacion_email import ComunicacionEmail
+            comunicacion_email = (
+                db.query(ComunicacionEmail).filter(ComunicacionEmail.id == ticket_data.comunicacion_email_id).first()
+            )
+            if not comunicacion_email:
+                raise HTTPException(status_code=404, detail="Comunicación de Email no encontrada")
+
         # Crear el ticket
         nuevo_ticket = Ticket(
             titulo=ticket_data.titulo,
             descripcion=ticket_data.descripcion,
             cliente_id=ticket_data.cliente_id,
             conversacion_whatsapp_id=ticket_data.conversacion_whatsapp_id,
+            comunicacion_email_id=ticket_data.comunicacion_email_id,
             estado=ticket_data.estado,
             prioridad=ticket_data.prioridad,
             tipo=ticket_data.tipo,
@@ -318,6 +329,16 @@ async def crear_ticket(
             )
             if conversacion:
                 conversacion.ticket_id = nuevo_ticket.id
+                db.commit()
+        
+        # Si hay comunicacion_email_id, actualizar la comunicación para vincular el ticket
+        if ticket_data.comunicacion_email_id:
+            from app.models.comunicacion_email import ComunicacionEmail
+            comunicacion_email = (
+                db.query(ComunicacionEmail).filter(ComunicacionEmail.id == ticket_data.comunicacion_email_id).first()
+            )
+            if comunicacion_email:
+                comunicacion_email.ticket_id = nuevo_ticket.id
                 db.commit()
 
         return nuevo_ticket.to_dict()

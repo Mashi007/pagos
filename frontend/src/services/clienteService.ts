@@ -161,6 +161,18 @@ class ClienteService {
     )
     return response.data
   }
+
+  // Buscar cliente por número de teléfono
+  async buscarClientePorTelefono(telefono: string): Promise<Cliente | null> {
+    try {
+      const filters: ClienteFilters = { search: telefono }
+      const response = await this.getClientes(filters, 1, 1)
+      return response.data.length > 0 ? response.data[0] : null
+    } catch (error) {
+      logger.error('Error buscando cliente por teléfono', { error, telefono })
+      return null
+    }
+  }
 }
 
 // Instancia singleton del servicio

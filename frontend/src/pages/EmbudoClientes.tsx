@@ -392,11 +392,11 @@ export function EmbudoClientes() {
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <Target className="h-8 w-8 text-blue-600" />
+          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Target className="h-6 w-6 text-blue-600" />
             Venta Servicios
-          </h1>
-          <p className="text-gray-600 mt-1">
+          </h2>
+          <p className="text-gray-600 mt-1 text-sm">
             Gestión de ventas y servicios
           </p>
         </div>

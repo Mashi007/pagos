@@ -269,7 +269,7 @@ export function TicketsAtencion() {
 
   const handleVerConversacion = (conversacionId?: number) => {
     if (conversacionId) {
-      navigate(`/conversaciones-whatsapp?conversacion_id=${conversacionId}`)
+      navigate(`/comunicaciones?conversacion_id=${conversacionId}`)
     }
   }
 
