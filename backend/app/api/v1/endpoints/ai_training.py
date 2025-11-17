@@ -1484,7 +1484,7 @@ async def entrenar_modelo_impago(
     Analiza el historial de pagos de préstamos aprobados para predecir impago futuro
     """
     logger.info(f"🚀 [ML-IMPAGO] Iniciando entrenamiento - Usuario: {current_user.id}, Algoritmo: {request.algoritmo}")
-    
+
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden entrenar modelos ML")
 
@@ -1696,11 +1696,12 @@ async def entrenar_modelo_impago(
         error_msg = str(e)
         error_type = type(e).__name__
         import traceback
+
         error_traceback = traceback.format_exc()
         logger.error(
             f"❌ [ML-IMPAGO] Error entrenando modelo de impago: {error_type}: {error_msg}\n"
             f"Traceback completo:\n{error_traceback}",
-            exc_info=True
+            exc_info=True,
         )
 
         # Mensaje más descriptivo según el tipo de error

@@ -279,14 +279,16 @@ class MLImpagoCuotasService:
                         except (ValueError, TypeError) as e:
                             logger.warning(f"Feature '{feature}' tiene valor inválido: {value}, usando 0.0")
                             features.append(0.0)
-                
+
                 # Validar que todas las features sean numéricas
                 if len(features) != len(feature_order):
-                    logger.error(f"Error: número de features incorrecto. Esperado {len(feature_order)}, obtenido {len(features)}")
+                    logger.error(
+                        f"Error: número de features incorrecto. Esperado {len(feature_order)}, obtenido {len(features)}"
+                    )
                     raise ValueError(f"Número de features incorrecto: {len(features)} != {len(feature_order)}")
-                
+
                 X.append(features)
-                
+
                 # Validar target
                 target = sample.get("target", 0)
                 if target is None:
@@ -304,7 +306,7 @@ class MLImpagoCuotasService:
             # Validar que X e y tengan el mismo número de muestras
             if len(X) != len(y):
                 raise ValueError(f"Número de muestras inconsistente: X={len(X)}, y={len(y)}")
-            
+
             # Convertir a numpy array con validación
             try:
                 X = np.array(X, dtype=np.float64)  # type: ignore[assignment]
@@ -314,7 +316,7 @@ class MLImpagoCuotasService:
                 logger.error(f"X sample: {X[0] if X else 'empty'}")
                 logger.error(f"y sample: {y[:5] if len(y) > 5 else y}")
                 raise ValueError(f"Error convirtiendo datos a numpy array: {e}")
-            
+
             # Validar dimensiones
             if X.shape[0] == 0:
                 raise ValueError("No hay muestras para entrenar")
