@@ -791,13 +791,22 @@ async def activar_modelo_fine_tuned(
 ):
     """Activar modelo fine-tuned"""
     try:
-        # Desactivar otros modelos
-        db.query(FineTuningJob).filter(FineTuningJob.modelo_entrenado == request.modelo_id).update({"status": "succeeded"})
+        # Verificar que el modelo existe y está disponible
+        job = db.query(FineTuningJob).filter(FineTuningJob.modelo_entrenado == request.modelo_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Modelo fine-tuned no encontrado: {request.modelo_id}")
+        
+        if job.status != "succeeded":
+            raise HTTPException(
+                status_code=400, 
+                detail=f"El modelo no está listo para usar. Estado actual: {job.status}. Solo se pueden activar modelos con estado 'succeeded'."
+            )
 
         # Guardar modelo activo en configuración
         from app.models.configuracion_sistema import ConfiguracionSistema
 
-        config = (
+        # Guardar en modelo_fine_tuned (para referencia)
+        config_fine_tuned = (
             db.query(ConfiguracionSistema)
             .filter(
                 and_(
@@ -808,24 +817,64 @@ async def activar_modelo_fine_tuned(
             .first()
         )
 
-        if config:
-            config.valor = request.modelo_id
+        if config_fine_tuned:
+            config_fine_tuned.valor = request.modelo_id
         else:
-            config = ConfiguracionSistema(
+            config_fine_tuned = ConfiguracionSistema(
                 categoria="AI",
                 clave="modelo_fine_tuned",
                 valor=request.modelo_id,
                 tipo_dato="string",
             )
-            db.add(config)
+            db.add(config_fine_tuned)
+
+        # ✅ CRÍTICO: Actualizar también la clave "modelo" para que el servicio de chat lo use
+        # Esto asegura que el modelo fine-tuned se use realmente en las llamadas a la API
+        config_modelo = (
+            db.query(ConfiguracionSistema)
+            .filter(
+                and_(
+                    ConfiguracionSistema.categoria == "AI",
+                    ConfiguracionSistema.clave == "modelo",
+                )
+            )
+            .first()
+        )
+
+        if config_modelo:
+            # Guardar el modelo base original si no existe
+            if not config_modelo.valor or config_modelo.valor == "gpt-3.5-turbo":
+                # Guardar el modelo base del job como respaldo
+                config_modelo.valor = job.modelo_base or "gpt-4o-2024-08-06"
+            # Actualizar a modelo fine-tuned
+            modelo_anterior = config_modelo.valor
+            config_modelo.valor = request.modelo_id
+            logger.info(f"✅ Modelo actualizado de '{modelo_anterior}' a '{request.modelo_id}'")
+        else:
+            # Si no existe configuración de modelo, crear una con el fine-tuned
+            config_modelo = ConfiguracionSistema(
+                categoria="AI",
+                clave="modelo",
+                valor=request.modelo_id,
+                tipo_dato="string",
+            )
+            db.add(config_modelo)
+            logger.info(f"✅ Configuración de modelo creada con fine-tuned: {request.modelo_id}")
 
         db.commit()
+        
+        logger.info(f"✅ Modelo fine-tuned activado exitosamente: {request.modelo_id}")
+        logger.info(f"   Modelo base original: {job.modelo_base}")
+        logger.info(f"   El modelo se usará en todas las llamadas al Chat AI")
 
         return {
             "mensaje": "Modelo activado exitosamente",
             "modelo_activo": request.modelo_id,
+            "modelo_base": job.modelo_base,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error activando modelo: {e}", exc_info=True)

@@ -40,7 +40,16 @@ class AIChatService:
 
         # Extraer parámetros de configuración
         self.openai_api_key = self.config_dict.get("openai_api_key", "")
-        self.modelo = self.config_dict.get("modelo", "gpt-3.5-turbo")
+        
+        # ✅ PRIORIDAD: Si hay un modelo fine-tuned activo, usarlo en lugar del modelo base
+        modelo_fine_tuned = self.config_dict.get("modelo_fine_tuned", "")
+        if modelo_fine_tuned and modelo_fine_tuned.strip():
+            self.modelo = modelo_fine_tuned.strip()
+            logger.info(f"✅ Usando modelo fine-tuned activo: {self.modelo}")
+        else:
+            self.modelo = self.config_dict.get("modelo", "gpt-3.5-turbo")
+            logger.debug(f"Usando modelo base: {self.modelo}")
+        
         self.temperatura = float(self.config_dict.get("temperatura", "0.7"))
         self.max_tokens = int(self.config_dict.get("max_tokens", "2000"))
 
