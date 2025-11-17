@@ -579,7 +579,19 @@ async def listar_fine_tuning_jobs(
                     job.completado_en = datetime.utcnow()
 
                 if estado.get("error"):
-                    job.error = str(estado["error"])
+                    # Formatear error de forma legible
+                    error_data = estado["error"]
+                    if isinstance(error_data, dict):
+                        # Si es un diccionario, extraer información clave
+                        error_msg = error_data.get("message", str(error_data))
+                        if error_data.get("code"):
+                            error_msg = f"[{error_data.get('code')}] {error_msg}"
+                        if error_data.get("param"):
+                            error_msg += f" (param: {error_data.get('param')})"
+                        job.error = error_msg
+                    else:
+                        job.error = str(error_data)
+                    logger.warning(f"Job {job.openai_job_id} falló: {job.error}")
 
                 db.commit()
             except Exception as e:
@@ -623,7 +635,19 @@ async def obtener_estado_fine_tuning(
             job.completado_en = datetime.utcnow()
 
         if estado.get("error"):
-            job.error = str(estado["error"])
+            # Formatear error de forma legible
+            error_data = estado["error"]
+            if isinstance(error_data, dict):
+                # Si es un diccionario, extraer información clave
+                error_msg = error_data.get("message", str(error_data))
+                if error_data.get("code"):
+                    error_msg = f"[{error_data.get('code')}] {error_msg}"
+                if error_data.get("param"):
+                    error_msg += f" (param: {error_data.get('param')})"
+                job.error = error_msg
+            else:
+                job.error = str(error_data)
+            logger.warning(f"Job {job_id} falló: {job.error}")
 
         db.commit()
         db.refresh(job)

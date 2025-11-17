@@ -32,6 +32,7 @@ from . import (  # aprobaciones,  # MODULO DESHABILITADO - Ver main.py
     reportes,
     scheduler_notificaciones,
     solicitudes,
+    tickets,
     users,
     validadores,
     whatsapp_webhook,
@@ -69,4 +70,5 @@ __all__ = [
     "cobranzas",
     "whatsapp_webhook",
     "conversaciones_whatsapp",
+    "tickets",
 ]

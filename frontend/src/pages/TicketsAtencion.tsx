@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import {
   Search,
   Filter,
@@ -18,6 +20,8 @@ import {
   Phone,
   Mail,
   XCircle as XCircleIcon,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,6 +36,8 @@ import { useSearchClientes } from '@/hooks/useClientes'
 import { Cliente } from '@/types'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
+import { ticketsService, Ticket, TicketCreate } from '@/services/ticketsService'
+import { toast } from 'sonner'
 
 // Estados de tickets
 const ESTADOS_TICKET = [
@@ -45,7 +51,6 @@ const ESTADOS_TICKET = [
 const PRIORIDADES = [
   { id: 'baja', label: 'Baja', color: 'bg-gray-100 text-gray-800' },
   { id: 'media', label: 'Media', color: 'bg-yellow-100 text-yellow-800' },
-  { id: 'alta', label: 'Alta', color: 'bg-orange-100 text-orange-800' },
   { id: 'urgente', label: 'Urgente', color: 'bg-red-100 text-red-800' },
 ]
 
@@ -57,42 +62,102 @@ const TIPOS_TICKET = [
   { id: 'reclamo', label: 'Reclamo' },
 ]
 
-interface Ticket {
-  id: number
-  titulo: string
-  descripcion: string
+// La interfaz Ticket ahora viene del servicio, pero la adaptamos para compatibilidad
+type TicketLocal = Ticket & {
   clienteId?: number
-  cliente?: string
-  clienteData?: Cliente
-  estado: string
-  prioridad: string
-  asignadoA: string
-  fechaCreacion: Date
-  fechaActualizacion: Date
-  tipo: string
+  asignadoA?: string
+  fechaCreacion?: Date
+  fechaActualizacion?: Date
 }
 
 export function TicketsAtencion() {
   const { user } = useSimpleAuth()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [searchTerm, setSearchTerm] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<string>('todos')
   const [filtroPrioridad, setFiltroPrioridad] = useState<string>('todos')
+  const [page, setPage] = useState(1)
   const [showAddDialog, setShowAddDialog] = useState(false)
+  const [showEditDialog, setShowEditDialog] = useState(false)
+  const [ticketSeleccionado, setTicketSeleccionado] = useState<Ticket | null>(null)
   const [searchCliente, setSearchCliente] = useState('')
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null)
-  const [nuevoTicket, setNuevoTicket] = useState<Partial<Ticket>>({
+  const [nuevoTicket, setNuevoTicket] = useState<Partial<TicketCreate>>({
     titulo: '',
     descripcion: '',
     estado: 'abierto',
     prioridad: 'media',
     tipo: 'consulta',
-    asignadoA: user ? `${user.nombre} ${user.apellido}` : '',
+    asignado_a: user ? `${user.nombre} ${user.apellido}` : '',
   })
-  const [tickets, setTickets] = useState<Ticket[]>([])
 
   // Búsqueda de clientes para agregar al ticket
-  // Búsqueda optimizada: se activa con 2 caracteres para capturar datos rápidamente
   const { data: clientesBuscados = [], isLoading: isLoadingSearch } = useSearchClientes(searchCliente)
+
+  // Query para obtener tickets del backend
+  const {
+    data: ticketsData,
+    isLoading: isLoadingTickets,
+    error: errorTickets,
+    refetch: refetchTickets,
+  } = useQuery({
+    queryKey: ['tickets', page, filtroEstado, filtroPrioridad],
+    queryFn: () =>
+      ticketsService.getTickets({
+        page,
+        per_page: 20,
+        estado: filtroEstado !== 'todos' ? filtroEstado : undefined,
+        prioridad: filtroPrioridad !== 'todos' ? filtroPrioridad : undefined,
+      }),
+  })
+
+  const tickets: TicketLocal[] = ticketsData?.tickets?.map((t) => ({
+    ...t,
+    clienteId: t.cliente_id,
+    cliente: t.cliente || undefined,
+    clienteData: t.clienteData || undefined,
+    asignadoA: t.asignado_a || 'Sin asignar',
+    fechaCreacion: t.fechaCreacion ? new Date(t.fechaCreacion) : new Date(),
+    fechaActualizacion: t.fechaActualizacion ? new Date(t.fechaActualizacion) : new Date(),
+  })) || []
+
+  // Mutation para crear ticket
+  const createTicketMutation = useMutation({
+    mutationFn: (ticket: TicketCreate) => ticketsService.createTicket(ticket),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tickets'] })
+      setShowAddDialog(false)
+      setNuevoTicket({
+        titulo: '',
+        descripcion: '',
+        estado: 'abierto',
+        prioridad: 'media',
+        tipo: 'consulta',
+        asignado_a: user ? `${user.nombre} ${user.apellido}` : '',
+      })
+      setClienteSeleccionado(null)
+      toast.success('Ticket creado exitosamente')
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || 'Error creando ticket')
+    },
+  })
+
+  // Mutation para actualizar ticket
+  const updateTicketMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<TicketCreate> }) =>
+      ticketsService.updateTicket(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tickets'] })
+      setShowEditDialog(false)
+      setTicketSeleccionado(null)
+      toast.success('Ticket actualizado exitosamente')
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || 'Error actualizando ticket')
+    },
+  })
 
   const ticketsFiltrados = tickets.filter(ticket => {
     const matchSearch =
@@ -109,7 +174,7 @@ export function TicketsAtencion() {
   })
 
   const estadisticas = {
-    total: tickets.length,
+    total: ticketsData?.paginacion?.total || 0,
     abiertos: tickets.filter(t => t.estado === 'abierto').length,
     enProceso: tickets.filter(t => t.estado === 'en_proceso').length,
     resueltos: tickets.filter(t => t.estado === 'resuelto').length,
@@ -141,33 +206,63 @@ export function TicketsAtencion() {
 
   const handleCrearTicket = () => {
     if (!nuevoTicket.titulo || !nuevoTicket.descripcion) {
+      toast.error('Por favor completa el título y descripción del ticket')
       return
     }
 
-    const ticket: Ticket = {
-      id: Date.now(),
-      ...nuevoTicket,
-      cliente: clienteSeleccionado 
-        ? [clienteSeleccionado.nombres, clienteSeleccionado.apellidos].filter(Boolean).join(' ').trim() || 'Sin nombre'
-        : nuevoTicket.cliente,
-      clienteId: clienteSeleccionado?.id,
-      clienteData: clienteSeleccionado || undefined,
-      fechaCreacion: new Date(),
-      fechaActualizacion: new Date(),
-    } as Ticket
+    const ticketData: TicketCreate = {
+      titulo: nuevoTicket.titulo!,
+      descripcion: nuevoTicket.descripcion!,
+      estado: nuevoTicket.estado || 'abierto',
+      prioridad: nuevoTicket.prioridad || 'media',
+      tipo: nuevoTicket.tipo || 'consulta',
+      cliente_id: clienteSeleccionado?.id,
+      asignado_a: nuevoTicket.asignado_a || user ? `${user.nombre} ${user.apellido}` : undefined,
+      asignado_a_id: user?.id,
+    }
 
-    setTickets(prev => [ticket, ...prev])
-    setShowAddDialog(false)
+    createTicketMutation.mutate(ticketData)
+  }
+
+  const handleEditarTicket = (ticket: Ticket) => {
+    setTicketSeleccionado(ticket)
     setNuevoTicket({
-      titulo: '',
-      descripcion: '',
-      estado: 'abierto',
-      prioridad: 'media',
-      tipo: 'consulta',
-      asignadoA: user ? `${user.nombre} ${user.apellido}` : '',
+      titulo: ticket.titulo,
+      descripcion: ticket.descripcion,
+      estado: ticket.estado,
+      prioridad: ticket.prioridad,
+      tipo: ticket.tipo,
+      asignado_a: ticket.asignado_a,
     })
-    setClienteSeleccionado(null)
-    setSearchCliente('')
+    if (ticket.clienteData) {
+      setClienteSeleccionado(ticket.clienteData)
+    }
+    setShowEditDialog(true)
+  }
+
+  const handleActualizarTicket = () => {
+    if (!ticketSeleccionado || !nuevoTicket.titulo || !nuevoTicket.descripcion) {
+      toast.error('Por favor completa el título y descripción del ticket')
+      return
+    }
+
+    updateTicketMutation.mutate({
+      id: ticketSeleccionado.id,
+      data: {
+        titulo: nuevoTicket.titulo,
+        descripcion: nuevoTicket.descripcion,
+        estado: nuevoTicket.estado,
+        prioridad: nuevoTicket.prioridad,
+        tipo: nuevoTicket.tipo,
+        asignado_a: nuevoTicket.asignado_a,
+      },
+    })
+  }
+
+  const handleVerConversacion = (conversacionId?: number) => {
+    if (conversacionId) {
+      navigate(`/conversaciones-whatsapp?conversacion_id=${conversacionId}`)
+    }
   }
 
   return (
@@ -439,11 +534,21 @@ export function TicketsAtencion() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowAddDialog(false)}>
+              <Button variant="outline" onClick={() => setShowAddDialog(false)} disabled={createTicketMutation.isPending}>
                 Cancelar
               </Button>
-              <Button onClick={handleCrearTicket} disabled={!nuevoTicket.titulo || !nuevoTicket.descripcion}>
-                Crear Ticket
+              <Button
+                onClick={handleCrearTicket}
+                disabled={!nuevoTicket.titulo || !nuevoTicket.descripcion || createTicketMutation.isPending}
+              >
+                {createTicketMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creando...
+                  </>
+                ) : (
+                  'Crear Ticket'
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -532,13 +637,33 @@ export function TicketsAtencion() {
       {/* Timeline de Tickets */}
       <Card>
         <CardHeader>
-          <CardTitle>Tickets de Atención</CardTitle>
-          <CardDescription>
-            Línea de tiempo de incidencias y actividades ordenadas por ID
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Tickets de Atención</CardTitle>
+              <CardDescription>
+                Gestión de incidencias y actividades que generan seguimiento
+              </CardDescription>
+            </div>
+            {isLoadingTickets && (
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          {ticketsFiltrados.length === 0 ? (
+          {isLoadingTickets ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              <span className="ml-3 text-gray-600">Cargando tickets...</span>
+            </div>
+          ) : errorTickets ? (
+            <div className="text-center py-12">
+              <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+              <p className="text-red-600 mb-4">Error cargando tickets</p>
+              <Button variant="outline" onClick={() => refetchTickets()}>
+                Reintentar
+              </Button>
+            </div>
+          ) : ticketsFiltrados.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
               {tickets.length === 0 ? (
@@ -558,7 +683,12 @@ export function TicketsAtencion() {
               {/* Lista de tickets en timeline */}
               <div className="space-y-6">
                 {ticketsFiltrados
-                  .sort((a, b) => a.id - b.id) // Ordenar por ID
+                  .sort((a, b) => {
+                    // Ordenar por fecha más reciente primero
+                    const fechaA = a.fechaCreacion ? new Date(a.fechaCreacion).getTime() : 0
+                    const fechaB = b.fechaCreacion ? new Date(b.fechaCreacion).getTime() : 0
+                    return fechaB - fechaA
+                  })
                   .map((ticket, index) => {
                     const estadoInfo = getEstadoInfo(ticket.estado)
                     const prioridadInfo = getPrioridadInfo(ticket.prioridad)
@@ -605,14 +735,26 @@ export function TicketsAtencion() {
                                 </p>
                               </div>
                               <div className="flex gap-2 ml-4">
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                {ticket.conversacion_whatsapp_id && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleVerConversacion(ticket.conversacion_whatsapp_id)}
+                                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                    title="Ver conversación de WhatsApp"
+                                  >
+                                    <MessageSquare className="h-4 w-4 mr-1" />
+                                    WhatsApp
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => handleEditarTicket(ticket)}
+                                  title="Editar ticket"
+                                >
                                   <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <MessageSquare className="h-4 w-4" />
                                 </Button>
                               </div>
                             </div>
@@ -675,9 +817,15 @@ export function TicketsAtencion() {
                               <Badge variant="outline" className="text-xs">
                                 {ticket.tipo}
                               </Badge>
+                              {ticket.conversacion_whatsapp_id && (
+                                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                                  <MessageSquare className="h-3 w-3 mr-1" />
+                                  Vinculado a WhatsApp
+                                </Badge>
+                              )}
                               <div className="flex items-center gap-1 text-xs text-gray-500 ml-auto">
                                 <Calendar className="h-3 w-3" />
-                                <span>{formatDate(ticket.fechaCreacion)}</span>
+                                <span>{ticket.fechaCreacion ? formatDate(ticket.fechaCreacion) : 'N/A'}</span>
                               </div>
                             </div>
                           </motion.div>
@@ -688,8 +836,142 @@ export function TicketsAtencion() {
               </div>
             </div>
           )}
+
+          {/* Paginación */}
+          {ticketsData?.paginacion && ticketsData.paginacion.pages > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t mt-6">
+              <div className="text-sm text-gray-600">
+                Página {ticketsData.paginacion.page} de {ticketsData.paginacion.pages} ({ticketsData.paginacion.total} total)
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1 || isLoadingTickets}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(ticketsData.paginacion.pages, p + 1))}
+                  disabled={page === ticketsData.paginacion.pages || isLoadingTickets}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Modal para editar ticket */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Ticket #{ticketSeleccionado?.id}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            {/* Mismo formulario que crear, pero con datos precargados */}
+            <div className="space-y-2">
+              <Label htmlFor="titulo-edit">Título *</Label>
+              <Input
+                id="titulo-edit"
+                placeholder="Ej: Consulta sobre estado de préstamo"
+                value={nuevoTicket.titulo || ''}
+                onChange={(e) => setNuevoTicket(prev => ({ ...prev, titulo: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="descripcion-edit">Descripción *</Label>
+              <Textarea
+                id="descripcion-edit"
+                placeholder="Describe el problema o consulta..."
+                value={nuevoTicket.descripcion || ''}
+                onChange={(e) => setNuevoTicket(prev => ({ ...prev, descripcion: e.target.value }))}
+                rows={4}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="tipo-edit">Tipo</Label>
+                <Select
+                  value={nuevoTicket.tipo || 'consulta'}
+                  onValueChange={(value) => setNuevoTicket(prev => ({ ...prev, tipo: value }))}
+                >
+                  <SelectTrigger id="tipo-edit">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIPOS_TICKET.map((tipo) => (
+                      <SelectItem key={tipo.id} value={tipo.id}>
+                        {tipo.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="estado-edit">Estado</Label>
+                <Select
+                  value={nuevoTicket.estado || 'abierto'}
+                  onValueChange={(value) => setNuevoTicket(prev => ({ ...prev, estado: value }))}
+                >
+                  <SelectTrigger id="estado-edit">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ESTADOS_TICKET.map((estado) => (
+                      <SelectItem key={estado.id} value={estado.id}>
+                        {estado.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="prioridad-edit">Prioridad</Label>
+                <Select
+                  value={nuevoTicket.prioridad || 'media'}
+                  onValueChange={(value) => setNuevoTicket(prev => ({ ...prev, prioridad: value }))}
+                >
+                  <SelectTrigger id="prioridad-edit">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRIORIDADES.map((prioridad) => (
+                      <SelectItem key={prioridad.id} value={prioridad.id}>
+                        {prioridad.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)} disabled={updateTicketMutation.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleActualizarTicket}
+              disabled={!nuevoTicket.titulo || !nuevoTicket.descripcion || updateTicketMutation.isPending}
+            >
+              {updateTicketMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Actualizando...
+                </>
+              ) : (
+                'Actualizar Ticket'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

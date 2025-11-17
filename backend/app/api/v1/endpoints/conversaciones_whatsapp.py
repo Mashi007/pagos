@@ -411,26 +411,40 @@ async def obtener_estadisticas_conversaciones(
                 )
 
         from sqlalchemy import func
-
-        # Total de conversaciones
-        total = db.query(ConversacionWhatsApp).count()
-
-        # Por dirección
-        inbound = db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.direccion == "INBOUND").count()
-        outbound = db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.direccion == "OUTBOUND").count()
-
-        # Con cliente identificado
-        con_cliente = db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.cliente_id.isnot(None)).count()
-        sin_cliente = db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.cliente_id.is_(None)).count()
-
-        # Respuestas enviadas
-        respuestas_enviadas = db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.respuesta_enviada == True).count()
-
-        # Últimas 24 horas
         from datetime import datetime, timedelta
 
+        # Función helper para contar con manejo de errores
+        def contar_con_fallback(query_func):
+            try:
+                return query_func().count()
+            except (ProgrammingError, OperationalError) as count_error:
+                error_str = str(count_error).lower()
+                if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+                    logger.warning(f"⚠️ Error al contar en estadísticas, intentando crear tabla: {count_error}")
+                    if _crear_tabla_si_no_existe(db):
+                        db.refresh(ConversacionWhatsApp)
+                        return query_func().count()
+                    else:
+                        return 0
+                raise
+
+        # Total de conversaciones
+        total = contar_con_fallback(lambda: db.query(ConversacionWhatsApp))
+
+        # Por dirección
+        inbound = contar_con_fallback(lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.direccion == "INBOUND"))
+        outbound = contar_con_fallback(lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.direccion == "OUTBOUND"))
+
+        # Con cliente identificado
+        con_cliente = contar_con_fallback(lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.cliente_id.isnot(None)))
+        sin_cliente = contar_con_fallback(lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.cliente_id.is_(None)))
+
+        # Respuestas enviadas
+        respuestas_enviadas = contar_con_fallback(lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.respuesta_enviada == True))
+
+        # Últimas 24 horas
         ultimas_24h = datetime.utcnow() - timedelta(hours=24)
-        ultimas_24h_count = db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.timestamp >= ultimas_24h).count()
+        ultimas_24h_count = contar_con_fallback(lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.timestamp >= ultimas_24h))
 
         return {
             "total": total,

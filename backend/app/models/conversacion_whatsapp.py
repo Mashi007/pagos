@@ -55,7 +55,8 @@ class ConversacionWhatsApp(Base):
     # Relaciones ORM
     cliente = relationship("Cliente", foreign_keys=[cliente_id])
     respuesta = relationship("ConversacionWhatsApp", remote_side=[id], foreign_keys=[respuesta_id])
-    ticket = relationship("Ticket", foreign_keys=[ticket_id])
+    ticket = relationship("Ticket", foreign_keys=[ticket_id], uselist=False, primaryjoin="ConversacionWhatsApp.ticket_id == Ticket.id")
+    tickets = relationship("Ticket", foreign_keys="[Ticket.conversacion_whatsapp_id]", back_populates="conversacion_whatsapp")
 
     def __repr__(self):
         return f"<ConversacionWhatsApp {self.id} - {self.direccion} - {self.from_number}>"
