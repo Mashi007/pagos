@@ -5,7 +5,7 @@ Fine-tuning, RAG, ML Risk
 
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -1088,6 +1088,277 @@ async def obtener_modelo_riesgo_activo(
         raise _handle_database_error(e, "obteniendo modelo activo")
 
 
+# ============================================================================
+# FUNCIONES HELPER PARA entrenar_modelo_riesgo - Refactorización
+# ============================================================================
+
+
+def _validar_ml_service_disponible() -> None:
+    """Valida que MLService esté disponible"""
+    if not ML_SERVICE_AVAILABLE or MLService is None:
+        raise HTTPException(
+            status_code=503,
+            detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
+        )
+
+
+def _validar_tabla_modelos_riesgo(db: Session) -> None:
+    """Valida que la tabla modelos_riesgo exista"""
+    try:
+        db.query(ModeloRiesgo).limit(1).all()
+    except (ProgrammingError, OperationalError) as db_error:
+        error_msg = str(db_error).lower()
+        if any(term in error_msg for term in ["does not exist", "no such table", "relation", "table"]):
+            raise HTTPException(
+                status_code=503,
+                detail="La tabla 'modelos_riesgo' no está creada. Ejecuta las migraciones: alembic upgrade head",
+            )
+        raise
+
+
+def _obtener_prestamos_aprobados(db: Session) -> list:
+    """
+    Obtiene préstamos aprobados con manejo de errores de columnas.
+    Retorna lista de préstamos.
+    """
+    from app.models.cliente import Cliente
+    from app.models.prestamo import Prestamo
+
+    prestamos_query = (
+        db.query(Prestamo)
+        .filter(Prestamo.estado == "APROBADO")
+        .options(
+            joinedload(Prestamo.cliente).load_only(
+                Cliente.id,
+                Cliente.fecha_nacimiento,
+            ),
+        )
+    )
+
+    try:
+        return prestamos_query.all()
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "valor_activo" in error_msg or "does not exist" in error_msg:
+            logger.warning("⚠️ Columna valor_activo no existe en BD, usando query directo")
+            from sqlalchemy import select
+
+            stmt = select(
+                Prestamo.id,
+                Prestamo.cliente_id,
+                Prestamo.cedula,
+                Prestamo.nombres,
+                Prestamo.total_financiamiento,
+                Prestamo.estado,
+                Prestamo.fecha_aprobacion,
+                Prestamo.fecha_registro,
+            ).where(Prestamo.estado == "APROBADO")
+
+            resultados = db.execute(stmt).all()
+            prestamos = []
+            for row in resultados:
+                prestamo = Prestamo()
+                prestamo.id = row.id
+                prestamo.cliente_id = row.cliente_id
+                prestamo.cedula = row.cedula
+                prestamo.nombres = row.nombres
+                prestamo.total_financiamiento = row.total_financiamiento
+                prestamo.estado = row.estado
+                prestamo.fecha_aprobacion = row.fecha_aprobacion
+                prestamo.fecha_registro = row.fecha_registro
+
+                if row.cliente_id:
+                    cliente = db.query(Cliente).filter(Cliente.id == row.cliente_id).first()
+                    if cliente:
+                        prestamo.cliente = cliente
+
+                prestamos.append(prestamo)
+            return prestamos
+        raise
+
+
+def _obtener_cliente_seguro(prestamo, db: Session):
+    """Obtiene cliente de forma segura, manejando errores de relación"""
+    try:
+        cliente = prestamo.cliente
+        if cliente:
+            return cliente
+    except AttributeError:
+        pass
+
+    try:
+        if prestamo.cliente_id:
+            return db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
+    except Exception as query_error:
+        logger.warning(f"Error consultando cliente para préstamo {prestamo.id}: {query_error}")
+
+    return None
+
+
+def _calcular_features_prestamo(prestamo, cliente, db: Session) -> Optional[Dict]:
+    """
+    Calcula features de un préstamo para entrenamiento.
+    Retorna dict con features o None si hay error.
+    """
+    from datetime import date
+
+    from app.models.amortizacion import Cuota
+    from app.models.pago import Pago
+    from app.models.prestamo import Prestamo
+
+    # Calcular edad
+    if cliente and cliente.fecha_nacimiento:
+        edad = (date.today() - cliente.fecha_nacimiento).days // 365
+    else:
+        edad = 0
+
+    # Obtener pagos
+    try:
+        pagos = db.query(Pago).filter(Pago.prestamo_id == prestamo.id).all()
+        total_pagado = sum(float(p.monto_pagado or 0) for p in pagos if p.monto_pagado is not None)
+    except Exception as e:
+        logger.warning(f"Error obteniendo pagos del préstamo {prestamo.id}: {e}")
+        total_pagado = 0
+
+    # Calcular métricas financieras
+    try:
+        total_financiamiento = float(prestamo.total_financiamiento or 0)
+        if total_financiamiento <= 0:
+            logger.warning(f"Préstamo {prestamo.id} tiene total_financiamiento inválido: {total_financiamiento}")
+            return None
+
+        ingreso_estimado = total_financiamiento * 0.3
+        deuda_total = total_financiamiento - total_pagado
+        ratio_deuda_ingreso = deuda_total / ingreso_estimado if ingreso_estimado > 0 else 0
+        historial_pagos = total_pagado / total_financiamiento if total_financiamiento > 0 else 0
+    except (ValueError, TypeError) as e:
+        logger.warning(f"Error calculando métricas financieras del préstamo {prestamo.id}: {e}")
+        return None
+
+    # Días desde último préstamo
+    dias_ultimo_prestamo = (date.today() - prestamo.fecha_registro.date()).days if prestamo.fecha_registro else 0
+
+    # Número de préstamos previos
+    prestamos_previos = (
+        db.query(Prestamo)
+        .filter(
+            and_(
+                Prestamo.cliente_id == prestamo.cliente_id,
+                Prestamo.id < prestamo.id,
+            )
+        )
+        .count()
+    )
+
+    # Calcular target (riesgo)
+    target = _calcular_target_riesgo(prestamo.id, db)
+
+    return {
+        "edad": edad,
+        "ingreso": ingreso_estimado,
+        "deuda_total": deuda_total,
+        "ratio_deuda_ingreso": ratio_deuda_ingreso,
+        "historial_pagos": historial_pagos,
+        "dias_ultimo_prestamo": dias_ultimo_prestamo,
+        "numero_prestamos_previos": prestamos_previos,
+        "target": target,
+    }
+
+
+def _calcular_target_riesgo(prestamo_id: int, db: Session) -> int:
+    """
+    Calcula el target (nivel de riesgo) basado en morosidad.
+    Retorna 0 (bajo), 1 (medio) o 2 (alto).
+    """
+    from datetime import date
+
+    from app.models.amortizacion import Cuota
+
+    try:
+        cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).all()
+        cuotas_vencidas = [
+            c for c in cuotas
+            if c.fecha_vencimiento and c.fecha_vencimiento < date.today() and c.estado != "PAGADA"
+        ]
+    except Exception as e:
+        logger.warning(f"Error obteniendo cuotas del préstamo {prestamo_id}: {e}")
+        cuotas_vencidas = []
+
+    if len(cuotas_vencidas) > 3:
+        return 2  # Alto riesgo
+    elif len(cuotas_vencidas) > 0:
+        return 1  # Medio riesgo
+    else:
+        return 0  # Bajo riesgo
+
+
+def _guardar_modelo_riesgo(resultado: Dict, request: EntrenarModeloRiesgoRequest, db: Session) -> ModeloRiesgo:
+    """Guarda el modelo entrenado en la base de datos"""
+    from datetime import datetime
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    modelo = ModeloRiesgo(
+        nombre=f"Modelo Riesgo {timestamp}",
+        version="1.0.0",
+        algoritmo=request.algoritmo,
+        accuracy=resultado["metrics"]["accuracy"],
+        precision=resultado["metrics"]["precision"],
+        recall=resultado["metrics"]["recall"],
+        f1_score=resultado["metrics"]["f1_score"],
+        roc_auc=resultado["metrics"].get("roc_auc"),
+        ruta_archivo=resultado["model_path"],
+        total_datos_entrenamiento=resultado["training_samples"],
+        total_datos_test=resultado["test_samples"],
+        test_size=request.test_size,
+        random_state=request.random_state,
+        features_usadas=",".join(resultado["features"]),
+        activo=False,
+    )
+
+    db.add(modelo)
+    db.commit()
+    db.refresh(modelo)
+    return modelo
+
+
+def _manejar_error_entrenamiento(e: Exception, db: Session) -> HTTPException:
+    """Maneja errores durante el entrenamiento y retorna HTTPException apropiado"""
+    db.rollback()
+    error_msg = str(e)
+    error_type = type(e).__name__
+    import traceback
+
+    error_traceback = traceback.format_exc()
+
+    logger.error(
+        f"❌ [ML-RIESGO] Error entrenando modelo de riesgo: {error_type}: {error_msg}\n"
+        f"Traceback completo:\n{error_traceback}",
+        exc_info=True,
+    )
+
+    # Mensaje más descriptivo según el tipo de error
+    if "scikit-learn" in error_msg.lower() or "sklearn" in error_msg.lower() or "SKLEARN" in error_msg:
+        detail_msg = "Error con scikit-learn. Verifica que esté instalado correctamente."
+    elif "stratify" in error_msg.lower():
+        detail_msg = "Error al dividir datos. Puede ser por pocas muestras de alguna clase."
+    elif "cliente" in error_msg.lower() or "relationship" in error_msg.lower() or "AttributeError" in error_type:
+        detail_msg = f"Error accediendo a datos de clientes ({error_type}): {error_msg[:200]}. Verifica la integridad de los datos y que los préstamos tengan clientes asociados."
+    elif "does not exist" in error_msg.lower() or "no such table" in error_msg.lower():
+        detail_msg = "La tabla de modelos de riesgo no está creada. Ejecuta las migraciones: alembic upgrade head"
+    elif "'NoneType' object has no attribute" in error_msg:
+        detail_msg = f"Error de datos: {error_msg[:200]}. Verifica que los préstamos tengan clientes y datos válidos."
+    elif "KeyError" in error_type:
+        detail_msg = f"Error de estructura de datos: {error_msg[:200]}. Verifica que las features estén completas."
+    elif "ValueError" in error_type:
+        detail_msg = f"Error de validación: {error_msg[:200]}"
+    elif "TypeError" in error_type:
+        detail_msg = f"Error de tipo de dato: {error_msg[:200]}. Verifica que los datos sean numéricos."
+    else:
+        detail_msg = f"Error entrenando modelo ({error_type}): {error_msg[:300]}"
+
+    return HTTPException(status_code=500, detail=detail_msg)
+
+
 @router.post("/ml-riesgo/entrenar")
 async def entrenar_modelo_riesgo(
     request: EntrenarModeloRiesgoRequest,
@@ -1096,97 +1367,12 @@ async def entrenar_modelo_riesgo(
 ):
     """Entrenar modelo de riesgo"""
     try:
-        # Verificar que MLService esté disponible
-        if not ML_SERVICE_AVAILABLE or MLService is None:
-            raise HTTPException(
-                status_code=503,
-                detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
-            )
+        # Validaciones
+        _validar_ml_service_disponible()
+        _validar_tabla_modelos_riesgo(db)
 
-        # Verificar que la tabla existe
-        try:
-            db.query(ModeloRiesgo).limit(1).all()
-        except (ProgrammingError, OperationalError) as db_error:
-            error_msg = str(db_error).lower()
-            if any(term in error_msg for term in ["does not exist", "no such table", "relation", "table"]):
-                raise HTTPException(
-                    status_code=503,
-                    detail="La tabla 'modelos_riesgo' no está creada. Ejecuta las migraciones: alembic upgrade head",
-                )
-            raise
-
-        # Obtener datos históricos de préstamos y pagos para entrenamiento
-        from datetime import date
-
-        from app.models.amortizacion import Cuota
-
-        # Obtener préstamos aprobados con historial (cargar relación cliente)
-        # Usar with_entities para especificar exactamente las columnas que existen en la BD
-        # Esto evita errores si hay columnas en el modelo que no existen en la BD (como valor_activo)
-        from app.models.cliente import Cliente
-        from app.models.pago import Pago
-        from app.models.prestamo import Prestamo
-
-        # Query usando with_entities para evitar columnas que no existen
-        prestamos_query = (
-            db.query(Prestamo)
-            .filter(Prestamo.estado == "APROBADO")
-            .options(
-                joinedload(Prestamo.cliente).load_only(
-                    Cliente.id,
-                    Cliente.fecha_nacimiento,
-                ),
-            )
-        )
-
-        # Intentar ejecutar el query, si falla por columnas inexistentes, usar query directo
-        try:
-            prestamos = prestamos_query.all()
-        except Exception as e:
-            error_msg = str(e).lower()
-            if "valor_activo" in error_msg or "does not exist" in error_msg:
-                # Si falla por valor_activo, usar query directo sin cargar el objeto completo
-                logger.warning("⚠️ Columna valor_activo no existe en BD, usando query directo")
-                from sqlalchemy import select
-
-                # Query directo con columnas específicas que sabemos que existen
-                stmt = select(
-                    Prestamo.id,
-                    Prestamo.cliente_id,
-                    Prestamo.cedula,
-                    Prestamo.nombres,
-                    Prestamo.total_financiamiento,
-                    Prestamo.estado,
-                    Prestamo.fecha_aprobacion,
-                    Prestamo.fecha_registro,
-                ).where(Prestamo.estado == "APROBADO")
-
-                resultados = db.execute(stmt).all()
-
-                # Convertir resultados a objetos Prestamo parciales
-                prestamos = []
-                for row in resultados:
-                    # Crear un objeto Prestamo parcial con solo las columnas que tenemos
-                    prestamo = Prestamo()
-                    prestamo.id = row.id
-                    prestamo.cliente_id = row.cliente_id
-                    prestamo.cedula = row.cedula
-                    prestamo.nombres = row.nombres
-                    prestamo.total_financiamiento = row.total_financiamiento
-                    prestamo.estado = row.estado
-                    prestamo.fecha_aprobacion = row.fecha_aprobacion
-                    prestamo.fecha_registro = row.fecha_registro
-
-                    # Cargar cliente por separado si es necesario
-                    if row.cliente_id:
-                        cliente = db.query(Cliente).filter(Cliente.id == row.cliente_id).first()
-                        if cliente:
-                            prestamo.cliente = cliente
-
-                    prestamos.append(prestamo)
-            else:
-                raise
-
+        # Obtener préstamos
+        prestamos = _obtener_prestamos_aprobados(db)
         if len(prestamos) < 10:
             raise HTTPException(
                 status_code=400,
@@ -1195,119 +1381,29 @@ async def entrenar_modelo_riesgo(
 
         # Preparar datos de entrenamiento
         training_data = []
-
         logger.info(f"📊 Procesando {len(prestamos)} préstamos para entrenamiento de ML Riesgo...")
 
+        from app.models.cliente import Cliente
+
         for prestamo in prestamos:
-            # Calcular features
-            try:
-                # Intentar acceder al cliente de forma segura
-                cliente = None
-                try:
-                    cliente = prestamo.cliente
-                except AttributeError:
-                    # Si no está cargado, intentar cargarlo manualmente
-                    try:
-                        cliente = db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
-                    except Exception as query_error:
-                        logger.warning(f"Error consultando cliente para préstamo {prestamo.id}: {query_error}")
-                        continue
-
-                if not cliente:
-                    logger.warning(
-                        f"Préstamo {prestamo.id} no tiene cliente asociado (cliente_id: {prestamo.cliente_id}), omitiendo..."
-                    )
-                    continue
-
-                # Verificar que el cliente tenga fecha_nacimiento si es necesario
-                if not hasattr(cliente, "fecha_nacimiento"):
-                    logger.warning(
-                        f"Cliente {cliente.id} no tiene atributo fecha_nacimiento, omitiendo préstamo {prestamo.id}..."
-                    )
-                    continue
-
-            except Exception as e:
-                error_type = type(e).__name__
-                logger.warning(f"Error accediendo a cliente del préstamo {prestamo.id} ({error_type}): {e}, omitiendo...")
-                continue
-
-            # Calcular edad
-            if cliente.fecha_nacimiento:
-                edad = (date.today() - cliente.fecha_nacimiento).days // 365
-            else:
-                edad = 0
-
-            # Obtener pagos del préstamo
-            try:
-                pagos = db.query(Pago).filter(Pago.prestamo_id == prestamo.id).all()
-                total_pagado = sum(float(p.monto_pagado or 0) for p in pagos if p.monto_pagado is not None)
-            except Exception as e:
-                logger.warning(f"Error obteniendo pagos del préstamo {prestamo.id}: {e}")
-                total_pagado = 0
-
-            # Calcular ratio deuda/ingreso (simplificado)
-            try:
-                total_financiamiento = float(prestamo.total_financiamiento or 0)
-                if total_financiamiento <= 0:
-                    logger.warning(
-                        f"Préstamo {prestamo.id} tiene total_financiamiento inválido: {total_financiamiento}, omitiendo..."
-                    )
-                    continue
-
-                ingreso_estimado = total_financiamiento * 0.3  # Estimación
-                deuda_total = total_financiamiento - total_pagado
-                ratio_deuda_ingreso = deuda_total / ingreso_estimado if ingreso_estimado > 0 else 0
-
-                # Historial de pagos (porcentaje pagado)
-                historial_pagos = total_pagado / total_financiamiento if total_financiamiento > 0 else 0
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Error calculando métricas financieras del préstamo {prestamo.id}: {e}, omitiendo...")
-                continue
-
-            # Días desde último préstamo
-            dias_ultimo_prestamo = (date.today() - prestamo.fecha_registro.date()).days if prestamo.fecha_registro else 0
-
-            # Número de préstamos previos
-            prestamos_previos = (
-                db.query(Prestamo)
-                .filter(
-                    and_(
-                        Prestamo.cliente_id == prestamo.cliente_id,
-                        Prestamo.id < prestamo.id,
-                    )
+            # Obtener cliente de forma segura
+            cliente = _obtener_cliente_seguro(prestamo, db)
+            if not cliente:
+                logger.warning(
+                    f"Préstamo {prestamo.id} no tiene cliente asociado (cliente_id: {prestamo.cliente_id}), omitiendo..."
                 )
-                .count()
-            )
+                continue
 
-            # Determinar target (riesgo) basado en morosidad
-            try:
-                cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).all()
-                cuotas_vencidas = [
-                    c for c in cuotas if c.fecha_vencimiento and c.fecha_vencimiento < date.today() and c.estado != "PAGADA"
-                ]
-            except Exception as e:
-                logger.warning(f"Error obteniendo cuotas del préstamo {prestamo.id}: {e}")
-                cuotas_vencidas = []
+            if not hasattr(cliente, "fecha_nacimiento"):
+                logger.warning(
+                    f"Cliente {cliente.id} no tiene atributo fecha_nacimiento, omitiendo préstamo {prestamo.id}..."
+                )
+                continue
 
-            if len(cuotas_vencidas) > 3:
-                target = 2  # Alto riesgo
-            elif len(cuotas_vencidas) > 0:
-                target = 1  # Medio riesgo
-            else:
-                target = 0  # Bajo riesgo
-
-            training_data.append(
-                {
-                    "edad": edad,
-                    "ingreso": ingreso_estimado,
-                    "deuda_total": deuda_total,
-                    "ratio_deuda_ingreso": ratio_deuda_ingreso,
-                    "historial_pagos": historial_pagos,
-                    "dias_ultimo_prestamo": dias_ultimo_prestamo,
-                    "numero_prestamos_previos": prestamos_previos,
-                    "target": target,
-                }
-            )
+            # Calcular features
+            features = _calcular_features_prestamo(prestamo, cliente, db)
+            if features:
+                training_data.append(features)
 
         if len(training_data) < 10:
             raise HTTPException(
@@ -1328,28 +1424,7 @@ async def entrenar_modelo_riesgo(
             raise HTTPException(status_code=500, detail=resultado.get("error", "Error entrenando modelo"))
 
         # Guardar modelo en BD
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        modelo = ModeloRiesgo(
-            nombre=f"Modelo Riesgo {timestamp}",
-            version="1.0.0",
-            algoritmo=request.algoritmo,
-            accuracy=resultado["metrics"]["accuracy"],
-            precision=resultado["metrics"]["precision"],
-            recall=resultado["metrics"]["recall"],
-            f1_score=resultado["metrics"]["f1_score"],
-            roc_auc=resultado["metrics"].get("roc_auc"),
-            ruta_archivo=resultado["model_path"],
-            total_datos_entrenamiento=resultado["training_samples"],
-            total_datos_test=resultado["test_samples"],
-            test_size=request.test_size,
-            random_state=request.random_state,
-            features_usadas=",".join(resultado["features"]),
-            activo=False,
-        )
-
-        db.add(modelo)
-        db.commit()
-        db.refresh(modelo)
+        modelo = _guardar_modelo_riesgo(resultado, request, db)
 
         return {
             "job_id": str(modelo.id),
@@ -1360,41 +1435,7 @@ async def entrenar_modelo_riesgo(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
-        error_msg = str(e)
-        error_type = type(e).__name__
-        import traceback
-
-        error_traceback = traceback.format_exc()
-
-        logger.error(
-            f"❌ [ML-RIESGO] Error entrenando modelo de riesgo: {error_type}: {error_msg}\n"
-            f"Traceback completo:\n{error_traceback}",
-            exc_info=True,
-        )
-
-        # Mensaje más descriptivo según el tipo de error
-        if "scikit-learn" in error_msg.lower() or "sklearn" in error_msg.lower() or "SKLEARN" in error_msg:
-            detail_msg = "Error con scikit-learn. Verifica que esté instalado correctamente."
-        elif "stratify" in error_msg.lower():
-            detail_msg = "Error al dividir datos. Puede ser por pocas muestras de alguna clase."
-        elif "cliente" in error_msg.lower() or "relationship" in error_msg.lower() or "AttributeError" in error_type:
-            detail_msg = f"Error accediendo a datos de clientes ({error_type}): {error_msg[:200]}. Verifica la integridad de los datos y que los préstamos tengan clientes asociados."
-        elif "does not exist" in error_msg.lower() or "no such table" in error_msg.lower():
-            detail_msg = "La tabla de modelos de riesgo no está creada. Ejecuta las migraciones: alembic upgrade head"
-        elif "'NoneType' object has no attribute" in error_msg:
-            detail_msg = f"Error de datos: {error_msg[:200]}. Verifica que los préstamos tengan clientes y datos válidos."
-        elif "KeyError" in error_type:
-            detail_msg = f"Error de estructura de datos: {error_msg[:200]}. Verifica que las features estén completas."
-        elif "ValueError" in error_type:
-            detail_msg = f"Error de validación: {error_msg[:200]}"
-        elif "TypeError" in error_type:
-            detail_msg = f"Error de tipo de dato: {error_msg[:200]}. Verifica que los datos sean numéricos."
-        else:
-            # Incluir más información del error para debugging
-            detail_msg = f"Error entrenando modelo ({error_type}): {error_msg[:300]}"
-
-        raise HTTPException(status_code=500, detail=detail_msg)
+        raise _manejar_error_entrenamiento(e, db)
 
 
 @router.get("/ml-riesgo/jobs/{job_id}")
