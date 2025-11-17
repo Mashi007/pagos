@@ -34,6 +34,7 @@ from . import (  # aprobaciones,  # MODULO DESHABILITADO - Ver main.py
     users,
     validadores,
     whatsapp_webhook,
+    conversaciones_whatsapp,
 )
 
 __all__ = [
@@ -67,4 +68,5 @@ __all__ = [
     "validadores",
     "cobranzas",
     "whatsapp_webhook",
+    "conversaciones_whatsapp",
 ]

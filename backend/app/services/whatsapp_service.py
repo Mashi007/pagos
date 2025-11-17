@@ -275,6 +275,7 @@ class WhatsAppService:
         to_number: str,
         message: str,
         template_name: Optional[str] = None,
+        template_parameters: Optional[List[Dict[str, str]]] = None,
         forzar_envio_real: bool = False,
     ) -> Dict[str, Any]:
         """
@@ -350,6 +351,20 @@ class WhatsAppService:
             # Payload del mensaje
             if template_name:
                 # Mensaje con template (debe estar aprobado por Meta)
+                # Si se proporcionan parámetros del template, usarlos
+                # Si no, usar el mensaje completo como único parámetro
+                if template_parameters:
+                    # Usar parámetros específicos del template
+                    body_parameters = [
+                        {"type": "text", "text": param.get("text", "")}
+                        for param in template_parameters
+                    ]
+                    logger.info(f"📋 [TEMPLATE] Usando {len(template_parameters)} parámetros para template '{template_name}'")
+                else:
+                    # Fallback: usar mensaje completo como único parámetro
+                    body_parameters = [{"type": "text", "text": message}]
+                    logger.warning(f"⚠️ [TEMPLATE] No se proporcionaron parámetros, usando mensaje completo como parámetro único")
+                
                 payload = {
                     "messaging_product": "whatsapp",
                     "to": numero_destinatario,
@@ -360,7 +375,7 @@ class WhatsAppService:
                         "components": [
                             {
                                 "type": "body",
-                                "parameters": [{"type": "text", "text": message}],
+                                "parameters": body_parameters,
                             }
                         ],
                     },
@@ -378,8 +393,26 @@ class WhatsAppService:
                 # Logging de compliance: mensaje fuera de template
                 logger.info(f"💬 [COMPLIANCE] Enviando mensaje de texto libre a {numero_destinatario}")
 
+            # ✅ LOGGING DETALLADO: Mostrar payload que se envía a Meta
+            logger.info(f"📤 [ENVÍO] Enviando mensaje a Meta API:")
+            logger.info(f"   URL: {url}")
+            logger.info(f"   Destinatario: {numero_destinatario}")
+            logger.info(f"   Tipo: {'template' if template_name else 'text (libre - requiere ventana 24h)'}")
+            if template_name:
+                logger.info(f"   Template: {template_name}")
+            logger.info(f"   Payload: {payload}")
+
             # Enviar mensaje con retry
             response = await self._send_with_retry(url, headers, payload)
+
+            # ✅ LOGGING DETALLADO: Mostrar respuesta de Meta
+            logger.info(f"📥 [RESPUESTA] Meta respondió:")
+            logger.info(f"   Status Code: {response.status_code}")
+            try:
+                response_data = response.json() if response.content else {}
+                logger.info(f"   Response Body: {response_data}")
+            except:
+                logger.info(f"   Response Body: (no JSON) {response.text[:500]}")
 
             # Procesar respuesta
             if response.status_code == 200:
@@ -415,11 +448,26 @@ class WhatsAppService:
                 error_data = response.json() if response.content else {}
                 error_result = self._handle_meta_error(response.status_code, error_data)
 
-                # Logging de compliance: error
+                # ✅ LOGGING DETALLADO: Mostrar error completo de Meta
                 logger.error(
                     f"❌ [COMPLIANCE] Error enviando mensaje WhatsApp a {numero_destinatario}: "
                     f"{error_result.get('message')} (Código: {error_result.get('error_code')})"
                 )
+                logger.error(f"❌ [ERROR DETALLADO] Status Code: {response.status_code}")
+                logger.error(f"❌ [ERROR DETALLADO] Error Data: {error_data}")
+                
+                # ⚠️ ADVERTENCIA ESPECÍFICA: Si es error 400 y no hay template, probablemente es ventana de 24h
+                if response.status_code == 400 and not template_name:
+                    logger.warning(
+                        "⚠️ [POLÍTICA META] Error 400 sin template - Probable causa: "
+                        "Mensaje fuera de ventana de 24 horas. Meta requiere template aprobado "
+                        "para mensajes fuera de la ventana de 24h desde el último mensaje del usuario."
+                    )
+                    logger.warning(
+                        "⚠️ [SOLUCIÓN] Para enviar mensajes fuera de ventana de 24h, debes usar un "
+                        "template aprobado por Meta. Los mensajes de texto libre solo funcionan dentro "
+                        "de 24 horas desde el último mensaje del usuario."
+                    )
 
                 return {
                     "success": False,
@@ -524,6 +572,13 @@ Equipo de {settings.APP_NAME}
     async def test_connection(self) -> Dict[str, Any]:
         """
         Probar conexión con Meta Developers API
+        
+        ✅ ESTA FUNCIÓN HACE UNA LLAMADA HTTP REAL A META:
+        - Se conecta a graph.facebook.com
+        - Envía tu Access Token real
+        - Meta valida y responde
+        - Si Meta responde 200 OK = ACEPTÓ la conexión
+        - Si Meta responde 401/400/etc = RECHAZÓ la conexión
 
         Returns:
             Dict con resultado de la prueba
@@ -533,32 +588,56 @@ Equipo de {settings.APP_NAME}
             self._cargar_configuracion()
 
             if not self.access_token or not self.phone_number_id:
+                logger.warning("⚠️ [TEST CONEXIÓN] Credenciales no configuradas")
                 return {"success": False, "message": "Credenciales no configuradas"}
 
-            # URL para obtener información del número de teléfono
+            # ✅ CONSTRUIR URL REAL de Meta API
             url = f"{self.api_url}/{self.phone_number_id}"
+            logger.info(f"🔗 [TEST CONEXIÓN] Conectando a Meta API: {url}")
+            logger.info(f"🔑 [TEST CONEXIÓN] Usando Access Token: {self.access_token[:20]}... (primeros 20 caracteres)")
 
             headers = {
                 "Authorization": f"Bearer {self.access_token}",
             }
 
+            # ✅ HACER REQUEST HTTP REAL A META
+            logger.info("📡 [TEST CONEXIÓN] Enviando request HTTP real a graph.facebook.com...")
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.get(url, headers=headers)
+                
+                # ✅ META RESPONDIÓ REALMENTE
+                logger.info(f"📥 [TEST CONEXIÓN] Meta respondió con código HTTP: {response.status_code}")
 
                 if response.status_code == 200:
+                    # ✅ META ACEPTÓ LA CONEXIÓN
+                    logger.info("✅ [TEST CONEXIÓN] Meta ACEPTÓ la conexión - respondió 200 OK")
+                    logger.info("✅ [TEST CONEXIÓN] Tu Access Token es VÁLIDO")
+                    logger.info("✅ [TEST CONEXIÓN] Tu Phone Number ID es CORRECTO")
+                    logger.info("✅ [TEST CONEXIÓN] Estás CONECTADO a Meta Developers API")
                     return {
                         "success": True,
                         "message": "Conexión exitosa con Meta Developers API",
                     }
                 else:
+                    # ❌ META RECHAZÓ LA CONEXIÓN
                     error_data = response.json() if response.content else {}
                     error_result = self._handle_meta_error(response.status_code, error_data)
+                    logger.error(f"❌ [TEST CONEXIÓN] Meta RECHAZÓ la conexión - código: {response.status_code}")
+                    logger.error(f"❌ [TEST CONEXIÓN] Error de Meta: {error_result.get('message')}")
+                    logger.error(f"❌ [TEST CONEXIÓN] Error code: {error_result.get('error_code')}")
                     return {
                         "success": False,
                         "message": error_result.get("message", f"Error de conexión: {response.status_code}"),
                         "error_code": error_result.get("error_code", "CONNECTION_ERROR"),
                     }
 
+        except httpx.ConnectError as e:
+            logger.error(f"❌ [TEST CONEXIÓN] Error de conexión de red: {str(e)}")
+            logger.error("❌ [TEST CONEXIÓN] No se pudo conectar a graph.facebook.com")
+            return {"success": False, "message": f"Error de conexión de red: {str(e)}"}
+        except httpx.TimeoutException as e:
+            logger.error(f"❌ [TEST CONEXIÓN] Timeout esperando respuesta de Meta: {str(e)}")
+            return {"success": False, "message": f"Timeout esperando respuesta de Meta: {str(e)}"}
         except Exception as e:
-            logger.error(f"Error probando conexión WhatsApp: {str(e)}")
+            logger.error(f"❌ [TEST CONEXIÓN] Error probando conexión WhatsApp: {str(e)}", exc_info=True)
             return {"success": False, "message": f"Error de conexión: {str(e)}"}

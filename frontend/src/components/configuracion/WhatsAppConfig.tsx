@@ -149,20 +149,32 @@ export function WhatsAppConfig() {
         }
       }
 
+      console.log('📤 [MENSAJE PRUEBA] Enviando mensaje de prueba...')
       const resultado = await whatsappConfigService.probarConfiguracionWhatsApp(
         telefonoPruebaDestino.trim() || undefined,
         mensajePrueba.trim() || undefined
       )
       setResultadoPrueba(resultado)
       
-      if (resultado.mensaje?.includes('enviado')) {
+      // ✅ LOG DETALLADO: Mostrar resultado del mensaje de prueba
+      console.log('📊 [MENSAJE PRUEBA] Resultado completo:', resultado)
+      
+      if (resultado.success || resultado.mensaje?.includes('enviado')) {
+        console.log('✅ [CONFIRMACIÓN] Mensaje de prueba ENVIADO EXITOSAMENTE')
+        console.log('✅ [CONFIRMACIÓN] WhatsApp ACEPTÓ y procesó tu mensaje')
+        console.log('✅ [CONFIRMACIÓN] Meta Developers API está funcionando correctamente')
+        console.log('✅ [CONFIRMACIÓN] Tu configuración es VÁLIDA y está CONECTADA')
         toast.success(`Mensaje de prueba enviado exitosamente a ${resultado.telefono_destino || 'tu teléfono'}`)
       } else {
+        console.error('❌ [CONFIRMACIÓN] Mensaje de prueba FALLÓ')
+        console.error('❌ [CONFIRMACIÓN] Error:', resultado.error || resultado.mensaje)
+        console.error('❌ [CONFIRMACIÓN] WhatsApp/Meta rechazó el envío')
         toast.error('Error enviando mensaje de prueba')
       }
     } catch (error: any) {
-      console.error('Error probando configuración:', error)
+      console.error('❌ [ERROR] Error probando configuración:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error desconocido'
+      console.error('❌ [ERROR] Detalle del error:', mensajeError)
       toast.error(`Error probando configuración: ${mensajeError}`)
       setResultadoPrueba({ error: mensajeError })
     } finally {
@@ -179,14 +191,49 @@ export function WhatsAppConfig() {
       const resultado = await whatsappConfigService.testCompletoWhatsApp()
       setResultadoTestCompleto(resultado)
       
+      // ✅ LOG DETALLADO: Mostrar resultados del test completo
+      console.log('📊 [TEST COMPLETO] Resultado completo:', resultado)
+      
+      // Verificar específicamente la conexión con Meta API
+      const testConexion = resultado.tests?.conexion
+      if (testConexion) {
+        console.log('🔍 [TEST CONEXIÓN META API]:', {
+          nombre: testConexion.nombre,
+          exito: testConexion.exito,
+          mensaje: testConexion.mensaje || testConexion.error,
+          detalles: testConexion.detalles,
+          error: testConexion.error
+        })
+        
+        if (testConexion.exito) {
+          console.log('✅ [CONFIRMACIÓN] WhatsApp ACEPTÓ la conexión - Meta respondió 200 OK')
+          console.log('✅ [CONFIRMACIÓN] Tu Access Token es VÁLIDO')
+          console.log('✅ [CONFIRMACIÓN] Tu Phone Number ID es CORRECTO')
+          console.log('✅ [CONFIRMACIÓN] Estás CONECTADO a Meta Developers API')
+        } else {
+          console.error('❌ [CONFIRMACIÓN] WhatsApp RECHAZÓ la conexión')
+          console.error('❌ [CONFIRMACIÓN] Error:', testConexion.error || testConexion.mensaje)
+          console.error('❌ [CONFIRMACIÓN] Meta respondió con error - Revisa tu configuración')
+        }
+      }
+      
       const resumen = resultado.resumen || {}
+      console.log('📈 [RESUMEN TEST]:', {
+        total: resumen.total,
+        exitosos: resumen.exitosos,
+        fallidos: resumen.fallidos,
+        advertencias: resumen.advertencias
+      })
+      
       if (resumen.fallidos === 0) {
         toast.success(`✅ Test completo: ${resumen.exitosos}/${resumen.total} tests exitosos`)
+        console.log('✅ [RESULTADO FINAL] Todos los tests pasaron - WhatsApp está configurado correctamente')
       } else {
         toast.warning(`⚠️ Test completo: ${resumen.exitosos}/${resumen.total} exitosos, ${resumen.fallidos} fallidos`)
+        console.warning('⚠️ [RESULTADO FINAL] Algunos tests fallaron - Revisa la configuración')
       }
     } catch (error: any) {
-      console.error('Error ejecutando test completo:', error)
+      console.error('❌ [ERROR] Error ejecutando test completo:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error desconocido'
       toast.error(`Error ejecutando test completo: ${mensajeError}`)
       setResultadoTestCompleto({ error: mensajeError })

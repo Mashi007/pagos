@@ -482,7 +482,18 @@ class ApiClient {
 
   async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     try {
-      const response: AxiosResponse<T> = await this.client.post(url, data, config)
+      // Detectar endpoints lentos (entrenamiento ML, etc.) y usar timeout extendido
+      const isSlowEndpoint = url.includes('/ml-riesgo/entrenar') || 
+                            url.includes('/ml-impago/entrenar') ||
+                            url.includes('/fine-tuning/iniciar') ||
+                            url.includes('/rag/generar-embeddings')
+      
+      const defaultTimeout = isSlowEndpoint ? 300000 : DEFAULT_TIMEOUT_MS // 5 minutos para ML, 30s por defecto
+      // Priorizar timeout explícito si se proporciona, sino usar el calculado
+      const timeout = config?.timeout ?? defaultTimeout
+      const finalConfig = { ...config, timeout }
+      
+      const response: AxiosResponse<T> = await this.client.post(url, data, finalConfig)
       
       // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
       if (response.status >= 400 && response.status < 500) {

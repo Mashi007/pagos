@@ -446,7 +446,8 @@ class MLImpagoCuotasService:
             self.scalers["impago_cuotas_scaler"] = scaler
 
             logger.info(f"✅ Modelo de impago entrenado exitosamente: {model_filename}")
-            logger.info(f"   Accuracy: {accuracy:.4f}, F1: {f1:.4f}, ROC AUC: {roc_auc:.4f if roc_auc else 'N/A'}")
+            roc_auc_str = f"{roc_auc:.4f}" if roc_auc is not None else "N/A"
+            logger.info(f"   Accuracy: {accuracy:.4f}, F1: {f1:.4f}, ROC AUC: {roc_auc_str}")
 
             return {
                 "success": True,

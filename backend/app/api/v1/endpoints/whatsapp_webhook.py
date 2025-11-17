@@ -321,13 +321,21 @@ async def _procesar_estados(statuses: list, db: Session) -> int:
 async def _procesar_mensajes_recibidos(messages: list, db: Session) -> int:
     """
     Procesar mensajes recibidos de clientes
-
-    Esto permite recibir mensajes de clientes y responder automáticamente.
-    Por ahora solo registramos los mensajes recibidos.
+    
+    ✅ BOT DE WHATSAPP IMPLEMENTADO:
+    - Guarda mensajes en BD (tabla conversaciones_whatsapp)
+    - Busca cliente por número de teléfono
+    - Genera respuestas automáticas
+    - Envía respuestas al cliente
+    - Registra toda la conversación en el CRM
     """
     eventos_procesados = 0
 
     try:
+        from app.services.whatsapp_bot_service import WhatsAppBotService
+
+        bot_service = WhatsAppBotService(db=db)
+
         for message in messages:
             from_number = message.get("from")
             message_id = message.get("id")
@@ -346,13 +354,23 @@ async def _procesar_mensajes_recibidos(messages: list, db: Session) -> int:
 
             logger.info(f"📨 Mensaje recibido de {from_number}: {body[:50]}... (ID: {message_id}, Tipo: {message_type})")
 
-            # Aquí podrías:
-            # 1. Guardar el mensaje en una tabla de mensajes recibidos
-            # 2. Procesar comandos automáticos
-            # 3. Enviar respuestas automáticas
-            # 4. Actualizar última interacción del cliente (para ventana de 24h)
+            # ✅ PROCESAR CON BOT: Guardar, buscar cliente, generar y enviar respuesta
+            resultado = await bot_service.procesar_mensaje_recibido(
+                from_number=from_number,
+                message_id=message_id,
+                message_type=message_type,
+                body=body,
+                timestamp=timestamp,
+            )
 
-            eventos_procesados += 1
+            if resultado.get("success"):
+                logger.info(
+                    f"✅ Mensaje procesado: Cliente {'encontrado' if resultado.get('cliente_encontrado') else 'no encontrado'}, "
+                    f"Respuesta {'enviada' if resultado.get('respuesta_enviada') else 'no enviada'}"
+                )
+                eventos_procesados += 1
+            else:
+                logger.error(f"❌ Error procesando mensaje: {resultado.get('error')}")
 
     except Exception as e:
         logger.error(f"❌ Error procesando mensajes recibidos: {e}", exc_info=True)

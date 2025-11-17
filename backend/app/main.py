@@ -103,6 +103,7 @@ from app.api.v1.endpoints import (  # noqa: E402; aprobaciones deshabilitado - v
     users,
     validadores,
     whatsapp_webhook,
+    conversaciones_whatsapp,
 )
 
 # Forzar inicialización de cache DESPUÉS de configurar logging
@@ -439,6 +440,7 @@ app.include_router(auditoria.router, prefix="/api/v1", tags=["auditoria"])
 app.include_router(configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"])
 app.include_router(ai_training.router, prefix="/api/v1/ai/training", tags=["ai-training"])
 app.include_router(whatsapp_webhook.router, prefix="/api/v1", tags=["whatsapp-webhook"])
+app.include_router(conversaciones_whatsapp.router, prefix="/api/v1", tags=["conversaciones-whatsapp"])
 # IMPORTANTE: Registrar estos routers ANTES de otros para evitar conflictos de rutas
 # Orden: modelos_vehiculos → analistas → concesionarios
 app.include_router(
