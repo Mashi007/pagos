@@ -52,7 +52,7 @@ export function FineTuningTab() {
 
   // Estados para nuevo entrenamiento
   const [mostrarFormEntrenamiento, setMostrarFormEntrenamiento] = useState(false)
-  const [modeloBase, setModeloBase] = useState('gpt-4o')
+  const [modeloBase, setModeloBase] = useState('gpt-4o-2024-08-06')
   const [archivoId, setArchivoId] = useState('')
 
   // Estados para crear conversación manual
@@ -1801,8 +1801,8 @@ export function FineTuningTab() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gpt-4o">gpt-4o (Recomendado)</SelectItem>
-                    <SelectItem value="gpt-4o-2024-08-06">gpt-4o-2024-08-06 (Versión específica)</SelectItem>
+                    <SelectItem value="gpt-4o-2024-08-06">gpt-4o-2024-08-06 (Recomendado - Versión específica)</SelectItem>
+                    <SelectItem value="gpt-4o">gpt-4o (Puede no estar disponible)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1885,7 +1885,7 @@ export function FineTuningTab() {
                     <li><strong>gpt-4o:</strong> 2-4 horas (depende del tamaño del archivo)</li>
                   </ul>
                   <p className="mt-1 text-blue-600">
-                    <strong>⚠️ Nota:</strong> Solo gpt-4o está disponible para fine-tuning. gpt-3.5-turbo y gpt-4o-mini no soportan fine-tuning.
+                    <strong>⚠️ Nota:</strong> Para fine-tuning, se recomienda usar <code className="bg-blue-100 px-1 rounded">gpt-4o-2024-08-06</code> (versión específica). gpt-3.5-turbo y gpt-4o-mini no soportan fine-tuning.
                   </p>
                   <p className="mt-2 text-blue-700">
                     El sistema actualiza automáticamente el estado cada 10 segundos. Los jobs pueden tardar más tiempo si OpenAI tiene alta demanda.

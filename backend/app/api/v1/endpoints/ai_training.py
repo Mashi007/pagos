@@ -83,7 +83,7 @@ class PrepararDatosRequest(BaseModel):
 
 class IniciarFineTuningRequest(BaseModel):
     archivo_id: str
-    modelo_base: str = "gpt-4o"  # gpt-4o-mini no está disponible para fine-tuning, solo gpt-4o
+    modelo_base: str = "gpt-4o-2024-08-06"  # Versión específica de gpt-4o requerida para fine-tuning
     epochs: Optional[int] = None
     learning_rate: Optional[float] = None
 

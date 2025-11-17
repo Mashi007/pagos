@@ -404,7 +404,7 @@ Por favor, mejora ambos textos siguiendo las instrucciones del sistema. Responde
     async def iniciar_fine_tuning(
         self,
         archivo_id: str,
-        modelo_base: str = "gpt-4o",
+        modelo_base: str = "gpt-4o-2024-08-06",
         epochs: Optional[int] = None,
         learning_rate: Optional[float] = None,
     ) -> Dict:
@@ -413,15 +413,22 @@ Por favor, mejora ambos textos siguiendo las instrucciones del sistema. Responde
 
         Args:
             archivo_id: ID del archivo subido
-            modelo_base: Modelo base a usar (gpt-4o, gpt-4o-2024-08-06, etc.)
-                       Nota: gpt-3.5-turbo y gpt-4o-mini no están disponibles para fine-tuning
-                       Solo gpt-4o y versiones específicas están disponibles
+            modelo_base: Modelo base a usar. Modelos disponibles:
+                       - gpt-4o-2024-08-06 (recomendado, versión específica de gpt-4o)
+                       - gpt-4o (puede no estar disponible, usar versión específica)
+                       Nota: gpt-3.5-turbo y gpt-4o-mini NO están disponibles para fine-tuning
             epochs: Número de épocas (opcional)
             learning_rate: Learning rate (opcional)
 
         Returns:
             Dict con información del job
         """
+        # Si el modelo es "gpt-4o" sin versión específica, usar la versión específica
+        # OpenAI requiere la versión específica "gpt-4o-2024-08-06" para fine-tuning
+        if modelo_base == "gpt-4o":
+            logger.info(f"ℹ️ Modelo 'gpt-4o' convertido a 'gpt-4o-2024-08-06' (versión requerida para fine-tuning)")
+            modelo_base = "gpt-4o-2024-08-06"
+        
         try:
             payload = {
                 "training_file": archivo_id,
@@ -448,6 +455,28 @@ Por favor, mejora ambos textos siguiendo las instrucciones del sistema. Responde
                 if response.status_code != 200:
                     error_msg = response.text
                     logger.error(f"Error iniciando fine-tuning: {error_msg}")
+                    
+                    # Intentar parsear el error para dar un mensaje más claro
+                    try:
+                        error_data = response.json()
+                        if isinstance(error_data, dict) and "error" in error_data:
+                            error_info = error_data["error"]
+                            if isinstance(error_info, dict):
+                                error_code = error_info.get("code", "")
+                                error_message = error_info.get("message", error_msg)
+                                
+                                if error_code == "model_not_available":
+                                    raise Exception(
+                                        f"El modelo '{modelo_base}' no está disponible para fine-tuning. "
+                                        f"Por favor, usa 'gpt-4o-2024-08-06' o verifica que tu cuenta de OpenAI tenga acceso al fine-tuning. "
+                                        f"Error: {error_message}"
+                                    )
+                                else:
+                                    raise Exception(f"Error iniciando fine-tuning [{error_code}]: {error_message}")
+                    except (ValueError, KeyError):
+                        # Si no se puede parsear el JSON, usar el mensaje original
+                        pass
+                    
                     raise Exception(f"Error iniciando fine-tuning: {error_msg}")
 
                 job_data = response.json()

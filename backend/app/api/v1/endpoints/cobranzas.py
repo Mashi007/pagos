@@ -19,7 +19,7 @@ from reportlab.lib.pagesizes import A4  # type: ignore[import-untyped]
 from reportlab.lib.styles import getSampleStyleSheet  # type: ignore[import-untyped]
 from reportlab.lib.units import inch  # type: ignore[import-untyped]
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle  # type: ignore[import-untyped]
-from sqlalchemy import case, func, or_  # type: ignore[import-untyped]
+from sqlalchemy import case, func, or_, text  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
@@ -311,7 +311,22 @@ def obtener_clientes_atrasados(
             fecha_limite = hoy - timedelta(days=dias_retraso)
             cuotas_filtros.append(Cuota.fecha_vencimiento <= fecha_limite)
 
+        # Ejecutar la query primero para detectar errores temprano
+        # Esto evita que la transacción se aborte cuando se use en el JOIN
         try:
+            # Primero ejecutar la query para validar que funciona
+            cuotas_vencidas_resultados = (
+                db.query(
+                    Cuota.prestamo_id,
+                    func.count(Cuota.id).label("cuotas_vencidas"),
+                    func.sum(Cuota.monto_cuota).label("total_adeudado"),
+                    func.min(Cuota.fecha_vencimiento).label("fecha_primera_vencida"),
+                )
+                .filter(*cuotas_filtros)
+                .group_by(Cuota.prestamo_id)
+                .all()
+            )
+            # Si llegamos aquí, la query funciona. Ahora crear la subquery
             cuotas_vencidas_subq = (
                 db.query(
                     Cuota.prestamo_id,
@@ -429,6 +444,20 @@ def obtener_clientes_atrasados(
         prestamo_ids = [row.prestamo_id for row in resultados]
         prestamos_dict = {}
         if prestamo_ids:
+            # Rollback preventivo para asegurar transacción limpia
+            try:
+                # Verificar que la transacción esté activa y no abortada
+                db.execute(text("SELECT 1"))
+            except Exception as test_error:
+                error_str = str(test_error).lower()
+                if "aborted" in error_str or "infailedsqltransaction" in error_str:
+                    logger.warning("⚠️ Transacción abortada detectada antes de cargar préstamos, haciendo rollback preventivo")
+                    try:
+                        db.rollback()
+                        logger.info("✅ Rollback preventivo exitoso")
+                    except Exception:
+                        pass
+            
             try:
                 # Intentar cargar préstamos normalmente
                 prestamos = db.query(Prestamo).filter(Prestamo.id.in_(prestamo_ids)).all()
