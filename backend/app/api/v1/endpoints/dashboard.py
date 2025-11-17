@@ -1317,6 +1317,154 @@ def _generar_lista_fechas(fecha_inicio: date, fecha_fin: date) -> List[date]:
     return fechas
 
 
+# ============================================================================
+# FUNCIONES HELPER PARA DASHBOARD ADMINISTRADOR - Refactorización
+# ============================================================================
+
+
+def _calcular_metricas_cartera(
+    db: Session,
+    base_prestamo_query,
+    hoy: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+    fecha_inicio: Optional[date],
+    fecha_fin: Optional[date],
+) -> dict:
+    """
+    Calcula métricas de cartera (total, vencida, al día, porcentaje mora).
+    Retorna diccionario con las métricas.
+    """
+    from decimal import Decimal
+
+    from sqlalchemy import and_, func
+
+    from app.models.cuota import Cuota
+    from app.models.prestamo import Prestamo
+
+    # 1. CARTERA TOTAL
+    cartera_total = base_prestamo_query.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0")
+
+    # 2. CARTERA VENCIDA
+    cartera_vencida_query = (
+        db.query(func.sum(Cuota.monto_cuota))
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            and_(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+                Prestamo.estado == "APROBADO",
+            )
+        )
+    )
+    cartera_vencida_query = FiltrosDashboard.aplicar_filtros_cuota(
+        cartera_vencida_query,
+        analista,
+        concesionario,
+        modelo,
+        fecha_inicio,
+        fecha_fin,
+    )
+    cartera_vencida = cartera_vencida_query.scalar() or Decimal("0")
+
+    # 3. CARTERA AL DÍA
+    cartera_al_dia = cartera_total - cartera_vencida
+
+    # 4. PORCENTAJE DE MORA
+    porcentaje_mora = (float(cartera_vencida) / float(cartera_total) * 100) if cartera_total > 0 else 0
+
+    return {
+        "cartera_total": cartera_total,
+        "cartera_vencida": cartera_vencida,
+        "cartera_al_dia": cartera_al_dia,
+        "porcentaje_mora": porcentaje_mora,
+    }
+
+
+def _calcular_pagos_hoy(db: Session, hoy: date) -> tuple[int, Decimal]:
+    """
+    Calcula pagos de hoy (cantidad y monto).
+    Retorna (cantidad, monto).
+    """
+    from decimal import Decimal
+
+    from datetime import datetime
+    from sqlalchemy import text
+
+    hoy_dt = datetime.combine(hoy, datetime.min.time())
+    hoy_dt_end = datetime.combine(hoy, datetime.max.time())
+
+    pagos_hoy_query = db.execute(
+        text("SELECT COUNT(*) FROM pagos WHERE fecha_pago >= :inicio AND fecha_pago <= :fin AND activo = TRUE").bindparams(
+            inicio=hoy_dt, fin=hoy_dt_end
+        )
+    )
+    pagos_hoy = pagos_hoy_query.scalar() or 0
+
+    monto_pagos_hoy_query = db.execute(
+        text(
+            "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE fecha_pago >= :inicio AND fecha_pago <= :fin AND monto_pagado IS NOT NULL AND monto_pagado > 0 AND activo = TRUE"
+        ).bindparams(inicio=hoy_dt, fin=hoy_dt_end)
+    )
+    monto_pagos_hoy = Decimal(str(monto_pagos_hoy_query.scalar() or 0))
+
+    return pagos_hoy, monto_pagos_hoy
+
+
+def _calcular_metricas_clientes(
+    db: Session,
+    base_prestamo_query,
+    hoy: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+    fecha_inicio: Optional[date],
+    fecha_fin: Optional[date],
+) -> dict:
+    """
+    Calcula métricas de clientes (activos, en mora).
+    Retorna diccionario con las métricas.
+    """
+    from sqlalchemy import and_, func
+
+    from app.models.cuota import Cuota
+    from app.models.prestamo import Prestamo
+
+    # CLIENTES ACTIVOS
+    clientes_activos = base_prestamo_query.with_entities(func.count(func.distinct(Prestamo.cedula))).scalar() or 0
+
+    # CLIENTES EN MORA
+    clientes_mora_query = (
+        db.query(func.count(func.distinct(Prestamo.cedula)))
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .filter(
+            and_(
+                Cuota.fecha_vencimiento < hoy,
+                Cuota.estado != "PAGADO",
+                Prestamo.estado == "APROBADO",
+            )
+        )
+    )
+    if analista or concesionario or modelo or fecha_inicio or fecha_fin:
+        clientes_mora_query = FiltrosDashboard.aplicar_filtros_cuota(
+            clientes_mora_query,
+            analista,
+            concesionario,
+            modelo,
+            fecha_inicio,
+            fecha_fin,
+        )
+    clientes_en_mora = clientes_mora_query.scalar() or 0
+
+    return {
+        "clientes_activos": clientes_activos,
+        "clientes_en_mora": clientes_en_mora,
+    }
+
+
 @router.get("/cobros-diarios")
 @cache_result(ttl=300, key_prefix="dashboard")  # ✅ Agregar caché
 def obtener_cobros_diarios(
@@ -1406,95 +1554,24 @@ def dashboard_administrador(
             fecha_fin,
         )
 
-        # 1. CARTERA TOTAL - Suma de todos los préstamos activos
-        cartera_total = base_prestamo_query.with_entities(func.sum(Prestamo.total_financiamiento)).scalar() or Decimal("0")
-
-        # 2. CARTERA VENCIDA - Monto de préstamos con cuotas vencidas (no pagadas)
-        # ✅ Usar select_from para evitar ambigüedad en JOIN
-        cartera_vencida_query = (
-            db.query(func.sum(Cuota.monto_cuota))
-            .select_from(Cuota)
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                and_(
-                    Cuota.fecha_vencimiento < hoy,
-                    Cuota.estado != "PAGADO",
-                    Prestamo.estado == "APROBADO",
-                )
-            )
+        # 1-4. MÉTRICAS DE CARTERA
+        metricas_cartera = _calcular_metricas_cartera(
+            db, base_prestamo_query, hoy, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        cartera_vencida_query = FiltrosDashboard.aplicar_filtros_cuota(
-            cartera_vencida_query,
-            analista,
-            concesionario,
-            modelo,
-            fecha_inicio,
-            fecha_fin,
+        cartera_total = metricas_cartera["cartera_total"]
+        cartera_vencida = metricas_cartera["cartera_vencida"]
+        cartera_al_dia = metricas_cartera["cartera_al_dia"]
+        porcentaje_mora = metricas_cartera["porcentaje_mora"]
+
+        # 5. PAGOS DE HOY
+        pagos_hoy, monto_pagos_hoy = _calcular_pagos_hoy(db, hoy)
+
+        # 6-7. MÉTRICAS DE CLIENTES
+        metricas_clientes = _calcular_metricas_clientes(
+            db, base_prestamo_query, hoy, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
-        cartera_vencida = cartera_vencida_query.scalar() or Decimal("0")
-
-        # 3. CARTERA AL DÍA - Cartera total menos cartera vencida
-        cartera_al_dia = cartera_total - cartera_vencida
-
-        # 4. PORCENTAJE DE MORA
-        porcentaje_mora = (float(cartera_vencida) / float(cartera_total) * 100) if cartera_total > 0 else 0
-
-        # 5. PAGOS DE HOY (con filtros)
-        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
-        # text ya está importado al inicio del archivo
-
-        hoy_dt = datetime.combine(hoy, datetime.min.time())
-        hoy_dt_end = datetime.combine(hoy, datetime.max.time())
-
-        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
-        pagos_hoy_query = db.execute(
-            text("SELECT COUNT(*) FROM pagos WHERE fecha_pago >= :inicio AND fecha_pago <= :fin AND activo = TRUE").bindparams(
-                inicio=hoy_dt, fin=hoy_dt_end
-            )
-        )
-        pagos_hoy = pagos_hoy_query.scalar() or 0
-
-        monto_pagos_hoy_query = db.execute(
-            text(
-                "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE fecha_pago >= :inicio AND fecha_pago <= :fin AND monto_pagado IS NOT NULL AND monto_pagado > 0 AND activo = TRUE"
-            ).bindparams(inicio=hoy_dt, fin=hoy_dt_end)
-        )
-        monto_pagos_hoy = Decimal(str(monto_pagos_hoy_query.scalar() or 0))
-
-        # ⚠️ Filtros por analista/concesionario/modelo no aplicados aquí (requeriría JOIN con prestamos)
-        # if analista or concesionario or modelo:
-        #     # No disponible sin prestamo_id
-
-        # ⚠️ Filtros ya aplicados arriba con SQL directo, valores ya calculados
-
-        # 6. CLIENTES ACTIVOS - Clientes con préstamos activos
-        clientes_activos = base_prestamo_query.with_entities(func.count(func.distinct(Prestamo.cedula))).scalar() or 0
-
-        # 7. CLIENTES EN MORA - Clientes con cuotas vencidas
-        # ✅ Usar select_from con Cuota como base y JOIN explícito
-        clientes_mora_query = (
-            db.query(func.count(func.distinct(Prestamo.cedula)))
-            .select_from(Cuota)
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                and_(
-                    Cuota.fecha_vencimiento < hoy,
-                    Cuota.estado != "PAGADO",
-                    Prestamo.estado == "APROBADO",
-                )
-            )
-        )
-        # Aplicar filtros solo si se proporcionan (evitar errores si no hay filtros)
-        if analista or concesionario or modelo or fecha_inicio or fecha_fin:
-            clientes_mora_query = FiltrosDashboard.aplicar_filtros_cuota(
-                clientes_mora_query,
-                analista,
-                concesionario,
-                modelo,
-                fecha_inicio,
-                fecha_fin,
-            )
-        clientes_en_mora = clientes_mora_query.scalar() or 0
+        clientes_activos = metricas_clientes["clientes_activos"]
+        clientes_en_mora = metricas_clientes["clientes_en_mora"]
 
         # 8. PRÉSTAMOS ACTIVOS (calculado pero no usado actualmente en respuesta)
         # prestamos_activos = (
