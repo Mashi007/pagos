@@ -28,9 +28,7 @@ class Ticket(Base):
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
 
     # Relación con conversación de WhatsApp (opcional)
-    conversacion_whatsapp_id = Column(
-        Integer, ForeignKey("conversaciones_whatsapp.id"), nullable=True, index=True
-    )
+    conversacion_whatsapp_id = Column(Integer, ForeignKey("conversaciones_whatsapp.id"), nullable=True, index=True)
 
     # Estado y prioridad
     estado = Column(String(20), nullable=False, default="abierto", index=True)  # abierto, en_proceso, resuelto, cerrado
@@ -65,13 +63,17 @@ class Ticket(Base):
             "descripcion": self.descripcion,
             "cliente_id": self.cliente_id,
             "cliente": self.cliente.nombres + " " + self.cliente.apellidos if self.cliente else None,
-            "clienteData": {
-                "id": self.cliente.id,
-                "nombres": self.cliente.nombres,
-                "apellidos": self.cliente.apellidos,
-                "cedula": self.cliente.cedula,
-                "telefono": self.cliente.telefono,
-            } if self.cliente else None,
+            "clienteData": (
+                {
+                    "id": self.cliente.id,
+                    "nombres": self.cliente.nombres,
+                    "apellidos": self.cliente.apellidos,
+                    "cedula": self.cliente.cedula,
+                    "telefono": self.cliente.telefono,
+                }
+                if self.cliente
+                else None
+            ),
             "conversacion_whatsapp_id": self.conversacion_whatsapp_id,
             "estado": self.estado,
             "prioridad": self.prioridad,
@@ -82,4 +84,3 @@ class Ticket(Base):
             "fechaCreacion": self.creado_en.isoformat() if self.creado_en else None,
             "fechaActualizacion": self.actualizado_en.isoformat() if self.actualizado_en else None,
         }
-
