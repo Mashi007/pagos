@@ -411,7 +411,18 @@ class ApiClient {
           const errorDetail = typeof responseData?.detail === 'string' 
             ? responseData.detail 
             : responseData?.message || 'Error interno del servidor'
-          console.error('❌ [ApiClient] Error 500 del servidor:', errorDetail)
+          
+          // Logging detallado para diagnóstico
+          console.error('❌ [ApiClient] Error 500 del servidor:', {
+            detail: errorDetail,
+            message: responseData?.message,
+            url: error.config?.url,
+            method: error.config?.method,
+            status: error.response?.status,
+            fullError: error
+          })
+          
+          // Mostrar toast con el mensaje del backend (ahora más específico)
           toast.error(errorDetail, { duration: 10000 })
           break
         case 503:

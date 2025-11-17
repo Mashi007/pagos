@@ -5354,12 +5354,24 @@ def obtener_cobranzas_semanales(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error obteniendo tendencia mensual de financiamiento: {e}", exc_info=True)
+        error_type = type(e).__name__
+        error_message = str(e)
+        logger.error(f"❌ [cobranzas-semanales] Error obteniendo cobranzas semanales: {error_type}: {error_message}", exc_info=True)
         try:
             db.rollback()  # ✅ Rollback para restaurar transacción después de error
         except Exception:
             pass
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        
+        # Proporcionar mensaje más específico según el tipo de error
+        error_lower = error_message.lower()
+        if "timeout" in error_lower or "timed out" in error_lower:
+            detail = "Timeout al consultar cobranzas semanales. La consulta está tomando demasiado tiempo."
+        elif "connection" in error_lower or "pool" in error_lower:
+            detail = "Error de conexión al consultar cobranzas semanales. Intenta nuevamente."
+        else:
+            detail = f"Error al obtener cobranzas semanales: {error_message[:200]}"
+        
+        raise HTTPException(status_code=500, detail=detail)
 
 
 @router.get("/cobros-por-analista")

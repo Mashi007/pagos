@@ -126,10 +126,26 @@ def get_db() -> Generator:
             raise e
 
         # Solo manejar errores reales de DB
-        logger.error(f"Error de base de datos: {type(e).__name__}: {str(e)}")
+        error_type = type(e).__name__
+        error_message = str(e)
+        logger.error(f"Error de base de datos: {error_type}: {error_message}", exc_info=True)
+        
+        # Detectar tipos específicos de errores para mensajes más informativos
+        error_lower = error_message.lower()
+        if "timeout" in error_lower or "timed out" in error_lower:
+            detail_message = "Timeout de conexión a la base de datos. El servidor está sobrecargado o la conexión es lenta."
+        elif "pool" in error_lower and ("exhausted" in error_lower or "timeout" in error_lower):
+            detail_message = "Pool de conexiones agotado. Demasiadas solicitudes simultáneas. Intenta nuevamente en unos momentos."
+        elif "connection" in error_lower and ("lost" in error_lower or "closed" in error_lower or "refused" in error_lower):
+            detail_message = "Conexión a la base de datos perdida o rechazada. Verifica que el servidor de base de datos esté disponible."
+        elif "operationalerror" in error_lower or "connectionerror" in error_lower:
+            detail_message = f"Error operacional de base de datos: {error_message[:200]}"
+        else:
+            # Mensaje genérico pero con más contexto
+            detail_message = f"Error de conexión a la base de datos: {error_type}"
 
         # Crear HTTPException para errores de DB
-        raise HTTPException(status_code=500, detail="Error de conexión a la base de datos")
+        raise HTTPException(status_code=500, detail=detail_message)
     finally:
         if db:
             try:
