@@ -5356,12 +5356,14 @@ def obtener_cobranzas_semanales(
     except Exception as e:
         error_type = type(e).__name__
         error_message = str(e)
-        logger.error(f"❌ [cobranzas-semanales] Error obteniendo cobranzas semanales: {error_type}: {error_message}", exc_info=True)
+        logger.error(
+            f"❌ [cobranzas-semanales] Error obteniendo cobranzas semanales: {error_type}: {error_message}", exc_info=True
+        )
         try:
             db.rollback()  # ✅ Rollback para restaurar transacción después de error
         except Exception:
             pass
-        
+
         # Proporcionar mensaje más específico según el tipo de error
         error_lower = error_message.lower()
         if "timeout" in error_lower or "timed out" in error_lower:
@@ -5370,7 +5372,7 @@ def obtener_cobranzas_semanales(
             detail = "Error de conexión al consultar cobranzas semanales. Intenta nuevamente."
         else:
             detail = f"Error al obtener cobranzas semanales: {error_message[:200]}"
-        
+
         raise HTTPException(status_code=500, detail=detail)
 
 
