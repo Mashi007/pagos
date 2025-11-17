@@ -246,7 +246,7 @@ export function Cobranzas() {
   }
 
   // Función para iniciar edición de ML Impago
-  const iniciarEdicionMLImpago = (prestamoId: number, mlImpagoActual: { nivel_riesgo: string; probabilidad_impago: number } | null) => {
+  const iniciarEdicionMLImpago = (prestamoId: number, mlImpagoActual: { nivel_riesgo: string; probabilidad_impago: number } | null | undefined) => {
     setEditandoMLImpago(prestamoId)
     if (mlImpagoActual) {
       setMLImpagoTemporal({
@@ -1054,7 +1054,7 @@ export function Cobranzas() {
                                               <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, cliente.ml_impago)}
+                                                onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, cliente.ml_impago ?? null)}
                                                 className="h-5 w-5 p-0 opacity-0 group-hover/ml:opacity-100 transition-opacity hover:opacity-100"
                                                 title="Editar Riesgo ML Impago"
                                               >
@@ -1597,7 +1597,7 @@ export function Cobranzas() {
                                                           <Button
                                                             size="sm"
                                                             variant="ghost"
-                                                            onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, cliente.ml_impago)}
+                                                            onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, cliente.ml_impago ?? null)}
                                                             className="h-5 w-5 p-0 opacity-0 group-hover/ml:opacity-100 transition-opacity hover:opacity-100"
                                                             title="Editar Riesgo ML Impago"
                                                           >
