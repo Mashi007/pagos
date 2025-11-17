@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 @router.get("/diagnostico-ml")
 def diagnostico_ml_impago(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # current_user: User = Depends(get_current_user),  # Temporalmente sin autenticación para diagnóstico
 ):
     """
     Endpoint de diagnóstico para verificar el estado del modelo ML Impago
