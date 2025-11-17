@@ -6331,6 +6331,8 @@ async def chat_ai(
     - Pagos
     - Cuotas
     - Y más...
+    
+    Refactorizado para usar AIChatService y reducir complejidad ciclomática.
     """
     if not current_user.is_admin:
         raise HTTPException(
@@ -6339,69 +6341,17 @@ async def chat_ai(
         )
 
     try:
-        # Obtener y validar configuración de AI
-        configs = _obtener_configuracion_ai_con_reintento(db)
-        if not configs:
-            raise HTTPException(status_code=400, detail="No hay configuracion de AI")
+        from app.services.ai_chat_service import AIChatService
 
-        config_dict = {config.clave: config.valor for config in configs}
-        _validar_configuracion_ai(config_dict)
+        # Inicializar servicio
+        service = AIChatService(db)
+        service.inicializar_configuracion()
 
-        # Validar pregunta
-        pregunta = request.pregunta.strip()
-        if not pregunta:
-            raise HTTPException(status_code=400, detail="La pregunta no puede estar vacia")
+        # Validar y procesar pregunta
+        pregunta = service.validar_pregunta(request.pregunta)
 
-        _validar_pregunta_es_sobre_bd(pregunta)
-
-        # Obtener parámetros de configuración
-        openai_api_key = config_dict.get("openai_api_key", "")
-        modelo = config_dict.get("modelo", "gpt-3.5-turbo")
-        temperatura = float(config_dict.get("temperatura", "0.7"))
-        max_tokens = int(config_dict.get("max_tokens", "2000"))
-
-        pregunta_lower = pregunta.lower().strip()
-
-        # Obtener contexto y datos
-        resumen_bd = _obtener_resumen_bd(db)
-        info_esquema = _obtener_info_esquema(pregunta_lower, db)
-        contexto_documentos, _ = await _obtener_contexto_documentos_semantico(pregunta, openai_api_key, db)
-
-        # Búsqueda por cédula si aplica
-        busqueda_cedula = _extraer_cedula_de_pregunta(pregunta)
-        info_cliente_buscado = ""
-        if busqueda_cedula:
-            info_cliente_buscado = _obtener_info_cliente_por_cedula(busqueda_cedula, db)
-
-        # Datos adicionales (cálculos, ML, etc.)
-        datos_adicionales = _obtener_datos_adicionales(pregunta, pregunta_lower, db)
-
-        # Construir system prompt
-        prompt_personalizado = config_dict.get("system_prompt_personalizado", "")
-        usar_prompt_personalizado = prompt_personalizado and prompt_personalizado.strip()
-        variables_personalizadas = _obtener_variables_personalizadas(db)
-
-        if usar_prompt_personalizado:
-            logger.info("Usando prompt personalizado configurado por el usuario")
-            system_prompt = _construir_system_prompt_personalizado(
-                prompt_personalizado,
-                resumen_bd,
-                info_cliente_buscado,
-                datos_adicionales,
-                info_esquema,
-                contexto_documentos,
-                variables_personalizadas,
-            )
-        else:
-            system_prompt = _construir_system_prompt_default(
-                resumen_bd, info_cliente_buscado, datos_adicionales, info_esquema, contexto_documentos
-            )
-
-        if contexto_documentos:
-            logger.info(f"Contexto de documentos incluido en system_prompt: {len(contexto_documentos)} caracteres")
-
-        # Llamar a OpenAI API
-        return await _llamar_openai_api(openai_api_key, modelo, temperatura, max_tokens, system_prompt, pregunta)
+        # Procesar pregunta completa usando el servicio
+        return await service.procesar_pregunta(pregunta)
 
     except HTTPException:
         raise
