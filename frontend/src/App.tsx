@@ -86,12 +86,18 @@ const PageLoader = () => (
 )
 
 function App() {
-  const { isAuthenticated, initializeAuth } = useSimpleAuth()
+  const { isAuthenticated, isLoading, initializeAuth } = useSimpleAuth()
 
   useEffect(() => {
     // Inicializar autenticación desde almacenamiento seguro CON VERIFICACIÓN AUTOMÁTICA
     initializeAuth()
   }, [initializeAuth])
+
+  // Mostrar loader solo si está cargando Y hay datos de auth (para evitar flash)
+  // Si no hay datos de auth, isLoading será false desde el inicio
+  if (isLoading) {
+    return <PageLoader />
+  }
 
   return (
     <AnimatePresence mode="wait">

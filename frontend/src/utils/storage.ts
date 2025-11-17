@@ -47,29 +47,59 @@ const removeStorageItem = (storage: Storage, key: string) => {
   }
 }
 
-// Funciones de localStorage
+// Verificar si localStorage está disponible
+const isLocalStorageAvailable = (): boolean => {
+  try {
+    const test = '__localStorage_test__'
+    localStorage.setItem(test, test)
+    localStorage.removeItem(test)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Verificar si sessionStorage está disponible
+const isSessionStorageAvailable = (): boolean => {
+  try {
+    const test = '__sessionStorage_test__'
+    sessionStorage.setItem(test, test)
+    sessionStorage.removeItem(test)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Funciones de localStorage con verificación de disponibilidad
 export const safeGetItem = (key: string, fallback: any = null) => {
+  if (!isLocalStorageAvailable()) return fallback
   return getStorageItem(localStorage, key, fallback)
 }
 
 export const safeSetItem = (key: string, value: any) => {
+  if (!isLocalStorageAvailable()) return false
   return setStorageItem(localStorage, key, value)
 }
 
 export const safeRemoveItem = (key: string) => {
+  if (!isLocalStorageAvailable()) return false
   return removeStorageItem(localStorage, key)
 }
 
-// Funciones de sessionStorage
+// Funciones de sessionStorage con verificación de disponibilidad
 export const safeGetSessionItem = (key: string, fallback: any = null) => {
+  if (!isSessionStorageAvailable()) return fallback
   return getStorageItem(sessionStorage, key, fallback)
 }
 
 export const safeSetSessionItem = (key: string, value: any) => {
+  if (!isSessionStorageAvailable()) return false
   return setStorageItem(sessionStorage, key, value)
 }
 
 export const safeRemoveSessionItem = (key: string) => {
+  if (!isSessionStorageAvailable()) return false
   return removeStorageItem(sessionStorage, key)
 }
 

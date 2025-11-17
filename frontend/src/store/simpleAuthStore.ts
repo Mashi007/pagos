@@ -43,12 +43,16 @@ const hasAuthData = (): boolean => {
   }
 }
 
-export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
-  // Estado inicial - si hay datos de auth, empezar como loading para evitar redirecciones
-  user: null,
-  isAuthenticated: false,
-  isLoading: hasAuthData(), // ✅ Si hay datos de auth, empezar como loading
-  error: null,
+export const useSimpleAuthStore = create<SimpleAuthState>((set) => {
+  // ✅ Verificar si hay datos de auth de forma segura
+  const hasAuth = hasAuthData()
+  
+  return {
+    // Estado inicial - si hay datos de auth, empezar como loading para evitar redirecciones
+    user: null,
+    isAuthenticated: false,
+    isLoading: hasAuth, // ✅ Si hay datos de auth, empezar como loading
+    error: null,
 
   // Inicializar autenticación desde almacenamiento seguro CON VERIFICACIÓN AUTOMÁTICA
   initializeAuth: async () => {
@@ -110,8 +114,8 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
             error: null,
           })
         }
-      } else if (!user) {
-        // No hay usuario almacenado
+      } else {
+        // No hay usuario almacenado - establecer estado inmediatamente
         set({
           user: null,
           isAuthenticated: false,
@@ -217,7 +221,8 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
       })
     }
   },
-}))
+  }
+})
 
 // Hook simplificado
 export const useSimpleAuth = () => {
