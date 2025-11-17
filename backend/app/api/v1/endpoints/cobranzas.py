@@ -35,6 +35,106 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@router.get("/diagnostico-ml")
+def diagnostico_ml_impago(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Endpoint de diagnóstico para verificar el estado del modelo ML Impago
+    """
+    diagnostico = {
+        "ml_service_available": False,
+        "modelo_en_bd": None,
+        "modelo_cargado": False,
+        "archivo_existe": False,
+        "ruta_archivo": None,
+        "errores": [],
+    }
+    
+    try:
+        from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
+        diagnostico["ml_service_available"] = ML_IMPAGO_SERVICE_AVAILABLE
+        
+        if not ML_IMPAGO_SERVICE_AVAILABLE:
+            diagnostico["errores"].append("ML_IMPAGO_SERVICE_AVAILABLE es False - scikit-learn no está disponible")
+            return diagnostico
+        
+        # Verificar modelo en BD
+        from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
+        modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
+        
+        if not modelo_activo:
+            diagnostico["errores"].append("No hay modelo ML Impago activo en la base de datos")
+            return diagnostico
+        
+        diagnostico["modelo_en_bd"] = {
+            "id": modelo_activo.id,
+            "nombre": modelo_activo.nombre,
+            "ruta_archivo": modelo_activo.ruta_archivo,
+            "algoritmo": modelo_activo.algoritmo,
+            "accuracy": modelo_activo.accuracy,
+        }
+        diagnostico["ruta_archivo"] = modelo_activo.ruta_archivo
+        
+        # Intentar cargar el modelo
+        try:
+            ml_service = MLImpagoCuotasService()
+            modelo_cargado = ml_service.load_model_from_path(modelo_activo.ruta_archivo)
+            
+            if modelo_cargado and "impago_cuotas_model" in ml_service.models:
+                diagnostico["modelo_cargado"] = True
+                diagnostico["tipo_modelo"] = type(ml_service.models["impago_cuotas_model"]).__name__
+            else:
+                diagnostico["errores"].append("Modelo no se cargó en memoria después de load_model_from_path")
+                
+                # Verificar si el archivo existe
+                from pathlib import Path
+                ruta = Path(modelo_activo.ruta_archivo)
+                if "/" in modelo_activo.ruta_archivo or "\\" in modelo_activo.ruta_archivo:
+                    filename = Path(modelo_activo.ruta_archivo).parts[-1]
+                    search_paths = [
+                        Path(modelo_activo.ruta_archivo),
+                        Path("ml_models") / filename,
+                        Path("ml_models") / modelo_activo.ruta_archivo,
+                    ]
+                else:
+                    search_paths = [Path("ml_models") / modelo_activo.ruta_archivo]
+                
+                archivos_encontrados = []
+                for search_path in search_paths:
+                    if search_path.exists() and search_path.is_file():
+                        archivos_encontrados.append(str(search_path.absolute()))
+                        diagnostico["archivo_existe"] = True
+                        diagnostico["ruta_encontrada"] = str(search_path.absolute())
+                        break
+                
+                if not diagnostico["archivo_existe"]:
+                    diagnostico["errores"].append(f"Archivo no encontrado en ninguna de las rutas: {[str(p) for p in search_paths]}")
+                    
+                    # Listar archivos .pkl en ml_models
+                    ml_models_dir = Path("ml_models")
+                    if ml_models_dir.exists():
+                        archivos_pkl = list(ml_models_dir.glob("*.pkl"))
+                        diagnostico["archivos_pkl_en_ml_models"] = [f.name for f in archivos_pkl]
+                    else:
+                        diagnostico["errores"].append("Directorio ml_models no existe")
+                        
+        except Exception as e:
+            diagnostico["errores"].append(f"Error cargando modelo: {str(e)}")
+            import traceback
+            diagnostico["traceback"] = traceback.format_exc()
+    
+    except ImportError as e:
+        diagnostico["errores"].append(f"Error importando servicios ML: {str(e)}")
+    except Exception as e:
+        diagnostico["errores"].append(f"Error general: {str(e)}")
+        import traceback
+        diagnostico["traceback"] = traceback.format_exc()
+    
+    return diagnostico
+
+
 @router.get("/health")
 def healthcheck_cobranzas(
     db: Session = Depends(get_db),
