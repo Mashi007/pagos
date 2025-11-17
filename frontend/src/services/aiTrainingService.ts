@@ -336,7 +336,12 @@ class AITrainingService {
     test_size?: number
     random_state?: number
   }): Promise<{ job_id: string; mensaje: string }> {
-    const response = await apiClient.post<{ job_id: string; mensaje: string }>(`${this.baseUrl}/ml-riesgo/entrenar`, params || {})
+    // Usar timeout extendido (5 minutos) para entrenamiento ML que puede tardar mucho
+    const response = await apiClient.post<{ job_id: string; mensaje: string }>(
+      `${this.baseUrl}/ml-riesgo/entrenar`, 
+      params || {},
+      { timeout: 300000 } // 5 minutos
+    )
     return response
   }
 
@@ -440,9 +445,11 @@ class AITrainingService {
   }): Promise<{ mensaje: string; modelo: ModeloImpagoCuotas; metricas: any }> {
     try {
       console.log('🔄 [aiTrainingService] Iniciando entrenamiento modelo impago:', params)
+      // Usar timeout extendido (5 minutos) para entrenamiento ML que puede tardar mucho
       const resultado = await apiClient.post<{ mensaje: string; modelo: ModeloImpagoCuotas; metricas: any }>(
         `${this.baseUrl}/ml-impago/entrenar`,
-        params || {}
+        params || {},
+        { timeout: 300000 } // 5 minutos
       )
       console.log('✅ [aiTrainingService] Modelo entrenado exitosamente:', resultado)
       return resultado

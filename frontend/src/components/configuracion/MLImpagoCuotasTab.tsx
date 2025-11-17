@@ -93,8 +93,12 @@ export function MLImpagoCuotasTab() {
       console.groupEnd()
       
       // Extraer mensaje de error de diferentes posibles ubicaciones
-      let mensajeError = 'Error al entrenar modelo (500 Internal Server Error)'
-      if (error?.response?.data?.detail) {
+      let mensajeError = 'Error al entrenar modelo'
+      
+      // Detectar timeout específicamente
+      if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        mensajeError = 'El entrenamiento está tardando más de lo esperado. El proceso continúa en el servidor. Por favor, espera unos minutos y recarga la página para ver el modelo entrenado.'
+      } else if (error?.response?.data?.detail) {
         mensajeError = String(error.response.data.detail)
       } else if (error?.response?.data?.message) {
         mensajeError = String(error.response.data.message)
@@ -108,7 +112,7 @@ export function MLImpagoCuotasTab() {
       
       // Mostrar toast con el mensaje completo
       toast.error(`Error entrenando modelo: ${mensajeError}`, {
-        duration: 10000, // 10 segundos para que el usuario pueda leerlo
+        duration: 15000, // 15 segundos para mensajes de timeout
       })
     } finally {
       setEntrenando(false)
