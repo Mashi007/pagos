@@ -978,7 +978,31 @@ async def entrenar_modelo_riesgo(
         from app.models.prestamo import Prestamo
 
         # Obtener préstamos aprobados con historial (cargar relación cliente)
-        prestamos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").options(joinedload(Prestamo.cliente)).all()
+        # Usar load_only para cargar solo las columnas que necesitamos y que existen en la BD
+        # Esto evita errores si hay columnas en el modelo que no existen en la BD (como valor_activo)
+        from app.models.cliente import Cliente
+        
+        prestamos = (
+            db.query(Prestamo)
+            .filter(Prestamo.estado == "APROBADO")
+            .options(
+                load_only(
+                    Prestamo.id,
+                    Prestamo.cliente_id,
+                    Prestamo.cedula,
+                    Prestamo.nombres,
+                    Prestamo.total_financiamiento,
+                    Prestamo.estado,
+                    Prestamo.fecha_aprobacion,
+                    Prestamo.fecha_registro,
+                ),
+                joinedload(Prestamo.cliente).load_only(
+                    Cliente.id,
+                    Cliente.fecha_nacimiento,
+                ),
+            )
+            .all()
+        )
 
         if len(prestamos) < 10:
             raise HTTPException(
