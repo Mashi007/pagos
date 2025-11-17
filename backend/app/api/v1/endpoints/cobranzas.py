@@ -362,37 +362,77 @@ def obtener_clientes_atrasados(
 
         # Cargar modelo ML Impago una sola vez si está disponible
         ml_service = None
+        modelo_cargado = False
         try:
             from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
 
             modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
             if modelo_activo:
-                logger.info(f"🔍 Modelo ML Impago activo encontrado: {modelo_activo.nombre} (ID: {modelo_activo.id})")
-                logger.info(f"   Ruta del modelo: {modelo_activo.ruta_archivo}")
+                logger.info(f"🔍 [ML] Modelo ML Impago activo encontrado: {modelo_activo.nombre} (ID: {modelo_activo.id})")
+                logger.info(f"   [ML] Ruta del modelo: {modelo_activo.ruta_archivo}")
                 try:
                     from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
 
                     if not ML_IMPAGO_SERVICE_AVAILABLE:
-                        logger.warning("⚠️ ML_IMPAGO_SERVICE_AVAILABLE es False - scikit-learn no está disponible")
+                        logger.warning("⚠️ [ML] ML_IMPAGO_SERVICE_AVAILABLE es False - scikit-learn no está disponible")
                     elif not MLImpagoCuotasService:
-                        logger.warning("⚠️ MLImpagoCuotasService no está disponible")
+                        logger.warning("⚠️ [ML] MLImpagoCuotasService no está disponible")
                     else:
-                        logger.info("✅ Servicio ML Impago disponible, intentando cargar modelo...")
+                        logger.info("✅ [ML] Servicio ML Impago disponible, intentando cargar modelo...")
                         ml_service = MLImpagoCuotasService()
                         if not ml_service.load_model_from_path(modelo_activo.ruta_archivo):
-                            logger.error(f"❌ No se pudo cargar el modelo ML desde {modelo_activo.ruta_archivo}")
-                            logger.error("   Verificar que el archivo existe y es accesible")
+                            logger.error(f"❌ [ML] No se pudo cargar el modelo ML desde {modelo_activo.ruta_archivo}")
+                            logger.error("   [ML] Verificar que el archivo existe y es accesible")
                             ml_service = None
                         else:
-                            logger.info(f"✅ Modelo ML Impago cargado correctamente: {modelo_activo.nombre}")
+                            # Verificar que el modelo realmente se cargó
+                            if "impago_cuotas_model" in ml_service.models:
+                                logger.info(f"✅ [ML] Modelo ML Impago cargado correctamente: {modelo_activo.nombre}")
+                                logger.info(f"   [ML] Modelo en memoria: {type(ml_service.models['impago_cuotas_model']).__name__}")
+                                modelo_cargado = True
+                            else:
+                                logger.error("❌ [ML] Modelo no se cargó en memoria después de load_model_from_path")
+                                ml_service = None
                 except ImportError as e:
-                    logger.error(f"❌ Error importando servicio ML Impago: {e}", exc_info=True)
+                    logger.error(f"❌ [ML] Error importando servicio ML Impago: {e}", exc_info=True)
             else:
-                logger.warning("⚠️ No hay modelo ML Impago activo en la base de datos")
-                logger.info("   Para activar un modelo, ve a la sección de entrenamiento de modelos ML")
+                logger.warning("⚠️ [ML] No hay modelo ML Impago activo en la base de datos")
+                logger.info("   [ML] Para activar un modelo, ve a la sección de entrenamiento de modelos ML")
         except Exception as e:
-            logger.error(f"❌ Error cargando modelo ML Impago: {e}", exc_info=True)
+            logger.error(f"❌ [ML] Error cargando modelo ML Impago: {e}", exc_info=True)
 
+        # Optimización: Cargar todos los préstamos de una vez
+        prestamo_ids = [row.prestamo_id for row in resultados]
+        prestamos_dict = {}
+        if prestamo_ids:
+            prestamos = db.query(Prestamo).filter(Prestamo.id.in_(prestamo_ids)).all()
+            prestamos_dict = {p.id: p for p in prestamos}
+            logger.info(f"📦 Cargados {len(prestamos_dict)} préstamos para procesamiento ML")
+
+        # Optimización: Cargar todas las cuotas de una vez (solo para préstamos que necesitan ML)
+        cuotas_dict = {}
+        if ml_service and prestamo_ids:
+            # Solo cargar cuotas para préstamos que no tienen valores manuales
+            prestamos_sin_manual = [
+                p_id for p_id, p in prestamos_dict.items()
+                if p and p.estado == "APROBADO" and not (p.ml_impago_nivel_riesgo_manual and p.ml_impago_probabilidad_manual is not None)
+            ]
+            if prestamos_sin_manual:
+                cuotas = db.query(Cuota).filter(Cuota.prestamo_id.in_(prestamos_sin_manual)).order_by(Cuota.prestamo_id, Cuota.numero_cuota).all()
+                # Agrupar cuotas por préstamo_id
+                for cuota in cuotas:
+                    if cuota.prestamo_id not in cuotas_dict:
+                        cuotas_dict[cuota.prestamo_id] = []
+                    cuotas_dict[cuota.prestamo_id].append(cuota)
+                logger.info(f"📦 Cargadas cuotas para {len(cuotas_dict)} préstamos")
+
+        fecha_actual = date.today()
+        ml_start_time = time.time()
+        ml_processed = 0
+        ml_manual = 0
+        ml_calculated = 0
+        ml_errors = 0
+        
         for row in resultados:
             cliente_data = {
                 "cedula": row.cedula,
@@ -407,7 +447,7 @@ def obtener_clientes_atrasados(
             # Agregar predicción ML Impago si está disponible
             # Priorizar valores manuales sobre calculados
             try:
-                prestamo = db.query(Prestamo).filter(Prestamo.id == row.prestamo_id).first()
+                prestamo = prestamos_dict.get(row.prestamo_id)
                 if prestamo and prestamo.estado == "APROBADO":
                     # Verificar si hay valores manuales
                     if prestamo.ml_impago_nivel_riesgo_manual and prestamo.ml_impago_probabilidad_manual is not None:
@@ -418,18 +458,23 @@ def obtener_clientes_atrasados(
                             "prediccion": "Manual",
                             "es_manual": True,
                         }
-                    elif ml_service:
+                        ml_manual += 1
+                        ml_processed += 1
+                    elif ml_service and modelo_cargado:
                         # Calcular con ML si no hay valores manuales
-                        cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
+                        cuotas = cuotas_dict.get(prestamo.id, [])
                         if cuotas:
                             try:
-                                fecha_actual = date.today()
                                 features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
                                 prediccion = ml_service.predict_impago(features)
+                                
+                                # Debug: Log primera predicción para verificar que funciona
+                                if ml_calculated == 0:
+                                    logger.info(f"🔍 [ML] Primera predicción exitosa - Préstamo {row.prestamo_id}: {prediccion.get('nivel_riesgo', 'N/A')}")
 
                                 # Verificar si la predicción fue exitosa
                                 if prediccion.get("prediccion") == "Error" or prediccion.get("prediccion") == "Desconocido":
-                                    logger.warning(f"Predicción ML falló para préstamo {row.prestamo_id}: {prediccion.get('recomendacion', 'Error desconocido')}")
+                                    logger.debug(f"Predicción ML falló para préstamo {row.prestamo_id}: {prediccion.get('recomendacion', 'Error desconocido')}")
                                     cliente_data["ml_impago"] = None
                                 else:
                                     cliente_data["ml_impago"] = {
@@ -438,20 +483,34 @@ def obtener_clientes_atrasados(
                                         "prediccion": prediccion.get("prediccion", "Desconocido"),
                                         "es_manual": False,
                                     }
+                                    ml_calculated += 1
+                                    ml_processed += 1
                             except Exception as e:
-                                logger.warning(f"Error calculando predicción ML para préstamo {row.prestamo_id}: {e}", exc_info=True)
+                                logger.debug(f"Error calculando predicción ML para préstamo {row.prestamo_id}: {e}")
                                 cliente_data["ml_impago"] = None
+                                ml_errors += 1
+                                ml_processed += 1
                         else:
-                            logger.debug(f"No hay cuotas para préstamo {row.prestamo_id}, no se puede calcular ML Impago")
                             cliente_data["ml_impago"] = None
                     else:
-                        logger.debug(f"Servicio ML no disponible para préstamo {row.prestamo_id}")
                         cliente_data["ml_impago"] = None
+                else:
+                    cliente_data["ml_impago"] = None
             except Exception as e:
-                logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}", exc_info=True)
+                logger.debug(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}")
                 cliente_data["ml_impago"] = None
 
             clientes_atrasados.append(cliente_data)
+
+        ml_time_ms = int((time.time() - ml_start_time) * 1000)
+        total_time_ms = int((time.time() - start_time) * 1000)
+        
+        logger.info(
+            f"✅ [clientes_atrasados] Procesamiento completado: "
+            f"{len(clientes_atrasados)} clientes, "
+            f"ML procesados: {ml_processed} (manuales: {ml_manual}, calculados: {ml_calculated}, errores: {ml_errors}), "
+            f"tiempo_total={total_time_ms}ms, tiempo_ml={ml_time_ms}ms"
+        )
 
         return clientes_atrasados
 
