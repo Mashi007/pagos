@@ -26,8 +26,10 @@ try:
     from sklearn.preprocessing import StandardScaler
 
     SKLEARN_AVAILABLE = True
+    ML_IMPAGO_SERVICE_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
+    ML_IMPAGO_SERVICE_AVAILABLE = False
     if not _sklearn_warning_logged:
         logger.warning("scikit-learn no está disponible. Funcionalidades de ML estarán limitadas.")
         _sklearn_warning_logged = True

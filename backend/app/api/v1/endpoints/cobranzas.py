@@ -373,11 +373,18 @@ def obtener_clientes_atrasados(
                     if ML_IMPAGO_SERVICE_AVAILABLE and MLImpagoCuotasService:
                         ml_service = MLImpagoCuotasService()
                         if not ml_service.load_model_from_path(modelo_activo.ruta_archivo):
+                            logger.warning(f"No se pudo cargar el modelo ML desde {modelo_activo.ruta_archivo}")
                             ml_service = None
-                except ImportError:
-                    pass
-        except Exception:
-            pass
+                        else:
+                            logger.info(f"Modelo ML Impago cargado correctamente: {modelo_activo.nombre}")
+                    else:
+                        logger.debug("ML_IMPAGO_SERVICE_AVAILABLE es False o MLImpagoCuotasService no está disponible")
+                except ImportError as e:
+                    logger.warning(f"Error importando servicio ML Impago: {e}")
+            else:
+                logger.debug("No hay modelo ML Impago activo en la base de datos")
+        except Exception as e:
+            logger.warning(f"Error cargando modelo ML Impago: {e}", exc_info=True)
 
         for row in resultados:
             cliente_data = {
@@ -486,11 +493,18 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
                     if ML_IMPAGO_SERVICE_AVAILABLE and MLImpagoCuotasService:
                         ml_service = MLImpagoCuotasService()
                         if not ml_service.load_model_from_path(modelo_activo.ruta_archivo):
+                            logger.warning(f"No se pudo cargar el modelo ML desde {modelo_activo.ruta_archivo}")
                             ml_service = None
-                except ImportError:
-                    pass
-        except Exception:
-            pass
+                        else:
+                            logger.info(f"Modelo ML Impago cargado correctamente: {modelo_activo.nombre}")
+                    else:
+                        logger.debug("ML_IMPAGO_SERVICE_AVAILABLE es False o MLImpagoCuotasService no está disponible")
+                except ImportError as e:
+                    logger.warning(f"Error importando servicio ML Impago: {e}")
+            else:
+                logger.debug("No hay modelo ML Impago activo en la base de datos")
+        except Exception as e:
+            logger.warning(f"Error cargando modelo ML Impago: {e}", exc_info=True)
 
         clientes = []
         for row in resultados:
@@ -681,11 +695,18 @@ def obtener_clientes_por_analista(
                     if ML_IMPAGO_SERVICE_AVAILABLE and MLImpagoCuotasService:
                         ml_service = MLImpagoCuotasService()
                         if not ml_service.load_model_from_path(modelo_activo.ruta_archivo):
+                            logger.warning(f"No se pudo cargar el modelo ML desde {modelo_activo.ruta_archivo}")
                             ml_service = None
-                except ImportError:
-                    pass
-        except Exception:
-            pass
+                        else:
+                            logger.info(f"Modelo ML Impago cargado correctamente: {modelo_activo.nombre}")
+                    else:
+                        logger.debug("ML_IMPAGO_SERVICE_AVAILABLE es False o MLImpagoCuotasService no está disponible")
+                except ImportError as e:
+                    logger.warning(f"Error importando servicio ML Impago: {e}")
+            else:
+                logger.debug("No hay modelo ML Impago activo en la base de datos")
+        except Exception as e:
+            logger.warning(f"Error cargando modelo ML Impago: {e}", exc_info=True)
 
         clientes = []
         for row in resultados:
