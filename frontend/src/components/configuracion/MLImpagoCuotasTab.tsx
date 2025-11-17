@@ -364,8 +364,75 @@ export function MLImpagoCuotasTab() {
         </Card>
       )}
 
+      {/* Estado de Entrenamiento */}
+      {estadoEntrenamiento && (
+        <Card className={estadoEntrenamiento.estado === 'error' ? 'border-red-200 bg-red-50/50' : estadoEntrenamiento.estado === 'completado' ? 'border-green-200 bg-green-50/50' : 'border-blue-200 bg-blue-50/50'}>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 mb-4">
+              {estadoEntrenamiento.estado === 'completado' ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : estadoEntrenamiento.estado === 'error' ? (
+                <AlertCircle className="h-5 w-5 text-red-600" />
+              ) : (
+                <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+              )}
+              <h4 className="font-semibold">
+                {estadoEntrenamiento.estado === 'completado'
+                  ? 'Entrenamiento Completado'
+                  : estadoEntrenamiento.estado === 'error'
+                  ? 'Error en Entrenamiento'
+                  : 'Entrenamiento en Progreso'}
+              </h4>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">{estadoEntrenamiento.mensaje}</span>
+                <span className="font-medium text-blue-600">{Math.round(estadoEntrenamiento.progreso)}%</span>
+              </div>
+              
+              <Progress value={estadoEntrenamiento.progreso} className="h-2.5" />
+              
+              {estadoEntrenamiento.estado === 'completado' && estadoEntrenamiento.modelo && (
+                <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div className="text-sm font-semibold text-green-800 mb-2">Modelo Entrenado:</div>
+                  <div className="text-sm text-green-700 space-y-1">
+                    <div><span className="font-medium">Nombre:</span> {estadoEntrenamiento.modelo.nombre}</div>
+                    <div><span className="font-medium">Algoritmo:</span> {estadoEntrenamiento.modelo.algoritmo}</div>
+                    {estadoEntrenamiento.modelo.accuracy && (
+                      <div>
+                        <span className="font-medium">Accuracy:</span>{' '}
+                        {(estadoEntrenamiento.modelo.accuracy * 100).toFixed(1)}%
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {estadoEntrenamiento.estado === 'error' && estadoEntrenamiento.error && (
+                <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                  <div className="text-sm font-semibold text-red-800 mb-1">Error:</div>
+                  <div className="text-sm text-red-700">{estadoEntrenamiento.error}</div>
+                </div>
+              )}
+              
+              {estadoEntrenamiento.estado === 'completado' && (
+                <Button
+                  onClick={() => setEstadoEntrenamiento(null)}
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                >
+                  Cerrar
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Sin Modelo Activo */}
-      {!modeloActivo && (
+      {!modeloActivo && !estadoEntrenamiento && (
         <Card className="border-amber-200 bg-amber-50/50">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 mb-2">
