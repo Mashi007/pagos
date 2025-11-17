@@ -441,101 +441,33 @@ def obtener_clientes_atrasados(
             logger.error(f"❌ [ML] Error cargando modelo ML Impago: {e}", exc_info=True)
 
         # Optimización: Cargar todos los préstamos de una vez
+        # SOLUCIÓN DEFINITIVA: Usar load_only() desde el inicio para evitar cargar columnas que no existen
         prestamo_ids = [row.prestamo_id for row in resultados]
         prestamos_dict = {}
         if prestamo_ids:
-            # Rollback preventivo para asegurar transacción limpia
-            try:
-                # Verificar que la transacción esté activa y no abortada
-                db.execute(text("SELECT 1"))
-            except Exception as test_error:
-                error_str = str(test_error).lower()
-                if "aborted" in error_str or "infailedsqltransaction" in error_str:
-                    logger.warning("⚠️ Transacción abortada detectada antes de cargar préstamos, haciendo rollback preventivo")
-                    try:
-                        db.rollback()
-                        logger.info("✅ Rollback preventivo exitoso")
-                    except Exception:
-                        pass
-            
-            try:
-                # Intentar cargar préstamos normalmente
-                prestamos = db.query(Prestamo).filter(Prestamo.id.in_(prestamo_ids)).all()
-                prestamos_dict = {p.id: p for p in prestamos}
-                logger.info(f"📦 Cargados {len(prestamos_dict)} préstamos para procesamiento ML")
-            except Exception as e:
-                error_msg = str(e).lower()
-                if "valor_activo" in error_msg or "does not exist" in error_msg or "infailed" in error_msg or "aborted" in error_msg:
-                    logger.warning("⚠️ Error con columna valor_activo o transacción abortada, haciendo rollback y usando query con columnas específicas")
-                    # Hacer rollback de la transacción fallida - CRÍTICO para restaurar la transacción
-                    try:
-                        db.rollback()
-                        logger.info("✅ Rollback exitoso, transacción restaurada")
-                    except Exception as rollback_error:
-                        logger.warning(f"⚠️ Error al hacer rollback: {rollback_error}, intentando continuar...")
-                        # Si el rollback falla, intentar cerrar y crear nueva sesión (no es posible aquí, solo continuar)
-                    
-                    # Cargar solo las columnas que necesitamos
-                    from sqlalchemy.orm import load_only
-                    try:
-                        prestamos = (
-                            db.query(Prestamo)
-                            .filter(Prestamo.id.in_(prestamo_ids))
-                            .options(
-                                load_only(
-                                    Prestamo.id,
-                                    Prestamo.estado,
-                                    Prestamo.fecha_aprobacion,
-                                    Prestamo.ml_impago_nivel_riesgo_manual,
-                                    Prestamo.ml_impago_probabilidad_manual,
-                                    Prestamo.total_financiamiento,
-                                    Prestamo.numero_cuotas,
-                                    Prestamo.modalidad_pago,
-                                    Prestamo.tasa_interes,
-                                    Prestamo.fecha_base_calculo,
-                                )
-                            )
-                            .all()
-                        )
-                        prestamos_dict = {p.id: p for p in prestamos}
-                        logger.info(f"📦 Cargados {len(prestamos_dict)} préstamos (sin valor_activo) para procesamiento ML")
-                    except Exception as e2:
-                        error_msg2 = str(e2).lower()
-                        if "infailed" in error_msg2 or "aborted" in error_msg2:
-                            logger.error(f"❌ Transacción aún abortada después de rollback, intentando rollback adicional: {e2}")
-                            try:
-                                db.rollback()
-                                # Reintentar la query después del segundo rollback
-                                prestamos = (
-                                    db.query(Prestamo)
-                                    .filter(Prestamo.id.in_(prestamo_ids))
-                                    .options(
-                                        load_only(
-                                            Prestamo.id,
-                                            Prestamo.estado,
-                                            Prestamo.fecha_aprobacion,
-                                            Prestamo.ml_impago_nivel_riesgo_manual,
-                                            Prestamo.ml_impago_probabilidad_manual,
-                                            Prestamo.total_financiamiento,
-                                            Prestamo.numero_cuotas,
-                                            Prestamo.modalidad_pago,
-                                            Prestamo.tasa_interes,
-                                            Prestamo.fecha_base_calculo,
-                                        )
-                                    )
-                                    .all()
-                                )
-                                prestamos_dict = {p.id: p for p in prestamos}
-                                logger.info(f"📦 Cargados {len(prestamos_dict)} préstamos después de segundo rollback")
-                            except Exception as e3:
-                                logger.error(f"❌ Error persistente incluso después de múltiples rollbacks: {e3}", exc_info=True)
-                                raise e
-                        else:
-                            logger.error(f"❌ Error incluso con load_only: {e2}", exc_info=True)
-                            raise e
-                else:
-                    # Re-lanzar el error si no es sobre valor_activo
-                    raise
+            from sqlalchemy.orm import load_only
+            # Cargar SOLO las columnas que necesitamos y que sabemos que existen
+            prestamos = (
+                db.query(Prestamo)
+                .filter(Prestamo.id.in_(prestamo_ids))
+                .options(
+                    load_only(
+                        Prestamo.id,
+                        Prestamo.estado,
+                        Prestamo.fecha_aprobacion,
+                        Prestamo.ml_impago_nivel_riesgo_manual,
+                        Prestamo.ml_impago_probabilidad_manual,
+                        Prestamo.total_financiamiento,
+                        Prestamo.numero_cuotas,
+                        Prestamo.modalidad_pago,
+                        Prestamo.tasa_interes,
+                        Prestamo.fecha_base_calculo,
+                    )
+                )
+                .all()
+            )
+            prestamos_dict = {p.id: p for p in prestamos}
+            logger.info(f"📦 Cargados {len(prestamos_dict)} préstamos para procesamiento ML (solo columnas necesarias)")
 
         # Optimización: Cargar todas las cuotas de una vez (solo para préstamos que necesitan ML)
         cuotas_dict = {}
