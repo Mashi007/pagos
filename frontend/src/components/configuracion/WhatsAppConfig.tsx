@@ -70,19 +70,29 @@ export function WhatsAppConfig() {
   }
 
   const validarConfiguracion = (): string | null => {
-    if (!config.api_url || !config.access_token || !config.phone_number_id) {
+    // Validar campos requeridos (usando trim para ignorar espacios)
+    const apiUrl = config.api_url?.trim() || ''
+    const accessToken = config.access_token?.trim() || ''
+    const phoneNumberId = config.phone_number_id?.trim() || ''
+
+    if (!apiUrl || !accessToken || !phoneNumberId) {
       const camposFaltantes: string[] = []
-      if (!config.api_url) camposFaltantes.push('API URL')
-      if (!config.access_token) camposFaltantes.push('Access Token')
-      if (!config.phone_number_id) camposFaltantes.push('Phone Number ID')
+      if (!apiUrl) camposFaltantes.push('API URL')
+      if (!accessToken) camposFaltantes.push('Access Token')
+      if (!phoneNumberId) camposFaltantes.push('Phone Number ID')
       return `Por favor completa todos los campos requeridos. Faltan: ${camposFaltantes.join(', ')}`
     }
 
     // Validar formato de API URL
     try {
-      new URL(config.api_url)
+      new URL(apiUrl)
     } catch {
       return 'La URL de la API no es válida'
+    }
+
+    // Validar que Phone Number ID sea solo números (sin espacios ni caracteres especiales)
+    if (!/^\d+$/.test(phoneNumberId)) {
+      return 'El Phone Number ID debe contener solo números (sin espacios ni caracteres especiales)'
     }
 
     return null
@@ -100,10 +110,16 @@ export function WhatsAppConfig() {
 
     try {
       setGuardando(true)
+      // Limpiar espacios en blanco de los campos importantes
       const configCompleta = {
         ...config,
+        api_url: config.api_url?.trim() || '',
+        access_token: config.access_token?.trim() || '',
+        phone_number_id: config.phone_number_id?.trim() || '',
+        business_account_id: config.business_account_id?.trim() || '',
+        webhook_verify_token: config.webhook_verify_token?.trim() || '',
         modo_pruebas: modoPruebas,
-        telefono_pruebas: modoPruebas === 'true' ? telefonoPruebas : ''
+        telefono_pruebas: modoPruebas === 'true' ? telefonoPruebas.trim() : ''
       }
 
       await whatsappConfigService.actualizarConfiguracionWhatsApp(configCompleta)
