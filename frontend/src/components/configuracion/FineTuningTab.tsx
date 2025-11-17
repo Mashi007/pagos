@@ -35,6 +35,7 @@ export function FineTuningTab() {
   const [cargando, setCargando] = useState(false)
   const [jobs, setJobs] = useState<FineTuningJob[]>([])
   const [cargandoJobs, setCargandoJobs] = useState(false)
+  const [tiempoActual, setTiempoActual] = useState(new Date())
 
   // Filtros
   const [filtroCalificacion, setFiltroCalificacion] = useState<string>('todas')
@@ -236,6 +237,15 @@ export function FineTuningTab() {
     const interval = setInterval(() => {
       cargarJobs()
     }, 10000) // Cada 10 segundos
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Actualizar tiempo actual cada minuto para mostrar tiempo transcurrido en tiempo real
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTiempoActual(new Date())
+    }, 60000) // Cada minuto
 
     return () => clearInterval(interval)
   }, [])
@@ -1284,7 +1294,19 @@ export function FineTuningTab() {
                 const conversacionesListas = conversaciones.filter((c) => c.calificacion && c.calificacion >= 4)
                 const totalListas = conversacionesListas.length
                 const MINIMO_REQUERIDO = 10
+                
+                // Calcular impacto del filtrado de feedback negativo
+                let conversacionesConFeedbackNegativo = 0
+                let conversacionesDespuesFiltrado = totalListas
+                if (filtrarFeedbackNegativo && totalListas > 0) {
+                  conversacionesConFeedbackNegativo = conversacionesListas.filter(c => 
+                    detectarFeedbackNegativo(c.feedback || null)
+                  ).length
+                  conversacionesDespuesFiltrado = totalListas - conversacionesConFeedbackNegativo
+                }
+                
                 const puedePreparar = totalListas >= MINIMO_REQUERIDO
+                const puedePrepararDespuesFiltrado = conversacionesDespuesFiltrado >= MINIMO_REQUERIDO
                 
                 return (
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1304,6 +1326,15 @@ export function FineTuningTab() {
                         />
                         Filtrar feedback negativo
                       </label>
+                      {filtrarFeedbackNegativo && totalListas > 0 && conversacionesConFeedbackNegativo > 0 && (
+                        <Badge 
+                          variant={puedePrepararDespuesFiltrado ? "outline" : "destructive"} 
+                          className="text-xs"
+                        >
+                          {conversacionesConFeedbackNegativo} excluidas → {conversacionesDespuesFiltrado} disponibles
+                          {!puedePrepararDespuesFiltrado && ` (necesitas ${MINIMO_REQUERIDO - conversacionesDespuesFiltrado} más)`}
+                        </Badge>
+                      )}
                     </div>
                     <Button
                       onClick={handlePrepararDatos}
@@ -1770,6 +1801,23 @@ export function FineTuningTab() {
               )}
             </Button>
           </div>
+          {jobs.some(job => job.status === 'pending' || job.status === 'running') && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 text-blue-600 mt-0.5" />
+                <div className="text-xs text-blue-800">
+                  <strong>⏱️ Tiempos típicos de entrenamiento:</strong>
+                  <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                    <li><strong>gpt-3.5-turbo:</strong> 10-30 minutos (depende del tamaño del archivo)</li>
+                    <li><strong>gpt-4:</strong> 2-4 horas</li>
+                  </ul>
+                  <p className="mt-2 text-blue-700">
+                    El sistema actualiza automáticamente el estado cada 10 segundos. Los jobs pueden tardar más tiempo si OpenAI tiene alta demanda.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {cargandoJobs ? (
             <div className="flex items-center justify-center py-8">
@@ -1781,7 +1829,28 @@ export function FineTuningTab() {
             </div>
           ) : (
             <div className="space-y-4">
-              {jobs.map((job) => (
+              {jobs.map((job) => {
+                // Calcular tiempo transcurrido (usar tiempoActual para actualización en tiempo real)
+                const fechaCreacion = new Date(job.creado_en)
+                const ahora = tiempoActual
+                const tiempoTranscurridoMs = ahora.getTime() - fechaCreacion.getTime()
+                const minutosTranscurridos = Math.floor(tiempoTranscurridoMs / 60000)
+                const horasTranscurridas = Math.floor(minutosTranscurridos / 60)
+                
+                // Formatear tiempo transcurrido
+                let tiempoTranscurridoTexto = ''
+                if (horasTranscurridas > 0) {
+                  tiempoTranscurridoTexto = `${horasTranscurridas}h ${minutosTranscurridos % 60}m`
+                } else {
+                  tiempoTranscurridoTexto = `${minutosTranscurridos}m`
+                }
+                
+                // Tiempo estimado según modelo base
+                const tiempoEstimado = job.modelo_base.includes('gpt-4') 
+                  ? '2-4 horas' 
+                  : '10-30 minutos'
+                
+                return (
                 <div key={job.id} className="border rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
@@ -1795,7 +1864,20 @@ export function FineTuningTab() {
                           <div>Modelo Entrenado: {job.modelo_entrenado}</div>
                         )}
                         {job.progreso !== undefined && (
-                          <div>Progreso: {job.progreso}%</div>
+                          <div>Progreso: {job.progreso.toFixed(1)}%</div>
+                        )}
+                        {(job.status === 'pending' || job.status === 'running') && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <Clock className="h-3 w-3 text-gray-400" />
+                            <span className="text-xs text-gray-500">
+                              Tiempo transcurrido: <strong>{tiempoTranscurridoTexto}</strong>
+                              {job.status === 'running' && minutosTranscurridos < 30 && (
+                                <span className="ml-2 text-blue-600">
+                                  (Típico: {tiempoEstimado})
+                                </span>
+                              )}
+                            </span>
+                          </div>
                         )}
                         {job.error && (
                           <div className="text-red-600">Error: {job.error}</div>
@@ -1820,7 +1902,8 @@ export function FineTuningTab() {
                     )}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </CardContent>
