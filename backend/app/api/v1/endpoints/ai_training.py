@@ -2088,7 +2088,7 @@ async def entrenar_modelo_impago(
                 status_code=400,
                 detail=(
                     f"Se necesitan al menos 10 muestras válidas para entrenar. "
-                    f"Se generaron {len(training_data)} muestras de {prestamos_procesados} préstamos procesados. "
+                    f"Se generaron {len(training_data)} muestras. "
                     f"Posibles causas: préstamos sin cuotas suficientes, sin cuotas vencidas, o errores al extraer features."
                 ),
             )
