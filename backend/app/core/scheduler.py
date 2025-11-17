@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 # Instancia global del scheduler
 scheduler = BackgroundScheduler(daemon=True)
 
+# Variable para evitar inicialización múltiple
+_scheduler_inicializado = False
+
 
 def _verificar_envio_habilitado(db: "Session", tipo_notificacion: str) -> bool:
     """Verificar si el envío de un tipo de notificación está habilitado"""
@@ -1031,10 +1034,18 @@ def calcular_notificaciones_prejudiciales_job():
 
 def iniciar_scheduler():
     """Inicia el scheduler con todas las tareas programadas"""
+    global _scheduler_inicializado
+
     try:
+        # ✅ PROTECCIÓN: Evitar inicialización múltiple usando variable global
+        if _scheduler_inicializado:
+            logger.debug("⚠️ Scheduler ya fue inicializado, omitiendo")
+            return
+
         # ✅ PROTECCIÓN: Verificar si el scheduler ya está corriendo
         if scheduler.running:
             logger.warning("⚠️ Scheduler ya está corriendo, omitiendo inicialización")
+            _scheduler_inicializado = True
             return
 
         # ✅ PROTECCIÓN: Verificar si los jobs ya existen antes de agregarlos
@@ -1098,6 +1109,9 @@ def iniciar_scheduler():
             logger.info("✅ Scheduler iniciado correctamente")
         else:
             logger.info("✅ Scheduler ya estaba corriendo")
+
+        # Marcar como inicializado
+        _scheduler_inicializado = True
 
         logger.info("📅 Jobs programados para ejecutarse diariamente a las 4:00 AM:")
         logger.info("   - Notificaciones Previas (5, 3, 1 días antes)")
