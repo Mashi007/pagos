@@ -80,6 +80,12 @@ class Prestamo(Base):
     # ============================================
     informacion_desplegable = Column(Boolean, nullable=False, default=False)  # Si ha desplegado info adicional
 
+    # ============================================
+    # ML IMPAGO - VALORES MANUALES
+    # ============================================
+    ml_impago_nivel_riesgo_manual = Column(String(20), nullable=True)  # Alto, Medio, Bajo (valores manuales)
+    ml_impago_probabilidad_manual = Column(Numeric(5, 3), nullable=True)  # Probabilidad manual (0.0 a 1.0)
+
     # Auditoría
     fecha_actualizacion = Column(TIMESTAMP, nullable=False, default=func.now(), onupdate=func.now())
 

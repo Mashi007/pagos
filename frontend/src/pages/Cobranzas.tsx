@@ -48,6 +48,9 @@ export function Cobranzas() {
   const [editandoAnalista, setEditandoAnalista] = useState<number | null>(null)
   const [analistaTemporal, setAnalistaTemporal] = useState<string>('')
   const [guardandoAnalista, setGuardandoAnalista] = useState<number | null>(null)
+  const [editandoMLImpago, setEditandoMLImpago] = useState<number | null>(null)
+  const [mlImpagoTemporal, setMLImpagoTemporal] = useState<{ nivelRiesgo: string; probabilidad: number } | null>(null)
+  const [guardandoMLImpago, setGuardandoMLImpago] = useState<number | null>(null)
 
   // Query para resumen
   const {
@@ -239,6 +242,79 @@ export function Cobranzas() {
       toast.error(error?.response?.data?.detail || 'Error al actualizar el analista')
     } finally {
       setGuardandoAnalista(null)
+    }
+  }
+
+  // Función para iniciar edición de ML Impago
+  const iniciarEdicionMLImpago = (prestamoId: number, mlImpagoActual: { nivel_riesgo: string; probabilidad_impago: number } | null) => {
+    setEditandoMLImpago(prestamoId)
+    if (mlImpagoActual) {
+      setMLImpagoTemporal({
+        nivelRiesgo: mlImpagoActual.nivel_riesgo,
+        probabilidad: mlImpagoActual.probabilidad_impago,
+      })
+    } else {
+      setMLImpagoTemporal({
+        nivelRiesgo: 'Medio',
+        probabilidad: 0.5,
+      })
+    }
+  }
+
+  // Función para cancelar edición de ML Impago
+  const cancelarEdicionMLImpago = () => {
+    setEditandoMLImpago(null)
+    setMLImpagoTemporal(null)
+  }
+
+  // Función para guardar ML Impago actualizado
+  const guardarMLImpago = async (prestamoId: number) => {
+    if (!mlImpagoTemporal) {
+      toast.error('Debe completar los datos de ML Impago')
+      return
+    }
+
+    if (mlImpagoTemporal.probabilidad < 0 || mlImpagoTemporal.probabilidad > 1) {
+      toast.error('La probabilidad debe estar entre 0 y 1')
+      return
+    }
+
+    setGuardandoMLImpago(prestamoId)
+    try {
+      await cobranzasService.actualizarMLImpago(
+        prestamoId,
+        mlImpagoTemporal.nivelRiesgo,
+        mlImpagoTemporal.probabilidad
+      )
+      toast.success('Riesgo ML Impago actualizado correctamente')
+      setEditandoMLImpago(null)
+      setMLImpagoTemporal(null)
+      // Refrescar los datos
+      refetchClientes()
+      // Si estamos en la sección "Por Analista", también refrescar
+      setClientesPorAnalista({})
+    } catch (error: any) {
+      console.error('Error actualizando ML Impago:', error)
+      toast.error(error?.response?.data?.detail || 'Error al actualizar el Riesgo ML Impago')
+    } finally {
+      setGuardandoMLImpago(null)
+    }
+  }
+
+  // Función para eliminar valores manuales de ML Impago
+  const eliminarMLImpagoManual = async (prestamoId: number) => {
+    setGuardandoMLImpago(prestamoId)
+    try {
+      await cobranzasService.eliminarMLImpagoManual(prestamoId)
+      toast.success('Valores manuales eliminados. Se usarán valores calculados por ML.')
+      // Refrescar los datos
+      refetchClientes()
+      setClientesPorAnalista({})
+    } catch (error: any) {
+      console.error('Error eliminando ML Impago manual:', error)
+      toast.error(error?.response?.data?.detail || 'Error al eliminar valores manuales')
+    } finally {
+      setGuardandoMLImpago(null)
     }
   }
 
@@ -899,27 +975,117 @@ export function Cobranzas() {
                                     </Badge>
                                   </td>
                                   <td className="p-2 text-center">
-                                    {cliente.ml_impago ? (
-                                      <div className="flex flex-col items-center gap-1">
-                                        <Badge
-                                          variant="outline"
-                                          className={
-                                            cliente.ml_impago.nivel_riesgo === 'Alto'
-                                              ? "bg-red-100 text-red-800 border-red-300 font-semibold"
-                                              : cliente.ml_impago.nivel_riesgo === 'Medio'
-                                              ? "bg-orange-100 text-orange-800 border-orange-300"
-                                              : "bg-green-100 text-green-800 border-green-300"
-                                          }
-                                        >
-                                          {cliente.ml_impago.nivel_riesgo}
-                                        </Badge>
-                                        <span className="text-xs text-gray-600">
-                                          {(cliente.ml_impago.probabilidad_impago * 100).toFixed(1)}%
-                                        </span>
-                                      </div>
-                                    ) : (
-                                      <span className="text-xs text-gray-400">N/A</span>
-                                    )}
+                                    {(() => {
+                                      const estaEditandoML = editandoMLImpago === cliente.prestamo_id
+                                      const estaGuardandoML = guardandoMLImpago === cliente.prestamo_id
+                                      
+                                      if (estaEditandoML) {
+                                        return (
+                                          <div className="flex flex-col items-center gap-2 min-w-[200px]">
+                                            <Select
+                                              value={mlImpagoTemporal?.nivelRiesgo || 'Medio'}
+                                              onValueChange={(value) => setMLImpagoTemporal(prev => prev ? { ...prev, nivelRiesgo: value } : { nivelRiesgo: value, probabilidad: 0.5 })}
+                                              disabled={estaGuardandoML}
+                                            >
+                                              <SelectTrigger className="w-full h-8 text-xs">
+                                                <SelectValue placeholder="Nivel de riesgo" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="Alto">Alto</SelectItem>
+                                                <SelectItem value="Medio">Medio</SelectItem>
+                                                <SelectItem value="Bajo">Bajo</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                            <Input
+                                              type="number"
+                                              min="0"
+                                              max="1"
+                                              step="0.01"
+                                              value={mlImpagoTemporal?.probabilidad || 0}
+                                              onChange={(e) => setMLImpagoTemporal(prev => prev ? { ...prev, probabilidad: parseFloat(e.target.value) || 0 } : { nivelRiesgo: 'Medio', probabilidad: parseFloat(e.target.value) || 0 })}
+                                              disabled={estaGuardandoML}
+                                              className="w-full h-8 text-xs"
+                                              placeholder="0.0 - 1.0"
+                                            />
+                                            <div className="flex items-center gap-1">
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => guardarMLImpago(cliente.prestamo_id)}
+                                                disabled={estaGuardandoML}
+                                                className="h-7 w-7 p-0"
+                                              >
+                                                {estaGuardandoML ? (
+                                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                                ) : (
+                                                  <Save className="h-3 w-3 text-green-600" />
+                                                )}
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={cancelarEdicionMLImpago}
+                                                disabled={estaGuardandoML}
+                                                className="h-7 w-7 p-0"
+                                              >
+                                                <X className="h-3 w-3 text-red-600" />
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        )
+                                      }
+                                      
+                                      if (cliente.ml_impago) {
+                                        return (
+                                          <div className="flex flex-col items-center gap-1 group/ml">
+                                            <div className="flex items-center gap-1">
+                                              <Badge
+                                                variant="outline"
+                                                className={
+                                                  cliente.ml_impago.nivel_riesgo === 'Alto'
+                                                    ? "bg-red-100 text-red-800 border-red-300 font-semibold"
+                                                    : cliente.ml_impago.nivel_riesgo === 'Medio'
+                                                    ? "bg-orange-100 text-orange-800 border-orange-300"
+                                                    : "bg-green-100 text-green-800 border-green-300"
+                                                }
+                                              >
+                                                {cliente.ml_impago.nivel_riesgo}
+                                              </Badge>
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, cliente.ml_impago)}
+                                                className="h-5 w-5 p-0 opacity-0 group-hover/ml:opacity-100 transition-opacity hover:opacity-100"
+                                                title="Editar Riesgo ML Impago"
+                                              >
+                                                <Edit className="h-3 w-3" />
+                                              </Button>
+                                            </div>
+                                            <span className="text-xs text-gray-600">
+                                              {(cliente.ml_impago.probabilidad_impago * 100).toFixed(1)}%
+                                            </span>
+                                            {cliente.ml_impago.es_manual && (
+                                              <span className="text-xs text-blue-600 italic">Manual</span>
+                                            )}
+                                          </div>
+                                        )
+                                      }
+                                      
+                                      return (
+                                        <div className="flex items-center gap-1 group/ml">
+                                          <span className="text-xs text-gray-400">N/A</span>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, null)}
+                                            className="h-5 w-5 p-0 opacity-0 group-hover/ml:opacity-100 transition-opacity hover:opacity-100"
+                                            title="Agregar Riesgo ML Impago"
+                                          >
+                                            <Edit className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      )
+                                    })()}
                                   </td>
                                   <td className="p-2 text-right font-semibold text-red-600">
                                     ${(cliente.total_adeudado || 0).toLocaleString('es-VE')}
@@ -1352,27 +1518,117 @@ export function Cobranzas() {
                                                 </Badge>
                                               </td>
                                               <td className="p-2 text-center">
-                                                {cliente.ml_impago ? (
-                                                  <div className="flex flex-col items-center gap-1">
-                                                    <Badge
-                                                      variant="outline"
-                                                      className={
-                                                        cliente.ml_impago.nivel_riesgo === 'Alto'
-                                                          ? "bg-red-100 text-red-800 border-red-300 font-semibold"
-                                                          : cliente.ml_impago.nivel_riesgo === 'Medio'
-                                                          ? "bg-orange-100 text-orange-800 border-orange-300"
-                                                          : "bg-green-100 text-green-800 border-green-300"
-                                                      }
-                                                    >
-                                                      {cliente.ml_impago.nivel_riesgo}
-                                                    </Badge>
-                                                    <span className="text-xs text-gray-600">
-                                                      {(cliente.ml_impago.probabilidad_impago * 100).toFixed(1)}%
-                                                    </span>
-                                                  </div>
-                                                ) : (
-                                                  <span className="text-xs text-gray-400">N/A</span>
-                                                )}
+                                                {(() => {
+                                                  const estaEditandoML = editandoMLImpago === cliente.prestamo_id
+                                                  const estaGuardandoML = guardandoMLImpago === cliente.prestamo_id
+                                                  
+                                                  if (estaEditandoML) {
+                                                    return (
+                                                      <div className="flex flex-col items-center gap-2 min-w-[200px]">
+                                                        <Select
+                                                          value={mlImpagoTemporal?.nivelRiesgo || 'Medio'}
+                                                          onValueChange={(value) => setMLImpagoTemporal(prev => prev ? { ...prev, nivelRiesgo: value } : { nivelRiesgo: value, probabilidad: 0.5 })}
+                                                          disabled={estaGuardandoML}
+                                                        >
+                                                          <SelectTrigger className="w-full h-8 text-xs">
+                                                            <SelectValue placeholder="Nivel de riesgo" />
+                                                          </SelectTrigger>
+                                                          <SelectContent>
+                                                            <SelectItem value="Alto">Alto</SelectItem>
+                                                            <SelectItem value="Medio">Medio</SelectItem>
+                                                            <SelectItem value="Bajo">Bajo</SelectItem>
+                                                          </SelectContent>
+                                                        </Select>
+                                                        <Input
+                                                          type="number"
+                                                          min="0"
+                                                          max="1"
+                                                          step="0.01"
+                                                          value={mlImpagoTemporal?.probabilidad || 0}
+                                                          onChange={(e) => setMLImpagoTemporal(prev => prev ? { ...prev, probabilidad: parseFloat(e.target.value) || 0 } : { nivelRiesgo: 'Medio', probabilidad: parseFloat(e.target.value) || 0 })}
+                                                          disabled={estaGuardandoML}
+                                                          className="w-full h-8 text-xs"
+                                                          placeholder="0.0 - 1.0"
+                                                        />
+                                                        <div className="flex items-center gap-1">
+                                                          <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => guardarMLImpago(cliente.prestamo_id)}
+                                                            disabled={estaGuardandoML}
+                                                            className="h-7 w-7 p-0"
+                                                          >
+                                                            {estaGuardandoML ? (
+                                                              <Loader2 className="h-3 w-3 animate-spin" />
+                                                            ) : (
+                                                              <Save className="h-3 w-3 text-green-600" />
+                                                            )}
+                                                          </Button>
+                                                          <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={cancelarEdicionMLImpago}
+                                                            disabled={estaGuardandoML}
+                                                            className="h-7 w-7 p-0"
+                                                          >
+                                                            <X className="h-3 w-3 text-red-600" />
+                                                          </Button>
+                                                        </div>
+                                                      </div>
+                                                    )
+                                                  }
+                                                  
+                                                  if (cliente.ml_impago) {
+                                                    return (
+                                                      <div className="flex flex-col items-center gap-1 group/ml">
+                                                        <div className="flex items-center gap-1">
+                                                          <Badge
+                                                            variant="outline"
+                                                            className={
+                                                              cliente.ml_impago.nivel_riesgo === 'Alto'
+                                                                ? "bg-red-100 text-red-800 border-red-300 font-semibold"
+                                                                : cliente.ml_impago.nivel_riesgo === 'Medio'
+                                                                ? "bg-orange-100 text-orange-800 border-orange-300"
+                                                                : "bg-green-100 text-green-800 border-green-300"
+                                                            }
+                                                          >
+                                                            {cliente.ml_impago.nivel_riesgo}
+                                                          </Badge>
+                                                          <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, cliente.ml_impago)}
+                                                            className="h-5 w-5 p-0 opacity-0 group-hover/ml:opacity-100 transition-opacity hover:opacity-100"
+                                                            title="Editar Riesgo ML Impago"
+                                                          >
+                                                            <Edit className="h-3 w-3" />
+                                                          </Button>
+                                                        </div>
+                                                        <span className="text-xs text-gray-600">
+                                                          {(cliente.ml_impago.probabilidad_impago * 100).toFixed(1)}%
+                                                        </span>
+                                                        {cliente.ml_impago.es_manual && (
+                                                          <span className="text-xs text-blue-600 italic">Manual</span>
+                                                        )}
+                                                      </div>
+                                                    )
+                                                  }
+                                                  
+                                                  return (
+                                                    <div className="flex items-center gap-1 group/ml">
+                                                      <span className="text-xs text-gray-400">N/A</span>
+                                                      <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, null)}
+                                                        className="h-5 w-5 p-0 opacity-0 group-hover/ml:opacity-100 transition-opacity hover:opacity-100"
+                                                        title="Agregar Riesgo ML Impago"
+                                                      >
+                                                        <Edit className="h-3 w-3" />
+                                                      </Button>
+                                                    </div>
+                                                  )
+                                                })()}
                                               </td>
                                               <td className="p-2 text-right font-semibold text-red-600">
                                                 ${(cliente.total_adeudado || 0).toLocaleString('es-VE')}

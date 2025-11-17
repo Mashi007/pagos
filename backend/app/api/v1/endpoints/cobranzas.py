@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[import-untyped]
 from fastapi.responses import StreamingResponse  # type: ignore[import-untyped]
+from pydantic import BaseModel, Field, field_validator  # type: ignore[import-untyped]
 from openpyxl import Workbook  # type: ignore[import-untyped]
 from openpyxl.styles import Alignment, Font, PatternFill  # type: ignore[import-untyped]
 from reportlab.lib import colors  # type: ignore[import-untyped]
@@ -390,10 +391,21 @@ def obtener_clientes_atrasados(
             }
 
             # Agregar predicción ML Impago si está disponible
-            if ml_service:
-                try:
-                    prestamo = db.query(Prestamo).filter(Prestamo.id == row.prestamo_id).first()
-                    if prestamo and prestamo.estado == "APROBADO":
+            # Priorizar valores manuales sobre calculados
+            try:
+                prestamo = db.query(Prestamo).filter(Prestamo.id == row.prestamo_id).first()
+                if prestamo and prestamo.estado == "APROBADO":
+                    # Verificar si hay valores manuales
+                    if prestamo.ml_impago_nivel_riesgo_manual and prestamo.ml_impago_probabilidad_manual is not None:
+                        # Usar valores manuales
+                        cliente_data["ml_impago"] = {
+                            "probabilidad_impago": float(prestamo.ml_impago_probabilidad_manual),
+                            "nivel_riesgo": prestamo.ml_impago_nivel_riesgo_manual,
+                            "prediccion": "Manual",
+                            "es_manual": True,
+                        }
+                    elif ml_service:
+                        # Calcular con ML si no hay valores manuales
                         cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
                         if cuotas:
                             fecha_actual = date.today()
@@ -404,10 +416,11 @@ def obtener_clientes_atrasados(
                                 "probabilidad_impago": round(prediccion.get("probabilidad_impago", 0.0), 3),
                                 "nivel_riesgo": prediccion.get("nivel_riesgo", "Desconocido"),
                                 "prediccion": prediccion.get("prediccion", "Desconocido"),
+                                "es_manual": False,
                             }
-                except Exception as e:
-                    logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}")
-                    cliente_data["ml_impago"] = None
+            except Exception as e:
+                logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}")
+                cliente_data["ml_impago"] = None
 
             clientes_atrasados.append(cliente_data)
 
@@ -490,10 +503,21 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
             }
 
             # Agregar predicción ML Impago si está disponible
-            if ml_service:
-                try:
-                    prestamo = db.query(Prestamo).filter(Prestamo.id == row.prestamo_id).first()
-                    if prestamo and prestamo.estado == "APROBADO":
+            # Priorizar valores manuales sobre calculados
+            try:
+                prestamo = db.query(Prestamo).filter(Prestamo.id == row.prestamo_id).first()
+                if prestamo and prestamo.estado == "APROBADO":
+                    # Verificar si hay valores manuales
+                    if prestamo.ml_impago_nivel_riesgo_manual and prestamo.ml_impago_probabilidad_manual is not None:
+                        # Usar valores manuales
+                        cliente_data["ml_impago"] = {
+                            "probabilidad_impago": float(prestamo.ml_impago_probabilidad_manual),
+                            "nivel_riesgo": prestamo.ml_impago_nivel_riesgo_manual,
+                            "prediccion": "Manual",
+                            "es_manual": True,
+                        }
+                    elif ml_service:
+                        # Calcular con ML si no hay valores manuales
                         cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
                         if cuotas:
                             fecha_actual = date.today()
@@ -504,10 +528,11 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
                                 "probabilidad_impago": round(prediccion.get("probabilidad_impago", 0.0), 3),
                                 "nivel_riesgo": prediccion.get("nivel_riesgo", "Desconocido"),
                                 "prediccion": prediccion.get("prediccion", "Desconocido"),
+                                "es_manual": False,
                             }
-                except Exception as e:
-                    logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}")
-                    cliente_data["ml_impago"] = None
+            except Exception as e:
+                logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}")
+                cliente_data["ml_impago"] = None
 
             clientes.append(cliente_data)
 
@@ -676,10 +701,21 @@ def obtener_clientes_por_analista(
             }
 
             # Agregar predicción ML Impago si está disponible
-            if ml_service:
-                try:
-                    prestamo = db.query(Prestamo).filter(Prestamo.id == row.prestamo_id).first()
-                    if prestamo and prestamo.estado == "APROBADO":
+            # Priorizar valores manuales sobre calculados
+            try:
+                prestamo = db.query(Prestamo).filter(Prestamo.id == row.prestamo_id).first()
+                if prestamo and prestamo.estado == "APROBADO":
+                    # Verificar si hay valores manuales
+                    if prestamo.ml_impago_nivel_riesgo_manual and prestamo.ml_impago_probabilidad_manual is not None:
+                        # Usar valores manuales
+                        cliente_data["ml_impago"] = {
+                            "probabilidad_impago": float(prestamo.ml_impago_probabilidad_manual),
+                            "nivel_riesgo": prestamo.ml_impago_nivel_riesgo_manual,
+                            "prediccion": "Manual",
+                            "es_manual": True,
+                        }
+                    elif ml_service:
+                        # Calcular con ML si no hay valores manuales
                         cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
                         if cuotas:
                             fecha_actual = date.today()
@@ -690,10 +726,11 @@ def obtener_clientes_por_analista(
                                 "probabilidad_impago": round(prediccion.get("probabilidad_impago", 0.0), 3),
                                 "nivel_riesgo": prediccion.get("nivel_riesgo", "Desconocido"),
                                 "prediccion": prediccion.get("prediccion", "Desconocido"),
+                                "es_manual": False,
                             }
-                except Exception as e:
-                    logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}")
-                    cliente_data["ml_impago"] = None
+            except Exception as e:
+                logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}")
+                cliente_data["ml_impago"] = None
 
             clientes.append(cliente_data)
 
@@ -1024,6 +1061,114 @@ def obtener_resumen_cobranzas(
             db.rollback()  # Rollback para restaurar transacción después de error
         except Exception:
             pass  # Si rollback falla, ignorar
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+# ==
+# ACTUALIZACIÓN ML IMPAGO
+# ==
+
+
+class MLImpagoUpdate(BaseModel):
+    """Schema para actualizar valores manuales de ML Impago"""
+    nivel_riesgo: str = Field(..., description="Nivel de riesgo: Alto, Medio, Bajo")
+    probabilidad_impago: float = Field(..., ge=0.0, le=1.0, description="Probabilidad de impago (0.0 a 1.0)")
+
+    @field_validator("nivel_riesgo")
+    @classmethod
+    def validate_nivel_riesgo(cls, v: str) -> str:
+        v_capitalized = v.capitalize()
+        if v_capitalized not in ["Alto", "Medio", "Bajo"]:
+            raise ValueError("Nivel de riesgo debe ser: Alto, Medio o Bajo")
+        return v_capitalized
+
+
+@router.put("/prestamos/{prestamo_id}/ml-impago")
+def actualizar_ml_impago(
+    prestamo_id: int,
+    ml_impago_data: MLImpagoUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Actualizar valores manuales de ML Impago para un préstamo.
+    Estos valores tendrán prioridad sobre los calculados por el modelo ML.
+    """
+    try:
+        # Buscar préstamo
+        prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+        if not prestamo:
+            raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+        # Validar nivel de riesgo
+        nivel_riesgo = ml_impago_data.nivel_riesgo.capitalize()
+        if nivel_riesgo not in ["Alto", "Medio", "Bajo"]:
+            raise HTTPException(status_code=400, detail="Nivel de riesgo debe ser: Alto, Medio o Bajo")
+
+        # Actualizar valores manuales
+        prestamo.ml_impago_nivel_riesgo_manual = nivel_riesgo
+        prestamo.ml_impago_probabilidad_manual = Decimal(str(ml_impago_data.probabilidad_impago))
+
+        # Guardar cambios
+        db.commit()
+        db.refresh(prestamo)
+
+        logger.info(f"ML Impago actualizado manualmente para préstamo {prestamo_id} por {current_user.email}")
+
+        return {
+            "mensaje": "ML Impago actualizado correctamente",
+            "prestamo_id": prestamo_id,
+            "ml_impago": {
+                "nivel_riesgo": prestamo.ml_impago_nivel_riesgo_manual,
+                "probabilidad_impago": float(prestamo.ml_impago_probabilidad_manual),
+                "es_manual": True,
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error actualizando ML Impago para préstamo {prestamo_id}: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.delete("/prestamos/{prestamo_id}/ml-impago")
+def eliminar_ml_impago_manual(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Eliminar valores manuales de ML Impago para un préstamo.
+    Después de eliminar, se usarán los valores calculados por el modelo ML.
+    """
+    try:
+        # Buscar préstamo
+        prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+        if not prestamo:
+            raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+        # Eliminar valores manuales
+        prestamo.ml_impago_nivel_riesgo_manual = None
+        prestamo.ml_impago_probabilidad_manual = None
+
+        # Guardar cambios
+        db.commit()
+        db.refresh(prestamo)
+
+        logger.info(f"ML Impago manual eliminado para préstamo {prestamo_id} por {current_user.email}")
+
+        return {
+            "mensaje": "Valores manuales de ML Impago eliminados. Se usarán valores calculados por ML.",
+            "prestamo_id": prestamo_id,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error eliminando ML Impago manual para préstamo {prestamo_id}: {e}", exc_info=True)
+        db.rollback()
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 

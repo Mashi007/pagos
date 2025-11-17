@@ -13,6 +13,7 @@ export interface ClienteAtrasado {
     probabilidad_impago: number
     nivel_riesgo: string
     prediccion: string
+    es_manual?: boolean
   } | null
   [key: string]: unknown // Firma de índice para compatibilidad con Record<string, unknown>
 }
@@ -334,6 +335,23 @@ class CobranzasService {
       // Es un nombre, actualizar analista
       return await prestamoService.updatePrestamo(prestamoId, { analista: analistaValue })
     }
+  }
+
+  // Actualizar ML Impago manual de un préstamo
+  async actualizarMLImpago(
+    prestamoId: number,
+    nivelRiesgo: string,
+    probabilidadImpago: number
+  ): Promise<any> {
+    return await apiClient.put(`${this.baseUrl}/prestamos/${prestamoId}/ml-impago`, {
+      nivel_riesgo: nivelRiesgo,
+      probabilidad_impago: probabilidadImpago,
+    })
+  }
+
+  // Eliminar ML Impago manual de un préstamo (volver a usar valores calculados)
+  async eliminarMLImpagoManual(prestamoId: number): Promise<any> {
+    return await apiClient.delete(`${this.baseUrl}/prestamos/${prestamoId}/ml-impago`)
   }
 }
 
