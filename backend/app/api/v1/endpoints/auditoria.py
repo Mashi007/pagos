@@ -58,6 +58,242 @@ def _determinar_resultado_auditoria(exito_attr) -> str:
     return exito_attr or "EXITOSO"
 
 
+# ============================================================================
+# FUNCIONES HELPER PARA ESTADISTICAS AUDITORIA - Refactorización
+# ============================================================================
+
+
+def _verificar_tabla_auditoria_existe(db: Session) -> bool:
+    """
+    Verifica si la tabla auditoria existe en la base de datos.
+    Retorna True si existe, False en caso contrario.
+    """
+    from sqlalchemy import inspect
+
+    try:
+        inspector = inspect(db.bind)
+        tablas = inspector.get_table_names()
+        return "auditoria" in tablas
+    except Exception:
+        return False
+
+
+def _calcular_totales_acciones(db: Session) -> dict:
+    """
+    Calcula totales de acciones desde todas las tablas de auditoría.
+    Retorna diccionario con totales.
+    """
+    try:
+        total_auditoria = db.query(func.count(Auditoria.id)).scalar() or 0
+    except Exception as e:
+        total_auditoria = 0
+        logger.warning(f"Error consultando tabla auditoria: {e}, usando 0")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    try:
+        total_prestamos = db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
+    except Exception:
+        total_prestamos = 0
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    try:
+        total_pagos = db.query(func.count(PagoAuditoria.id)).scalar() or 0
+    except Exception:
+        total_pagos = 0
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    total_acciones = total_auditoria + total_prestamos + total_pagos
+
+    logger.info(
+        f"📊 Totales calculados - Auditoría: {total_auditoria}, Préstamos: {total_prestamos}, Pagos: {total_pagos}, Total: {total_acciones}"
+    )
+
+    return {
+        "total_auditoria": total_auditoria,
+        "total_prestamos": total_prestamos,
+        "total_pagos": total_pagos,
+        "total_acciones": total_acciones,
+    }
+
+
+def _calcular_acciones_por_modulo(db: Session) -> dict:
+    """
+    Calcula acciones por módulo (entidad).
+    Retorna diccionario con acciones por módulo.
+    """
+    acciones_por_modulo: dict[str, int] = {}
+
+    # Calcular acciones por módulo usando GROUP BY
+    try:
+        acciones_por_modulo_rows = db.query(Auditoria.entidad, func.count(Auditoria.id)).group_by(Auditoria.entidad).all()
+        acciones_por_modulo = {
+            (row[0] if row[0] is not None else "DESCONOCIDO"): (row[1] if row[1] is not None else 0)
+            for row in acciones_por_modulo_rows
+        }
+    except Exception as e:
+        logger.warning(f"Error consultando acciones por módulo de auditoria: {e}")
+        acciones_por_modulo = {}
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # Agregar acciones de préstamos y pagos
+    try:
+        acciones_por_modulo["PRESTAMOS"] = acciones_por_modulo.get("PRESTAMOS", 0) + (
+            db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
+        )
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    try:
+        acciones_por_modulo["PAGOS"] = acciones_por_modulo.get("PAGOS", 0) + (
+            db.query(func.count(PagoAuditoria.id)).scalar() or 0
+        )
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    return acciones_por_modulo
+
+
+def _calcular_acciones_por_usuario(db: Session) -> dict:
+    """
+    Calcula acciones por usuario (email).
+    Retorna diccionario con acciones por usuario.
+    """
+    try:
+        acciones_por_usuario_rows = (
+            db.query(User.email, func.count(Auditoria.id))
+            .join(User, User.id == Auditoria.usuario_id)
+            .group_by(User.email)
+            .all()
+        )
+        acciones_por_usuario = {
+            (row[0] if row[0] is not None else ""): (row[1] if row[1] is not None else 0)
+            for row in acciones_por_usuario_rows
+        }
+    except Exception as e:
+        logger.warning(f"Error consultando acciones por usuario de auditoria: {e}")
+        acciones_por_usuario = {}
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    return acciones_por_usuario
+
+
+def _obtener_fechas_periodos() -> dict:
+    """
+    Obtiene fechas de inicio para hoy, semana y mes en UTC.
+    Retorna diccionario con fechas.
+    """
+    from datetime import datetime, timedelta
+
+    import pytz
+
+    # Usar zona horaria de Venezuela (America/Caracas) para cálculos
+    tz_caracas = pytz.timezone("America/Caracas")
+    now_caracas = datetime.now(tz_caracas)
+
+    # Crear fechas de inicio en la zona horaria local
+    inicio_hoy_caracas = datetime(now_caracas.year, now_caracas.month, now_caracas.day, tzinfo=tz_caracas)
+    inicio_semana_caracas = inicio_hoy_caracas - timedelta(days=6)
+    inicio_mes_caracas = datetime(now_caracas.year, now_caracas.month, 1, tzinfo=tz_caracas)
+
+    # Convertir a UTC para comparar con fechas de la BD
+    inicio_hoy = inicio_hoy_caracas.astimezone(pytz.UTC).replace(tzinfo=None)
+    inicio_semana = inicio_semana_caracas.astimezone(pytz.UTC).replace(tzinfo=None)
+    inicio_mes = inicio_mes_caracas.astimezone(pytz.UTC).replace(tzinfo=None)
+
+    logger.info(
+        f"📅 Calculando estadísticas - Hoy (UTC): {inicio_hoy}, Semana (UTC): {inicio_semana}, Mes (UTC): {inicio_mes}"
+    )
+
+    return {
+        "inicio_hoy": inicio_hoy,
+        "inicio_semana": inicio_semana,
+        "inicio_mes": inicio_mes,
+    }
+
+
+def _contar_acciones_por_fecha(db: Session, fecha_inicio: datetime) -> int:
+    """
+    Cuenta acciones desde una fecha específica en todas las tablas de auditoría.
+    Retorna total de acciones.
+    """
+    acciones_aud = 0
+    acciones_prest = 0
+    acciones_pagos = 0
+
+    try:
+        acciones_aud = db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= fecha_inicio).scalar() or 0
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    try:
+        acciones_prest = (
+            db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= fecha_inicio).scalar() or 0
+        )
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    try:
+        acciones_pagos = (
+            db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= fecha_inicio).scalar() or 0
+        )
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    return acciones_aud + acciones_prest + acciones_pagos
+
+
+def _calcular_acciones_por_periodo(db: Session) -> dict:
+    """
+    Calcula acciones por período (hoy, semana, mes).
+    Retorna diccionario con las métricas.
+    """
+    fechas = _obtener_fechas_periodos()
+
+    acciones_hoy = _contar_acciones_por_fecha(db, fechas["inicio_hoy"])
+    acciones_esta_semana = _contar_acciones_por_fecha(db, fechas["inicio_semana"])
+    acciones_este_mes = _contar_acciones_por_fecha(db, fechas["inicio_mes"])
+
+    logger.info(
+        f"📈 Estadísticas por período - Hoy: {acciones_hoy}, Semana: {acciones_esta_semana}, Mes: {acciones_este_mes}"
+    )
+
+    return {
+        "acciones_hoy": acciones_hoy,
+        "acciones_esta_semana": acciones_esta_semana,
+        "acciones_este_mes": acciones_este_mes,
+    }
+
+
 def _convertir_registro_general_listado(registro) -> dict:
     """Convierte un registro de Auditoria general a dict para listado"""
     # Manejar caso donde usuario puede ser None
@@ -598,17 +834,9 @@ def estadisticas_auditoria(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from sqlalchemy import inspect
-    from sqlalchemy.exc import ProgrammingError
-
     try:
         # Verificar si la tabla auditoria existe
-        inspector = inspect(db.bind)
-        tablas = inspector.get_table_names()
-        tabla_auditoria_existe = "auditoria" in tablas
-
-        if not tabla_auditoria_existe:
-            # ✅ Cambiar a debug para reducir verbosidad - es un comportamiento esperado
+        if not _verificar_tabla_auditoria_existe(db):
             logger.debug("Tabla 'auditoria' no existe en BD. Retornando estadísticas vacías (comportamiento esperado).")
             return AuditoriaStatsResponse(
                 total_acciones=0,
@@ -619,235 +847,26 @@ def estadisticas_auditoria(
                 acciones_este_mes=0,
             )
 
-        # Totales (sumando fuentes detalladas)
-        try:
-            total_auditoria = db.query(func.count(Auditoria.id)).scalar() or 0
-        except Exception as e:
-            total_auditoria = 0
-            logger.warning(f"Error consultando tabla auditoria: {e}, usando 0")
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
+        # Totales
+        totales = _calcular_totales_acciones(db)
+        total_acciones = totales["total_acciones"]
 
-        try:
-            total_prestamos = db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
-        except Exception:
-            total_prestamos = 0
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
+        # Acciones por módulo
+        acciones_por_modulo = _calcular_acciones_por_modulo(db)
 
-        try:
-            total_pagos = db.query(func.count(PagoAuditoria.id)).scalar() or 0
-        except Exception:
-            total_pagos = 0
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
+        # Acciones por usuario
+        acciones_por_usuario = _calcular_acciones_por_usuario(db)
 
-        total_acciones = total_auditoria + total_prestamos + total_pagos
-
-        logger.info(
-            f"📊 Totales calculados - Auditoría: {total_auditoria}, Préstamos: {total_prestamos}, Pagos: {total_pagos}, Total: {total_acciones}"
-        )
-
-        # Acciones por módulo (entidad)
-        acciones_por_modulo: dict[str, int] = {}
-        # Calcular acciones por módulo usando GROUP BY (más eficiente)
-        try:
-            acciones_por_modulo_rows = db.query(Auditoria.entidad, func.count(Auditoria.id)).group_by(Auditoria.entidad).all()
-            acciones_por_modulo = {
-                (row[0] if row[0] is not None else "DESCONOCIDO"): (row[1] if row[1] is not None else 0)
-                for row in acciones_por_modulo_rows
-            }
-        except Exception as e:
-            logger.warning(f"Error consultando acciones por módulo de auditoria: {e}")
-            acciones_por_modulo = {}
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-
-        # Agregar acciones de préstamos y pagos
-        try:
-            acciones_por_modulo["PRESTAMOS"] = acciones_por_modulo.get("PRESTAMOS", 0) + (
-                db.query(func.count(PrestamoAuditoria.id)).scalar() or 0
-            )
-        except Exception:
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-
-        try:
-            acciones_por_modulo["PAGOS"] = acciones_por_modulo.get("PAGOS", 0) + (
-                db.query(func.count(PagoAuditoria.id)).scalar() or 0
-            )
-        except Exception:
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-
-        # Acciones por usuario (email)
-        try:
-            acciones_por_usuario_rows = (
-                db.query(User.email, func.count(Auditoria.id))
-                .join(User, User.id == Auditoria.usuario_id)
-                .group_by(User.email)
-                .all()
-            )
-            acciones_por_usuario = {
-                (row[0] if row[0] is not None else ""): (row[1] if row[1] is not None else 0)
-                for row in acciones_por_usuario_rows
-            }
-        except Exception as e:
-            logger.warning(f"Error consultando acciones por usuario de auditoria: {e}")
-            acciones_por_usuario = {}
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-
-        # Hoy / semana / mes
-        from datetime import datetime, timedelta
-
-        import pytz
-
-        # Usar zona horaria de Venezuela (America/Caracas) para cálculos
-        tz_caracas = pytz.timezone("America/Caracas")
-        now_caracas = datetime.now(tz_caracas)
-
-        # Crear fechas de inicio en la zona horaria local
-        inicio_hoy_caracas = datetime(now_caracas.year, now_caracas.month, now_caracas.day, tzinfo=tz_caracas)
-        inicio_semana_caracas = inicio_hoy_caracas - timedelta(days=6)
-        inicio_mes_caracas = datetime(now_caracas.year, now_caracas.month, 1, tzinfo=tz_caracas)
-
-        # Convertir a UTC para comparar con fechas de la BD (que probablemente están en UTC)
-        # Las fechas en PostgreSQL con timezone=True se almacenan en UTC
-        inicio_hoy = inicio_hoy_caracas.astimezone(pytz.UTC).replace(tzinfo=None)
-        inicio_semana = inicio_semana_caracas.astimezone(pytz.UTC).replace(tzinfo=None)
-        inicio_mes = inicio_mes_caracas.astimezone(pytz.UTC).replace(tzinfo=None)
-
-        logger.info(
-            f"📅 Calculando estadísticas - Hoy (UTC): {inicio_hoy}, Semana (UTC): {inicio_semana}, Mes (UTC): {inicio_mes}"
-        )
-
-        # Calcular acciones por período de forma segura
-        try:
-            acciones_hoy_aud = db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_hoy).scalar() or 0
-        except Exception:
-            acciones_hoy_aud = 0
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-
-        try:
-            acciones_hoy_prest = (
-                db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0
-            )
-        except Exception:
-            acciones_hoy_prest = 0
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-
-        try:
-            acciones_hoy_pagos = (
-                db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_hoy).scalar() or 0
-            )
-        except Exception:
-            acciones_hoy_pagos = 0
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-
-        acciones_hoy = acciones_hoy_aud + acciones_hoy_prest + acciones_hoy_pagos
-
-        try:
-            acciones_semana_aud = db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_semana).scalar() or 0
-        except Exception:
-            acciones_semana_aud = 0
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-
-        try:
-            acciones_semana_prest = (
-                db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_semana).scalar()
-                or 0
-            )
-        except Exception:
-            acciones_semana_prest = 0
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-
-        try:
-            acciones_semana_pagos = (
-                db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_semana).scalar() or 0
-            )
-        except Exception:
-            acciones_semana_pagos = 0
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-
-        acciones_esta_semana = acciones_semana_aud + acciones_semana_prest + acciones_semana_pagos
-
-        try:
-            acciones_mes_aud = db.query(func.count(Auditoria.id)).filter(Auditoria.fecha >= inicio_mes).scalar() or 0
-        except Exception:
-            acciones_mes_aud = 0
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-
-        try:
-            acciones_mes_prest = (
-                db.query(func.count(PrestamoAuditoria.id)).filter(PrestamoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0
-            )
-        except Exception:
-            acciones_mes_prest = 0
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-
-        try:
-            acciones_mes_pagos = (
-                db.query(func.count(PagoAuditoria.id)).filter(PagoAuditoria.fecha_cambio >= inicio_mes).scalar() or 0
-            )
-        except Exception:
-            acciones_mes_pagos = 0
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-
-        acciones_este_mes = acciones_mes_aud + acciones_mes_prest + acciones_mes_pagos
-
-        logger.info(
-            f"📈 Estadísticas por período - Hoy: {acciones_hoy}, Semana: {acciones_esta_semana}, Mes: {acciones_este_mes}"
-        )
+        # Acciones por período
+        acciones_periodo = _calcular_acciones_por_periodo(db)
 
         stats_response = AuditoriaStatsResponse(
             total_acciones=total_acciones,
             acciones_por_modulo=acciones_por_modulo,
             acciones_por_usuario=acciones_por_usuario,
-            acciones_hoy=acciones_hoy,
-            acciones_esta_semana=acciones_esta_semana,
-            acciones_este_mes=acciones_este_mes,
+            acciones_hoy=acciones_periodo["acciones_hoy"],
+            acciones_esta_semana=acciones_periodo["acciones_esta_semana"],
+            acciones_este_mes=acciones_periodo["acciones_este_mes"],
         )
 
         logger.info(f"✅ Estadísticas generadas exitosamente: {stats_response.model_dump()}")
@@ -855,7 +874,7 @@ def estadisticas_auditoria(
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas de auditoría: {e}", exc_info=True)
         try:
-            db.rollback()  # ✅ Rollback para restaurar transacción después de error
+            db.rollback()
         except Exception:
             pass
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
