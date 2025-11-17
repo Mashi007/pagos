@@ -1764,6 +1764,278 @@ async def obtener_metricas_entrenamiento(
 # ML PREDICCIÓN DE IMPAGO DE CUOTAS
 # ============================================
 
+# ============================================================================
+# FUNCIONES HELPER PARA entrenar_modelo_impago - Refactorización
+# ============================================================================
+
+
+def _validar_ml_impago_service_disponible() -> None:
+    """Valida que MLImpagoCuotasService esté disponible"""
+    if not ML_IMPAGO_SERVICE_AVAILABLE or MLImpagoCuotasService is None:
+        raise HTTPException(
+            status_code=503,
+            detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
+        )
+
+
+def _validar_tabla_modelos_impago(db: Session) -> None:
+    """Valida que la tabla modelos_impago_cuotas exista"""
+    try:
+        db.query(ModeloImpagoCuotas).limit(1).all()
+    except (ProgrammingError, OperationalError) as db_error:
+        error_msg = str(db_error).lower()
+        if any(term in error_msg for term in ["does not exist", "no such table", "relation", "table"]):
+            raise HTTPException(
+                status_code=503,
+                detail="La tabla 'modelos_impago_cuotas' no está creada. Ejecuta las migraciones: alembic upgrade head",
+            )
+        raise
+
+
+def _verificar_conexion_bd(db: Session) -> None:
+    """Verifica la conexión a la base de datos"""
+    try:
+        logger.info("🔍 Verificando conexión a la base de datos...")
+        db.execute(text("SELECT 1"))
+        logger.info("✅ Conexión a la base de datos verificada")
+    except Exception as db_conn_error:
+        logger.error(f"❌ Error de conexión a la base de datos: {db_conn_error}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Error de conexión a la base de datos: {str(db_conn_error)[:200]}",
+        )
+
+
+def _obtener_prestamos_aprobados_impago(db: Session) -> list:
+    """
+    Obtiene préstamos aprobados con manejo de errores de columnas.
+    Retorna lista de préstamos.
+    """
+    from app.models.prestamo import Prestamo
+
+    prestamos_query = (
+        db.query(Prestamo)
+        .filter(Prestamo.estado == "APROBADO")
+        .filter(Prestamo.fecha_aprobacion.isnot(None))
+    )
+
+    try:
+        return prestamos_query.all()
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "valor_activo" in error_msg or "does not exist" in error_msg:
+            logger.warning("⚠️ Columna valor_activo no existe en BD, usando query directo")
+            from sqlalchemy import select
+
+            stmt = (
+                select(
+                    Prestamo.id,
+                    Prestamo.cliente_id,
+                    Prestamo.cedula,
+                    Prestamo.nombres,
+                    Prestamo.total_financiamiento,
+                    Prestamo.estado,
+                    Prestamo.fecha_aprobacion,
+                )
+                .where(Prestamo.estado == "APROBADO")
+                .where(Prestamo.fecha_aprobacion.isnot(None))
+            )
+
+            resultados = db.execute(stmt).all()
+            prestamos = []
+            for row in resultados:
+                prestamo = Prestamo()
+                prestamo.id = row.id
+                prestamo.cliente_id = row.cliente_id
+                prestamo.cedula = row.cedula
+                prestamo.nombres = row.nombres
+                prestamo.total_financiamiento = row.total_financiamiento
+                prestamo.estado = row.estado
+                prestamo.fecha_aprobacion = row.fecha_aprobacion
+                prestamos.append(prestamo)
+            return prestamos
+        raise
+
+
+def _obtener_cuotas_prestamo(prestamo_id: int, db: Session) -> list:
+    """Obtiene cuotas de un préstamo con manejo de errores"""
+    from app.models.amortizacion import Cuota
+
+    try:
+        return db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota).all()
+    except Exception as cuota_query_error:
+        logger.warning(f"Error consultando cuotas del préstamo {prestamo_id}: {cuota_query_error}")
+        return []
+
+
+def _extraer_features_prestamo_impago(
+    cuotas: list, prestamo, fecha_actual, ml_service
+) -> Optional[Dict]:
+    """
+    Extrae features de un préstamo para entrenamiento de impago.
+    Retorna dict con features o None si hay error.
+    """
+    try:
+        features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
+        if not features or len(features) == 0:
+            logger.warning(f"Features vacías para préstamo {prestamo.id}, omitiendo...")
+            return None
+        return features
+    except Exception as e:
+        logger.warning(f"Error extrayendo features del préstamo {prestamo.id}: {e}, omitiendo...", exc_info=True)
+        return None
+
+
+def _calcular_target_impago(cuotas: list, fecha_actual) -> Optional[int]:
+    """
+    Calcula el target (impago) basado en cuotas vencidas.
+    Retorna 0 (pagó) o 1 (no pagó), o None si no hay cuotas vencidas.
+    """
+    try:
+        cuotas_vencidas = [c for c in cuotas if c.fecha_vencimiento and c.fecha_vencimiento < fecha_actual]
+        if not cuotas_vencidas:
+            return None  # No hay cuotas vencidas aún, no podemos determinar target
+
+        # Target: 0 = Pagó (todas las cuotas vencidas están pagadas), 1 = No pagó (hay cuotas vencidas sin pagar)
+        cuotas_vencidas_sin_pagar = sum(
+            1 for c in cuotas_vencidas if c.estado and c.estado not in ["PAGADO", "PARCIAL"]
+        )
+        return 1 if cuotas_vencidas_sin_pagar > 0 else 0
+    except Exception as e:
+        logger.warning(f"Error determinando target: {e}, omitiendo...", exc_info=True)
+        return None
+
+
+def _procesar_prestamos_para_entrenamiento(
+    prestamos: list, ml_service, fecha_actual, db: Session
+) -> list:
+    """
+    Procesa préstamos para generar datos de entrenamiento.
+    Retorna lista de training_data.
+    """
+    from app.models.amortizacion import Cuota
+
+    training_data = []
+    prestamos_procesados = 0
+    prestamos_con_cuotas = 0
+    prestamos_con_features = 0
+
+    logger.info(f"🔄 Procesando {len(prestamos)} préstamos para generar datos de entrenamiento...")
+
+    for prestamo in prestamos:
+        prestamos_procesados += 1
+        try:
+            # Obtener cuotas del préstamo
+            cuotas = _obtener_cuotas_prestamo(prestamo.id, db)
+            if not cuotas or len(cuotas) < 2:
+                if prestamos_procesados % 10 == 0:
+                    logger.debug(f"Préstamo {prestamo.id}: {len(cuotas) if cuotas else 0} cuotas (necesita mínimo 2)")
+                continue
+
+            prestamos_con_cuotas += 1
+
+            # Extraer features
+            features = _extraer_features_prestamo_impago(cuotas, prestamo, fecha_actual, ml_service)
+            if not features:
+                continue
+
+            # Calcular target
+            target = _calcular_target_impago(cuotas, fecha_actual)
+            if target is None:
+                continue
+
+            # Agregar a datos de entrenamiento
+            training_data.append({**features, "target": target})
+            prestamos_con_features += 1
+
+            if prestamos_con_features % 5 == 0:
+                logger.info(f"✅ Generadas {prestamos_con_features} muestras de entrenamiento...")
+
+        except Exception as e:
+            logger.warning(f"Error procesando préstamo {prestamo.id}: {e}, omitiendo...", exc_info=True)
+            continue
+
+    logger.info(
+        f"📊 Resumen de procesamiento:\n"
+        f"   - Préstamos procesados: {prestamos_procesados}/{len(prestamos)}\n"
+        f"   - Préstamos con cuotas (≥2): {prestamos_con_cuotas}\n"
+        f"   - Préstamos con features válidas: {prestamos_con_features}\n"
+        f"   - Muestras de entrenamiento generadas: {len(training_data)}"
+    )
+
+    return training_data
+
+
+def _guardar_modelo_impago(
+    resultado: Dict, request: EntrenarModeloImpagoRequest, current_user: User, db: Session
+) -> ModeloImpagoCuotas:
+    """Guarda el modelo entrenado en la base de datos"""
+    from datetime import datetime
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    modelo = ModeloImpagoCuotas(
+        nombre=f"Modelo Impago Cuotas {timestamp}",
+        version="1.0.0",
+        algoritmo=request.algoritmo,
+        accuracy=resultado["metrics"]["accuracy"],
+        precision=resultado["metrics"]["precision"],
+        recall=resultado["metrics"]["recall"],
+        f1_score=resultado["metrics"]["f1_score"],
+        roc_auc=resultado["metrics"]["roc_auc"],
+        ruta_archivo=resultado["model_path"],
+        total_datos_entrenamiento=resultado["training_samples"],
+        total_datos_test=resultado["test_samples"],
+        test_size=request.test_size,
+        random_state=request.random_state,
+        activo=False,
+        usuario_id=current_user.id,
+        descripcion=f"Modelo entrenado para predecir impago de cuotas usando {request.algoritmo}",
+        features_usadas=",".join(resultado["features"]),
+    )
+
+    db.add(modelo)
+    db.commit()
+    db.refresh(modelo)
+    return modelo
+
+
+def _manejar_error_entrenamiento_impago(e: Exception, db: Session) -> HTTPException:
+    """Maneja errores durante el entrenamiento y retorna HTTPException apropiado"""
+    db.rollback()
+    error_msg = str(e)
+    error_type = type(e).__name__
+    import traceback
+
+    error_traceback = traceback.format_exc()
+
+    logger.error(
+        f"❌ [ML-IMPAGO] Error entrenando modelo de impago: {error_type}: {error_msg}\n"
+        f"Traceback completo:\n{error_traceback}",
+        exc_info=True,
+    )
+
+    # Mensaje más descriptivo según el tipo de error
+    if "scikit-learn" in error_msg.lower() or "sklearn" in error_msg.lower() or "SKLEARN" in error_msg:
+        detail_msg = "Error con scikit-learn. Verifica que esté instalado correctamente."
+    elif "stratify" in error_msg.lower():
+        detail_msg = "Error al dividir datos. Puede ser por pocas muestras de alguna clase."
+    elif "cuota" in error_msg.lower() or "fecha_vencimiento" in error_msg.lower() or "Cuota" in error_msg:
+        detail_msg = "Error accediendo a datos de cuotas. Verifica la integridad de los datos."
+    elif "does not exist" in error_msg.lower() or "no such table" in error_msg.lower():
+        detail_msg = "La tabla de modelos de impago no está creada. Ejecuta las migraciones: alembic upgrade head"
+    elif "AttributeError" in error_type or "'NoneType' object has no attribute" in error_msg:
+        detail_msg = f"Error de datos: {error_msg[:200]}. Verifica que los préstamos tengan cuotas y datos válidos."
+    elif "KeyError" in error_type:
+        detail_msg = f"Error de estructura de datos: {error_msg[:200]}. Verifica que las features estén completas."
+    elif "ValueError" in error_type:
+        detail_msg = f"Error de validación: {error_msg[:200]}"
+    elif "TypeError" in error_type:
+        detail_msg = f"Error de tipo de dato: {error_msg[:200]}. Verifica que los datos sean numéricos."
+    else:
+        detail_msg = f"Error entrenando modelo ({error_type}): {error_msg[:300]}"
+
+    return HTTPException(status_code=500, detail=detail_msg)
+
 
 @router.post("/ml-impago/entrenar")
 async def entrenar_modelo_impago(
@@ -1789,176 +2061,27 @@ async def entrenar_modelo_impago(
         raise HTTPException(status_code=403, detail="Solo administradores pueden entrenar modelos ML")
 
     try:
-        # Verificar que MLImpagoCuotasService esté disponible PRIMERO
-        if not ML_IMPAGO_SERVICE_AVAILABLE or MLImpagoCuotasService is None:
-            raise HTTPException(
-                status_code=503,
-                detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
-            )
+        # Validaciones
+        _validar_ml_impago_service_disponible()
+        _validar_tabla_modelos_impago(db)
+        _verificar_conexion_bd(db)
 
-        # Verificar que la tabla existe
-        try:
-            db.query(ModeloImpagoCuotas).limit(1).all()
-        except (ProgrammingError, OperationalError) as db_error:
-            error_msg = str(db_error).lower()
-            if any(term in error_msg for term in ["does not exist", "no such table", "relation", "table"]):
-                raise HTTPException(
-                    status_code=503,
-                    detail="La tabla 'modelos_impago_cuotas' no está creada. Ejecuta las migraciones: alembic upgrade head",
-                )
-            raise
-
-        from datetime import date
-
-        from app.models.amortizacion import Cuota
-        from app.models.prestamo import Prestamo
-
-        # Validar conexión a la base de datos
-        try:
-            logger.info("🔍 Verificando conexión a la base de datos...")
-            # Test de conexión ejecutando una query simple
-            db.execute(text("SELECT 1"))
-            logger.info("✅ Conexión a la base de datos verificada")
-        except Exception as db_conn_error:
-            logger.error(f"❌ Error de conexión a la base de datos: {db_conn_error}", exc_info=True)
-            raise HTTPException(
-                status_code=503,
-                detail=f"Error de conexión a la base de datos: {str(db_conn_error)[:200]}",
-            )
-
-        # Obtener todos los préstamos aprobados con cuotas
-        # Para ML Impago solo necesitamos datos del préstamo, no del cliente
+        # Obtener préstamos
         logger.info("🔍 Buscando préstamos aprobados para entrenamiento...")
-        try:
-            # Intentar query normal primero
-            prestamos_query = (
-                db.query(Prestamo).filter(Prestamo.estado == "APROBADO").filter(Prestamo.fecha_aprobacion.isnot(None))
-            )
-
-            try:
-                prestamos = prestamos_query.all()
-            except Exception as e:
-                error_msg = str(e).lower()
-                if "valor_activo" in error_msg or "does not exist" in error_msg:
-                    # Si falla por valor_activo, usar query directo
-                    logger.warning("⚠️ Columna valor_activo no existe en BD, usando query directo")
-                    from sqlalchemy import select
-
-                    stmt = (
-                        select(
-                            Prestamo.id,
-                            Prestamo.cliente_id,
-                            Prestamo.cedula,
-                            Prestamo.nombres,
-                            Prestamo.total_financiamiento,
-                            Prestamo.estado,
-                            Prestamo.fecha_aprobacion,
-                        )
-                        .where(Prestamo.estado == "APROBADO")
-                        .where(Prestamo.fecha_aprobacion.isnot(None))
-                    )
-
-                    resultados = db.execute(stmt).all()
-
-                    # Convertir a objetos Prestamo parciales
-                    prestamos = []
-                    for row in resultados:
-                        prestamo = Prestamo()
-                        prestamo.id = row.id
-                        prestamo.cliente_id = row.cliente_id
-                        prestamo.cedula = row.cedula
-                        prestamo.nombres = row.nombres
-                        prestamo.total_financiamiento = row.total_financiamiento
-                        prestamo.estado = row.estado
-                        prestamo.fecha_aprobacion = row.fecha_aprobacion
-                        prestamos.append(prestamo)
-                else:
-                    raise
-
-            logger.info(f"📊 Encontrados {len(prestamos)} préstamos aprobados")
-        except Exception as query_error:
-            logger.error(f"❌ Error consultando préstamos: {query_error}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error consultando préstamos de la base de datos: {str(query_error)[:200]}",
-            )
+        prestamos = _obtener_prestamos_aprobados_impago(db)
+        logger.info(f"📊 Encontrados {len(prestamos)} préstamos aprobados")
 
         if not prestamos:
             raise HTTPException(status_code=400, detail="No hay préstamos aprobados para entrenar el modelo")
 
-        ml_service = MLImpagoCuotasService()
-        training_data = []
-        fecha_actual = date.today()
+        # Procesar préstamos para generar datos de entrenamiento
+        from datetime import date
 
+        ml_service = MLImpagoCuotasService()
+        fecha_actual = date.today()
         logger.info(f"📅 Fecha actual para cálculo de features: {fecha_actual}")
 
-        # Generar datos de entrenamiento
-        logger.info(f"🔄 Procesando {len(prestamos)} préstamos para generar datos de entrenamiento...")
-        prestamos_procesados = 0
-        prestamos_con_cuotas = 0
-        prestamos_con_features = 0
-
-        for prestamo in prestamos:
-            prestamos_procesados += 1
-            try:
-                # Obtener cuotas del préstamo
-                try:
-                    cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
-                except Exception as cuota_query_error:
-                    logger.warning(f"Error consultando cuotas del préstamo {prestamo.id}: {cuota_query_error}")
-                    continue
-
-                if not cuotas or len(cuotas) < 2:
-                    if prestamos_procesados % 10 == 0:  # Log cada 10 préstamos
-                        logger.debug(f"Préstamo {prestamo.id}: {len(cuotas) if cuotas else 0} cuotas (necesita mínimo 2)")
-                    continue  # Necesitamos al menos 2 cuotas para tener historial
-
-                prestamos_con_cuotas += 1
-
-                # Extraer features del historial de pagos
-                try:
-                    features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
-                    # Validar que features no esté vacío
-                    if not features or len(features) == 0:
-                        logger.warning(f"Features vacías para préstamo {prestamo.id}, omitiendo...")
-                        continue
-                except Exception as e:
-                    logger.warning(f"Error extrayendo features del préstamo {prestamo.id}: {e}, omitiendo...", exc_info=True)
-                    continue
-
-                # Determinar target: ¿El cliente pagó o no pagó sus cuotas?
-                # Usamos las cuotas vencidas para determinar si pagó o no
-                try:
-                    cuotas_vencidas = [c for c in cuotas if c.fecha_vencimiento and c.fecha_vencimiento < fecha_actual]
-                    if not cuotas_vencidas:
-                        continue  # No hay cuotas vencidas aún, no podemos determinar target
-
-                    # Target: 0 = Pagó (todas las cuotas vencidas están pagadas), 1 = No pagó (hay cuotas vencidas sin pagar)
-                    cuotas_vencidas_sin_pagar = sum(
-                        1 for c in cuotas_vencidas if c.estado and c.estado not in ["PAGADO", "PARCIAL"]
-                    )
-                    target = 1 if cuotas_vencidas_sin_pagar > 0 else 0
-
-                    # Agregar a datos de entrenamiento
-                    training_data.append({**features, "target": target})
-                    prestamos_con_features += 1
-
-                    if prestamos_con_features % 5 == 0:  # Log cada 5 muestras generadas
-                        logger.info(f"✅ Generadas {prestamos_con_features} muestras de entrenamiento...")
-                except Exception as e:
-                    logger.warning(f"Error determinando target del préstamo {prestamo.id}: {e}, omitiendo...", exc_info=True)
-                    continue
-            except Exception as e:
-                logger.warning(f"Error procesando préstamo {prestamo.id}: {e}, omitiendo...", exc_info=True)
-                continue
-
-        logger.info(
-            f"📊 Resumen de procesamiento:\n"
-            f"   - Préstamos procesados: {prestamos_procesados}/{len(prestamos)}\n"
-            f"   - Préstamos con cuotas (≥2): {prestamos_con_cuotas}\n"
-            f"   - Préstamos con features válidas: {prestamos_con_features}\n"
-            f"   - Muestras de entrenamiento generadas: {len(training_data)}"
-        )
+        training_data = _procesar_prestamos_para_entrenamiento(prestamos, ml_service, fecha_actual, db)
 
         if len(training_data) < 10:
             raise HTTPException(
