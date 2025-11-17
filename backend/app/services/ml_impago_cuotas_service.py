@@ -628,10 +628,14 @@ class MLImpagoCuotasService:
                 
                 # Buscar en todas las ubicaciones
                 model_file = None
-                for search_path in search_paths:
-                    if search_path.exists() and search_path.is_file():
+                logger.info(f"🔍 [ML] Buscando modelo '{filename}' en {len(search_paths)} ubicaciones...")
+                for i, search_path in enumerate(search_paths, 1):
+                    exists = search_path.exists()
+                    is_file = search_path.is_file() if exists else False
+                    logger.debug(f"   [{i}/{len(search_paths)}] {search_path.absolute()} - Existe: {exists}, Es archivo: {is_file}")
+                    if exists and is_file:
                         model_file = search_path
-                        logger.info(f"✅ Modelo encontrado en: {model_file.absolute()}")
+                        logger.info(f"✅ [ML] Modelo encontrado en: {model_file.absolute()}")
                         break
             else:
                 # Es solo un nombre de archivo, buscar en directorio de modelos
@@ -645,18 +649,41 @@ class MLImpagoCuotasService:
                         model_file = project_root / "ml_models" / model_path
             
             if model_file is None or not model_file.exists():
-                logger.error(f"❌ Modelo no encontrado en ninguna ubicación.")
-                logger.error(f"   Ruta original: {model_path}")
-                logger.error(f"   Directorio de modelos configurado: {self.model_path.absolute()}")
-                logger.error(f"   Directorio de trabajo actual: {Path.cwd()}")
-                logger.error(f"   Directorio raíz del proyecto: {Path(__file__).parent.parent.parent.parent.absolute()}")
+                logger.error(f"❌ [ML] Modelo no encontrado en ninguna ubicación.")
+                logger.error(f"   [ML] Ruta original: {model_path}")
+                logger.error(f"   [ML] Directorio de modelos configurado: {self.model_path.absolute()}")
+                logger.error(f"   [ML] Directorio de trabajo actual: {Path.cwd()}")
+                logger.error(f"   [ML] Directorio raíz del proyecto: {Path(__file__).parent.parent.parent.parent.absolute()}")
                 
                 # Listar archivos en el directorio de modelos para debugging
                 if self.model_path.exists():
                     archivos = list(self.model_path.glob("*.pkl"))
-                    logger.info(f"   Archivos .pkl encontrados en {self.model_path.absolute()}: {[f.name for f in archivos]}")
+                    logger.info(f"   [ML] Archivos .pkl encontrados en {self.model_path.absolute()}: {[f.name for f in archivos]}")
                 else:
-                    logger.warning(f"   El directorio {self.model_path.absolute()} no existe")
+                    logger.warning(f"   [ML] El directorio {self.model_path.absolute()} no existe")
+                
+                # Buscar archivos .pkl en el directorio raíz del proyecto
+                try:
+                    project_root = Path(__file__).parent.parent.parent.parent
+                    ml_models_dir = project_root / "ml_models"
+                    if ml_models_dir.exists():
+                        archivos_root = list(ml_models_dir.glob("*.pkl"))
+                        logger.info(f"   [ML] Archivos .pkl en {ml_models_dir.absolute()}: {[f.name for f in archivos_root]}")
+                    else:
+                        logger.warning(f"   [ML] El directorio {ml_models_dir.absolute()} no existe")
+                except Exception as e:
+                    logger.warning(f"   [ML] Error buscando en directorio raíz: {e}")
+                
+                # Buscar en directorio de trabajo actual
+                try:
+                    cwd_pkl = list(Path.cwd().glob("*.pkl"))
+                    if cwd_pkl:
+                        logger.info(f"   [ML] Archivos .pkl en directorio de trabajo: {[f.name for f in cwd_pkl]}")
+                    cwd_ml = list((Path.cwd() / "ml_models").glob("*.pkl"))
+                    if cwd_ml:
+                        logger.info(f"   [ML] Archivos .pkl en {Path.cwd() / 'ml_models'}: {[f.name for f in cwd_ml]}")
+                except Exception as e:
+                    logger.warning(f"   [ML] Error buscando en directorio de trabajo: {e}")
                 
                 return False
             

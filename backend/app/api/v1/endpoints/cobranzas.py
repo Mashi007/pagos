@@ -405,9 +405,41 @@ def obtener_clientes_atrasados(
         prestamo_ids = [row.prestamo_id for row in resultados]
         prestamos_dict = {}
         if prestamo_ids:
-            prestamos = db.query(Prestamo).filter(Prestamo.id.in_(prestamo_ids)).all()
-            prestamos_dict = {p.id: p for p in prestamos}
-            logger.info(f"📦 Cargados {len(prestamos_dict)} préstamos para procesamiento ML")
+            try:
+                # Intentar cargar préstamos normalmente
+                prestamos = db.query(Prestamo).filter(Prestamo.id.in_(prestamo_ids)).all()
+                prestamos_dict = {p.id: p for p in prestamos}
+                logger.info(f"📦 Cargados {len(prestamos_dict)} préstamos para procesamiento ML")
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "valor_activo" in error_msg or "does not exist" in error_msg:
+                    logger.warning("⚠️ Columna valor_activo no existe en BD, usando query con columnas específicas")
+                    # Cargar solo las columnas que necesitamos
+                    from sqlalchemy.orm import load_only
+                    prestamos = (
+                        db.query(Prestamo)
+                        .filter(Prestamo.id.in_(prestamo_ids))
+                        .options(
+                            load_only(
+                                Prestamo.id,
+                                Prestamo.estado,
+                                Prestamo.fecha_aprobacion,
+                                Prestamo.ml_impago_nivel_riesgo_manual,
+                                Prestamo.ml_impago_probabilidad_manual,
+                                Prestamo.total_financiamiento,
+                                Prestamo.numero_cuotas,
+                                Prestamo.modalidad_pago,
+                                Prestamo.tasa_interes,
+                                Prestamo.fecha_base_calculo,
+                            )
+                        )
+                        .all()
+                    )
+                    prestamos_dict = {p.id: p for p in prestamos}
+                    logger.info(f"📦 Cargados {len(prestamos_dict)} préstamos (sin valor_activo) para procesamiento ML")
+                else:
+                    # Re-lanzar el error si no es sobre valor_activo
+                    raise
 
         # Optimización: Cargar todas las cuotas de una vez (solo para préstamos que necesitan ML)
         cuotas_dict = {}
