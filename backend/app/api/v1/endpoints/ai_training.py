@@ -1012,16 +1012,36 @@ async def entrenar_modelo_riesgo(
 
         # Preparar datos de entrenamiento
         training_data = []
+        
+        logger.info(f"📊 Procesando {len(prestamos)} préstamos para entrenamiento de ML Riesgo...")
 
         for prestamo in prestamos:
             # Calcular features
             try:
-                cliente = prestamo.cliente
+                # Intentar acceder al cliente de forma segura
+                cliente = None
+                try:
+                    cliente = prestamo.cliente
+                except AttributeError:
+                    # Si no está cargado, intentar cargarlo manualmente
+                    try:
+                        cliente = db.query(Cliente).filter(Cliente.id == prestamo.cliente_id).first()
+                    except Exception as query_error:
+                        logger.warning(f"Error consultando cliente para préstamo {prestamo.id}: {query_error}")
+                        continue
+                
                 if not cliente:
-                    logger.warning(f"Préstamo {prestamo.id} no tiene cliente asociado, omitiendo...")
+                    logger.warning(f"Préstamo {prestamo.id} no tiene cliente asociado (cliente_id: {prestamo.cliente_id}), omitiendo...")
                     continue
+                    
+                # Verificar que el cliente tenga fecha_nacimiento si es necesario
+                if not hasattr(cliente, 'fecha_nacimiento'):
+                    logger.warning(f"Cliente {cliente.id} no tiene atributo fecha_nacimiento, omitiendo préstamo {prestamo.id}...")
+                    continue
+                    
             except Exception as e:
-                logger.warning(f"Error accediendo a cliente del préstamo {prestamo.id}: {e}, omitiendo...")
+                error_type = type(e).__name__
+                logger.warning(f"Error accediendo a cliente del préstamo {prestamo.id} ({error_type}): {e}, omitiendo...")
                 continue
 
             # Calcular edad
@@ -1155,17 +1175,36 @@ async def entrenar_modelo_riesgo(
     except Exception as e:
         db.rollback()
         error_msg = str(e)
-        logger.error(f"Error entrenando modelo de riesgo: {error_msg}", exc_info=True)
+        error_type = type(e).__name__
+        import traceback
+        error_traceback = traceback.format_exc()
+        
+        logger.error(
+            f"❌ [ML-RIESGO] Error entrenando modelo de riesgo: {error_type}: {error_msg}\n"
+            f"Traceback completo:\n{error_traceback}",
+            exc_info=True,
+        )
 
         # Mensaje más descriptivo según el tipo de error
-        if "scikit-learn" in error_msg.lower() or "sklearn" in error_msg.lower():
+        if "scikit-learn" in error_msg.lower() or "sklearn" in error_msg.lower() or "SKLEARN" in error_msg:
             detail_msg = "Error con scikit-learn. Verifica que esté instalado correctamente."
         elif "stratify" in error_msg.lower():
             detail_msg = "Error al dividir datos. Puede ser por pocas muestras de alguna clase."
-        elif "cliente" in error_msg.lower() or "relationship" in error_msg.lower():
-            detail_msg = "Error accediendo a datos de clientes. Verifica la integridad de los datos."
+        elif "cliente" in error_msg.lower() or "relationship" in error_msg.lower() or "AttributeError" in error_type:
+            detail_msg = f"Error accediendo a datos de clientes ({error_type}): {error_msg[:200]}. Verifica la integridad de los datos y que los préstamos tengan clientes asociados."
+        elif "does not exist" in error_msg.lower() or "no such table" in error_msg.lower():
+            detail_msg = "La tabla de modelos de riesgo no está creada. Ejecuta las migraciones: alembic upgrade head"
+        elif "'NoneType' object has no attribute" in error_msg:
+            detail_msg = f"Error de datos: {error_msg[:200]}. Verifica que los préstamos tengan clientes y datos válidos."
+        elif "KeyError" in error_type:
+            detail_msg = f"Error de estructura de datos: {error_msg[:200]}. Verifica que las features estén completas."
+        elif "ValueError" in error_type:
+            detail_msg = f"Error de validación: {error_msg[:200]}"
+        elif "TypeError" in error_type:
+            detail_msg = f"Error de tipo de dato: {error_msg[:200]}. Verifica que los datos sean numéricos."
         else:
-            detail_msg = f"Error entrenando modelo: {error_msg}"
+            # Incluir más información del error para debugging
+            detail_msg = f"Error entrenando modelo ({error_type}): {error_msg[:300]}"
 
         raise HTTPException(status_code=500, detail=detail_msg)
 
