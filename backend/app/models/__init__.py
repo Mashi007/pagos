@@ -12,6 +12,7 @@ from app.models.configuracion_sistema import ConfiguracionSistema
 from app.models.conversacion_ai import ConversacionAI
 from app.models.conversacion_whatsapp import ConversacionWhatsApp
 from app.models.documento_ai import DocumentoAI
+from app.models.ticket import Ticket
 from app.models.documento_embedding import DocumentoEmbedding
 from app.models.fine_tuning_job import FineTuningJob
 from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
@@ -46,6 +47,7 @@ __all__ = [
     "AIPromptVariable",
     "ConversacionAI",
     "ConversacionWhatsApp",
+    "Ticket",
     "Auditoria",
     "Notificacion",
     "NotificacionPlantilla",

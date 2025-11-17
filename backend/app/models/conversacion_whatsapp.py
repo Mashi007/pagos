@@ -33,6 +33,9 @@ class ConversacionWhatsApp(Base):
     # Relación con cliente
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
 
+    # Relación con ticket (opcional)
+    ticket_id = Column(Integer, ForeignKey("tickets.id"), nullable=True, index=True)
+
     # Estado y procesamiento
     procesado = Column(Boolean, default=False, nullable=False)  # Si fue procesado por el bot
     respuesta_enviada = Column(Boolean, default=False, nullable=False)  # Si se envió respuesta
@@ -52,6 +55,7 @@ class ConversacionWhatsApp(Base):
     # Relaciones ORM
     cliente = relationship("Cliente", foreign_keys=[cliente_id])
     respuesta = relationship("ConversacionWhatsApp", remote_side=[id], foreign_keys=[respuesta_id])
+    ticket = relationship("Ticket", foreign_keys=[ticket_id])
 
     def __repr__(self):
         return f"<ConversacionWhatsApp {self.id} - {self.direccion} - {self.from_number}>"
@@ -68,6 +72,7 @@ class ConversacionWhatsApp(Base):
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
             "direccion": self.direccion,
             "cliente_id": self.cliente_id,
+            "ticket_id": self.ticket_id,
             "procesado": self.procesado,
             "respuesta_enviada": self.respuesta_enviada,
             "respuesta_id": self.respuesta_id,

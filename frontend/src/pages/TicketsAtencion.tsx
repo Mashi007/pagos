@@ -134,7 +134,7 @@ export function TicketsAtencion() {
       cliente: nombreCompleto,
       clienteData: cliente,
       // Pre-llenar descripción con datos del cliente si está vacía para agilizar
-      descripcion: prev.descripcion || `Cliente: ${nombreCompleto}\nCédula: ${cliente.cedula}${cliente.telefono ? `\nTeléfono: ${cliente.telefono}` : ''}${cliente.email ? `\nEmail: ${cliente.email}` : ''}\n\n`,
+      descripcion: prev.descripcion || `Cliente: ${nombreCompleto}\nCédula: ${cliente.cedula}${cliente.telefono ? `\nTeléfono: ${cliente.telefono}` : ''}${cliente.email ? `\nEmail: ${cliente.email}` : ''}${cliente.direccion ? `\nDirección: ${cliente.direccion}` : ''}${cliente.ocupacion ? `\nOcupación: ${cliente.ocupacion}` : ''}\n\n`,
     }))
     setSearchCliente('')
   }
@@ -203,17 +203,45 @@ export function TicketsAtencion() {
               <div className="space-y-2">
                 <Label>Cliente</Label>
                 {clienteSeleccionado ? (
-                  <Card className="p-3 bg-blue-50">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold">{[clienteSeleccionado.nombres, clienteSeleccionado.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}</p>
-                        <p className="text-sm text-gray-600">Cédula: {clienteSeleccionado.cedula}</p>
-                        {clienteSeleccionado.telefono && (
-                          <p className="text-sm text-gray-600">Tel: {clienteSeleccionado.telefono}</p>
-                        )}
-                        {clienteSeleccionado.email && (
-                          <p className="text-sm text-gray-600">Email: {clienteSeleccionado.email}</p>
-                        )}
+                  <Card className="p-4 bg-green-50 border-2 border-green-300 shadow-sm">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-3">
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <p className="font-semibold text-base text-green-900">
+                            {[clienteSeleccionado.nombres, clienteSeleccionado.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm ml-7">
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-600 font-medium">Cédula:</span>
+                            <span className="text-gray-900 font-semibold">{clienteSeleccionado.cedula}</span>
+                          </div>
+                          {clienteSeleccionado.telefono && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-600 font-medium">Teléfono:</span>
+                              <span className="text-gray-900 font-semibold">{clienteSeleccionado.telefono}</span>
+                            </div>
+                          )}
+                          {clienteSeleccionado.email && (
+                            <div className="flex items-center gap-2 sm:col-span-2">
+                              <span className="text-gray-600 font-medium">Email:</span>
+                              <span className="text-gray-900 font-semibold break-all">{clienteSeleccionado.email}</span>
+                            </div>
+                          )}
+                          {clienteSeleccionado.direccion && (
+                            <div className="flex items-center gap-2 sm:col-span-2">
+                              <span className="text-gray-600 font-medium">Dirección:</span>
+                              <span className="text-gray-900">{clienteSeleccionado.direccion}</span>
+                            </div>
+                          )}
+                          {clienteSeleccionado.ocupacion && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-600 font-medium">Ocupación:</span>
+                              <span className="text-gray-900">{clienteSeleccionado.ocupacion}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <Button
                         variant="ghost"
@@ -221,7 +249,9 @@ export function TicketsAtencion() {
                         onClick={() => {
                           setClienteSeleccionado(null)
                           setNuevoTicket(prev => ({ ...prev, clienteId: undefined, cliente: undefined, clienteData: undefined }))
+                          setSearchCliente('')
                         }}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
                         <XCircleIcon className="h-4 w-4" />
                       </Button>
@@ -249,37 +279,77 @@ export function TicketsAtencion() {
                         <p>No se encontraron clientes</p>
                       </div>
                     ) : searchCliente.length >= 2 && clientesBuscados.length > 0 ? (
-                      <div className="max-h-48 overflow-y-auto border rounded-lg space-y-1 p-2 bg-white">
-                        {clientesBuscados.map((cliente) => (
-                          <Card
-                            key={cliente.id}
-                            className="cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-all"
-                            onClick={() => handleSeleccionarCliente(cliente)}
-                          >
-                            <CardContent className="p-3">
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <p className="font-medium text-sm text-gray-900">{[cliente.nombres, cliente.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}</p>
-                                  <div className="flex gap-3 mt-1">
-                                    <p className="text-xs text-gray-600">Cédula: <span className="font-medium">{cliente.cedula}</span></p>
+                      <div className="max-h-64 overflow-y-auto border-2 border-blue-200 rounded-lg shadow-lg bg-white z-50">
+                        <div className="p-2 bg-blue-50 border-b border-blue-200 sticky top-0">
+                          <p className="text-xs font-semibold text-blue-700">
+                            {clientesBuscados.length} {clientesBuscados.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}
+                          </p>
+                        </div>
+                        <div className="space-y-1 p-2">
+                          {clientesBuscados.map((cliente) => (
+                            <div
+                              key={cliente.id}
+                              className="cursor-pointer p-3 rounded-lg border border-gray-200 hover:bg-blue-50 hover:border-blue-300 hover:shadow-md transition-all"
+                              onClick={() => handleSeleccionarCliente(cliente)}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <User className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                                    <p className="font-semibold text-sm text-gray-900 truncate">
+                                      {[cliente.nombres, cliente.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}
+                                    </p>
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 ml-6 text-xs">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-gray-500">Cédula:</span>
+                                      <span className="font-medium text-gray-700">{cliente.cedula}</span>
+                                    </div>
                                     {cliente.telefono && (
-                                      <p className="text-xs text-gray-600">Tel: <span className="font-medium">{cliente.telefono}</span></p>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-gray-500">Tel:</span>
+                                        <span className="font-medium text-gray-700">{cliente.telefono}</span>
+                                      </div>
                                     )}
                                     {cliente.email && (
-                                      <p className="text-xs text-gray-600">Email: <span className="font-medium">{cliente.email}</span></p>
+                                      <div className="flex items-center gap-1.5 sm:col-span-2">
+                                        <span className="text-gray-500">Email:</span>
+                                        <span className="font-medium text-gray-700 truncate">{cliente.email}</span>
+                                      </div>
+                                    )}
+                                    {cliente.direccion && (
+                                      <div className="flex items-center gap-1.5 sm:col-span-2">
+                                        <span className="text-gray-500">Dirección:</span>
+                                        <span className="font-medium text-gray-700 truncate">{cliente.direccion}</span>
+                                      </div>
+                                    )}
+                                    {cliente.ocupacion && (
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-gray-500">Ocupación:</span>
+                                        <span className="font-medium text-gray-700">{cliente.ocupacion}</span>
+                                      </div>
                                     )}
                                   </div>
                                 </div>
-                                <Button size="sm" variant="outline" className="ml-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="ml-2 flex-shrink-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleSeleccionarCliente(cliente)
+                                  }}
+                                >
                                   Seleccionar
                                 </Button>
                               </div>
-                            </CardContent>
-                          </Card>
-                        ))}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ) : searchCliente.length > 0 && searchCliente.length < 2 ? (
-                      <div className="text-xs text-gray-400 mt-1 px-1">
+                      <div className="text-xs text-gray-500 mt-1 px-2 py-1 bg-gray-50 rounded border border-gray-200">
+                        <AlertCircle className="h-3 w-3 inline mr-1" />
                         Escribe al menos 2 caracteres para buscar
                       </div>
                     ) : null}

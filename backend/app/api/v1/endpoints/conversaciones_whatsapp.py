@@ -40,6 +40,7 @@ def _crear_tabla_si_no_existe(db: Session) -> bool:
         logger.warning("⚠️ Tabla conversaciones_whatsapp no existe, intentando crearla...")
 
         # Crear tabla usando SQL directo
+        # Nota: ticket_id se agrega después si la tabla de tickets existe
         create_table_sql = """
         CREATE TABLE IF NOT EXISTS conversaciones_whatsapp (
             id SERIAL PRIMARY KEY,
@@ -51,6 +52,7 @@ def _crear_tabla_si_no_existe(db: Session) -> bool:
             timestamp TIMESTAMP NOT NULL,
             direccion VARCHAR(10) NOT NULL,
             cliente_id INTEGER REFERENCES clientes(id),
+            ticket_id INTEGER,
             procesado BOOLEAN NOT NULL DEFAULT false,
             respuesta_enviada BOOLEAN NOT NULL DEFAULT false,
             respuesta_id INTEGER REFERENCES conversaciones_whatsapp(id),
@@ -67,10 +69,36 @@ def _crear_tabla_si_no_existe(db: Session) -> bool:
         CREATE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_timestamp ON conversaciones_whatsapp(timestamp);
         CREATE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_cliente_id ON conversaciones_whatsapp(cliente_id);
         CREATE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_creado_en ON conversaciones_whatsapp(creado_en);
+        CREATE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_ticket_id ON conversaciones_whatsapp(ticket_id);
         """
 
         db.execute(text(create_table_sql))
         db.commit()
+        
+        # Intentar agregar foreign key a tickets si la tabla existe (después de crear la tabla)
+        try:
+            inspector = inspect(db.bind)
+            if "tickets" in inspector.get_table_names():
+                # Agregar foreign key constraint si no existe
+                alter_sql = """
+                DO $$ 
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint 
+                        WHERE conname = 'conversaciones_whatsapp_ticket_id_fkey'
+                    ) THEN
+                        ALTER TABLE conversaciones_whatsapp 
+                        ADD CONSTRAINT conversaciones_whatsapp_ticket_id_fkey 
+                        FOREIGN KEY (ticket_id) REFERENCES tickets(id);
+                    END IF;
+                END $$;
+                """
+                db.execute(text(alter_sql))
+                db.commit()
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudo agregar foreign key a tickets (puede que la tabla no exista aún): {e}")
+            db.rollback()
+        
         logger.info("✅ Tabla conversaciones_whatsapp creada exitosamente (fallback)")
         return True
     except Exception as e:
@@ -122,9 +150,35 @@ async def listar_conversaciones_whatsapp(
         # Ordenar por fecha más reciente
         query = query.order_by(ConversacionWhatsApp.timestamp.desc())
 
-        # Paginación
-        total = query.count()
-        conversaciones = query.offset((page - 1) * per_page).limit(per_page).all()
+        # Paginación - con manejo de errores para tabla inexistente
+        try:
+            total = query.count()
+            conversaciones = query.offset((page - 1) * per_page).limit(per_page).all()
+        except (ProgrammingError, OperationalError) as count_error:
+            error_str = str(count_error).lower()
+            if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+                # Intentar crear la tabla como fallback
+                logger.warning(f"⚠️ Error al contar conversaciones, intentando crear tabla: {count_error}")
+                if _crear_tabla_si_no_existe(db):
+                    # Reintentar después de crear la tabla
+                    db.refresh(ConversacionWhatsApp)
+                    query = db.query(ConversacionWhatsApp)
+                    if cliente_id:
+                        query = query.filter(ConversacionWhatsApp.cliente_id == cliente_id)
+                    if from_number:
+                        query = query.filter(ConversacionWhatsApp.from_number.like(f"%{from_number}%"))
+                    if direccion:
+                        query = query.filter(ConversacionWhatsApp.direccion == direccion.upper())
+                    query = query.order_by(ConversacionWhatsApp.timestamp.desc())
+                    total = query.count()
+                    conversaciones = query.offset((page - 1) * per_page).limit(per_page).all()
+                else:
+                    raise HTTPException(
+                        status_code=503,
+                        detail="La tabla 'conversaciones_whatsapp' no existe y no se pudo crear. Ejecuta las migraciones: alembic upgrade head",
+                    )
+            else:
+                raise
 
         return {
             "conversaciones": [c.to_dict() for c in conversaciones],
@@ -142,6 +196,7 @@ async def listar_conversaciones_whatsapp(
         error_str = str(db_error).lower()
         if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
             # Intentar crear la tabla como fallback
+            logger.warning(f"⚠️ Error de base de datos, intentando crear tabla: {db_error}")
             if _crear_tabla_si_no_existe(db):
                 # Reintentar la query
                 try:
@@ -212,14 +267,42 @@ async def obtener_conversaciones_cliente(
     Obtener todas las conversaciones de un cliente específico
     """
     try:
+        # Verificar si la tabla existe, si no, intentar crearla
+        if not _verificar_tabla_existe(db):
+            if not _crear_tabla_si_no_existe(db):
+                raise HTTPException(
+                    status_code=503,
+                    detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head",
+                )
+
         query = db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.cliente_id == cliente_id)
 
         # Ordenar por fecha más reciente
         query = query.order_by(ConversacionWhatsApp.timestamp.desc())
 
-        # Paginación
-        total = query.count()
-        conversaciones = query.offset((page - 1) * per_page).limit(per_page).all()
+        # Paginación - con manejo de errores para tabla inexistente
+        try:
+            total = query.count()
+            conversaciones = query.offset((page - 1) * per_page).limit(per_page).all()
+        except (ProgrammingError, OperationalError) as count_error:
+            error_str = str(count_error).lower()
+            if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+                # Intentar crear la tabla como fallback
+                logger.warning(f"⚠️ Error al contar conversaciones del cliente, intentando crear tabla: {count_error}")
+                if _crear_tabla_si_no_existe(db):
+                    # Reintentar después de crear la tabla
+                    db.refresh(ConversacionWhatsApp)
+                    query = db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.cliente_id == cliente_id)
+                    query = query.order_by(ConversacionWhatsApp.timestamp.desc())
+                    total = query.count()
+                    conversaciones = query.offset((page - 1) * per_page).limit(per_page).all()
+                else:
+                    raise HTTPException(
+                        status_code=503,
+                        detail="La tabla 'conversaciones_whatsapp' no existe y no se pudo crear. Ejecuta las migraciones: alembic upgrade head",
+                    )
+            else:
+                raise
 
         return {
             "conversaciones": [c.to_dict() for c in conversaciones],
@@ -231,6 +314,36 @@ async def obtener_conversaciones_cliente(
             },
         }
 
+    except HTTPException:
+        raise
+    except (ProgrammingError, OperationalError) as db_error:
+        error_str = str(db_error).lower()
+        if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+            # Intentar crear la tabla como fallback
+            logger.warning(f"⚠️ Error de base de datos, intentando crear tabla: {db_error}")
+            if _crear_tabla_si_no_existe(db):
+                # Reintentar la query
+                try:
+                    query = db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.cliente_id == cliente_id)
+                    query = query.order_by(ConversacionWhatsApp.timestamp.desc())
+                    total = query.count()
+                    conversaciones = query.offset((page - 1) * per_page).limit(per_page).all()
+                    return {
+                        "conversaciones": [c.to_dict() for c in conversaciones],
+                        "paginacion": {
+                            "page": page,
+                            "per_page": per_page,
+                            "total": total,
+                            "pages": (total + per_page - 1) // per_page,
+                        },
+                    }
+                except Exception:
+                    pass
+            raise HTTPException(
+                status_code=503,
+                detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head",
+            )
+        raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(db_error)}")
     except Exception as e:
         logger.error(f"Error obteniendo conversaciones del cliente: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
