@@ -599,23 +599,69 @@ class MLImpagoCuotasService:
         """
         try:
             # Manejar rutas relativas y absolutas
-            model_file = Path(model_path)
-            if not model_file.is_absolute():
-                # Si es relativa, intentar desde el directorio de trabajo actual
-                if not model_file.exists():
-                    # Intentar desde el directorio de modelos
-                    model_file = self.model_path / model_path
-                # Si aún no existe, intentar desde el directorio raíz del proyecto
-                if not model_file.exists():
+            original_path = Path(model_path)
+            
+            # Si la ruta contiene el nombre del directorio (ej: "ml_models/archivo.pkl")
+            # extraer solo el nombre del archivo para búsquedas
+            if "/" in model_path or "\\" in model_path:
+                # Es una ruta con directorio, intentar diferentes ubicaciones
+                path_parts = Path(model_path).parts
+                filename = path_parts[-1]  # Última parte es el nombre del archivo
+                
+                # Lista de ubicaciones a buscar
+                search_paths = [
+                    Path(model_path),  # Ruta original (relativa al directorio actual)
+                    self.model_path / filename,  # Solo nombre en directorio de modelos
+                    self.model_path / model_path,  # Ruta completa en directorio de modelos
+                ]
+                
+                # Si no es absoluta, agregar búsquedas adicionales
+                if not original_path.is_absolute():
                     from pathlib import Path as PathLib
                     project_root = PathLib(__file__).parent.parent.parent.parent
-                    model_file = project_root / model_path
+                    search_paths.extend([
+                        project_root / model_path,  # Ruta completa desde raíz del proyecto
+                        project_root / "ml_models" / filename,  # En ml_models desde raíz
+                        Path.cwd() / model_path,  # Desde directorio de trabajo
+                        Path.cwd() / filename,  # Solo nombre desde directorio de trabajo
+                    ])
+                
+                # Buscar en todas las ubicaciones
+                model_file = None
+                for search_path in search_paths:
+                    if search_path.exists() and search_path.is_file():
+                        model_file = search_path
+                        logger.info(f"✅ Modelo encontrado en: {model_file.absolute()}")
+                        break
+            else:
+                # Es solo un nombre de archivo, buscar en directorio de modelos
+                if original_path.is_absolute():
+                    model_file = original_path
+                else:
+                    model_file = self.model_path / model_path
+                    if not model_file.exists():
+                        from pathlib import Path as PathLib
+                        project_root = PathLib(__file__).parent.parent.parent.parent
+                        model_file = project_root / "ml_models" / model_path
             
-            if not model_file.exists():
-                logger.error(f"Modelo no encontrado en ninguna ubicación. Buscado en: {model_path}, {self.model_path / model_path}, {Path(__file__).parent.parent.parent.parent / model_path}")
+            if model_file is None or not model_file.exists():
+                logger.error(f"❌ Modelo no encontrado en ninguna ubicación.")
+                logger.error(f"   Ruta original: {model_path}")
+                logger.error(f"   Directorio de modelos configurado: {self.model_path.absolute()}")
+                logger.error(f"   Directorio de trabajo actual: {Path.cwd()}")
+                logger.error(f"   Directorio raíz del proyecto: {Path(__file__).parent.parent.parent.parent.absolute()}")
+                
+                # Listar archivos en el directorio de modelos para debugging
+                if self.model_path.exists():
+                    archivos = list(self.model_path.glob("*.pkl"))
+                    logger.info(f"   Archivos .pkl encontrados en {self.model_path.absolute()}: {[f.name for f in archivos]}")
+                else:
+                    logger.warning(f"   El directorio {self.model_path.absolute()} no existe")
+                
                 return False
             
             logger.info(f"📂 Cargando modelo desde: {model_file.absolute()}")
+            logger.info(f"   Tamaño del archivo: {model_file.stat().st_size / 1024:.2f} KB")
 
             with open(model_file, "rb") as f:
                 self.models["impago_cuotas_model"] = pickle.load(f)

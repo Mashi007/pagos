@@ -1435,16 +1435,42 @@ def iniciar_scheduler():
             logger.debug("Job 'notificaciones_prejudiciales' ya existe, omitiendo")
 
         # Agregar job para reentrenamiento automático de ML Impago (domingos a las 3 AM)
-        if "reentrenar_ml_impago" not in existing_jobs:
-            scheduler.add_job(
-                reentrenar_modelo_ml_impago_job,
-                trigger=CronTrigger(day_of_week=6, hour=3, minute=0),  # Domingo (6) a las 3:00 AM
-                id="reentrenar_ml_impago",
-                name="Reentrenamiento Automático ML Impago",
-                replace_existing=True,
-            )
-        else:
-            logger.debug("Job 'reentrenar_ml_impago' ya existe, omitiendo")
+        # Solo agregar si el servicio ML está disponible y las funciones auxiliares existen
+        try:
+            from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE
+            
+            # Verificar que las funciones auxiliares se puedan importar
+            try:
+                from app.api.v1.endpoints.ai_training import (
+                    _obtener_prestamos_aprobados_impago,
+                    _procesar_prestamos_para_entrenamiento,
+                )
+                funciones_disponibles = True
+            except ImportError as import_error:
+                logger.warning(f"⚠️ No se pudieron importar funciones auxiliares de ML: {import_error}. Omitiendo job de reentrenamiento ML")
+                funciones_disponibles = False
+            
+            if ML_IMPAGO_SERVICE_AVAILABLE and funciones_disponibles:
+                if "reentrenar_ml_impago" not in existing_jobs:
+                    scheduler.add_job(
+                        reentrenar_modelo_ml_impago_job,
+                        trigger=CronTrigger(day_of_week=6, hour=3, minute=0),  # Domingo (6) a las 3:00 AM
+                        id="reentrenar_ml_impago",
+                        name="Reentrenamiento Automático ML Impago",
+                        replace_existing=True,
+                    )
+                    logger.info("✅ Job de reentrenamiento ML Impago agregado correctamente")
+                else:
+                    logger.debug("Job 'reentrenar_ml_impago' ya existe, omitiendo")
+            else:
+                if not ML_IMPAGO_SERVICE_AVAILABLE:
+                    logger.info("⚠️ ML_IMPAGO_SERVICE_AVAILABLE es False, omitiendo job de reentrenamiento ML")
+                elif not funciones_disponibles:
+                    logger.info("⚠️ Funciones auxiliares de ML no disponibles, omitiendo job de reentrenamiento ML")
+        except ImportError as e:
+            logger.warning(f"⚠️ No se pudo importar ML_IMPAGO_SERVICE_AVAILABLE: {e}. Omitiendo job de reentrenamiento ML")
+        except Exception as e:
+            logger.warning(f"⚠️ Error configurando job de reentrenamiento ML: {e}. Continuando sin este job", exc_info=True)
 
         # Iniciar scheduler solo si no está corriendo
         if not scheduler.running:

@@ -367,24 +367,31 @@ def obtener_clientes_atrasados(
 
             modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
             if modelo_activo:
+                logger.info(f"🔍 Modelo ML Impago activo encontrado: {modelo_activo.nombre} (ID: {modelo_activo.id})")
+                logger.info(f"   Ruta del modelo: {modelo_activo.ruta_archivo}")
                 try:
                     from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
 
-                    if ML_IMPAGO_SERVICE_AVAILABLE and MLImpagoCuotasService:
+                    if not ML_IMPAGO_SERVICE_AVAILABLE:
+                        logger.warning("⚠️ ML_IMPAGO_SERVICE_AVAILABLE es False - scikit-learn no está disponible")
+                    elif not MLImpagoCuotasService:
+                        logger.warning("⚠️ MLImpagoCuotasService no está disponible")
+                    else:
+                        logger.info("✅ Servicio ML Impago disponible, intentando cargar modelo...")
                         ml_service = MLImpagoCuotasService()
                         if not ml_service.load_model_from_path(modelo_activo.ruta_archivo):
-                            logger.warning(f"No se pudo cargar el modelo ML desde {modelo_activo.ruta_archivo}")
+                            logger.error(f"❌ No se pudo cargar el modelo ML desde {modelo_activo.ruta_archivo}")
+                            logger.error("   Verificar que el archivo existe y es accesible")
                             ml_service = None
                         else:
-                            logger.info(f"Modelo ML Impago cargado correctamente: {modelo_activo.nombre}")
-                    else:
-                        logger.debug("ML_IMPAGO_SERVICE_AVAILABLE es False o MLImpagoCuotasService no está disponible")
+                            logger.info(f"✅ Modelo ML Impago cargado correctamente: {modelo_activo.nombre}")
                 except ImportError as e:
-                    logger.warning(f"Error importando servicio ML Impago: {e}")
+                    logger.error(f"❌ Error importando servicio ML Impago: {e}", exc_info=True)
             else:
-                logger.debug("No hay modelo ML Impago activo en la base de datos")
+                logger.warning("⚠️ No hay modelo ML Impago activo en la base de datos")
+                logger.info("   Para activar un modelo, ve a la sección de entrenamiento de modelos ML")
         except Exception as e:
-            logger.warning(f"Error cargando modelo ML Impago: {e}", exc_info=True)
+            logger.error(f"❌ Error cargando modelo ML Impago: {e}", exc_info=True)
 
         for row in resultados:
             cliente_data = {
