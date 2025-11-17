@@ -678,10 +678,7 @@ async def cancelar_fine_tuning_job(
 
         # Verificar que el job puede ser cancelado
         if job.status in ["succeeded", "failed", "cancelled"]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"No se puede cancelar un job con estado '{job.status}'"
-            )
+            raise HTTPException(status_code=400, detail=f"No se puede cancelar un job con estado '{job.status}'")
 
         # Cancelar en OpenAI
         openai_api_key = _obtener_openai_api_key(db)
@@ -692,7 +689,7 @@ async def cancelar_fine_tuning_job(
         job.status = job_data.get("status", "cancelled")
         if job.status == "cancelled":
             job.completado_en = datetime.utcnow()
-        
+
         db.commit()
         db.refresh(job)
 
