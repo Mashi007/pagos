@@ -438,7 +438,21 @@ class AITrainingService {
     test_size?: number
     random_state?: number
   }): Promise<{ mensaje: string; modelo: ModeloImpagoCuotas; metricas: any }> {
-    return await apiClient.post(`${this.baseUrl}/ml-impago/entrenar`, params || {})
+    try {
+      console.log('🔄 [aiTrainingService] Iniciando entrenamiento modelo impago:', params)
+      const resultado = await apiClient.post<{ mensaje: string; modelo: ModeloImpagoCuotas; metricas: any }>(
+        `${this.baseUrl}/ml-impago/entrenar`,
+        params || {}
+      )
+      console.log('✅ [aiTrainingService] Modelo entrenado exitosamente:', resultado)
+      return resultado
+    } catch (error: any) {
+      console.error('❌ [aiTrainingService] Error entrenando modelo impago:', error)
+      console.error('Error response:', error?.response)
+      console.error('Error response data:', error?.response?.data)
+      console.error('Error response status:', error?.response?.status)
+      throw error
+    }
   }
 
   /**

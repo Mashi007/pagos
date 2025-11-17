@@ -407,7 +407,12 @@ class ApiClient {
           }
           break
         case 500:
-          toast.error('Error interno del servidor')
+          // Mostrar el mensaje de error específico del backend si está disponible
+          const errorDetail = typeof responseData?.detail === 'string' 
+            ? responseData.detail 
+            : responseData?.message || 'Error interno del servidor'
+          console.error('❌ [ApiClient] Error 500 del servidor:', errorDetail)
+          toast.error(errorDetail, { duration: 10000 })
           break
         case 503:
           // NO mostrar toast genérico para errores 503 de duplicados

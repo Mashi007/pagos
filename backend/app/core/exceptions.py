@@ -106,8 +106,14 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         )
 
     # Excepción no esperada - manejar según ambiente
+    import traceback
+    error_traceback = traceback.format_exc()
     logger.error(
-        f"Unhandled exception: {type(exc).__name__}: {str(exc)}",
+        f"❌ [GLOBAL EXCEPTION HANDLER] Unhandled exception: {type(exc).__name__}: {str(exc)}\n"
+        f"Path: {request.url.path}\n"
+        f"Method: {request.method}\n"
+        f"Request ID: {request_id}\n"
+        f"Traceback completo:\n{error_traceback}",
         extra={
             "request_id": request_id,
             "path": request.url.path,
@@ -116,23 +122,44 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         exc_info=True,
     )
 
-    # En producción, no exponer detalles del error
+    # Determinar mensaje de error según el tipo
+    error_type = type(exc).__name__
+    error_msg = str(exc)
+    
+    # Mensajes más descriptivos según el tipo de error
+    if "ValidationError" in error_type or "Pydantic" in error_type:
+        detail_msg = f"Error de validación: {error_msg[:200]}"
+    elif "AttributeError" in error_type or "'NoneType' object" in error_msg:
+        detail_msg = f"Error de datos: {error_msg[:200]}. Verifica que todos los campos requeridos estén presentes."
+    elif "KeyError" in error_type:
+        detail_msg = f"Error de estructura de datos: {error_msg[:200]}"
+    elif "ValueError" in error_type:
+        detail_msg = f"Error de validación: {error_msg[:200]}"
+    elif "TypeError" in error_type:
+        detail_msg = f"Error de tipo de dato: {error_msg[:200]}"
+    elif "ImportError" in error_type or "ModuleNotFoundError" in error_type:
+        detail_msg = f"Error de importación: {error_msg[:200]}. Verifica que todas las dependencias estén instaladas."
+    else:
+        detail_msg = f"Error interno ({error_type}): {error_msg[:300]}"
+    
+    # En producción, mostrar mensaje descriptivo pero no el traceback completo
     if settings.ENVIRONMENT == "production":
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
-                "detail": "Error interno del servidor",
+                "detail": detail_msg,
                 "request_id": request_id,
             },
             headers={"X-Request-ID": request_id} if request_id else {},
         )
 
-    # En desarrollo, mostrar más detalles
+    # En desarrollo, mostrar más detalles incluyendo el tipo
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
-            "detail": f"Error interno: {str(exc)}",
-            "type": type(exc).__name__,
+            "detail": detail_msg,
+            "type": error_type,
+            "full_error": error_msg,
             "request_id": request_id,
         },
         headers={"X-Request-ID": request_id} if request_id else {},

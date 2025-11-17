@@ -79,10 +79,37 @@ export function MLImpagoCuotasTab() {
       setMostrarFormEntrenamiento(false)
       await cargarModelos()
     } catch (error: any) {
-      console.error('❌ Error entrenando modelo ML Impago:', error)
-      console.error('Error completo:', JSON.stringify(error, null, 2))
-      const mensajeError = error?.response?.data?.detail || error?.message || error?.error?.detail || 'Error al entrenar modelo'
-      toast.error(mensajeError)
+      console.group('❌ Error entrenando modelo ML Impago')
+      console.error('Error objeto completo:', error)
+      console.error('Error response:', error?.response)
+      console.error('Error response data:', error?.response?.data)
+      console.error('Error response status:', error?.response?.status)
+      console.error('Error response headers:', error?.response?.headers)
+      
+      // Expandir el objeto de error para ver todos los detalles
+      if (error?.response?.data) {
+        console.error('📋 Detalles del error del servidor:', JSON.stringify(error.response.data, null, 2))
+      }
+      console.groupEnd()
+      
+      // Extraer mensaje de error de diferentes posibles ubicaciones
+      let mensajeError = 'Error al entrenar modelo (500 Internal Server Error)'
+      if (error?.response?.data?.detail) {
+        mensajeError = String(error.response.data.detail)
+      } else if (error?.response?.data?.message) {
+        mensajeError = String(error.response.data.message)
+      } else if (error?.message) {
+        mensajeError = String(error.message)
+      } else if (error?.error?.detail) {
+        mensajeError = String(error.error.detail)
+      }
+      
+      console.error('📝 Mensaje de error extraído para mostrar al usuario:', mensajeError)
+      
+      // Mostrar toast con el mensaje completo
+      toast.error(`Error entrenando modelo: ${mensajeError}`, {
+        duration: 10000, // 10 segundos para que el usuario pueda leerlo
+      })
     } finally {
       setEntrenando(false)
     }

@@ -1483,7 +1483,15 @@ async def entrenar_modelo_impago(
     Entrenar modelo de predicción de impago de cuotas
     Analiza el historial de pagos de préstamos aprobados para predecir impago futuro
     """
-    logger.info(f"🚀 [ML-IMPAGO] Iniciando entrenamiento - Usuario: {current_user.id}, Algoritmo: {request.algoritmo}")
+    # Log inmediato al inicio - esto confirma que el endpoint se está ejecutando
+    logger.info("=" * 80)
+    logger.info("🚀 [ML-IMPAGO] ===== INICIO DE ENTRENAMIENTO =====")
+    logger.info(f"   Usuario ID: {current_user.id}")
+    logger.info(f"   Usuario es admin: {current_user.is_admin}")
+    logger.info(f"   Algoritmo solicitado: {request.algoritmo}")
+    logger.info(f"   Test size: {request.test_size}")
+    logger.info(f"   Random state: {request.random_state}")
+    logger.info("=" * 80)
 
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden entrenar modelos ML")
