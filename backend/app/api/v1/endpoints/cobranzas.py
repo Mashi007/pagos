@@ -358,15 +358,17 @@ def obtener_clientes_atrasados(
 
         # Convertir a diccionarios y agregar predicción ML Impago
         clientes_atrasados = []
-        
+
         # Cargar modelo ML Impago una sola vez si está disponible
         ml_service = None
         try:
             from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
+
             modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
             if modelo_activo:
                 try:
                     from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
+
                     if ML_IMPAGO_SERVICE_AVAILABLE and MLImpagoCuotasService:
                         ml_service = MLImpagoCuotasService()
                         if not ml_service.load_model_from_path(modelo_activo.ruta_archivo):
@@ -375,7 +377,7 @@ def obtener_clientes_atrasados(
                     pass
         except Exception:
             pass
-        
+
         for row in resultados:
             cliente_data = {
                 "cedula": row.cedula,
@@ -386,14 +388,15 @@ def obtener_clientes_atrasados(
                 "total_adeudado": (float(row.total_adeudado) if row.total_adeudado else 0.0),
                 "fecha_primera_vencida": (row.fecha_primera_vencida.isoformat() if row.fecha_primera_vencida else None),
             }
-            
+
             # Agregar predicción ML Impago si está disponible
             if ml_service:
                 try:
-                    from app.models.prestamo import Prestamo
-                    from app.models.amortizacion import Cuota
                     from datetime import date
-                    
+
+                    from app.models.amortizacion import Cuota
+                    from app.models.prestamo import Prestamo
+
                     prestamo = db.query(Prestamo).filter(Prestamo.id == row.prestamo_id).first()
                     if prestamo and prestamo.estado == "APROBADO":
                         cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
@@ -401,7 +404,7 @@ def obtener_clientes_atrasados(
                             fecha_actual = date.today()
                             features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
                             prediccion = ml_service.predict_impago(features)
-                            
+
                             cliente_data["ml_impago"] = {
                                 "probabilidad_impago": round(prediccion.get("probabilidad_impago", 0.0), 3),
                                 "nivel_riesgo": prediccion.get("nivel_riesgo", "Desconocido"),
@@ -410,7 +413,7 @@ def obtener_clientes_atrasados(
                 except Exception as e:
                     logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}")
                     cliente_data["ml_impago"] = None
-            
+
             clientes_atrasados.append(cliente_data)
 
         return clientes_atrasados
@@ -1110,42 +1113,51 @@ def informe_clientes_atrasados(
         resultados = query.all()
 
         datos_filtrados = _filtrar_por_dias_retraso(resultados, hoy, dias_retraso_min, dias_retraso_max)
-        
+
         # Agregar predicción ML Impago a cada cliente si está disponible
         ml_service = None
         try:
             from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
+
             modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
             if modelo_activo:
                 try:
-                    from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
-                    from app.models.prestamo import Prestamo
-                    from app.models.amortizacion import Cuota
                     from datetime import date
-                    
+
+                    from app.models.amortizacion import Cuota
+                    from app.models.prestamo import Prestamo
+                    from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
+
                     if ML_IMPAGO_SERVICE_AVAILABLE and MLImpagoCuotasService:
                         ml_service = MLImpagoCuotasService()
                         if not ml_service.load_model_from_path(modelo_activo.ruta_archivo):
                             ml_service = None
-                        
+
                         if ml_service:
                             for cliente_data in datos_filtrados:
                                 try:
                                     prestamo = db.query(Prestamo).filter(Prestamo.id == cliente_data["prestamo_id"]).first()
                                     if prestamo and prestamo.estado == "APROBADO":
-                                        cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
+                                        cuotas = (
+                                            db.query(Cuota)
+                                            .filter(Cuota.prestamo_id == prestamo.id)
+                                            .order_by(Cuota.numero_cuota)
+                                            .all()
+                                        )
                                         if cuotas:
                                             fecha_actual = date.today()
                                             features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
                                             prediccion = ml_service.predict_impago(features)
-                                            
+
                                             cliente_data["ml_impago"] = {
                                                 "probabilidad_impago": round(prediccion.get("probabilidad_impago", 0.0), 3),
                                                 "nivel_riesgo": prediccion.get("nivel_riesgo", "Desconocido"),
                                                 "prediccion": prediccion.get("prediccion", "Desconocido"),
                                             }
                                 except Exception as e:
-                                    logger.warning(f"Error obteniendo predicción ML para préstamo {cliente_data.get('prestamo_id')}: {e}")
+                                    logger.warning(
+                                        f"Error obteniendo predicción ML para préstamo {cliente_data.get('prestamo_id')}: {e}"
+                                    )
                                     cliente_data["ml_impago"] = None
                 except ImportError:
                     pass
