@@ -1340,7 +1340,7 @@ def _calcular_metricas_cartera(
 
     from sqlalchemy import and_, func
 
-    from app.models.cuota import Cuota
+    from app.models.amortizacion import Cuota
     from app.models.prestamo import Prestamo
 
     # 1. CARTERA TOTAL
@@ -1429,7 +1429,7 @@ def _calcular_metricas_clientes(
     """
     from sqlalchemy import and_, func
 
-    from app.models.cuota import Cuota
+    from app.models.amortizacion import Cuota
     from app.models.prestamo import Prestamo
 
     # CLIENTES ACTIVOS
@@ -2006,7 +2006,7 @@ def _calcular_meta_mensual(
 
     from sqlalchemy import func
 
-    from app.models.cuota import Cuota
+    from app.models.amortizacion import Cuota
     from app.models.prestamo import Prestamo
 
     try:
@@ -2066,7 +2066,7 @@ def _obtener_fecha_inicio_query(
 
     from sqlalchemy import func
 
-    from app.models.cuota import Cuota
+    from app.models.amortizacion import Cuota
     from app.models.pago import Pago
     from app.models.prestamo import Prestamo
 
@@ -2220,7 +2220,7 @@ def _obtener_cuotas_programadas_por_mes(
 
     from sqlalchemy import func
 
-    from app.models.cuota import Cuota
+    from app.models.amortizacion import Cuota
     from app.models.prestamo import Prestamo
 
     start_cuotas = time.time()
@@ -2287,7 +2287,7 @@ def _obtener_pagos_por_mes(
     from datetime import datetime
     from sqlalchemy import func
 
-    from app.models.cuota import Cuota
+    from app.models.amortizacion import Cuota
     from app.models.prestamo import Prestamo
 
     start_pagos = time.time()

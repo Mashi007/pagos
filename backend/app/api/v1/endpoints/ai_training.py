@@ -2309,13 +2309,18 @@ async def activar_modelo_impago(
         if not modelo:
             raise HTTPException(status_code=404, detail="Modelo no encontrado")
 
-        # Cargar modelo en servicio ML antes de activar
+        # Intentar cargar modelo en servicio ML antes de activar (pero no fallar si no existe)
         ml_service = MLImpagoCuotasService()
-        if not ml_service.load_model_from_path(modelo.ruta_archivo):
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error cargando modelo desde {modelo.ruta_archivo}. Verifica que el archivo exista.",
+        modelo_cargado = ml_service.load_model_from_path(modelo.ruta_archivo)
+        
+        if not modelo_cargado:
+            logger.warning(
+                f"⚠️ [ML-IMPAGO] No se pudo cargar el archivo del modelo desde {modelo.ruta_archivo}. "
+                f"El modelo se activará de todas formas, pero no funcionará hasta que el archivo exista. "
+                f"Esto puede ocurrir si el archivo fue eliminado o si el modelo se entrenó en otro entorno."
             )
+            # No lanzar error, solo advertir - permitir activar el modelo de todas formas
+            # El sistema de cobranza manejará el caso cuando intente usar el modelo
 
         modelo.activo = True
         modelo.activado_en = datetime.now()
@@ -2335,6 +2340,177 @@ async def activar_modelo_impago(
         db.rollback()
         logger.error(f"Error activando modelo: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error activando modelo: {str(e)}")
+
+
+@router.get("/ml-impago/calcular-detalle-cedula/{cedula}")
+async def calcular_detalle_impago_por_cedula(
+    cedula: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Calcular y mostrar el detalle completo del cálculo de riesgo ML Impago para un cliente por cédula.
+    Si el cliente tiene múltiples préstamos, muestra el cálculo para el préstamo activo más reciente.
+    """
+    try:
+        from app.models.prestamo import Prestamo
+
+        # Buscar préstamos aprobados del cliente
+        prestamos = (
+            db.query(Prestamo)
+            .filter(Prestamo.cedula == cedula, Prestamo.estado == "APROBADO")
+            .order_by(Prestamo.fecha_aprobacion.desc())
+            .all()
+        )
+
+        if not prestamos:
+            raise HTTPException(status_code=404, detail=f"No se encontraron préstamos aprobados para la cédula {cedula}")
+
+        # Usar el préstamo más reciente
+        prestamo = prestamos[0]
+        
+        # Llamar directamente a la función de cálculo
+        return await calcular_detalle_impago(prestamo.id, db, current_user)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error calculando detalle de impago por cédula: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error calculando detalle: {str(e)}")
+
+
+@router.get("/ml-impago/calcular-detalle/{prestamo_id}")
+async def calcular_detalle_impago(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Calcular y mostrar el detalle completo del cálculo de riesgo ML Impago para un préstamo.
+    Incluye todas las features extraídas y cómo se calcula la probabilidad.
+    """
+    try:
+        from datetime import date
+
+        from app.models.amortizacion import Cuota
+        from app.models.prestamo import Prestamo
+
+        # Obtener modelo activo
+        modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
+
+        if not modelo_activo:
+            raise HTTPException(status_code=400, detail="No hay modelo activo")
+
+        # Verificar que MLImpagoCuotasService esté disponible
+        if not ML_IMPAGO_SERVICE_AVAILABLE or MLImpagoCuotasService is None:
+            raise HTTPException(
+                status_code=503,
+                detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
+            )
+
+        # Obtener préstamo
+        prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+
+        if not prestamo:
+            raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+        if prestamo.estado != "APROBADO":
+            raise HTTPException(status_code=400, detail="El préstamo debe estar aprobado para calcular impago")
+
+        # Obtener cuotas del préstamo
+        cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
+
+        if not cuotas:
+            raise HTTPException(status_code=400, detail="El préstamo no tiene cuotas generadas")
+
+        # Cargar modelo
+        ml_service = MLImpagoCuotasService()
+        if not ml_service.load_model_from_path(modelo_activo.ruta_archivo):
+            raise HTTPException(status_code=500, detail="Error cargando modelo")
+
+        # Extraer features
+        fecha_actual = date.today()
+        features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
+
+        # Calcular estadísticas detalladas de cuotas
+        cuotas_ordenadas = sorted(cuotas, key=lambda c: c.numero_cuota)
+        total_cuotas = len(cuotas_ordenadas)
+        cuotas_pagadas = sum(1 for c in cuotas_ordenadas if c.estado and c.estado == "PAGADO")
+        cuotas_atrasadas = sum(1 for c in cuotas_ordenadas if c.estado and c.estado == "ATRASADO")
+        cuotas_parciales = sum(1 for c in cuotas_ordenadas if c.estado and c.estado == "PARCIAL")
+        cuotas_pendientes = sum(1 for c in cuotas_ordenadas if c.estado and c.estado == "PENDIENTE")
+        cuotas_vencidas = [c for c in cuotas_ordenadas if c.fecha_vencimiento and c.fecha_vencimiento < fecha_actual]
+        cuotas_vencidas_sin_pagar = sum(
+            1 for c in cuotas_vencidas if c.estado and c.estado not in ["PAGADO", "PARCIAL"]
+        )
+
+        # Calcular montos
+        monto_total_prestamo = float(prestamo.total_financiamiento or 0)
+        monto_total_pagado = sum(float(c.total_pagado or 0) for c in cuotas_ordenadas if c.total_pagado is not None)
+        monto_total_pendiente = monto_total_prestamo - monto_total_pagado
+
+        # Predecir
+        prediccion = ml_service.predict_impago(features)
+
+        # Determinar criterio de clasificación
+        probabilidad_impago = prediccion.get("probabilidad_impago", 0.0)
+        criterio_clasificacion = ""
+        if probabilidad_impago >= 0.7:
+            criterio_clasificacion = f"probabilidad_impago >= 0.7 ({probabilidad_impago:.3f} >= 0.7) → Riesgo ALTO"
+        elif probabilidad_impago >= 0.4:
+            criterio_clasificacion = f"0.4 <= probabilidad_impago < 0.7 ({probabilidad_impago:.3f}) → Riesgo MEDIO"
+        else:
+            criterio_clasificacion = f"probabilidad_impago < 0.4 ({probabilidad_impago:.3f} < 0.4) → Riesgo BAJO"
+
+        return {
+            "prestamo_id": prestamo_id,
+            "cedula": prestamo.cedula,
+            "nombres": prestamo.nombres,
+            "modelo_usado": {
+                "id": modelo_activo.id,
+                "nombre": modelo_activo.nombre,
+                "algoritmo": modelo_activo.algoritmo,
+                "accuracy": modelo_activo.accuracy,
+            },
+            "fecha_calculo": fecha_actual.isoformat(),
+            "estadisticas_cuotas": {
+                "total_cuotas": total_cuotas,
+                "cuotas_pagadas": cuotas_pagadas,
+                "cuotas_atrasadas": cuotas_atrasadas,
+                "cuotas_parciales": cuotas_parciales,
+                "cuotas_pendientes": cuotas_pendientes,
+                "cuotas_vencidas": len(cuotas_vencidas),
+                "cuotas_vencidas_sin_pagar": cuotas_vencidas_sin_pagar,
+            },
+            "estadisticas_financieras": {
+                "monto_total_prestamo": round(monto_total_prestamo, 2),
+                "monto_total_pagado": round(monto_total_pagado, 2),
+                "monto_total_pendiente": round(monto_total_pendiente, 2),
+                "porcentaje_pagado": round((monto_total_pagado / monto_total_prestamo * 100) if monto_total_prestamo > 0 else 0, 2),
+            },
+            "features_extraidas": features,
+            "prediccion": {
+                "probabilidad_impago": round(probabilidad_impago, 4),
+                "probabilidad_impago_porcentaje": round(probabilidad_impago * 100, 2),
+                "probabilidad_pago": round(prediccion.get("probabilidad_pago", 0.0), 4),
+                "prediccion": prediccion.get("prediccion", "Desconocido"),
+                "nivel_riesgo": prediccion.get("nivel_riesgo", "Desconocido"),
+                "confidence": round(prediccion.get("confidence", 0.0), 4),
+                "recomendacion": prediccion.get("recomendacion", ""),
+            },
+            "criterio_clasificacion": criterio_clasificacion,
+            "umbrales": {
+                "alto": "probabilidad_impago >= 0.7 (70% o más)",
+                "medio": "0.4 <= probabilidad_impago < 0.7 (40% a 69.9%)",
+                "bajo": "probabilidad_impago < 0.4 (menos de 40%)",
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error calculando detalle de impago: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error calculando detalle: {str(e)}")
 
 
 @router.post("/ml-impago/predecir")
