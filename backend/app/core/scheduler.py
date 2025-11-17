@@ -1046,9 +1046,8 @@ def reentrenar_modelo_ml_impago_job():
         from app.api.v1.endpoints.ai_training import (
             _obtener_prestamos_aprobados_impago,
             _procesar_prestamos_para_entrenamiento,
-            _validar_ml_impago_service_disponible,
-            _validar_tabla_modelos_impago,
         )
+        from sqlalchemy.exc import ProgrammingError, OperationalError
 
         logger.info("=" * 80)
         logger.info("🤖 [Scheduler] ===== INICIO REENTRENAMIENTO AUTOMÁTICO ML IMPAGO =====")
@@ -1056,16 +1055,19 @@ def reentrenar_modelo_ml_impago_job():
         logger.info("=" * 80)
 
         # Validar que el servicio ML esté disponible
-        if not ML_IMPAGO_SERVICE_AVAILABLE:
-            logger.warning("⚠️ [Scheduler] ML_IMPAGO_SERVICE_AVAILABLE es False, omitiendo reentrenamiento")
+        if not ML_IMPAGO_SERVICE_AVAILABLE or MLImpagoCuotasService is None:
+            logger.warning("⚠️ [Scheduler] ML_IMPAGO_SERVICE_AVAILABLE es False o MLImpagoCuotasService no disponible, omitiendo reentrenamiento")
             return
 
+        # Validar que la tabla exista
         try:
-            _validar_ml_impago_service_disponible()
-            _validar_tabla_modelos_impago(db)
-        except Exception as e:
-            logger.warning(f"⚠️ [Scheduler] Validaciones fallaron: {e}, omitiendo reentrenamiento")
-            return
+            db.query(ModeloImpagoCuotas).limit(1).all()
+        except (ProgrammingError, OperationalError) as db_error:
+            error_msg = str(db_error).lower()
+            if any(term in error_msg for term in ["does not exist", "no such table", "relation", "table"]):
+                logger.warning("⚠️ [Scheduler] La tabla 'modelos_impago_cuotas' no existe. Omitiendo reentrenamiento.")
+                return
+            raise
 
         # Obtener préstamos aprobados
         logger.info("🔍 [Scheduler] Buscando préstamos aprobados para reentrenamiento...")
@@ -1329,6 +1331,18 @@ def iniciar_scheduler():
             )
         else:
             logger.debug("Job 'notificaciones_prejudiciales' ya existe, omitiendo")
+
+        # Agregar job para reentrenamiento automático de ML Impago (domingos a las 3 AM)
+        if "reentrenar_ml_impago" not in existing_jobs:
+            scheduler.add_job(
+                reentrenar_modelo_ml_impago_job,
+                trigger=CronTrigger(day_of_week=6, hour=3, minute=0),  # Domingo (6) a las 3:00 AM
+                id="reentrenar_ml_impago",
+                name="Reentrenamiento Automático ML Impago",
+                replace_existing=True,
+            )
+        else:
+            logger.debug("Job 'reentrenar_ml_impago' ya existe, omitiendo")
 
         # Iniciar scheduler solo si no está corriendo
         if not scheduler.running:
