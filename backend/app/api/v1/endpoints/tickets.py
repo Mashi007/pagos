@@ -430,7 +430,12 @@ async def obtener_tickets_por_conversacion(
                     detail="La tabla 'tickets' no existe. Ejecuta las migraciones: alembic upgrade head",
                 )
 
-        tickets = db.query(Ticket).options(joinedload(Ticket.cliente)).filter(Ticket.conversacion_whatsapp_id == conversacion_id).all()
+        tickets = (
+            db.query(Ticket)
+            .options(joinedload(Ticket.cliente))
+            .filter(Ticket.conversacion_whatsapp_id == conversacion_id)
+            .all()
+        )
 
         return [t.to_dict() for t in tickets]
 
