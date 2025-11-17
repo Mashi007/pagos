@@ -1,17 +1,18 @@
 """create_conversaciones_whatsapp
 
 Revision ID: 20250117_conversaciones_whatsapp
-Revises: 20251114_05_modelos_impago_cuotas
+Revises: ('20251114_05_modelos_impago_cuotas', '20250115_ai_prompt_variables', 'add_notificacion_variables')
 Create Date: 2025-01-17
 
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect
+from typing import Union
 
 # revision identifiers, used by Alembic.
 revision = '20250117_conversaciones_whatsapp'
-down_revision = '20251114_05_modelos_impago_cuotas'
+down_revision: Union[str, tuple] = ('20251114_05_modelos_impago_cuotas', '20250115_ai_prompt_variables', 'add_notificacion_variables')
 branch_labels = None
 depends_on = None
 
