@@ -20,6 +20,7 @@ import {
   TrendingUp,
   TrendingDown,
   Info,
+  Trash2,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -51,7 +52,7 @@ export function FineTuningTab() {
 
   // Estados para nuevo entrenamiento
   const [mostrarFormEntrenamiento, setMostrarFormEntrenamiento] = useState(false)
-  const [modeloBase, setModeloBase] = useState('gpt-4o-mini')
+  const [modeloBase, setModeloBase] = useState('gpt-4o')
   const [archivoId, setArchivoId] = useState('')
 
   // Estados para crear conversación manual
@@ -443,6 +444,40 @@ export function FineTuningTab() {
       cargarJobs()
     } catch (error: any) {
       const mensaje = error?.response?.data?.detail || error?.message || 'Error al cancelar job'
+      toast.error(mensaje)
+    }
+  }
+
+  const handleEliminarJob = async (jobId: string) => {
+    if (!confirm('¿Estás seguro de que deseas eliminar este job? Esta acción no se puede deshacer.')) {
+      return
+    }
+
+    try {
+      await aiTrainingService.eliminarFineTuningJob(jobId)
+      toast.success('Job eliminado exitosamente')
+      cargarJobs()
+    } catch (error: any) {
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al eliminar job'
+      toast.error(mensaje)
+    }
+  }
+
+  const handleEliminarTodosJobs = async (soloFallidos: boolean = false) => {
+    const mensaje = soloFallidos 
+      ? '¿Estás seguro de que deseas eliminar todos los jobs fallidos? Esta acción no se puede deshacer.'
+      : '¿Estás seguro de que deseas eliminar TODOS los jobs completados? Esta acción no se puede deshacer.'
+    
+    if (!confirm(mensaje)) {
+      return
+    }
+
+    try {
+      const resultado = await aiTrainingService.eliminarTodosFineTuningJobs(soloFallidos)
+      toast.success(resultado.mensaje)
+      cargarJobs()
+    } catch (error: any) {
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al eliminar jobs'
       toast.error(mensaje)
     }
   }
@@ -1766,8 +1801,8 @@ export function FineTuningTab() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gpt-4o-mini">gpt-4o-mini (Recomendado - Económico)</SelectItem>
-                    <SelectItem value="gpt-4o">gpt-4o (Más potente)</SelectItem>
+                    <SelectItem value="gpt-4o">gpt-4o (Recomendado)</SelectItem>
+                    <SelectItem value="gpt-4o-2024-08-06">gpt-4o-2024-08-06 (Versión específica)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1805,16 +1840,40 @@ export function FineTuningTab() {
               <Brain className="h-5 w-5" />
               Jobs de Entrenamiento
             </h4>
-            <Button onClick={cargarJobs} variant="outline" size="sm" disabled={cargandoJobs}>
-              {cargandoJobs ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Actualizando...
-                </>
-              ) : (
-                'Actualizar'
+            <div className="flex gap-2">
+              {jobs.some(job => job.status === 'failed' || job.status === 'cancelled') && (
+                <Button 
+                  onClick={() => handleEliminarTodosJobs(true)} 
+                  variant="outline" 
+                  size="sm"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Eliminar Fallidos
+                </Button>
               )}
-            </Button>
+              {jobs.some(job => job.status !== 'pending' && job.status !== 'running') && (
+                <Button 
+                  onClick={() => handleEliminarTodosJobs(false)} 
+                  variant="outline" 
+                  size="sm"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Limpiar Todo
+                </Button>
+              )}
+              <Button onClick={cargarJobs} variant="outline" size="sm" disabled={cargandoJobs}>
+                {cargandoJobs ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Actualizando...
+                  </>
+                ) : (
+                  'Actualizar'
+                )}
+              </Button>
+            </div>
           </div>
           {jobs.some(job => job.status === 'pending' || job.status === 'running') && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -1823,11 +1882,10 @@ export function FineTuningTab() {
                 <div className="text-xs text-blue-800">
                   <strong>⏱️ Tiempos típicos de entrenamiento:</strong>
                   <ul className="mt-1 ml-4 list-disc space-y-0.5">
-                    <li><strong>gpt-4o-mini:</strong> 10-30 minutos (depende del tamaño del archivo)</li>
-                    <li><strong>gpt-4o:</strong> 2-4 horas</li>
+                    <li><strong>gpt-4o:</strong> 2-4 horas (depende del tamaño del archivo)</li>
                   </ul>
                   <p className="mt-1 text-blue-600">
-                    <strong>⚠️ Nota:</strong> gpt-3.5-turbo ya no está disponible para fine-tuning debido a políticas de seguridad de OpenAI.
+                    <strong>⚠️ Nota:</strong> Solo gpt-4o está disponible para fine-tuning. gpt-3.5-turbo y gpt-4o-mini no soportan fine-tuning.
                   </p>
                   <p className="mt-2 text-blue-700">
                     El sistema actualiza automáticamente el estado cada 10 segundos. Los jobs pueden tardar más tiempo si OpenAI tiene alta demanda.
@@ -1864,12 +1922,24 @@ export function FineTuningTab() {
                 }
                 
                 // Tiempo estimado según modelo base
-                const tiempoEstimado = job.modelo_base.includes('gpt-4') 
-                  ? '2-4 horas' 
-                  : '10-30 minutos'
+                const tiempoEstimado = '2-4 horas'  // gpt-4o típicamente toma 2-4 horas
+                
+                // Verificar si el job usa un modelo obsoleto
+                const modeloObsoleto = job.modelo_base === 'gpt-3.5-turbo' || job.modelo_base === 'gpt-4o-mini'
                 
                 return (
-                <div key={job.id} className="border rounded-lg p-4">
+                <div key={job.id} className={`border rounded-lg p-4 ${modeloObsoleto ? 'bg-yellow-50 border-yellow-200' : ''}`}>
+                  {modeloObsoleto && (
+                    <div className="mb-3 p-2 bg-yellow-100 border border-yellow-300 rounded text-xs">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-yellow-700 mt-0.5 flex-shrink-0" />
+                        <div className="text-yellow-800">
+                          <strong>⚠️ Modelo obsoleto:</strong> Este job usa <code className="bg-yellow-200 px-1 rounded">{job.modelo_base}</code>, que ya no está disponible para fine-tuning. 
+                          Los nuevos jobs usarán <code className="bg-yellow-200 px-1 rounded">gpt-4o</code> automáticamente.
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
@@ -1877,7 +1947,7 @@ export function FineTuningTab() {
                         {getStatusBadge(job.status)}
                       </div>
                       <div className="text-sm text-gray-600 space-y-1">
-                        <div>Modelo Base: {job.modelo_base}</div>
+                        <div>Modelo Base: <span className={modeloObsoleto ? 'text-yellow-700 font-semibold' : ''}>{job.modelo_base}</span></div>
                         {job.modelo_entrenado && (
                           <div>Modelo Entrenado: {job.modelo_entrenado}</div>
                         )}
@@ -1937,6 +2007,17 @@ export function FineTuningTab() {
                           onClick={() => handleActivarModelo(job.modelo_entrenado!)}
                         >
                           Activar Modelo
+                        </Button>
+                      )}
+                      {(job.status === 'failed' || job.status === 'cancelled' || (job.status === 'succeeded' && !job.modelo_entrenado)) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => handleEliminarJob(job.id)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Eliminar
                         </Button>
                       )}
                     </div>

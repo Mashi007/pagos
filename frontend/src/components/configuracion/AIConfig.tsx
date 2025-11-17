@@ -335,8 +335,20 @@ export function AIConfig() {
       await cargarDocumentos()
     } catch (error: any) {
       console.error('Error procesando documento:', error)
-      const mensajeError = error?.response?.data?.detail || error?.message || 'Error procesando documento'
-      toast.error(`Error al procesar documento: ${mensajeError}`)
+      let mensajeError = error?.response?.data?.detail || error?.message || 'Error procesando documento'
+      
+      // Simplificar mensajes largos de diagnóstico
+      if (mensajeError.includes('El archivo físico no existe')) {
+        mensajeError = 'El archivo físico no existe en el servidor. Por favor, elimina este documento y súbelo nuevamente.'
+      } else if (mensajeError.length > 200) {
+        // Truncar mensajes muy largos pero mantener la parte importante
+        const partes = mensajeError.split('\n')
+        mensajeError = partes[0] + (partes.length > 1 ? ' (Ver consola para más detalles)' : '')
+      }
+      
+      toast.error(`Error al procesar documento: ${mensajeError}`, {
+        duration: 5000,
+      })
     } finally {
       setProcesandoDocumento(null)
     }

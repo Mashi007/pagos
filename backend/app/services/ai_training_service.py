@@ -404,7 +404,7 @@ Por favor, mejora ambos textos siguiendo las instrucciones del sistema. Responde
     async def iniciar_fine_tuning(
         self,
         archivo_id: str,
-        modelo_base: str = "gpt-4o-mini",
+        modelo_base: str = "gpt-4o",
         epochs: Optional[int] = None,
         learning_rate: Optional[float] = None,
     ) -> Dict:
@@ -413,9 +413,9 @@ Por favor, mejora ambos textos siguiendo las instrucciones del sistema. Responde
 
         Args:
             archivo_id: ID del archivo subido
-            modelo_base: Modelo base a usar (gpt-4o-mini, gpt-4o, etc.)
-                       Nota: gpt-3.5-turbo ya no está disponible para fine-tuning
-                       debido a políticas de seguridad de OpenAI
+            modelo_base: Modelo base a usar (gpt-4o, gpt-4o-2024-08-06, etc.)
+                       Nota: gpt-3.5-turbo y gpt-4o-mini no están disponibles para fine-tuning
+                       Solo gpt-4o y versiones específicas están disponibles
             epochs: Número de épocas (opcional)
             learning_rate: Learning rate (opcional)
 

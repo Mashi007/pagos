@@ -1273,6 +1273,7 @@ export function Cobranzas() {
                                           <th className="text-left p-2 font-semibold">Analista</th>
                                           <th className="text-left p-2 font-semibold">Teléfono</th>
                                           <th className="text-right p-2 font-semibold">Cuotas Vencidas</th>
+                                          <th className="text-center p-2 font-semibold">Riesgo ML Impago</th>
                                           <th className="text-right p-2 font-semibold">Total Adeudado</th>
                                           <th className="text-left p-2 font-semibold">Primera Vencida</th>
                                         </tr>
@@ -1349,6 +1350,29 @@ export function Cobranzas() {
                                                 <Badge variant="outline" className="bg-red-50 text-red-700">
                                                   {cliente.cuotas_vencidas}
                                                 </Badge>
+                                              </td>
+                                              <td className="p-2 text-center">
+                                                {cliente.ml_impago ? (
+                                                  <div className="flex flex-col items-center gap-1">
+                                                    <Badge
+                                                      variant="outline"
+                                                      className={
+                                                        cliente.ml_impago.nivel_riesgo === 'Alto'
+                                                          ? "bg-red-100 text-red-800 border-red-300 font-semibold"
+                                                          : cliente.ml_impago.nivel_riesgo === 'Medio'
+                                                          ? "bg-orange-100 text-orange-800 border-orange-300"
+                                                          : "bg-green-100 text-green-800 border-green-300"
+                                                      }
+                                                    >
+                                                      {cliente.ml_impago.nivel_riesgo}
+                                                    </Badge>
+                                                    <span className="text-xs text-gray-600">
+                                                      {(cliente.ml_impago.probabilidad_impago * 100).toFixed(1)}%
+                                                    </span>
+                                                  </div>
+                                                ) : (
+                                                  <span className="text-xs text-gray-400">N/A</span>
+                                                )}
                                               </td>
                                               <td className="p-2 text-right font-semibold text-red-600">
                                                 ${(cliente.total_adeudado || 0).toLocaleString('es-VE')}

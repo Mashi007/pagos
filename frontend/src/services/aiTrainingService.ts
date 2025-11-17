@@ -283,6 +283,20 @@ class AITrainingService {
     return await apiClient.post(`${this.baseUrl}/fine-tuning/jobs/${jobId}/cancelar`)
   }
 
+  /**
+   * Eliminar un job de fine-tuning
+   */
+  async eliminarFineTuningJob(jobId: string): Promise<{ mensaje: string }> {
+    return await apiClient.delete(`${this.baseUrl}/fine-tuning/jobs/${jobId}`)
+  }
+
+  /**
+   * Eliminar todos los jobs de fine-tuning (o solo los fallidos)
+   */
+  async eliminarTodosFineTuningJobs(soloFallidos: boolean = false): Promise<{ mensaje: string; eliminados: number }> {
+    return await apiClient.delete(`${this.baseUrl}/fine-tuning/jobs?solo_fallidos=${soloFallidos}`)
+  }
+
   // ============================================
   // RAG MEJORADO (EMBEDDINGS)
   // ============================================

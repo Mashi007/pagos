@@ -1395,45 +1395,6 @@ export function Configuracion() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Información del Sistema */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Settings className="mr-2 h-5 w-5" /> Información del Sistema
-          </CardTitle>
-          <CardDescription>Detalles técnicos y estado del sistema.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-sm text-gray-500">Última Actualización</div>
-              <div className="font-semibold">{formatDate(configuracion.general.ultimaActualizacion)}</div>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-sm text-gray-500">Estado del Sistema</div>
-              <div className="font-semibold text-green-600 flex items-center">
-                <CheckCircle className="h-4 w-4 mr-1" />
-                Activo
-              </div>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-sm text-gray-500">Base de Datos</div>
-              <div className="font-semibold text-green-600 flex items-center">
-                <CheckCircle className="h-4 w-4 mr-1" />
-                Conectada
-              </div>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-sm text-gray-500">Backup</div>
-              <div className="font-semibold text-green-600 flex items-center">
-                <CheckCircle className="h-4 w-4 mr-1" />
-                Actualizado
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </motion.div>
   )
 }

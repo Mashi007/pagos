@@ -83,7 +83,7 @@ class PrepararDatosRequest(BaseModel):
 
 class IniciarFineTuningRequest(BaseModel):
     archivo_id: str
-    modelo_base: str = "gpt-4o-mini"  # gpt-3.5-turbo ya no está disponible para fine-tuning
+    modelo_base: str = "gpt-4o"  # gpt-4o-mini no está disponible para fine-tuning, solo gpt-4o
     epochs: Optional[int] = None
     learning_rate: Optional[float] = None
 
@@ -708,6 +708,88 @@ async def cancelar_fine_tuning_job(
         raise HTTPException(status_code=500, detail=f"Error cancelando job: {str(e)}")
 
 
+@router.delete("/fine-tuning/jobs/{job_id}")
+async def eliminar_fine_tuning_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Eliminar un job de fine-tuning"""
+    try:
+        # Buscar job en BD
+        job = db.query(FineTuningJob).filter(FineTuningJob.openai_job_id == job_id).first()
+
+        if not job:
+            raise HTTPException(status_code=404, detail="Job no encontrado")
+
+        # No permitir eliminar jobs en ejecución
+        if job.status in ["pending", "running"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se puede eliminar un job con estado '{job.status}'. Cancélalo primero."
+            )
+
+        # Eliminar de la BD
+        db.delete(job)
+        db.commit()
+
+        logger.info(f"Job {job_id} eliminado por usuario {current_user.id}")
+
+        return {"mensaje": "Job eliminado exitosamente"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error eliminando job: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error eliminando job: {str(e)}")
+
+
+@router.delete("/fine-tuning/jobs")
+async def eliminar_todos_fine_tuning_jobs(
+    solo_fallidos: bool = Query(False, description="Eliminar solo jobs fallidos"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Eliminar todos los jobs de fine-tuning (o solo los fallidos)"""
+    try:
+        # Construir query
+        query = db.query(FineTuningJob)
+        
+        if solo_fallidos:
+            # Solo eliminar jobs fallidos o cancelados
+            query = query.filter(FineTuningJob.status.in_(["failed", "cancelled"]))
+        else:
+            # Eliminar todos excepto los que están en ejecución
+            query = query.filter(~FineTuningJob.status.in_(["pending", "running"]))
+
+        jobs = query.all()
+        
+        if not jobs:
+            return {"mensaje": "No hay jobs para eliminar", "eliminados": 0}
+
+        # Contar jobs que se eliminarán
+        total_eliminados = len(jobs)
+        
+        # Eliminar jobs
+        for job in jobs:
+            db.delete(job)
+        
+        db.commit()
+
+        logger.info(f"{total_eliminados} jobs eliminados por usuario {current_user.id}")
+
+        return {
+            "mensaje": f"{total_eliminados} job(s) eliminado(s) exitosamente",
+            "eliminados": total_eliminados
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error eliminando jobs: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error eliminando jobs: {str(e)}")
+
+
 @router.post("/fine-tuning/activar")
 async def activar_modelo_fine_tuned(
     request: ActivarModeloRequest,
@@ -1046,33 +1128,74 @@ async def entrenar_modelo_riesgo(
         from app.models.amortizacion import Cuota
 
         # Obtener préstamos aprobados con historial (cargar relación cliente)
-        # Usar load_only para cargar solo las columnas que necesitamos y que existen en la BD
+        # Usar with_entities para especificar exactamente las columnas que existen en la BD
         # Esto evita errores si hay columnas en el modelo que no existen en la BD (como valor_activo)
         from app.models.cliente import Cliente
         from app.models.pago import Pago
         from app.models.prestamo import Prestamo
 
-        prestamos = (
+        # Query usando with_entities para evitar columnas que no existen
+        prestamos_query = (
             db.query(Prestamo)
             .filter(Prestamo.estado == "APROBADO")
             .options(
-                load_only(
-                    Prestamo.id,
-                    Prestamo.cliente_id,
-                    Prestamo.cedula,
-                    Prestamo.nombres,
-                    Prestamo.total_financiamiento,
-                    Prestamo.estado,
-                    Prestamo.fecha_aprobacion,
-                    Prestamo.fecha_registro,
-                ),
                 joinedload(Prestamo.cliente).load_only(
                     Cliente.id,
                     Cliente.fecha_nacimiento,
                 ),
             )
-            .all()
         )
+        
+        # Intentar ejecutar el query, si falla por columnas inexistentes, usar query directo
+        try:
+            prestamos = prestamos_query.all()
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "valor_activo" in error_msg or "does not exist" in error_msg:
+                # Si falla por valor_activo, usar query directo sin cargar el objeto completo
+                logger.warning("⚠️ Columna valor_activo no existe en BD, usando query directo")
+                from sqlalchemy import select
+                
+                # Query directo con columnas específicas que sabemos que existen
+                stmt = (
+                    select(
+                        Prestamo.id,
+                        Prestamo.cliente_id,
+                        Prestamo.cedula,
+                        Prestamo.nombres,
+                        Prestamo.total_financiamiento,
+                        Prestamo.estado,
+                        Prestamo.fecha_aprobacion,
+                        Prestamo.fecha_registro,
+                    )
+                    .where(Prestamo.estado == "APROBADO")
+                )
+                
+                resultados = db.execute(stmt).all()
+                
+                # Convertir resultados a objetos Prestamo parciales
+                prestamos = []
+                for row in resultados:
+                    # Crear un objeto Prestamo parcial con solo las columnas que tenemos
+                    prestamo = Prestamo()
+                    prestamo.id = row.id
+                    prestamo.cliente_id = row.cliente_id
+                    prestamo.cedula = row.cedula
+                    prestamo.nombres = row.nombres
+                    prestamo.total_financiamiento = row.total_financiamiento
+                    prestamo.estado = row.estado
+                    prestamo.fecha_aprobacion = row.fecha_aprobacion
+                    prestamo.fecha_registro = row.fecha_registro
+                    
+                    # Cargar cliente por separado si es necesario
+                    if row.cliente_id:
+                        cliente = db.query(Cliente).filter(Cliente.id == row.cliente_id).first()
+                        if cliente:
+                            prestamo.cliente = cliente
+                    
+                    prestamos.append(prestamo)
+            else:
+                raise
 
         if len(prestamos) < 10:
             raise HTTPException(
@@ -1676,25 +1799,53 @@ async def entrenar_modelo_impago(
         # Para ML Impago solo necesitamos datos del préstamo, no del cliente
         logger.info("🔍 Buscando préstamos aprobados para entrenamiento...")
         try:
-            # Usar load_only para cargar solo las columnas que necesitamos y que existen en la BD
-            # Esto evita errores si hay columnas en el modelo que no existen en la BD (como valor_activo)
-            prestamos = (
+            # Intentar query normal primero
+            prestamos_query = (
                 db.query(Prestamo)
                 .filter(Prestamo.estado == "APROBADO")
                 .filter(Prestamo.fecha_aprobacion.isnot(None))
-                .options(
-                    load_only(
-                        Prestamo.id,
-                        Prestamo.cliente_id,
-                        Prestamo.cedula,
-                        Prestamo.nombres,
-                        Prestamo.total_financiamiento,
-                        Prestamo.estado,
-                        Prestamo.fecha_aprobacion,
-                    )
-                )
-                .all()
             )
+            
+            try:
+                prestamos = prestamos_query.all()
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "valor_activo" in error_msg or "does not exist" in error_msg:
+                    # Si falla por valor_activo, usar query directo
+                    logger.warning("⚠️ Columna valor_activo no existe en BD, usando query directo")
+                    from sqlalchemy import select
+                    
+                    stmt = (
+                        select(
+                            Prestamo.id,
+                            Prestamo.cliente_id,
+                            Prestamo.cedula,
+                            Prestamo.nombres,
+                            Prestamo.total_financiamiento,
+                            Prestamo.estado,
+                            Prestamo.fecha_aprobacion,
+                        )
+                        .where(Prestamo.estado == "APROBADO")
+                        .where(Prestamo.fecha_aprobacion.isnot(None))
+                    )
+                    
+                    resultados = db.execute(stmt).all()
+                    
+                    # Convertir a objetos Prestamo parciales
+                    prestamos = []
+                    for row in resultados:
+                        prestamo = Prestamo()
+                        prestamo.id = row.id
+                        prestamo.cliente_id = row.cliente_id
+                        prestamo.cedula = row.cedula
+                        prestamo.nombres = row.nombres
+                        prestamo.total_financiamiento = row.total_financiamiento
+                        prestamo.estado = row.estado
+                        prestamo.fecha_aprobacion = row.fecha_aprobacion
+                        prestamos.append(prestamo)
+                else:
+                    raise
+            
             logger.info(f"📊 Encontrados {len(prestamos)} préstamos aprobados")
         except Exception as query_error:
             logger.error(f"❌ Error consultando préstamos: {query_error}", exc_info=True)

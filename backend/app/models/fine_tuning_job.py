@@ -27,7 +27,7 @@ class FineTuningJob(Base):
     )  # pending, running, succeeded, failed, cancelled
 
     # Información del modelo
-    modelo_base = Column(String(100), nullable=False)  # gpt-4o-mini, gpt-4o, etc. (gpt-3.5-turbo ya no disponible)
+    modelo_base = Column(String(100), nullable=False)  # gpt-4o, gpt-4o-2024-08-06, etc. (gpt-4o-mini no disponible para fine-tuning)
     modelo_entrenado = Column(String(200), nullable=True)  # ID del modelo entrenado en OpenAI
 
     # Archivo de entrenamiento

@@ -32,16 +32,18 @@ export function Auditoria() {
   // Cargar auditoría cuando cambian los filtros o la página
   useEffect(() => {
     cargarAuditoria()
+    // Actualizar estadísticas cuando se recarga la lista
+    cargarEstadisticas()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, filtros.usuario_email, filtros.modulo, filtros.accion, filtros.fecha_desde, filtros.fecha_hasta, filtros.ordenar_por, filtros.orden])
 
-  // Cargar estadísticas solo una vez al montar y luego con polling
+  // Cargar estadísticas al montar y luego con polling más frecuente
   useEffect(() => {
     cargarEstadisticas()
 
     const interval = setInterval(() => {
       cargarEstadisticas()
-    }, 30 * 60 * 1000) // 30 minutos
+    }, 5 * 60 * 1000) // 5 minutos (actualizado desde 30 minutos)
 
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,12 +93,15 @@ export function Auditoria() {
     }
   }
 
-  const cargarEstadisticas = async () => {
+  const cargarEstadisticas = async (mostrarToast = false) => {
     try {
       console.log('📊 Cargando estadísticas de auditoría...')
       const response = await auditoriaService.obtenerEstadisticas()
       console.log('✅ Estadísticas recibidas:', response)
       setStats(response)
+      if (mostrarToast) {
+        toast.success('✅ KPIs actualizados correctamente')
+      }
     } catch (err: any) {
       console.error('❌ Error cargando estadísticas:', err)
       const errorMessage = err?.response?.data?.detail || err?.message || 'Error al cargar estadísticas'
@@ -110,7 +115,9 @@ export function Auditoria() {
         acciones_esta_semana: 0,
         acciones_este_mes: 0,
       })
-      // No mostrar toast para no molestar al usuario, solo log
+      if (mostrarToast) {
+        toast.error(`Error al actualizar KPIs: ${errorMessage}`)
+      }
     }
   }
 
@@ -188,10 +195,21 @@ export function Auditoria() {
             Seguimiento completo de todas las acciones realizadas
           </p>
         </div>
-        <Button onClick={handleExportarExcel} className="bg-green-600 hover:bg-green-700">
-          <Download className="w-4 h-4 mr-2" />
-          Exportar Excel
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => cargarEstadisticas(true)} 
+            variant="outline"
+            disabled={loading}
+            title="Actualizar estadísticas"
+          >
+            <Activity className="w-4 h-4 mr-2" />
+            Actualizar KPIs
+          </Button>
+          <Button onClick={handleExportarExcel} className="bg-green-600 hover:bg-green-700">
+            <Download className="w-4 h-4 mr-2" />
+            Exportar Excel
+          </Button>
+        </div>
       </div>
 
       {/* Stats Dashboard */}

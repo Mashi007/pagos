@@ -3118,26 +3118,28 @@ def procesar_documento_ai(
 
         if not archivo_encontrado or not ruta_archivo or not ruta_archivo.exists():
             mensaje_error = (
-                f"El archivo físico no existe para el documento ID {documento_id}. "
-                f"Nombre: {nombre_archivo_original}, Ruta original: {ruta_original}. "
-                f"Rutas intentadas: {len(rutas_intentadas)} ubicaciones."
+                f"El archivo físico no existe para el documento '{documento.titulo}' (ID: {documento_id}). "
+                f"El archivo puede haber sido eliminado del servidor o nunca se subió correctamente. "
+                f"Por favor, elimina este documento y súbelo nuevamente."
             )
 
             logger.error(
                 f"❌ Archivo no encontrado después de {len(rutas_intentadas)} intentos. "
+                f"Documento: {documento.titulo}, Nombre archivo: {nombre_archivo_original}, "
+                f"Ruta original: {ruta_original}. "
                 f"Rutas intentadas: {', '.join(rutas_intentadas[:5])}..."
             )
 
-            # Agregar información de diagnóstico
-            info_diagnostico = f"\nDirectorios base verificados: {[str(d) for d in directorios_base]}"
-            if nombre_archivo_original:
-                info_diagnostico += f"\nNombre de archivo buscado: {nombre_archivo_original}"
-            if documento.tamaño_bytes:
-                info_diagnostico += f"\nTamaño esperado: {documento.tamaño_bytes} bytes"
+            # Log detallado para diagnóstico (solo en logs, no en respuesta al usuario)
+            logger.debug(
+                f"Directorios base verificados: {[str(d) for d in directorios_base]}, "
+                f"Nombre archivo buscado: {nombre_archivo_original}, "
+                f"Tamaño esperado: {documento.tamaño_bytes} bytes"
+            )
 
             raise HTTPException(
                 status_code=400,
-                detail=mensaje_error + info_diagnostico,
+                detail=mensaje_error,
             )
 
         # Verificar que el archivo no esté vacío
