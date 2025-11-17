@@ -230,7 +230,7 @@ export function WhatsAppConfig() {
         console.log('✅ [RESULTADO FINAL] Todos los tests pasaron - WhatsApp está configurado correctamente')
       } else {
         toast.warning(`⚠️ Test completo: ${resumen.exitosos}/${resumen.total} exitosos, ${resumen.fallidos} fallidos`)
-        console.warning('⚠️ [RESULTADO FINAL] Algunos tests fallaron - Revisa la configuración')
+        console.warn('⚠️ [RESULTADO FINAL] Algunos tests fallaron - Revisa la configuración')
       }
     } catch (error: any) {
       console.error('❌ [ERROR] Error ejecutando test completo:', error)
@@ -325,12 +325,18 @@ export function WhatsAppConfig() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium block mb-2">Webhook Verify Token <span className="text-gray-500">(opcional)</span></label>
+              <label className="text-sm font-medium block mb-2">
+                Webhook Verify Token <span className="text-gray-500">(requerido para bot)</span>
+              </label>
               <Input
                 value={config.webhook_verify_token || ''}
                 onChange={(e) => handleChange('webhook_verify_token', e.target.value)}
-                placeholder="mi_token_secreto"
+                placeholder="mi_token_secreto_2024"
+                type={mostrarToken ? 'text' : 'password'}
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Token secreto para verificar webhooks de Meta. Debe ser el mismo que configures en Meta Developers.
+              </p>
             </div>
           </div>
 
