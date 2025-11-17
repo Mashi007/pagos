@@ -981,7 +981,7 @@ async def entrenar_modelo_riesgo(
         # Usar load_only para cargar solo las columnas que necesitamos y que existen en la BD
         # Esto evita errores si hay columnas en el modelo que no existen en la BD (como valor_activo)
         from app.models.cliente import Cliente
-        
+
         prestamos = (
             db.query(Prestamo)
             .filter(Prestamo.estado == "APROBADO")
