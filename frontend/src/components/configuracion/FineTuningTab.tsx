@@ -1863,7 +1863,7 @@ export function FineTuningTab() {
                         {job.modelo_entrenado && (
                           <div>Modelo Entrenado: {job.modelo_entrenado}</div>
                         )}
-                        {job.progreso !== undefined && (
+                        {job.progreso !== undefined && job.progreso !== null && (
                           <div>Progreso: {job.progreso.toFixed(1)}%</div>
                         )}
                         {(job.status === 'pending' || job.status === 'running') && (
@@ -1880,7 +1880,17 @@ export function FineTuningTab() {
                           </div>
                         )}
                         {job.error && (
-                          <div className="text-red-600">Error: {job.error}</div>
+                          <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs">
+                            <div className="font-semibold text-red-800 mb-1 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              Error:
+                            </div>
+                            <div className="text-red-700 whitespace-pre-wrap break-words">
+                              {typeof job.error === 'string' 
+                                ? job.error 
+                                : JSON.stringify(job.error, null, 2)}
+                            </div>
+                          </div>
                         )}
                         <div className="text-xs text-gray-400">
                           Creado: {new Date(job.creado_en).toLocaleString()}
