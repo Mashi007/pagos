@@ -12,6 +12,7 @@ export interface Ticket {
     apellidos: string
     cedula: string
     telefono?: string
+    email?: string
   }
   conversacion_whatsapp_id?: number
   estado: string

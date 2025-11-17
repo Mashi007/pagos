@@ -20,7 +20,6 @@ import {
   Phone,
   Mail,
   XCircle as XCircleIcon,
-  ExternalLink,
   Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -217,7 +216,7 @@ export function TicketsAtencion() {
       prioridad: nuevoTicket.prioridad || 'media',
       tipo: nuevoTicket.tipo || 'consulta',
       cliente_id: clienteSeleccionado?.id,
-      asignado_a: nuevoTicket.asignado_a || user ? `${user.nombre} ${user.apellido}` : undefined,
+      asignado_a: nuevoTicket.asignado_a || (user ? `${user.nombre} ${user.apellido}` : undefined),
       asignado_a_id: user?.id,
     }
 
@@ -235,7 +234,16 @@ export function TicketsAtencion() {
       asignado_a: ticket.asignado_a,
     })
     if (ticket.clienteData) {
-      setClienteSeleccionado(ticket.clienteData)
+      // Convertir clienteData parcial a Cliente completo con valores por defecto
+      const clienteCompleto: Cliente = {
+        ...ticket.clienteData,
+        email: ticket.clienteData.email,
+        estado: 'ACTIVO',
+        activo: true,
+        dias_mora: 0,
+        fecha_registro: new Date().toISOString(),
+      }
+      setClienteSeleccionado(clienteCompleto)
     }
     setShowEditDialog(true)
   }
