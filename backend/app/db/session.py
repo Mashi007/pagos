@@ -129,15 +129,19 @@ def get_db() -> Generator:
         error_type = type(e).__name__
         error_message = str(e)
         logger.error(f"Error de base de datos: {error_type}: {error_message}", exc_info=True)
-        
+
         # Detectar tipos específicos de errores para mensajes más informativos
         error_lower = error_message.lower()
         if "timeout" in error_lower or "timed out" in error_lower:
             detail_message = "Timeout de conexión a la base de datos. El servidor está sobrecargado o la conexión es lenta."
         elif "pool" in error_lower and ("exhausted" in error_lower or "timeout" in error_lower):
-            detail_message = "Pool de conexiones agotado. Demasiadas solicitudes simultáneas. Intenta nuevamente en unos momentos."
+            detail_message = (
+                "Pool de conexiones agotado. Demasiadas solicitudes simultáneas. Intenta nuevamente en unos momentos."
+            )
         elif "connection" in error_lower and ("lost" in error_lower or "closed" in error_lower or "refused" in error_lower):
-            detail_message = "Conexión a la base de datos perdida o rechazada. Verifica que el servidor de base de datos esté disponible."
+            detail_message = (
+                "Conexión a la base de datos perdida o rechazada. Verifica que el servidor de base de datos esté disponible."
+            )
         elif "operationalerror" in error_lower or "connectionerror" in error_lower:
             detail_message = f"Error operacional de base de datos: {error_message[:200]}"
         else:
