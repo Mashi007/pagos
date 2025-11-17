@@ -12,7 +12,8 @@ import {
   Mail,
   User,
   AlertCircle,
-  Calendar
+  Calendar,
+  MessageSquare
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -33,9 +34,11 @@ import { ClienteFilters } from '@/types'
 import { useClientes } from '@/hooks/useClientes'
 import { useQueryClient } from '@tanstack/react-query'
 import { clienteService } from '@/services/clienteService'
+import { useNavigate } from 'react-router-dom'
 
 export function ClientesList() {
   // Forzar nuevo build - versión actualizada
+  const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState<ClienteFilters>({})
   const [currentPage, setCurrentPage] = useState(1)
@@ -475,6 +478,20 @@ export function ClientesList() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {/* ✅ BOTÓN VER CONVERSACIONES WHATSAPP */}
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          title="Ver conversaciones de WhatsApp"
+                          className="text-blue-600 border-blue-400 bg-blue-50 hover:text-white hover:bg-blue-600 hover:border-blue-600 font-medium cursor-pointer transition-colors"
+                          onClick={() => {
+                            navigate(`/conversaciones-whatsapp?cliente_id=${cliente.id}`)
+                          }}
+                        >
+                          <MessageSquare className="w-4 h-4 mr-1" />
+                          WhatsApp
+                        </Button>
+                        
                         {/* ✅ BOTÓN EDITAR - ACTIVO Y FUNCIONAL */}
                         <Button 
                           variant="outline" 

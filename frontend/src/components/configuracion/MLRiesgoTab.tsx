@@ -15,6 +15,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { aiTrainingService, ModeloRiesgo } from '@/services/aiTrainingService'
 import { toast } from 'sonner'
@@ -108,17 +109,74 @@ export function MLRiesgoTab() {
 
   const handleEntrenar = async () => {
     setEntrenando(true)
+    setEstadoJob({ status: 'pending', progreso: 0 })
+    setMostrarFormEntrenamiento(false)
+
+    // Simular progreso mientras se entrena
+    const intervalProgreso = setInterval(() => {
+      setEstadoJob((prev) => {
+        if (!prev) return { status: 'pending', progreso: 0 }
+        
+        let nuevoProgreso = prev.progreso || 0
+        if (nuevoProgreso < 90) {
+          nuevoProgreso = Math.min(nuevoProgreso + 1.5, 90)
+        } else if (nuevoProgreso < 95) {
+          nuevoProgreso = Math.min(nuevoProgreso + 0.5, 95)
+        }
+        
+        return {
+          ...prev,
+          progreso: nuevoProgreso,
+        }
+      })
+    }, 500)
+
     try {
       const result = await aiTrainingService.entrenarModeloRiesgo({
         algoritmo,
         test_size: testSize,
       })
+      
+      clearInterval(intervalProgreso)
+      
       setJobId(result.job_id)
-      setEstadoJob({ status: 'pending' })
-      toast.success('Entrenamiento iniciado')
-      setMostrarFormEntrenamiento(false)
+      setEstadoJob({ 
+        status: 'succeeded', 
+        progreso: 100,
+        modelo: result.modelo 
+      })
+      
+      // Notificación mejorada con métricas
+      const modelo = result.modelo
+      const accuracy = modelo?.accuracy ? `${(modelo.accuracy * 100).toFixed(1)}%` : 'N/A'
+      const f1 = modelo?.f1_score ? `${(modelo.f1_score * 100).toFixed(1)}%` : 'N/A'
+      
+      toast.success(
+        `Modelo entrenado exitosamente\n` +
+        `Accuracy: ${accuracy} | F1 Score: ${f1}`,
+        {
+          duration: 8000,
+          description: `Modelo: ${modelo?.nombre || 'N/A'}`,
+        }
+      )
+      
+      // Recargar modelos después de 2 segundos
+      setTimeout(async () => {
+        await cargarModelos()
+      }, 2000)
     } catch (error: any) {
-      toast.error('Error al iniciar entrenamiento')
+      clearInterval(intervalProgreso)
+      
+      const errorMsg = error?.response?.data?.detail || error?.message || 'Error desconocido'
+      setEstadoJob({ 
+        status: 'failed', 
+        progreso: 0,
+        error: errorMsg 
+      })
+      
+      toast.error(`Error al entrenar modelo: ${errorMsg}`, {
+        duration: 10000,
+      })
     } finally {
       setEntrenando(false)
     }
@@ -318,31 +376,76 @@ export function MLRiesgoTab() {
 
       {/* Estado de Entrenamiento */}
       {estadoJob && (
-        <Card>
+        <Card className={
+          estadoJob.status === 'succeeded' 
+            ? 'border-green-200 bg-green-50/50' 
+            : estadoJob.status === 'failed'
+            ? 'border-red-200 bg-red-50/50'
+            : 'border-blue-200 bg-blue-50/50'
+        }>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 mb-4">
-              <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
-              <h4 className="font-semibold">Entrenamiento en Progreso</h4>
+              {estadoJob.status === 'succeeded' ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : estadoJob.status === 'failed' ? (
+                <AlertCircle className="h-5 w-5 text-red-600" />
+              ) : (
+                <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+              )}
+              <h4 className="font-semibold">
+                {estadoJob.status === 'succeeded'
+                  ? 'Entrenamiento Completado'
+                  : estadoJob.status === 'failed'
+                  ? 'Error en Entrenamiento'
+                  : 'Entrenamiento en Progreso'}
+              </h4>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
-                <span>Estado: {estadoJob.status}</span>
+                <span className="text-gray-600">
+                  {estadoJob.status === 'succeeded'
+                    ? '¡Modelo entrenado exitosamente!'
+                    : estadoJob.status === 'failed'
+                    ? 'Error durante el entrenamiento'
+                    : 'Procesando y entrenando modelo...'}
+                </span>
                 {estadoJob.progreso !== undefined && (
-                  <span className="font-medium">{estadoJob.progreso}%</span>
+                  <span className="font-medium text-blue-600">{Math.round(estadoJob.progreso)}%</span>
                 )}
               </div>
               {estadoJob.progreso !== undefined && (
-                <div className="w-full bg-gray-200 rounded-full h-2.5">
-                  <div
-                    className="bg-blue-600 h-2.5 rounded-full transition-all"
-                    style={{ width: `${estadoJob.progreso}%` }}
-                  />
+                <Progress value={estadoJob.progreso} className="h-2.5" />
+              )}
+              {estadoJob.status === 'succeeded' && estadoJob.modelo && (
+                <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div className="text-sm font-semibold text-green-800 mb-2">Modelo Entrenado:</div>
+                  <div className="text-sm text-green-700 space-y-1">
+                    <div><span className="font-medium">Nombre:</span> {estadoJob.modelo.nombre}</div>
+                    <div><span className="font-medium">Algoritmo:</span> {estadoJob.modelo.algoritmo}</div>
+                    {estadoJob.modelo.accuracy && (
+                      <div>
+                        <span className="font-medium">Accuracy:</span>{' '}
+                        {(estadoJob.modelo.accuracy * 100).toFixed(1)}%
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
               {estadoJob.error && (
-                <div className="text-sm text-red-600 bg-red-50 rounded p-2">
-                  Error: {estadoJob.error}
+                <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                  <div className="text-sm font-semibold text-red-800 mb-1">Error:</div>
+                  <div className="text-sm text-red-700">{estadoJob.error}</div>
                 </div>
+              )}
+              {estadoJob.status === 'succeeded' && (
+                <Button
+                  onClick={() => setEstadoJob(null)}
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                >
+                  Cerrar
+                </Button>
               )}
             </div>
           </CardContent>

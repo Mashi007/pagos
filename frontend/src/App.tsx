@@ -51,6 +51,7 @@ const Solicitudes = lazy(() => import('@/pages/Solicitudes').then(module => ({ d
 const EmbudoClientes = lazy(() => import('@/pages/EmbudoClientes').then(module => ({ default: module.EmbudoClientes })))
 const TicketsAtencion = lazy(() => import('@/pages/TicketsAtencion').then(module => ({ default: module.TicketsAtencion })))
 const EmbudoConcesionarios = lazy(() => import('@/pages/EmbudoConcesionarios').then(module => ({ default: module.EmbudoConcesionarios })))
+const ConversacionesWhatsAppPage = lazy(() => import('@/pages/ConversacionesWhatsApp').then(module => ({ default: module.ConversacionesWhatsAppPage })))
 
 // Todas las páginas ahora están importadas desde archivos reales
 
@@ -183,6 +184,9 @@ function App() {
 
           {/* Notificaciones */}
           <Route path="notificaciones" element={<Notificaciones />} />
+
+          {/* Conversaciones WhatsApp */}
+          <Route path="conversaciones-whatsapp" element={<ConversacionesWhatsAppPage />} />
 
           {/* Herramientas: Plantillas (solo admin) */}
           <Route

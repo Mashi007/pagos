@@ -17,15 +17,25 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { aiTrainingService, ModeloImpagoCuotas } from '@/services/aiTrainingService'
 import { toast } from 'sonner'
+
+interface EstadoEntrenamiento {
+  estado: 'iniciando' | 'procesando' | 'entrenando' | 'finalizando' | 'completado' | 'error'
+  progreso: number
+  mensaje: string
+  modelo?: ModeloImpagoCuotas
+  error?: string
+}
 
 export function MLImpagoCuotasTab() {
   const [modelos, setModelos] = useState<ModeloImpagoCuotas[]>([])
   const [modeloActivo, setModeloActivo] = useState<ModeloImpagoCuotas | null>(null)
   const [cargando, setCargando] = useState(false)
   const [entrenando, setEntrenando] = useState(false)
+  const [estadoEntrenamiento, setEstadoEntrenamiento] = useState<EstadoEntrenamiento | null>(null)
 
   // Formulario de entrenamiento
   const [mostrarFormEntrenamiento, setMostrarFormEntrenamiento] = useState(false)
@@ -69,16 +79,100 @@ export function MLImpagoCuotasTab() {
 
   const handleEntrenar = async () => {
     setEntrenando(true)
+    setEstadoEntrenamiento({
+      estado: 'iniciando',
+      progreso: 0,
+      mensaje: 'Iniciando entrenamiento...',
+    })
+    setMostrarFormEntrenamiento(false)
+
+    // Simular progreso mientras se entrena (el backend no devuelve progreso real)
+    const intervalProgreso = setInterval(() => {
+      setEstadoEntrenamiento((prev) => {
+        if (!prev) return null
+        
+        let nuevoProgreso = prev.progreso
+        let nuevoEstado = prev.estado
+        let nuevoMensaje = prev.mensaje
+
+        // Simular progreso basado en el estado
+        if (prev.estado === 'iniciando' && prev.progreso < 10) {
+          nuevoProgreso = Math.min(prev.progreso + 2, 10)
+          nuevoMensaje = 'Preparando datos de entrenamiento...'
+        } else if (prev.estado === 'iniciando' && prev.progreso >= 10) {
+          nuevoEstado = 'procesando'
+          nuevoMensaje = 'Procesando préstamos y extrayendo features...'
+        } else if (prev.estado === 'procesando' && prev.progreso < 60) {
+          nuevoProgreso = Math.min(prev.progreso + 1.5, 60)
+          nuevoMensaje = `Procesando datos... ${Math.round(prev.progreso)}%`
+        } else if (prev.estado === 'procesando' && prev.progreso >= 60) {
+          nuevoEstado = 'entrenando'
+          nuevoMensaje = 'Entrenando modelo con algoritmo seleccionado...'
+        } else if (prev.estado === 'entrenando' && prev.progreso < 90) {
+          nuevoProgreso = Math.min(prev.progreso + 0.8, 90)
+          nuevoMensaje = `Entrenando modelo... ${Math.round(prev.progreso)}%`
+        } else if (prev.estado === 'entrenando' && prev.progreso >= 90) {
+          nuevoEstado = 'finalizando'
+          nuevoMensaje = 'Finalizando y guardando modelo...'
+          nuevoProgreso = 95
+        }
+
+        return {
+          ...prev,
+          estado: nuevoEstado,
+          progreso: nuevoProgreso,
+          mensaje: nuevoMensaje,
+        }
+      })
+    }, 500) // Actualizar cada 500ms
+
     try {
       const resultado = await aiTrainingService.entrenarModeloImpago({
         algoritmo,
         test_size: testSize,
       })
+      
+      // Limpiar intervalo y mostrar éxito
+      clearInterval(intervalProgreso)
+      
+      setEstadoEntrenamiento({
+        estado: 'completado',
+        progreso: 100,
+        mensaje: '¡Modelo entrenado exitosamente!',
+        modelo: resultado.modelo,
+      })
+
+      // Notificación mejorada con métricas
+      const metricas = resultado.metricas
+      const accuracy = metricas?.accuracy ? `${(metricas.accuracy * 100).toFixed(1)}%` : 'N/A'
+      const f1 = metricas?.f1_score ? `${(metricas.f1_score * 100).toFixed(1)}%` : 'N/A'
+      
+      toast.success(
+        `Modelo entrenado exitosamente\n` +
+        `Accuracy: ${accuracy} | F1 Score: ${f1}`,
+        {
+          duration: 8000,
+          description: `Modelo: ${resultado.modelo.nombre}`,
+        }
+      )
+
+      // Recargar modelos después de 2 segundos
+      setTimeout(async () => {
+        await cargarModelos()
+        setEstadoEntrenamiento(null)
+      }, 2000)
+
       console.log('✅ Modelo entrenado exitosamente:', resultado)
-      toast.success('Modelo entrenado exitosamente')
-      setMostrarFormEntrenamiento(false)
-      await cargarModelos()
     } catch (error: any) {
+      // Limpiar intervalo en caso de error
+      clearInterval(intervalProgreso)
+      
+      setEstadoEntrenamiento({
+        estado: 'error',
+        progreso: 0,
+        mensaje: 'Error durante el entrenamiento',
+        error: error?.response?.data?.detail || error?.message || 'Error desconocido',
+      })
       console.group('❌ Error entrenando modelo ML Impago')
       console.error('Error objeto completo:', error)
       console.error('Error response:', error?.response)

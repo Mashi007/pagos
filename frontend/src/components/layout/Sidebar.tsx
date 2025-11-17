@@ -113,6 +113,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
           icon: Bell,
           badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
         },
+        { title: 'Conversaciones WhatsApp', href: '/conversaciones-whatsapp', icon: MessageSquare },
         { title: 'Seguimiento Concesionarios', href: '/crm/embudo-concesionarios', icon: Building },
       ],
     },
