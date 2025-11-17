@@ -9,6 +9,11 @@ export interface ClienteAtrasado {
   cuotas_vencidas: number
   total_adeudado: number
   fecha_primera_vencida?: string
+  ml_impago?: {
+    probabilidad_impago: number
+    nivel_riesgo: string
+    prediccion: string
+  } | null
   [key: string]: unknown // Firma de índice para compatibilidad con Record<string, unknown>
 }
 
