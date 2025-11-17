@@ -266,12 +266,60 @@ class MLImpagoCuotasService:
             ]
 
             for sample in training_data:
-                features = [sample.get(feature, 0.0) for feature in feature_order]
+                # Validar y convertir features a float, manejar None
+                features = []
+                for feature in feature_order:
+                    value = sample.get(feature, 0.0)
+                    # Convertir None a 0.0 y asegurar que sea numérico
+                    if value is None:
+                        features.append(0.0)
+                    else:
+                        try:
+                            features.append(float(value))
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Feature '{feature}' tiene valor inválido: {value}, usando 0.0")
+                            features.append(0.0)
+                
+                # Validar que todas las features sean numéricas
+                if len(features) != len(feature_order):
+                    logger.error(f"Error: número de features incorrecto. Esperado {len(feature_order)}, obtenido {len(features)}")
+                    raise ValueError(f"Número de features incorrecto: {len(features)} != {len(feature_order)}")
+                
                 X.append(features)
-                y.append(sample.get("target", 0))  # 0=Pagó, 1=No pagó
+                
+                # Validar target
+                target = sample.get("target", 0)
+                if target is None:
+                    target = 0
+                try:
+                    target = int(target)
+                    if target not in [0, 1]:
+                        logger.warning(f"Target inválido: {target}, usando 0")
+                        target = 0
+                except (ValueError, TypeError):
+                    logger.warning(f"Target no numérico: {target}, usando 0")
+                    target = 0
+                y.append(target)
 
-            X = np.array(X)  # type: ignore[assignment]
-            y = np.array(y)  # type: ignore[assignment]
+            # Validar que X e y tengan el mismo número de muestras
+            if len(X) != len(y):
+                raise ValueError(f"Número de muestras inconsistente: X={len(X)}, y={len(y)}")
+            
+            # Convertir a numpy array con validación
+            try:
+                X = np.array(X, dtype=np.float64)  # type: ignore[assignment]
+                y = np.array(y, dtype=np.int32)  # type: ignore[assignment]
+            except (ValueError, TypeError) as e:
+                logger.error(f"Error convirtiendo a numpy array: {e}")
+                logger.error(f"X sample: {X[0] if X else 'empty'}")
+                logger.error(f"y sample: {y[:5] if len(y) > 5 else y}")
+                raise ValueError(f"Error convirtiendo datos a numpy array: {e}")
+            
+            # Validar dimensiones
+            if X.shape[0] == 0:
+                raise ValueError("No hay muestras para entrenar")
+            if X.shape[1] != len(feature_order):
+                raise ValueError(f"Dimensiones incorrectas: X.shape={X.shape}, esperado {len(feature_order)} features")
 
             # Dividir en train y test
             # Usar stratify solo si hay suficientes muestras por clase
