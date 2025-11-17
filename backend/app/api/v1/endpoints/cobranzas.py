@@ -415,18 +415,33 @@ def obtener_clientes_atrasados(
                         # Calcular con ML si no hay valores manuales
                         cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
                         if cuotas:
-                            fecha_actual = date.today()
-                            features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
-                            prediccion = ml_service.predict_impago(features)
+                            try:
+                                fecha_actual = date.today()
+                                features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
+                                prediccion = ml_service.predict_impago(features)
 
-                            cliente_data["ml_impago"] = {
-                                "probabilidad_impago": round(prediccion.get("probabilidad_impago", 0.0), 3),
-                                "nivel_riesgo": prediccion.get("nivel_riesgo", "Desconocido"),
-                                "prediccion": prediccion.get("prediccion", "Desconocido"),
-                                "es_manual": False,
-                            }
+                                # Verificar si la predicción fue exitosa
+                                if prediccion.get("prediccion") == "Error" or prediccion.get("prediccion") == "Desconocido":
+                                    logger.warning(f"Predicción ML falló para préstamo {row.prestamo_id}: {prediccion.get('recomendacion', 'Error desconocido')}")
+                                    cliente_data["ml_impago"] = None
+                                else:
+                                    cliente_data["ml_impago"] = {
+                                        "probabilidad_impago": round(prediccion.get("probabilidad_impago", 0.0), 3),
+                                        "nivel_riesgo": prediccion.get("nivel_riesgo", "Desconocido"),
+                                        "prediccion": prediccion.get("prediccion", "Desconocido"),
+                                        "es_manual": False,
+                                    }
+                            except Exception as e:
+                                logger.warning(f"Error calculando predicción ML para préstamo {row.prestamo_id}: {e}", exc_info=True)
+                                cliente_data["ml_impago"] = None
+                        else:
+                            logger.debug(f"No hay cuotas para préstamo {row.prestamo_id}, no se puede calcular ML Impago")
+                            cliente_data["ml_impago"] = None
+                    else:
+                        logger.debug(f"Servicio ML no disponible para préstamo {row.prestamo_id}")
+                        cliente_data["ml_impago"] = None
             except Exception as e:
-                logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}")
+                logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}", exc_info=True)
                 cliente_data["ml_impago"] = None
 
             clientes_atrasados.append(cliente_data)
@@ -534,18 +549,33 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
                         # Calcular con ML si no hay valores manuales
                         cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
                         if cuotas:
-                            fecha_actual = date.today()
-                            features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
-                            prediccion = ml_service.predict_impago(features)
+                            try:
+                                fecha_actual = date.today()
+                                features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
+                                prediccion = ml_service.predict_impago(features)
 
-                            cliente_data["ml_impago"] = {
-                                "probabilidad_impago": round(prediccion.get("probabilidad_impago", 0.0), 3),
-                                "nivel_riesgo": prediccion.get("nivel_riesgo", "Desconocido"),
-                                "prediccion": prediccion.get("prediccion", "Desconocido"),
-                                "es_manual": False,
-                            }
+                                # Verificar si la predicción fue exitosa
+                                if prediccion.get("prediccion") == "Error" or prediccion.get("prediccion") == "Desconocido":
+                                    logger.warning(f"Predicción ML falló para préstamo {row.prestamo_id}: {prediccion.get('recomendacion', 'Error desconocido')}")
+                                    cliente_data["ml_impago"] = None
+                                else:
+                                    cliente_data["ml_impago"] = {
+                                        "probabilidad_impago": round(prediccion.get("probabilidad_impago", 0.0), 3),
+                                        "nivel_riesgo": prediccion.get("nivel_riesgo", "Desconocido"),
+                                        "prediccion": prediccion.get("prediccion", "Desconocido"),
+                                        "es_manual": False,
+                                    }
+                            except Exception as e:
+                                logger.warning(f"Error calculando predicción ML para préstamo {row.prestamo_id}: {e}", exc_info=True)
+                                cliente_data["ml_impago"] = None
+                        else:
+                            logger.debug(f"No hay cuotas para préstamo {row.prestamo_id}, no se puede calcular ML Impago")
+                            cliente_data["ml_impago"] = None
+                    else:
+                        logger.debug(f"Servicio ML no disponible para préstamo {row.prestamo_id}")
+                        cliente_data["ml_impago"] = None
             except Exception as e:
-                logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}")
+                logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}", exc_info=True)
                 cliente_data["ml_impago"] = None
 
             clientes.append(cliente_data)
@@ -739,18 +769,33 @@ def obtener_clientes_por_analista(
                         # Calcular con ML si no hay valores manuales
                         cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
                         if cuotas:
-                            fecha_actual = date.today()
-                            features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
-                            prediccion = ml_service.predict_impago(features)
+                            try:
+                                fecha_actual = date.today()
+                                features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
+                                prediccion = ml_service.predict_impago(features)
 
-                            cliente_data["ml_impago"] = {
-                                "probabilidad_impago": round(prediccion.get("probabilidad_impago", 0.0), 3),
-                                "nivel_riesgo": prediccion.get("nivel_riesgo", "Desconocido"),
-                                "prediccion": prediccion.get("prediccion", "Desconocido"),
-                                "es_manual": False,
-                            }
+                                # Verificar si la predicción fue exitosa
+                                if prediccion.get("prediccion") == "Error" or prediccion.get("prediccion") == "Desconocido":
+                                    logger.warning(f"Predicción ML falló para préstamo {row.prestamo_id}: {prediccion.get('recomendacion', 'Error desconocido')}")
+                                    cliente_data["ml_impago"] = None
+                                else:
+                                    cliente_data["ml_impago"] = {
+                                        "probabilidad_impago": round(prediccion.get("probabilidad_impago", 0.0), 3),
+                                        "nivel_riesgo": prediccion.get("nivel_riesgo", "Desconocido"),
+                                        "prediccion": prediccion.get("prediccion", "Desconocido"),
+                                        "es_manual": False,
+                                    }
+                            except Exception as e:
+                                logger.warning(f"Error calculando predicción ML para préstamo {row.prestamo_id}: {e}", exc_info=True)
+                                cliente_data["ml_impago"] = None
+                        else:
+                            logger.debug(f"No hay cuotas para préstamo {row.prestamo_id}, no se puede calcular ML Impago")
+                            cliente_data["ml_impago"] = None
+                    else:
+                        logger.debug(f"Servicio ML no disponible para préstamo {row.prestamo_id}")
+                        cliente_data["ml_impago"] = None
             except Exception as e:
-                logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}")
+                logger.warning(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}", exc_info=True)
                 cliente_data["ml_impago"] = None
 
             clientes.append(cliente_data)

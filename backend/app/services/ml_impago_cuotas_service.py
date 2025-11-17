@@ -591,17 +591,31 @@ class MLImpagoCuotasService:
         Cargar modelo desde una ruta específica
 
         Args:
-            model_path: Ruta al archivo del modelo
+            model_path: Ruta al archivo del modelo (relativa o absoluta)
             scaler_path: Ruta al archivo del scaler (opcional, se busca automáticamente)
 
         Returns:
             bool: True si se cargó exitosamente
         """
         try:
+            # Manejar rutas relativas y absolutas
             model_file = Path(model_path)
+            if not model_file.is_absolute():
+                # Si es relativa, intentar desde el directorio de trabajo actual
+                if not model_file.exists():
+                    # Intentar desde el directorio de modelos
+                    model_file = self.model_path / model_path
+                # Si aún no existe, intentar desde el directorio raíz del proyecto
+                if not model_file.exists():
+                    from pathlib import Path as PathLib
+                    project_root = PathLib(__file__).parent.parent.parent.parent
+                    model_file = project_root / model_path
+            
             if not model_file.exists():
-                logger.error(f"Modelo no encontrado: {model_path}")
+                logger.error(f"Modelo no encontrado en ninguna ubicación. Buscado en: {model_path}, {self.model_path / model_path}, {Path(__file__).parent.parent.parent.parent / model_path}")
                 return False
+            
+            logger.info(f"📂 Cargando modelo desde: {model_file.absolute()}")
 
             with open(model_file, "rb") as f:
                 self.models["impago_cuotas_model"] = pickle.load(f)
