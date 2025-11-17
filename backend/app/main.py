@@ -86,6 +86,7 @@ from app.api.v1.endpoints import (  # noqa: E402; aprobaciones deshabilitado - v
     concesionarios,
     conciliacion_bancaria,
     configuracion,
+    conversaciones_whatsapp,
     dashboard,
     health,
     kpis,
@@ -103,7 +104,6 @@ from app.api.v1.endpoints import (  # noqa: E402; aprobaciones deshabilitado - v
     users,
     validadores,
     whatsapp_webhook,
-    conversaciones_whatsapp,
 )
 
 # Forzar inicialización de cache DESPUÉS de configurar logging

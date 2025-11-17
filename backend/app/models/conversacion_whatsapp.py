@@ -77,4 +77,3 @@ class ConversacionWhatsApp(Base):
             "creado_en": self.creado_en.isoformat() if self.creado_en else None,
             "actualizado_en": self.actualizado_en.isoformat() if self.actualizado_en else None,
         }
-

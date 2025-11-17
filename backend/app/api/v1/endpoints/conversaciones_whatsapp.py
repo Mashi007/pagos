@@ -12,8 +12,8 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models.conversacion_whatsapp import ConversacionWhatsApp
 from app.models.cliente import Cliente
+from app.models.conversacion_whatsapp import ConversacionWhatsApp
 from app.models.user import User
 from app.services.whatsapp_service import WhatsAppService
 
@@ -39,7 +39,7 @@ async def listar_conversaciones_whatsapp(
 ):
     """
     Listar conversaciones de WhatsApp para el CRM
-    
+
     Permite ver todas las conversaciones entre clientes y el bot
     """
     try:
@@ -202,17 +202,13 @@ async def obtener_estadisticas_conversaciones(
         sin_cliente = db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.cliente_id.is_(None)).count()
 
         # Respuestas enviadas
-        respuestas_enviadas = (
-            db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.respuesta_enviada == True).count()
-        )
+        respuestas_enviadas = db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.respuesta_enviada == True).count()
 
         # Últimas 24 horas
         from datetime import datetime, timedelta
 
         ultimas_24h = datetime.utcnow() - timedelta(hours=24)
-        ultimas_24h_count = (
-            db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.timestamp >= ultimas_24h).count()
-        )
+        ultimas_24h_count = db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.timestamp >= ultimas_24h).count()
 
         return {
             "total": total,
@@ -237,18 +233,18 @@ async def enviar_mensaje_desde_crm(
 ):
     """
     Enviar mensaje de WhatsApp desde el CRM
-    
+
     Si el cliente no existe, se puede crear primero usando el endpoint de clientes.
     Este endpoint busca el cliente por número de teléfono o por cliente_id.
     """
     try:
         from app.services.whatsapp_service import WhatsAppService
-        
+
         whatsapp_service = WhatsAppService(db=db)
-        
+
         # Limpiar número de teléfono
         numero_limpio = request.to_number.replace("+", "").replace(" ", "").replace("-", "")
-        
+
         # Buscar cliente
         cliente = None
         if request.cliente_id:
@@ -257,19 +253,16 @@ async def enviar_mensaje_desde_crm(
         else:
             # Buscar por número de teléfono
             cliente = db.query(Cliente).filter(Cliente.telefono.like(f"%{numero_limpio}%")).first()
-        
+
         # Enviar mensaje
         resultado = await whatsapp_service.send_message(
             to_number=numero_limpio,
             message=request.message,
         )
-        
+
         if not resultado.get("success"):
-            raise HTTPException(
-                status_code=400,
-                detail=resultado.get("message", "Error enviando mensaje")
-            )
-        
+            raise HTTPException(status_code=400, detail=resultado.get("message", "Error enviando mensaje"))
+
         # Guardar mensaje en BD
         conversacion_outbound = ConversacionWhatsApp(
             message_id=resultado.get("message_id"),
@@ -287,12 +280,11 @@ async def enviar_mensaje_desde_crm(
         db.add(conversacion_outbound)
         db.commit()
         db.refresh(conversacion_outbound)
-        
+
         logger.info(
-            f"✅ Mensaje enviado desde CRM a {numero_limpio} "
-            f"(Cliente: {cliente.id if cliente else 'No encontrado'})"
+            f"✅ Mensaje enviado desde CRM a {numero_limpio} " f"(Cliente: {cliente.id if cliente else 'No encontrado'})"
         )
-        
+
         return {
             "success": True,
             "conversacion": conversacion_outbound.to_dict(),
@@ -300,7 +292,7 @@ async def enviar_mensaje_desde_crm(
             "cliente_id": cliente.id if cliente else None,
             "message_id": resultado.get("message_id"),
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -317,17 +309,17 @@ async def buscar_cliente_por_numero(
 ):
     """
     Buscar cliente por número de teléfono
-    
+
     Retorna información del cliente si existe, o null si no existe.
     Útil para determinar si se debe crear un cliente nuevo.
     """
     try:
         # Limpiar número
         numero_limpio = numero.replace("+", "").replace(" ", "").replace("-", "")
-        
+
         # Buscar cliente
         cliente = db.query(Cliente).filter(Cliente.telefono.like(f"%{numero_limpio}%")).first()
-        
+
         if cliente:
             return {
                 "cliente_encontrado": True,
@@ -337,15 +329,14 @@ async def buscar_cliente_por_numero(
                     "nombres": cliente.nombres,
                     "telefono": cliente.telefono,
                     "email": cliente.email,
-                }
+                },
             }
         else:
             return {
                 "cliente_encontrado": False,
                 "cliente": None,
             }
-            
+
     except Exception as e:
         logger.error(f"Error buscando cliente por número: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
-

@@ -36,7 +36,7 @@ class WhatsAppBotService:
     ) -> Dict[str, any]:
         """
         Procesar mensaje recibido de un cliente
-        
+
         Args:
             from_number: Número que envía el mensaje
             message_id: ID del mensaje en Meta
@@ -44,7 +44,7 @@ class WhatsAppBotService:
             body: Contenido del mensaje
             timestamp: Timestamp de Meta (Unix timestamp)
             to_number: Número que recibe (opcional, se obtiene de configuración)
-            
+
         Returns:
             Dict con resultado del procesamiento
         """
@@ -122,10 +122,10 @@ class WhatsAppBotService:
     def _buscar_cliente_por_telefono(self, telefono: str) -> Optional[Cliente]:
         """
         Buscar cliente por número de teléfono
-        
+
         Args:
             telefono: Número de teléfono (puede tener + o no)
-            
+
         Returns:
             Cliente si se encuentra, None si no
         """
@@ -148,16 +148,14 @@ class WhatsAppBotService:
             logger.error(f"Error buscando cliente por teléfono {telefono}: {e}")
             return None
 
-    async def _generar_respuesta(
-        self, conversacion: ConversacionWhatsApp, cliente: Optional[Cliente]
-    ) -> Dict[str, any]:
+    async def _generar_respuesta(self, conversacion: ConversacionWhatsApp, cliente: Optional[Cliente]) -> Dict[str, any]:
         """
         Generar respuesta automática para un mensaje
-        
+
         Args:
             conversacion: Conversación recibida
             cliente: Cliente que envió el mensaje (si se encontró)
-            
+
         Returns:
             Dict con mensaje y si debe enviarse
         """
@@ -208,11 +206,11 @@ class WhatsAppBotService:
     async def _consultar_chat_ai(self, pregunta: str, cliente: Cliente) -> Optional[str]:
         """
         Consultar Chat AI para respuesta inteligente
-        
+
         Args:
             pregunta: Pregunta del cliente
             cliente: Cliente que pregunta
-            
+
         Returns:
             Respuesta del Chat AI o None si hay error
         """
@@ -231,17 +229,15 @@ class WhatsAppBotService:
             logger.warning(f"Error consultando Chat AI: {e}")
             return None
 
-    async def _enviar_respuesta(
-        self, to_number: str, mensaje: str, conversacion_id: int
-    ) -> Dict[str, any]:
+    async def _enviar_respuesta(self, to_number: str, mensaje: str, conversacion_id: int) -> Dict[str, any]:
         """
         Enviar respuesta al cliente
-        
+
         Args:
             to_number: Número de destino
             mensaje: Mensaje a enviar
             conversacion_id: ID de la conversación original
-            
+
         Returns:
             Resultado del envío
         """
@@ -273,4 +269,3 @@ class WhatsAppBotService:
         except Exception as e:
             logger.error(f"Error enviando respuesta: {e}", exc_info=True)
             return {"success": False, "message": str(e)}
-

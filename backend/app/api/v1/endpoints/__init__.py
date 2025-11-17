@@ -14,6 +14,7 @@ from . import (  # aprobaciones,  # MODULO DESHABILITADO - Ver main.py
     concesionarios,
     conciliacion_bancaria,
     configuracion,
+    conversaciones_whatsapp,
     dashboard,
     health,
     kpis,
@@ -34,7 +35,6 @@ from . import (  # aprobaciones,  # MODULO DESHABILITADO - Ver main.py
     users,
     validadores,
     whatsapp_webhook,
-    conversaciones_whatsapp,
 )
 
 __all__ = [
