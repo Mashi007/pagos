@@ -228,6 +228,15 @@ def obtener_tareas_programadas(
                 "hora": "04:00",
                 "canales": ["EMAIL"],
             },
+            "reentrenar_ml_impago": {
+                "id": "reentrenar_ml_impago",
+                "nombre": "Reentrenamiento ML Impago",
+                "descripcion": "Reentrenar automáticamente el modelo de Machine Learning para predicción de impago de cuotas. Compara métricas y activa el nuevo modelo si es mejor.",
+                "tipo": "ML",
+                "frecuencia": "SEMANAL",
+                "hora": "03:00",
+                "canales": ["SISTEMA"],
+            },
         }
 
         # Construir respuesta con información de cada tarea

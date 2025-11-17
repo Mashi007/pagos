@@ -26,6 +26,7 @@ import {
   Link,
   Search,
   Loader2,
+  Brain,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -154,6 +155,7 @@ const tiposTarea = [
   { value: 'PROCESO', label: 'Proceso', icon: RefreshCw },
   { value: 'BACKUP', label: 'Backup', icon: Shield },
   { value: 'INTEGRACION', label: 'Integración', icon: Link },
+  { value: 'ML', label: 'Machine Learning', icon: Brain },
 ]
 
 const frecuencias = [

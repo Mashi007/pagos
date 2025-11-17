@@ -6,7 +6,7 @@ Usa APScheduler para ejecutar tareas programadas
 import asyncio
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional, Any
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -1032,12 +1032,83 @@ def calcular_notificaciones_prejudiciales_job():
         db.close()
 
 
+def _registrar_auditoria_reentrenamiento(
+    db: "Session",
+    nuevo_modelo: Optional[Any] = None,
+    nuevas_metricas: Optional[dict] = None,
+    modelo_activo: Optional[Any] = None,
+    es_mejor: Optional[bool] = None,
+    nuevo_accuracy: Optional[float] = None,
+    nuevo_f1: Optional[float] = None,
+    accuracy_actual: Optional[float] = None,
+    f1_actual: Optional[float] = None,
+):
+    """Registra el reentrenamiento en auditoría"""
+    try:
+        from app.models.auditoria import Auditoria
+        from app.models.user import User
+
+        # Buscar usuario admin o sistema para registrar auditoría
+        usuario_sistema = db.query(User).filter(User.is_admin == True).first()
+        if not usuario_sistema:
+            # Si no hay admin, buscar cualquier usuario
+            usuario_sistema = db.query(User).first()
+
+        if not usuario_sistema:
+            logger.warning("⚠️ [Scheduler] No se encontró usuario para registrar auditoría")
+            return
+
+        # Determinar si se activó un nuevo modelo
+        modelo_activado = None
+        if modelo_activo:
+            if es_mejor and nuevo_modelo:
+                modelo_activado = nuevo_modelo
+        elif nuevo_modelo:
+            modelo_activado = nuevo_modelo
+
+        detalles_auditoria = f"Reentrenamiento automático del modelo ML Impago. "
+        if modelo_activado:
+            detalles_auditoria += f"Modelo activado: {modelo_activado.nombre} (ID: {modelo_activado.id}). "
+            if nuevas_metricas:
+                detalles_auditoria += f"Métricas: Accuracy={nuevas_metricas.get('accuracy', 0.0):.4f}, F1={nuevas_metricas.get('f1_score', 0.0):.4f}"
+        else:
+            detalles_auditoria += f"Modelo no activado (métricas inferiores al actual). "
+            if all(v is not None for v in [nuevo_accuracy, nuevo_f1, accuracy_actual, f1_actual]):
+                detalles_auditoria += f"Nuevo modelo: Accuracy={nuevo_accuracy:.4f}, F1={nuevo_f1:.4f} vs Actual: Accuracy={accuracy_actual:.4f}, F1={f1_actual:.4f}"
+
+        auditoria = Auditoria(
+            usuario_id=usuario_sistema.id,
+            accion="REENTRENAR_MODELO_ML",
+            entidad="ML_IMPAGO",
+            entidad_id=modelo_activado.id if modelo_activado else None,
+            detalles=detalles_auditoria,
+            ip_address="SISTEMA",
+            user_agent="APScheduler",
+            exito=True,
+        )
+        db.add(auditoria)
+        db.commit()
+        logger.info(f"📝 [Scheduler] Auditoría registrada: Reentrenamiento ML Impago")
+    except Exception as audit_error:
+        logger.warning(f"⚠️ [Scheduler] No se pudo registrar auditoría: {audit_error}")
+
+
 def reentrenar_modelo_ml_impago_job():
     """
     Job que reentrena automáticamente el modelo ML de impago semanalmente.
     Compara métricas con el modelo actual y lo activa si es mejor.
     """
     db = SessionLocal()
+    # Inicializar variables para auditoría
+    nuevo_modelo = None
+    nuevas_metricas = None
+    modelo_activo = None
+    es_mejor = None
+    nuevo_accuracy = None
+    nuevo_f1 = None
+    accuracy_actual = None
+    f1_actual = None
+    
     try:
         from datetime import date, datetime
         from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
@@ -1248,10 +1319,41 @@ def reentrenar_modelo_ml_impago_job():
         logger.info("✅ [Scheduler] ===== REENTRENAMIENTO AUTOMÁTICO COMPLETADO =====")
         logger.info("=" * 80)
 
+        # Registrar en auditoría (las variables están en el scope del try)
+        _registrar_auditoria_reentrenamiento(
+            db, nuevo_modelo, nuevas_metricas, modelo_activo, es_mejor, nuevo_accuracy, nuevo_f1, accuracy_actual, f1_actual
+        )
+
     except Exception as e:
         logger.error(f"❌ [Scheduler] Error en reentrenamiento automático ML Impago: {e}", exc_info=True)
         try:
             db.rollback()
+        except Exception:
+            pass
+
+        # Registrar error en auditoría
+        try:
+            from app.models.auditoria import Auditoria
+            from app.models.user import User
+
+            usuario_sistema = db.query(User).filter(User.is_admin == True).first()
+            if not usuario_sistema:
+                usuario_sistema = db.query(User).first()
+
+            if usuario_sistema:
+                auditoria = Auditoria(
+                    usuario_id=usuario_sistema.id,
+                    accion="REENTRENAR_MODELO_ML",
+                    entidad="ML_IMPAGO",
+                    entidad_id=None,
+                    detalles=f"Error en reentrenamiento automático: {str(e)}",
+                    ip_address="SISTEMA",
+                    user_agent="APScheduler",
+                    exito=False,
+                    mensaje_error=str(e),
+                )
+                db.add(auditoria)
+                db.commit()
         except Exception:
             pass
     finally:
