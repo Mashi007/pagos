@@ -353,6 +353,7 @@ def diagnostico_cobranzas(
 def obtener_clientes_atrasados(
     dias_retraso: Optional[int] = Query(None, description="Días de retraso para filtrar"),
     incluir_admin: bool = Query(False, description="Incluir datos del administrador para diagnóstico"),
+    diagnostico_ml: bool = Query(False, description="Incluir diagnóstico ML en la respuesta"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -696,6 +697,15 @@ def obtener_clientes_atrasados(
         )
         
         # Resumen del estado ML para diagnóstico
+        diagnostico_ml_dict = {
+            "ml_service_disponible": ml_service is not None,
+            "modelo_cargado": modelo_cargado,
+            "ml_procesados": ml_processed,
+            "ml_manuales": ml_manual,
+            "ml_calculados": ml_calculated,
+            "ml_errores": ml_errors,
+        }
+        
         if ml_processed == 0:
             logger.warning(
                 f"⚠️ [ML] RESUMEN: No se procesó ningún ML. "
@@ -704,7 +714,67 @@ def obtener_clientes_atrasados(
                 f"prestamos_dict={len(prestamos_dict)}, "
                 f"cuotas_dict={len(cuotas_dict)}"
             )
+            
+            # Agregar información adicional de diagnóstico
+            if ml_service is None:
+                diagnostico_ml_dict["razon"] = "ml_service es None"
+            elif not modelo_cargado:
+                diagnostico_ml_dict["razon"] = "modelo no se cargó en memoria"
+                # Intentar obtener más información
+                try:
+                    from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
+                    modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
+                    if modelo_activo:
+                        diagnostico_ml_dict["modelo_en_bd"] = {
+                            "id": modelo_activo.id,
+                            "nombre": modelo_activo.nombre,
+                            "ruta_archivo": modelo_activo.ruta_archivo,
+                        }
+                        # Verificar si el archivo existe
+                        from pathlib import Path
+                        ruta_archivo = Path(modelo_activo.ruta_archivo)
+                        if "/" in modelo_activo.ruta_archivo or "\\" in modelo_activo.ruta_archivo:
+                            filename = Path(modelo_activo.ruta_archivo).parts[-1]
+                            search_paths = [
+                                Path(modelo_activo.ruta_archivo),
+                                Path("ml_models") / filename,
+                            ]
+                        else:
+                            search_paths = [Path("ml_models") / modelo_activo.ruta_archivo]
+                        
+                        archivo_encontrado = False
+                        for search_path in search_paths:
+                            if search_path.exists() and search_path.is_file():
+                                diagnostico_ml_dict["archivo_encontrado"] = True
+                                diagnostico_ml_dict["ruta_archivo_encontrado"] = str(search_path.absolute())
+                                archivo_encontrado = True
+                                break
+                        
+                        if not archivo_encontrado:
+                            diagnostico_ml_dict["archivo_encontrado"] = False
+                            diagnostico_ml_dict["rutas_buscadas"] = [str(p) for p in search_paths]
+                            # Listar archivos .pkl disponibles
+                            ml_models_dir = Path("ml_models")
+                            if ml_models_dir.exists():
+                                archivos_pkl = list(ml_models_dir.glob("*.pkl"))
+                                diagnostico_ml_dict["archivos_pkl_disponibles"] = [f.name for f in archivos_pkl]
+                            else:
+                                diagnostico_ml_dict["directorio_ml_models_existe"] = False
+                except Exception as e:
+                    diagnostico_ml_dict["error_diagnostico"] = str(e)
+            else:
+                diagnostico_ml_dict["razon"] = "desconocida"
+        else:
+            diagnostico_ml_dict["razon"] = "ML funcionando correctamente"
 
+        # Retornar lista directamente para compatibilidad con frontend
+        # Si se solicita diagnóstico con ?diagnostico_ml=true, agregarlo a la respuesta
+        # Nota: diagnostico_ml es el parámetro de la función, diagnostico_ml_dict es el diccionario
+        if diagnostico_ml:
+            return {
+                "clientes_atrasados": clientes_atrasados,
+                "_diagnostico_ml": diagnostico_ml_dict,
+            }
         return clientes_atrasados
 
     except Exception as e:
