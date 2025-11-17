@@ -156,8 +156,8 @@ async def _enviar_whatsapp_desde_scheduler(
             # Obtener variables desde la BD si es posible
             try:
                 from app.models.cliente import Cliente
-                from app.models.prestamo import Prestamo
                 from app.models.cuota import Cuota
+                from app.models.prestamo import Prestamo
                 from app.services.variables_notificacion_service import VariablesNotificacionService
 
                 cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()

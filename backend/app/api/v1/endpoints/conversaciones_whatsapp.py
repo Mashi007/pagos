@@ -12,8 +12,8 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models.conversacion_whatsapp import ConversacionWhatsApp
 from app.models.cliente import Cliente
+from app.models.conversacion_whatsapp import ConversacionWhatsApp
 from app.models.user import User
 from app.services.whatsapp_service import WhatsAppService
 
