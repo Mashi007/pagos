@@ -11,7 +11,7 @@ on:
 # Variables globales
 env:
   PYTHON_VERSION: '3.11'
-  NODE_VERSION: '18'
+  NODE_VERSION: '20.19.0'
   BACKEND_DIR: './backend'
   FRONTEND_DIR: './frontend'
 

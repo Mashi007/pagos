@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   MessageSquare,
-  ArrowRight,
+  ChevronRight,
   Mail,
   Phone,
   Calendar,
@@ -15,7 +15,6 @@ import {
   CheckCircle,
   XCircle,
   Brain,
-  UserPlus as UserPlusIcon,
   Plus,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -333,7 +332,7 @@ export function ConversacionesWhatsApp({
                   <p className="text-sm text-gray-600">Enviados</p>
                   <p className="text-2xl font-bold text-blue-600">{estadisticas.outbound}</p>
                 </div>
-                <ArrowRight className="h-8 w-8 text-blue-600" />
+                <ChevronRight className="h-8 w-8 text-blue-600" />
               </div>
             </CardContent>
           </Card>
@@ -465,7 +464,7 @@ export function ConversacionesWhatsApp({
                       {conversacion.direccion === 'INBOUND' ? (
                         <Mail className="h-4 w-4 text-blue-600" />
                       ) : (
-                        <ArrowRight className="h-4 w-4 text-green-600" />
+                        <ChevronRight className="h-4 w-4 text-green-600" />
                       )}
                       <Badge
                         variant={conversacion.direccion === 'INBOUND' ? 'default' : 'secondary'}
@@ -568,7 +567,7 @@ export function ConversacionesWhatsApp({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <ArrowRight className="h-5 w-5" />
+            <ChevronRight className="h-5 w-5" />
             Enviar Mensaje
           </CardTitle>
           <CardDescription>
@@ -644,7 +643,7 @@ export function ConversacionesWhatsApp({
                   </>
                 ) : (
                   <>
-                    <ArrowRight className="h-4 w-4 mr-2" />
+                    <ChevronRight className="h-4 w-4 mr-2" />
                     Enviar Mensaje
                   </>
                 )}
