@@ -124,7 +124,7 @@ def get_db() -> Generator:
         if isinstance(e, HTTPException):
             # Re-lanzar HTTPException sin modificar (preservar mensaje)
             raise e
-        
+
         # NO manejar RequestValidationError de FastAPI (errores de validación de parámetros)
         if isinstance(e, RequestValidationError):
             # Re-lanzar RequestValidationError sin modificar
