@@ -26,7 +26,7 @@ def _verificar_tabla_existe(db: Session) -> bool:
     """Verificar si la tabla conversaciones_whatsapp existe"""
     try:
         inspector = inspect(db.bind)
-        return 'conversaciones_whatsapp' in inspector.get_table_names()
+        return "conversaciones_whatsapp" in inspector.get_table_names()
     except Exception:
         return False
 
@@ -36,9 +36,9 @@ def _crear_tabla_si_no_existe(db: Session) -> bool:
     try:
         if _verificar_tabla_existe(db):
             return True
-        
+
         logger.warning("⚠️ Tabla conversaciones_whatsapp no existe, intentando crearla...")
-        
+
         # Crear tabla usando SQL directo
         create_table_sql = """
         CREATE TABLE IF NOT EXISTS conversaciones_whatsapp (
@@ -68,7 +68,7 @@ def _crear_tabla_si_no_existe(db: Session) -> bool:
         CREATE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_cliente_id ON conversaciones_whatsapp(cliente_id);
         CREATE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_creado_en ON conversaciones_whatsapp(creado_en);
         """
-        
+
         db.execute(text(create_table_sql))
         db.commit()
         logger.info("✅ Tabla conversaciones_whatsapp creada exitosamente (fallback)")
@@ -97,7 +97,7 @@ async def listar_conversaciones_whatsapp(
 ):
     """
     Listar conversaciones de WhatsApp para el CRM
-    
+
     Permite ver todas las conversaciones entre clientes y el bot
     """
     try:
@@ -106,9 +106,9 @@ async def listar_conversaciones_whatsapp(
             if not _crear_tabla_si_no_existe(db):
                 raise HTTPException(
                     status_code=503,
-                    detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head"
+                    detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head",
                 )
-        
+
         query = db.query(ConversacionWhatsApp)
 
         # Filtros
@@ -168,7 +168,7 @@ async def listar_conversaciones_whatsapp(
                     pass
             raise HTTPException(
                 status_code=503,
-                detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head"
+                detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head",
             )
         raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(db_error)}")
     except Exception as e:
@@ -294,9 +294,9 @@ async def obtener_estadisticas_conversaciones(
             if not _crear_tabla_si_no_existe(db):
                 raise HTTPException(
                     status_code=503,
-                    detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head"
+                    detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head",
                 )
-        
+
         from sqlalchemy import func
 
         # Total de conversaciones
@@ -337,7 +337,7 @@ async def obtener_estadisticas_conversaciones(
             if not _crear_tabla_si_no_existe(db):
                 raise HTTPException(
                     status_code=503,
-                    detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head"
+                    detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head",
                 )
             # Si se creó, retornar estadísticas vacías
             return {

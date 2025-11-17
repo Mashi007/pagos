@@ -67,8 +67,10 @@ def run_migrations() -> None:
                         logger.info(f"📌 Actualizando a merge point {merge_revision}...")
                         command.upgrade(alembic_cfg, merge_revision)
                 except Exception as merge_error:
-                    logger.warning(f"⚠️ No se pudo actualizar al merge point {merge_revision} (puede que ya esté aplicado): {merge_error}")
-            
+                    logger.warning(
+                        f"⚠️ No se pudo actualizar al merge point {merge_revision} (puede que ya esté aplicado): {merge_error}"
+                    )
+
             # Finalmente, intentar actualizar a head para asegurar que todas las migraciones estén aplicadas
             try:
                 logger.info("📌 Actualizando a head final...")
