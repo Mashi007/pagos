@@ -2952,6 +2952,355 @@ async def crear_documento_ai(
         raise HTTPException(status_code=500, detail=detail_msg)
 
 
+# ============================================================================
+# FUNCIONES HELPER PARA procesar_documento_ai - Refactorización
+# ============================================================================
+
+
+def _obtener_info_documento(documento: DocumentoAI) -> tuple:
+    """
+    Obtiene información del documento para búsqueda de archivo.
+    Retorna (nombre_archivo_original, ruta_original, extension)
+    """
+    from pathlib import Path
+
+    nombre_archivo_original = (
+        documento.nombre_archivo or Path(documento.ruta_archivo).name if documento.ruta_archivo else None
+    )
+    ruta_original = documento.ruta_archivo or ""
+    extension = Path(nombre_archivo_original).suffix if nombre_archivo_original else ""
+    return nombre_archivo_original, ruta_original, extension
+
+
+def _obtener_directorios_base() -> list:
+    """Obtiene lista de directorios base posibles para búsqueda de archivos"""
+    from pathlib import Path
+
+    from app.core.config import settings
+
+    directorios_base = []
+
+    # Directorio desde configuración
+    if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
+        directorios_base.append(Path(settings.UPLOAD_DIR).resolve())
+
+    # Directorio por defecto
+    directorios_base.append(Path("uploads").resolve())
+
+    # Directorio actual de trabajo
+    directorios_base.append(Path.cwd() / "uploads")
+
+    # Directorio del proyecto
+    directorios_base.append(Path(__file__).parent.parent.parent.parent / "uploads")
+
+    # Eliminar duplicados manteniendo orden
+    return list(dict.fromkeys(directorios_base))
+
+
+def _buscar_archivo_ruta_absoluta(ruta_original: str) -> tuple:
+    """
+    Busca archivo usando ruta absoluta.
+    Retorna (ruta_archivo, archivo_encontrado) o (None, False)
+    """
+    from pathlib import Path
+
+    if not ruta_original:
+        return None, False
+
+    ruta_original_path = Path(ruta_original)
+    if ruta_original_path.is_absolute() and ruta_original_path.exists():
+        logger.info(f"✅ Archivo encontrado en ruta absoluta: {ruta_original_path.resolve()}")
+        return ruta_original_path.resolve(), True
+
+    return None, False
+
+
+def _buscar_archivo_ruta_relativa(
+    ruta_original: str, base_dir: Path, rutas_intentadas: list
+) -> tuple:
+    """
+    Busca archivo usando ruta relativa desde base_dir.
+    Retorna (ruta_archivo, archivo_encontrado) o (None, False)
+    """
+    from pathlib import Path
+
+    if not ruta_original or Path(ruta_original).is_absolute():
+        return None, False
+
+    if not base_dir.exists():
+        rutas_intentadas.append(f"Directorio no existe: {base_dir}")
+        return None, False
+
+    ruta_intento = (base_dir / ruta_original).resolve()
+    if ruta_intento.exists() and ruta_intento.is_file():
+        logger.info(f"✅ Archivo encontrado en ruta relativa: {ruta_intento}")
+        return ruta_intento, True
+
+    rutas_intentadas.append(f"Ruta relativa: {ruta_intento}")
+    return None, False
+
+
+def _buscar_archivo_nombre_exacto(
+    nombre_archivo_original: str, base_dir: Path, rutas_intentadas: list
+) -> tuple:
+    """
+    Busca archivo por nombre exacto en documentos_ai.
+    Retorna (ruta_archivo, archivo_encontrado) o (None, False)
+    """
+    from pathlib import Path
+
+    if not nombre_archivo_original:
+        return None, False
+
+    upload_dir = base_dir / "documentos_ai"
+    if not upload_dir.exists():
+        return None, False
+
+    ruta_intento = upload_dir / nombre_archivo_original
+    if ruta_intento.exists() and ruta_intento.is_file():
+        logger.info(f"✅ Archivo encontrado por nombre exacto: {ruta_intento}")
+        return ruta_intento, True
+
+    rutas_intentadas.append(f"Nombre exacto: {ruta_intento}")
+    return None, False
+
+
+def _buscar_archivo_por_id(
+    documento_id: int, extension: str, base_dir: Path, rutas_intentadas: list
+) -> tuple:
+    """
+    Busca archivo por ID del documento en el nombre.
+    Retorna (ruta_archivo, archivo_encontrado) o (None, False)
+    """
+    from pathlib import Path
+
+    upload_dir = base_dir / "documentos_ai"
+    if not upload_dir.exists():
+        rutas_intentadas.append(f"Búsqueda por ID en: {upload_dir}")
+        return None, False
+
+    for archivo_en_dir in upload_dir.iterdir():
+        if archivo_en_dir.is_file():
+            # Buscar archivos que contengan el ID del documento
+            if str(documento_id) in archivo_en_dir.name:
+                # Verificar extensión si está disponible
+                if not extension or archivo_en_dir.suffix == extension:
+                    logger.info(f"✅ Archivo encontrado por ID en nombre: {archivo_en_dir.resolve()}")
+                    return archivo_en_dir.resolve(), True
+
+    rutas_intentadas.append(f"Búsqueda por ID en: {upload_dir}")
+    return None, False
+
+
+def _buscar_archivo_por_tamaño_extension(
+    nombre_archivo_original: str,
+    extension: str,
+    tamaño_esperado: int,
+    base_dir: Path,
+    rutas_intentadas: list,
+) -> tuple:
+    """
+    Busca archivo por extensión y tamaño similar.
+    Retorna (ruta_archivo, archivo_encontrado) o (None, False)
+    """
+    from pathlib import Path
+
+    if not nombre_archivo_original or not extension:
+        return None, False
+
+    upload_dir = base_dir / "documentos_ai"
+    if not upload_dir.exists():
+        return None, False
+
+    for archivo_en_dir in upload_dir.iterdir():
+        if archivo_en_dir.is_file() and archivo_en_dir.suffix == extension:
+            # Si tenemos tamaño, verificar que sea similar
+            if tamaño_esperado:
+                try:
+                    tamaño_real = archivo_en_dir.stat().st_size
+                    # Permitir diferencia de hasta 10%
+                    if abs(tamaño_real - tamaño_esperado) / tamaño_esperado < 0.1:
+                        logger.info(f"✅ Archivo encontrado por tamaño y extensión: {archivo_en_dir.resolve()}")
+                        return archivo_en_dir.resolve(), True
+                except Exception:
+                    pass
+            else:
+                # Si no hay tamaño, usar el primero con la extensión correcta
+                logger.info(f"✅ Archivo encontrado por extensión: {archivo_en_dir.resolve()}")
+                return archivo_en_dir.resolve(), True
+
+    return None, False
+
+
+def _buscar_archivo_recursivo(
+    nombre_archivo_original: str, extension: str, documento_id: int, directorios_base: list
+) -> tuple:
+    """
+    Busca archivo recursivamente en directorios base.
+    Retorna (ruta_archivo, archivo_encontrado) o (None, False)
+    """
+    import os
+    from pathlib import Path
+
+    if not nombre_archivo_original:
+        return None, False
+
+    for base_dir in directorios_base:
+        if not base_dir.exists():
+            continue
+
+        # Búsqueda recursiva limitada a 2 niveles
+        for root, dirs, files in os.walk(base_dir):
+            if root.count(os.sep) - base_dir.as_posix().count(os.sep) > 2:
+                continue  # Limitar profundidad
+            for file in files:
+                if file == nombre_archivo_original or (
+                    extension and file.endswith(extension) and str(documento_id) in file
+                ):
+                    ruta_archivo = Path(root) / file
+                    if ruta_archivo.exists():
+                        logger.info(f"✅ Archivo encontrado en búsqueda recursiva: {ruta_archivo}")
+                        return ruta_archivo, True
+
+    return None, False
+
+
+def _buscar_archivo_documento(
+    documento: DocumentoAI, documento_id: int, directorios_base: list
+) -> tuple:
+    """
+    Busca archivo usando múltiples estrategias.
+    Retorna (ruta_archivo, archivo_encontrado, rutas_intentadas)
+    """
+    nombre_archivo_original, ruta_original, extension = _obtener_info_documento(documento)
+    rutas_intentadas = []
+
+    logger.info(
+        f"🔍 Buscando archivo para documento ID {documento_id}: "
+        f"nombre={nombre_archivo_original}, ruta_original={ruta_original}"
+    )
+
+    # Estrategia 1: Ruta absoluta
+    ruta_archivo, archivo_encontrado = _buscar_archivo_ruta_absoluta(ruta_original)
+    if archivo_encontrado:
+        return ruta_archivo, True, rutas_intentadas
+
+    if ruta_original:
+        rutas_intentadas.append(f"Ruta absoluta: {Path(ruta_original)}")
+
+    # Estrategias 2-5: Buscar en directorios base
+    for base_dir in directorios_base:
+        if not base_dir.exists():
+            rutas_intentadas.append(f"Directorio no existe: {base_dir}")
+            continue
+
+        # Estrategia 2: Ruta relativa
+        if not archivo_encontrado:
+            ruta_archivo, archivo_encontrado = _buscar_archivo_ruta_relativa(
+                ruta_original, base_dir, rutas_intentadas
+            )
+
+        # Estrategia 3: Nombre exacto
+        if not archivo_encontrado:
+            ruta_archivo, archivo_encontrado = _buscar_archivo_nombre_exacto(
+                nombre_archivo_original, base_dir, rutas_intentadas
+            )
+
+        # Estrategia 4: Por ID
+        if not archivo_encontrado:
+            ruta_archivo, archivo_encontrado = _buscar_archivo_por_id(
+                documento_id, extension, base_dir, rutas_intentadas
+            )
+
+        # Estrategia 5: Por tamaño y extensión
+        if not archivo_encontrado:
+            ruta_archivo, archivo_encontrado = _buscar_archivo_por_tamaño_extension(
+                nombre_archivo_original, extension, documento.tamaño_bytes, base_dir, rutas_intentadas
+            )
+
+        if archivo_encontrado:
+            break
+
+    # Estrategia 6: Búsqueda recursiva
+    if not archivo_encontrado:
+        ruta_archivo, archivo_encontrado = _buscar_archivo_recursivo(
+            nombre_archivo_original, extension, documento_id, directorios_base
+        )
+
+    return ruta_archivo, archivo_encontrado, rutas_intentadas
+
+
+def _validar_archivo_encontrado(
+    ruta_archivo, archivo_encontrado: bool, documento: DocumentoAI, documento_id: int, rutas_intentadas: list
+) -> None:
+    """Valida que el archivo encontrado existe y no está vacío"""
+    from pathlib import Path
+
+    if not archivo_encontrado or not ruta_archivo or not ruta_archivo.exists():
+        mensaje_error = (
+            f"El archivo físico no existe para el documento '{documento.titulo}' (ID: {documento_id}). "
+            f"El archivo puede haber sido eliminado del servidor o nunca se subió correctamente. "
+            f"Por favor, elimina este documento y súbelo nuevamente."
+        )
+
+        logger.error(
+            f"❌ Archivo no encontrado después de {len(rutas_intentadas)} intentos. "
+            f"Documento: {documento.titulo}, Nombre archivo: {documento.nombre_archivo}, "
+            f"Ruta original: {documento.ruta_archivo}. "
+            f"Rutas intentadas: {', '.join(rutas_intentadas[:5])}..."
+        )
+
+        raise HTTPException(status_code=400, detail=mensaje_error)
+
+    # Verificar que el archivo no esté vacío
+    if ruta_archivo.stat().st_size == 0:
+        logger.warning(f"⚠️ Archivo vacío: {documento.ruta_archivo}")
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo está vacío. No se puede extraer texto de un archivo sin contenido.",
+        )
+
+
+def _procesar_y_guardar_documento(
+    documento: DocumentoAI, ruta_archivo, db: Session
+) -> Dict:
+    """
+    Procesa el documento y guarda el resultado.
+    Retorna dict con resultado o lanza HTTPException si falla.
+    """
+    # Extraer texto del documento
+    texto_extraido = _extraer_texto_documento(str(ruta_archivo), documento.tipo_archivo)
+
+    if texto_extraido and texto_extraido.strip():
+        documento.contenido_texto = texto_extraido
+        documento.contenido_procesado = True
+        db.commit()
+        db.refresh(documento)
+
+        logger.info(f"✅ Documento procesado: {documento.titulo} ({len(texto_extraido)} caracteres)")
+
+        return {
+            "mensaje": "Documento procesado exitosamente",
+            "documento": documento.to_dict(),
+            "caracteres_extraidos": len(texto_extraido),
+        }
+    else:
+        # Proporcionar mensaje más específico según el tipo de archivo
+        tipo = documento.tipo_archivo.lower()
+        mensaje_error = "No se pudo extraer texto del documento."
+
+        if tipo == "pdf":
+            mensaje_error += " El PDF puede estar escaneado (imagen) sin OCR, estar protegido con contraseña, o las librerías PyPDF2/pdfplumber no están instaladas."
+        elif tipo == "docx":
+            mensaje_error += " El archivo DOCX puede estar corrupto o la librería python-docx no está instalada."
+        elif tipo == "txt":
+            mensaje_error += " El archivo de texto puede estar vacío o usar una codificación no soportada."
+        else:
+            mensaje_error += " Verifica que el archivo sea válido y que las librerías necesarias estén instaladas."
+
+        raise HTTPException(status_code=400, detail=mensaje_error)
+
+
 @router.post("/ai/documentos/{documento_id}/procesar")
 def procesar_documento_ai(
     documento_id: int,
@@ -2963,224 +3312,23 @@ def procesar_documento_ai(
         raise HTTPException(status_code=403, detail="Solo administradores pueden procesar documentos AI")
 
     try:
+        # Obtener documento
         documento = db.query(DocumentoAI).filter(DocumentoAI.id == documento_id).first()
 
         if not documento:
             raise HTTPException(status_code=404, detail="Documento no encontrado")
 
-        # Verificar que el archivo existe
-        import os
-        from pathlib import Path
-
-        from app.core.config import settings
-
-        # Obtener información del documento
-        nombre_archivo_original = (
-            documento.nombre_archivo or Path(documento.ruta_archivo).name if documento.ruta_archivo else None
-        )
-        ruta_original = documento.ruta_archivo or ""
-        extension = Path(nombre_archivo_original).suffix if nombre_archivo_original else ""
-
-        logger.info(
-            f"🔍 Buscando archivo para documento ID {documento_id}: "
-            f"nombre={nombre_archivo_original}, ruta_original={ruta_original}"
+        # Obtener directorios base y buscar archivo
+        directorios_base = _obtener_directorios_base()
+        ruta_archivo, archivo_encontrado, rutas_intentadas = _buscar_archivo_documento(
+            documento, documento_id, directorios_base
         )
 
-        # Determinar directorios base posibles
-        directorios_base = []
+        # Validar archivo encontrado
+        _validar_archivo_encontrado(ruta_archivo, archivo_encontrado, documento, documento_id, rutas_intentadas)
 
-        # Directorio desde configuración
-        if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
-            directorios_base.append(Path(settings.UPLOAD_DIR).resolve())
-
-        # Directorio por defecto
-        directorios_base.append(Path("uploads").resolve())
-
-        # Directorio actual de trabajo
-        directorios_base.append(Path.cwd() / "uploads")
-
-        # Directorio del proyecto
-        directorios_base.append(Path(__file__).parent.parent.parent.parent / "uploads")
-
-        # Eliminar duplicados manteniendo orden
-        directorios_base = list(dict.fromkeys(directorios_base))
-
-        ruta_archivo = None
-        archivo_encontrado = False
-        rutas_intentadas = []
-
-        # Estrategia 1: Si la ruta es absoluta y existe, usarla directamente
-        if ruta_original:
-            ruta_original_path = Path(ruta_original)
-            if ruta_original_path.is_absolute() and ruta_original_path.exists():
-                ruta_archivo = ruta_original_path.resolve()
-                archivo_encontrado = True
-                logger.info(f"✅ Archivo encontrado en ruta absoluta: {ruta_archivo}")
-            else:
-                rutas_intentadas.append(f"Ruta absoluta: {ruta_original_path}")
-
-        # Si no se encontró, intentar con directorios base
-        if not archivo_encontrado:
-            for base_dir in directorios_base:
-                if not base_dir.exists():
-                    rutas_intentadas.append(f"Directorio no existe: {base_dir}")
-                    continue
-
-                # Estrategia 2: Ruta relativa desde base_dir
-                if ruta_original and not Path(ruta_original).is_absolute():
-                    ruta_intento = (base_dir / ruta_original).resolve()
-                    if ruta_intento.exists() and ruta_intento.is_file():
-                        ruta_archivo = ruta_intento
-                        archivo_encontrado = True
-                        logger.info(f"✅ Archivo encontrado en ruta relativa: {ruta_archivo}")
-                        break
-                    rutas_intentadas.append(f"Ruta relativa: {ruta_intento}")
-
-                # Estrategia 3: Buscar en documentos_ai por nombre exacto
-                if not archivo_encontrado and nombre_archivo_original:
-                    upload_dir = base_dir / "documentos_ai"
-                    if upload_dir.exists():
-                        ruta_intento = upload_dir / nombre_archivo_original
-                        if ruta_intento.exists() and ruta_intento.is_file():
-                            ruta_archivo = ruta_intento
-                            archivo_encontrado = True
-                            logger.info(f"✅ Archivo encontrado por nombre exacto: {ruta_archivo}")
-                            break
-                        rutas_intentadas.append(f"Nombre exacto: {ruta_intento}")
-
-                # Estrategia 4: Buscar por ID del documento en el nombre
-                if not archivo_encontrado:
-                    upload_dir = base_dir / "documentos_ai"
-                    if upload_dir.exists():
-                        for archivo_en_dir in upload_dir.iterdir():
-                            if archivo_en_dir.is_file():
-                                # Buscar archivos que contengan el ID del documento
-                                if str(documento_id) in archivo_en_dir.name:
-                                    # Verificar extensión si está disponible
-                                    if not extension or archivo_en_dir.suffix == extension:
-                                        ruta_archivo = archivo_en_dir.resolve()
-                                        archivo_encontrado = True
-                                        logger.info(f"✅ Archivo encontrado por ID en nombre: {ruta_archivo}")
-                                        break
-                        if not archivo_encontrado:
-                            rutas_intentadas.append(f"Búsqueda por ID en: {upload_dir}")
-
-                # Estrategia 5: Buscar por extensión y tamaño similar
-                if not archivo_encontrado and nombre_archivo_original and extension:
-                    upload_dir = base_dir / "documentos_ai"
-                    if upload_dir.exists():
-                        tamaño_esperado = documento.tamaño_bytes
-                        for archivo_en_dir in upload_dir.iterdir():
-                            if archivo_en_dir.is_file() and archivo_en_dir.suffix == extension:
-                                # Si tenemos tamaño, verificar que sea similar
-                                if tamaño_esperado:
-                                    try:
-                                        tamaño_real = archivo_en_dir.stat().st_size
-                                        # Permitir diferencia de hasta 10%
-                                        if abs(tamaño_real - tamaño_esperado) / tamaño_esperado < 0.1:
-                                            ruta_archivo = archivo_en_dir.resolve()
-                                            archivo_encontrado = True
-                                            logger.info(f"✅ Archivo encontrado por tamaño y extensión: {ruta_archivo}")
-                                            break
-                                    except Exception:
-                                        pass
-                                else:
-                                    # Si no hay tamaño, usar el primero con la extensión correcta
-                                    ruta_archivo = archivo_en_dir.resolve()
-                                    archivo_encontrado = True
-                                    logger.info(f"✅ Archivo encontrado por extensión: {ruta_archivo}")
-                                    break
-
-                if archivo_encontrado:
-                    break
-
-        # Si aún no se encontró, intentar búsqueda recursiva en uploads
-        if not archivo_encontrado and nombre_archivo_original:
-            for base_dir in directorios_base:
-                if base_dir.exists():
-                    # Búsqueda recursiva limitada a 2 niveles
-                    for root, dirs, files in os.walk(base_dir):
-                        if root.count(os.sep) - base_dir.as_posix().count(os.sep) > 2:
-                            continue  # Limitar profundidad
-                        for file in files:
-                            if file == nombre_archivo_original or (
-                                extension and file.endswith(extension) and str(documento_id) in file
-                            ):
-                                ruta_archivo = Path(root) / file
-                                if ruta_archivo.exists():
-                                    archivo_encontrado = True
-                                    logger.info(f"✅ Archivo encontrado en búsqueda recursiva: {ruta_archivo}")
-                                    break
-                        if archivo_encontrado:
-                            break
-                    if archivo_encontrado:
-                        break
-
-        if not archivo_encontrado or not ruta_archivo or not ruta_archivo.exists():
-            mensaje_error = (
-                f"El archivo físico no existe para el documento '{documento.titulo}' (ID: {documento_id}). "
-                f"El archivo puede haber sido eliminado del servidor o nunca se subió correctamente. "
-                f"Por favor, elimina este documento y súbelo nuevamente."
-            )
-
-            logger.error(
-                f"❌ Archivo no encontrado después de {len(rutas_intentadas)} intentos. "
-                f"Documento: {documento.titulo}, Nombre archivo: {nombre_archivo_original}, "
-                f"Ruta original: {ruta_original}. "
-                f"Rutas intentadas: {', '.join(rutas_intentadas[:5])}..."
-            )
-
-            # Log detallado para diagnóstico (solo en logs, no en respuesta al usuario)
-            logger.debug(
-                f"Directorios base verificados: {[str(d) for d in directorios_base]}, "
-                f"Nombre archivo buscado: {nombre_archivo_original}, "
-                f"Tamaño esperado: {documento.tamaño_bytes} bytes"
-            )
-
-            raise HTTPException(
-                status_code=400,
-                detail=mensaje_error,
-            )
-
-        # Verificar que el archivo no esté vacío
-        if ruta_archivo.stat().st_size == 0:
-            logger.warning(f"⚠️ Archivo vacío: {documento.ruta_archivo}")
-            raise HTTPException(
-                status_code=400,
-                detail="El archivo está vacío. No se puede extraer texto de un archivo sin contenido.",
-            )
-
-        # Extraer texto del documento (usar la ruta resuelta, no la original)
-        texto_extraido = _extraer_texto_documento(str(ruta_archivo), documento.tipo_archivo)
-
-        if texto_extraido and texto_extraido.strip():
-            documento.contenido_texto = texto_extraido
-            documento.contenido_procesado = True
-            db.commit()
-            db.refresh(documento)
-
-            logger.info(f"✅ Documento procesado: {documento.titulo} ({len(texto_extraido)} caracteres)")
-
-            return {
-                "mensaje": "Documento procesado exitosamente",
-                "documento": documento.to_dict(),
-                "caracteres_extraidos": len(texto_extraido),
-            }
-        else:
-            # Proporcionar mensaje más específico según el tipo de archivo
-            tipo = documento.tipo_archivo.lower()
-            mensaje_error = "No se pudo extraer texto del documento."
-
-            if tipo == "pdf":
-                mensaje_error += " El PDF puede estar escaneado (imagen) sin OCR, estar protegido con contraseña, o las librerías PyPDF2/pdfplumber no están instaladas."
-            elif tipo == "docx":
-                mensaje_error += " El archivo DOCX puede estar corrupto o la librería python-docx no está instalada."
-            elif tipo == "txt":
-                mensaje_error += " El archivo de texto puede estar vacío o usar una codificación no soportada."
-            else:
-                mensaje_error += " Verifica que el archivo sea válido y que las librerías necesarias estén instaladas."
-
-            raise HTTPException(status_code=400, detail=mensaje_error)
+        # Procesar y guardar documento
+        return _procesar_y_guardar_documento(documento, ruta_archivo, db)
 
     except HTTPException:
         raise
