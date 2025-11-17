@@ -3090,8 +3090,17 @@ async def crear_documento_ai(
             logger.warning(f"   Esto puede indicar un problema con el sistema de archivos efímero")
             logger.warning(f"   El documento se creó en BD pero el archivo físico no está disponible")
 
-        # Procesar documento automáticamente (extraer texto)
-        _procesar_documento_creado(db, nuevo_documento, ruta_archivo_absoluta, tipo_archivo_db)
+        # Procesar documento automáticamente (extraer texto) - CRÍTICO hacerlo inmediatamente
+        # mientras el archivo todavía existe en el sistema de archivos efímero
+        try:
+            _procesar_documento_creado(db, nuevo_documento, ruta_archivo_absoluta, tipo_archivo_db)
+            if nuevo_documento.contenido_procesado:
+                logger.info(f"✅ Documento procesado automáticamente al subirlo: {nuevo_documento.titulo}")
+            else:
+                logger.warning(f"⚠️ Documento subido pero no procesado automáticamente: {nuevo_documento.titulo}")
+        except Exception as proc_error:
+            logger.error(f"❌ Error procesando documento automáticamente al subirlo: {proc_error}", exc_info=True)
+            # No fallar la creación si el procesamiento falla - el usuario puede procesarlo después
 
         logger.info(f"✅ Documento AI creado: {titulo} ({nombre_archivo_original})")
 
@@ -3598,14 +3607,50 @@ def procesar_documento_ai(
         if not documento:
             raise HTTPException(status_code=404, detail="Documento no encontrado")
 
+        # Si el documento ya está procesado y tiene contenido, retornar éxito
+        if documento.contenido_procesado and documento.contenido_texto:
+            logger.info(f"✅ Documento {documento_id} ya está procesado ({len(documento.contenido_texto)} caracteres)")
+            return {
+                "mensaje": "Documento ya estaba procesado",
+                "documento": documento.to_dict(),
+                "caracteres_extraidos": len(documento.contenido_texto),
+            }
+
         # Obtener directorios base y buscar archivo
         directorios_base = _obtener_directorios_base()
         ruta_archivo, archivo_encontrado, rutas_intentadas = _buscar_archivo_documento(
             documento, documento_id, directorios_base
         )
 
-        # Validar archivo encontrado
-        _validar_archivo_encontrado(ruta_archivo, archivo_encontrado, documento, documento_id, rutas_intentadas)
+        # Si el archivo no se encuentra, proporcionar mensaje más útil
+        if not archivo_encontrado or not ruta_archivo or not ruta_archivo.exists():
+            # Construir mensaje de error detallado
+            rutas_info = '\n'.join(rutas_intentadas[:15])  # Mostrar hasta 15 rutas intentadas
+            if len(rutas_intentadas) > 15:
+                rutas_info += f"\n... y {len(rutas_intentadas) - 15} rutas más"
+            
+            mensaje_error = (
+                f"El archivo físico no existe para el documento '{documento.titulo}' (ID: {documento_id}).\n\n"
+                f"Información del documento:\n"
+                f"- Nombre archivo: {documento.nombre_archivo}\n"
+                f"- Ruta guardada en BD: {documento.ruta_archivo}\n"
+                f"- Tipo: {documento.tipo_archivo}\n"
+                f"- Tamaño: {documento.tamaño_bytes} bytes\n"
+                f"- Procesado: {'Sí' if documento.contenido_procesado else 'No'}\n\n"
+                f"Rutas intentadas ({len(rutas_intentadas)}):\n{rutas_info}\n\n"
+                f"⚠️ En sistemas de archivos efímeros (como Render), los archivos pueden desaparecer entre requests.\n"
+                f"💡 Solución: Elimina este documento y súbelo nuevamente. El sistema intentará procesarlo automáticamente al subirlo."
+            )
+
+            logger.error(
+                f"❌ Archivo no encontrado después de {len(rutas_intentadas)} intentos. "
+                f"Documento: {documento.titulo} (ID: {documento_id}), "
+                f"Ruta original: {documento.ruta_archivo}. "
+                f"Rutas intentadas: {len(rutas_intentadas)}"
+            )
+            logger.debug(f"Rutas intentadas detalladas: {rutas_intentadas}")
+
+            raise HTTPException(status_code=400, detail=mensaje_error)
 
         # Procesar y guardar documento
         return _procesar_y_guardar_documento(documento, ruta_archivo, db)
