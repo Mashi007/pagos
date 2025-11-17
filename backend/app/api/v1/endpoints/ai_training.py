@@ -974,13 +974,13 @@ async def entrenar_modelo_riesgo(
         from datetime import date
 
         from app.models.amortizacion import Cuota
-        from app.models.pago import Pago
-        from app.models.prestamo import Prestamo
 
         # Obtener préstamos aprobados con historial (cargar relación cliente)
         # Usar load_only para cargar solo las columnas que necesitamos y que existen en la BD
         # Esto evita errores si hay columnas en el modelo que no existen en la BD (como valor_activo)
         from app.models.cliente import Cliente
+        from app.models.pago import Pago
+        from app.models.prestamo import Prestamo
 
         prestamos = (
             db.query(Prestamo)
