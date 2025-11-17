@@ -410,8 +410,9 @@ async def obtener_estadisticas_conversaciones(
                     detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head",
                 )
 
-        from sqlalchemy import func
         from datetime import datetime, timedelta
+
+        from sqlalchemy import func
 
         # Función helper para contar con manejo de errores
         def contar_con_fallback(query_func):
