@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { 
   FileText, 
   Download, 
@@ -330,6 +331,7 @@ export function InformesCobranzas() {
                           <th className="p-2 text-left">Nombres</th>
                           <th className="p-2 text-left">Teléfono</th>
                           <th className="p-2 text-right">Cuotas Vencidas</th>
+                          <th className="p-2 text-center">Riesgo ML Impago</th>
                           <th className="p-2 text-right">Total Adeudado</th>
                           <th className="p-2 text-left">Primera Vencida</th>
                         </tr>
@@ -341,6 +343,29 @@ export function InformesCobranzas() {
                             <td className="p-2">{cliente.nombres}</td>
                             <td className="p-2">{cliente.telefono || 'N/A'}</td>
                             <td className="p-2 text-right">{cliente.cuotas_vencidas}</td>
+                            <td className="p-2 text-center">
+                              {cliente.ml_impago ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <Badge
+                                    variant="outline"
+                                    className={
+                                      cliente.ml_impago.nivel_riesgo === 'Alto'
+                                        ? "bg-red-100 text-red-800 border-red-300 font-semibold"
+                                        : cliente.ml_impago.nivel_riesgo === 'Medio'
+                                        ? "bg-orange-100 text-orange-800 border-orange-300"
+                                        : "bg-green-100 text-green-800 border-green-300"
+                                    }
+                                  >
+                                    {cliente.ml_impago.nivel_riesgo}
+                                  </Badge>
+                                  <span className="text-xs text-gray-600">
+                                    {(cliente.ml_impago.probabilidad_impago * 100).toFixed(1)}%
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">N/A</span>
+                              )}
+                            </td>
                             <td className="p-2 text-right font-semibold text-red-600">
                               ${(cliente.total_adeudado || 0).toLocaleString('es-VE')}
                             </td>

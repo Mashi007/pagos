@@ -1888,6 +1888,8 @@ def _generar_excel_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
         "Préstamo ID",
         "Total Financiamiento",
         "Cuotas Vencidas",
+        "Riesgo ML Impago",
+        "Prob. Impago %",
         "Total Adeudado",
         "Fecha Primera Vencida",
         "Días Retraso",
@@ -1910,10 +1912,18 @@ def _generar_excel_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
         ws.cell(row=row_idx, column=5, value=registro.get("prestamo_id"))
         ws.cell(row=row_idx, column=6, value=registro.get("total_financiamiento"))
         ws.cell(row=row_idx, column=7, value=registro.get("cuotas_vencidas"))
-        ws.cell(row=row_idx, column=8, value=registro.get("total_adeudado"))
-        ws.cell(row=row_idx, column=9, value=registro.get("fecha_primera_vencida"))
-        ws.cell(row=row_idx, column=10, value=registro.get("dias_retraso"))
-        ws.cell(row=row_idx, column=11, value=registro.get("monto_mas_30_dias"))
+        # ML Impago
+        ml_impago = registro.get("ml_impago")
+        if ml_impago:
+            ws.cell(row=row_idx, column=8, value=ml_impago.get("nivel_riesgo", "N/A"))
+            ws.cell(row=row_idx, column=9, value=round(ml_impago.get("probabilidad_impago", 0.0) * 100, 1))
+        else:
+            ws.cell(row=row_idx, column=8, value="N/A")
+            ws.cell(row=row_idx, column=9, value="N/A")
+        ws.cell(row=row_idx, column=10, value=registro.get("total_adeudado"))
+        ws.cell(row=row_idx, column=11, value=registro.get("fecha_primera_vencida"))
+        ws.cell(row=row_idx, column=12, value=registro.get("dias_retraso"))
+        ws.cell(row=row_idx, column=13, value=registro.get("monto_mas_30_dias"))
 
     # Ajustar anchos
     ws.column_dimensions["A"].width = 15
@@ -1923,17 +1933,19 @@ def _generar_excel_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
     ws.column_dimensions["E"].width = 12
     ws.column_dimensions["F"].width = 18
     ws.column_dimensions["G"].width = 15
-    ws.column_dimensions["H"].width = 15
-    ws.column_dimensions["I"].width = 18
-    ws.column_dimensions["J"].width = 12
-    ws.column_dimensions["K"].width = 15
+    ws.column_dimensions["H"].width = 15  # Riesgo ML Impago
+    ws.column_dimensions["I"].width = 15  # Prob. Impago %
+    ws.column_dimensions["J"].width = 15  # Total Adeudado
+    ws.column_dimensions["K"].width = 18  # Fecha Primera Vencida
+    ws.column_dimensions["L"].width = 12  # Días Retraso
+    ws.column_dimensions["M"].width = 15  # Monto >30 días
 
     # Totales
     total_row = len(datos) + 3
     ws.cell(row=total_row, column=7, value="TOTAL:")
     ws.cell(row=total_row, column=7).font = Font(bold=True)
-    ws.cell(row=total_row, column=8, value=sum(d.get("total_adeudado", 0) for d in datos))
-    ws.cell(row=total_row, column=8).font = Font(bold=True)
+    ws.cell(row=total_row, column=10, value=sum(d.get("total_adeudado", 0) for d in datos))
+    ws.cell(row=total_row, column=10).font = Font(bold=True)
 
     output = BytesIO()
     wb.save(output)
@@ -2182,14 +2194,22 @@ def _generar_pdf_clientes_atrasados(datos: List[Dict]) -> StreamingResponse:
 
     # Tabla de datos
     if datos:
-        table_data = [["Cédula", "Nombres", "Analista", "Cuotas", "Adeudado", "Días Retraso"]]
+        table_data = [["Cédula", "Nombres", "Analista", "Cuotas", "Riesgo ML", "Prob. %", "Adeudado", "Días Retraso"]]
         for registro in datos[:100]:  # Limitar a 100 registros por página
+            ml_impago = registro.get("ml_impago")
+            riesgo_ml = "N/A"
+            prob_ml = "N/A"
+            if ml_impago:
+                riesgo_ml = ml_impago.get("nivel_riesgo", "N/A")
+                prob_ml = f"{ml_impago.get('probabilidad_impago', 0.0) * 100:.1f}%"
             table_data.append(
                 [
                     registro.get("cedula", ""),
                     registro.get("nombres", "")[:30],
                     (registro.get("analista", "") or "N/A")[:20],
                     str(registro.get("cuotas_vencidas", 0)),
+                    riesgo_ml,
+                    prob_ml,
                     f"${registro.get('total_adeudado', 0):,.2f}",
                     str(registro.get("dias_retraso", 0)),
                 ]
