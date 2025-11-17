@@ -222,7 +222,6 @@ class EmailService:
             # Los filtros spam prefieren emails con ambas versiones
             if is_html:
                 # Extraer texto plano del HTML (mejorado para mejor formato)
-                import html as html_module
                 import re
 
                 # Decodificar entidades HTML (&nbsp;, &amp;, etc.)

@@ -1088,7 +1088,7 @@ def _obtener_prediccion_ml(prestamo: Prestamo, datos_evaluacion: dict, db: Sessi
     """
     try:
         # Verificar si hay modelo ML activo
-        modelo_activo = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo == True).first()
+        modelo_activo = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo.is_(True)).first()
         if not modelo_activo:
             logger.info("No hay modelo ML activo, omitiendo predicción ML")
             return None

@@ -72,7 +72,7 @@ def _sanitizar_string(valor: Optional[str], max_length: int = 100) -> Optional[s
     peligrosos = ["'", '"', ";", "--", "/*", "*/", "xp_", "sp_"]
     for char in peligrosos:
         if char in valor.lower():
-            raise HTTPException(status_code=400, detail=f"Caracteres no permitidos en parámetro")
+            raise HTTPException(status_code=400, detail="Caracteres no permitidos en parámetro")
     return valor
 
 
@@ -3013,8 +3013,9 @@ def obtener_cobranza_fechas_especificas(
         _validar_rango_fechas(fecha_inicio, fecha_fin)
         hoy = date.today()
         mañana = hoy + timedelta(days=1)
-        ayer = hoy - timedelta(days=1)
-        anteayer = hoy - timedelta(days=2)
+        # ayer y anteayer calculados pero no usados en esta función
+        # ayer = hoy - timedelta(days=1)
+        # anteayer = hoy - timedelta(days=2)
 
         # Nombres de días de la semana en español
         dias_semana = {

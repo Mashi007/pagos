@@ -852,7 +852,7 @@ def calcular_notificaciones_prejudiciales_job():
         # Contadores
         enviadas = 0
         fallidas = 0
-        sin_plantilla = 0
+        # sin_plantilla no se usa en esta función (se verifica al inicio y retorna si no existe)
         sin_email = 0
 
         # Inicializar servicio de variables

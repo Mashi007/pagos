@@ -261,7 +261,7 @@ async def _procesar_estados(statuses: list, db: Session) -> int:
             message_id = status.get("id")
             status_value = status.get("status")  # sent, delivered, read, failed
             recipient_id = status.get("recipient_id")
-            timestamp = status.get("timestamp")
+            # timestamp = status.get("timestamp")  # Variable no usada
 
             if not message_id:
                 continue
@@ -440,7 +440,7 @@ async def webhook_info(db: Session = Depends(get_db)):
                     "paso_1": "Ve a Meta Developers: https://developers.facebook.com/apps",
                     "paso_2": "Selecciona tu app y ve a WhatsApp > Configuration",
                     "paso_3": f"Configura Webhook URL: {webhook_url}",
-                    "paso_4": f"Configura Verify Token: (el token de 'webhook_verify_token' configurado)",
+                    "paso_4": "Configura Verify Token: (el token de 'webhook_verify_token' configurado)",
                     "paso_5": "Haz clic en 'Verify and Save'",
                     "paso_6": "Suscríbete a eventos: messages, messaging_postbacks",
                 },

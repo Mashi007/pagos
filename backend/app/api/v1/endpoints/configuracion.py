@@ -1465,7 +1465,7 @@ def verificar_estado_configuracion_email(
                     logger.warning(f"⚠️ Conexión SMTP falló: {error_msg}")
                 else:
                     # ✅ Si la conexión fue exitosa, confirmar que Gmail aceptó
-                    logger.info(f"✅ Conexión SMTP exitosa con Gmail/Google Workspace")
+                    logger.info("✅ Conexión SMTP exitosa con Gmail/Google Workspace")
             except Exception as e:
                 error_msg = f"Error probando conexión SMTP: {str(e)}"
                 problemas.append(error_msg)
@@ -4073,7 +4073,7 @@ EJEMPLO CORRECTO:
             logger.error(f"⏱️ Timeout en prueba de AI (Tiempo: {elapsed_time:.2f}s)")
             return {
                 "success": False,
-                "mensaje": f"Timeout al conectar con OpenAI (límite: 30s)",
+                "mensaje": "Timeout al conectar con OpenAI (límite: 30s)",
                 "error_code": "TIMEOUT",
                 "pregunta": pregunta,
             }
@@ -4107,11 +4107,12 @@ def _calcular_tasa_morosidad_mes(db: Session, año: int, mes: int) -> dict:
         from sqlalchemy import and_, extract, text
 
         # Calcular primer y último día del mes
-        primer_dia = date(año, mes, 1)
-        if mes == 12:
-            ultimo_dia = date(año + 1, 1, 1)
-        else:
-            ultimo_dia = date(año, mes + 1, 1)
+        # primer_dia y ultimo_dia calculados pero no usados en esta función
+        # primer_dia = date(año, mes, 1)
+        # if mes == 12:
+        #     ultimo_dia = date(año + 1, 1, 1)
+        # else:
+        #     ultimo_dia = date(año, mes + 1, 1)
 
         # Total de cuotas del mes
         total_cuotas = (
@@ -4408,9 +4409,9 @@ def _obtener_inventario_campos_bd(db: Session) -> str:
 def _agregar_info_tabla(inventario: list, inspector, tabla: str):
     """Agrega información detallada de una tabla al inventario"""
     try:
-        inventario.append(f"\n{'='*80}")
+        inventario.append(f"\n{'=' * 80}")
         inventario.append(f"TABLA: {tabla.upper()}")
-        inventario.append(f"{'='*80}\n")
+        inventario.append(f"{'=' * 80}\n")
 
         # Obtener columnas
         columnas = inspector.get_columns(tabla)
@@ -4542,7 +4543,7 @@ def _agregar_info_tabla(inventario: list, inspector, tabla: str):
                 inventario.append(f"    • {col_local} -> {tabla_ref}.{col_ref}")
 
         # Información de uso común y sinónimos
-        inventario.append(f"\n  💡 USO COMÚN Y SINÓNIMOS:")
+        inventario.append("\n  💡 USO COMÚN Y SINÓNIMOS:")
         if tabla == "clientes":
             inventario.append("    • Buscar por: cedula (indexed) [también: cédula, documento, DNI, CI]")
             inventario.append("    • Buscar por: telefono (indexed) [también: teléfono, tel, contacto, celular]")
@@ -4823,7 +4824,8 @@ def _analisis_ml_segmentacion_clientes(db: Session) -> dict:
 
         from sqlalchemy import and_, func, text
 
-        hoy = date.today()
+        # hoy calculado pero no usado en esta función
+        # hoy = date.today()
 
         # Segmentar clientes por comportamiento de pago
         query = text(
@@ -5090,11 +5092,12 @@ def _analizar_pagos_segun_vencimiento(db: Session, año: int, mes: int) -> dict:
         from sqlalchemy import and_, extract, text
 
         # Calcular rango del mes
-        fecha_inicio_mes = date(año, mes, 1)
-        if mes == 12:
-            fecha_fin_mes = date(año + 1, 1, 1) - timedelta(days=1)
-        else:
-            fecha_fin_mes = date(año, mes + 1, 1) - timedelta(days=1)
+        # fecha_inicio_mes y fecha_fin_mes calculados pero no usados en esta función
+        # fecha_inicio_mes = date(año, mes, 1)
+        # if mes == 12:
+        #     fecha_fin_mes = date(año + 1, 1, 1) - timedelta(days=1)
+        # else:
+        #     fecha_fin_mes = date(año, mes + 1, 1) - timedelta(days=1)
 
         # Consulta: Cuotas con fecha_vencimiento en el mes y si fueron pagadas
         query = text(
@@ -6044,7 +6047,7 @@ async def chat_ai(
                     if prestamo:
                         info_cliente_buscado = f"\n\n=== INFORMACIÓN ENCONTRADA (Cédula: {busqueda_cedula}) ===\n"
                         info_cliente_buscado += (
-                            f"⚠️ Cliente no encontrado en tabla clientes, pero hay préstamos con esta cédula\n"
+                            "⚠️ Cliente no encontrado en tabla clientes, pero hay préstamos con esta cédula\n"
                         )
                         info_cliente_buscado += f"Nombre en préstamo: {prestamo.nombres}\n"
                         info_cliente_buscado += f"Cédula: {prestamo.cedula}\n"
@@ -6681,7 +6684,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
             logger.error(f"⏱️ Timeout en Chat AI (Tiempo: {elapsed_time:.2f}s)")
             return {
                 "success": False,
-                "respuesta": f"Timeout al conectar con OpenAI (límite: 60s). La pregunta puede ser muy compleja.",
+                "respuesta": "Timeout al conectar con OpenAI (límite: 60s). La pregunta puede ser muy compleja.",
                 "error": "TIMEOUT",
                 "pregunta": pregunta,
             }

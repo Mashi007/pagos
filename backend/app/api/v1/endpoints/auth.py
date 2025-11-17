@@ -141,11 +141,11 @@ async def login(
 
             # Flush para aplicar cambios antes del commit
             db.flush()
-            logger.debug(f"✅ Flush exitoso para last_login")
+            logger.debug("✅ Flush exitoso para last_login")
 
             # Commit explícito
             db.commit()
-            logger.info(f"✅ Commit exitoso para last_login")
+            logger.info("✅ Commit exitoso para last_login")
 
             # Refresh para obtener el valor actualizado de la BD
             db.refresh(user)
@@ -156,7 +156,7 @@ async def login(
             # No queremos que un error en last_login impida el login del usuario
             try:
                 db.rollback()
-                logger.warning(f"⚠️ Rollback realizado después de error en last_login")
+                logger.warning("⚠️ Rollback realizado después de error en last_login")
             except Exception as rollback_error:
                 logger.error(f"❌ Error al hacer rollback: {rollback_error}")
             logger.error(f"❌ No se pudo actualizar last_login para usuario {user_id}: {update_error}", exc_info=True)

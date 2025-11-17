@@ -427,7 +427,7 @@ def delete_user(
 
         # No permitir eliminar el último admin
         if user.is_admin:
-            admin_count = db.query(User).filter(User.is_admin, User.is_active == True).count()
+            admin_count = db.query(User).filter(User.is_admin, User.is_active.is_(True)).count()
             if admin_count <= 1:
                 raise HTTPException(
                     status_code=400,
@@ -535,7 +535,7 @@ def deactivate_user(
 
         # No permitir desactivar el último admin activo
         if user.is_admin and user.is_active:
-            admin_count = db.query(User).filter(User.is_admin, User.is_active == True).count()
+            admin_count = db.query(User).filter(User.is_admin, User.is_active.is_(True)).count()
             if admin_count <= 1:
                 raise HTTPException(
                     status_code=400,

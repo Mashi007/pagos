@@ -218,7 +218,7 @@ class WhatsAppBotService:
             from app.api.v1.endpoints.configuracion import chat_ai_service
 
             # Construir contexto del cliente
-            contexto = f"Cliente: {cliente.nombres}, Cédula: {cliente.cedula}"
+            # contexto = f"Cliente: {cliente.nombres}, Cédula: {cliente.cedula}"  # Variable no usada
 
             # Consultar Chat AI
             # Nota: Esto requiere que el servicio de Chat AI esté disponible

@@ -291,7 +291,7 @@ try:
     else:
         logger.debug("Redis cache inicializado")
 
-except ImportError as import_err:
+except ImportError:
     # Logs concisos cuando Redis no está instalado (caso común)
     if not _cache_logs_shown:
         logger.warning("⚠️ Redis no instalado - Usando MemoryCache (no recomendado para producción con múltiples workers)")

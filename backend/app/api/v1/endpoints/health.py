@@ -1284,7 +1284,8 @@ async def check_pending_processes(
 
         # 4. Cuotas con estados inconsistentes (total_pagado >= monto_cuota pero estado != PAGADO)
         try:
-            hoy = date.today()
+            # hoy calculado pero no usado en esta función
+            # hoy = date.today()
             cuotas_inconsistentes = (
                 db.query(Cuota)
                 .filter(
@@ -1481,7 +1482,7 @@ async def check_duplicate_files(
             resultado["archivos_no_registrados"] = []
 
         # 5. Verificar posibles conflictos de imports
-        posibles_conflictos_imports = []
+        # posibles_conflictos_imports = []  # Variable no usada
 
         # Verificar si hay imports circulares potenciales
         archivos_imports_ml = []

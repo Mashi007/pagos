@@ -450,7 +450,7 @@ async def obtener_estadisticas_conversaciones(
 
         # Respuestas enviadas
         respuestas_enviadas = contar_con_fallback(
-            lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.respuesta_enviada == True)
+            lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.respuesta_enviada.is_(True))
         )
 
         # Últimas 24 horas
@@ -508,7 +508,6 @@ async def enviar_mensaje_desde_crm(
     Este endpoint busca el cliente por número de teléfono o por cliente_id.
     """
     try:
-        from app.services.whatsapp_service import WhatsAppService
 
         whatsapp_service = WhatsAppService(db=db)
 

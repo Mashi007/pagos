@@ -356,7 +356,7 @@ async def envio_masivo(
                                 if notif_local:
                                     notif_local.estado = "ENVIADA"
                                     notif_local.enviada_en = datetime.utcnow()
-                                    notif_local.respuesta_servicio = f"Email enviado exitosamente (Envío masivo optimizado)"
+                                    notif_local.respuesta_servicio = "Email enviado exitosamente (Envío masivo optimizado)"
                                     emails_enviados.add(email_destino)
                                     db_local.commit()
                             else:

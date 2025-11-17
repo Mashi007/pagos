@@ -154,7 +154,7 @@ class WhatsAppService:
         Manejar errores específicos de Meta según políticas
         """
         error_info = error_data.get("error", {})
-        error_code = error_info.get("code", status_code)
+        # error_code = error_info.get("code", status_code)  # Variable no usada
         error_message = error_info.get("message", "Error desconocido")
         error_type = error_info.get("type", "Unknown")
 
@@ -190,7 +190,7 @@ class WhatsAppService:
             }
         elif status_code == 401:
             # No autorizado - token inválido
-            logger.error(f"❌ Token de Meta inválido o expirado")
+            logger.error("❌ Token de Meta inválido o expirado")
             return {
                 "success": False,
                 "message": "Token de acceso inválido o expirado",
@@ -361,7 +361,7 @@ class WhatsAppService:
                     # Fallback: usar mensaje completo como único parámetro
                     body_parameters = [{"type": "text", "text": message}]
                     logger.warning(
-                        f"⚠️ [TEMPLATE] No se proporcionaron parámetros, usando mensaje completo como parámetro único"
+                        "⚠️ [TEMPLATE] No se proporcionaron parámetros, usando mensaje completo como parámetro único"
                     )
 
                 payload = {
@@ -393,7 +393,7 @@ class WhatsAppService:
                 logger.info(f"💬 [COMPLIANCE] Enviando mensaje de texto libre a {numero_destinatario}")
 
             # ✅ LOGGING DETALLADO: Mostrar payload que se envía a Meta
-            logger.info(f"📤 [ENVÍO] Enviando mensaje a Meta API:")
+            logger.info("📤 [ENVÍO] Enviando mensaje a Meta API:")
             logger.info(f"   URL: {url}")
             logger.info(f"   Destinatario: {numero_destinatario}")
             logger.info(f"   Tipo: {'template' if template_name else 'text (libre - requiere ventana 24h)'}")
@@ -405,12 +405,12 @@ class WhatsAppService:
             response = await self._send_with_retry(url, headers, payload)
 
             # ✅ LOGGING DETALLADO: Mostrar respuesta de Meta
-            logger.info(f"📥 [RESPUESTA] Meta respondió:")
+            logger.info("📥 [RESPUESTA] Meta respondió:")
             logger.info(f"   Status Code: {response.status_code}")
             try:
                 response_data = response.json() if response.content else {}
                 logger.info(f"   Response Body: {response_data}")
-            except:
+            except Exception:
                 logger.info(f"   Response Body: (no JSON) {response.text[:500]}")
 
             # Procesar respuesta

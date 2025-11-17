@@ -276,7 +276,7 @@ class MLImpagoCuotasService:
                     else:
                         try:
                             features.append(float(value))
-                        except (ValueError, TypeError) as e:
+                        except (ValueError, TypeError):
                             logger.warning(f"Feature '{feature}' tiene valor inválido: {value}, usando 0.0")
                             features.append(0.0)
 

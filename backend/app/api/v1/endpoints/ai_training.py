@@ -881,13 +881,13 @@ async def generar_embeddings(
                 .filter(
                     and_(
                         DocumentoAI.id.in_(request.documento_ids),
-                        DocumentoAI.contenido_procesado == True,
+                        DocumentoAI.contenido_procesado.is_(True),
                     )
                 )
                 .all()
             )
         else:
-            documentos = db.query(DocumentoAI).filter(DocumentoAI.contenido_procesado == True).all()
+            documentos = db.query(DocumentoAI).filter(DocumentoAI.contenido_procesado.is_(True)).all()
 
         documentos_procesados = 0
         total_embeddings = 0
@@ -1075,7 +1075,7 @@ async def obtener_modelo_riesgo_activo(
 ):
     """Obtener modelo de riesgo activo"""
     try:
-        modelo = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo == True).first()
+        modelo = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo.is_(True)).first()
 
         if not modelo:
             return {"modelo": None}
@@ -1478,7 +1478,7 @@ async def predecir_riesgo(
     """Predecir riesgo de un cliente"""
     try:
         # Obtener modelo activo
-        modelo_activo = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo == True).first()
+        modelo_activo = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo.is_(True)).first()
 
         if not modelo_activo:
             raise HTTPException(status_code=400, detail="No hay modelo activo")
@@ -1657,7 +1657,7 @@ async def obtener_metricas_entrenamiento(
         # Métricas de ML Riesgo
         try:
             modelos_riesgo_disponibles = db.query(ModeloRiesgo).count()
-            modelo_activo_riesgo = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo == True).first()
+            modelo_activo_riesgo = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo.is_(True)).first()
             ultimo_modelo_riesgo = db.query(ModeloRiesgo).order_by(ModeloRiesgo.entrenado_en.desc()).first()
         except Exception as e:
             logger.warning(f"Error obteniendo métricas ML Riesgo: {e}")
@@ -1668,7 +1668,7 @@ async def obtener_metricas_entrenamiento(
         # Métricas de ML Impago
         try:
             modelos_impago_disponibles = db.query(ModeloImpagoCuotas).count()
-            modelo_activo_impago = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
+            modelo_activo_impago = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
             ultimo_modelo_impago = db.query(ModeloImpagoCuotas).order_by(ModeloImpagoCuotas.entrenado_en.desc()).first()
         except Exception as e:
             logger.warning(f"Error obteniendo métricas ML Impago: {e}")
@@ -2095,7 +2095,7 @@ async def predecir_impago(
         from app.models.prestamo import Prestamo
 
         # Obtener modelo activo
-        modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
+        modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
 
         if not modelo_activo:
             raise HTTPException(status_code=400, detail="No hay modelo activo")
@@ -2169,7 +2169,7 @@ async def listar_modelos_impago(
         # Intentar verificar si la tabla existe primero
         try:
             modelos = db.query(ModeloImpagoCuotas).order_by(ModeloImpagoCuotas.entrenado_en.desc()).all()
-            modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
+            modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
 
             return {
                 "modelos": [modelo.to_dict() for modelo in modelos],

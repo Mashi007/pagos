@@ -364,7 +364,7 @@ def obtener_clientes_atrasados(
         try:
             from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
 
-            modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
+            modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
             if modelo_activo:
                 try:
                     from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
@@ -465,7 +465,7 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
         try:
             from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
 
-            modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
+            modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
             if modelo_activo:
                 try:
                     from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
@@ -648,7 +648,7 @@ def obtener_clientes_por_analista(
         try:
             from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
 
-            modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
+            modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
             if modelo_activo:
                 try:
                     from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
@@ -1192,7 +1192,7 @@ def informe_clientes_atrasados(
         try:
             from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
 
-            modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo == True).first()
+            modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
             if modelo_activo:
                 try:
                     from datetime import date
