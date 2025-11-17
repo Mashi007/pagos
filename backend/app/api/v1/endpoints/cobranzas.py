@@ -471,6 +471,7 @@ def obtener_clientes_atrasados(
 
         # Optimización: Cargar todas las cuotas de una vez (solo para préstamos que necesitan ML)
         cuotas_dict = {}
+        logger.info(f"🔍 [ML] Estado antes de cargar cuotas: ml_service={ml_service is not None}, modelo_cargado={modelo_cargado}, prestamo_ids={len(prestamo_ids) if prestamo_ids else 0}")
         if ml_service and prestamo_ids:
             # Solo cargar cuotas para préstamos que no tienen valores manuales
             prestamos_sin_manual = [
@@ -545,6 +546,7 @@ def obtener_clientes_atrasados(
                         # Calcular con ML si no hay valores manuales
                         cuotas = cuotas_dict.get(prestamo.id, [])
                         if cuotas:
+                            logger.debug(f"🔍 [ML] Calculando predicción para préstamo {row.prestamo_id}, cuotas: {len(cuotas)}")
                             try:
                                 features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
                                 prediccion = ml_service.predict_impago(features)
@@ -592,6 +594,16 @@ def obtener_clientes_atrasados(
             f"ML procesados: {ml_processed} (manuales: {ml_manual}, calculados: {ml_calculated}, errores: {ml_errors}), "
             f"tiempo_total={total_time_ms}ms, tiempo_ml={ml_time_ms}ms"
         )
+        
+        # Resumen del estado ML para diagnóstico
+        if ml_processed == 0:
+            logger.warning(
+                f"⚠️ [ML] RESUMEN: No se procesó ningún ML. "
+                f"ml_service={'✅ disponible' if ml_service else '❌ None'}, "
+                f"modelo_cargado={'✅ True' if modelo_cargado else '❌ False'}, "
+                f"prestamos_dict={len(prestamos_dict)}, "
+                f"cuotas_dict={len(cuotas_dict)}"
+            )
 
         return clientes_atrasados
 
