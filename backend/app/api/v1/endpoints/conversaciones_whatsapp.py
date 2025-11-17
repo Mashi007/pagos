@@ -432,19 +432,31 @@ async def obtener_estadisticas_conversaciones(
         total = contar_con_fallback(lambda: db.query(ConversacionWhatsApp))
 
         # Por dirección
-        inbound = contar_con_fallback(lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.direccion == "INBOUND"))
-        outbound = contar_con_fallback(lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.direccion == "OUTBOUND"))
+        inbound = contar_con_fallback(
+            lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.direccion == "INBOUND")
+        )
+        outbound = contar_con_fallback(
+            lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.direccion == "OUTBOUND")
+        )
 
         # Con cliente identificado
-        con_cliente = contar_con_fallback(lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.cliente_id.isnot(None)))
-        sin_cliente = contar_con_fallback(lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.cliente_id.is_(None)))
+        con_cliente = contar_con_fallback(
+            lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.cliente_id.isnot(None))
+        )
+        sin_cliente = contar_con_fallback(
+            lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.cliente_id.is_(None))
+        )
 
         # Respuestas enviadas
-        respuestas_enviadas = contar_con_fallback(lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.respuesta_enviada == True))
+        respuestas_enviadas = contar_con_fallback(
+            lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.respuesta_enviada == True)
+        )
 
         # Últimas 24 horas
         ultimas_24h = datetime.utcnow() - timedelta(hours=24)
-        ultimas_24h_count = contar_con_fallback(lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.timestamp >= ultimas_24h))
+        ultimas_24h_count = contar_con_fallback(
+            lambda: db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.timestamp >= ultimas_24h)
+        )
 
         return {
             "total": total,

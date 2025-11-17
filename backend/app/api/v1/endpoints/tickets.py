@@ -282,9 +282,9 @@ async def crear_ticket(
 
         # Verificar que la conversación existe si se proporciona conversacion_whatsapp_id
         if ticket_data.conversacion_whatsapp_id:
-            conversacion = db.query(ConversacionWhatsApp).filter(
-                ConversacionWhatsApp.id == ticket_data.conversacion_whatsapp_id
-            ).first()
+            conversacion = (
+                db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.id == ticket_data.conversacion_whatsapp_id).first()
+            )
             if not conversacion:
                 raise HTTPException(status_code=404, detail="Conversación de WhatsApp no encontrada")
 
@@ -308,9 +308,9 @@ async def crear_ticket(
 
         # Si hay conversación_whatsapp_id, actualizar la conversación para vincular el ticket
         if ticket_data.conversacion_whatsapp_id:
-            conversacion = db.query(ConversacionWhatsApp).filter(
-                ConversacionWhatsApp.id == ticket_data.conversacion_whatsapp_id
-            ).first()
+            conversacion = (
+                db.query(ConversacionWhatsApp).filter(ConversacionWhatsApp.id == ticket_data.conversacion_whatsapp_id).first()
+            )
             if conversacion:
                 conversacion.ticket_id = nuevo_ticket.id
                 db.commit()
@@ -434,4 +434,3 @@ async def obtener_tickets_por_conversacion(
     except Exception as e:
         logger.error(f"Error obteniendo tickets por conversación: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
-

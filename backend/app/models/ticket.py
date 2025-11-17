@@ -48,7 +48,9 @@ class Ticket(Base):
 
     # Relaciones ORM
     cliente = relationship("Cliente", foreign_keys=[cliente_id])
-    conversacion_whatsapp = relationship("ConversacionWhatsApp", foreign_keys=[conversacion_whatsapp_id], back_populates="tickets")
+    conversacion_whatsapp = relationship(
+        "ConversacionWhatsApp", foreign_keys=[conversacion_whatsapp_id], back_populates="tickets"
+    )
     asignado_a_usuario = relationship("User", foreign_keys=[asignado_a_id])
     creado_por = relationship("User", foreign_keys=[creado_por_id])
 
