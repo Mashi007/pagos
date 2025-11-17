@@ -1483,6 +1483,8 @@ async def entrenar_modelo_impago(
     Entrenar modelo de predicción de impago de cuotas
     Analiza el historial de pagos de préstamos aprobados para predecir impago futuro
     """
+    logger.info(f"🚀 [ML-IMPAGO] Iniciando entrenamiento - Usuario: {current_user.id}, Algoritmo: {request.algoritmo}")
+    
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden entrenar modelos ML")
 
@@ -1644,7 +1646,13 @@ async def entrenar_modelo_impago(
         db.rollback()
         error_msg = str(e)
         error_type = type(e).__name__
-        logger.error(f"Error entrenando modelo de impago: {error_type}: {error_msg}", exc_info=True)
+        import traceback
+        error_traceback = traceback.format_exc()
+        logger.error(
+            f"❌ [ML-IMPAGO] Error entrenando modelo de impago: {error_type}: {error_msg}\n"
+            f"Traceback completo:\n{error_traceback}",
+            exc_info=True
+        )
 
         # Mensaje más descriptivo según el tipo de error
         if "scikit-learn" in error_msg.lower() or "sklearn" in error_msg.lower() or "SKLEARN" in error_msg:
