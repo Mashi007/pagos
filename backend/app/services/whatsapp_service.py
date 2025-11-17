@@ -9,7 +9,7 @@ import re
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 from sqlalchemy.orm import Session
