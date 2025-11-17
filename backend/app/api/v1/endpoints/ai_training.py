@@ -722,8 +722,7 @@ async def eliminar_fine_tuning_job(
         # No permitir eliminar jobs en ejecución
         if job.status in ["pending", "running"]:
             raise HTTPException(
-                status_code=400,
-                detail=f"No se puede eliminar un job con estado '{job.status}'. Cancélalo primero."
+                status_code=400, detail=f"No se puede eliminar un job con estado '{job.status}'. Cancélalo primero."
             )
 
         # Eliminar de la BD
@@ -752,7 +751,7 @@ async def eliminar_todos_fine_tuning_jobs(
     try:
         # Construir query
         query = db.query(FineTuningJob)
-        
+
         if solo_fallidos:
             # Solo eliminar jobs fallidos o cancelados
             query = query.filter(FineTuningJob.status.in_(["failed", "cancelled"]))
@@ -761,25 +760,22 @@ async def eliminar_todos_fine_tuning_jobs(
             query = query.filter(~FineTuningJob.status.in_(["pending", "running"]))
 
         jobs = query.all()
-        
+
         if not jobs:
             return {"mensaje": "No hay jobs para eliminar", "eliminados": 0}
 
         # Contar jobs que se eliminarán
         total_eliminados = len(jobs)
-        
+
         # Eliminar jobs
         for job in jobs:
             db.delete(job)
-        
+
         db.commit()
 
         logger.info(f"{total_eliminados} jobs eliminados por usuario {current_user.id}")
 
-        return {
-            "mensaje": f"{total_eliminados} job(s) eliminado(s) exitosamente",
-            "eliminados": total_eliminados
-        }
+        return {"mensaje": f"{total_eliminados} job(s) eliminado(s) exitosamente", "eliminados": total_eliminados}
 
     except Exception as e:
         db.rollback()
@@ -1142,7 +1138,7 @@ async def entrenar_modelo_riesgo(
                 ),
             )
         )
-        
+
         # Intentar ejecutar el query, si falla por columnas inexistentes, usar query directo
         try:
             prestamos = prestamos_query.all()
@@ -1152,24 +1148,21 @@ async def entrenar_modelo_riesgo(
                 # Si falla por valor_activo, usar query directo sin cargar el objeto completo
                 logger.warning("⚠️ Columna valor_activo no existe en BD, usando query directo")
                 from sqlalchemy import select
-                
+
                 # Query directo con columnas específicas que sabemos que existen
-                stmt = (
-                    select(
-                        Prestamo.id,
-                        Prestamo.cliente_id,
-                        Prestamo.cedula,
-                        Prestamo.nombres,
-                        Prestamo.total_financiamiento,
-                        Prestamo.estado,
-                        Prestamo.fecha_aprobacion,
-                        Prestamo.fecha_registro,
-                    )
-                    .where(Prestamo.estado == "APROBADO")
-                )
-                
+                stmt = select(
+                    Prestamo.id,
+                    Prestamo.cliente_id,
+                    Prestamo.cedula,
+                    Prestamo.nombres,
+                    Prestamo.total_financiamiento,
+                    Prestamo.estado,
+                    Prestamo.fecha_aprobacion,
+                    Prestamo.fecha_registro,
+                ).where(Prestamo.estado == "APROBADO")
+
                 resultados = db.execute(stmt).all()
-                
+
                 # Convertir resultados a objetos Prestamo parciales
                 prestamos = []
                 for row in resultados:
@@ -1183,13 +1176,13 @@ async def entrenar_modelo_riesgo(
                     prestamo.estado = row.estado
                     prestamo.fecha_aprobacion = row.fecha_aprobacion
                     prestamo.fecha_registro = row.fecha_registro
-                    
+
                     # Cargar cliente por separado si es necesario
                     if row.cliente_id:
                         cliente = db.query(Cliente).filter(Cliente.id == row.cliente_id).first()
                         if cliente:
                             prestamo.cliente = cliente
-                    
+
                     prestamos.append(prestamo)
             else:
                 raise
@@ -1798,11 +1791,9 @@ async def entrenar_modelo_impago(
         try:
             # Intentar query normal primero
             prestamos_query = (
-                db.query(Prestamo)
-                .filter(Prestamo.estado == "APROBADO")
-                .filter(Prestamo.fecha_aprobacion.isnot(None))
+                db.query(Prestamo).filter(Prestamo.estado == "APROBADO").filter(Prestamo.fecha_aprobacion.isnot(None))
             )
-            
+
             try:
                 prestamos = prestamos_query.all()
             except Exception as e:
@@ -1811,7 +1802,7 @@ async def entrenar_modelo_impago(
                     # Si falla por valor_activo, usar query directo
                     logger.warning("⚠️ Columna valor_activo no existe en BD, usando query directo")
                     from sqlalchemy import select
-                    
+
                     stmt = (
                         select(
                             Prestamo.id,
@@ -1825,9 +1816,9 @@ async def entrenar_modelo_impago(
                         .where(Prestamo.estado == "APROBADO")
                         .where(Prestamo.fecha_aprobacion.isnot(None))
                     )
-                    
+
                     resultados = db.execute(stmt).all()
-                    
+
                     # Convertir a objetos Prestamo parciales
                     prestamos = []
                     for row in resultados:
@@ -1842,7 +1833,7 @@ async def entrenar_modelo_impago(
                         prestamos.append(prestamo)
                 else:
                     raise
-            
+
             logger.info(f"📊 Encontrados {len(prestamos)} préstamos aprobados")
         except Exception as query_error:
             logger.error(f"❌ Error consultando préstamos: {query_error}", exc_info=True)
