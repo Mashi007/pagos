@@ -277,12 +277,20 @@ def obtener_clientes_atrasados(
         from app.core.config import settings
 
         # Verificar si hay otros usuarios no-admin en el sistema
-        otros_analistas = (
-            db.query(func.count(User.id))
-            .filter(User.is_active.is_(True), or_(User.is_admin.is_(False), User.is_admin.is_(None)))
-            .scalar()
-            or 0
-        )
+        try:
+            otros_analistas = (
+                db.query(func.count(User.id))
+                .filter(User.is_active.is_(True), or_(User.is_admin.is_(False), User.is_admin.is_(None)))
+                .scalar()
+                or 0
+            )
+        except Exception as e:
+            logger.error(f"Error consultando otros analistas: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            otros_analistas = 0
 
         # Si no hay otros analistas, incluir admin automáticamente
         if otros_analistas == 0:
@@ -303,17 +311,25 @@ def obtener_clientes_atrasados(
             fecha_limite = hoy - timedelta(days=dias_retraso)
             cuotas_filtros.append(Cuota.fecha_vencimiento <= fecha_limite)
 
-        cuotas_vencidas_subq = (
-            db.query(
-                Cuota.prestamo_id,
-                func.count(Cuota.id).label("cuotas_vencidas"),
-                func.sum(Cuota.monto_cuota).label("total_adeudado"),
-                func.min(Cuota.fecha_vencimiento).label("fecha_primera_vencida"),
+        try:
+            cuotas_vencidas_subq = (
+                db.query(
+                    Cuota.prestamo_id,
+                    func.count(Cuota.id).label("cuotas_vencidas"),
+                    func.sum(Cuota.monto_cuota).label("total_adeudado"),
+                    func.min(Cuota.fecha_vencimiento).label("fecha_primera_vencida"),
+                )
+                .filter(*cuotas_filtros)
+                .group_by(Cuota.prestamo_id)
+                .subquery()
             )
-            .filter(*cuotas_filtros)
-            .group_by(Cuota.prestamo_id)
-            .subquery()
-        )
+        except Exception as e:
+            logger.error(f"Error creando subquery de cuotas vencidas: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            raise HTTPException(status_code=500, detail=f"Error interno consultando cuotas vencidas: {str(e)}")
 
         # Query principal con JOINs optimizados
         query_filters = [
@@ -348,7 +364,15 @@ def obtener_clientes_atrasados(
         if not incluir_admin:
             query = query.filter(or_(User.is_admin.is_(False), User.is_admin.is_(None)))  # Excluir admins
 
-        resultados = query.all()
+        try:
+            resultados = query.all()
+        except Exception as e:
+            logger.error(f"Error ejecutando query principal de clientes atrasados: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            raise HTTPException(status_code=500, detail=f"Error interno consultando clientes atrasados: {str(e)}")
 
         query_time_ms = int((time.time() - start_time) * 1000)
 
@@ -412,31 +436,74 @@ def obtener_clientes_atrasados(
                 logger.info(f"📦 Cargados {len(prestamos_dict)} préstamos para procesamiento ML")
             except Exception as e:
                 error_msg = str(e).lower()
-                if "valor_activo" in error_msg or "does not exist" in error_msg:
-                    logger.warning("⚠️ Columna valor_activo no existe en BD, usando query con columnas específicas")
+                if "valor_activo" in error_msg or "does not exist" in error_msg or "infailed" in error_msg or "aborted" in error_msg:
+                    logger.warning("⚠️ Error con columna valor_activo o transacción abortada, haciendo rollback y usando query con columnas específicas")
+                    # Hacer rollback de la transacción fallida - CRÍTICO para restaurar la transacción
+                    try:
+                        db.rollback()
+                        logger.info("✅ Rollback exitoso, transacción restaurada")
+                    except Exception as rollback_error:
+                        logger.warning(f"⚠️ Error al hacer rollback: {rollback_error}, intentando continuar...")
+                        # Si el rollback falla, intentar cerrar y crear nueva sesión (no es posible aquí, solo continuar)
+                    
                     # Cargar solo las columnas que necesitamos
                     from sqlalchemy.orm import load_only
-                    prestamos = (
-                        db.query(Prestamo)
-                        .filter(Prestamo.id.in_(prestamo_ids))
-                        .options(
-                            load_only(
-                                Prestamo.id,
-                                Prestamo.estado,
-                                Prestamo.fecha_aprobacion,
-                                Prestamo.ml_impago_nivel_riesgo_manual,
-                                Prestamo.ml_impago_probabilidad_manual,
-                                Prestamo.total_financiamiento,
-                                Prestamo.numero_cuotas,
-                                Prestamo.modalidad_pago,
-                                Prestamo.tasa_interes,
-                                Prestamo.fecha_base_calculo,
+                    try:
+                        prestamos = (
+                            db.query(Prestamo)
+                            .filter(Prestamo.id.in_(prestamo_ids))
+                            .options(
+                                load_only(
+                                    Prestamo.id,
+                                    Prestamo.estado,
+                                    Prestamo.fecha_aprobacion,
+                                    Prestamo.ml_impago_nivel_riesgo_manual,
+                                    Prestamo.ml_impago_probabilidad_manual,
+                                    Prestamo.total_financiamiento,
+                                    Prestamo.numero_cuotas,
+                                    Prestamo.modalidad_pago,
+                                    Prestamo.tasa_interes,
+                                    Prestamo.fecha_base_calculo,
+                                )
                             )
+                            .all()
                         )
-                        .all()
-                    )
-                    prestamos_dict = {p.id: p for p in prestamos}
-                    logger.info(f"📦 Cargados {len(prestamos_dict)} préstamos (sin valor_activo) para procesamiento ML")
+                        prestamos_dict = {p.id: p for p in prestamos}
+                        logger.info(f"📦 Cargados {len(prestamos_dict)} préstamos (sin valor_activo) para procesamiento ML")
+                    except Exception as e2:
+                        error_msg2 = str(e2).lower()
+                        if "infailed" in error_msg2 or "aborted" in error_msg2:
+                            logger.error(f"❌ Transacción aún abortada después de rollback, intentando rollback adicional: {e2}")
+                            try:
+                                db.rollback()
+                                # Reintentar la query después del segundo rollback
+                                prestamos = (
+                                    db.query(Prestamo)
+                                    .filter(Prestamo.id.in_(prestamo_ids))
+                                    .options(
+                                        load_only(
+                                            Prestamo.id,
+                                            Prestamo.estado,
+                                            Prestamo.fecha_aprobacion,
+                                            Prestamo.ml_impago_nivel_riesgo_manual,
+                                            Prestamo.ml_impago_probabilidad_manual,
+                                            Prestamo.total_financiamiento,
+                                            Prestamo.numero_cuotas,
+                                            Prestamo.modalidad_pago,
+                                            Prestamo.tasa_interes,
+                                            Prestamo.fecha_base_calculo,
+                                        )
+                                    )
+                                    .all()
+                                )
+                                prestamos_dict = {p.id: p for p in prestamos}
+                                logger.info(f"📦 Cargados {len(prestamos_dict)} préstamos después de segundo rollback")
+                            except Exception as e3:
+                                logger.error(f"❌ Error persistente incluso después de múltiples rollbacks: {e3}", exc_info=True)
+                                raise e
+                        else:
+                            logger.error(f"❌ Error incluso con load_only: {e2}", exc_info=True)
+                            raise e
                 else:
                     # Re-lanzar el error si no es sobre valor_activo
                     raise
@@ -450,13 +517,34 @@ def obtener_clientes_atrasados(
                 if p and p.estado == "APROBADO" and not (p.ml_impago_nivel_riesgo_manual and p.ml_impago_probabilidad_manual is not None)
             ]
             if prestamos_sin_manual:
-                cuotas = db.query(Cuota).filter(Cuota.prestamo_id.in_(prestamos_sin_manual)).order_by(Cuota.prestamo_id, Cuota.numero_cuota).all()
-                # Agrupar cuotas por préstamo_id
-                for cuota in cuotas:
-                    if cuota.prestamo_id not in cuotas_dict:
-                        cuotas_dict[cuota.prestamo_id] = []
-                    cuotas_dict[cuota.prestamo_id].append(cuota)
-                logger.info(f"📦 Cargadas cuotas para {len(cuotas_dict)} préstamos")
+                try:
+                    cuotas = db.query(Cuota).filter(Cuota.prestamo_id.in_(prestamos_sin_manual)).order_by(Cuota.prestamo_id, Cuota.numero_cuota).all()
+                    # Agrupar cuotas por préstamo_id
+                    for cuota in cuotas:
+                        if cuota.prestamo_id not in cuotas_dict:
+                            cuotas_dict[cuota.prestamo_id] = []
+                        cuotas_dict[cuota.prestamo_id].append(cuota)
+                    logger.info(f"📦 Cargadas cuotas para {len(cuotas_dict)} préstamos")
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    is_transaction_aborted = (
+                        "aborted" in error_msg
+                        or "infailedsqltransaction" in error_msg
+                        or "current transaction is aborted" in error_msg
+                    )
+                    if is_transaction_aborted:
+                        logger.warning("⚠️ Transacción abortada al cargar cuotas, haciendo rollback...")
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
+                    else:
+                        logger.error(f"Error cargando cuotas: {e}", exc_info=True)
+                        try:
+                            db.rollback()
+                        except Exception:
+                            pass
+                    cuotas_dict = {}
 
         fecha_actual = date.today()
         ml_start_time = time.time()
