@@ -1128,9 +1128,21 @@ def iniciar_scheduler():
 
 def detener_scheduler():
     """Detiene el scheduler"""
+    global _scheduler_inicializado
+
     try:
+        # ✅ PROTECCIÓN: Evitar detención múltiple
+        if not _scheduler_inicializado:
+            logger.debug("⚠️ Scheduler no estaba inicializado, omitiendo detención")
+            return
+
         if scheduler.running:
             scheduler.shutdown()
             logger.info("✅ Scheduler detenido correctamente")
+            _scheduler_inicializado = False
+        else:
+            logger.debug("⚠️ Scheduler ya estaba detenido")
+            _scheduler_inicializado = False
     except Exception as e:
         logger.error(f"❌ Error deteniendo scheduler: {e}", exc_info=True)
+        _scheduler_inicializado = False
