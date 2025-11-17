@@ -1465,6 +1465,573 @@ def _calcular_metricas_clientes(
     }
 
 
+def _calcular_metricas_periodos(
+    db: Session,
+    periodo: str,
+    hoy: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+    cartera_total: Decimal,
+) -> dict:
+    """
+    Calcula métricas de períodos anteriores (cartera anterior).
+    Retorna diccionario con las métricas.
+    """
+    from decimal import Decimal
+
+    try:
+        fecha_inicio_periodo, fecha_fin_periodo_anterior = _calcular_periodos(periodo, hoy)
+        cartera_anterior_val = _calcular_cartera_anterior(
+            db, periodo, fecha_fin_periodo_anterior, analista, concesionario, modelo, cartera_total
+        )
+    except Exception as e:
+        logger.warning(f"Error calculando períodos anteriores: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        cartera_anterior_val = float(cartera_total)
+
+    return {"cartera_anterior": cartera_anterior_val}
+
+
+def _calcular_metricas_cobrado(
+    db: Session,
+    hoy: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> dict:
+    """
+    Calcula métricas de total cobrado (acumulativo, período, anterior).
+    Retorna diccionario con las métricas.
+    """
+    from calendar import monthrange
+    from decimal import Decimal
+
+    # Total cobrado acumulativo
+    try:
+        total_cobrado_acumulativo = _calcular_total_cobrado_acumulativo(db, analista, concesionario, modelo)
+    except Exception as e:
+        logger.warning(f"Error calculando total cobrado acumulativo: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        total_cobrado_acumulativo = Decimal("0")
+
+    # Total cobrado mes actual
+    año_actual = hoy.year
+    mes_actual = hoy.month
+    primer_dia_mes = date(año_actual, mes_actual, 1)
+    ultimo_dia_mes = date(año_actual, mes_actual, monthrange(año_actual, mes_actual)[1])
+
+    try:
+        total_cobrado_periodo = _calcular_total_cobrado_mes(
+            db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo
+        )
+    except Exception as e:
+        logger.warning(f"Error calculando total cobrado período: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        total_cobrado_periodo = Decimal("0")
+
+    # Total cobrado mes anterior
+    try:
+        mes_anterior, año_anterior = _calcular_mes_anterior(mes_actual, año_actual)
+        primer_dia_mes_anterior, ultimo_dia_mes_anterior = _obtener_fechas_mes(mes_anterior, año_anterior)
+        total_cobrado_anterior = _calcular_total_cobrado_mes(
+            db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
+        )
+    except Exception as e:
+        logger.warning(f"Error calculando total cobrado anterior: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        total_cobrado_anterior = Decimal("0")
+
+    return {
+        "total_cobrado_acumulativo": total_cobrado_acumulativo,
+        "total_cobrado_periodo": total_cobrado_periodo,
+        "total_cobrado_anterior": total_cobrado_anterior,
+        "primer_dia_mes": primer_dia_mes,
+        "ultimo_dia_mes": ultimo_dia_mes,
+        "primer_dia_mes_anterior": primer_dia_mes_anterior,
+        "ultimo_dia_mes_anterior": ultimo_dia_mes_anterior,
+    }
+
+
+def _calcular_metricas_tasa_recuperacion(
+    db: Session,
+    primer_dia_mes: date,
+    ultimo_dia_mes: date,
+    primer_dia_mes_anterior: date,
+    ultimo_dia_mes_anterior: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> dict:
+    """
+    Calcula métricas de tasa de recuperación (actual y anterior).
+    Retorna diccionario con las métricas.
+    """
+    # Tasa de recuperación mensual
+    try:
+        tasa_recuperacion = _calcular_tasa_recuperacion(
+            db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo
+        )
+    except Exception as e:
+        logger.warning(f"Error calculando tasa recuperación: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        tasa_recuperacion = 0.0
+
+    # Tasa recuperación mes anterior
+    try:
+        tasa_recuperacion_anterior = _calcular_tasa_recuperacion(
+            db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
+        )
+    except Exception as e:
+        logger.warning(f"Error calculando tasa recuperación anterior: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        tasa_recuperacion_anterior = 0.0
+
+    return {
+        "tasa_recuperacion": tasa_recuperacion,
+        "tasa_recuperacion_anterior": tasa_recuperacion_anterior,
+    }
+
+
+def _calcular_promedio_dias_mora(db: Session, hoy: date) -> float:
+    """
+    Calcula promedio de días de mora.
+    Retorna promedio como float.
+    """
+    from sqlalchemy import text
+
+    try:
+        promedio_dias_mora_query = db.execute(
+            text(
+                """
+                SELECT COALESCE(AVG(CAST(:hoy AS date) - CAST(c.fecha_vencimiento AS date)), 0)
+                FROM cuotas c
+                INNER JOIN prestamos p ON c.prestamo_id = p.id
+                WHERE c.fecha_vencimiento < CAST(:hoy AS date)
+                  AND c.estado != 'PAGADO'
+                  AND p.estado = 'APROBADO'
+            """
+            ).bindparams(hoy=hoy)
+        )
+        return float(promedio_dias_mora_query.scalar() or 0.0)
+    except Exception as e:
+        logger.warning(f"Error calculando promedio días de mora: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return 0.0
+
+
+def _calcular_metricas_modelos(
+    db: Session,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    fecha_inicio: Optional[date],
+    fecha_fin: Optional[date],
+) -> dict:
+    """
+    Calcula métricas de modelos (más vendido, menos vendido, etc.).
+    Retorna diccionario con las métricas.
+    """
+    from decimal import Decimal
+
+    from sqlalchemy import func
+
+    from app.models.prestamo import Prestamo
+
+    try:
+        query_modelos = (
+            db.query(
+                func.coalesce(func.coalesce(Prestamo.modelo_vehiculo, Prestamo.producto), "Sin Modelo").label("modelo"),
+                func.sum(Prestamo.total_financiamiento).label("total_prestamos"),
+                func.count(Prestamo.id).label("cantidad_prestamos"),
+            )
+            .filter(Prestamo.estado == "APROBADO")
+            .group_by("modelo")
+        )
+        query_modelos = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_modelos, analista, concesionario, None, fecha_inicio, fecha_fin
+        )
+        resultados_modelos = query_modelos.all()
+
+        if resultados_modelos:
+            modelos_ordenados = sorted(
+                resultados_modelos, key=lambda x: float(x.total_prestamos or Decimal("0")), reverse=True
+            )
+            modelo_mas_vendido = modelos_ordenados[0].modelo or "N/A"
+            ventas_modelo_mas_vendido = int(modelos_ordenados[0].cantidad_prestamos or 0)
+            modelo_menos_vendido = modelos_ordenados[-1].modelo or "N/A"
+            total_modelos = len(modelos_ordenados)
+        else:
+            modelo_mas_vendido = "N/A"
+            ventas_modelo_mas_vendido = 0
+            modelo_menos_vendido = "N/A"
+            total_modelos = 0
+    except Exception as e:
+        logger.warning(f"Error calculando modelos más/menos vendidos: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        modelo_mas_vendido = "N/A"
+        ventas_modelo_mas_vendido = 0
+        modelo_menos_vendido = "N/A"
+        total_modelos = 0
+
+    return {
+        "modelo_mas_vendido": modelo_mas_vendido,
+        "ventas_modelo_mas_vendido": ventas_modelo_mas_vendido,
+        "modelo_menos_vendido": modelo_menos_vendido,
+        "total_modelos": total_modelos,
+    }
+
+
+def _calcular_evolucion_mensual(db: Session, hoy: date) -> list:
+    """
+    Calcula evolución mensual (últimos 7 meses).
+    Retorna lista de diccionarios con evolución.
+    """
+    import time
+
+    from decimal import Decimal
+
+    from datetime import datetime, timedelta
+    from sqlalchemy import text
+
+    start_evolucion = time.time()
+    evolucion_mensual = []
+    nombres_meses = [
+        "Ene",
+        "Feb",
+        "Mar",
+        "Abr",
+        "May",
+        "Jun",
+        "Jul",
+        "Ago",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dic",
+    ]
+
+    try:
+        # Calcular rango de meses (últimos 7 meses)
+        meses_rango = []
+        for i in range(6, -1, -1):
+            mes_fecha = hoy - timedelta(days=30 * i)
+            mes_inicio = date(mes_fecha.year, mes_fecha.month, 1)
+            if mes_fecha.month == 12:
+                mes_fin = date(mes_fecha.year + 1, 1, 1) - timedelta(days=1)
+            else:
+                mes_fin = date(mes_fecha.year, mes_fecha.month + 1, 1) - timedelta(days=1)
+            meses_rango.append(
+                {
+                    "fecha": mes_fecha,
+                    "inicio": mes_inicio,
+                    "fin": mes_fin,
+                    "inicio_dt": datetime.combine(mes_inicio, datetime.min.time()),
+                    "fin_dt": datetime.combine(mes_fin, datetime.max.time()),
+                }
+            )
+
+        # Obtener pagos por mes
+        fecha_primera = meses_rango[0]["inicio_dt"]
+        fecha_ultima = meses_rango[-1]["fin_dt"]
+        try:
+            if isinstance(fecha_primera, date) and not isinstance(fecha_primera, datetime):
+                fecha_primera = datetime.combine(fecha_primera, datetime.min.time())
+            if isinstance(fecha_ultima, date) and not isinstance(fecha_ultima, datetime):
+                fecha_ultima = datetime.combine(fecha_ultima, datetime.max.time())
+
+            pagos_evolucion_query = db.execute(
+                text(
+                    """
+                    SELECT
+                        EXTRACT(YEAR FROM fecha_pago)::integer as año,
+                        EXTRACT(MONTH FROM fecha_pago)::integer as mes,
+                        COALESCE(SUM(monto_pagado), 0) as monto_total
+                    FROM pagos
+                    WHERE fecha_pago >= :fecha_inicio
+                      AND fecha_pago <= :fecha_fin
+                      AND monto_pagado IS NOT NULL
+                      AND monto_pagado > 0
+                      AND activo = TRUE
+            GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
+                    ORDER BY año, mes
+                """
+                ).bindparams(fecha_inicio=fecha_primera, fecha_fin=fecha_ultima)
+            )
+            pagos_por_mes = {(int(row[0]), int(row[1])): Decimal(str(row[2] or 0)) for row in pagos_evolucion_query}
+        except Exception as e:
+            logger.error(f"Error consultando pagos en dashboard_administrador: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            pagos_por_mes = {}
+
+        # Obtener cuotas vencidas por mes
+        try:
+            cuotas_vencidas_query = db.execute(
+                text(
+                    """
+                    SELECT
+                        EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
+                        EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
+                        COUNT(*) as cantidad_vencidas
+                    FROM cuotas c
+                    INNER JOIN prestamos p ON c.prestamo_id = p.id
+                    WHERE p.estado = 'APROBADO'
+                      AND c.estado != 'PAGADO'
+                      AND c.fecha_vencimiento >= :fecha_inicio
+                      AND c.fecha_vencimiento <= :fecha_fin
+            GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+                    ORDER BY año, mes
+                """
+                ).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
+            )
+            cuotas_vencidas_por_mes = {(int(row[0]), int(row[1])): int(row[2] or 0) for row in cuotas_vencidas_query}
+        except Exception as e:
+            logger.error(f"Error consultando cuotas vencidas en dashboard_administrador: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            cuotas_vencidas_por_mes = {}
+
+        # Obtener cuotas pagadas por mes
+        try:
+            cuotas_pagadas_query = db.execute(
+                text(
+                    """
+                SELECT
+                    EXTRACT(YEAR FROM DATE(c.fecha_pago))::integer as año,
+                    EXTRACT(MONTH FROM DATE(c.fecha_pago))::integer as mes,
+                    COUNT(*) as cantidad_pagadas
+                FROM cuotas c
+                INNER JOIN prestamos p ON c.prestamo_id = p.id
+                WHERE p.estado = 'APROBADO'
+                  AND c.estado = 'PAGADO'
+                  AND c.fecha_pago IS NOT NULL
+                  AND DATE(c.fecha_pago) >= :fecha_inicio
+                  AND DATE(c.fecha_pago) <= :fecha_fin
+            GROUP BY EXTRACT(YEAR FROM DATE(c.fecha_pago)), EXTRACT(MONTH FROM DATE(c.fecha_pago))
+                ORDER BY año, mes
+            """
+                ).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
+            )
+            cuotas_pagadas_por_mes = {(int(row[0]), int(row[1])): int(row[2] or 0) for row in cuotas_pagadas_query}
+        except Exception as e:
+            logger.error(f"Error consultando cuotas pagadas en dashboard_administrador: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            cuotas_pagadas_por_mes = {}
+
+        # Calcular cartera acumulada por mes
+        fecha_ultima = meses_rango[-1]["fin_dt"]
+        cartera_por_mes_query = db.execute(
+            text(
+                """
+                SELECT
+                    EXTRACT(YEAR FROM fecha_registro)::integer as año,
+                    EXTRACT(MONTH FROM fecha_registro)::integer as mes,
+                    SUM(total_financiamiento) as monto_mes
+                FROM prestamos
+                WHERE estado = 'APROBADO'
+                  AND fecha_registro <= :fecha_fin
+            GROUP BY EXTRACT(YEAR FROM fecha_registro), EXTRACT(MONTH FROM fecha_registro)
+                ORDER BY año, mes
+            """
+            ).bindparams(fecha_fin=fecha_ultima)
+        )
+        cartera_por_mes_raw = {(int(row[0]), int(row[1])): Decimal(str(row[2] or 0)) for row in cartera_por_mes_query}
+
+        # Calcular cartera acumulada por mes (suma acumulativa)
+        cartera_acumulada = {}
+        cartera_acum = Decimal("0")
+        for mes_info in sorted(meses_rango, key=lambda x: (x["fecha"].year, x["fecha"].month)):
+            año_mes = int(mes_info["fecha"].year)
+            num_mes = int(mes_info["fecha"].month)
+            mes_key: tuple[int, int] = (año_mes, num_mes)
+            cartera_acum += cartera_por_mes_raw.get(mes_key, Decimal("0"))
+            cartera_acumulada[mes_key] = cartera_acum
+
+        # Construir evolución mensual con datos pre-calculados
+        for mes_info in meses_rango:
+            año_mes = int(mes_info["fecha"].year)
+            num_mes = int(mes_info["fecha"].month)
+            mes_key_evol: tuple[int, int] = (año_mes, num_mes)
+
+            cartera_mes = float(cartera_acumulada.get(mes_key_evol, Decimal("0")))
+            cobrado_mes = pagos_por_mes.get(mes_key_evol, Decimal("0"))
+            cuotas_vencidas_mes = cuotas_vencidas_por_mes.get(mes_key_evol, 0)
+            cuotas_pagadas_mes = cuotas_pagadas_por_mes.get(mes_key_evol, 0)
+            total_cuotas_mes = cuotas_vencidas_mes + cuotas_pagadas_mes
+            morosidad_mes = (cuotas_vencidas_mes / total_cuotas_mes * 100) if total_cuotas_mes > 0 else 0
+
+            evolucion_mensual.append(
+                {
+                    "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
+                    "cartera": float(cartera_mes),
+                    "cobrado": float(cobrado_mes),
+                    "morosidad": round(morosidad_mes, 1),
+                }
+            )
+
+        tiempo_evolucion = int((time.time() - start_evolucion) * 1000)
+        logger.info(f"📊 [dashboard/admin] Evolución mensual calculada en {tiempo_evolucion}ms")
+    except Exception as e:
+        logger.error(f"Error calculando evolución mensual: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        evolucion_mensual = []
+
+    return evolucion_mensual
+
+
+def _calcular_metricas_morosidad(
+    db: Session,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+    fecha_inicio: Optional[date],
+    fecha_fin: Optional[date],
+) -> dict:
+    """
+    Calcula métricas de morosidad (total financiamiento, cartera cobrada, morosidad diferencia).
+    Retorna diccionario con las métricas.
+    """
+    from decimal import Decimal
+
+    from datetime import datetime
+    from sqlalchemy import func, text
+
+    from app.models.prestamo import Prestamo
+
+    # Total Financiamiento
+    try:
+        total_financiamiento_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
+            Prestamo.estado == "APROBADO"
+        )
+        total_financiamiento_query = FiltrosDashboard.aplicar_filtros_prestamo(
+            total_financiamiento_query,
+            analista,
+            concesionario,
+            modelo,
+            None,  # NO aplicar fecha_inicio
+            None,  # NO aplicar fecha_fin
+        )
+        total_financiamiento_operaciones = float(total_financiamiento_query.scalar() or Decimal("0"))
+    except Exception as e:
+        logger.error(f"Error calculando total_financiamiento_operaciones: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        total_financiamiento_operaciones = 0.0
+
+    # Cartera Cobrada
+    where_conditions = ["monto_pagado IS NOT NULL", "monto_pagado > 0", "activo = TRUE"]
+    params = {}
+
+    if fecha_inicio:
+        where_conditions.append("fecha_pago >= :fecha_inicio")
+        params["fecha_inicio"] = datetime.combine(fecha_inicio, datetime.min.time())
+    if fecha_fin:
+        where_conditions.append("fecha_pago <= :fecha_fin")
+        params["fecha_fin"] = datetime.combine(fecha_fin, datetime.max.time())
+
+    where_clause = " AND ".join(where_conditions)
+
+    try:
+        cartera_cobrada_query = db.execute(
+            text(f"SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE {where_clause}").bindparams(**params)
+        )
+        cartera_cobrada_total = float(cartera_cobrada_query.scalar() or Decimal("0"))
+    except Exception as e:
+        logger.error(f"Error calculando cartera_cobrada_total: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        cartera_cobrada_total = 0.0
+
+    # Morosidad (Diferencia)
+    morosidad_diferencia = max(0, total_financiamiento_operaciones - cartera_cobrada_total)
+
+    return {
+        "ingresos_capital": total_financiamiento_operaciones,
+        "ingresos_interes": cartera_cobrada_total,
+        "ingresos_mora": morosidad_diferencia,
+    }
+
+
+def _calcular_meta_mensual(
+    db: Session,
+    primer_dia_mes: date,
+    ultimo_dia_mes: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> float:
+    """
+    Calcula meta mensual (total a cobrar del mes).
+    Retorna meta como float.
+    """
+    from decimal import Decimal
+
+    from sqlalchemy import func
+
+    from app.models.cuota import Cuota
+    from app.models.prestamo import Prestamo
+
+    try:
+        query_meta_mensual = (
+            db.query(func.sum(Cuota.monto_cuota))
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                func.date(Cuota.fecha_vencimiento) >= primer_dia_mes,
+                func.date(Cuota.fecha_vencimiento) <= ultimo_dia_mes,
+            )
+        )
+        query_meta_mensual = FiltrosDashboard.aplicar_filtros_cuota(
+            query_meta_mensual, analista, concesionario, modelo, None, None
+        )
+        return float(query_meta_mensual.scalar() or Decimal("0"))
+    except Exception as e:
+        logger.error(f"Error calculando meta_mensual_final: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return 0.0
+
+
 @router.get("/cobros-diarios")
 @cache_result(ttl=300, key_prefix="dashboard")  # ✅ Agregar caché
 def obtener_cobros_diarios(
@@ -1681,117 +2248,36 @@ def dashboard_administrador(
         # cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
 
         # 15. CÁLCULO DE PERÍODOS ANTERIORES
-        try:
-            fecha_inicio_periodo, fecha_fin_periodo_anterior = _calcular_periodos(periodo, hoy)
+        metricas_periodos = _calcular_metricas_periodos(
+            db, periodo, hoy, analista, concesionario, modelo, cartera_total
+        )
+        cartera_anterior_val = metricas_periodos["cartera_anterior"]
 
-            # Cartera anterior - Calcular desde BD histórica
-            cartera_anterior_val = _calcular_cartera_anterior(
-                db, periodo, fecha_fin_periodo_anterior, analista, concesionario, modelo, cartera_total
-            )
-        except Exception as e:
-            logger.warning(f"Error calculando períodos anteriores: {e}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            cartera_anterior_val = float(cartera_total)
+        # 16-17. MÉTRICAS DE COBRADO Y TASA DE RECUPERACIÓN
+        metricas_cobrado = _calcular_metricas_cobrado(db, hoy, analista, concesionario, modelo)
+        total_cobrado_acumulativo = metricas_cobrado["total_cobrado_acumulativo"]
+        total_cobrado_periodo = metricas_cobrado["total_cobrado_periodo"]
+        total_cobrado_anterior = metricas_cobrado["total_cobrado_anterior"]
+        primer_dia_mes = metricas_cobrado["primer_dia_mes"]
+        ultimo_dia_mes = metricas_cobrado["ultimo_dia_mes"]
+        primer_dia_mes_anterior = metricas_cobrado["primer_dia_mes_anterior"]
+        ultimo_dia_mes_anterior = metricas_cobrado["ultimo_dia_mes_anterior"]
 
-        # 16. TOTAL COBRADO ACUMULATIVO (TODOS LOS PAGOS HISTÓRICOS)
-        # ✅ CAMBIO: Ahora calcula el total acumulativo, no solo del mes actual
-        try:
-            total_cobrado_acumulativo = _calcular_total_cobrado_acumulativo(db, analista, concesionario, modelo)
-        except Exception as e:
-            logger.warning(f"Error calculando total cobrado acumulativo: {e}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            total_cobrado_acumulativo = Decimal("0")
-
-        # Total cobrado mes actual (para comparación y tasa de recuperación)
-        año_actual = hoy.year
-        mes_actual = hoy.month
-        primer_dia_mes = date(año_actual, mes_actual, 1)
-        ultimo_dia_mes = date(año_actual, mes_actual, monthrange(año_actual, mes_actual)[1])
-
-        try:
-            total_cobrado_periodo = _calcular_total_cobrado_mes(
-                db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo
-            )
-        except Exception as e:
-            logger.warning(f"Error calculando total cobrado período: {e}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            total_cobrado_periodo = Decimal("0")
-
-        # Total cobrado mes anterior
-        try:
-            mes_anterior, año_anterior = _calcular_mes_anterior(mes_actual, año_actual)
-            primer_dia_mes_anterior, ultimo_dia_mes_anterior = _obtener_fechas_mes(mes_anterior, año_anterior)
-
-            total_cobrado_anterior = _calcular_total_cobrado_mes(
-                db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
-            )
-        except Exception as e:
-            logger.warning(f"Error calculando total cobrado anterior: {e}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            total_cobrado_anterior = Decimal("0")
-
-        # 17. TASA DE RECUPERACIÓN MENSUAL
-        try:
-            tasa_recuperacion = _calcular_tasa_recuperacion(
-                db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo
-            )
-        except Exception as e:
-            logger.warning(f"Error calculando tasa recuperación: {e}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            tasa_recuperacion = 0.0
-
-        # Tasa recuperación mes anterior
-        try:
-            tasa_recuperacion_anterior = _calcular_tasa_recuperacion(
-                db, primer_dia_mes_anterior, ultimo_dia_mes_anterior, analista, concesionario, modelo
-            )
-        except Exception as e:
-            logger.warning(f"Error calculando tasa recuperación anterior: {e}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            tasa_recuperacion_anterior = 0.0
+        metricas_tasa = _calcular_metricas_tasa_recuperacion(
+            db,
+            primer_dia_mes,
+            ultimo_dia_mes,
+            primer_dia_mes_anterior,
+            ultimo_dia_mes_anterior,
+            analista,
+            concesionario,
+            modelo,
+        )
+        tasa_recuperacion = metricas_tasa["tasa_recuperacion"]
+        tasa_recuperacion_anterior = metricas_tasa["tasa_recuperacion_anterior"]
 
         # 18. PROMEDIO DÍAS DE MORA
-        # Calcular desde cuotas vencidas en lugar de usar campo inexistente
-        # ✅ CORRECCIÓN: Usar CAST para convertir el parámetro bind correctamente
-        try:
-            promedio_dias_mora_query = db.execute(
-                text(
-                    """
-                    SELECT COALESCE(AVG(CAST(:hoy AS date) - CAST(c.fecha_vencimiento AS date)), 0)
-                    FROM cuotas c
-                    INNER JOIN prestamos p ON c.prestamo_id = p.id
-                    WHERE c.fecha_vencimiento < CAST(:hoy AS date)
-                      AND c.estado != 'PAGADO'
-                      AND p.estado = 'APROBADO'
-                """
-                ).bindparams(hoy=hoy)
-            )
-            promedio_dias_mora = float(promedio_dias_mora_query.scalar() or 0.0)
-        except Exception as e:
-            logger.warning(f"Error calculando promedio días de mora: {e}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            promedio_dias_mora = 0.0
+        promedio_dias_mora = _calcular_promedio_dias_mora(db, hoy)
 
         # 19. PORCENTAJE CUMPLIMIENTO (clientes al día / total clientes)
         porcentaje_cumplimiento = (
@@ -1801,338 +2287,28 @@ def dashboard_administrador(
         # 20. TICKET PROMEDIO (promedio de préstamos)
         ticket_promedio = float(cartera_total / clientes_activos) if clientes_activos > 0 else 0
 
-        # 20.1. MODELOS MÁS Y MENOS VENDIDOS (conectado a datos reales)
-        try:
-            query_modelos = (
-                db.query(
-                    func.coalesce(func.coalesce(Prestamo.modelo_vehiculo, Prestamo.producto), "Sin Modelo").label("modelo"),
-                    func.sum(Prestamo.total_financiamiento).label("total_prestamos"),
-                    func.count(Prestamo.id).label("cantidad_prestamos"),
-                )
-                .filter(Prestamo.estado == "APROBADO")
-                .group_by("modelo")
-            )
-            # Aplicar filtros
-            query_modelos = FiltrosDashboard.aplicar_filtros_prestamo(
-                query_modelos, analista, concesionario, None, fecha_inicio, fecha_fin
-            )
-            resultados_modelos = query_modelos.all()
-
-            if resultados_modelos:
-                # Ordenar por total_prestamos
-                modelos_ordenados = sorted(
-                    resultados_modelos, key=lambda x: float(x.total_prestamos or Decimal("0")), reverse=True
-                )
-                modelo_mas_vendido = modelos_ordenados[0].modelo or "N/A"
-                ventas_modelo_mas_vendido = int(modelos_ordenados[0].cantidad_prestamos or 0)
-                modelo_menos_vendido = modelos_ordenados[-1].modelo or "N/A"
-                total_modelos = len(modelos_ordenados)
-            else:
-                modelo_mas_vendido = "N/A"
-                ventas_modelo_mas_vendido = 0
-                modelo_menos_vendido = "N/A"
-                total_modelos = 0
-        except Exception as e:
-            logger.warning(f"Error calculando modelos más/menos vendidos: {e}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            modelo_mas_vendido = "N/A"
-            ventas_modelo_mas_vendido = 0
-            modelo_menos_vendido = "N/A"
-            total_modelos = 0
+        # 20.1. MODELOS MÁS Y MENOS VENDIDOS
+        metricas_modelos = _calcular_metricas_modelos(db, analista, concesionario, fecha_inicio, fecha_fin)
+        modelo_mas_vendido = metricas_modelos["modelo_mas_vendido"]
+        ventas_modelo_mas_vendido = metricas_modelos["ventas_modelo_mas_vendido"]
+        modelo_menos_vendido = metricas_modelos["modelo_menos_vendido"]
+        total_modelos = metricas_modelos["total_modelos"]
 
         # 21. EVOLUCIÓN MENSUAL (últimos 6 meses)
-        # ✅ OPTIMIZACIÓN: Combinar múltiples queries en una sola consulta con GROUP BY
-        start_evolucion = time.time()
-        evolucion_mensual = []
-        nombres_meses = [
-            "Ene",
-            "Feb",
-            "Mar",
-            "Abr",
-            "May",
-            "Jun",
-            "Jul",
-            "Ago",
-            "Sep",
-            "Oct",
-            "Nov",
-            "Dic",
-        ]
-        try:
-            # Calcular rango de meses (últimos 7 meses)
-            meses_rango = []
-            for i in range(6, -1, -1):
-                mes_fecha = hoy - timedelta(days=30 * i)
-                mes_inicio = date(mes_fecha.year, mes_fecha.month, 1)
-                if mes_fecha.month == 12:
-                    mes_fin = date(mes_fecha.year + 1, 1, 1) - timedelta(days=1)
-                else:
-                    mes_fin = date(mes_fecha.year, mes_fecha.month + 1, 1) - timedelta(days=1)
-                meses_rango.append(
-                    {
-                        "fecha": mes_fecha,
-                        "inicio": mes_inicio,
-                        "fin": mes_fin,
-                        "inicio_dt": datetime.combine(mes_inicio, datetime.min.time()),
-                        "fin_dt": datetime.combine(mes_fin, datetime.max.time()),
-                    }
-                )
+        evolucion_mensual = _calcular_evolucion_mensual(db, hoy)
 
-            # ✅ OPTIMIZACIÓN: Una sola query para obtener todos los pagos del rango
-            fecha_primera = meses_rango[0]["inicio_dt"]
-            fecha_ultima = meses_rango[-1]["fin_dt"]
-            # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
-            try:
-                # Asegurar que las fechas sean datetime objects
-                if isinstance(fecha_primera, date) and not isinstance(fecha_primera, datetime):
-                    fecha_primera = datetime.combine(fecha_primera, datetime.min.time())
-                if isinstance(fecha_ultima, date) and not isinstance(fecha_ultima, datetime):
-                    fecha_ultima = datetime.combine(fecha_ultima, datetime.max.time())
+        # 22. ANÁLISIS DE MOROSIDAD
+        metricas_morosidad = _calcular_metricas_morosidad(
+            db, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+        ingresos_capital = metricas_morosidad["ingresos_capital"]
+        ingresos_interes = metricas_morosidad["ingresos_interes"]
+        ingresos_mora = metricas_morosidad["ingresos_mora"]
 
-                pagos_evolucion_query = db.execute(
-                    text(
-                        """
-                        SELECT
-                            EXTRACT(YEAR FROM fecha_pago)::integer as año,
-                            EXTRACT(MONTH FROM fecha_pago)::integer as mes,
-                            COALESCE(SUM(monto_pagado), 0) as monto_total
-                        FROM pagos
-                        WHERE fecha_pago >= :fecha_inicio
-                          AND fecha_pago <= :fecha_fin
-                          AND monto_pagado IS NOT NULL
-                          AND monto_pagado > 0
-                          AND activo = TRUE
-                GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
-                        ORDER BY año, mes
-                    """
-                    ).bindparams(fecha_inicio=fecha_primera, fecha_fin=fecha_ultima)
-                )
-                pagos_por_mes = {(int(row[0]), int(row[1])): Decimal(str(row[2] or 0)) for row in pagos_evolucion_query}
-            except Exception as e:
-                logger.error(f"Error consultando pagos en dashboard_administrador: {e}", exc_info=True)
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
-                pagos_por_mes = {}
-
-            # ✅ OPTIMIZACIÓN: Una sola query para obtener cuotas vencidas por mes
-            try:
-                cuotas_vencidas_query = db.execute(
-                    text(
-                        """
-                        SELECT
-                            EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
-                            EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
-                            COUNT(*) as cantidad_vencidas
-                        FROM cuotas c
-                        INNER JOIN prestamos p ON c.prestamo_id = p.id
-                        WHERE p.estado = 'APROBADO'
-                          AND c.estado != 'PAGADO'
-                          AND c.fecha_vencimiento >= :fecha_inicio
-                          AND c.fecha_vencimiento <= :fecha_fin
-                GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
-                        ORDER BY año, mes
-                    """
-                    ).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
-                )
-                cuotas_vencidas_por_mes = {(int(row[0]), int(row[1])): int(row[2] or 0) for row in cuotas_vencidas_query}
-            except Exception as e:
-                logger.error(f"Error consultando cuotas vencidas en dashboard_administrador: {e}", exc_info=True)
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
-                cuotas_vencidas_por_mes = {}
-
-            # ✅ OPTIMIZACIÓN: Una sola query para obtener cuotas pagadas por mes
-            try:
-                cuotas_pagadas_query = db.execute(
-                    text(
-                        """
-                    SELECT
-                        EXTRACT(YEAR FROM DATE(c.fecha_pago))::integer as año,
-                        EXTRACT(MONTH FROM DATE(c.fecha_pago))::integer as mes,
-                        COUNT(*) as cantidad_pagadas
-                    FROM cuotas c
-                    INNER JOIN prestamos p ON c.prestamo_id = p.id
-                    WHERE p.estado = 'APROBADO'
-                      AND c.estado = 'PAGADO'
-                      AND c.fecha_pago IS NOT NULL
-                      AND DATE(c.fecha_pago) >= :fecha_inicio
-                      AND DATE(c.fecha_pago) <= :fecha_fin
-                GROUP BY EXTRACT(YEAR FROM DATE(c.fecha_pago)), EXTRACT(MONTH FROM DATE(c.fecha_pago))
-                    ORDER BY año, mes
-                """
-                    ).bindparams(fecha_inicio=meses_rango[0]["inicio"], fecha_fin=meses_rango[-1]["fin"])
-                )
-                cuotas_pagadas_por_mes = {(int(row[0]), int(row[1])): int(row[2] or 0) for row in cuotas_pagadas_query}
-            except Exception as e:
-                logger.error(f"Error consultando cuotas pagadas en dashboard_administrador: {e}", exc_info=True)
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
-                cuotas_pagadas_por_mes = {}
-
-            # ✅ OPTIMIZACIÓN: Calcular cartera acumulada para todos los meses en una sola query
-            # Usar una query con CASE WHEN para calcular cartera acumulada por mes
-            fecha_ultima = meses_rango[-1]["fin_dt"]
-            cartera_por_mes_query = db.execute(
-                text(
-                    """
-                    SELECT
-                        EXTRACT(YEAR FROM fecha_registro)::integer as año,
-                        EXTRACT(MONTH FROM fecha_registro)::integer as mes,
-                        SUM(total_financiamiento) as monto_mes
-                    FROM prestamos
-                    WHERE estado = 'APROBADO'
-                      AND fecha_registro <= :fecha_fin
-                GROUP BY EXTRACT(YEAR FROM fecha_registro), EXTRACT(MONTH FROM fecha_registro)
-                    ORDER BY año, mes
-                """
-                ).bindparams(fecha_fin=fecha_ultima)
-            )
-            cartera_por_mes_raw = {(int(row[0]), int(row[1])): Decimal(str(row[2] or 0)) for row in cartera_por_mes_query}
-
-            # Calcular cartera acumulada por mes (suma acumulativa)
-            cartera_acumulada = {}
-            cartera_acum = Decimal("0")
-            for mes_info in sorted(meses_rango, key=lambda x: (x["fecha"].year, x["fecha"].month)):
-                año_mes = int(mes_info["fecha"].year)
-                num_mes = int(mes_info["fecha"].month)
-                mes_key: tuple[int, int] = (año_mes, num_mes)
-
-                # Sumar cartera del mes actual
-                cartera_acum += cartera_por_mes_raw.get(mes_key, Decimal("0"))
-                cartera_acumulada[mes_key] = cartera_acum
-
-            # Construir evolución mensual con datos pre-calculados
-            for mes_info in meses_rango:
-                año_mes = int(mes_info["fecha"].year)
-                num_mes = int(mes_info["fecha"].month)
-                mes_key_evol: tuple[int, int] = (año_mes, num_mes)
-
-                # Cartera acumulada hasta el fin del mes (de datos pre-calculados)
-                cartera_mes = float(cartera_acumulada.get(mes_key_evol, Decimal("0")))
-
-                # Cobrado del mes (de datos pre-calculados)
-                cobrado_mes = pagos_por_mes.get(mes_key_evol, Decimal("0"))
-
-                # Cuotas vencidas y pagadas (de datos pre-calculados)
-                cuotas_vencidas_mes = cuotas_vencidas_por_mes.get(mes_key_evol, 0)
-                cuotas_pagadas_mes = cuotas_pagadas_por_mes.get(mes_key_evol, 0)
-                total_cuotas_mes = cuotas_vencidas_mes + cuotas_pagadas_mes
-                morosidad_mes = (cuotas_vencidas_mes / total_cuotas_mes * 100) if total_cuotas_mes > 0 else 0
-
-                evolucion_mensual.append(
-                    {
-                        "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
-                        "cartera": float(cartera_mes),
-                        "cobrado": float(cobrado_mes),
-                        "morosidad": round(morosidad_mes, 1),
-                    }
-                )
-
-            tiempo_evolucion = int((time.time() - start_evolucion) * 1000)
-            logger.info(f"📊 [dashboard/admin] Evolución mensual calculada en {tiempo_evolucion}ms")
-        except Exception as e:
-            logger.error(f"Error calculando evolución mensual: {e}", exc_info=True)
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            evolucion_mensual = []
-
-        # 22. ANÁLISIS DE MOROSIDAD - Cálculo real desde BD
-        # Total Financiamiento: Suma de todos los préstamos aprobados (ACUMULATIVO - sin filtros de fecha)
-        # ✅ CORRECCIÓN: Hacer acumulativo para consistencia con Cartera Recobrada y Morosidad
-        try:
-            total_financiamiento_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-                Prestamo.estado == "APROBADO"
-            )
-            # ✅ Aplicar solo filtros de analista, concesionario y modelo (NO filtros de fecha)
-            # Esto hace que sea acumulativo, consistente con totalCobrado y morosidad
-            total_financiamiento_query = FiltrosDashboard.aplicar_filtros_prestamo(
-                total_financiamiento_query,
-                analista,
-                concesionario,
-                modelo,
-                None,  # ✅ NO aplicar fecha_inicio
-                None,  # ✅ NO aplicar fecha_fin
-            )
-            total_financiamiento_operaciones = float(total_financiamiento_query.scalar() or Decimal("0"))
-        except Exception as e:
-            logger.error(f"Error calculando total_financiamiento_operaciones: {e}", exc_info=True)
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-            total_financiamiento_operaciones = 0.0
-
-        # Cartera Cobrada: Suma de TODOS los pagos
-        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
-        # Usar SQL directo para sumar monto_pagado con filtros de fecha únicamente
-        where_conditions = ["monto_pagado IS NOT NULL", "monto_pagado > 0", "activo = TRUE"]
-        params = {}
-
-        if fecha_inicio:
-            where_conditions.append("fecha_pago >= :fecha_inicio")
-            params["fecha_inicio"] = datetime.combine(fecha_inicio, datetime.min.time())
-        if fecha_fin:
-            where_conditions.append("fecha_pago <= :fecha_fin")
-            params["fecha_fin"] = datetime.combine(fecha_fin, datetime.max.time())
-
-        where_clause = " AND ".join(where_conditions)
-
-        try:
-            cartera_cobrada_query = db.execute(
-                text(f"SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE {where_clause}").bindparams(**params)
-            )
-            cartera_cobrada_total = float(cartera_cobrada_query.scalar() or Decimal("0"))
-        except Exception as e:
-            logger.error(f"Error calculando cartera_cobrada_total: {e}", exc_info=True)
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-            cartera_cobrada_total = 0.0
-
-        # Morosidad (Diferencia): Total Financiamiento - Cartera Cobrada
-        morosidad_diferencia = max(0, total_financiamiento_operaciones - cartera_cobrada_total)
-
-        # Mantener nombres de variables para compatibilidad con frontend
-        ingresos_capital = total_financiamiento_operaciones
-        ingresos_interes = cartera_cobrada_total
-        ingresos_mora = morosidad_diferencia
-
-        # 23. META MENSUAL - Total a cobrar del mes actual (suma de monto_cuota de cuotas del mes)
-        # Meta = Total a cobrar del mes (cuotas planificadas)
-        # Recaudado = Pagos conciliados del mes
-        try:
-            query_meta_mensual = (
-                db.query(func.sum(Cuota.monto_cuota))
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(
-                    Prestamo.estado == "APROBADO",
-                    func.date(Cuota.fecha_vencimiento) >= primer_dia_mes,
-                    func.date(Cuota.fecha_vencimiento) <= ultimo_dia_mes,
-                )
-            )
-            query_meta_mensual = FiltrosDashboard.aplicar_filtros_cuota(
-                query_meta_mensual, analista, concesionario, modelo, None, None
-            )
-            meta_mensual_final = float(query_meta_mensual.scalar() or Decimal("0"))
-        except Exception as e:
-            logger.error(f"Error calculando meta_mensual_final: {e}", exc_info=True)
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-            meta_mensual_final = 0.0
+        # 23. META MENSUAL
+        meta_mensual_final = _calcular_meta_mensual(
+            db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo
+        )
 
         return {
             "cartera_total": float(cartera_total),
