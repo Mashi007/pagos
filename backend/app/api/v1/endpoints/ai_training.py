@@ -1012,7 +1012,7 @@ async def entrenar_modelo_riesgo(
 
         # Preparar datos de entrenamiento
         training_data = []
-        
+
         logger.info(f"📊 Procesando {len(prestamos)} préstamos para entrenamiento de ML Riesgo...")
 
         for prestamo in prestamos:
@@ -1029,16 +1029,20 @@ async def entrenar_modelo_riesgo(
                     except Exception as query_error:
                         logger.warning(f"Error consultando cliente para préstamo {prestamo.id}: {query_error}")
                         continue
-                
+
                 if not cliente:
-                    logger.warning(f"Préstamo {prestamo.id} no tiene cliente asociado (cliente_id: {prestamo.cliente_id}), omitiendo...")
+                    logger.warning(
+                        f"Préstamo {prestamo.id} no tiene cliente asociado (cliente_id: {prestamo.cliente_id}), omitiendo..."
+                    )
                     continue
-                    
+
                 # Verificar que el cliente tenga fecha_nacimiento si es necesario
-                if not hasattr(cliente, 'fecha_nacimiento'):
-                    logger.warning(f"Cliente {cliente.id} no tiene atributo fecha_nacimiento, omitiendo préstamo {prestamo.id}...")
+                if not hasattr(cliente, "fecha_nacimiento"):
+                    logger.warning(
+                        f"Cliente {cliente.id} no tiene atributo fecha_nacimiento, omitiendo préstamo {prestamo.id}..."
+                    )
                     continue
-                    
+
             except Exception as e:
                 error_type = type(e).__name__
                 logger.warning(f"Error accediendo a cliente del préstamo {prestamo.id} ({error_type}): {e}, omitiendo...")
@@ -1177,8 +1181,9 @@ async def entrenar_modelo_riesgo(
         error_msg = str(e)
         error_type = type(e).__name__
         import traceback
+
         error_traceback = traceback.format_exc()
-        
+
         logger.error(
             f"❌ [ML-RIESGO] Error entrenando modelo de riesgo: {error_type}: {error_msg}\n"
             f"Traceback completo:\n{error_traceback}",
