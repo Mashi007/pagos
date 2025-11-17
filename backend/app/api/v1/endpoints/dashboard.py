@@ -2032,6 +2032,372 @@ def _calcular_meta_mensual(
         return 0.0
 
 
+# ============================================================================
+# FUNCIONES HELPER PARA OBTENER_FINANCIAMIENTO_TENDENCIA_MENSUAL - Refactorización
+# ============================================================================
+
+
+def _verificar_rollback_preventivo(db: Session) -> None:
+    """
+    Verifica y hace rollback preventivo si la transacción está abortada.
+    """
+    from sqlalchemy import text
+
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as test_error:
+        error_str = str(test_error)
+        if "aborted" in error_str.lower() or "InFailedSqlTransaction" in error_str:
+            logger.warning("⚠️ [financiamiento-tendencia] Transacción abortada detectada, haciendo rollback preventivo")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+
+def _obtener_fecha_inicio_query(
+    db: Session, fecha_inicio: Optional[date], cache_backend
+) -> date:
+    """
+    Obtiene fecha de inicio para la query, usando caché si está disponible.
+    Retorna fecha como date.
+    """
+    from datetime import datetime
+
+    from sqlalchemy import func
+
+    from app.models.cuota import Cuota
+    from app.models.pago import Pago
+    from app.models.prestamo import Prestamo
+
+    fecha_inicio_query = fecha_inicio
+    if not fecha_inicio_query:
+        cache_key_primera_fecha = "dashboard:primera_fecha_desde_2024"
+        primera_fecha_cached = cache_backend.get(cache_key_primera_fecha)
+
+        if primera_fecha_cached:
+            fecha_inicio_query = date.fromisoformat(primera_fecha_cached)
+        else:
+            # Buscar la primera fecha con datos desde 2024
+            primera_fecha = None
+            try:
+                primera_aprobacion = (
+                    db.query(func.min(Prestamo.fecha_aprobacion))
+                    .filter(Prestamo.estado == "APROBADO", func.extract("year", Prestamo.fecha_aprobacion) >= 2024)
+                    .scalar()
+                )
+
+                primera_cuota = (
+                    db.query(func.min(Cuota.fecha_vencimiento))
+                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                    .filter(Prestamo.estado == "APROBADO", func.extract("year", Cuota.fecha_vencimiento) >= 2024)
+                    .scalar()
+                )
+
+                primera_pago = (
+                    db.query(func.min(Pago.fecha_pago))
+                    .filter(Pago.activo.is_(True), Pago.monto_pagado > 0, func.extract("year", Pago.fecha_pago) >= 2024)
+                    .scalar()
+                )
+
+                fechas_disponibles = []
+                for f in [primera_aprobacion, primera_cuota, primera_pago]:
+                    if f is not None:
+                        if isinstance(f, datetime):
+                            fechas_disponibles.append(f.date())
+                        else:
+                            fechas_disponibles.append(f)
+
+                if fechas_disponibles:
+                    primera_fecha = min(fechas_disponibles)
+                    fecha_inicio_query = date(primera_fecha.year, primera_fecha.month, 1)
+                else:
+                    fecha_inicio_query = date(2024, 1, 1)
+
+                cache_backend.set(cache_key_primera_fecha, fecha_inicio_query.isoformat(), ttl=3600)
+            except Exception as e:
+                logger.warning(f"⚠️ [financiamiento-tendencia] Error buscando primera fecha: {e}, usando enero 2024")
+                fecha_inicio_query = date(2024, 1, 1)
+
+    return fecha_inicio_query
+
+
+def _obtener_nuevos_financiamientos_por_mes(
+    db: Session,
+    fecha_inicio_query: date,
+    fecha_fin_query: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+    fecha_inicio: Optional[date],
+    fecha_fin: Optional[date],
+) -> dict:
+    """
+    Obtiene nuevos financiamientos por mes usando GROUP BY.
+    Retorna diccionario con (año, mes) como clave.
+    """
+    import time
+
+    from decimal import Decimal
+
+    from datetime import datetime
+    from sqlalchemy import func
+
+    from app.models.prestamo import Prestamo
+
+    start_query = time.time()
+    nuevos_por_mes = {}
+
+    try:
+        filtros_base = [Prestamo.estado == "APROBADO"]
+        if fecha_inicio_query:
+            filtros_base.append(Prestamo.fecha_aprobacion >= fecha_inicio_query)
+        if fecha_fin_query:
+            filtros_base.append(Prestamo.fecha_aprobacion <= fecha_fin_query)
+
+        query_nuevos = (
+            db.query(
+                func.date_trunc("month", Prestamo.fecha_aprobacion).label("mes"),
+                func.count(Prestamo.id).label("cantidad"),
+                func.sum(Prestamo.total_financiamiento).label("monto_total"),
+            )
+            .filter(*filtros_base)
+            .group_by(func.date_trunc("month", Prestamo.fecha_aprobacion))
+            .order_by(func.date_trunc("month", Prestamo.fecha_aprobacion))
+        )
+
+        query_nuevos = FiltrosDashboard.aplicar_filtros_prestamo(
+            query_nuevos, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+
+        resultados_nuevos = query_nuevos.all()
+
+        for row in resultados_nuevos:
+            mes_datetime = row.mes
+            if isinstance(mes_datetime, datetime):
+                año_mes = mes_datetime.year
+                num_mes = mes_datetime.month
+            elif isinstance(mes_datetime, date):
+                año_mes = mes_datetime.year
+                num_mes = mes_datetime.month
+            else:
+                año_mes = int(mes_datetime.year) if hasattr(mes_datetime, "year") else int(mes_datetime)
+                num_mes = int(mes_datetime.month) if hasattr(mes_datetime, "month") else 1
+
+            nuevos_por_mes[(año_mes, num_mes)] = {
+                "cantidad": row.cantidad or 0,
+                "monto": float(row.monto_total or Decimal("0")),
+            }
+
+        query_time = int((time.time() - start_query) * 1000)
+        logger.info(f"📊 [financiamiento-tendencia] Query completada en {query_time}ms, {len(nuevos_por_mes)} meses")
+    except Exception as e:
+        logger.error(f"⚠️ [financiamiento-tendencia] Error en query nuevos financiamientos: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        nuevos_por_mes = {}
+
+    return nuevos_por_mes
+
+
+def _obtener_cuotas_programadas_por_mes(
+    db: Session,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+    fecha_inicio: Optional[date],
+    fecha_fin: Optional[date],
+) -> dict:
+    """
+    Obtiene cuotas programadas por mes.
+    Retorna diccionario con (año, mes) como clave y monto como valor.
+    """
+    import time
+
+    from decimal import Decimal
+
+    from sqlalchemy import func
+
+    from app.models.cuota import Cuota
+    from app.models.prestamo import Prestamo
+
+    start_cuotas = time.time()
+    cuotas_por_mes = {}
+
+    try:
+        query_cuotas = (
+            db.query(
+                func.extract("year", Cuota.fecha_vencimiento).label("año"),
+                func.extract("month", Cuota.fecha_vencimiento).label("mes"),
+                func.sum(Cuota.monto_cuota).label("total_cuotas_programadas"),
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(Prestamo.estado == "APROBADO", func.extract("year", Cuota.fecha_vencimiento) >= 2024)
+            .group_by(func.extract("year", Cuota.fecha_vencimiento), func.extract("month", Cuota.fecha_vencimiento))
+            .order_by("año", "mes")
+        )
+
+        query_cuotas = FiltrosDashboard.aplicar_filtros_cuota(
+            query_cuotas, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+
+        resultados_cuotas = query_cuotas.all()
+
+        for row in resultados_cuotas:
+            año_mes = int(row.año)
+            num_mes = int(row.mes)
+            monto = float(row.total_cuotas_programadas or Decimal("0"))
+            cuotas_por_mes[(año_mes, num_mes)] = monto
+
+        cuotas_time = int((time.time() - start_cuotas) * 1000)
+        logger.info(
+            f"📊 [financiamiento-tendencia] Query cuotas programadas completada en {cuotas_time}ms, {len(cuotas_por_mes)} meses con datos"
+        )
+    except Exception as e:
+        logger.error(f"⚠️ [financiamiento-tendencia] Error en query cuotas programadas: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        cuotas_por_mes = {}
+
+    return cuotas_por_mes
+
+
+def _obtener_pagos_por_mes(
+    db: Session,
+    fecha_inicio_query: date,
+    fecha_fin_query: date,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+    fecha_inicio: Optional[date],
+    fecha_fin: Optional[date],
+) -> dict:
+    """
+    Obtiene pagos por mes usando total_pagado de cuotas.
+    Retorna diccionario con (año, mes) como clave y monto como valor.
+    """
+    import time
+
+    from decimal import Decimal
+
+    from datetime import datetime
+    from sqlalchemy import func
+
+    from app.models.cuota import Cuota
+    from app.models.prestamo import Prestamo
+
+    start_pagos = time.time()
+    pagos_por_mes = {}
+
+    try:
+        query_pagos = (
+            db.query(
+                func.extract("year", Cuota.fecha_vencimiento).label("año"),
+                func.extract("month", Cuota.fecha_vencimiento).label("mes"),
+                func.sum(Cuota.total_pagado).label("total_pagado"),
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(Prestamo.estado == "APROBADO", func.extract("year", Cuota.fecha_vencimiento) >= 2024)
+            .group_by(func.extract("year", Cuota.fecha_vencimiento), func.extract("month", Cuota.fecha_vencimiento))
+            .order_by("año", "mes")
+        )
+
+        query_pagos = FiltrosDashboard.aplicar_filtros_cuota(
+            query_pagos, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
+
+        if fecha_inicio_query:
+            query_pagos = query_pagos.filter(Cuota.fecha_vencimiento >= fecha_inicio_query)
+        if fecha_fin_query:
+            query_pagos = query_pagos.filter(Cuota.fecha_vencimiento <= fecha_fin_query)
+
+        resultados_pagos = query_pagos.all()
+
+        for row in resultados_pagos:
+            año_mes = int(row.año)
+            num_mes = int(row.mes)
+            monto_total_pagado = float(row.total_pagado or Decimal("0"))
+            pagos_por_mes[(año_mes, num_mes)] = monto_total_pagado
+
+        pagos_time = int((time.time() - start_pagos) * 1000)
+        logger.info(
+            f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms, {len(pagos_por_mes)} meses con datos"
+        )
+    except Exception as e:
+        logger.error(f"⚠️ [financiamiento-tendencia] Error consultando pagos: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        pagos_por_mes = {}
+
+    return pagos_por_mes
+
+
+def _generar_datos_mensuales(
+    fecha_inicio_query: date,
+    hoy: date,
+    nuevos_por_mes: dict,
+    cuotas_por_mes: dict,
+    pagos_por_mes: dict,
+) -> list:
+    """
+    Genera datos mensuales con cálculo de morosidad y acumulados.
+    Retorna lista de diccionarios con datos mensuales.
+    """
+    from decimal import Decimal
+
+    nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+
+    meses_data = []
+    current_date = fecha_inicio_query
+    total_acumulado = Decimal("0")
+
+    logger.info(f"📊 [financiamiento-tendencia] Generando meses desde {fecha_inicio_query} hasta {hoy}")
+
+    while current_date <= hoy:
+        año_mes = current_date.year
+        num_mes = current_date.month
+        fecha_mes_inicio = date(año_mes, num_mes, 1)
+        fecha_mes_fin = _obtener_fechas_mes_siguiente(num_mes, año_mes)
+
+        mes_key_financiamiento: tuple[int, int] = (año_mes, num_mes)
+        datos_mes = nuevos_por_mes.get(mes_key_financiamiento, {"cantidad": 0, "monto": Decimal("0")})
+        cantidad_nuevos = datos_mes["cantidad"]
+        monto_nuevos = datos_mes["monto"]
+
+        monto_cuotas_programadas = cuotas_por_mes.get(mes_key_financiamiento, 0.0)
+        monto_pagado_mes = pagos_por_mes.get(mes_key_financiamiento, 0.0)
+
+        morosidad_mensual = max(0.0, float(monto_cuotas_programadas) - float(monto_pagado_mes))
+
+        total_acumulado += Decimal(str(monto_nuevos))
+
+        meses_data.append(
+            {
+                "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
+                "año": año_mes,
+                "mes_numero": num_mes,
+                "cantidad_nuevos": cantidad_nuevos,
+                "monto_nuevos": float(monto_nuevos),
+                "total_acumulado": float(total_acumulado),
+                "monto_cuotas_programadas": float(monto_cuotas_programadas),
+                "monto_pagado": float(monto_pagado_mes),
+                "morosidad": float(morosidad_mensual),
+                "morosidad_mensual": float(morosidad_mensual),
+                "fecha_mes": fecha_mes_inicio.isoformat(),
+            }
+        )
+
+        current_date = fecha_mes_fin
+
+    return meses_data
+
+
 @router.get("/cobros-diarios")
 @cache_result(ttl=300, key_prefix="dashboard")  # ✅ Agregar caché
 def obtener_cobros_diarios(
@@ -4833,471 +5199,44 @@ def obtener_financiamiento_tendencia_mensual(
 
     try:
         # ✅ ROLLBACK PREVENTIVO: Restaurar transacción si está abortada
-        try:
-            db.execute(text("SELECT 1"))
-        except Exception as test_error:
-            error_str = str(test_error)
-            if "aborted" in error_str.lower() or "InFailedSqlTransaction" in error_str:
-                logger.warning("⚠️ [financiamiento-tendencia] Transacción abortada detectada, haciendo rollback preventivo")
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
+        _verificar_rollback_preventivo(db)
 
         hoy = date.today()
-        nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
         # ✅ OPTIMIZACIÓN: Cachear primera fecha para evitar 3 queries MIN() en cada request
-        fecha_inicio_query = fecha_inicio
-        if not fecha_inicio_query:
-            cache_key_primera_fecha = "dashboard:primera_fecha_desde_2024"
-            primera_fecha_cached = cache_backend.get(cache_key_primera_fecha)
-
-            if primera_fecha_cached:
-                fecha_inicio_query = date.fromisoformat(primera_fecha_cached)
-            else:
-                # Buscar la primera fecha con datos desde 2024 (solo si no está en cache)
-                primera_fecha = None
-                try:
-                    # Buscar primera fecha de aprobación desde 2024
-                    primera_aprobacion = (
-                        db.query(func.min(Prestamo.fecha_aprobacion))
-                        .filter(Prestamo.estado == "APROBADO", func.extract("year", Prestamo.fecha_aprobacion) >= 2024)
-                        .scalar()
-                    )
-
-                    # Buscar primera fecha de cuota desde 2024
-                    primera_cuota = (
-                        db.query(func.min(Cuota.fecha_vencimiento))
-                        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                        .filter(Prestamo.estado == "APROBADO", func.extract("year", Cuota.fecha_vencimiento) >= 2024)
-                        .scalar()
-                    )
-
-                    # Buscar primera fecha de pago desde 2024
-                    primera_pago = (
-                        db.query(func.min(Pago.fecha_pago))
-                        .filter(Pago.activo.is_(True), Pago.monto_pagado > 0, func.extract("year", Pago.fecha_pago) >= 2024)
-                        .scalar()
-                    )
-
-                    # Encontrar la fecha más antigua entre todas
-                    # ✅ CORRECCIÓN: Normalizar todas las fechas a date antes de comparar
-                    # fecha_aprobacion y fecha_pago pueden ser datetime.datetime, fecha_vencimiento es date
-                    fechas_disponibles = []
-                    for f in [primera_aprobacion, primera_cuota, primera_pago]:
-                        if f is not None:
-                            # Convertir datetime a date si es necesario
-                            if isinstance(f, datetime):
-                                fechas_disponibles.append(f.date())
-                            else:
-                                fechas_disponibles.append(f)
-
-                    if fechas_disponibles:
-                        primera_fecha = min(fechas_disponibles)
-                        # Redondear al primer día del mes
-                        fecha_inicio_query = date(primera_fecha.year, primera_fecha.month, 1)
-                    else:
-                        # Si no hay datos, usar enero 2024
-                        fecha_inicio_query = date(2024, 1, 1)
-
-                    # Cachear resultado por 1 hora (cambia muy raramente)
-                    cache_backend.set(cache_key_primera_fecha, fecha_inicio_query.isoformat(), ttl=3600)
-                except Exception as e:
-                    logger.warning(f"⚠️ [financiamiento-tendencia] Error buscando primera fecha: {e}, usando enero 2024")
-                    fecha_inicio_query = date(2024, 1, 1)
+        fecha_inicio_query = _obtener_fecha_inicio_query(db, fecha_inicio, cache_backend)
 
         # Calcular fecha fin (hoy)
         fecha_fin_query = hoy
 
         # ✅ OPTIMIZACIÓN: Una sola query para obtener todos los nuevos financiamientos por mes con GROUP BY
-        start_query = time.time()
-        resultados_nuevos = []
-        query_time = 0  # Inicializar query_time
-        try:
-            # Construir filtros base
-            # ⚠️ TEMPORAL: Usar fecha_aprobacion porque fecha_registro no migró correctamente
-            filtros_base = [Prestamo.estado == "APROBADO"]
-            if fecha_inicio_query:
-                filtros_base.append(Prestamo.fecha_aprobacion >= fecha_inicio_query)
-            if fecha_fin_query:
-                filtros_base.append(Prestamo.fecha_aprobacion <= fecha_fin_query)
-
-            # ✅ OPTIMIZACIÓN: Usar date_trunc en lugar de EXTRACT para mejor rendimiento con índices
-            # Query optimizada: GROUP BY usando date_trunc('month', fecha_aprobacion)
-            from sqlalchemy import text
-
-            # Construir query SQL con date_trunc para aprovechar índices funcionales
-            query_nuevos = (
-                db.query(
-                    func.date_trunc("month", Prestamo.fecha_aprobacion).label("mes"),
-                    func.count(Prestamo.id).label("cantidad"),
-                    func.sum(Prestamo.total_financiamiento).label("monto_total"),
-                )
-                .filter(*filtros_base)
-                .group_by(func.date_trunc("month", Prestamo.fecha_aprobacion))
-                .order_by(func.date_trunc("month", Prestamo.fecha_aprobacion))
-            )
-
-            # Aplicar filtros adicionales (si hay)
-            query_nuevos = FiltrosDashboard.aplicar_filtros_prestamo(
-                query_nuevos, analista, concesionario, modelo, fecha_inicio, fecha_fin
-            )
-
-            resultados_nuevos = query_nuevos.all()
-            query_time = int((time.time() - start_query) * 1000)
-
-            # ✅ MONITOREO: Registrar query individual con info de BD y campos
-            from app.utils.db_analyzer import get_database_size
-
-            db_info = get_database_size(db)
-            query_analysis = {
-                "tables": ["prestamos"],
-                "columns": [
-                    "fecha_aprobacion",
-                    "total_financiamiento",
-                    "estado",
-                    "analista",
-                    "concesionario",
-                    "modelo_vehiculo",
-                ],
-            }
-
-            query_monitor.record_query(
-                query_name="financiamiento_tendencia_nuevos",
-                execution_time_ms=query_time,
-                query_type="SELECT",
-                tables=query_analysis["tables"],
-                columns=query_analysis["columns"],
-            )
-
-            logger.info(f"📊 [financiamiento-tendencia] Query completada en {query_time}ms, {len(resultados_nuevos)} meses")
-
-            # ✅ ALERTA: Si la query es lenta (con info de BD y campos)
-            if query_time >= 5000:
-                db_size_info = f"BD: {db_info.get('size_pretty', 'N/A')}" if db_info else "BD: N/A"
-                tables_info = f"Tablas: {', '.join(query_analysis['tables'])}"
-                logger.error(
-                    f"🚨 [ALERTA CRÍTICA] Query nuevos financiamientos muy lenta: {query_time}ms - "
-                    f"{db_size_info} - {tables_info}"
-                )
-            elif query_time >= 2000:
-                db_size_info = f"BD: {db_info.get('size_pretty', 'N/A')}" if db_info else "BD: N/A"
-                tables_info = f"Tablas: {', '.join(query_analysis['tables'])}"
-                logger.warning(
-                    f"⚠️ [ALERTA] Query nuevos financiamientos lenta: {query_time}ms - " f"{db_size_info} - {tables_info}"
-                )
-        except Exception as e:
-            logger.error(f"⚠️ [financiamiento-tendencia] Error en query nuevos financiamientos: {e}", exc_info=True)
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-            resultados_nuevos = []
-            query_time = int((time.time() - start_query) * 1000)
-
-        # Crear diccionario de nuevos financiamientos por mes
-        # ✅ ACTUALIZADO: date_trunc retorna datetime, extraer año y mes
-        nuevos_por_mes = {}
-        for row in resultados_nuevos:
-            # date_trunc retorna un datetime (primer día del mes)
-            mes_datetime = row.mes
-            if isinstance(mes_datetime, datetime):
-                año_mes = mes_datetime.year
-                num_mes = mes_datetime.month
-            elif isinstance(mes_datetime, date):
-                año_mes = mes_datetime.year
-                num_mes = mes_datetime.month
-            else:
-                # Fallback si no es datetime/date
-                año_mes = int(mes_datetime.year) if hasattr(mes_datetime, "year") else int(mes_datetime)
-                num_mes = int(mes_datetime.month) if hasattr(mes_datetime, "month") else 1
-
-            nuevos_por_mes[(año_mes, num_mes)] = {
-                "cantidad": row.cantidad or 0,
-                "monto": float(row.monto_total or Decimal("0")),
-            }
+        nuevos_por_mes = _obtener_nuevos_financiamientos_por_mes(
+            db, fecha_inicio_query, fecha_fin_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
 
         # ✅ OPTIMIZACIÓN: Usar ORM en lugar de SQL directo para aprovechar índices
         # Query para calcular suma de monto_cuota programado por mes (cuotas que vencen en cada mes)
-        # Suma TODAS las cuotas de TODOS los clientes que vencen en cada mes (desde 2024)
-        start_cuotas = time.time()
-        cuotas_por_mes = {}
-        try:
-            # ✅ Query optimizada con ORM que aprovecha mejor los índices
-            query_cuotas = (
-                db.query(
-                    func.extract("year", Cuota.fecha_vencimiento).label("año"),
-                    func.extract("month", Cuota.fecha_vencimiento).label("mes"),
-                    func.sum(Cuota.monto_cuota).label("total_cuotas_programadas"),
-                )
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(Prestamo.estado == "APROBADO", func.extract("year", Cuota.fecha_vencimiento) >= 2024)
-                .group_by(func.extract("year", Cuota.fecha_vencimiento), func.extract("month", Cuota.fecha_vencimiento))
-                .order_by("año", "mes")
-            )
-
-            # Aplicar filtros usando FiltrosDashboard (reutiliza lógica)
-            query_cuotas = FiltrosDashboard.aplicar_filtros_cuota(
-                query_cuotas, analista, concesionario, modelo, fecha_inicio, fecha_fin
-            )
-
-            resultados_cuotas = query_cuotas.all()
-
-            for row in resultados_cuotas:
-                año_mes = int(row.año)
-                num_mes = int(row.mes)
-                monto = float(row.total_cuotas_programadas or Decimal("0"))
-                cuotas_por_mes[(año_mes, num_mes)] = monto
-
-            cuotas_time = int((time.time() - start_cuotas) * 1000)
-
-            # ✅ MONITOREO: Registrar query individual con info de BD y campos
-            db_info = get_database_size(db)
-            query_analysis_cuotas = {
-                "tables": ["cuotas", "prestamos"],
-                "columns": ["fecha_vencimiento", "monto_cuota", "estado", "prestamo_id"],
-            }
-
-            query_monitor.record_query(
-                query_name="financiamiento_tendencia_cuotas",
-                execution_time_ms=cuotas_time,
-                query_type="SELECT",
-                tables=query_analysis_cuotas["tables"],
-                columns=query_analysis_cuotas["columns"],
-            )
-
-            logger.info(
-                f"📊 [financiamiento-tendencia] Query cuotas programadas completada en {cuotas_time}ms, {len(cuotas_por_mes)} meses con datos"
-            )
-
-            # ✅ ALERTA: Si la query es lenta (con info de BD y campos)
-            if cuotas_time >= 5000:
-                db_size_info = f"BD: {db_info.get('size_pretty', 'N/A')}" if db_info else "BD: N/A"
-                tables_info = f"Tablas: {', '.join(query_analysis_cuotas['tables'])}"
-                logger.error(
-                    f"🚨 [ALERTA CRÍTICA] Query cuotas programadas muy lenta: {cuotas_time}ms - "
-                    f"{db_size_info} - {tables_info}"
-                )
-            elif cuotas_time >= 2000:
-                db_size_info = f"BD: {db_info.get('size_pretty', 'N/A')}" if db_info else "BD: N/A"
-                tables_info = f"Tablas: {', '.join(query_analysis_cuotas['tables'])}"
-                logger.warning(
-                    f"⚠️ [ALERTA] Query cuotas programadas lenta: {cuotas_time}ms - " f"{db_size_info} - {tables_info}"
-                )
-
-            # ✅ Logging adicional: mostrar algunos meses de ejemplo
-            if cuotas_por_mes:
-                ejemplos = list(cuotas_por_mes.items())[:3]
-                for (año, mes), monto in ejemplos:
-                    logger.info(f"  📊 Ejemplo: {año}-{mes:02d} = ${monto:,.2f}")
-        except Exception as e:
-            logger.error(f"⚠️ [financiamiento-tendencia] Error en query cuotas programadas: {e}", exc_info=True)
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-            cuotas_por_mes = {}
+        cuotas_por_mes = _obtener_cuotas_programadas_por_mes(db, analista, concesionario, modelo, fecha_inicio, fecha_fin)
 
         # ✅ Query para calcular suma de monto_pagado de tabla pagos por mes
-        # ⚠️ IMPORTANTE: Esto representa "Cuánto dinero ENTRÓ este mes" (flujo de caja)
-        # Incluye TODOS los pagos realizados en el mes, sin importar para qué cuota son:
-        # - Pagos de cuotas atrasadas de meses anteriores (PRINCIPAL CAUSA de diferencia)
-        # - Exceso de pagos aplicado a cuotas futuras (solo si hay exceso después de pagar todas las vencidas)
-        # - Pagos extras/amortizaciones
-        # Por eso puede ser MAYOR que "Cuotas Programadas por Mes"
-        # NOTA: Los pagos se aplican PRIMERO a cuotas vencidas, no hay pagos anticipados intencionales
-        start_pagos = time.time()
-        fecha_inicio_query_dt = datetime.combine(fecha_inicio_query, datetime.min.time())
-        fecha_fin_query_dt = datetime.combine(fecha_fin_query, datetime.max.time())
-
-        pagos_por_mes = {}
-        try:
-            # ✅ SOLUCIÓN INTEGRAL: Usar helper que busca pagos de múltiples formas
-            # Primero intentar usar total_pagado de cuotas (si está actualizado)
-            # Si está en 0, usar helper para buscar pagos por múltiples estrategias
-            query_pagos = (
-                db.query(
-                    func.extract("year", Cuota.fecha_vencimiento).label("año"),
-                    func.extract("month", Cuota.fecha_vencimiento).label("mes"),
-                    func.sum(Cuota.total_pagado).label("total_pagado"),
-                )
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .filter(Prestamo.estado == "APROBADO", func.extract("year", Cuota.fecha_vencimiento) >= 2024)
-                .group_by(func.extract("year", Cuota.fecha_vencimiento), func.extract("month", Cuota.fecha_vencimiento))
-                .order_by("año", "mes")
-            )
-
-            # Aplicar filtros usando FiltrosDashboard (reutiliza lógica)
-            query_pagos = FiltrosDashboard.aplicar_filtros_cuota(
-                query_pagos, analista, concesionario, modelo, fecha_inicio, fecha_fin
-            )
-
-            # Aplicar filtros de fecha si existen
-            if fecha_inicio_query:
-                query_pagos = query_pagos.filter(Cuota.fecha_vencimiento >= fecha_inicio_query)
-            if fecha_fin_query:
-                query_pagos = query_pagos.filter(Cuota.fecha_vencimiento <= fecha_fin_query)
-
-            resultados_pagos = query_pagos.all()
-
-            # ✅ OPTIMIZACIÓN: Usar directamente total_pagado de cuotas
-            # Si está en 0, significa que no hay pagos registrados para ese mes
-            # No hacer queries adicionales por mes (evita problema N+1)
-            for row in resultados_pagos:
-                año_mes = int(row.año)
-                num_mes = int(row.mes)
-                monto_total_pagado = float(row.total_pagado or Decimal("0"))
-
-                # ✅ Si total_pagado es 0, usar 0 directamente
-                # El helper calcular_monto_pagado_mes() es muy lento (hace múltiples queries por mes)
-                # y causa el problema de rendimiento. Si total_pagado está actualizado en cuotas,
-                # no necesitamos recalcularlo. Si no está actualizado, es mejor aceptar 0
-                # que hacer queries adicionales que tardan 19+ segundos.
-                mes_key_pagos: tuple[int, int] = (año_mes, num_mes)
-                pagos_por_mes[mes_key_pagos] = monto_total_pagado
-
-            pagos_time = int((time.time() - start_pagos) * 1000)
-
-            # ✅ MONITOREO: Registrar query individual con info de BD y campos
-            db_info = get_database_size(db)
-            query_analysis_pagos = {
-                "tables": ["cuotas", "prestamos"],
-                "columns": ["fecha_vencimiento", "total_pagado", "estado", "prestamo_id"],
-            }
-
-            query_monitor.record_query(
-                query_name="financiamiento_tendencia_pagos",
-                execution_time_ms=pagos_time,
-                query_type="SELECT",
-                tables=query_analysis_pagos["tables"],
-                columns=query_analysis_pagos["columns"],
-            )
-
-            logger.info(
-                f"📊 [financiamiento-tendencia] Query pagos (total_pagado de cuotas por fecha_vencimiento) completada en {pagos_time}ms, {len(pagos_por_mes)} meses con datos"
-            )
-
-            # ✅ ALERTA: Si la query es lenta (con info de BD y campos)
-            if pagos_time >= 5000:
-                db_size_info = f"BD: {db_info.get('size_pretty', 'N/A')}" if db_info else "BD: N/A"
-                tables_info = f"Tablas: {', '.join(query_analysis_pagos['tables'])}"
-                logger.error(f"🚨 [ALERTA CRÍTICA] Query pagos muy lenta: {pagos_time}ms - " f"{db_size_info} - {tables_info}")
-            elif pagos_time >= 2000:
-                db_size_info = f"BD: {db_info.get('size_pretty', 'N/A')}" if db_info else "BD: N/A"
-                tables_info = f"Tablas: {', '.join(query_analysis_pagos['tables'])}"
-                logger.warning(f"⚠️ [ALERTA] Query pagos lenta: {pagos_time}ms - " f"{db_size_info} - {tables_info}")
-            # ✅ Logging adicional: mostrar algunos meses de ejemplo
-            if pagos_por_mes:
-                ejemplos = list(pagos_por_mes.items())[:3]
-                for (año, mes), monto in ejemplos:
-                    logger.info(f"  📊 Ejemplo total_pagado de cuotas que vencen en {año}-{mes:02d} = ${monto:,.2f}")
-        except Exception as e:
-            logger.error(f"⚠️ [financiamiento-tendencia] Error consultando pagos: {e}", exc_info=True)
-            try:
-                db.rollback()  # ✅ Rollback para restaurar transacción después de error
-            except Exception:
-                pass
-            # Si la tabla no existe o hay error, usar valores por defecto (0)
-            pagos_por_mes = {}
+        pagos_por_mes = _obtener_pagos_por_mes(
+            db, fecha_inicio_query, fecha_fin_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
+        )
 
         # ✅ SIMPLIFICADO: Eliminada query innecesaria de cuotas_pagos_por_mes
         # No se necesita para el cálculo de morosidad: morosidad = MAX(0, programado - pagado)
 
         # ✅ CÁLCULO CORREGIDO: Morosidad mensual (NO acumulativa)
-        # Morosidad mensual = MAX(0, Monto programado del mes - Monto pagado del mes)
-        # Cada mes tiene su propia morosidad independiente
+        # Generar datos mensuales (incluyendo meses sin datos) y calcular acumulados
         logger.info("📊 [financiamiento-tendencia] Calculando morosidad mensual (NO acumulativa)")
 
-        # Generar datos mensuales (incluyendo meses sin datos) y calcular acumulados
-        start_process = time.time()
-        meses_data = []
-        current_date = fecha_inicio_query
-        total_acumulado = Decimal("0")
-        # ✅ Morosidad NO es acumulativa, solo mensual
+        meses_data = _generar_datos_mensuales(
+            fecha_inicio_query, hoy, nuevos_por_mes, cuotas_por_mes, pagos_por_mes
+        )
 
-        logger.info(f"📊 [financiamiento-tendencia] Generando meses desde {fecha_inicio_query} hasta {hoy}")
-
-        # ⚠️ TEMPORAL: Usar fecha_aprobacion en lugar de fecha_registro
-        while current_date <= hoy:
-            año_mes = current_date.year
-            num_mes = current_date.month
-            fecha_mes_inicio = date(año_mes, num_mes, 1)
-            fecha_mes_fin = _obtener_fechas_mes_siguiente(num_mes, año_mes)
-
-            # Obtener datos del mes (o valores por defecto si no hay)
-            mes_key_financiamiento: tuple[int, int] = (año_mes, num_mes)
-            datos_mes = nuevos_por_mes.get(mes_key_financiamiento, {"cantidad": 0, "monto": Decimal("0")})
-            cantidad_nuevos = datos_mes["cantidad"]
-            monto_nuevos = datos_mes["monto"]
-
-            # Obtener suma de cuotas programadas del mes (monto a pagar programado)
-            monto_cuotas_programadas = cuotas_por_mes.get(mes_key_financiamiento, 0.0)
-
-            # Obtener suma de monto_pagado de tabla pagos del mes (monto pagado)
-            monto_pagado_mes = pagos_por_mes.get(mes_key_financiamiento, 0.0)
-
-            # ✅ CÁLCULO SIMPLIFICADO: Morosidad mensual = MAX(0, Programado - Pagado)
-            # Esta es la lógica exacta del script SQL: morosidad_mensual = MAX(0, monto_programado - monto_pagado)
-            morosidad_mensual = max(0.0, float(monto_cuotas_programadas) - float(monto_pagado_mes))
-
-            # ✅ Logging reducido a debug para mejorar performance (solo mostrar en modo debug)
-            logger.debug(
-                f"📊 [financiamiento-tendencia] {fecha_mes_inicio.strftime('%Y-%m')} (año={año_mes}, mes={num_mes}): "
-                f"Programado=${monto_cuotas_programadas:,.2f}, "
-                f"Pagado=${monto_pagado_mes:,.2f}, "
-                f"Morosidad=${morosidad_mensual:,.2f}"
-            )
-
-            # ✅ Morosidad NO es acumulativa, solo mensual
-
-            # Calcular acumulado: sumar los nuevos financiamientos del mes
-            total_acumulado += Decimal(str(monto_nuevos))
-
-            meses_data.append(
-                {
-                    "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
-                    "año": año_mes,
-                    "mes_numero": num_mes,
-                    "cantidad_nuevos": cantidad_nuevos,
-                    "monto_nuevos": float(monto_nuevos),
-                    "total_acumulado": float(total_acumulado),
-                    "monto_cuotas_programadas": float(monto_cuotas_programadas),
-                    "monto_pagado": float(monto_pagado_mes),
-                    "morosidad": float(
-                        morosidad_mensual
-                    ),  # ⚠️ DEPRECATED: Usar morosidad_mensual. Este campo es mensual (NO acumulativo)
-                    "morosidad_mensual": float(
-                        morosidad_mensual
-                    ),  # ✅ Morosidad MENSUAL (NO acumulativa): MAX(0, Programado del mes - Pagado del mes)
-                    "fecha_mes": fecha_mes_inicio.isoformat(),
-                }
-            )
-
-            # Avanzar al siguiente mes
-            current_date = fecha_mes_fin
-
-        process_time = int((time.time() - start_process) * 1000)
         total_time = int((time.time() - start_time) * 1000)
 
-        # ✅ MONITOREO: Registrar métricas de queries individuales
-        query_monitor.record_query(
-            query_name="financiamiento_tendencia_nuevos", execution_time_ms=query_time, query_type="SELECT"
-        )
-        query_monitor.record_query(
-            query_name="financiamiento_tendencia_cuotas",
-            execution_time_ms=cuotas_time if "cuotas_time" in locals() else 0,
-            query_type="SELECT",
-        )
-        query_monitor.record_query(
-            query_name="financiamiento_tendencia_pagos",
-            execution_time_ms=pagos_time if "pagos_time" in locals() else 0,
-            query_type="SELECT",
-        )
-
-        logger.info(
-            f"⏱️ [financiamiento-tendencia] Tiempo total: {total_time}ms (query: {query_time}ms, process: {process_time}ms)"
-        )
+        logger.info(f"⏱️ [financiamiento-tendencia] Tiempo total: {total_time}ms")
         logger.info(f"📊 [financiamiento-tendencia] Generados {len(meses_data)} meses de datos")
 
         # ✅ ALERTA: Si la query es muy lenta
