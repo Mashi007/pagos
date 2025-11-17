@@ -2211,7 +2211,7 @@ def _obtener_cuotas_programadas_por_mes(
     fecha_fin: Optional[date],
 ) -> dict:
     """
-    Obtiene cuotas programadas por mes.
+    Obtiene cuotas programadas por mes (cuotas que vencen en ese mes).
     Retorna diccionario con (año, mes) como clave y monto como valor.
     """
     import time
@@ -2264,6 +2264,99 @@ def _obtener_cuotas_programadas_por_mes(
         cuotas_por_mes = {}
 
     return cuotas_por_mes
+
+
+def _obtener_morosidad_por_mes(
+    db: Session,
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+    fecha_inicio: Optional[date],
+    fecha_fin: Optional[date],
+) -> dict:
+    """
+    Obtiene morosidad mensual: cuotas que vencen en cada mes y NO fueron pagadas (o fueron pagadas parcialmente).
+    Retorna diccionario con (año, mes) como clave y monto como valor.
+    ✅ CORRECCIÓN: Calcula morosidad real del mes, no acumulada.
+    """
+    import time
+
+    from decimal import Decimal
+
+    from sqlalchemy import func, text
+
+    from app.models.amortizacion import Cuota
+    from app.models.prestamo import Prestamo
+
+    start_morosidad = time.time()
+    morosidad_por_mes = {}
+
+    try:
+        # Construir filtros para WHERE clause
+        where_conditions = [
+            "p.estado = 'APROBADO'",
+            "EXTRACT(YEAR FROM c.fecha_vencimiento) >= 2024"
+        ]
+        bind_params = {}
+
+        # Aplicar filtros de analista, concesionario, modelo
+        if analista:
+            where_conditions.append("(p.analista = :analista OR p.producto_financiero = :analista)")
+            bind_params["analista"] = analista
+        if concesionario:
+            where_conditions.append("p.concesionario = :concesionario")
+            bind_params["concesionario"] = concesionario
+        if modelo:
+            where_conditions.append("(p.producto = :modelo OR p.modelo_vehiculo = :modelo)")
+            bind_params["modelo"] = modelo
+        if fecha_inicio:
+            where_conditions.append("p.fecha_aprobacion >= :fecha_inicio")
+            bind_params["fecha_inicio"] = fecha_inicio
+        if fecha_fin:
+            where_conditions.append("p.fecha_aprobacion <= :fecha_fin")
+            bind_params["fecha_fin"] = fecha_fin
+
+        where_clause = " AND ".join(where_conditions)
+
+        # ✅ CORRECCIÓN: Calcular morosidad mensual real
+        # Morosidad del mes = cuotas que vencen en ese mes y NO fueron pagadas completamente
+        query_morosidad_sql = text(
+            f"""
+            SELECT
+                EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
+                EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
+                COALESCE(SUM(GREATEST(0, c.monto_cuota - COALESCE(c.total_pagado, 0))), 0) as morosidad_mensual
+            FROM cuotas c
+            INNER JOIN prestamos p ON c.prestamo_id = p.id
+            WHERE {where_clause}
+              AND c.estado != 'PAGADO'
+              AND (c.monto_cuota - COALESCE(c.total_pagado, 0)) > 0
+            GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+            ORDER BY año, mes
+            """
+        )
+
+        resultados_morosidad = db.execute(query_morosidad_sql.bindparams(**bind_params))
+
+        for row in resultados_morosidad:
+            año_mes = int(row[0])
+            num_mes = int(row[1])
+            monto_morosidad = float(row[2] or Decimal("0"))
+            morosidad_por_mes[(año_mes, num_mes)] = monto_morosidad
+
+        morosidad_time = int((time.time() - start_morosidad) * 1000)
+        logger.info(
+            f"📊 [financiamiento-tendencia] Query morosidad mensual completada en {morosidad_time}ms, {len(morosidad_por_mes)} meses con datos"
+        )
+    except Exception as e:
+        logger.error(f"⚠️ [financiamiento-tendencia] Error consultando morosidad mensual: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        morosidad_por_mes = {}
+
+    return morosidad_por_mes
 
 
 def _obtener_pagos_por_mes(
@@ -2380,10 +2473,12 @@ def _generar_datos_mensuales(
     nuevos_por_mes: dict,
     cuotas_por_mes: dict,
     pagos_por_mes: dict,
+    morosidad_por_mes: dict,
 ) -> list:
     """
     Genera datos mensuales con cálculo de morosidad y acumulados.
     Retorna lista de diccionarios con datos mensuales.
+    ✅ CORREGIDO: Usa morosidad_por_mes calculada directamente de cuotas no pagadas.
     """
     from decimal import Decimal
 
@@ -2408,8 +2503,8 @@ def _generar_datos_mensuales(
 
         monto_cuotas_programadas = cuotas_por_mes.get(mes_key_financiamiento, 0.0)
         monto_pagado_mes = pagos_por_mes.get(mes_key_financiamiento, 0.0)
-
-        morosidad_mensual = max(0.0, float(monto_cuotas_programadas) - float(monto_pagado_mes))
+        # ✅ CORRECCIÓN: Usar morosidad calculada directamente de cuotas no pagadas del mes
+        morosidad_mensual = morosidad_por_mes.get(mes_key_financiamiento, 0.0)
 
         total_acumulado += Decimal(str(monto_nuevos))
 
@@ -5254,20 +5349,20 @@ def obtener_financiamiento_tendencia_mensual(
         # Query para calcular suma de monto_cuota programado por mes (cuotas que vencen en cada mes)
         cuotas_por_mes = _obtener_cuotas_programadas_por_mes(db, analista, concesionario, modelo, fecha_inicio, fecha_fin)
 
-        # ✅ Query para calcular suma de monto_pagado de tabla pagos por mes
+        # ✅ Query para calcular suma de monto_pagado de tabla pagos por mes (fecha real de pago)
         pagos_por_mes = _obtener_pagos_por_mes(
             db, fecha_inicio_query, fecha_fin_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
 
-        # ✅ SIMPLIFICADO: Eliminada query innecesaria de cuotas_pagos_por_mes
-        # No se necesita para el cálculo de morosidad: morosidad = MAX(0, programado - pagado)
+        # ✅ CORRECCIÓN: Calcular morosidad mensual real (cuotas que vencen en ese mes y NO fueron pagadas)
+        morosidad_por_mes = _obtener_morosidad_por_mes(db, analista, concesionario, modelo, fecha_inicio, fecha_fin)
 
         # ✅ CÁLCULO CORREGIDO: Morosidad mensual (NO acumulativa)
         # Generar datos mensuales (incluyendo meses sin datos) y calcular acumulados
         logger.info("📊 [financiamiento-tendencia] Calculando morosidad mensual (NO acumulativa)")
 
         meses_data = _generar_datos_mensuales(
-            fecha_inicio_query, hoy, nuevos_por_mes, cuotas_por_mes, pagos_por_mes
+            fecha_inicio_query, hoy, nuevos_por_mes, cuotas_por_mes, pagos_por_mes, morosidad_por_mes
         )
 
         total_time = int((time.time() - start_time) * 1000)

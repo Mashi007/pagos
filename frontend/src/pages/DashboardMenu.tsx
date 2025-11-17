@@ -803,13 +803,27 @@ export function DashboardMenu() {
                       <ComposedChart data={evolucionMensual}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="mes" />
-                        <YAxis yAxisId="left" />
-                        <YAxis yAxisId="right" orientation="right" />
-                        <Tooltip />
+                        <YAxis 
+                          tickFormatter={(value) => {
+                            if (value >= 1000) {
+                              return `$${(value / 1000).toFixed(0)}K`
+                            }
+                            return `$${value}`
+                          }}
+                          label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft' }}
+                        />
+                        <Tooltip 
+                          formatter={(value: number, name: string) => {
+                            if (name === 'Morosidad') {
+                              return [formatCurrency(value), name]
+                            }
+                            return [formatCurrency(value), name]
+                          }}
+                        />
                         <Legend />
-                        <Bar yAxisId="left" dataKey="cartera" fill="#3b82f6" name="Cartera" />
-                        <Bar yAxisId="left" dataKey="cobrado" fill="#10b981" name="Cobrado" />
-                        <Line yAxisId="right" type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" />
+                        <Bar dataKey="cartera" fill="#3b82f6" name="Cartera" />
+                        <Bar dataKey="cobrado" fill="#10b981" name="Cobrado" />
+                        <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -1169,12 +1183,12 @@ export function DashboardMenu() {
               >
                 <Card className="shadow-lg border-2 border-gray-200">
                 <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <CardTitle className="flex items-center justify-center space-x-2 text-xl font-bold text-gray-800">
                     <BarChart3 className="h-6 w-6 text-purple-600" />
                     <span>Préstamos por Concesionario</span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-6">
+                  <CardContent className="p-6 flex items-center justify-center">
                   <ResponsiveContainer width="100%" height={400}>
                     <BarChart data={datosConcesionarios} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" />
@@ -1221,12 +1235,12 @@ export function DashboardMenu() {
               >
                 <Card className="shadow-lg border-2 border-gray-200">
                 <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b-2 border-amber-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                    <CardTitle className="flex items-center justify-center space-x-2 text-xl font-bold text-gray-800">
                     <BarChart3 className="h-6 w-6 text-amber-600" />
                     <span>Préstamos por Modelo</span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-6">
+                  <CardContent className="p-6 flex items-center justify-center">
                   <ResponsiveContainer width="100%" height={400}>
                     <BarChart data={datosModelos} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" />
