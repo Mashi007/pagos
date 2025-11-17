@@ -2600,6 +2600,144 @@ class DocumentoAIUpdate(BaseModel):
     activo: Optional[bool] = Field(None, description="Estado activo/inactivo")
 
 
+# ============================================================================
+# FUNCIONES HELPER PARA EXTRACCIÓN DE TEXTO - Refactorización
+# ============================================================================
+
+
+def _extraer_texto_txt(ruta_archivo: str) -> str:
+    """
+    Extrae texto de un archivo TXT.
+    Retorna texto extraído o cadena vacía si falla.
+    """
+    try:
+        with open(ruta_archivo, "r", encoding="utf-8", errors="ignore") as f:
+            return f.read()
+    except UnicodeDecodeError:
+        # Intentar con otras codificaciones comunes
+        for encoding in ["latin-1", "cp1252", "iso-8859-1"]:
+            try:
+                with open(ruta_archivo, "r", encoding=encoding, errors="ignore") as f:
+                    texto = f.read()
+                    logger.info(f"✅ Texto leído con codificación {encoding}")
+                    return texto
+            except Exception:
+                continue
+    return ""
+
+
+def _extraer_texto_pdf_pypdf2(ruta_archivo: str) -> tuple[str, bool]:
+    """
+    Extrae texto de PDF usando PyPDF2.
+    Retorna (texto, éxito).
+    """
+    try:
+        import PyPDF2
+
+        with open(ruta_archivo, "rb") as f:
+            pdf_reader = PyPDF2.PdfReader(f)
+            # Verificar si el PDF está encriptado
+            if pdf_reader.is_encrypted:
+                logger.warning("⚠️ PDF está encriptado. Intentando desencriptar sin contraseña...")
+                try:
+                    pdf_reader.decrypt("")
+                except Exception:
+                    logger.error("❌ PDF requiere contraseña para desencriptar.")
+                    return "", False
+
+            textos_paginas = []
+            for page in pdf_reader.pages:
+                texto_pagina = page.extract_text()
+                if texto_pagina:
+                    textos_paginas.append(texto_pagina)
+            return "\n".join(textos_paginas), True
+    except ImportError:
+        logger.warning("⚠️ PyPDF2 no está instalado. Instala con: pip install PyPDF2")
+        return "", False
+    except Exception as e:
+        logger.warning(f"⚠️ Error con PyPDF2: {e}. Intentando con pdfplumber...")
+        return "", False
+
+
+def _extraer_texto_pdf_pdfplumber(ruta_archivo: str) -> tuple[str, bool]:
+    """
+    Extrae texto de PDF usando pdfplumber.
+    Retorna (texto, éxito).
+    """
+    try:
+        import pdfplumber
+
+        with pdfplumber.open(ruta_archivo) as pdf:
+            textos_paginas = []
+            for page in pdf.pages:
+                texto_pagina = page.extract_text()
+                if texto_pagina:
+                    textos_paginas.append(texto_pagina)
+            return "\n".join(textos_paginas), True
+    except ImportError:
+        logger.error("❌ pdfplumber no está instalado. No se puede extraer texto de PDF.")
+        return "", False
+    except Exception as e:
+        logger.error(f"❌ Error con pdfplumber: {e}")
+        return "", False
+
+
+def _extraer_texto_pdf(ruta_archivo: str) -> str:
+    """
+    Extrae texto de PDF usando PyPDF2 o pdfplumber como fallback.
+    Retorna texto extraído o cadena vacía si falla.
+    """
+    # Intentar primero con PyPDF2
+    texto, exito = _extraer_texto_pdf_pypdf2(ruta_archivo)
+    if exito and texto.strip():
+        return texto
+
+    # Si PyPDF2 falló o no produjo texto, intentar con pdfplumber
+    texto, exito = _extraer_texto_pdf_pdfplumber(ruta_archivo)
+    if exito:
+        return texto
+
+    # Si ambos fallaron y PyPDF2 no estaba instalado, retornar error
+    if not texto and not exito:
+        logger.error("❌ Ni PyPDF2 ni pdfplumber están instalados. No se puede extraer texto de PDF.")
+    return ""
+
+
+def _extraer_texto_docx(ruta_archivo: str) -> str:
+    """
+    Extrae texto de un archivo DOCX.
+    Retorna texto extraído o cadena vacía si falla.
+    """
+    try:
+        from docx import Document
+
+        doc = Document(ruta_archivo)
+        textos_parrafos = []
+        for paragraph in doc.paragraphs:
+            if paragraph.text.strip():
+                textos_parrafos.append(paragraph.text)
+        return "\n".join(textos_parrafos)
+    except ImportError:
+        logger.warning("⚠️ python-docx no está instalado. Instala con: pip install python-docx")
+        return ""
+    except Exception as e:
+        logger.error(f"❌ Error extrayendo texto de DOCX: {e}")
+        return ""
+
+
+def _limpiar_y_normalizar_texto(texto: str) -> str:
+    """
+    Limpia y normaliza el texto extraído.
+    Retorna texto normalizado.
+    """
+    import re
+
+    texto = texto.strip()
+    # Eliminar espacios múltiples
+    texto = re.sub(r"\s+", " ", texto)
+    return texto
+
+
 def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
     """
     Extrae texto de un documento según su tipo
@@ -2619,99 +2757,21 @@ def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
             logger.error(f"❌ Archivo no encontrado: {ruta_archivo}")
             return ""
 
+        tipo_archivo_lower = tipo_archivo.lower()
         texto = ""
 
-        if tipo_archivo.lower() == "txt":
-            # Leer archivo de texto plano
-            try:
-                with open(ruta_archivo, "r", encoding="utf-8", errors="ignore") as f:
-                    texto = f.read()
-            except UnicodeDecodeError:
-                # Intentar con otras codificaciones comunes
-                for encoding in ["latin-1", "cp1252", "iso-8859-1"]:
-                    try:
-                        with open(ruta_archivo, "r", encoding=encoding, errors="ignore") as f:
-                            texto = f.read()
-                            logger.info(f"✅ Texto leído con codificación {encoding}")
-                            break
-                    except Exception:
-                        continue
-
-        elif tipo_archivo.lower() == "pdf":
-            # Extraer texto de PDF
-            texto_extraido = False
-            try:
-                import PyPDF2
-
-                with open(ruta_archivo, "rb") as f:
-                    pdf_reader = PyPDF2.PdfReader(f)
-                    # Verificar si el PDF está encriptado
-                    if pdf_reader.is_encrypted:
-                        logger.warning("⚠️ PDF está encriptado. Intentando desencriptar sin contraseña...")
-                        try:
-                            pdf_reader.decrypt("")
-                        except Exception:
-                            logger.error("❌ PDF requiere contraseña para desencriptar.")
-                            return ""
-
-                    textos_paginas = []
-                    for page in pdf_reader.pages:
-                        texto_pagina = page.extract_text()
-                        if texto_pagina:
-                            textos_paginas.append(texto_pagina)
-                    texto = "\n".join(textos_paginas)
-                    texto_extraido = True
-            except ImportError:
-                logger.warning("⚠️ PyPDF2 no está instalado. Instala con: pip install PyPDF2")
-            except Exception as e:
-                logger.warning(f"⚠️ Error con PyPDF2: {e}. Intentando con pdfplumber...")
-
-            # Intentar con pdfplumber como alternativa si PyPDF2 falló
-            if not texto_extraido or not texto.strip():
-                try:
-                    import pdfplumber
-
-                    with pdfplumber.open(ruta_archivo) as pdf:
-                        textos_paginas = []
-                        for page in pdf.pages:
-                            texto_pagina = page.extract_text()
-                            if texto_pagina:
-                                textos_paginas.append(texto_pagina)
-                        texto = "\n".join(textos_paginas)
-                        texto_extraido = True
-                except ImportError:
-                    if not texto_extraido:
-                        logger.error("❌ Ni PyPDF2 ni pdfplumber están instalados. No se puede extraer texto de PDF.")
-                        return ""
-                except Exception as e:
-                    logger.error(f"❌ Error con pdfplumber: {e}")
-                    if not texto_extraido:
-                        return ""
-
-        elif tipo_archivo.lower() == "docx":
-            # Extraer texto de DOCX
-            try:
-                from docx import Document
-
-                doc = Document(ruta_archivo)
-                textos_parrafos = []
-                for paragraph in doc.paragraphs:
-                    if paragraph.text.strip():
-                        textos_parrafos.append(paragraph.text)
-                texto = "\n".join(textos_parrafos)
-            except ImportError:
-                logger.warning("⚠️ python-docx no está instalado. Instala con: pip install python-docx")
-                return ""
-            except Exception as e:
-                logger.error(f"❌ Error extrayendo texto de DOCX: {e}")
-                return ""
+        if tipo_archivo_lower == "txt":
+            texto = _extraer_texto_txt(ruta_archivo)
+        elif tipo_archivo_lower == "pdf":
+            texto = _extraer_texto_pdf(ruta_archivo)
+        elif tipo_archivo_lower == "docx":
+            texto = _extraer_texto_docx(ruta_archivo)
+        else:
+            logger.warning(f"⚠️ Tipo de archivo no soportado: {tipo_archivo}")
+            return ""
 
         # Limpiar y normalizar texto
-        texto = texto.strip()
-        # Eliminar espacios múltiples
-        import re
-
-        texto = re.sub(r"\s+", " ", texto)
+        texto = _limpiar_y_normalizar_texto(texto)
 
         logger.info(f"✅ Texto extraído: {len(texto)} caracteres de {tipo_archivo}")
         return texto
