@@ -42,13 +42,19 @@ def diagnostico_ml_impago(
 ):
     """
     Endpoint de diagnóstico para verificar el estado del modelo ML Impago
+    Incluye verificación detallada del archivo .pkl
     """
     diagnostico = {
         "ml_service_available": False,
         "modelo_en_bd": None,
         "modelo_cargado": False,
         "archivo_existe": False,
+        "archivo_valido": False,
         "ruta_archivo": None,
+        "ruta_absoluta_encontrada": None,
+        "tamaño_archivo_kb": None,
+        "tipo_modelo": None,
+        "archivos_pkl_disponibles": [],
         "errores": [],
     }
     
@@ -88,37 +94,94 @@ def diagnostico_ml_impago(
             else:
                 diagnostico["errores"].append("Modelo no se cargó en memoria después de load_model_from_path")
                 
-                # Verificar si el archivo existe
+                # Verificar si el archivo existe con búsqueda exhaustiva
                 from pathlib import Path
-                ruta = Path(modelo_activo.ruta_archivo)
-                if "/" in modelo_activo.ruta_archivo or "\\" in modelo_activo.ruta_archivo:
-                    filename = Path(modelo_activo.ruta_archivo).parts[-1]
-                    search_paths = [
-                        Path(modelo_activo.ruta_archivo),
-                        Path("ml_models") / filename,
-                        Path("ml_models") / modelo_activo.ruta_archivo,
-                    ]
-                else:
-                    search_paths = [Path("ml_models") / modelo_activo.ruta_archivo]
+                import pickle
                 
-                archivos_encontrados = []
+                ruta_original = Path(modelo_activo.ruta_archivo)
+                search_paths = []
+                
+                # Construir lista de rutas a buscar
+                if ruta_original.is_absolute():
+                    search_paths.append(ruta_original)
+                else:
+                    # Ruta original
+                    search_paths.append(ruta_original)
+                    
+                    # ml_models en directorio actual
+                    search_paths.append(Path("ml_models") / modelo_activo.ruta_archivo)
+                    
+                    # Si tiene directorio, extraer solo el nombre del archivo
+                    if "/" in modelo_activo.ruta_archivo or "\\" in modelo_activo.ruta_archivo:
+                        filename = Path(modelo_activo.ruta_archivo).parts[-1]
+                        search_paths.append(Path("ml_models") / filename)
+                    
+                    # Directorio raíz del proyecto
+                    try:
+                        project_root = Path(__file__).parent.parent.parent.parent
+                        search_paths.append(project_root / "ml_models" / modelo_activo.ruta_archivo)
+                        if "/" in modelo_activo.ruta_archivo or "\\" in modelo_activo.ruta_archivo:
+                            filename = Path(modelo_activo.ruta_archivo).parts[-1]
+                            search_paths.append(project_root / "ml_models" / filename)
+                    except Exception:
+                        pass
+                    
+                    # Directorio de trabajo actual
+                    search_paths.append(Path.cwd() / modelo_activo.ruta_archivo)
+                    if "/" in modelo_activo.ruta_archivo or "\\" in modelo_activo.ruta_archivo:
+                        filename = Path(modelo_activo.ruta_archivo).parts[-1]
+                        search_paths.append(Path.cwd() / filename)
+                
+                # Buscar archivo
+                archivo_encontrado = None
                 for search_path in search_paths:
                     if search_path.exists() and search_path.is_file():
-                        archivos_encontrados.append(str(search_path.absolute()))
+                        archivo_encontrado = search_path
                         diagnostico["archivo_existe"] = True
-                        diagnostico["ruta_encontrada"] = str(search_path.absolute())
+                        diagnostico["ruta_absoluta_encontrada"] = str(search_path.absolute())
+                        diagnostico["tamaño_archivo_kb"] = round(search_path.stat().st_size / 1024, 2)
+                        
+                        # Intentar cargar el archivo para verificar que es válido
+                        try:
+                            with open(search_path, "rb") as f:
+                                modelo_cargado = pickle.load(f)
+                            diagnostico["archivo_valido"] = True
+                            diagnostico["tipo_modelo"] = type(modelo_cargado).__name__
+                        except Exception as e:
+                            diagnostico["archivo_valido"] = False
+                            diagnostico["errores"].append(f"Archivo encontrado pero no es válido (error al cargar): {e}")
                         break
                 
                 if not diagnostico["archivo_existe"]:
-                    diagnostico["errores"].append(f"Archivo no encontrado en ninguna de las rutas: {[str(p) for p in search_paths]}")
+                    diagnostico["errores"].append(f"Archivo no encontrado en ninguna de las {len(search_paths)} rutas buscadas")
+                    diagnostico["rutas_buscadas"] = [str(p.absolute()) for p in search_paths]
                     
-                    # Listar archivos .pkl en ml_models
-                    ml_models_dir = Path("ml_models")
-                    if ml_models_dir.exists():
-                        archivos_pkl = list(ml_models_dir.glob("*.pkl"))
-                        diagnostico["archivos_pkl_en_ml_models"] = [f.name for f in archivos_pkl]
+                    # Listar archivos .pkl disponibles en todos los directorios
+                    archivos_pkl_encontrados = []
+                    directorios_buscar = [
+                        Path("ml_models"),
+                        Path.cwd() / "ml_models",
+                    ]
+                    try:
+                        project_root = Path(__file__).parent.parent.parent.parent
+                        directorios_buscar.append(project_root / "ml_models")
+                    except Exception:
+                        pass
+                    
+                    for directorio in directorios_buscar:
+                        if directorio.exists() and directorio.is_dir():
+                            archivos_pkl = list(directorio.glob("*.pkl"))
+                            for archivo in archivos_pkl:
+                                archivos_pkl_encontrados.append({
+                                    "nombre": archivo.name,
+                                    "ruta": str(archivo.absolute()),
+                                    "tamaño_kb": round(archivo.stat().st_size / 1024, 2),
+                                })
+                    
+                    if archivos_pkl_encontrados:
+                        diagnostico["archivos_pkl_disponibles"] = archivos_pkl_encontrados
                     else:
-                        diagnostico["errores"].append("Directorio ml_models no existe")
+                        diagnostico["errores"].append("No se encontraron archivos .pkl en ningún directorio ml_models")
                         
         except Exception as e:
             diagnostico["errores"].append(f"Error cargando modelo: {str(e)}")
@@ -503,6 +566,7 @@ def obtener_clientes_atrasados(
         # Cargar modelo ML Impago una sola vez si está disponible
         ml_service = None
         modelo_cargado = False
+        razon_fallo_ml = None
         try:
             from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
 
@@ -514,14 +578,17 @@ def obtener_clientes_atrasados(
                     from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
 
                     if not ML_IMPAGO_SERVICE_AVAILABLE:
-                        logger.warning("⚠️ [ML] ML_IMPAGO_SERVICE_AVAILABLE es False - scikit-learn no está disponible")
+                        razon_fallo_ml = "ML_IMPAGO_SERVICE_AVAILABLE es False - scikit-learn no está disponible"
+                        logger.warning(f"⚠️ [ML] {razon_fallo_ml}")
                     elif not MLImpagoCuotasService:
-                        logger.warning("⚠️ [ML] MLImpagoCuotasService no está disponible")
+                        razon_fallo_ml = "MLImpagoCuotasService no está disponible"
+                        logger.warning(f"⚠️ [ML] {razon_fallo_ml}")
                     else:
                         logger.info("✅ [ML] Servicio ML Impago disponible, intentando cargar modelo...")
                         ml_service = MLImpagoCuotasService()
                         if not ml_service.load_model_from_path(modelo_activo.ruta_archivo):
-                            logger.error(f"❌ [ML] No se pudo cargar el modelo ML desde {modelo_activo.ruta_archivo}")
+                            razon_fallo_ml = f"No se pudo cargar el modelo ML desde {modelo_activo.ruta_archivo}"
+                            logger.error(f"❌ [ML] {razon_fallo_ml}")
                             logger.error("   [ML] Verificar que el archivo existe y es accesible")
                             ml_service = None
                         else:
@@ -531,15 +598,19 @@ def obtener_clientes_atrasados(
                                 logger.info(f"   [ML] Modelo en memoria: {type(ml_service.models['impago_cuotas_model']).__name__}")
                                 modelo_cargado = True
                             else:
-                                logger.error("❌ [ML] Modelo no se cargó en memoria después de load_model_from_path")
+                                razon_fallo_ml = "Modelo no se cargó en memoria después de load_model_from_path"
+                                logger.error(f"❌ [ML] {razon_fallo_ml}")
                                 ml_service = None
                 except ImportError as e:
-                    logger.error(f"❌ [ML] Error importando servicio ML Impago: {e}", exc_info=True)
+                    razon_fallo_ml = f"Error importando servicio ML Impago: {e}"
+                    logger.error(f"❌ [ML] {razon_fallo_ml}", exc_info=True)
             else:
-                logger.warning("⚠️ [ML] No hay modelo ML Impago activo en la base de datos")
+                razon_fallo_ml = "No hay modelo ML Impago activo en la base de datos"
+                logger.warning(f"⚠️ [ML] {razon_fallo_ml}")
                 logger.info("   [ML] Para activar un modelo, ve a la sección de entrenamiento de modelos ML")
         except Exception as e:
-            logger.error(f"❌ [ML] Error cargando modelo ML Impago: {e}", exc_info=True)
+            razon_fallo_ml = f"Error cargando modelo ML Impago: {e}"
+            logger.error(f"❌ [ML] {razon_fallo_ml}", exc_info=True)
 
         # Optimización: Cargar todos los préstamos de una vez
         # SOLUCIÓN DEFINITIVA: Usar load_only() desde el inicio para evitar cargar columnas que no existen
@@ -658,8 +729,10 @@ def obtener_clientes_atrasados(
 
                                 # Verificar si la predicción fue exitosa
                                 if prediccion.get("prediccion") == "Error" or prediccion.get("prediccion") == "Desconocido":
-                                    logger.debug(f"Predicción ML falló para préstamo {row.prestamo_id}: {prediccion.get('recomendacion', 'Error desconocido')}")
+                                    logger.warning(f"⚠️ [ML] Predicción ML falló para préstamo {row.prestamo_id}: {prediccion.get('recomendacion', 'Error desconocido')}")
                                     cliente_data["ml_impago"] = None
+                                    ml_errors += 1
+                                    ml_processed += 1
                                 else:
                                     cliente_data["ml_impago"] = {
                                         "probabilidad_impago": round(prediccion.get("probabilidad_impago", 0.0), 3),
@@ -670,18 +743,26 @@ def obtener_clientes_atrasados(
                                     ml_calculated += 1
                                     ml_processed += 1
                             except Exception as e:
-                                logger.debug(f"Error calculando predicción ML para préstamo {row.prestamo_id}: {e}")
+                                logger.warning(f"⚠️ [ML] Error calculando predicción ML para préstamo {row.prestamo_id}: {e}")
+                                logger.debug(f"   [ML] Detalles del error: {e}", exc_info=True)
                                 cliente_data["ml_impago"] = None
                                 ml_errors += 1
                                 ml_processed += 1
                         else:
+                            logger.debug(f"🔍 [ML] No hay cuotas para préstamo {row.prestamo_id}, no se puede calcular ML Impago")
                             cliente_data["ml_impago"] = None
                     else:
+                        if not ml_service:
+                            logger.debug(f"🔍 [ML] ml_service es None para préstamo {row.prestamo_id}")
+                        elif not modelo_cargado:
+                            logger.debug(f"🔍 [ML] modelo_cargado es False para préstamo {row.prestamo_id}")
                         cliente_data["ml_impago"] = None
                 else:
+                    logger.debug(f"🔍 [ML] Préstamo {row.prestamo_id} no está APROBADO o no existe en prestamos_dict")
                     cliente_data["ml_impago"] = None
             except Exception as e:
-                logger.debug(f"Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}")
+                logger.warning(f"⚠️ [ML] Error obteniendo predicción ML para préstamo {row.prestamo_id}: {e}")
+                logger.debug(f"   [ML] Detalles del error: {e}", exc_info=True)
                 cliente_data["ml_impago"] = None
 
             clientes_atrasados.append(cliente_data)
@@ -704,6 +785,7 @@ def obtener_clientes_atrasados(
             "ml_manuales": ml_manual,
             "ml_calculados": ml_calculated,
             "ml_errores": ml_errors,
+            "razon_fallo": razon_fallo_ml,
         }
         
         if ml_processed == 0:
@@ -712,14 +794,15 @@ def obtener_clientes_atrasados(
                 f"ml_service={'✅ disponible' if ml_service else '❌ None'}, "
                 f"modelo_cargado={'✅ True' if modelo_cargado else '❌ False'}, "
                 f"prestamos_dict={len(prestamos_dict)}, "
-                f"cuotas_dict={len(cuotas_dict)}"
+                f"cuotas_dict={len(cuotas_dict)}, "
+                f"razon_fallo={razon_fallo_ml or 'N/A'}"
             )
             
             # Agregar información adicional de diagnóstico
             if ml_service is None:
-                diagnostico_ml_dict["razon"] = "ml_service es None"
+                diagnostico_ml_dict["razon"] = razon_fallo_ml or "ml_service es None"
             elif not modelo_cargado:
-                diagnostico_ml_dict["razon"] = "modelo no se cargó en memoria"
+                diagnostico_ml_dict["razon"] = razon_fallo_ml or "modelo no se cargó en memoria"
                 # Intentar obtener más información
                 try:
                     from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
