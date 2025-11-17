@@ -662,6 +662,52 @@ async def obtener_estado_fine_tuning(
         raise HTTPException(status_code=500, detail=f"Error obteniendo estado: {str(e)}")
 
 
+@router.post("/fine-tuning/jobs/{job_id}/cancelar")
+async def cancelar_fine_tuning_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cancelar un job de fine-tuning"""
+    try:
+        # Buscar job en BD
+        job = db.query(FineTuningJob).filter(FineTuningJob.openai_job_id == job_id).first()
+
+        if not job:
+            raise HTTPException(status_code=404, detail="Job no encontrado")
+
+        # Verificar que el job puede ser cancelado
+        if job.status in ["succeeded", "failed", "cancelled"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se puede cancelar un job con estado '{job.status}'"
+            )
+
+        # Cancelar en OpenAI
+        openai_api_key = _obtener_openai_api_key(db)
+        service = AITrainingService(openai_api_key)
+        job_data = await service.cancelar_job(job_id)
+
+        # Actualizar estado en BD
+        job.status = job_data.get("status", "cancelled")
+        if job.status == "cancelled":
+            job.completado_en = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(job)
+
+        logger.info(f"Job {job_id} cancelado por usuario {current_user.id}")
+
+        return {"job": job.to_dict(), "mensaje": "Job cancelado exitosamente"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error cancelando job: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error cancelando job: {str(e)}")
+
+
 @router.post("/fine-tuning/activar")
 async def activar_modelo_fine_tuned(
     request: ActivarModeloRequest,

@@ -515,3 +515,34 @@ Por favor, mejora ambos textos siguiendo las instrucciones del sistema. Responde
         except Exception as e:
             logger.error(f"Error listando jobs: {e}", exc_info=True)
             raise
+
+    async def cancelar_job(self, job_id: str) -> Dict:
+        """
+        Cancelar un job de fine-tuning en OpenAI
+
+        Args:
+            job_id: ID del job en OpenAI
+
+        Returns:
+            Dict con información del job cancelado
+        """
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/fine_tuning/jobs/{job_id}/cancel",
+                    headers={"Authorization": f"Bearer {self.openai_api_key}"},
+                )
+
+                if response.status_code != 200:
+                    error_msg = response.text
+                    logger.error(f"Error cancelando job: {error_msg}")
+                    raise Exception(f"Error cancelando job: {error_msg}")
+
+                job_data = response.json()
+                logger.info(f"✅ Job cancelado: {job_id}")
+
+                return job_data
+
+        except Exception as e:
+            logger.error(f"Error cancelando job: {e}", exc_info=True)
+            raise

@@ -432,6 +432,21 @@ export function FineTuningTab() {
     }
   }
 
+  const handleCancelarJob = async (jobId: string) => {
+    if (!confirm('¿Estás seguro de que deseas cancelar este job de entrenamiento?')) {
+      return
+    }
+
+    try {
+      await aiTrainingService.cancelarFineTuningJob(jobId)
+      toast.success('Job cancelado exitosamente')
+      cargarJobs()
+    } catch (error: any) {
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al cancelar job'
+      toast.error(mensaje)
+    }
+  }
+
   const handleCrearConversacion = async () => {
     if (!nuevaPregunta.trim() || !nuevaRespuesta.trim()) {
       toast.error('La pregunta y respuesta son requeridas')
@@ -1905,14 +1920,26 @@ export function FineTuningTab() {
                         )}
                       </div>
                     </div>
-                    {job.status === 'succeeded' && job.modelo_entrenado && (
-                      <Button
-                        size="sm"
-                        onClick={() => handleActivarModelo(job.modelo_entrenado!)}
-                      >
-                        Activar Modelo
-                      </Button>
-                    )}
+                    <div className="flex gap-2">
+                      {(job.status === 'pending' || job.status === 'running') && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleCancelarJob(job.id)}
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          Cancelar
+                        </Button>
+                      )}
+                      {job.status === 'succeeded' && job.modelo_entrenado && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleActivarModelo(job.modelo_entrenado!)}
+                        >
+                          Activar Modelo
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
                 )

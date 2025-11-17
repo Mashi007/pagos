@@ -276,6 +276,13 @@ class AITrainingService {
     return await apiClient.post(`${this.baseUrl}/fine-tuning/activar`, { modelo_id: modeloId })
   }
 
+  /**
+   * Cancelar un job de fine-tuning
+   */
+  async cancelarFineTuningJob(jobId: string): Promise<{ job: FineTuningJob; mensaje: string }> {
+    return await apiClient.post(`${this.baseUrl}/fine-tuning/jobs/${jobId}/cancelar`)
+  }
+
   // ============================================
   // RAG MEJORADO (EMBEDDINGS)
   // ============================================
