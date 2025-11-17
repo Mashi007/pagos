@@ -24,7 +24,7 @@ Los índices funcionales con `DATE_TRUNC` o `EXTRACT` pueden causar problemas de
 
 #### ❌ ANTES (Índices Funcionales - Causaban Error)
 ```sql
-CREATE INDEX idx_pagos_date_trunc_month 
+CREATE INDEX idx_pagos_date_trunc_month
 ON pagos (
     DATE_TRUNC('month', fecha_pago)  -- ❌ Error: función no IMMUTABLE
 );
@@ -32,7 +32,7 @@ ON pagos (
 
 #### ✅ DESPUÉS (Índices Regulares Compuestos)
 ```sql
-CREATE INDEX idx_pagos_fecha_pago_activo_monto 
+CREATE INDEX idx_pagos_fecha_pago_activo_monto
 ON pagos (fecha_pago, activo, monto_pagado)
 WHERE fecha_pago IS NOT NULL
   AND activo = TRUE
@@ -93,7 +93,7 @@ PostgreSQL puede usar índices regulares en columnas de fecha para optimizar que
 Después de ejecutar el script, verificar que los índices se crearon correctamente:
 
 ```sql
-SELECT 
+SELECT
     schemaname,
     tablename,
     indexname,

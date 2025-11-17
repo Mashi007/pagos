@@ -27,8 +27,8 @@ He creado todo el código necesario para migrar el dashboard a usar **tablas ofi
 
 **Verificar que se crearon:**
 ```sql
-SELECT table_name 
-FROM information_schema.tables 
+SELECT table_name
+FROM information_schema.tables
 WHERE table_name LIKE 'dashboard_%';
 ```
 
@@ -53,7 +53,7 @@ Deberías ver 9 tablas:
 
 **Verificar que se poblaron:**
 ```sql
-SELECT 
+SELECT
     'dashboard_morosidad_mensual' as tabla,
     COUNT(*) as registros,
     MAX(fecha_actualizacion) as ultima_actualizacion
@@ -170,9 +170,9 @@ Por ahora, el endpoint `evolucion-morosidad` migrado funciona sin filtros. Si ne
 
 ### **Verificar Tablas Creadas:**
 ```sql
-SELECT 
+SELECT
     table_name,
-    (SELECT COUNT(*) FROM information_schema.columns 
+    (SELECT COUNT(*) FROM information_schema.columns
      WHERE table_name = t.table_name) as columnas
 FROM information_schema.tables t
 WHERE table_name LIKE 'dashboard_%'
@@ -181,7 +181,7 @@ ORDER BY table_name;
 
 ### **Verificar Datos:**
 ```sql
-SELECT 
+SELECT
     'dashboard_morosidad_mensual' as tabla,
     COUNT(*) as registros,
     MAX(fecha_actualizacion) as ultima_actualizacion

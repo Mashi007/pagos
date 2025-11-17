@@ -63,22 +63,22 @@ def aplicar_condiciones_aprobacion(
     current_user: User = Depends(get_current_user),
 ):
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-    
+
     # ✅ ACTUALIZA TASA DE INTERÉS EN LA BD
     if "tasa_interes" in condiciones:
         prestamo.tasa_interes = Decimal(str(condiciones["tasa_interes"]))  # Línea 933
-    
+
     # ✅ ACTUALIZA FECHA BASE DE CÁLCULO EN LA BD
     if "fecha_base_calculo" in condiciones:
         fecha_str = condiciones["fecha_base_calculo"]
         prestamo.fecha_base_calculo = date_parse(fecha_str).date()  # Línea 938
-    
+
     # ✅ ACTUALIZA PLAZO MÁXIMO Y RECALCULA CUOTAS
     if "plazo_maximo" in condiciones:
         actualizar_cuotas_segun_plazo_maximo(
             prestamo, condiciones["plazo_maximo"], db
         )
-    
+
     # ✅ CAMBIA ESTADO Y GENERA AMORTIZACIÓN
     if condiciones.get("estado") == "APROBADO":
         procesar_cambio_estado(
@@ -90,11 +90,11 @@ def aplicar_condiciones_aprobacion(
             tasa_interes=Decimal(str(condiciones.get("tasa_interes", 0))),
             fecha_base_calculo=prestamo.fecha_base_calculo,
         )
-    
+
     # ✅ **GUARDA EN LA BASE DE DATOS**
     db.commit()      # Línea 961 - Persiste cambios en PostgreSQL
     db.refresh(prestamo)  # Línea 962 - Recarga desde BD para verificar
-    
+
     return {
         "message": "Condiciones aplicadas exitosamente",
         "tasa_interes": float(prestamo.tasa_interes),  # ✅ Valores actualizados desde BD
@@ -116,7 +116,7 @@ def aplicar_condiciones_aprobacion(
 
 ```sql
 UPDATE prestamos
-SET 
+SET
     tasa_interes = 12.5,                    -- ✅ Valor editado por admin
     fecha_base_calculo = '2025-11-15',     -- ✅ Fecha seleccionada por admin
     numero_cuotas = 24,                     -- ✅ Recalculado según plazo_maximo
@@ -191,11 +191,11 @@ WHERE id = {prestamo_id}
 
 **SÍ, el formulario está 100% conectado a la base de datos:**
 
-✅ Los valores editados en el frontend se envían al backend  
-✅ El backend actualiza los campos en el modelo SQLAlchemy  
-✅ `db.commit()` **PERSISTE los cambios en PostgreSQL**  
-✅ La tabla de amortización se genera con los valores actualizados  
-✅ El frontend recibe confirmación con los valores guardados  
+✅ Los valores editados en el frontend se envían al backend
+✅ El backend actualiza los campos en el modelo SQLAlchemy
+✅ `db.commit()` **PERSISTE los cambios en PostgreSQL**
+✅ La tabla de amortización se genera con los valores actualizados
+✅ El frontend recibe confirmación con los valores guardados
 
 **La conexión Frontend → Backend → Base de Datos está completamente funcional.**
 

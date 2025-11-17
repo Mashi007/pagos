@@ -434,9 +434,9 @@ export function TicketsAtencion() {
                                     )}
                                   </div>
                                 </div>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
+                                <Button
+                                  size="sm"
+                                  variant="outline"
                                   className="ml-2 flex-shrink-0"
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -687,7 +687,7 @@ export function TicketsAtencion() {
             <div className="relative">
               {/* Línea vertical de la timeline */}
               <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-200 via-blue-300 to-blue-200" />
-              
+
               {/* Lista de tickets en timeline */}
               <div className="space-y-6">
                 {ticketsFiltrados
@@ -702,7 +702,7 @@ export function TicketsAtencion() {
                     const prioridadInfo = getPrioridadInfo(ticket.prioridad)
                     const EstadoIcon = estadoInfo.icon
                     const isLast = index === ticketsFiltrados.length - 1
-                    
+
                     return (
                       <motion.div
                         key={ticket.id}

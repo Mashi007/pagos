@@ -19,7 +19,7 @@ py scripts\generar_hash_simple.py Casa1803+
 
 Copia el SQL que se muestra y ejecútalo en:
 - pgAdmin
-- DBeaver  
+- DBeaver
 - psql (línea de comandos)
 - Cualquier cliente SQL
 
@@ -46,7 +46,7 @@ psql -U tu_usuario -d tu_base_de_datos -f C:\Users\PORTATIL\Documents\GitHub\pag
 Después de ejecutar, verifica con:
 
 ```sql
-SELECT 
+SELECT
     email,
     nombre,
     apellido,

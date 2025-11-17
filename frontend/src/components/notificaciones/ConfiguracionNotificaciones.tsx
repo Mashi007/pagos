@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 
 export function ConfiguracionNotificaciones() {
   console.log('🔄 [ConfiguracionNotificaciones] Componente renderizado')
-  
+
   const [configEnvios, setConfigEnvios] = useState<Record<string, { habilitado: boolean, cco: string[] }>>({})
   const [guardandoEnvios, setGuardandoEnvios] = useState(false)
   const [cargando, setCargando] = useState(true)
@@ -254,29 +254,29 @@ export function ConfiguracionNotificaciones() {
           ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="grid w-full grid-cols-4 h-12 bg-gray-100 p-1">
-              <TabsTrigger 
-                value="previa" 
+              <TabsTrigger
+                value="previa"
                 className="flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white transition-all"
               >
                 <Bell className="h-4 w-4" />
                 <span className="font-medium">Notificación Previa</span>
               </TabsTrigger>
-              <TabsTrigger 
-                value="dia-pago" 
+              <TabsTrigger
+                value="dia-pago"
                 className="flex items-center gap-2 data-[state=active]:bg-green-500 data-[state=active]:text-white transition-all"
               >
                 <Calendar className="h-4 w-4" />
                 <span className="font-medium">Día de Pago</span>
               </TabsTrigger>
-              <TabsTrigger 
-                value="retrasada" 
+              <TabsTrigger
+                value="retrasada"
                 className="flex items-center gap-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white transition-all"
               >
                 <AlertTriangle className="h-4 w-4" />
                 <span className="font-medium">Retrasada</span>
               </TabsTrigger>
-              <TabsTrigger 
-                value="prejudicial" 
+              <TabsTrigger
+                value="prejudicial"
                 className="flex items-center gap-2 data-[state=active]:bg-red-500 data-[state=active]:text-white transition-all"
               >
                 <Shield className="h-4 w-4" />
@@ -289,11 +289,11 @@ export function ConfiguracionNotificaciones() {
               const primeraTarjeta = mapeoTipos[tipos[0] as keyof typeof mapeoTipos]
               const colorCategoria = primeraTarjeta?.color || 'blue'
               const colores = coloresCategoria[colorCategoria as keyof typeof coloresCategoria]
-              
+
               // Ordenar tipos según el criterio seleccionado para esta pestaña
               const ordenActual = ordenamiento[pestaña] || 'default'
               const tiposOrdenados = ordenarTipos(tipos, ordenActual, pestaña)
-              
+
               return (
                 <TabsContent key={pestaña} value={pestaña} className="space-y-4 mt-6">
                   {/* Menú de ordenamiento */}
@@ -304,8 +304,8 @@ export function ConfiguracionNotificaciones() {
                           <ChevronUp className="h-3 w-3 text-gray-400" />
                           <ChevronDown className="h-3 w-3 text-gray-400" />
                         </div>
-                        <Select 
-                          value={ordenActual} 
+                        <Select
+                          value={ordenActual}
                           onValueChange={(value) => {
                             setOrdenamiento(prev => ({
                               ...prev,
@@ -328,7 +328,7 @@ export function ConfiguracionNotificaciones() {
                       </div>
                     </div>
                   )}
-                  
+
                   <div className={`grid grid-cols-1 ${tiposOrdenados.length === 1 ? 'md:grid-cols-1 max-w-2xl mx-auto' : tiposOrdenados.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'} gap-5`}>
                     {tiposOrdenados.map(tipo => {
                       const mapeo = mapeoTipos[tipo as keyof typeof mapeoTipos]
@@ -337,10 +337,10 @@ export function ConfiguracionNotificaciones() {
                       const ccoList = config.cco || []
                       const colorTipo = mapeo?.color || 'blue'
                       const coloresTarjeta = coloresCategoria[colorTipo as keyof typeof coloresCategoria]
-                      
+
                       return (
-                        <div 
-                          key={tipo} 
+                        <div
+                          key={tipo}
                           className={`border-2 rounded-xl p-6 space-y-4 ${coloresTarjeta.bg} ${coloresTarjeta.border} hover:shadow-lg transition-all transform hover:-translate-y-1`}
                         >
                           {/* Header con toggle */}
@@ -371,7 +371,7 @@ export function ConfiguracionNotificaciones() {
                             <span className={`text-xs w-8 text-center font-medium ${habilitado ? 'text-gray-900' : 'text-gray-400'}`}>ON</span>
                           </div>
                         </div>
-                        
+
                           {/* CCO mejorado - Campos más grandes y cómodos */}
                           <div className={`pt-4 border-t-2 ${colorTipo === 'blue' ? 'border-blue-300' : colorTipo === 'green' ? 'border-green-300' : colorTipo === 'orange' ? 'border-orange-300' : 'border-red-300'} opacity-50`}>
                             <div className="flex items-center gap-2 mb-4">

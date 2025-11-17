@@ -130,8 +130,8 @@ grep -r "query_monitor" backend/app/api/v1/endpoints/prestamos.py
 ### Script SQL (Falta ejecutar):
 ```sql
 -- Verificar índices creados
-SELECT indexname FROM pg_indexes 
-WHERE indexname LIKE 'idx_prestamos_%' 
+SELECT indexname FROM pg_indexes
+WHERE indexname LIKE 'idx_prestamos_%'
    OR indexname LIKE 'idx_cuotas_%'
    OR indexname LIKE 'idx_pagos_%';
 ```

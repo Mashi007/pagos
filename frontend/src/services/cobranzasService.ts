@@ -41,7 +41,7 @@ class CobranzasService {
 
   // Obtener clientes atrasados
   async getClientesAtrasados(
-    diasRetraso?: number, 
+    diasRetraso?: number,
     diasRetrasoMin?: number,
     diasRetrasoMax?: number,
     incluirAdmin: boolean = false
@@ -67,7 +67,7 @@ class CobranzasService {
     }
     if (incluirAdmin) params.append('incluir_admin', 'true')
     const url = `${this.baseUrl}/clientes-atrasados${params.toString() ? `?${params.toString()}` : ''}`
-    
+
     try {
       const result = await apiClient.get<ClienteAtrasado[]>(url, { timeout: 60000 })
       console.log(`✅ [Cobranzas] Clientes atrasados cargados: ${result.length}`)
@@ -88,7 +88,7 @@ class CobranzasService {
   // Obtener cobranzas por analista
   async getCobranzasPorAnalista(incluirAdmin: boolean = false): Promise<CobranzasPorAnalista[]> {
     const url = `${this.baseUrl}/por-analista${incluirAdmin ? '?incluir_admin=true' : ''}`
-    
+
     try {
       const result = await apiClient.get<CobranzasPorAnalista[]>(url, { timeout: 60000 })
       console.log(`✅ [Cobranzas] Datos por analista cargados: ${result.length}`)
@@ -107,7 +107,7 @@ class CobranzasService {
   // Obtener montos vencidos por mes
   async getMontosPorMes(incluirAdmin: boolean = false): Promise<MontosPorMes[]> {
     const url = `${this.baseUrl}/montos-por-mes${incluirAdmin ? '?incluir_admin=true' : ''}`
-    
+
     try {
       const result = await apiClient.get<MontosPorMes[]>(url, { timeout: 60000 })
       console.log(`✅ [Cobranzas] Montos por mes cargados: ${result.length}`)
@@ -122,7 +122,7 @@ class CobranzasService {
   async getResumen(incluirAdmin: boolean = false): Promise<ResumenCobranzas> {
     const url = `${this.baseUrl}/resumen${incluirAdmin ? '?incluir_admin=true' : ''}`
     console.log('🔍 [Cobranzas] Iniciando petición a:', url)
-    
+
     try {
       const startTime = Date.now()
       const result = await apiClient.get<ResumenCobranzas>(url, { timeout: 60000 })
@@ -157,9 +157,9 @@ class CobranzasService {
     if (params?.dias_retraso_max) searchParams.append('dias_retraso_max', params.dias_retraso_max.toString())
     if (params?.analista) searchParams.append('analista', params.analista)
     if (params?.formato) searchParams.append('formato', params.formato)
-    
+
     const url = `${this.baseUrl}/informes/clientes-atrasados?${searchParams.toString()}`
-    
+
     if (params?.formato === 'pdf' || params?.formato === 'excel') {
       // Descargar archivo usando axios directamente
       const axiosInstance = apiClient.getAxiosInstance()
@@ -177,14 +177,14 @@ class CobranzasService {
       window.URL.revokeObjectURL(urlBlob)
       return { success: true }
     }
-    
+
     return await apiClient.get(url)
   }
 
   // Informe 2: Rendimiento por Analista
   async getInformeRendimientoAnalista(formato: 'json' | 'pdf' | 'excel' = 'json'): Promise<any> {
     const url = `${this.baseUrl}/informes/rendimiento-analista?formato=${formato}`
-    
+
     if (formato === 'pdf' || formato === 'excel') {
       const axiosInstance = apiClient.getAxiosInstance()
       const response = await axiosInstance.get(url, { responseType: 'blob' })
@@ -201,7 +201,7 @@ class CobranzasService {
       window.URL.revokeObjectURL(urlBlob)
       return { success: true }
     }
-    
+
     return await apiClient.get(url)
   }
 
@@ -215,9 +215,9 @@ class CobranzasService {
     if (params?.fecha_inicio) searchParams.append('fecha_inicio', params.fecha_inicio)
     if (params?.fecha_fin) searchParams.append('fecha_fin', params.fecha_fin)
     if (params?.formato) searchParams.append('formato', params.formato)
-    
+
     const url = `${this.baseUrl}/informes/montos-vencidos-periodo?${searchParams.toString()}`
-    
+
     if (params?.formato === 'pdf' || params?.formato === 'excel') {
       const axiosInstance = apiClient.getAxiosInstance()
       const response = await axiosInstance.get(url, { responseType: 'blob' })
@@ -234,14 +234,14 @@ class CobranzasService {
       window.URL.revokeObjectURL(urlBlob)
       return { success: true }
     }
-    
+
     return await apiClient.get(url)
   }
 
   // Informe 4: Antigüedad de Saldos
   async getInformeAntiguedadSaldos(formato: 'json' | 'pdf' | 'excel' = 'json'): Promise<any> {
     const url = `${this.baseUrl}/informes/antiguedad-saldos?formato=${formato}`
-    
+
     if (formato === 'pdf' || formato === 'excel') {
       const axiosInstance = apiClient.getAxiosInstance()
       const response = await axiosInstance.get(url, { responseType: 'blob' })
@@ -258,14 +258,14 @@ class CobranzasService {
       window.URL.revokeObjectURL(urlBlob)
       return { success: true }
     }
-    
+
     return await apiClient.get(url)
   }
 
   // Informe 5: Resumen Ejecutivo
   async getInformeResumenEjecutivo(formato: 'json' | 'pdf' | 'excel' = 'json'): Promise<any> {
     const url = `${this.baseUrl}/informes/resumen-ejecutivo?formato=${formato}`
-    
+
     if (formato === 'pdf' || formato === 'excel') {
       const axiosInstance = apiClient.getAxiosInstance()
       const response = await axiosInstance.get(url, { responseType: 'blob' })
@@ -282,7 +282,7 @@ class CobranzasService {
       window.URL.revokeObjectURL(urlBlob)
       return { success: true }
     }
-    
+
     return await apiClient.get(url)
   }
 
@@ -295,7 +295,7 @@ class CobranzasService {
   async getDiagnostico(): Promise<any> {
     const url = `${this.baseUrl}/diagnostico`
     console.log('🔍 [Cobranzas] Obteniendo diagnóstico completo...')
-    
+
     try {
       const result = await apiClient.get(url, { timeout: 60000 })
       console.log('✅ [Cobranzas] Diagnóstico recibido:', result)
@@ -310,7 +310,7 @@ class CobranzasService {
   async getResumenConDiagnostico(): Promise<any> {
     const url = `${this.baseUrl}/resumen?incluir_diagnostico=true`
     console.log('🔍 [Cobranzas] Obteniendo resumen con diagnóstico...')
-    
+
     try {
       const result = await apiClient.get(url, { timeout: 60000 })
       console.log('✅ [Cobranzas] Resumen con diagnóstico recibido:', result)
@@ -326,7 +326,7 @@ class CobranzasService {
   async actualizarAnalista(prestamoId: number, analistaValue: string): Promise<any> {
     const { prestamoService } = await import('./prestamoService')
     const isEmail = analistaValue.includes('@')
-    
+
     if (isEmail) {
       // Es un email, actualizar usuario_proponente
       return await prestamoService.updatePrestamo(prestamoId, { usuario_proponente: analistaValue })

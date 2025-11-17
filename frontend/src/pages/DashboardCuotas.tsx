@@ -100,8 +100,8 @@ export function DashboardCuotas() {
         {
           estado: 'Atrasadas',
           cantidad: kpisData.cuotas_atrasadas_mes,
-          porcentaje: kpisData.total_cuotas_mes > 0 
-            ? (kpisData.cuotas_atrasadas_mes / kpisData.total_cuotas_mes) * 100 
+          porcentaje: kpisData.total_cuotas_mes > 0
+            ? (kpisData.cuotas_atrasadas_mes / kpisData.total_cuotas_mes) * 100
             : 0,
           color: '#ef4444',
         },
@@ -122,8 +122,8 @@ export function DashboardCuotas() {
         {
           estado: 'Conciliadas',
           cantidad: kpisData.total_cuotas_conciliadas,
-          porcentaje: kpisData.total_cuotas_mes > 0 
-            ? (kpisData.total_cuotas_conciliadas / kpisData.total_cuotas_mes) * 100 
+          porcentaje: kpisData.total_cuotas_mes > 0
+            ? (kpisData.total_cuotas_conciliadas / kpisData.total_cuotas_mes) * 100
             : 0,
           color: '#3b82f6',
         },

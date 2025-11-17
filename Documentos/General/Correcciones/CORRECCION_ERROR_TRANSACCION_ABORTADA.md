@@ -7,7 +7,7 @@
 ## ❌ Error Identificado
 
 ```
-sqlalchemy.exc.InternalError: (psycopg2.errors.InFailedSqlTransaction) 
+sqlalchemy.exc.InternalError: (psycopg2.errors.InFailedSqlTransaction)
 current transaction is aborted, commands ignored until end of transaction block
 ```
 

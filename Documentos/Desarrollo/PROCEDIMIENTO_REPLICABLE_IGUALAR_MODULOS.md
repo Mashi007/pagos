@@ -15,8 +15,8 @@ Aplicar el mismo perfil y funcionalidades de Analistas a otros módulos (Concesi
 #### 1.1 Verificar estructura BD
 ```sql
 -- Verificar columnas existentes
-SELECT column_name, data_type 
-FROM information_schema.columns 
+SELECT column_name, data_type
+FROM information_schema.columns
 WHERE table_name = 'tu_tabla';
 ```
 
@@ -183,20 +183,20 @@ const validateNombre = (nombre: string): string => {
   if (!nombre.trim()) return 'El nombre es requerido'
   const nombreLimpio = nombre.trim().replace(/\s+/g, ' ')
   const palabras = nombreLimpio.split(' ')
-  
+
   if (palabras.length < 2) {
     return 'Debe ingresar al menos 2 palabras (Nombre y Apellido)'
   }
   if (palabras.length > 4) {
     return 'Debe ingresar máximo 4 palabras'
   }
-  
+
   for (const palabra of palabras) {
     if (palabra.length < 2) {
       return 'Cada palabra debe tener al menos 2 caracteres'
     }
   }
-  
+
   return ''
 }
 ```

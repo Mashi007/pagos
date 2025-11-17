@@ -4677,7 +4677,7 @@ def _obtener_estadisticas_tablas(db: Session) -> str:
                 try:
                     query_fecha = text(
                         f"""
-                        SELECT 
+                        SELECT
                             MIN(fecha_registro) as min_fecha,
                             MAX(fecha_registro) as max_fecha
                         FROM {tabla}
@@ -4747,7 +4747,7 @@ def _analisis_ml_morosidad_predictiva(db: Session) -> dict:
         # Obtener datos históricos para análisis
         query = text(
             """
-            SELECT 
+            SELECT
                 p.analista,
                 p.concesionario,
                 p.total_financiamiento,
@@ -4828,7 +4828,7 @@ def _analisis_ml_segmentacion_clientes(db: Session) -> dict:
         # Segmentar clientes por comportamiento de pago
         query = text(
             """
-            SELECT 
+            SELECT
                 c.cedula,
                 c.nombres,
                 COUNT(DISTINCT p.id) as total_prestamos,
@@ -4958,14 +4958,14 @@ def _analisis_ml_deteccion_anomalias(db: Session) -> dict:
         # Detectar anomalías en pagos
         query_anomalias = text(
             """
-            SELECT 
+            SELECT
                 p.id,
                 p.cedula,
                 p.monto_pagado,
                 p.fecha_pago,
                 p.numero_documento,
                 pr.total_financiamiento,
-                CASE 
+                CASE
                     WHEN p.monto_pagado > pr.total_financiamiento * 0.5 THEN 'PAGO_MUY_ALTO'
                     WHEN p.monto_pagado < 100 THEN 'PAGO_MUY_BAJO'
                     WHEN p.fecha_pago < pr.fecha_aprobacion THEN 'PAGO_ANTES_APROBACION'
@@ -5019,7 +5019,7 @@ def _analisis_ml_clustering_prestamos(db: Session) -> dict:
         # Agrupar préstamos por características similares
         query = text(
             """
-            SELECT 
+            SELECT
                 p.analista,
                 p.concesionario,
                 p.producto,
@@ -5099,14 +5099,14 @@ def _analizar_pagos_segun_vencimiento(db: Session, año: int, mes: int) -> dict:
         # Consulta: Cuotas con fecha_vencimiento en el mes y si fueron pagadas
         query = text(
             """
-            SELECT 
+            SELECT
                 c.id as cuota_id,
                 c.prestamo_id,
                 c.fecha_vencimiento,
                 c.monto_cuota,
                 c.estado as estado_cuota,
                 c.total_pagado,
-                CASE 
+                CASE
                     WHEN c.estado = 'PAGADA' AND c.fecha_pago IS NOT NULL THEN TRUE
                     ELSE FALSE
                 END as fue_pagada,
@@ -6331,7 +6331,7 @@ Tienes acceso a información de la base de datos del sistema y a la fecha/hora a
 {info_esquema}
 
 === INVENTARIO COMPLETO DE CAMPOS ===
-El sistema tiene acceso completo a TODOS los campos de TODAS las tablas. 
+El sistema tiene acceso completo a TODOS los campos de TODAS las tablas.
 El inventario detallado está disponible más abajo en "INVENTARIO COMPLETO DE CAMPOS DE BASE DE DATOS".
 
 RESUMEN RÁPIDO DE TABLAS PRINCIPALES:
@@ -6377,7 +6377,7 @@ PROCESO DE ANÁLISIS:
 5. Presenta resultados con contexto y conclusiones claras
 
 EJEMPLOS DE PREGUNTAS VÁLIDAS (para referencia):
-- **Búsqueda de clientes**: 
+- **Búsqueda de clientes**:
   * "¿Cómo se llama quien tiene este número de cédula: V19226493?"
   * "¿Quién tiene la cédula V19226493?"
   * "Buscar cliente con cédula V19226493"
@@ -6459,7 +6459,7 @@ INSTRUCCIONES COMO ESPECIALISTA EN COBRANZAS Y PRÉSTAMOS:
 11. Responde siempre en español con un tono profesional de especialista
 12. Para preguntas sobre la fecha actual, usa la información de "Fecha y hora actual del sistema" del resumen
 13. Proporciona contexto y análisis cuando sea relevante (ej: "Tienes X cuotas en mora, lo que representa Y% del total")
-14. **COMPRENSIÓN SEMÁNTICA DE CAMPOS**: 
+14. **COMPRENSIÓN SEMÁNTICA DE CAMPOS**:
     - NO busques solo coincidencias textuales exactas. Usa el "MAPEO SEMÁNTICO DE CAMPOS" para entender sinónimos
     - Si el usuario dice "cuándo vence", entiende que se refiere a "fecha_vencimiento"
     - Si dice "monto pagado", puede referirse a "monto_pagado" o "total_pagado" según el contexto
@@ -6489,17 +6489,17 @@ INSTRUCCIONES COMO ESPECIALISTA EN COBRANZAS Y PRÉSTAMOS:
       * Crecimiento de cartera: Comparación período actual vs anterior
     - Comparaciones entre períodos: calcula diferencias y porcentajes de cambio
     - Promedios, sumas, diferencias, porcentajes, variaciones, etc.
-    - Si la pregunta menciona meses específicos (ej: "septiembre", "octubre"), 
+    - Si la pregunta menciona meses específicos (ej: "septiembre", "octubre"),
       el sistema automáticamente ejecutará consultas SQL para obtener datos precisos de esos meses
     - Usa los datos de "CÁLCULOS ESPECÍFICOS SOLICITADOS" cuando estén disponibles - son consultas directas a BD
-    - **ANÁLISIS DE PAGOS SEGÚN FECHAS DE VENCIMIENTO**: 
+    - **ANÁLISIS DE PAGOS SEGÚN FECHAS DE VENCIMIENTO**:
       * El sistema puede analizar si los pagos se realizaron según las fechas de vencimiento de las cuotas
       * Compara fecha_pago de cuotas con fecha_vencimiento
       * Clasifica pagos como: según vencimiento (±3 días), antes, después, o no pagados
       * Si preguntan "ninguno en [mes] pagó según fechas de vencimiento", el sistema ejecutará este análisis automáticamente
       * Los resultados aparecen en "Análisis de Pagos según Fechas de Vencimiento"
 14. **ESTRUCTURA DE RESPUESTA PARA ANÁLISIS**:
-    
+
     **Para consultas de tendencias**:
     - **Métrica**: [Nombre del KPI]
     - **Período actual**: [Valor y fecha]
@@ -6507,16 +6507,16 @@ INSTRUCCIONES COMO ESPECIALISTA EN COBRANZAS Y PRÉSTAMOS:
     - **Cambio**: [+/- X% o $X] → ⬆️ Aumentó / ⬇️ Disminuyó
     - **Interpretación**: [Qué significa este cambio]
     - **Fuente de datos**: [Tablas y campos utilizados]
-    
+
     **Para proyecciones operativas**:
     - **Concepto**: [Qué se debe cobrar]
     - **Monto total**: $[X,XXX.XX]
-    - **Desglose**: 
+    - **Desglose**:
       - Por rango de mora: [distribución]
       - Top clientes: [mayores montos]
       - Por zona/producto: [si aplica]
     - **Fuente**: [Query o cálculo realizado]
-    
+
     **CUANDO REALICES CÁLCULOS, siempre muestra**:
     - ✅ Fórmula utilizada
     - ✅ Valores extraídos de la BD
@@ -6558,31 +6558,31 @@ INSTRUCCIONES COMO ESPECIALISTA EN COBRANZAS Y PRÉSTAMOS:
     - El sistema tiene capacidades de Machine Learning activas y puede ejecutar análisis automáticamente
     - Cuando detectes preguntas sobre ML, el sistema ejecutará consultas SQL especializadas
     - **TIPOS DE ANÁLISIS ML DISPONIBLES**:
-      
+
       a) **PREDICCIÓN DE MOROSIDAD**:
          - Analiza patrones históricos de morosidad por analista/concesionario
          - Calcula factores de riesgo basados en múltiples variables
          - Identifica préstamos con mayor probabilidad de mora
          - Palabras clave: "predicción morosidad", "riesgo", "predecir mora"
-      
+
       b) **SEGMENTACIÓN DE CLIENTES**:
          - Agrupa clientes en segmentos: Excelentes, Buenos, Regulares, Riesgo
          - Basado en comportamiento de pago histórico
          - Permite estrategias diferenciadas por segmento
          - Palabras clave: "segmentación", "segmentar clientes", "grupos de clientes"
-      
+
       c) **DETECCIÓN DE ANOMALÍAS**:
          - Identifica pagos con montos inusuales (muy altos o muy bajos)
          - Detecta pagos registrados antes de aprobación de préstamo
          - Encuentra patrones irregulares en transacciones
          - Palabras clave: "anomalías", "irregularidades", "pagos extraños"
-      
+
       d) **CLUSTERING DE PRÉSTAMOS**:
          - Agrupa préstamos por características similares (analista, producto, modalidad)
          - Identifica clusters de alto y bajo rendimiento
          - Permite optimizar políticas por tipo de cluster
          - Palabras clave: "clustering", "agrupar préstamos", "grupos similares"
-    
+
     - **CÓMO USAR**: Simplemente pregunta sobre cualquiera de estos análisis y el sistema los ejecutará automáticamente
     - **EJEMPLOS**:
       * "Haz un análisis de machine learning para predecir morosidad"

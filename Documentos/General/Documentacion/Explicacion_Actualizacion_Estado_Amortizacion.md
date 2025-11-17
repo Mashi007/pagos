@@ -1,6 +1,6 @@
 # 📋 EXPLICACIÓN: Actualización de Estado en Amortización por Pago
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Objetivo:** Documentar cómo se actualiza el estado de las cuotas cuando se aplica un pago
 
 ---
@@ -66,7 +66,7 @@ return _actualizar_estado_cuota(cuota, fecha_hoy, db, es_exceso)
 if cuota.total_pagado >= cuota.monto_cuota:
     # Verificar si TODOS los pagos están conciliados
     todos_conciliados = _verificar_pagos_conciliados_cuota(db, cuota.id, cuota.prestamo_id)
-    
+
     if todos_conciliados:
         cuota.estado = "PAGADO"  # ✅ Estado final
     else:
@@ -127,7 +127,7 @@ else:
 
 ## 🔍 VERIFICACIÓN DE CONCILIACIÓN
 
-**Función:** `_verificar_pagos_conciliados_cuota()`  
+**Función:** `_verificar_pagos_conciliados_cuota()`
 **Ubicación:** `backend/app/api/v1/endpoints/pagos.py` (líneas 973-1016)
 
 **Proceso:**

@@ -1,7 +1,7 @@
 # 🔍 AUDITORÍA COMPLETA DEL SISTEMA - SINTAXYS
 
-**Fecha:** 2025-01-27  
-**Auditor:** Sistema Automatizado  
+**Fecha:** 2025-01-27
+**Auditor:** Sistema Automatizado
 **Objetivo:** Verificación completa de sintaxis, endpoints, imports, archivos obsoletos y enlace front-back
 
 ---

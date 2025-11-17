@@ -89,11 +89,11 @@ export function useUpdateModeloVehiculo() {
         modeloVehiculoKeys.detail(updatedModeloVehiculo.id),
         updatedModeloVehiculo
       )
-      
+
       // Invalidar listas
       queryClient.invalidateQueries({ queryKey: modeloVehiculoKeys.lists() })
       queryClient.invalidateQueries({ queryKey: modeloVehiculoKeys.activos() })
-      
+
       toast.success('Modelo de vehículo actualizado exitosamente')
     },
     onError: (error: any) => {

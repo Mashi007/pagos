@@ -29,7 +29,7 @@ export function useSidebarCounts() {
 
       try {
         setLoading(true)
-        
+
         // Obtener KPIs de pagos para cuotas en mora
         const [kpisResponse, notificacionesResponse] = await Promise.allSettled([
           apiClient.get('/api/v1/pagos/kpis', { signal }),
@@ -78,7 +78,7 @@ export function useSidebarCounts() {
 
     // Cargar inmediatamente
     fetchCounts()
-    
+
     // Verificar si la página está visible antes de actualizar
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -88,7 +88,7 @@ export function useSidebarCounts() {
 
     // Suscribirse a cambios de visibilidad
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    
+
     // Actualizar cada 5 minutos (300 segundos) - optimizado para reducir carga del servidor
     // Esto reduce significativamente la carga del servidor y los requests repetitivos
     const interval = setInterval(() => {
@@ -97,7 +97,7 @@ export function useSidebarCounts() {
         fetchCounts()
       }
     }, 300000) // 5 minutos
-    
+
     return () => {
       clearInterval(interval)
       document.removeEventListener('visibilitychange', handleVisibilityChange)

@@ -1,6 +1,6 @@
 # 🔧 SOLUCIÓN: Error de Inicio en Producción
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Error:** `RuntimeError: CONFIGURACIÓN INSEGURA DETECTADA EN PRODUCCIÓN`
 
 ---
@@ -10,7 +10,7 @@
 La aplicación no inicia en producción porque detecta la contraseña por defecto:
 
 ```
-RuntimeError: CONFIGURACIÓN INSEGURA DETECTADA EN PRODUCCIÓN: 
+RuntimeError: CONFIGURACIÓN INSEGURA DETECTADA EN PRODUCCIÓN:
 CRÍTICO: No se puede usar la contraseña por defecto en producción.
 Debe configurarse ADMIN_PASSWORD con una contraseña segura mediante variable de entorno.
 ```

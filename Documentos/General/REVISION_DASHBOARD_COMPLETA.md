@@ -1,7 +1,7 @@
 # 📊 REVISIÓN INTEGRAL DEL MÓDULO DASHBOARD
 
-**Fecha:** 2025-11-05  
-**Archivo:** `backend/app/api/v1/endpoints/dashboard.py`  
+**Fecha:** 2025-11-05
+**Archivo:** `backend/app/api/v1/endpoints/dashboard.py`
 **Líneas totales:** 3909
 
 ---
@@ -280,7 +280,7 @@ HTTPException o valores por defecto
 
 ---
 
-**Generado:** 2025-11-05  
-**Revisor:** Auto (AI Assistant)  
+**Generado:** 2025-11-05
+**Revisor:** Auto (AI Assistant)
 **Versión:** 1.0
 

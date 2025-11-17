@@ -1,7 +1,7 @@
 # 🔍 Revisión Integral: Conexiones a Tablas del Módulo Cobranzas
 
-**Fecha:** 2025-11-XX  
-**Módulo:** Cobranzas  
+**Fecha:** 2025-11-XX
+**Módulo:** Cobranzas
 **Objetivo:** Documentar todas las tablas a las que está conectado el módulo de cobranzas
 
 ---
@@ -16,8 +16,8 @@ El módulo de cobranzas está conectado a **5 tablas principales** de la base de
 
 ### 1. ✅ **Tabla: `cuotas`** (PRINCIPAL)
 
-**Modelo:** `app.models.amortizacion.Cuota`  
-**Tabla BD:** `cuotas`  
+**Modelo:** `app.models.amortizacion.Cuota`
+**Tabla BD:** `cuotas`
 **Uso:** Tabla principal para determinar cuotas vencidas y calcular mora
 
 #### Campos Utilizados:
@@ -73,8 +73,8 @@ Cuota.fecha_vencimiento < hoy AND Cuota.total_pagado < Cuota.monto_cuota
 
 ### 2. ✅ **Tabla: `prestamos`** (SECUNDARIA - JOIN)
 
-**Modelo:** `app.models.prestamo.Prestamo`  
-**Tabla BD:** `prestamos`  
+**Modelo:** `app.models.prestamo.Prestamo`
+**Tabla BD:** `prestamos`
 **Uso:** Información de préstamos y filtros por estado/analista
 
 #### Campos Utilizados:
@@ -116,8 +116,8 @@ Prestamo.usuario_proponente != settings.ADMIN_EMAIL
 
 ### 3. ✅ **Tabla: `clientes`** (SECUNDARIA - JOIN)
 
-**Modelo:** `app.models.cliente.Cliente`  
-**Tabla BD:** `clientes`  
+**Modelo:** `app.models.cliente.Cliente`
+**Tabla BD:** `clientes`
 **Uso:** Información de clientes atrasados
 
 #### Campos Utilizados:
@@ -154,8 +154,8 @@ Prestamo.usuario_proponente != settings.ADMIN_EMAIL
 
 ### 4. ✅ **Tabla: `users`** (SECUNDARIA - JOIN OPCIONAL)
 
-**Modelo:** `app.models.user.User`  
-**Tabla BD:** `users`  
+**Modelo:** `app.models.user.User`
+**Tabla BD:** `users`
 **Uso:** Filtrar y excluir usuarios administradores
 
 #### Campos Utilizados:
@@ -195,8 +195,8 @@ Prestamo.usuario_proponente != settings.ADMIN_EMAIL
 
 ### 5. ✅ **Tabla: `auditoria`** (SECUNDARIA - ESCRITURA)
 
-**Modelo:** `app.models.auditoria.Auditoria`  
-**Tabla BD:** `auditoria`  
+**Modelo:** `app.models.auditoria.Auditoria`
+**Tabla BD:** `auditoria`
 **Uso:** Registrar exportaciones de informes (Excel/PDF)
 
 #### Campos Utilizados:
@@ -304,7 +304,7 @@ Prestamo.usuario_proponente != settings.ADMIN_EMAIL
 ### Consulta Base para Clientes Atrasados:
 
 ```sql
-SELECT 
+SELECT
     c.cedula,
     c.nombres,
     c.telefono,
@@ -317,27 +317,27 @@ FROM cuotas cu
 JOIN prestamos p ON cu.prestamo_id = p.id
 JOIN clientes c ON p.cedula = c.cedula
 LEFT OUTER JOIN users u ON u.email = p.usuario_proponente
-WHERE 
+WHERE
     cu.fecha_vencimiento < CURRENT_DATE
     AND cu.total_pagado < cu.monto_cuota
     AND p.estado IN ('APROBADO', 'ACTIVO')
     AND p.usuario_proponente != 'admin@example.com'
     AND (u.is_admin = FALSE OR u.is_admin IS NULL)
-GROUP BY 
+GROUP BY
     c.cedula, c.nombres, c.telefono, p.usuario_proponente, p.id
 ```
 
 ### Consulta para Resumen General:
 
 ```sql
-SELECT 
+SELECT
     COUNT(cu.id) AS total_cuotas_vencidas,
     SUM(cu.monto_cuota) AS monto_total_adeudado,
     COUNT(DISTINCT p.cedula) AS clientes_atrasados
 FROM cuotas cu
 JOIN prestamos p ON cu.prestamo_id = p.id
 LEFT OUTER JOIN users u ON u.email = p.usuario_proponente
-WHERE 
+WHERE
     cu.fecha_vencimiento < CURRENT_DATE
     AND cu.total_pagado < cu.monto_cuota
     AND p.estado IN ('APROBADO', 'ACTIVO')
@@ -439,6 +439,6 @@ Para optimizar las consultas de cobranzas, se recomiendan los siguientes índice
 
 ---
 
-**Última actualización:** 2025-11-XX  
+**Última actualización:** 2025-11-XX
 **Revisado por:** Sistema de Auditoría Automática
 

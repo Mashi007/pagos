@@ -109,7 +109,7 @@ query_cuotas = FiltrosDashboard.aplicar_filtros_cuota(...)
 
 **Estado:** ⚠️ Pendiente (opcional)
 
-**Nota:** El cache actual ya está implementado con `@cache_result(ttl=300)`. 
+**Nota:** El cache actual ya está implementado con `@cache_result(ttl=300)`.
 La mejora adicional sería agregar cache más agresivo para datos históricos, pero esto es opcional y puede implementarse después de verificar las mejoras de los pasos anteriores.
 
 ---
@@ -128,8 +128,8 @@ La mejora adicional sería agregar cache más agresivo para datos históricos, p
 
 ### 1. Verificar que los índices se usen:
 ```sql
-EXPLAIN ANALYZE 
-SELECT 
+EXPLAIN ANALYZE
+SELECT
     EXTRACT(YEAR FROM fecha_aprobacion),
     EXTRACT(MONTH FROM fecha_aprobacion),
     COUNT(*)
@@ -173,7 +173,7 @@ Los logs mostrarán tiempos de ejecución mejorados:
 
 ## 🎉 Resultado
 
-**Todas las optimizaciones críticas han sido implementadas.** 
+**Todas las optimizaciones críticas han sido implementadas.**
 
 El código está listo para producción. Solo falta ejecutar el script de índices para obtener el máximo beneficio de rendimiento.
 

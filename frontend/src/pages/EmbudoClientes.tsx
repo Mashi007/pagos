@@ -33,42 +33,42 @@ import { useQuery } from '@tanstack/react-query'
 
 // Estados del embudo
 const ESTADOS_EMBUDO = [
-  { 
-    id: 'prospecto', 
-    label: 'Prospecto', 
-    color: 'bg-gray-50 border-gray-200', 
+  {
+    id: 'prospecto',
+    label: 'Prospecto',
+    color: 'bg-gray-50 border-gray-200',
     headerColor: 'bg-gray-100 text-gray-800',
     icon: Users,
     count: 0
   },
-  { 
-    id: 'evaluacion', 
-    label: 'En Evaluación', 
-    color: 'bg-blue-50 border-blue-200', 
+  {
+    id: 'evaluacion',
+    label: 'En Evaluación',
+    color: 'bg-blue-50 border-blue-200',
     headerColor: 'bg-blue-100 text-blue-800',
     icon: Clock,
     count: 0
   },
-  { 
-    id: 'aprobado', 
-    label: 'Aprobado', 
-    color: 'bg-green-50 border-green-200', 
+  {
+    id: 'aprobado',
+    label: 'Aprobado',
+    color: 'bg-green-50 border-green-200',
     headerColor: 'bg-green-100 text-green-800',
     icon: CheckCircle,
     count: 0
   },
-  { 
-    id: 'rechazado', 
-    label: 'Rechazado', 
-    color: 'bg-red-50 border-red-200', 
+  {
+    id: 'rechazado',
+    label: 'Rechazado',
+    color: 'bg-red-50 border-red-200',
     headerColor: 'bg-red-100 text-red-800',
     icon: XCircle,
     count: 0
   },
-  { 
-    id: 'agregar_otro', 
-    label: 'Agregar embudo (agregar otro)', 
-    color: 'bg-purple-50 border-purple-200', 
+  {
+    id: 'agregar_otro',
+    label: 'Agregar embudo (agregar otro)',
+    color: 'bg-purple-50 border-purple-200',
     headerColor: 'bg-purple-100 text-purple-800',
     icon: Plus,
     count: 0
@@ -77,35 +77,35 @@ const ESTADOS_EMBUDO = [
 
 // Mapear estado de Cliente a estado del embudo
 const mapearEstadoEmbudo = (
-  cliente: Cliente, 
+  cliente: Cliente,
   tienePrestamos: boolean,
   prestamosAlDia: boolean,
   prestamosCliente: any[] = []
 ): string => {
   // 1. RECHAZADO: Solo si en módulo préstamos está con ese estado
-  const prestamosRechazados = prestamosCliente.filter(p => 
+  const prestamosRechazados = prestamosCliente.filter(p =>
     p.estado === 'RECHAZADO'
   )
   if (prestamosRechazados.length > 0) {
     return 'rechazado'
   }
-  
+
   // 2. APROBADO: Todos los que tienen estado aprobado en préstamos
-  const prestamosAprobados = prestamosCliente.filter(p => 
+  const prestamosAprobados = prestamosCliente.filter(p =>
     p.estado === 'APROBADO'
   )
   if (prestamosAprobados.length > 0) {
     return 'aprobado'
   }
-  
+
   // 3. EN EVALUACIÓN: Solo si están en el módulo préstamos en evaluación (EN_REVISION o DRAFT)
-  const prestamosEnEvaluacion = prestamosCliente.filter(p => 
+  const prestamosEnEvaluacion = prestamosCliente.filter(p =>
     p.estado === 'EN_REVISION' || p.estado === 'DRAFT'
   )
   if (prestamosEnEvaluacion.length > 0) {
     return 'evaluacion'
   }
-  
+
   // 4. PROSPECTO: Debe habilitarse para encontrar cliente de base de datos
   // Cualquier cliente de la base de datos puede ser prospecto (no requiere tener préstamos)
   // Si no tiene préstamos o no está en ningún estado específico, es prospecto
@@ -121,7 +121,7 @@ export function EmbudoClientes() {
   const [estadosManuales, setEstadosManuales] = useState<Map<number, string>>(new Map()) // Guardar estados manuales del embudo
   const [clienteArrastrando, setClienteArrastrando] = useState<number | null>(null)
   const [columnaDestino, setColumnaDestino] = useState<string | null>(null)
-  
+
   // Hook para actualizar estado del cliente en la BD
   const cambiarEstadoMutation = useCambiarEstadoCliente()
 
@@ -149,16 +149,16 @@ export function EmbudoClientes() {
   // Convertir clientes a formato del embudo
   const clientesEmbudo = useMemo(() => {
     if (!clientesData?.data) return []
-    
+
     const prestamos = prestamosData?.data || []
-    
+
     // Combinar clientes de la API con clientes agregados manualmente
     // Si un cliente está en clientesEnEmbudo, usar esa versión (tiene estado actualizado)
     const todosClientes = clientesData.data.map(cliente => {
       const clienteActualizado = clientesEnEmbudo.get(cliente.id)
       return clienteActualizado || cliente
     })
-    
+
     // Agregar clientes que no están en la API pero sí en clientesEnEmbudo
     clientesEnEmbudo.forEach((cliente) => {
       if (!todosClientes.find(c => c.id === cliente.id)) {
@@ -170,25 +170,25 @@ export function EmbudoClientes() {
       // Buscar préstamos del cliente
       const prestamosCliente = prestamos.filter(p => p.cliente_id === cliente.id)
       const tienePrestamos = prestamosCliente.length > 0
-      
+
       // Verificar si los préstamos están al día:
       // - El cliente debe estar ACTIVO
       // - No debe tener días de mora (dias_mora === 0)
       // - Los préstamos deben estar APROBADOS (no en revisión o rechazados)
-      const prestamosAlDia = tienePrestamos && 
-        cliente.estado === 'ACTIVO' && 
+      const prestamosAlDia = tienePrestamos &&
+        cliente.estado === 'ACTIVO' &&
         cliente.dias_mora === 0 &&
         prestamosCliente.every(p => p.estado === 'APROBADO')
-      
+
       const prestamoCliente = prestamosCliente[0] || null
       const concesionario = prestamoCliente?.concesionario || 'N/A'
-      
+
       // Priorizar estado manual si existe, sino usar el estado calculado
       const estadoCalculado = mapearEstadoEmbudo(cliente, tienePrestamos, prestamosAlDia, prestamosCliente)
-      const estadoFinal = estadosManuales.has(cliente.id) 
-        ? estadosManuales.get(cliente.id)! 
+      const estadoFinal = estadosManuales.has(cliente.id)
+        ? estadosManuales.get(cliente.id)!
         : estadoCalculado
-      
+
       return {
         id: cliente.id,
         nombre: [cliente.nombres, cliente.apellidos].filter(Boolean).join(' ').trim() || 'Sin nombre',
@@ -229,7 +229,7 @@ export function EmbudoClientes() {
     const aprobados = clientesPorEstado.find(e => e.id === 'aprobado')?.count || 0
     const rechazados = clientesPorEstado.find(e => e.id === 'rechazado')?.count || 0
     const agregarOtro = clientesPorEstado.find(e => e.id === 'agregar_otro')?.count || 0
-    
+
     return {
       total: clientesFiltrados.length,
       prospectos,
@@ -277,7 +277,7 @@ export function EmbudoClientes() {
   // Función auxiliar para mapear estado del embudo al estado del cliente en BD
   // Retorna el nuevo estado o null si no debe cambiar
   const mapearEstadoEmbudoACliente = (
-    estadoEmbudo: string, 
+    estadoEmbudo: string,
     cliente: Cliente,
     prestamosCliente: any[] = []
   ): Cliente['estado'] | null => {
@@ -287,7 +287,7 @@ export function EmbudoClientes() {
       case 'evaluacion':
         // Si el cliente tiene préstamos en aprobación de riesgo, mantener ACTIVO
         // Solo cambiar a MORA si realmente está en mora
-        const tienePrestamosEnRiesgo = prestamosCliente.some(p => 
+        const tienePrestamosEnRiesgo = prestamosCliente.some(p =>
           p.estado === 'EN_REVISION' || p.estado === 'DRAFT'
         )
         if (tienePrestamosEnRiesgo) {
@@ -317,21 +317,21 @@ export function EmbudoClientes() {
         // Obtener préstamos del cliente para la lógica de mapeo
         const prestamos = prestamosData?.data || []
         const prestamosCliente = prestamos.filter(p => p.cliente_id === cliente.id)
-        
+
         // Guardar el estado manual del embudo (esto tiene prioridad sobre el cálculo automático)
         setEstadosManuales(prev => {
           const nuevo = new Map(prev)
           nuevo.set(cliente.id, estadoDestino)
           return nuevo
         })
-        
+
         // Mapear el estado del embudo al estado del cliente en BD
         const nuevoEstadoCliente = mapearEstadoEmbudoACliente(
-          estadoDestino, 
+          estadoDestino,
           cliente.cliente,
           prestamosCliente
         )
-        
+
         // Si hay un nuevo estado válido y es diferente al actual, actualizar en BD
         if (nuevoEstadoCliente && nuevoEstadoCliente !== cliente.cliente.estado) {
           try {
@@ -340,13 +340,13 @@ export function EmbudoClientes() {
               id: String(cliente.id),
               estado: nuevoEstadoCliente
             })
-            
+
             // Actualizar el estado del cliente en el objeto Cliente local
             const clienteActualizado: Cliente = {
               ...cliente.cliente,
               estado: nuevoEstadoCliente,
             }
-            
+
             // Actualizar en el Map de clientesEnEmbudo
             setClientesEnEmbudo(prev => {
               const nuevo = new Map(prev)
@@ -487,7 +487,7 @@ export function EmbudoClientes() {
             'rechazado': 'text-red-600'
           }
           const color = colorMap[estado.id] || 'text-gray-600'
-          
+
           return (
             <Card key={estado.id}>
               <CardContent className="pt-6">
@@ -571,9 +571,9 @@ export function EmbudoClientes() {
                                 <motion.div
                                   key={cliente.id}
                                   initial={{ opacity: 0, scale: 0.95 }}
-                                  animate={{ 
-                                    opacity: clienteArrastrando === cliente.id ? 0.5 : 1, 
-                                    scale: clienteArrastrando === cliente.id ? 0.95 : 1 
+                                  animate={{
+                                    opacity: clienteArrastrando === cliente.id ? 0.5 : 1,
+                                    scale: clienteArrastrando === cliente.id ? 0.95 : 1
                                   }}
                                   whileHover={{ scale: clienteArrastrando === cliente.id ? 0.95 : 1.02 }}
                                   draggable
@@ -594,9 +594,9 @@ export function EmbudoClientes() {
                                         </div>
                                       </div>
                                       <div className="flex gap-1">
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
                                           className="h-7 w-7"
                                           onClick={(e) => {
                                             e.stopPropagation()
@@ -606,9 +606,9 @@ export function EmbudoClientes() {
                                         >
                                           <Eye className="h-3.5 w-3.5" />
                                         </Button>
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
                                           className="h-7 w-7"
                                           onClick={(e) => {
                                             e.stopPropagation()
@@ -619,9 +619,9 @@ export function EmbudoClientes() {
                                           <Edit className="h-3.5 w-3.5" />
                                         </Button>
                                         {clientesEnEmbudo.has(cliente.id) && (
-                                          <Button 
-                                            variant="ghost" 
-                                            size="icon" 
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
                                             className="h-7 w-7 text-red-600 hover:text-red-700"
                                             onClick={(e) => {
                                               e.stopPropagation()
@@ -634,7 +634,7 @@ export function EmbudoClientes() {
                                         )}
                                       </div>
                                     </div>
-                                    
+
                                     <div className="space-y-2 pt-2 border-t border-gray-100">
                                       <div className="flex items-center gap-2 text-xs text-gray-600">
                                         <Phone className="h-3.5 w-3.5" />
@@ -672,9 +672,9 @@ export function EmbudoClientes() {
                           <motion.div
                             key={cliente.id}
                             initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ 
-                              opacity: clienteArrastrando === cliente.id ? 0.5 : 1, 
-                              scale: clienteArrastrando === cliente.id ? 0.95 : 1 
+                            animate={{
+                              opacity: clienteArrastrando === cliente.id ? 0.5 : 1,
+                              scale: clienteArrastrando === cliente.id ? 0.95 : 1
                             }}
                             whileHover={{ scale: clienteArrastrando === cliente.id ? 0.95 : 1.02 }}
                             draggable
@@ -695,9 +695,9 @@ export function EmbudoClientes() {
                                   </div>
                                 </div>
                                 <div className="flex gap-1">
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     className="h-7 w-7"
                                     onClick={(e) => {
                                       e.stopPropagation()
@@ -707,9 +707,9 @@ export function EmbudoClientes() {
                                   >
                                     <Eye className="h-3.5 w-3.5" />
                                   </Button>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     className="h-7 w-7"
                                     onClick={(e) => {
                                       e.stopPropagation()
@@ -720,9 +720,9 @@ export function EmbudoClientes() {
                                     <Edit className="h-3.5 w-3.5" />
                                   </Button>
                                   {clientesEnEmbudo.has(cliente.id) && (
-                                    <Button 
-                                      variant="ghost" 
-                                      size="icon" 
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
                                       className="h-7 w-7 text-red-600 hover:text-red-700"
                                       onClick={(e) => {
                                         e.stopPropagation()
@@ -735,7 +735,7 @@ export function EmbudoClientes() {
                                   )}
                                 </div>
                               </div>
-                              
+
                               <div className="space-y-2 pt-2 border-t border-gray-100">
                                 <div className="flex items-center gap-2 text-xs text-gray-600">
                                   <Phone className="h-3.5 w-3.5" />

@@ -137,8 +137,8 @@ dad de Pago (ingresos, gastos, otras deudas, cuota)
 
 ```sql
 -- Ver estructura de la tabla
-SELECT column_name, data_type, is_nullable 
-FROM information_schema.columns 
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
 WHERE table_name = 'prestamos_evaluacion'
 ORDER BY ordinal_position;
 
@@ -146,7 +146,7 @@ ORDER BY ordinal_position;
 SELECT * FROM prestamos_evaluacion ORDER BY id DESC LIMIT 5;
 
 -- Ver relación con préstamos
-SELECT 
+SELECT
     p.id AS prestamo_id,
     p.cedula,
     p.total_financiamiento,

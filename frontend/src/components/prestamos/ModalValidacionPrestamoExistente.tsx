@@ -39,7 +39,7 @@ export function ModalValidacionPrestamoExistente({
       setError('Debe ingresar una justificación para continuar')
       return
     }
-    
+
     if (justificacion.trim().length < 10) {
       setError('La justificación debe tener al menos 10 caracteres')
       return

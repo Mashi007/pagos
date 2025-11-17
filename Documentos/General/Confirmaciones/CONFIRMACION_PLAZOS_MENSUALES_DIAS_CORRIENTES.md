@@ -206,7 +206,7 @@ fecha_vencimiento = fecha_base + timedelta(days=intervalo_dias * numero_cuota)
 
 ### **Pregunta: ¿Por qué 30 días y no meses calendario?**
 
-**Respuesta:** 
+**Respuesta:**
 - **Simplicidad:** 30 días es más predecible y fácil de calcular
 - **Consistencia:** Todas las cuotas tienen exactamente el mismo intervalo
 - **Manejo de fechas especiales:** Funciona bien con fechas como 31 de enero que no tienen equivalente el mes siguiente

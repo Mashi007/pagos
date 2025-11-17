@@ -50,7 +50,7 @@
 **Índices necesarios:**
 ```sql
 -- Índice compuesto para cuotas vencidas no pagadas
-CREATE INDEX idx_cuotas_prestamo_estado_fecha_vencimiento 
+CREATE INDEX idx_cuotas_prestamo_estado_fecha_vencimiento
 ON cuotas (prestamo_id, estado, fecha_vencimiento)
 WHERE estado != 'PAGADO';
 ```
@@ -72,14 +72,14 @@ ORDER BY c.fecha_vencimiento DESC;
 **Índices necesarios:**
 ```sql
 -- Índice compuesto para filtros frecuentes
-CREATE INDEX idx_pagos_prestamo_id_activo_fecha 
+CREATE INDEX idx_pagos_prestamo_id_activo_fecha
 ON pagos (prestamo_id, activo, fecha_pago)
 WHERE prestamo_id IS NOT NULL
   AND activo = TRUE
   AND fecha_pago IS NOT NULL;
 
 -- Índice para filtros individuales
-CREATE INDEX idx_pagos_activo_fecha_pago 
+CREATE INDEX idx_pagos_activo_fecha_pago
 ON pagos (activo, fecha_pago)
 WHERE activo = TRUE;
 ```
@@ -157,7 +157,7 @@ LIMIT 20;
 ### Para `/api/v1/cobranzas/clientes-atrasados`
 ```sql
 -- Ya incluido en crear_indices_optimizados.sql
-CREATE INDEX idx_cuotas_prestamo_estado_fecha_vencimiento 
+CREATE INDEX idx_cuotas_prestamo_estado_fecha_vencimiento
 ON cuotas (prestamo_id, estado, fecha_vencimiento)
 WHERE estado != 'PAGADO';
 ```
@@ -165,7 +165,7 @@ WHERE estado != 'PAGADO';
 ### Para `/api/v1/pagos/`
 ```sql
 -- Ya incluido en crear_indices_optimizados.sql
-CREATE INDEX idx_pagos_prestamo_id_activo_fecha 
+CREATE INDEX idx_pagos_prestamo_id_activo_fecha
 ON pagos (prestamo_id, activo, fecha_pago)
 WHERE prestamo_id IS NOT NULL
   AND activo = TRUE

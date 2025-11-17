@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { 
-  DollarSign, 
-  Calendar, 
-  CreditCard, 
+import {
+  DollarSign,
+  Calendar,
+  CreditCard,
   Search,
   X,
   ChevronDown,
@@ -43,10 +43,10 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const createPrestamo = useCreatePrestamo()
   const updatePrestamo = useUpdatePrestamo()
   const { canEditPrestamo, canApprovePrestamo } = usePermissions()
-  
+
   // Cerrar con ESC
   useEscapeClose(onClose, true)
-  
+
   // Función para obtener la fecha actual en formato YYYY-MM-DD
   const getCurrentDate = () => {
     const today = new Date()
@@ -55,7 +55,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     const day = String(today.getDate()).padStart(2, '0')
     return `${year}-${month}-${day}`
   }
-  
+
   const [formData, setFormData] = useState<Partial<PrestamoForm>>({
     cedula: prestamo?.cedula || '',
     total_financiamiento: prestamo?.total_financiamiento || 0,
@@ -69,7 +69,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     tasa_interes: prestamo?.tasa_interes || 0,
     observaciones: prestamo?.observaciones || '',
   })
-  
+
   // Obtener datos de configuración con manejo de errores
   const { data: concesionarios = [], error: errorConcesionarios } = useConcesionariosActivos()
   const { data: analistas = [], error: errorAnalistas } = useAnalistasActivos()
@@ -88,7 +88,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   }
 
   const [valorActivo, setValorActivo] = useState<number>(prestamo?.valor_activo || 0)
-  
+
   // Estados para validación de préstamos existentes
   const [showModalValidacion, setShowModalValidacion] = useState(false)
   const [resumenPrestamos, setResumenPrestamos] = useState<any>(null)
@@ -181,55 +181,55 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // Validaciones requeridas
     const errors: string[] = []
-    
+
     // Validar cédula
     if (!formData.cedula || formData.cedula.trim() === '') {
       errors.push('La cédula es requerida')
     }
-    
+
     // Validar que el cliente exista y esté ACTIVO (solo para nuevos préstamos)
     if (!prestamo && !clienteData) {
       errors.push('Debe buscar y seleccionar un cliente válido')
     }
-    
+
     // Validar que el cliente esté ACTIVO para permitir crear préstamo
     if (!prestamo && clienteData && clienteData.estado !== 'ACTIVO') {
       errors.push(`No se puede crear un préstamo para un cliente con estado: ${clienteData.estado}. El cliente debe estar ACTIVO.`)
     }
-    
+
     // Validar Valor Activo
     if (valorActivo <= 0) {
       errors.push('El Valor Activo debe ser mayor a 0')
     }
-    
+
     // Validar Anticipo
     if (anticipo < 0) {
       errors.push('El Anticipo no puede ser negativo')
     }
-    
+
     // Validar Número de Cuotas
     if (numeroCuotas < 1 || numeroCuotas > 12) {
       errors.push('El número de cuotas debe estar entre 1 y 12')
     }
-    
+
     // Validar Total de Financiamiento
     if (!formData.total_financiamiento || formData.total_financiamiento <= 0) {
       errors.push('El Total de Financiamiento debe ser mayor a 0')
     }
-    
+
     // Validar Modalidad de Pago
     if (!formData.modalidad_pago) {
       errors.push('La modalidad de pago es requerida')
     }
-    
+
     // Validar Fecha de Requerimiento
     if (!formData.fecha_requerimiento || formData.fecha_requerimiento.trim() === '') {
       errors.push('La fecha de requerimiento es requerida')
     }
-    
+
     // Requeridos adicionales del formulario (producto/producto_financiero se completan automáticamente al enviar)
     const faltaConcesionario = !formData.concesionario || String(formData.concesionario).trim() === ''
     const faltaAnalista = !formData.analista || String(formData.analista).trim() === ''
@@ -302,11 +302,11 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
         cuota_periodo: cuotaPeriodo,
         fecha_base_calculo: formData.fecha_base_calculo,
         usuario_autoriza: !prestamo && justificacionAutorizacion ? user?.email : undefined,
-        observaciones: justificacionAutorizacion 
+        observaciones: justificacionAutorizacion
           ? `${formData.observaciones || ''}\n\n--- JUSTIFICACIÓN PARA NUEVO PRÉSTAMO ---\n${justificacionAutorizacion}`.trim()
           : formData.observaciones,
       }
-      
+
       if (prestamo) {
         // Editar préstamo existente
         await updatePrestamo.mutateAsync({
@@ -317,7 +317,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
         // Crear nuevo préstamo
         await createPrestamo.mutateAsync(prestamoData as PrestamoForm)
       }
-      
+
       onSuccess()
       onClose()
     } catch (error) {
@@ -425,7 +425,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                                 <p className="text-sm text-blue-800">Buscando cliente...</p>
                               </div>
                             )}
-                            
+
                             {clienteData && !isLoadingCliente && (
                               <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                                 <div className="flex items-center gap-2 mb-2">
@@ -563,9 +563,9 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                     </label>
                     <Select
                       value={formData.modalidad_pago}
-                      onValueChange={(value: any) => setFormData({ 
-                        ...formData, 
-                        modalidad_pago: value 
+                      onValueChange={(value: any) => setFormData({
+                        ...formData,
+                        modalidad_pago: value
                       })}
                       disabled={isReadOnly}
                     >
@@ -618,9 +618,9 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                     <Input
                       type="date"
                       value={formData.fecha_requerimiento}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        fecha_requerimiento: e.target.value 
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        fecha_requerimiento: e.target.value
                       })}
                       disabled={isReadOnly}
                     />
@@ -638,8 +638,8 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       onChange={(e) => {
                         const value = e.target.value
                         const numericValue = value === '' ? 0 : parseFloat(value.replace(/^0+/, '').replace(/^\./, '0.'))
-                        setFormData({ 
-                          ...formData, 
+                        setFormData({
+                          ...formData,
                           tasa_interes: isNaN(numericValue) ? 0 : numericValue
                         })
                       }}
@@ -735,8 +735,8 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                     </label>
                   <Select
                       value={formData.concesionario ?? ''}
-                      onValueChange={(value) => setFormData({ 
-                        ...formData, 
+                      onValueChange={(value) => setFormData({
+                        ...formData,
                         concesionario: value
                       })}
                       disabled={isReadOnly}
@@ -763,8 +763,8 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                     </label>
                   <Select
                       value={formData.analista ?? ''}
-                      onValueChange={(value) => setFormData({ 
-                        ...formData, 
+                      onValueChange={(value) => setFormData({
+                        ...formData,
                         analista: value
                       })}
                       disabled={isReadOnly}
@@ -792,9 +792,9 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                   <label className="block text-sm font-medium mb-1">Observaciones</label>
                   <Textarea
                     value={formData.observaciones || ''}
-                    onChange={(e) => setFormData({ 
-                      ...formData, 
-                      observaciones: e.target.value 
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      observaciones: e.target.value
                     })}
                     disabled={isReadOnly}
                     rows={3}

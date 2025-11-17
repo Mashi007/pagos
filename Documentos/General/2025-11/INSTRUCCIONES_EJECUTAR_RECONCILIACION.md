@@ -184,7 +184,7 @@ Después de ejecutar el script, verifica en SQL:
 
 ```sql
 -- Verificar pagos vinculados después de reconciliación
-SELECT 
+SELECT
     COUNT(*) as total_cuotas,
     COUNT(CASE WHEN total_pagado > 0 THEN 1 END) as cuotas_con_pagos,
     SUM(total_pagado) as monto_total_pagado
@@ -193,7 +193,7 @@ INNER JOIN prestamos p ON c.prestamo_id = p.id
 WHERE p.estado = 'APROBADO';
 
 -- Verificar morosidad mensual con pagos
-SELECT 
+SELECT
     TO_CHAR(DATE_TRUNC('month', c.fecha_vencimiento), 'YYYY-MM') as mes,
     SUM(c.monto_cuota) as monto_programado,
     SUM(COALESCE(c.total_pagado, 0)) as monto_pagado,

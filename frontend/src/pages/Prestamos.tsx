@@ -8,7 +8,7 @@ export function Prestamos() {
         <DollarSign className="h-8 w-8 text-blue-600" />
         <h1 className="text-3xl font-bold text-gray-900">Préstamos</h1>
       </div>
-      
+
       <PrestamosList />
     </div>
   )

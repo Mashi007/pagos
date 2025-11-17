@@ -13,7 +13,7 @@
 #### **2. Componentes Relacionados**
 - `./ConfirmacionDuplicadoModal` - Modal para confirmar duplicados
   - **Propósito**: Muestra información del cliente existente y nuevo
-  - **Interfaz**: 
+  - **Interfaz**:
     - `clienteExistente`: Cliente ya registrado
     - `clienteNuevo`: Cliente que se intenta crear
     - `prestamos`: Préstamos del cliente existente
@@ -23,7 +23,7 @@
 - `@/services/clienteService` ⭐ **PRINCIPAL**
   - `createCliente(data)` - Crear cliente normal
   - `createClienteWithConfirmation(data, comentarios)` - Crear con `confirm_duplicate: true`
-  
+
 - `@/services/concesionarioService`
   - Obtiene lista de concesionarios activos para dropdowns
 
@@ -173,7 +173,7 @@ const [showExcelUploader, setShowExcelUploader] = useState(false)
 
 // Renderiza ExcelUploader si está activo:
 {showExcelUploader && (
-  <ExcelUploader 
+  <ExcelUploader
     onClose={() => setShowExcelUploader(false)}
     onSuccess={() => setShowExcelUploader(false)}
   />

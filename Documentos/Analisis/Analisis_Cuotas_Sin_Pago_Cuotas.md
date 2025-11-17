@@ -1,6 +1,6 @@
 # 🔍 ANÁLISIS: Cuotas con Pagos pero Sin Registro en `pago_cuotas`
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Problema detectado:** 18+ cuotas tienen `total_pagado > 0` pero no tienen registros en la tabla `pago_cuotas`
 
 ---
@@ -37,7 +37,7 @@ Si los pagos están en la tabla `pagos` y se pueden mapear a las cuotas:
 
 ```sql
 -- 1. Identificar préstamos con cuotas afectadas
-SELECT DISTINCT prestamo_id 
+SELECT DISTINCT prestamo_id
 FROM cuotas c
 WHERE c.total_pagado > 0
   AND NOT EXISTS (
@@ -57,7 +57,7 @@ Si no se puede determinar la relación exacta:
 - Los nuevos pagos sí crearán registros en `pago_cuotas`
 - Las cuotas históricas quedarán sin registro en `pago_cuotas`
 
-**Impacto:** 
+**Impacto:**
 - ✅ No afecta el cálculo de `total_pagado`
 - ❌ No se puede rastrear qué pago específico cubrió qué cuota
 - ❌ Reportes que dependen de `pago_cuotas` pueden estar incompletos
@@ -84,9 +84,9 @@ Crear un registro genérico en `pago_cuotas` que represente "pago histórico" o 
    SELECT p.id, p.prestamo_id, p.monto_pagado, p.fecha_pago
    FROM pagos p
    WHERE p.prestamo_id IN (
-       SELECT DISTINCT prestamo_id 
-       FROM cuotas 
-       WHERE total_pagado > 0 
+       SELECT DISTINCT prestamo_id
+       FROM cuotas
+       WHERE total_pagado > 0
          AND NOT EXISTS (
              SELECT 1 FROM pago_cuotas WHERE cuota_id = cuotas.id
          )

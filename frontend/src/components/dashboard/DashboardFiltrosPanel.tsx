@@ -64,8 +64,8 @@ export function DashboardFiltrosPanel({
   return (
     <div className="flex items-center space-x-3">
       {/* Popover de Filtros */}
-      <Popover 
-        open={showFiltros} 
+      <Popover
+        open={showFiltros}
         onOpenChange={(open) => {
           setShowFiltros(open)
           // ✅ Cuando se abre el popover, sincronizar filtros temporales con los actuales

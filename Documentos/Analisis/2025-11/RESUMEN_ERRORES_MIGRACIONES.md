@@ -1,7 +1,7 @@
 # 🚨 RESUMEN: Errores en Migraciones de Alembic
 
-**Fecha:** 2025-11-06  
-**Problema:** Múltiples archivos de migración tienen errores de sintaxis  
+**Fecha:** 2025-11-06
+**Problema:** Múltiples archivos de migración tienen errores de sintaxis
 **Estado:** Corregidos algunos, otros requieren corrección extensa
 
 ---
@@ -61,12 +61,12 @@ from sqlalchemy import text
 with engine.connect() as conn:
     # Verificar si existe
     result = conn.execute(text("""
-        SELECT column_name 
+        SELECT column_name
         FROM information_schema.columns
-        WHERE table_name = 'notificaciones' 
+        WHERE table_name = 'notificaciones'
           AND column_name = 'canal'
     """))
-    
+
     if result.fetchone():
         print("✅ Columna canal ya existe")
     else:
@@ -124,9 +124,9 @@ EOF
 
 **Después de ejecutar SQL directo:**
 
-✅ Columna `canal` existe en tabla `notificaciones`  
-✅ Índice `ix_notificaciones_canal` creado  
-✅ Endpoint `/api/v1/notificaciones/` funciona sin errores  
+✅ Columna `canal` existe en tabla `notificaciones`
+✅ Índice `ix_notificaciones_canal` creado
+✅ Endpoint `/api/v1/notificaciones/` funciona sin errores
 ✅ Sin mensajes de error en logs del backend
 
 ---

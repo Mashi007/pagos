@@ -1,6 +1,6 @@
 # 🔍 AUDITORÍA COMPLETA DEL DASHBOARD
 
-**Fecha:** 2025-11-04  
+**Fecha:** 2025-11-04
 **Alcance:** Frontend, Backend, Rutas, Endpoints, Sintaxis, Integración
 
 ---
@@ -370,7 +370,7 @@ from sqlalchemy import text
 
 ---
 
-**Generado el:** 2025-11-04  
-**Auditoría realizada por:** AI Assistant  
+**Generado el:** 2025-11-04
+**Auditoría realizada por:** AI Assistant
 **Versión del Dashboard:** v2.0
 

@@ -1,7 +1,7 @@
 # 🔍 ANÁLISIS EXHAUSTIVO DE PROBLEMAS DEL DASHBOARD
 
-**Fecha:** 2025-01-06  
-**Fuente:** Investigación SQL en DBeaver  
+**Fecha:** 2025-01-06
+**Fuente:** Investigación SQL en DBeaver
 **Estado:** CRÍTICO - Múltiples problemas de integridad y lógica
 
 ---
@@ -139,7 +139,7 @@ def reconciliar_pagos_con_cuotas(db: Session):
         Pago.prestamo_id.isnot(None),
         Pago.numero_cuota.isnot(None)
     ).all()
-    
+
     reconciliados = 0
     for pago in pagos_con_info:
         # Verificar que la cuota existe
@@ -147,33 +147,33 @@ def reconciliar_pagos_con_cuotas(db: Session):
             Cuota.prestamo_id == pago.prestamo_id,
             Cuota.numero_cuota == pago.numero_cuota
         ).first()
-        
+
         if cuota:
             # Actualizar total_pagado de la cuota
             if cuota.total_pagado is None:
                 cuota.total_pagado = Decimal("0")
             cuota.total_pagado += pago.monto_pagado
-            
+
             # Actualizar estado si está completamente pagada
             if cuota.total_pagado >= cuota.monto_cuota:
                 cuota.estado = "PAGADO"
                 cuota.fecha_pago = pago.fecha_pago.date()
-            
+
             reconciliados += 1
-    
+
     # 2. Pagos sin prestamo_id - intentar reconciliar por cédula y fecha
     pagos_sin_prestamo = db.query(Pago).filter(
         Pago.activo == True,
         or_(Pago.prestamo_id.is_(None), Pago.numero_cuota.is_(None))
     ).all()
-    
+
     for pago in pagos_sin_prestamo:
         # Buscar préstamos por cédula
         prestamos = db.query(Prestamo).filter(
             Prestamo.cedula == pago.cedula,
             Prestamo.estado == "APROBADO"
         ).all()
-        
+
         for prestamo in prestamos:
             # Buscar cuota que coincida con fecha de pago
             cuota = db.query(Cuota).filter(
@@ -181,24 +181,24 @@ def reconciliar_pagos_con_cuotas(db: Session):
                 Cuota.fecha_vencimiento <= pago.fecha_pago.date(),
                 Cuota.estado != "PAGADO"
             ).order_by(Cuota.fecha_vencimiento).first()
-            
+
             if cuota:
                 # Vincular pago a cuota
                 pago.prestamo_id = prestamo.id
                 pago.numero_cuota = cuota.numero_cuota
-                
+
                 # Actualizar cuota
                 if cuota.total_pagado is None:
                     cuota.total_pagado = Decimal("0")
                 cuota.total_pagado += pago.monto_pagado
-                
+
                 if cuota.total_pagado >= cuota.monto_cuota:
                     cuota.estado = "PAGADO"
                     cuota.fecha_pago = pago.fecha_pago.date()
-                
+
                 reconciliados += 1
                 break
-    
+
     db.commit()
     return reconciliados
 ```
@@ -209,12 +209,12 @@ Si los pagos se registran por cédula y no por préstamo, modificar las queries:
 
 ```python
 # En lugar de:
-LEFT JOIN pagos pa ON pa.prestamo_id = c.prestamo_id 
+LEFT JOIN pagos pa ON pa.prestamo_id = c.prestamo_id
     AND pa.numero_cuota = c.numero_cuota
 
 # Usar:
 LEFT JOIN pagos pa ON pa.cedula = p.cedula
-    AND pa.fecha_pago::date BETWEEN c.fecha_vencimiento - INTERVAL '30 days' 
+    AND pa.fecha_pago::date BETWEEN c.fecha_vencimiento - INTERVAL '30 days'
     AND c.fecha_vencimiento + INTERVAL '30 days'
 ```
 
@@ -262,7 +262,7 @@ def corregir_cuotas_pagadas_sin_pagos(db: Session):
         Cuota.estado == "PAGADO",
         Prestamo.estado == "APROBADO"
     ).all()
-    
+
     corregidas = 0
     for cuota in cuotas_pagadas:
         # Buscar pagos por prestamo_id + numero_cuota
@@ -271,20 +271,20 @@ def corregir_cuotas_pagadas_sin_pagos(db: Session):
             Pago.numero_cuota == cuota.numero_cuota,
             Pago.activo == True
         ).all()
-        
+
         if not pagos:
             # Buscar pagos por cédula y fecha
             prestamo = db.query(Prestamo).filter(
                 Prestamo.id == cuota.prestamo_id
             ).first()
-            
+
             if prestamo:
                 pagos_cedula = db.query(Pago).filter(
                     Pago.cedula == prestamo.cedula,
                     Pago.fecha_pago::date == cuota.fecha_vencimiento,
                     Pago.activo == True
                 ).all()
-                
+
                 if not pagos_cedula:
                     # Si no hay pagos, cambiar estado a PENDIENTE
                     cuota.estado = "PENDIENTE"
@@ -296,7 +296,7 @@ def corregir_cuotas_pagadas_sin_pagos(db: Session):
             if total_pagado < cuota.monto_cuota:
                 cuota.estado = "PARCIAL"
                 corregidas += 1
-    
+
     db.commit()
     return corregidas
 ```
@@ -329,31 +329,31 @@ def obtener_pagos_cuota(
         Pago.numero_cuota == numero_cuota,
         Pago.activo == True
     ).all()
-    
+
     if pagos:
         return pagos
-    
+
     # Estrategia 2: cedula + fecha_vencimiento (exacta)
     pagos = db.query(Pago).filter(
         Pago.cedula == cedula,
         func.date(Pago.fecha_pago) == fecha_vencimiento,
         Pago.activo == True
     ).all()
-    
+
     if pagos:
         return pagos
-    
+
     # Estrategia 3: cedula + rango de fechas (±30 días)
     fecha_inicio = fecha_vencimiento - timedelta(days=30)
     fecha_fin = fecha_vencimiento + timedelta(days=30)
-    
+
     pagos = db.query(Pago).filter(
         Pago.cedula == cedula,
         func.date(Pago.fecha_pago) >= fecha_inicio,
         func.date(Pago.fecha_pago) <= fecha_fin,
         Pago.activo == True
     ).order_by(Pago.fecha_pago).all()
-    
+
     return pagos
 ```
 
@@ -367,7 +367,7 @@ def obtener_pagos_cuota(
 
 ```sql
 CREATE MATERIALIZED VIEW pagos_cuotas_vista AS
-SELECT 
+SELECT
     c.id as cuota_id,
     c.prestamo_id,
     c.numero_cuota,
@@ -387,12 +387,12 @@ LEFT JOIN pagos pa ON (
     (pa.cedula = p.cedula AND DATE(pa.fecha_pago) = c.fecha_vencimiento)
     OR
     -- Estrategia 3: cedula + rango de fechas
-    (pa.cedula = p.cedula 
-     AND DATE(pa.fecha_pago) BETWEEN c.fecha_vencimiento - INTERVAL '30 days' 
+    (pa.cedula = p.cedula
+     AND DATE(pa.fecha_pago) BETWEEN c.fecha_vencimiento - INTERVAL '30 days'
      AND c.fecha_vencimiento + INTERVAL '30 days')
 )
 WHERE pa.activo = true OR pa.id IS NULL
-GROUP BY c.id, c.prestamo_id, c.numero_cuota, c.cedula, 
+GROUP BY c.id, c.prestamo_id, c.numero_cuota, c.cedula,
          c.fecha_vencimiento, c.monto_cuota, c.estado;
 
 CREATE INDEX idx_pagos_cuotas_vista_prestamo ON pagos_cuotas_vista(prestamo_id, numero_cuota);
@@ -448,7 +448,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY pagos_cuotas_vista;
 
 ```sql
 -- Verificar pagos vinculados después de reconciliación
-SELECT 
+SELECT
     COUNT(*) as total_cuotas,
     COUNT(CASE WHEN total_pagado > 0 THEN 1 END) as cuotas_con_pagos,
     SUM(total_pagado) as monto_total_pagado
@@ -457,7 +457,7 @@ INNER JOIN prestamos p ON c.prestamo_id = p.id
 WHERE p.estado = 'APROBADO';
 
 -- Verificar morosidad mensual con pagos
-SELECT 
+SELECT
     TO_CHAR(DATE_TRUNC('month', c.fecha_vencimiento), 'YYYY-MM') as mes,
     SUM(c.monto_cuota) as monto_programado,
     SUM(COALESCE(c.total_pagado, 0)) as monto_pagado,

@@ -83,11 +83,11 @@ export function useCreateCliente() {
       // Invalidar y refetch queries relacionadas
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
       // ✅ Invalidar también búsquedas de clientes (usadas en formularios de préstamos)
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ['clientes', 'search'],
         exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
       })
-      
+
       const nombreCompleto = [newCliente.nombres, newCliente.apellidos].filter(Boolean).join(' ').trim() || 'Sin nombre'
       toast.success(`Cliente ${nombreCompleto} creado exitosamente`)
     },
@@ -110,15 +110,15 @@ export function useUpdateCliente() {
         clienteKeys.detail(String(updatedCliente.id)),
         updatedCliente
       )
-      
+
       // Invalidar listas
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
       // ✅ Invalidar también búsquedas de clientes (usadas en formularios de préstamos)
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ['clientes', 'search'],
         exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
       })
-      
+
       const nombreCompleto = [updatedCliente.nombres, updatedCliente.apellidos].filter(Boolean).join(' ').trim() || 'Sin nombre'
       toast.success(`Cliente ${nombreCompleto} actualizado`)
     },
@@ -137,10 +137,10 @@ export function useDeleteCliente() {
     onSuccess: (_, deletedId) => {
       // Remover del cache
       queryClient.removeQueries({ queryKey: clienteKeys.detail(deletedId) })
-      
+
       // Invalidar listas
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
-      
+
       toast.success('Cliente eliminado exitosamente')
     },
     onError: (error: any) => {
@@ -162,10 +162,10 @@ export function useCambiarEstadoCliente() {
         clienteKeys.detail(String(updatedCliente.id)),
         updatedCliente
       )
-      
+
       // Invalidar listas
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
-      
+
       toast.success(`Estado del cliente cambiado a ${updatedCliente.estado}`)
     },
     onError: (error: any) => {
@@ -187,11 +187,11 @@ export function useAsignarAsesor() {
         clienteKeys.detail(String(updatedCliente.id)),
         updatedCliente
       )
-      
+
       // Invalidar listas y clientes por analista
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
       queryClient.invalidateQueries({ queryKey: [...clienteKeys.all, 'analista'] })
-      
+
       toast.success('Asesor asignado exitosamente')
     },
     onError: (error: any) => {
@@ -233,7 +233,7 @@ export function useImportClientes() {
     onSuccess: (result) => {
       // Invalidar listas para mostrar nuevos datos
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
-      
+
       if (result.errors.length > 0) {
         toast.success(
           `Importación completada: ${result.success} exitosos, ${result.errors.length} errores`

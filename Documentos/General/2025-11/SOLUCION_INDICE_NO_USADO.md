@@ -34,7 +34,7 @@ Aunque el índice existe, PostgreSQL no lo está usando.
 ANALYZE prestamos;
 
 -- Verificar estadísticas
-SELECT 
+SELECT
     schemaname,
     tablename,
     last_analyze,
@@ -45,8 +45,8 @@ WHERE tablename = 'prestamos';
 
 Luego ejecutar de nuevo:
 ```sql
-EXPLAIN ANALYZE 
-SELECT 
+EXPLAIN ANALYZE
+SELECT
     EXTRACT(YEAR FROM fecha_aprobacion),
     EXTRACT(MONTH FROM fecha_aprobacion),
     COUNT(*)
@@ -61,14 +61,14 @@ GROUP BY EXTRACT(YEAR FROM fecha_aprobacion), EXTRACT(MONTH FROM fecha_aprobacio
 
 ```sql
 -- Verificar definición del índice
-SELECT 
+SELECT
     indexname,
     indexdef
 FROM pg_indexes
 WHERE indexname = 'idx_prestamos_fecha_aprobacion_ym';
 
 -- Verificar que el índice esté activo
-SELECT 
+SELECT
     indexrelid::regclass AS index_name,
     indisvalid,
     indisready,
@@ -91,8 +91,8 @@ WHERE indexrelid = 'idx_prestamos_fecha_aprobacion_ym'::regclass;
 SET enable_seqscan = OFF;
 
 -- Ejecutar query
-EXPLAIN ANALYZE 
-SELECT 
+EXPLAIN ANALYZE
+SELECT
     EXTRACT(YEAR FROM fecha_aprobacion),
     EXTRACT(MONTH FROM fecha_aprobacion),
     COUNT(*)
@@ -112,7 +112,7 @@ SET enable_seqscan = ON;
 
 ```sql
 -- Ver tamaño de la tabla y número de filas
-SELECT 
+SELECT
     pg_size_pretty(pg_total_relation_size('prestamos')) AS total_size,
     pg_size_pretty(pg_relation_size('prestamos')) AS table_size,
     pg_size_pretty(pg_total_relation_size('prestamos') - pg_relation_size('prestamos')) AS indexes_size,
@@ -189,8 +189,8 @@ SELECT COUNT(*) FROM prestamos WHERE estado = 'APROBADO';
 Después de ejecutar `ANALYZE`, verificar de nuevo:
 
 ```sql
-EXPLAIN ANALYZE 
-SELECT 
+EXPLAIN ANALYZE
+SELECT
     EXTRACT(YEAR FROM fecha_aprobacion),
     EXTRACT(MONTH FROM fecha_aprobacion),
     COUNT(*)

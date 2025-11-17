@@ -63,7 +63,7 @@ export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaña, active
   // Organizar plantillas por categoría
   const plantillasPorCategoria = useMemo(() => {
     const organizadas: Record<string, NotificacionPlantilla[]> = {}
-    
+
     plantillas.forEach(plantilla => {
       const mapeo = mapeoTipos[plantilla.tipo as keyof typeof mapeoTipos]
       if (mapeo) {

@@ -29,7 +29,7 @@ Se han identificado y mejorado los endpoints que no tenían paginación o límit
 ### 3. `listar_notificaciones` ✅
 - **Archivo:** `backend/app/api/v1/endpoints/notificaciones.py`
 - **Antes:** Tenía `skip/limit` pero sin validación ni respuesta paginada
-- **Después:** 
+- **Después:**
   - Usa `page/per_page` con validación
   - Respuesta paginada estandarizada
   - Ordenamiento por fecha
@@ -185,8 +185,8 @@ const { items, total, page, total_pages } = response.data  // Objeto paginado
 
 ## ✅ CONCLUSIÓN
 
-**Endpoints mejorados:** 8  
-**Utilidades creadas:** 1 módulo completo  
+**Endpoints mejorados:** 8
+**Utilidades creadas:** 1 módulo completo
 **Estado:** ✅ Completado
 
 **Resultado:**

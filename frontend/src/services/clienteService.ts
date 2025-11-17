@@ -16,9 +16,9 @@ class ClienteService {
   ): Promise<PaginatedResponse<Cliente>> {
     const params = { ...filters, page, per_page: perPage }
     const url = buildUrl(this.baseUrl, params)
-    
+
     const response = await apiClient.get<any>(url)
-    
+
     // Adaptar respuesta del backend al formato esperado
     return {
       data: response.clientes || [],

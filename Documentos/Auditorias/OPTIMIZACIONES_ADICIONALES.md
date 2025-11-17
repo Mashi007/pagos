@@ -1,6 +1,6 @@
 # 🔧 OPTIMIZACIONES ADICIONALES PENDIENTES
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Estado:** Pendientes de implementar
 
 ---
@@ -28,7 +28,7 @@ Campos que se consultan frecuentemente **NO tienen índices**, causando:
 #### **Tabla: `pagos`**
 ```python
 # ❌ FALTA ÍNDICE
-fecha_registro = Column(DateTime, default=func.now(), nullable=False)  
+fecha_registro = Column(DateTime, default=func.now(), nullable=False)
 # Se usa en: ORDER BY, filtros por fecha, queries de dashboard
 
 # ✅ YA TIENE ÍNDICE (correcto)
@@ -110,33 +110,33 @@ import sqlalchemy as sa
 def upgrade():
     # Índice en pagos.fecha_registro
     op.create_index(
-        'ix_pagos_fecha_registro', 
-        'pagos', 
-        ['fecha_registro'], 
+        'ix_pagos_fecha_registro',
+        'pagos',
+        ['fecha_registro'],
         unique=False
     )
-    
+
     # Índice en cuotas.fecha_vencimiento
     op.create_index(
-        'ix_cuotas_fecha_vencimiento', 
-        'cuotas', 
-        ['fecha_vencimiento'], 
+        'ix_cuotas_fecha_vencimiento',
+        'cuotas',
+        ['fecha_vencimiento'],
         unique=False
     )
-    
+
     # Índice en prestamos.fecha_registro
     op.create_index(
-        'ix_prestamos_fecha_registro', 
-        'prestamos', 
-        ['fecha_registro'], 
+        'ix_prestamos_fecha_registro',
+        'prestamos',
+        ['fecha_registro'],
         unique=False
     )
-    
+
     # Índice en prestamo_auditoria.fecha_cambio
     op.create_index(
-        'ix_prestamo_auditoria_fecha_cambio', 
-        'prestamo_auditoria', 
-        ['fecha_cambio'], 
+        'ix_prestamo_auditoria_fecha_cambio',
+        'prestamo_auditoria',
+        ['fecha_cambio'],
         unique=False
     )
 
@@ -246,7 +246,7 @@ Para KPIs muy complejos, crear vistas materializadas:
 
 ```sql
 CREATE MATERIALIZED VIEW dashboard_stats AS
-SELECT 
+SELECT
     COUNT(DISTINCT p.cedula) as clientes_total,
     SUM(p.total_financiamiento) as cartera_total,
     ...

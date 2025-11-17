@@ -37,7 +37,7 @@ morosidad_mensual = max(0.0, float(monto_cuotas_programadas) - float(monto_pagad
 **Ubicación**: `dashboard.py:3545-3563`
 
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
     EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
     COALESCE(SUM(c.monto_cuota), 0) as total_cuotas_programadas
@@ -58,7 +58,7 @@ GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_venc
 **Ubicación**: `dashboard.py:3657-3673` (sin filtros)
 
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM fecha_pago)::integer as año,
     EXTRACT(MONTH FROM fecha_pago)::integer as mes,
     COALESCE(SUM(monto_pagado), 0) as total_pagado
@@ -102,7 +102,7 @@ GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
 **Ubicación**: `frontend/src/pages/DashboardMenu.tsx:149`
 
 ```typescript
-const response = await apiClient.get(...) as { 
+const response = await apiClient.get(...) as {
   meses: Array<{
     ...
     morosidad_mensual: number
@@ -120,10 +120,10 @@ return response.meses
 **Ubicación**: `frontend/src/pages/DashboardMenu.tsx:874`
 
 ```typescript
-<Line 
+<Line
   yAxisId="right"
-  type="monotone" 
-  dataKey="morosidad_mensual" 
+  type="monotone"
+  dataKey="morosidad_mensual"
   stroke="#ef4444"
   ...
 />
@@ -138,7 +138,7 @@ return response.meses
 **Ubicación**: `frontend/src/pages/DashboardMenu.tsx:800-809`
 
 ```typescript
-<YAxis 
+<YAxis
   yAxisId="right"
   orientation="right"
   stroke="#ef4444"
@@ -176,7 +176,7 @@ return response.meses
 
 **Problema potencial**: El frontend puede estar usando datos en cache.
 
-**Solución aplicada**: 
+**Solución aplicada**:
 - Cache reducido a 1 minuto
 - `refetchOnWindowFocus: true`
 
@@ -226,7 +226,7 @@ Para confirmar que todo funciona:
 
 1. **Revisar logs del backend**:
    ```
-   📊 [financiamiento-tendencia] 2024-05 (año=2024, mes=5): 
+   📊 [financiamiento-tendencia] 2024-05 (año=2024, mes=5):
    Programado=$514.00, Pagado=$520.00, Morosidad=$0.00
    ```
 
@@ -307,7 +307,7 @@ Ejecutar query SQL para verificar:
 
 ```sql
 -- Verificar cuotas programadas vs pagos por mes
-SELECT 
+SELECT
     EXTRACT(YEAR FROM c.fecha_vencimiento) as año,
     EXTRACT(MONTH FROM c.fecha_vencimiento) as mes,
     SUM(c.monto_cuota) as programado,
@@ -316,7 +316,7 @@ SELECT
      WHERE EXTRACT(YEAR FROM p.fecha_pago) = EXTRACT(YEAR FROM c.fecha_vencimiento)
        AND EXTRACT(MONTH FROM p.fecha_pago) = EXTRACT(MONTH FROM c.fecha_vencimiento)
        AND p.activo = TRUE) as pagado,
-    GREATEST(0, SUM(c.monto_cuota) - 
+    GREATEST(0, SUM(c.monto_cuota) -
         (SELECT COALESCE(SUM(p.monto_pagado), 0)
          FROM pagos p
          WHERE EXTRACT(YEAR FROM p.fecha_pago) = EXTRACT(YEAR FROM c.fecha_vencimiento)

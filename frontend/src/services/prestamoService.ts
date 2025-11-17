@@ -49,9 +49,9 @@ class PrestamoService {
       params.fecha_fin = params.fecha_fin
     }
     const url = buildUrl(this.baseUrl, params)
-    
+
     const response = await apiClient.get<any>(url)
-    
+
     // Adaptar respuesta del backend al formato esperado
     return {
       data: response.data || [],

@@ -37,7 +37,7 @@ Los errores que estás viendo son **NORMALES y ESPERADOS** en este contexto. Te 
    ```python
    # ❌ ANTES (causaba errores)
    op.create_table("clientes", ...)
-   
+
    # ✅ AHORA (idempotente)
    if "clientes" not in inspector.get_table_names():
        op.create_table("clientes", ...)

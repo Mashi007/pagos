@@ -1,7 +1,7 @@
 # 🔍 ANÁLISIS DETALLADO DE IMPACTO - ELIMINACIÓN DE ARCHIVOS SQL
 
-**Fecha:** 2025-01-27  
-**Total de archivos SQL:** 95 archivos  
+**Fecha:** 2025-01-27
+**Total de archivos SQL:** 95 archivos
 **Referencias en documentación:** 92+ referencias encontradas
 
 ---
@@ -30,7 +30,7 @@ Estos archivos son **esenciales** para operaciones del sistema y están **activa
   - **Referencias:** 6 documentos
   - **Uso:** Crear índices de performance para dashboard
   - **Impacto:** 🔴 CRÍTICO - Mejora significativa de performance
-  - **Documentación:** 
+  - **Documentación:**
     - `Documentos/General/2025-11/GUIA_EJECUTAR_INDICES_DBEAVER.md`
     - `Documentos/General/2025-11/INSTRUCCIONES_EJECUCION_OPTIMIZACIONES.md`
     - `Documentos/General/2025-11/RESUMEN_OPTIMIZACIONES_APLICADAS.md`

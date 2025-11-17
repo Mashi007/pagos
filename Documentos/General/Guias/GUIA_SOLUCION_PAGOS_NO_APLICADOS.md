@@ -30,18 +30,18 @@
 ## 🔍 CAUSAS POSIBLES
 
 ### 1. Pagos sin `prestamo_id` (NULL)
-**Síntoma**: En PASO 1, hay muchos pagos sin `prestamo_id`  
-**Causa**: El formulario de registro no está capturando/guardando el `prestamo_id`  
+**Síntoma**: En PASO 1, hay muchos pagos sin `prestamo_id`
+**Causa**: El formulario de registro no está capturando/guardando el `prestamo_id`
 **Solución**: Verificar que el formulario esté enviando `prestamo_id` al backend
 
 ### 2. Préstamos sin cuotas generadas
-**Síntoma**: En PASO 2, estado `ERROR (Prestamo sin cuotas generadas)`  
-**Causa**: El préstamo fue aprobado pero no se generaron las cuotas  
+**Síntoma**: En PASO 2, estado `ERROR (Prestamo sin cuotas generadas)`
+**Causa**: El préstamo fue aprobado pero no se generaron las cuotas
 **Solución**: Generar cuotas manualmente usando el endpoint `/api/v1/prestamos/{id}/generar-amortizacion`
 
 ### 3. Error silencioso en `aplicar_pago_a_cuotas()`
-**Síntoma**: Pagos tienen `prestamo_id` y hay cuotas, pero no se aplicaron  
-**Causa**: Error en la función que no se está reportando  
+**Síntoma**: Pagos tienen `prestamo_id` y hay cuotas, pero no se aplicaron
+**Causa**: Error en la función que no se está reportando
 **Solución**: Revisar logs del backend para ver errores
 
 ---
@@ -77,7 +77,7 @@ Si hay pagos sin `prestamo_id`, necesitas vincularlos:
 
 ```sql
 -- PASO 1: Identificar pagos sin prestamo_id que tienen cédula
-SELECT 
+SELECT
     p.id AS pago_id,
     p.cedula_cliente,
     pr.id AS prestamo_id_posible,
@@ -93,18 +93,18 @@ LIMIT 20;
 -- Si hay múltiples préstamos, necesitas lógica más compleja
 UPDATE pagos p
 SET prestamo_id = (
-    SELECT pr.id 
-    FROM prestamos pr 
-    WHERE pr.cedula = p.cedula_cliente 
+    SELECT pr.id
+    FROM prestamos pr
+    WHERE pr.cedula = p.cedula_cliente
         AND pr.estado = 'APROBADO'
     ORDER BY pr.fecha_aprobacion DESC
     LIMIT 1
 )
 WHERE p.prestamo_id IS NULL
     AND EXISTS (
-        SELECT 1 
-        FROM prestamos pr 
-        WHERE pr.cedula = p.cedula_cliente 
+        SELECT 1
+        FROM prestamos pr
+        WHERE pr.cedula = p.cedula_cliente
             AND pr.estado = 'APROBADO'
     );
 ```

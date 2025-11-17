@@ -175,7 +175,7 @@ db.commit()
 ```python
 class Analista(Base):
     __tablename__ = "analistas"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(255), nullable=False, index=True)
     activo = Column(Boolean, default=True, nullable=False)
@@ -239,7 +239,7 @@ CREATE TABLE analistas (
 );
 
 -- Ejemplo de registro
-INSERT INTO analistas (nombre, activo, created_at) 
+INSERT INTO analistas (nombre, activo, created_at)
 VALUES ('Juan Pérez', true, '2025-10-01 00:00:00+00');
 
 -- Resultado

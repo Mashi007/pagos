@@ -126,8 +126,8 @@ if ultima_interaccion and ultima_interaccion > ventana_24h:
 else:
     # Fuera de ventana: usar template
     await whatsapp_service.send_message(
-        to_number, 
-        message, 
+        to_number,
+        message,
         template_name="notificacion_pago"
     )
 ```

@@ -38,17 +38,17 @@ export function ModelosVehiculos() {
   const itemsPerPage = 10
 
   // Usar hooks de React Query
-  const { 
-    data: modelosData, 
-    isLoading: loading, 
+  const {
+    data: modelosData,
+    isLoading: loading,
     error,
     refetch
   } = useModelosVehiculos({ limit: 1000 })
-  
+
   const deleteModeloMutation = useDeleteModeloVehiculo()
   const updateModeloMutation = useUpdateModeloVehiculo()
   const createModeloMutation = useCreateModeloVehiculo()
-  
+
   const modelos = modelosData?.items || []
 
   useEffect(() => {
@@ -67,11 +67,11 @@ export function ModelosVehiculos() {
         '⚠️ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este modelo?\n\n' +
         'Esta acción NO se puede deshacer y el modelo será borrado completamente de la base de datos.'
       )
-      
+
       if (!confirmar) {
         return
       }
-      
+
       await deleteModeloMutation.mutateAsync(id)
     } catch (err) {
       console.error('Error:', err)
@@ -82,14 +82,14 @@ export function ModelosVehiculos() {
     if (!modelo.trim()) {
       return 'El modelo es requerido'
     }
-    
+
     return ''
   }
 
   const formatModelo = (modelo: string): string => {
     // Limpiar espacios extras
     const modeloLimpio = modelo.trim().replace(/\s+/g, ' ')
-    
+
     // Capitalizar primera letra de cada palabra
     return modeloLimpio.split(' ').map(word => {
       if (word.length === 0) return word
@@ -110,20 +110,20 @@ export function ModelosVehiculos() {
 
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // Validar modelo (solo que no esté vacío)
     const error = validateModelo(formData.modelo)
     if (error) {
       setValidationError(error)
       return
     }
-    
+
     setValidationError('')
-    
+
     try {
       // Formatear modelo (capitalizar primera letra de cada palabra)
       const modeloFormateado = formatModelo(formData.modelo)
-      
+
       if (editingModelo) {
         // Al editar, mantener el estado actual
         await updateModeloMutation.mutateAsync({
@@ -311,15 +311,15 @@ export function ModelosVehiculos() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {modelo.created_at 
+                    {modelo.created_at
                       ? (() => {
                           const date = new Date(modelo.created_at)
-                          return isNaN(date.getTime()) 
-                            ? '01/10/2025' 
-                            : date.toLocaleDateString('es-VE', { 
-                                year: 'numeric', 
-                                month: '2-digit', 
-                                day: '2-digit' 
+                          return isNaN(date.getTime())
+                            ? '01/10/2025'
+                            : date.toLocaleDateString('es-VE', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit'
                               })
                         })()
                       : '01/10/2025'}
@@ -349,7 +349,7 @@ export function ModelosVehiculos() {
               ))}
             </TableBody>
           </Table>
-          
+
           {filteredModelos.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               {searchTerm ? 'No se encontraron modelos con ese nombre' : 'No hay modelos disponibles'}
@@ -400,11 +400,11 @@ export function ModelosVehiculos() {
 
       {/* Create/Edit Form Modal */}
       {showCreateForm && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
           onClick={resetForm}
         >
-          <div 
+          <div
             className="bg-white rounded-lg shadow-xl max-w-md w-full"
             onClick={(e) => e.stopPropagation()}
           >
@@ -476,8 +476,8 @@ export function ModelosVehiculos() {
                   )}
 
                   <div className="flex items-center space-x-2 pt-4">
-                    <Button 
-                      type="submit" 
+                    <Button
+                      type="submit"
                       disabled={createModeloMutation.isPending || updateModeloMutation.isPending}
                       className="bg-blue-600 hover:bg-blue-700"
                     >

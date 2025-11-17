@@ -83,7 +83,7 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
 
   // Preparar datos para gráfico divergente
   // Ordenar por monto total (ascendente para visualización)
-  const datosGrafico = [...(distribucionData?.distribucion || [])].sort((a, b) => 
+  const datosGrafico = [...(distribucionData?.distribucion || [])].sort((a, b) =>
     a.monto_total - b.monto_total
   )
 
@@ -92,11 +92,11 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
     if (active && payload && payload.length) {
       const data = payload[0].payload
       if (!data) return null
-      
+
       const cantidad = typeof data.cantidad_prestamos === 'number' ? data.cantidad_prestamos : 0
       const montoTotal = typeof data.monto_total === 'number' ? data.monto_total : 0
       const porcentaje = typeof data.porcentaje_monto === 'number' ? data.porcentaje_monto : 0
-      
+
       return (
         <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
           <p className="font-semibold mb-2">{label}</p>

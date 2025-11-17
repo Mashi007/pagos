@@ -1,6 +1,6 @@
 # ✅ OPTIMIZACIONES ADICIONALES - IMPLEMENTADAS
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Estado:** ✅ COMPLETADO
 
 ---
@@ -234,8 +234,8 @@ alembic upgrade head
 
 ```sql
 -- Verificar que los índices se crearon
-SELECT indexname, tablename 
-FROM pg_indexes 
+SELECT indexname, tablename
+FROM pg_indexes
 WHERE tablename IN ('pagos', 'cuotas', 'prestamos', 'prestamos_auditoria')
   AND indexname LIKE 'ix_%_fecha%'
 ORDER BY tablename, indexname;

@@ -23,4 +23,3 @@ export function useEscapeClose(onClose: () => void, enabled: boolean = true) {
   }, [onClose, enabled])
 }
 
-

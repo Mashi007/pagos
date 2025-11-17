@@ -59,7 +59,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const isMounted = useIsMounted()
-  
+
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [excelData, setExcelData] = useState<ExcelRow[]>([])
@@ -150,9 +150,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         field: 'fila_completa',
         rowIndex
       }
-      
+
       setToasts(prev => [...prev, successToast])
-      
+
       // Limpiar tracker
       setViolationTracker(prev => ({
         ...prev,
@@ -161,24 +161,24 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           lastRowData: rowDataHash
         }
       }))
-      
+
       // Auto-remover notificación después de 3 segundos
       setTimeout(() => {
         setToasts(prev => prev.filter(toast => toast.id !== successToast.id))
       }, 3000)
-      
+
     } else {
       // Fila con errores - incrementar contador
       const newViolationCount = currentTracker.violationCount + 1
-      
+
       // Mostrar notificación solo en violaciones específicas: 1ra, 3ra, 6ta, 9na, 12va...
-      const shouldShowNotification = newViolationCount === 1 || 
-                                   newViolationCount === 3 || 
-                                   newViolationCount === 6 || 
-                                   newViolationCount === 9 || 
+      const shouldShowNotification = newViolationCount === 1 ||
+                                   newViolationCount === 3 ||
+                                   newViolationCount === 6 ||
+                                   newViolationCount === 9 ||
                                    newViolationCount === 12 ||
                                    (newViolationCount > 12 && newViolationCount % 3 === 0)
-      
+
       if (shouldShowNotification) {
         const errorToast = {
           id: `error-row-${rowIndex}-${Date.now()}`,
@@ -188,15 +188,15 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           field: 'fila_completa',
           rowIndex
         }
-        
+
         setToasts(prev => [...prev, errorToast])
-        
+
         // Auto-remover notificación después de 3 segundos
         setTimeout(() => {
           setToasts(prev => prev.filter(toast => toast.id !== errorToast.id))
         }, 3000)
       }
-      
+
       // Actualizar contador de violaciones
       setViolationTracker(prev => ({
         ...prev,
@@ -233,7 +233,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const addToast = (type: 'error' | 'warning' | 'success', message: string, suggestion?: string, field: string = 'general', rowIndex: number = -1) => {
     const id = Date.now().toString()
     setToasts(prev => [...prev, { id, type, message, suggestion, field, rowIndex }])
-    
+
     // Auto-remover después de 3 segundos
     setTimeout(() => {
       setToasts(prev => prev.filter(toast => toast.id !== id))
@@ -242,8 +242,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
   // Limpiar notificaciones contradictorias
   const clearContradictoryToasts = () => {
-    setToasts(prev => prev.filter(toast => 
-      !toast.message.includes('guardado exitosamente') && 
+    setToasts(prev => prev.filter(toast =>
+      !toast.message.includes('guardado exitosamente') &&
       !toast.message.includes('agregado al Dashboard') &&
       !toast.message.includes('Redirigiendo')
     ))
@@ -255,13 +255,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)
-      
+
       // Usar endpoint raíz que sabemos que funciona
-      const response = await fetch('/', { 
+      const response = await fetch('/', {
         method: 'HEAD',
         signal: controller.signal
       })
-      
+
       clearTimeout(timeoutId)
       setServiceStatus(response.ok ? 'online' : 'offline')
     } catch (error) {
@@ -302,16 +302,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     queryClient.invalidateQueries({ queryKey: ['clientes-list'] })
     queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
     // ✅ Invalidar también búsquedas de clientes (usadas en formularios de préstamos)
-    queryClient.invalidateQueries({ 
+    queryClient.invalidateQueries({
       queryKey: ['clientes', 'search'],
       exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
     })
-    
+
     console.log('🔄 Cache de Dashboard de Clientes y búsquedas invalidado')
   }
 
   const notifyDashboardUpdate = (clientCount: number) => {
-    addToast('success', 
+    addToast('success',
       `${clientCount} cliente${clientCount > 1 ? 's' : ''} agregado${clientCount > 1 ? 's' : ''} al Dashboard de Clientes`,
       'Los clientes ya están disponibles en la lista principal'
     )
@@ -319,16 +319,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
 
   const saveIndividualClient = async (row: ExcelRow): Promise<boolean> => {
-    
+
     try {
       // ✅ VALIDACIÓN PREVIA: Verificar que NO hay errores antes de intentar guardar
       if (row._hasErrors) {
         alert('⚠️ NO SE PUEDE GUARDAR: Hay campos vacíos o con errores en esta fila.\n\nPor favor, complete todos los campos obligatorios en la tabla antes de guardar.')
         return false
       }
-      
+
       setSavingProgress(prev => ({ ...prev, [row._rowIndex]: true }))
-      
+
       const clienteData = {
         cedula: blankIfNN(row.cedula),
         nombres: formatNombres(blankIfNN(row.nombres)),  // ✅ Aplicar formato Title Case y ya unificados (nombres + apellidos)
@@ -346,7 +346,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         await clienteService.createCliente(clienteData)
       } catch (error: any) {
         console.error('Error guardando cliente individual:', error)
-        
+
         // Manejar diferentes tipos de errores
         if (error.response?.status === 400 || error.response?.status === 409) {
           // Error de cliente duplicado (misma cédula y mismo nombre)
@@ -362,32 +362,32 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           const errorMessage = error.response?.data?.detail || error.response?.data?.message || error.message || 'Error desconocido'
           addToast('error', `Error guardando cliente en fila ${row._rowIndex}: ${errorMessage}`)
         }
-        
+
         // Limpiar progreso
         setSavingProgress(prev => ({ ...prev, [row._rowIndex]: false }))
         return false
       }
-      
+
       // Marcar como guardado
       setSavedClients(prev => new Set([...prev, row._rowIndex]))
-      
+
       // Refrescar Dashboard de Clientes
       refreshDashboardClients()
-      
+
       addToast('success', `Cliente ${row.nombres} guardado exitosamente`)
-      
+
       // Eliminar la fila de la lista después de guardar exitosamente
       setExcelData(prev => {
         const remaining = prev.filter(r => r._rowIndex !== row._rowIndex)
-        
+
         // ✅ Solo cerrar automáticamente si YA NO HAY filas pendientes
         if (remaining.length === 0) {
           addToast('success', '🎉 ¡Todos los clientes han sido guardados exitosamente!')
           notifyDashboardUpdate(getSavedClientsCount())
-          
+
           // Mostrar mensaje informativo sobre navegación automática
           addToast('success', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
-          
+
           // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
           setTimeout(() => {
             // Cerrar el modal de Carga Masiva
@@ -399,18 +399,18 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           // ✅ HAY clientes pendientes, mostrar información
           addToast('warning', `${remaining.length} clientes pendientes`)
         }
-        
+
         return remaining
       })
-      
+
       return true
-      
+
     } catch (error: any) {
       console.error('Error guardando cliente individual:', error)
-      
+
       // Limpiar notificaciones anteriores para evitar contradicciones
       clearContradictoryToasts()
-      
+
       // Manejar diferentes tipos de errores
       if (error.response?.status === 503) {
         addToast('error', '🚨 SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
@@ -423,7 +423,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       } else {
         addToast('error', `Error guardando cliente: ${error.response?.data?.detail || error.message}`)
       }
-      
+
       return false
     } finally {
       // Limpiar progreso
@@ -433,30 +433,30 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
   const saveAllValidClients = async (): Promise<void> => {
     const validClients = getValidClients()
-    
+
     if (validClients.length === 0) {
       addToast('warning', 'No hay clientes válidos para guardar')
       return
     }
 
     setIsSavingIndividual(true)
-    
+
     try {
       // Guardar todos los clientes válidos uno por uno
       let successful = 0
       let failed = 0
       const successfulRowIndexes: number[] = []
-      
+
       console.log(`🔄 Iniciando guardado masivo de ${validClients.length} clientes válidos`)
-      
+
       for (let i = 0; i < validClients.length; i++) {
         const client = validClients[i]
         console.log(`📋 Procesando cliente ${i + 1}/${validClients.length}: ${client.cedula} - ${client.nombres}`)
-        
+
         try {
           // ✅ await esperará automáticamente si hay un duplicado y el usuario debe confirmar
           const result = await saveIndividualClient(client)
-          
+
           if (result === true) {
             successful++
             successfulRowIndexes.push(client._rowIndex)
@@ -475,29 +475,29 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             addToast('error', `Error guardando ${client.cedula}: ${error.message || 'Error desconocido'}`)
           }
         }
-        
+
         console.log(`📊 Progreso: ${successful} exitosos, ${failed} fallidos, ${validClients.length - (i + 1)} pendientes`)
       }
-      
+
       console.log(`✅ Guardado masivo completado: ${successful} exitosos, ${failed} fallidos`)
-      
+
       if (successful > 0) {
         // Solo mostrar notificación de éxito si realmente se guardaron
         addToast('success', `${successful} clientes guardados exitosamente`)
-        
+
         // Refrescar Dashboard de Clientes
         refreshDashboardClients()
         notifyDashboardUpdate(successful)
-        
+
         // Eliminar las filas guardadas de la lista
         setExcelData(prev => {
           const remaining = prev.filter(r => !successfulRowIndexes.includes(r._rowIndex))
-          
+
           // ✅ Solo cerrar automáticamente si YA NO HAY filas pendientes
           if (remaining.length === 0) {
             // Mostrar mensaje informativo sobre navegación automática
             addToast('success', '🎉 ¡Todos los clientes guardados! Cerrando en 2 segundos...')
-            
+
             // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
             setTimeout(() => {
               // Cerrar el modal de Carga Masiva
@@ -509,21 +509,21 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             // ✅ HAY clientes pendientes, mostrar advertencia
             addToast('warning', `⚠️ Quedan ${remaining.length} clientes por verificar`)
           }
-          
+
           return remaining
         })
       }
-      
+
       if (failed > 0) {
         addToast('error', `${failed} clientes fallaron al guardar`)
       }
-      
+
     } catch (error: any) {
       console.error('Error en guardado masivo:', error)
-      
+
       // Limpiar notificaciones anteriores para evitar contradicciones
       clearContradictoryToasts()
-      
+
       // Manejar diferentes tipos de errores
       if (error.response?.status === 503) {
         addToast('error', '🚨 SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
@@ -536,7 +536,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       } else {
         addToast('error', 'Error en el guardado masivo')
       }
-      
+
       // NO navegar si hay errores
       console.log('No se navegará al Dashboard debido a errores en el guardado')
     } finally {
@@ -572,7 +572,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   // 🎨 FUNCIÓN PARA FORMATO DE NOMBRES (Primera letra mayúscula)
   const formatNombres = (nombres: string): string => {
     if (!nombres || !nombres.trim()) return nombres
-    
+
     return nombres
       .split(/\s+/)  // Separar por espacios
       .filter(word => word.length > 0)  // Filtrar palabras vacías
@@ -586,9 +586,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   // 📅 FUNCIÓN PARA CONVERTIR FECHA DE EXCEL A DD/MM/YYYY
   const convertirFechaExcel = (value: any): string => {
     if (!value) return ''
-    
+
     const strValue = value.toString().trim()
-    
+
     // Si es un número serial de Excel (ej: 45940, 45941)
     if (/^\d{4,}$/.test(strValue)) {
       try {
@@ -597,30 +597,30 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         // Fórmula: fecha = new Date(1900, 0, 1) + (numeroSerie - 2) días
         const fechaBase = new Date(1900, 0, 1)
         fechaBase.setDate(fechaBase.getDate() + numeroSerie - 2)
-        
+
         // Convertir a DD/MM/YYYY
         const dia = String(fechaBase.getDate()).padStart(2, '0')
         const mes = String(fechaBase.getMonth() + 1).padStart(2, '0')
         const ano = String(fechaBase.getFullYear())
-        
+
         return `${dia}/${mes}/${ano}`
       } catch (error) {
         console.warn('Error convirtiendo fecha Excel:', strValue, error)
         return strValue
       }
     }
-    
+
     // Si ya está en formato DD/MM/YYYY, devolverlo tal cual
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(strValue)) {
       return strValue
     }
-    
+
     // Si está en formato ISO (YYYY-MM-DD), convertir
     if (/^\d{4}-\d{2}-\d{2}$/.test(strValue)) {
       const [ano, mes, dia] = strValue.split('-')
       return `${dia}/${mes}/${ano}`
     }
-    
+
     // Formato desconocido, devolver tal cual (se validará después)
     return strValue
   }
@@ -628,15 +628,15 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   // 🔄 FUNCIÓN PARA CONVERTIR DD/MM/YYYY A YYYY-MM-DD (formato que espera el backend)
   const convertirFechaParaBackend = (fechaDDMMYYYY: string): string => {
     if (!fechaDDMMYYYY || !fechaDDMMYYYY.trim()) return ''
-    
+
     const fechaRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/
     const match = fechaDDMMYYYY.trim().match(fechaRegex)
-    
+
     if (!match) {
       console.warn('Formato de fecha inválido para convertir:', fechaDDMMYYYY)
       return fechaDDMMYYYY // Devolver tal cual si no es válido
     }
-    
+
     const [, dia, mes, ano] = match
     return `${ano}-${mes}-${dia}`
   }
@@ -669,50 +669,50 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       case 'telefono':
         if (!value || !value.trim()) return { isValid: false, message: 'Teléfono requerido' }
-        
+
         // El valor ya viene con +58, solo validar los 10 dígitos
         if (!value.startsWith('+58')) {
           return { isValid: false, message: 'Formato: +58 + 10 dígitos' }
         }
-        
+
         const phoneDigits = value.replace('+58', '')
-        
+
         // Validar que sean exactamente 10 dígitos y no empiece por 0
         const phonePattern = /^[1-9]\d{9}$/
         if (!phonePattern.test(phoneDigits)) {
-          return { 
-            isValid: false, 
-            message: 'Formato: 10 dígitos (sin 0 inicial)' 
+          return {
+            isValid: false,
+            message: 'Formato: 10 dígitos (sin 0 inicial)'
           }
         }
-        
+
         return { isValid: true }
 
       case 'email':
         if (!value.trim()) return { isValid: false, message: 'Email requerido' }
         const emailTrimmed = value.trim()
-        
+
         // Validar que no tenga espacios intermedios
         if (emailTrimmed.includes(' ')) {
           return { isValid: false, message: 'El email no puede contener espacios' }
         }
-        
+
         // Validar que no tenga comas
         if (emailTrimmed.includes(',')) {
           return { isValid: false, message: 'El email no puede contener comas' }
         }
-        
+
         // Validar que tenga arroba
         if (!emailTrimmed.includes('@')) {
           return { isValid: false, message: 'El email debe contener un @' }
         }
-        
+
         // Validar que tenga extensión válida (.com, .edu, .gob, etc.)
         const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
         if (!emailPattern.test(emailTrimmed.toLowerCase())) {
           return { isValid: false, message: 'El email debe tener una extensión válida (.com, .edu, .gob, etc.)' }
         }
-        
+
         return { isValid: true }
 
       case 'direccion':
@@ -739,19 +739,19 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       case 'fecha_nacimiento':
         if (!value.trim()) return { isValid: false, message: 'Fecha requerida' }
-        
+
         // Validar formato DD/MM/YYYY
         const fechaFormatRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/
         if (!fechaFormatRegex.test(value.trim())) {
           return { isValid: false, message: 'Formato: DD/MM/YYYY (ej: 01/01/2025)' }
         }
-        
+
         // Extraer día, mes y año
         const [, dia, mes, ano] = value.trim().match(fechaFormatRegex)!
         const diaNum = parseInt(dia, 10)
         const mesNum = parseInt(mes, 10)
         const anoNum = parseInt(ano, 10)
-        
+
         // Validar rangos
         if (diaNum < 1 || diaNum > 31) {
           return { isValid: false, message: 'Día inválido (1-31)' }
@@ -762,29 +762,29 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         if (anoNum < 1900 || anoNum > 2100) {
           return { isValid: false, message: 'Año inválido (1900-2100)' }
         }
-        
+
         // Validar que la fecha sea válida (ej: no 31/02/2025)
         const fechaNac = new Date(anoNum, mesNum - 1, diaNum)
         if (fechaNac.getDate() !== diaNum || fechaNac.getMonth() !== mesNum - 1 || fechaNac.getFullYear() !== anoNum) {
           return { isValid: false, message: 'Fecha inválida (ej: 31/02 no existe)' }
         }
-        
+
         // ✅ Validar que la fecha sea pasada (no futura)
         const hoyNac = new Date()
         hoyNac.setHours(0, 0, 0, 0)
-        
+
         if (fechaNac >= hoyNac) {
           return { isValid: false, message: 'La fecha de nacimiento no puede ser futura o de hoy' }
         }
-        
+
         // ✅ Validar que tenga al menos 18 años exactos
         const edad = hoyNac.getFullYear() - anoNum
         const fecha18 = new Date(anoNum + 18, mesNum - 1, diaNum)
-        
+
         if (fecha18 > hoyNac) {
           return { isValid: false, message: 'Debe tener al menos 18 años cumplidos' }
         }
-        
+
         return { isValid: true }
 
       case 'ocupacion':
@@ -807,47 +807,47 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     setIsProcessing(true)
     try {
       console.log('📊 Procesando archivo Excel:', file.name)
-      
+
       // ✅ VALIDACIÓN DE SEGURIDAD: Validar archivo antes de procesar
       const { validateExcelFile, validateWorkbookStructure, validateExcelData, sanitizeFileName } = await import('@/utils/excelValidation')
-      
+
       if (!isMounted()) return
-      
+
       const fileValidation = validateExcelFile(file)
       if (!fileValidation.isValid) {
         alert(`Error de validación: ${fileValidation.error}`)
         if (isMounted()) setIsProcessing(false)
         return
       }
-      
+
       if (fileValidation.warnings && fileValidation.warnings.length > 0) {
         console.warn('Advertencias de validación:', fileValidation.warnings)
       }
-      
+
       // Sanitizar nombre del archivo
       const sanitizedFileName = sanitizeFileName(file.name)
       if (sanitizedFileName !== file.name) {
         console.warn('Nombre de archivo sanitizado:', sanitizedFileName)
       }
-      
+
       // ✅ Importar exceljs dinámicamente para reducir bundle inicial
       const data = await file.arrayBuffer()
-      
+
       if (!isMounted()) return
-      
+
       // ✅ VALIDACIÓN DE SEGURIDAD: Validar tamaño del archivo antes de procesar
       if (data.byteLength > 10 * 1024 * 1024) {
         alert('El archivo es demasiado grande. Tamaño máximo: 10 MB')
         if (isMounted()) setIsProcessing(false)
         return
       }
-      
+
       // ✅ Leer archivo Excel usando exceljs (import dinámico para evitar precarga)
       const { readExcelToJSON } = await import('@/types/exceljs')
       const jsonData = await readExcelToJSON(data)
-      
+
       if (!isMounted()) return
-      
+
       // ✅ VALIDACIÓN DE SEGURIDAD: Validar datos extraídos
       const dataValidation = validateExcelData(jsonData)
       if (!dataValidation.isValid) {
@@ -855,24 +855,24 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         if (isMounted()) setIsProcessing(false)
         return
       }
-      
+
       if (jsonData.length < 2) {
         throw new Error('El archivo debe tener al menos una fila de datos')
       }
-      
+
       // Obtener encabezados (primera fila)
       const headers = jsonData[0] as string[]
       console.log('📋 Encabezados encontrados:', headers)
-      
+
       // Procesar filas de datos
       const processedData: ExcelRow[] = []
-      
+
       for (let i = 1; i < jsonData.length; i++) {
         if (!isMounted()) return
-        
+
         const row = jsonData[i] as any[]
         if (!row || row.every(cell => !cell)) continue // Saltar filas vacías
-        
+
         const rowData: ExcelRow = {
           _rowIndex: i + 1,
           _validation: {},
@@ -888,11 +888,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           activo: row[8]?.toString() || 'TRUE',              // Columna I - Por defecto siempre TRUE
           notas: row[9]?.toString() || ''                    // Columna J
         }
-        
+
         // Validar campos requeridos
-        const requiredFields = ['cedula', 'nombres', 'telefono', 'email', 
+        const requiredFields = ['cedula', 'nombres', 'telefono', 'email',
                               'direccion', 'fecha_nacimiento', 'ocupacion', 'estado', 'activo']
-        
+
         let hasErrors = false
         for (const field of requiredFields) {
           if (!isMounted()) return
@@ -900,23 +900,23 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           rowData._validation[field] = validation
           if (!validation.isValid) hasErrors = true
         }
-        
+
         // Validar notas por separado (siempre válido)
         rowData._validation.notas = { isValid: true }
-        
+
         rowData._hasErrors = hasErrors
         processedData.push(rowData)
       }
-      
+
       if (!isMounted()) return
-      
+
       console.log('✅ Datos procesados:', processedData.length, 'filas')
       setExcelData(processedData)
       setShowPreview(true)
-      
+
       // Validar dropdowns después de procesar
       updateDropdownErrors(processedData)
-      
+
     } catch (error) {
       console.error('❌ Error procesando Excel:', error)
       alert(`Error procesando el archivo: ${error instanceof Error ? error.message : 'Error desconocido'}`)
@@ -941,12 +941,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
-    
+
     const files = Array.from(e.dataTransfer.files)
-    const excelFile = files.find(file => 
+    const excelFile = files.find(file =>
       file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
     )
-    
+
     if (excelFile) {
       setUploadedFile(excelFile)
       processExcelFile(excelFile)
@@ -968,14 +968,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const updateCellValue = async (rowIndex: number, field: string, value: string | null) => {
     const newData = [...excelData]
     const row = newData[rowIndex]
-    
+
     if (row) {
       // 🎨 NO APLICAR FORMATO MIENTRAS ESCRIBE (permitir espacios libres)
       // El formato se aplicará al guardar
       const formattedValue = value || ''
-      
+
       row[field as keyof ExcelData] = formattedValue
-      
+
       // Para el campo notas, no hacer validación ni notificaciones
       if (field === 'notas') {
         // Solo actualizar el valor sin validación ni notificaciones
@@ -983,28 +983,28 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         setExcelData(newData)
         return
       }
-      
+
       // Re-validar el campo (solo para campos que no son notas)
       const validation = await validateField(field, formattedValue)
       row._validation[field] = validation
-      
+
       // Recalcular si tiene errores (excluyendo notas que es opcional)
       const fieldsToCheck = Object.keys(row._validation).filter(field => field !== 'notas')
       const hasValidationErrors = fieldsToCheck.some(field => !row._validation[field]?.isValid)
-      
+
       // ✅ Validar dropdowns explícitamente
       const hasDropdownErrors = false
-      
+
       row._hasErrors = hasValidationErrors || hasDropdownErrors
-      
+
       setExcelData(newData)
-      
+
       // Manejar notificaciones por fila completa según el comportamiento requerido
       handleRowValidationNotification(rowIndex, row)
-      
+
       // Actualizar estado de errores en dropdowns (ya no necesario - usando validación unificada)
       // updateDropdownErrors(newData)
-      
+
       // Sistema de notificaciones anterior (comentado para usar el nuevo)
       // if (!validation.isValid) {
       //   addToast('error', `Campo "${field}": ${validation.message}`, getSuggestion(field, value))
@@ -1017,12 +1017,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   // 🎯 VALIDAR DROPDOWNS Y ACTUALIZAR ESTADO DE ERRORES
   const updateDropdownErrors = (data: ExcelRow[]) => {
     const errors: {[key: string]: boolean} = {}
-    
+
     data.forEach((row, index) => {
       // Validar dropdowns específicos - SIEMPRE mostrar error si está vacío
       // Campos eliminados: modelo_vehiculo, concesionario, analista
     })
-    
+
     console.log('🔍 Actualizando errores de dropdowns:', errors)
     setDropdownErrors(errors)
   }
@@ -1032,17 +1032,17 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     // Filtrar solo registros completamente válidos
     const validData = excelData.filter(row => {
       const hasNoErrors = !row._hasErrors
-      
+
       return hasNoErrors
     })
-    
+
     if (validData.length === 0) {
       setShowValidationModal(true) // Abre modal de advertencias
       return
     }
-    
+
     setIsSaving(true)
-    
+
     try {
       console.log('💾 Guardando datos:', validData.length, 'clientes')
       console.log('📋 Datos a guardar:', validData.map(row => ({
@@ -1053,7 +1053,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         activo: row.activo,
         errores: row._hasErrors
       })))
-      
+
       // Guardar cada cliente individualmente
       const resultados: Array<{
         success: boolean;
@@ -1076,38 +1076,38 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
             notas: blankIfNN(row.notas) || 'NA'
           }
-          
+
           console.log(`🔄 Procesando fila ${row._rowIndex}:`, clienteData)
-          
+
           const clienteCreado = await clienteService.createCliente(clienteData)
           resultados.push({ success: true, cliente: clienteCreado, fila: row._rowIndex })
           console.log(`✅ Cliente creado exitosamente: ${clienteData.nombres}`)
-          
+
         } catch (error: any) {
           console.error(`❌ Error creando cliente en fila ${row._rowIndex}:`, error)
-          
+
           // Manejar error de cliente duplicado (misma cédula y mismo nombre)
           let errorMessage = error instanceof Error ? error.message : 'Error desconocido'
-          
+
           if (error.response?.status === 400 || error.response?.status === 409) {
             errorMessage = error.response?.data?.detail || error.response?.data?.message || 'Cliente duplicado: Ya existe un cliente con la misma cédula y el mismo nombre'
           }
-          
-          resultados.push({ 
-            success: false, 
+
+          resultados.push({
+            success: false,
             error: errorMessage,
             fila: row._rowIndex,
             cedula: row.cedula
           })
         }
       }
-      
+
       // Mostrar resumen de resultados
       const exitosos = resultados.filter(r => r.success).length
       const fallidos = resultados.filter(r => !r.success).length
-      
+
       console.log(`📊 Resumen: ${exitosos} exitosos, ${fallidos} fallidos`)
-      
+
       if (exitosos > 0) {
         // Notificar éxito y cerrar
         onDataProcessed?.(validData)
@@ -1117,7 +1117,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       } else {
         alert('No se pudo guardar ningún cliente. Revisa los errores.')
       }
-      
+
     } catch (error) {
       console.error('❌ Error en proceso de guardado:', error)
       alert('Error al guardar los datos. Intenta nuevamente.')
@@ -1129,10 +1129,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   // 🎯 CONTAR REGISTROS VÁLIDOS (sin errores + dropdowns seleccionados)
   const validRows = excelData.filter(row => {
     const hasNoErrors = !row._hasErrors
-    
+
     return hasNoErrors
   }).length
-  
+
   const totalRows = excelData.length
 
   return (
@@ -1189,8 +1189,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
               <CardContent className="pt-6">
                 <div
                   className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                    isDragging 
-                      ? 'border-green-500 bg-green-50' 
+                    isDragging
+                      ? 'border-green-500 bg-green-50'
                       : 'border-gray-300 hover:border-gray-400'
                   }`}
                   onDragOver={handleDragOver}
@@ -1204,7 +1204,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                   <p className="text-gray-600 mb-4">
                     Arrastra y suelta tu archivo Excel o haz clic para seleccionar
                   </p>
-                  
+
                   <Button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isProcessing}
@@ -1213,7 +1213,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                     <FileSpreadsheet className="mr-2 h-4 w-4" />
                     Seleccionar archivo
                   </Button>
-                  
+
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -1221,14 +1221,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                     onChange={handleFileSelect}
                     className="hidden"
                   />
-                  
+
                   {isProcessing && (
                     <div className="mt-4">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
                       <p className="text-sm text-gray-600 mt-2">Procesando archivo...</p>
                     </div>
                   )}
-                  
+
                   {uploadedFile && (
                     <div className="mt-4 p-3 bg-green-50 rounded-lg">
                       <div className="flex items-center space-x-2">
@@ -1361,7 +1361,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                           {excelData.filter(row => {
                             // Incluir filas con errores de validación
                             const hasValidationErrors = row._hasErrors
-                            
+
                             return hasValidationErrors
                           }).map((row, index) => (
                             <div key={index} className="border border-red-200 rounded-lg p-4 bg-red-50">
@@ -1411,7 +1411,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                           <Button variant="outline" onClick={() => setShowValidationModal(false)}>
                             Cerrar
                           </Button>
-                          <Button 
+                          <Button
                             onClick={() => {
                               setShowValidationModal(false);
                               // Scroll a la tabla para que el usuario corrija
@@ -1419,7 +1419,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                               if (tableElement) {
                                 tableElement.scrollIntoView({ behavior: 'smooth' });
                               }
-                            }} 
+                            }}
                             className="bg-blue-600 hover:bg-blue-700"
                           >
                             Ir a Corregir Errores
@@ -1462,7 +1462,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                         {getDisplayData().map((row, index) => (
                           <tr key={index} className={row._hasErrors ? 'bg-red-50' : 'bg-green-50'}>
                             <td className="border p-2 text-xs">{row._rowIndex}</td>
-                            
+
                             {/* Cédula */}
                             <td className="border p-2">
                               <input
@@ -1474,7 +1474,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 }`}
                               />
                             </td>
-                            
+
                             {/* Nombres y Apellidos (unificados) */}
                             <td className="border p-2">
                               <input
@@ -1486,7 +1486,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 }`}
                               />
                             </td>
-                            
+
                             {/* Teléfono */}
                             <td className="border p-2">
                               <div className="flex items-center">
@@ -1509,7 +1509,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 />
                               </div>
                             </td>
-                            
+
                             {/* Email */}
                             <td className="border p-2">
                               <input
@@ -1521,7 +1521,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 }`}
                               />
                             </td>
-                            
+
                             {/* Dirección */}
                             <td className="border p-2">
                               <input
@@ -1533,7 +1533,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 }`}
                               />
                             </td>
-                            
+
                             {/* Fecha Nacimiento */}
                             <td className="border p-2">
                               <input
@@ -1543,17 +1543,17 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   let value = e.target.value
                                   // Limpiar todos los caracteres no numéricos y barras
                                   const onlyDigits = value.replace(/\D/g, '')
-                                  
+
                                   // Solo procesar si hay dígitos
                                   if (onlyDigits.length === 0) {
                                     updateCellValue(index, 'fecha_nacimiento', '')
                                     return
                                   }
-                                  
+
                                   // Auto-formatear a DD/MM/YYYY
                                   let formatted = ''
                                   const digits = onlyDigits.substring(0, 8) // Limitar a 8 dígitos
-                                  
+
                                   if (digits.length === 1) {
                                     // Solo un dígito: no formatear aún
                                     formatted = digits
@@ -1573,19 +1573,19 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                     const ano = digits.substring(4, 8)
                                     formatted = dia + '/' + mes + '/' + ano
                                   }
-                                  
+
                                   updateCellValue(index, 'fecha_nacimiento', formatted)
                                 }}
                                 onBlur={(e) => {
                                   // Al perder el foco, auto-completar con 0 si falta
                                   let value = e.target.value
                                   if (!value) return
-                                  
+
                                   // Si no tiene barras, no formatear
                                   if (!value.includes('/')) {
                                     return
                                   }
-                                  
+
                                   const parts = value.split('/')
                                   if (parts.length === 3) {
                                     // Auto-completar día con 0 si solo tiene un dígito
@@ -1611,7 +1611,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 }`}
                               />
                             </td>
-                            
+
                             {/* Ocupación */}
                             <td className="border p-2">
                               <input
@@ -1623,7 +1623,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 }`}
                               />
                             </td>
-                            
+
                             {/* Estado */}
                             <td className="border p-2">
                               <select
@@ -1638,7 +1638,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 <option value="FINALIZADO">FINALIZADO</option>
                               </select>
                             </td>
-                            
+
                             {/* Activo */}
                             <td className="border p-2">
                               <input
@@ -1650,7 +1650,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 }`}
                               />
                             </td>
-                            
+
                             {/* Notas */}
                             <td className="border p-2">
                               <input
@@ -1660,7 +1660,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 className="w-full text-sm p-2 border border-gray-300 bg-white text-black rounded min-w-[80px]"
                               />
                             </td>
-                            
+
                             {/* Acciones */}
                             <td className="border p-2">
                               <div className="flex items-center justify-center space-x-1">
@@ -1700,7 +1700,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                         ))}
                       </tbody>
                     </table>
-                    
+
                     {/* Handle de redimensionamiento */}
                     <div className="absolute bottom-0 right-0 w-4 h-4 bg-gray-400 cursor-se-resize opacity-50 hover:opacity-100 transition-opacity">
                       <div className="w-full h-full bg-gradient-to-br from-transparent via-gray-600 to-gray-800"></div>
@@ -1723,8 +1723,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 300, scale: 0.8 }}
               className={`max-w-sm p-4 rounded-lg shadow-lg border-l-4 ${
-                toast.type === 'error' 
-                  ? 'bg-red-50 border-red-500 text-red-800' 
+                toast.type === 'error'
+                  ? 'bg-red-50 border-red-500 text-red-800'
                   : toast.type === 'warning'
                   ? 'bg-yellow-50 border-yellow-500 text-yellow-800'
                   : 'bg-green-50 border-green-500 text-green-800'

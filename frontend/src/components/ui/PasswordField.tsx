@@ -79,7 +79,7 @@ export const PasswordField = ({
             </Button>
           )}
         </div>
-        
+
         {showGenerateButton && (
           <Button
             type="button"
@@ -95,7 +95,7 @@ export const PasswordField = ({
             <Key className="h-4 w-4" />
           </Button>
         )}
-        
+
         {showCopyButton && currentPassword && (
           <Button
             type="button"
@@ -109,7 +109,7 @@ export const PasswordField = ({
           </Button>
         )}
       </div>
-      
+
       {/* Indicador de fortaleza de contraseña */}
       {currentPassword && (
         <div className="space-y-1">
@@ -131,11 +131,11 @@ export const PasswordField = ({
               ))}
             </div>
             <span className="text-xs text-gray-500">
-              {validation.strength <= 2 ? 'Débil' : 
+              {validation.strength <= 2 ? 'Débil' :
                validation.strength <= 3 ? 'Media' : 'Fuerte'}
             </span>
           </div>
-          
+
           {/* Requisitos de contraseña */}
           <div className="text-xs text-gray-500 space-y-0.5">
             <div className={validation.hasMinLength ? 'text-green-600' : ''}>

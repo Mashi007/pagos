@@ -218,6 +218,6 @@ Los endpoints del backend aún no están implementados. El frontend está prepar
 
 ---
 
-**Fecha de Verificación**: 2025-01-XX  
+**Fecha de Verificación**: 2025-01-XX
 **Estado General**: ✅ Frontend completamente integrado, Backend pendiente
 

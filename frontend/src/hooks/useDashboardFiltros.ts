@@ -46,7 +46,7 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
     return (periodo: string = 'mes') => {
       const params = new URLSearchParams()
       params.append('periodo', periodo)
-      
+
       // Aplicar todos los filtros disponibles (ignorar valores especiales)
       if (filtros.analista && filtros.analista !== '__ALL__') params.append('analista', normalizarValor(filtros.analista)!)
       if (filtros.concesionario && filtros.concesionario !== '__ALL__') params.append('concesionario', normalizarValor(filtros.concesionario)!)
@@ -54,7 +54,7 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
       if (filtros.fecha_inicio && filtros.fecha_inicio !== '') params.append('fecha_inicio', filtros.fecha_inicio)
       if (filtros.fecha_fin && filtros.fecha_fin !== '') params.append('fecha_fin', filtros.fecha_fin)
       if (filtros.consolidado) params.append('consolidado', 'true')
-      
+
       const result = params.toString()
       if (DEBUG_LOGS) {
         console.log('🔧 [useDashboardFiltros] Construyendo params:', { filtrosOriginales: filtros, periodo, paramsConstruidos: result })
@@ -131,7 +131,7 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
       if (filtros.analista && filtros.analista !== '__ALL__') obj.analista = normalizarValor(filtros.analista)
       if (filtros.concesionario && filtros.concesionario !== '__ALL__') obj.concesionario = normalizarValor(filtros.concesionario)
       if (filtros.modelo && filtros.modelo !== '__ALL__') obj.modelo = normalizarValor(filtros.modelo)
-      
+
       // ✅ Si hay fecha_inicio/fecha_fin explícitos, usarlos; si no, calcular del período
       if (filtros.fecha_inicio && filtros.fecha_inicio !== '') {
         obj.fecha_inicio = filtros.fecha_inicio
@@ -139,14 +139,14 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
         const fechas = calcularFechasPorPeriodo(periodo)
         obj.fecha_inicio = fechas.fecha_inicio
       }
-      
+
       if (filtros.fecha_fin && filtros.fecha_fin !== '') {
         obj.fecha_fin = filtros.fecha_fin
       } else if (periodo) {
         const fechas = calcularFechasPorPeriodo(periodo)
         obj.fecha_fin = fechas.fecha_fin
       }
-      
+
       if (DEBUG_LOGS) {
         console.log('🔧 [useDashboardFiltros] Construyendo objeto de filtros:', { filtrosOriginales: filtros, periodo, objetoConstruido: obj })
       }
@@ -159,10 +159,10 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
    */
   const tieneFiltrosActivos = useMemo(() => {
     return Boolean(
-      filtros.analista || 
-      filtros.concesionario || 
-      filtros.modelo || 
-      filtros.fecha_inicio || 
+      filtros.analista ||
+      filtros.concesionario ||
+      filtros.modelo ||
+      filtros.fecha_inicio ||
       filtros.fecha_fin
     )
   }, [filtros])

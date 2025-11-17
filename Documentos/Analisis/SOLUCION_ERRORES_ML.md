@@ -82,8 +82,8 @@ return {
 ### Verificar si la tabla existe
 
 ```sql
-SELECT table_name 
-FROM information_schema.tables 
+SELECT table_name
+FROM information_schema.tables
 WHERE table_name = 'modelos_impago_cuotas';
 ```
 

@@ -2,8 +2,8 @@
 
 ## 🚨 RESUMEN EJECUTIVO
 
-**Fecha/Hora**: 2025-11-04 11:13-11:14 UTC  
-**Timeouts detectados**: 3 requests críticos (>40s)  
+**Fecha/Hora**: 2025-11-04 11:13-11:14 UTC
+**Timeouts detectados**: 3 requests críticos (>40s)
 **Status**: ⚠️ **CRÍTICO** - La migración de índices aún no se aplicó o no está funcionando
 
 ---
@@ -140,7 +140,7 @@ Basado en el análisis del código y los timeouts conocidos:
 
 **Si tienes acceso a PostgreSQL**:
 ```sql
-SELECT 
+SELECT
     tablename,
     indexname,
     indexdef

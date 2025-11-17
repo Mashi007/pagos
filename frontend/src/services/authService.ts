@@ -1,8 +1,8 @@
 import { apiClient, ApiResponse } from './api'
 import { User, AuthTokens } from '@/types'
-import { 
-  safeSetItem, 
-  safeGetItem, 
+import {
+  safeSetItem,
+  safeGetItem,
   safeRemoveItem,
   safeSetSessionItem,
   safeGetSessionItem,
@@ -42,9 +42,9 @@ export class AuthService {
         ...credentials,
         email: credentials.email.toLowerCase().trim()
       }
-      
+
       const response = await apiClient.post<LoginResponse>('/api/v1/auth/login', normalizedCredentials)
-      
+
       // Guardar tokens de forma segura
       if (response.access_token) {
         if (credentials.remember) {
@@ -57,11 +57,11 @@ export class AuthService {
           safeSetSessionItem('refresh_token', response.refresh_token)
           safeSetSessionItem('user', response.user)
         }
-        
+
         // ✅ Resetear el flag de refresh token expirado después de login exitoso
         apiClient.resetRefreshTokenExpired()
       }
-      
+
       return response
     } catch (error: any) {
       if (error.code === 'NETWORK_ERROR' || !error.response) {
@@ -69,7 +69,7 @@ export class AuthService {
         networkError.code = 'NETWORK_ERROR'
         throw networkError
       }
-      
+
       throw error
     }
   }
@@ -90,7 +90,7 @@ export class AuthService {
   async refreshToken(): Promise<AuthTokens> {
     try {
       const refreshToken = safeGetItem('refresh_token') || safeGetSessionItem('refresh_token')
-      
+
       if (!refreshToken) {
         throw new Error('No hay refresh token disponible')
       }
@@ -121,14 +121,14 @@ export class AuthService {
   async getCurrentUser(): Promise<User> {
     try {
       const response = await apiClient.get<User>('/api/v1/auth/me')
-      
+
       // El backend retorna directamente el objeto User, no envuelto en ApiResponse
       const user = response
-      
+
       if (!user) {
         throw new Error('Usuario no encontrado en la respuesta')
       }
-      
+
       // Actualizar usuario en el almacenamiento correspondiente
       const rememberMe = safeGetItem('remember_me', false)
       if (rememberMe) {
@@ -136,7 +136,7 @@ export class AuthService {
       } else {
         safeSetSessionItem('user', user)
       }
-      
+
       return user
     } catch (error: any) {
       throw error
@@ -146,21 +146,21 @@ export class AuthService {
   // Cambiar contraseña
   async changePassword(data: ChangePasswordRequest): Promise<{ requires_reauth: boolean; message?: string }> {
     const response = await apiClient.post<{ message: string; requires_reauth?: boolean }>('/api/v1/auth/change-password', data)
-    
+
     // ✅ Si el backend indica que se requiere reautenticación, cerrar sesión y redirigir
     if (response.requires_reauth) {
       // Limpiar almacenamiento de autenticación
       clearAuthStorage()
-      
+
       // Redirigir al login después de un delay para mostrar mensaje y limpiar storage
       setTimeout(() => {
         window.location.href = '/login'
       }, 500) // Aumentado a 500ms para dar tiempo a mostrar el mensaje
     }
-    
-    return { 
+
+    return {
       requires_reauth: response.requires_reauth || false,
-      message: response.message 
+      message: response.message
     }
   }
 
@@ -178,8 +178,8 @@ export class AuthService {
   // Obtener usuario desde almacenamiento
   getStoredUser(): User | null {
     const rememberMe = safeGetItem('remember_me', false)
-    return rememberMe 
-      ? safeGetItem('user', null) 
+    return rememberMe
+      ? safeGetItem('user', null)
       : safeGetSessionItem('user', null)
   }
 }

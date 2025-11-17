@@ -1,6 +1,6 @@
 # 📋 REVISIÓN COMPLETA: MODELOS PAGOS, PRÉSTAMOS Y CLIENTES
 
-**Fecha:** 2025-11-05  
+**Fecha:** 2025-11-05
 **Estado:** ✅ REVISIÓN COMPLETA
 
 ---

@@ -27,7 +27,7 @@ El cálculo anterior solo sumaba cuotas vencidas con `estado != 'PAGADO'`, pero 
 **Morosidad Real = Cuotas Vencidas - Pagos Aplicados a Cuotas Vencidas**
 
 ```
-Morosidad = SUM(monto_cuota de cuotas vencidas) 
+Morosidad = SUM(monto_cuota de cuotas vencidas)
           - SUM(monto_aplicado de pagos a cuotas vencidas)
 ```
 
@@ -37,10 +37,10 @@ Morosidad = SUM(monto_cuota de cuotas vencidas)
 
 **Antes:**
 ```sql
-SELECT 
+SELECT
     COALESCE(SUM(c.monto_cuota), 0) as morosidad
 FROM cuotas c
-WHERE c.fecha_vencimiento <= ultimo_dia_mes 
+WHERE c.fecha_vencimiento <= ultimo_dia_mes
   AND c.estado != 'PAGADO'
 ```
 
@@ -49,7 +49,7 @@ WHERE c.fecha_vencimiento <= ultimo_dia_mes
 WITH cuotas_vencidas AS (
     SELECT SUM(monto_cuota) as total_cuotas_vencidas
     FROM cuotas c
-    WHERE c.fecha_vencimiento <= ultimo_dia_mes 
+    WHERE c.fecha_vencimiento <= ultimo_dia_mes
       AND c.estado != 'PAGADO'
 ),
 pagos_aplicados AS (
@@ -65,7 +65,7 @@ pagos_aplicados AS (
             AND p.activo = TRUE
       )
 )
-SELECT 
+SELECT
     GREATEST(0, cuotas_vencidas.total_cuotas_vencidas - pagos_aplicados.total_pagado) as morosidad
 FROM cuotas_vencidas, pagos_aplicados
 ```

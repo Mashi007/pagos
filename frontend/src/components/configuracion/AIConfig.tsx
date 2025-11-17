@@ -44,12 +44,12 @@ export function AIConfig() {
     max_tokens: '1000',
     activo: 'false',
   })
-  
+
   const [mostrarToken, setMostrarToken] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [documentos, setDocumentos] = useState<DocumentoAI[]>([])
   const [cargandoDocumentos, setCargandoDocumentos] = useState(false)
-  
+
   // Formulario de nuevo documento
   const [nuevoDocumento, setNuevoDocumento] = useState({
     titulo: '',
@@ -57,7 +57,7 @@ export function AIConfig() {
     archivo: null as File | null,
   })
   const [subiendoDocumento, setSubiendoDocumento] = useState(false)
-  
+
   // Estado para editar documento
   const [editandoDocumento, setEditandoDocumento] = useState<number | null>(null)
   const [documentoEditado, setDocumentoEditado] = useState({
@@ -66,7 +66,7 @@ export function AIConfig() {
   })
   const [actualizandoDocumento, setActualizandoDocumento] = useState(false)
   const [procesandoDocumento, setProcesandoDocumento] = useState<number | null>(null)
-  
+
   // Estado para pruebas (chat)
   const [probando, setProbando] = useState(false)
   const [preguntaPrueba, setPreguntaPrueba] = useState('')
@@ -88,7 +88,7 @@ export function AIConfig() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [activeTab, setActiveTab] = useState('configuracion')
   const [activeHybridTab, setActiveHybridTab] = useState('dashboard')
-  
+
   // Estado para verificar configuración correcta
   const [configuracionCorrecta, setConfiguracionCorrecta] = useState(false)
   const [verificandoConfig, setVerificandoConfig] = useState(false)
@@ -112,7 +112,7 @@ export function AIConfig() {
       console.log('✅ Token detectado desde BD - guardado permanentemente, no requiere confirmación')
       return
     }
-    
+
     // Solo verificar si el token cambió manualmente (no en la carga inicial)
     if (tokenAnterior && tokenAnterior !== config.openai_api_key && config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-')) {
       // El usuario cambió el token manualmente, verificar después de un delay
@@ -121,7 +121,7 @@ export function AIConfig() {
       }, 1000)
       return () => clearTimeout(timer)
     }
-    
+
     // Actualizar estado basado en configuración actual
     if (config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-')) {
       if (config.activo === 'true') {
@@ -150,11 +150,11 @@ export function AIConfig() {
         pregunta: 'Verificar conexión con OpenAI',
         usar_documentos: false,
       })
-      
+
       // Si la respuesta es exitosa o el error no es de autenticación, la config está correcta
       const esValida = resultado.success || !resultado.mensaje?.includes('API key')
       setConfiguracionCorrecta(esValida)
-      
+
       // Si el token es válido y se debe guardar automáticamente, guardar la configuración
       if (esValida && guardarAutomaticamente) {
         try {
@@ -166,7 +166,7 @@ export function AIConfig() {
           toast.error('Token válido pero error al guardar. Guarda manualmente.')
         }
       }
-      
+
       return esValida
     } catch (error: any) {
       // Si el error es de autenticación, la config no está correcta
@@ -191,7 +191,7 @@ export function AIConfig() {
         activo: data.activo || 'false',
       }
       setConfig(configCargada)
-      
+
       // Log para depuración
       console.log('📋 Configuración cargada desde BD:', {
         tieneToken: !!(configCargada.openai_api_key && configCargada.openai_api_key.trim()),
@@ -231,13 +231,13 @@ export function AIConfig() {
         tieneToken: !!(config.openai_api_key && config.openai_api_key.trim()),
         activo: config.activo
       })
-      
+
       await apiClient.put('/api/v1/configuracion/ai/configuracion', config)
       toast.success('✅ Configuración de AI guardada exitosamente y de forma permanente')
-      
+
       // Recargar configuración desde BD para confirmar que se guardó
       await cargarConfiguracion()
-      
+
       // Si hay token guardado, actualizar estado
       if (config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')) {
         if (config.activo === 'true') {
@@ -255,7 +255,7 @@ export function AIConfig() {
       setGuardando(false)
     }
   }
-  
+
   const handleVerificarYGuardar = async () => {
     // Verificar y guardar automáticamente si el token es válido
     const tokenValido = await verificarConfiguracion(true)
@@ -274,13 +274,13 @@ export function AIConfig() {
         toast.error('Tipo de archivo no permitido. Use PDF, TXT o DOCX')
         return
       }
-      
+
       // Validar tamaño (máximo 10MB)
       if (file.size > 10 * 1024 * 1024) {
         toast.error('El archivo es demasiado grande. Máximo 10MB')
         return
       }
-      
+
       setNuevoDocumento(prev => ({ ...prev, archivo: file }))
     }
   }
@@ -290,7 +290,7 @@ export function AIConfig() {
       toast.error('El título es requerido')
       return
     }
-    
+
     if (!nuevoDocumento.archivo) {
       toast.error('Debe seleccionar un archivo')
       return
@@ -336,7 +336,7 @@ export function AIConfig() {
     } catch (error: any) {
       console.error('Error procesando documento:', error)
       let mensajeError = error?.response?.data?.detail || error?.message || 'Error procesando documento'
-      
+
       // Simplificar mensajes largos de diagnóstico
       if (mensajeError.includes('El archivo físico no existe')) {
         mensajeError = 'El archivo físico no existe en el servidor. Por favor, elimina este documento y súbelo nuevamente.'
@@ -345,7 +345,7 @@ export function AIConfig() {
         const partes = mensajeError.split('\n')
         mensajeError = partes[0] + (partes.length > 1 ? ' (Ver consola para más detalles)' : '')
       }
-      
+
       toast.error(`Error al procesar documento: ${mensajeError}`, {
         duration: 5000,
       })
@@ -411,7 +411,7 @@ export function AIConfig() {
   const handleActivarDesactivarDocumento = async (id: number, activo: boolean) => {
     // Encontrar el documento para validar
     const documento = documentos.find(doc => doc.id === id)
-    
+
     // Si se está intentando activar, verificar que esté procesado
     if (activo && documento && !documento.contenido_procesado) {
       const confirmar = confirm(
@@ -422,7 +422,7 @@ export function AIConfig() {
         '3. ✅ Con contenido_texto válido\n\n' +
         '¿Deseas procesarlo ahora antes de activarlo?'
       )
-      
+
       if (confirmar) {
         // Procesar primero
         try {
@@ -442,7 +442,7 @@ export function AIConfig() {
         toast.warning('⚠️ Documento activado pero no procesado. El AI no podrá usarlo como contexto hasta que sea procesado.')
       }
     }
-    
+
     try {
       await apiClient.patch(`/api/v1/configuracion/ai/documentos/${id}/activar`, { activo })
       toast.success(`Documento ${activo ? 'activado' : 'desactivado'} exitosamente`)
@@ -478,7 +478,7 @@ export function AIConfig() {
       toast.error('Debes configurar el OpenAI API Key primero')
       return
     }
-    
+
     // Validar formato básico de API key (debe empezar con sk-)
     if (!apiKey.startsWith('sk-')) {
       toast.error('El API Key debe empezar con "sk-". Verifica que sea un token válido de OpenAI.')
@@ -496,7 +496,7 @@ export function AIConfig() {
     setPreguntaPrueba('')
     setProbando(true)
     setResultadoPrueba(null)
-    
+
     try {
       const resultado = await apiClient.post<{
         success: boolean
@@ -513,9 +513,9 @@ export function AIConfig() {
         pregunta: pregunta,
         usar_documentos: usarDocumentos,
       })
-      
+
       setResultadoPrueba(resultado)
-      
+
       if (resultado.success && resultado.respuesta) {
         // Agregar respuesta de AI al chat
         const mensajeAI = {
@@ -582,7 +582,7 @@ export function AIConfig() {
     const [guardandoPrompt, setGuardandoPrompt] = useState(false)
     const [tienePromptPersonalizado, setTienePromptPersonalizado] = useState(false)
     const [mostrarPlaceholders, setMostrarPlaceholders] = useState(true)
-    
+
     // Estados para variables personalizadas
     const [variablesPersonalizadas, setVariablesPersonalizadas] = useState<Array<{
       id: number
@@ -618,7 +618,7 @@ export function AIConfig() {
             orden: number
           }>
         }>('/api/v1/configuracion/ai/prompt')
-        
+
         setPromptPersonalizado(data.prompt_personalizado || '')
         setTienePromptPersonalizado(data.tiene_prompt_personalizado)
         if (data.variables_personalizadas) {
@@ -653,7 +653,7 @@ export function AIConfig() {
       if (!confirm('¿Estás seguro de restaurar el prompt por defecto? Se perderá el prompt personalizado.')) {
         return
       }
-      
+
       setGuardandoPrompt(true)
       try {
         await apiClient.put('/api/v1/configuracion/ai/prompt', {
@@ -780,12 +780,12 @@ export function AIConfig() {
 {datos_adicionales}
 {info_esquema}
 {contexto_documentos}`
-      
+
       const placeholdersPersonalizados = variablesPersonalizadas
         .filter(v => v.activo)
         .map(v => v.variable)
         .join('\n')
-      
+
       const todos = placeholdersDefault + (placeholdersPersonalizados ? '\n' + placeholdersPersonalizados : '')
       navigator.clipboard.writeText(todos)
       toast.success('Placeholders copiados al portapapeles')
@@ -904,8 +904,8 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
               Prompt Personalizado
             </h3>
             <p className="text-sm text-gray-600 mt-1">
-              {tienePromptPersonalizado 
-                ? '✅ Usando prompt personalizado' 
+              {tienePromptPersonalizado
+                ? '✅ Usando prompt personalizado'
                 : 'ℹ️ Usando prompt por defecto'}
             </p>
           </div>
@@ -958,7 +958,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
               <p className="text-sm text-amber-800 mb-2">
                 El sistema reemplazará automáticamente estos placeholders con datos reales:
               </p>
-              
+
               {/* Placeholders predeterminados */}
               <div className="bg-white rounded p-3 font-mono text-xs space-y-1 mb-3">
                 <div className="font-semibold text-amber-900 mb-1">Predeterminados:</div>
@@ -988,7 +988,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                     <FileText className="h-4 w-4" />
                     Gestión de Variables Personalizadas
                   </h4>
-                  
+
                   {/* Formulario para nueva variable */}
                   <div className="border rounded-lg p-3 mb-4 space-y-3">
                     <h5 className="font-medium text-sm">Nueva Variable</h5>
@@ -1151,7 +1151,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
               </Button>
             </div>
           </div>
-          
+
           {mostrarPlaceholders && !tienePromptPersonalizado && (
             <div className="mb-4 p-4 bg-gray-50 border rounded-lg">
               <p className="text-sm font-medium mb-2">Template de Prompt (para referencia):</p>
@@ -1185,8 +1185,8 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-sm text-blue-800">
-            💡 <strong>Tip:</strong> Puedes personalizar el comportamiento del AI ajustando el prompt. 
-            Los placeholders se reemplazarán automáticamente con datos reales del sistema. 
+            💡 <strong>Tip:</strong> Puedes personalizar el comportamiento del AI ajustando el prompt.
+            Los placeholders se reemplazarán automáticamente con datos reales del sistema.
             Si dejas el prompt vacío, se usará el prompt por defecto.
           </p>
         </div>
@@ -1214,21 +1214,21 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
       {/* Tabs con 3 pestañas - diseño mejorado */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3 bg-gray-100/50 p-1 rounded-lg">
-          <TabsTrigger 
-            value="configuracion" 
+          <TabsTrigger
+            value="configuracion"
             className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
           >
             <Settings className="h-4 w-4" />
             Configuración
           </TabsTrigger>
-          <TabsTrigger 
+          <TabsTrigger
             value="entrenamiento"
             className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
           >
             <FileText className="h-4 w-4" />
             Entrenamiento
           </TabsTrigger>
-          <TabsTrigger 
+          <TabsTrigger
             value="sistema-hibrido"
             className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
           >
@@ -1247,8 +1247,8 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                   Servicio de AI
                 </label>
                 <p className="text-xs text-gray-600">
-                  {config.activo === 'true' 
-                    ? '✅ El sistema está usando AI para generar respuestas automáticas' 
+                  {config.activo === 'true'
+                    ? '✅ El sistema está usando AI para generar respuestas automáticas'
                     : '⚠️ El sistema NO usará AI. Activa el servicio para habilitar respuestas inteligentes.'}
                 </p>
               </div>
@@ -1259,7 +1259,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                       onChange={async (e) => {
                         const nuevoEstado = e.target.checked ? 'true' : 'false'
                         handleChange('activo', nuevoEstado)
-                        
+
                         // Si hay token válido y se está activando, guardar automáticamente
                         if (e.target.checked && config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')) {
                           try {
@@ -1422,11 +1422,11 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
               </div>
 
               <div className="flex gap-2 pt-4 border-t">
-                <Button 
-                  onClick={handleGuardar} 
+                <Button
+                  onClick={handleGuardar}
                   disabled={guardando}
-                  className={configuracionCorrecta && config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-') 
-                    ? 'bg-green-600 hover:bg-green-700 text-white' 
+                  className={configuracionCorrecta && config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')
+                    ? 'bg-green-600 hover:bg-green-700 text-white'
                     : ''}
                 >
                   {guardando ? (
@@ -1444,8 +1444,8 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                   )}
                 </Button>
                 {config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-') && !configuracionCorrecta && (
-                  <Button 
-                    onClick={handleVerificarYGuardar} 
+                  <Button
+                    onClick={handleVerificarYGuardar}
                     disabled={verificandoConfig}
                     variant="outline"
                     className="border-blue-600 text-blue-600 hover:bg-blue-50"
@@ -1559,7 +1559,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                         </div>
                       ))
                     )}
-                    
+
                     {/* Indicador de escritura */}
                     {probando && (
                       <div className="flex gap-3 justify-start">
@@ -1642,7 +1642,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                   <div className="flex-1">
                     <p className="font-semibold text-blue-900 mb-1">Entrenamiento y Ajuste de Prompt</p>
                     <p className="text-sm text-blue-800">
-                      Personaliza el prompt del AI para ajustar su comportamiento, tono y capacidades. 
+                      Personaliza el prompt del AI para ajustar su comportamiento, tono y capacidades.
                       El prompt personalizado reemplazará al prompt por defecto.
                     </p>
                   </div>
@@ -1658,35 +1658,35 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
         <TabsContent value="sistema-hibrido" className="space-y-4 mt-6">
           <Tabs value={activeHybridTab} onValueChange={setActiveHybridTab} className="w-full">
             <TabsList className="grid w-full grid-cols-5 bg-gray-100/50 p-1 rounded-lg">
-              <TabsTrigger 
+              <TabsTrigger
                 value="dashboard"
                 className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
               >
                 <BarChart3 className="h-4 w-4" />
                 Dashboard
               </TabsTrigger>
-              <TabsTrigger 
+              <TabsTrigger
                 value="fine-tuning"
                 className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
               >
                 <Brain className="h-4 w-4" />
                 Fine-tuning
               </TabsTrigger>
-              <TabsTrigger 
+              <TabsTrigger
                 value="rag"
                 className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
               >
                 <Zap className="h-4 w-4" />
                 RAG
               </TabsTrigger>
-              <TabsTrigger 
+              <TabsTrigger
                 value="ml-riesgo"
                 className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
               >
                 <Brain className="h-4 w-4" />
                 ML Riesgo
               </TabsTrigger>
-              <TabsTrigger 
+              <TabsTrigger
                 value="ml-impago"
                 className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
               >

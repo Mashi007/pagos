@@ -38,7 +38,7 @@ Cuando se concilia un pago (`conciliado = True`), **SOLO** se actualizan estos c
    ├─> pago.conciliado = True ✅
    ├─> pago.fecha_conciliacion = datetime.now() ✅
    └─> pago.verificado_concordancia = "SI" ✅
-   
+
 3. Se actualizan campos en tabla `cuotas`:
    ├─> cuota.estado (de PENDIENTE a PAGADO si corresponde) ✅
    ├─> cuota.dias_morosidad ✅
@@ -60,7 +60,7 @@ def _conciliar_pago(pago: Pago, db: Session, numero_documento: str) -> bool:
     pago.fecha_conciliacion = datetime.now()
     pago.verificado_concordancia = "SI"
     db.commit()  # ✅ Commit del pago
-    
+
     # ✅ ACTUALIZA cuotas (NO actualiza campos en pagos)
     if pago.prestamo_id:
         cuotas = db.query(Cuota).filter(...).all()
@@ -69,7 +69,7 @@ def _conciliar_pago(pago: Pago, db: Session, numero_documento: str) -> bool:
             # ✅ Actualiza cuota.estado, cuota.dias_morosidad, cuota.monto_morosidad
             # ❌ NO actualiza pago.estado ni ningún otro campo en pagos
         db.commit()  # ✅ Commit de cuotas
-    
+
     return True
 ```
 

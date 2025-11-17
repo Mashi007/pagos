@@ -28,7 +28,7 @@ if sys.platform == "win32":
             sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     except (AttributeError, ValueError):
         pass
-    
+
     try:
         if hasattr(sys.stderr, 'buffer'):
             if sys.stderr.encoding != 'utf-8':
@@ -37,7 +37,7 @@ if sys.platform == "win32":
             sys.stderr.reconfigure(encoding='utf-8', errors='replace')
     except (AttributeError, ValueError):
         pass
-    
+
     os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 # Timeout global (30 segundos por defecto)
@@ -59,7 +59,7 @@ def run_with_timeout(func, timeout_seconds: int = TIMEOUT_SECONDS) -> Any:
     result = [None]
     exception = [None]
     done = threading.Event()
-    
+
     def target():
         try:
             result[0] = func()
@@ -67,10 +67,10 @@ def run_with_timeout(func, timeout_seconds: int = TIMEOUT_SECONDS) -> Any:
             exception[0] = e
         finally:
             done.set()
-    
+
     thread = threading.Thread(target=target, daemon=True)
     thread.start()
-    
+
     if done.wait(timeout=timeout_seconds):
         if exception[0]:
             raise exception[0]
@@ -83,7 +83,7 @@ def load_env_file(env_file: Path) -> None:
     """Cargar variables de entorno desde .env"""
     if not env_file.exists():
         return
-    
+
     try:
         from dotenv import load_dotenv
         load_dotenv(env_file)
@@ -102,41 +102,41 @@ def load_env_file(env_file: Path) -> None:
 def get_alembic_config() -> 'Config':
     """Obtener configuración de Alembic de forma segura"""
     from alembic.config import Config
-    
+
     # Asegurar que estamos en el directorio backend
     backend_dir = Path(__file__).parent.parent
     if Path.cwd() != backend_dir:
         os.chdir(backend_dir)
         print(f"[INFO] Cambiado al directorio: {backend_dir}")
-    
+
     # Verificar que alembic.ini existe
     alembic_ini = backend_dir / "alembic.ini"
     if not alembic_ini.exists():
         raise FileNotFoundError(f"No se encontró alembic.ini en {alembic_ini}")
-    
+
     # Cargar variables de entorno
     env_file = backend_dir / ".env"
     load_env_file(env_file)
-    
+
     # Crear configuración
     cfg = Config(str(alembic_ini))
-    
+
     # Configurar DATABASE_URL si está disponible
     database_url = os.getenv("DATABASE_URL")
     if database_url:
         cfg.set_main_option("sqlalchemy.url", database_url)
     elif not cfg.get_main_option("sqlalchemy.url"):
         print("[WARNING] DATABASE_URL no está configurada. Algunos comandos pueden fallar.")
-    
+
     return cfg
 
 def execute_command_safe(cmd: str, args: list, timeout: int = TIMEOUT_SECONDS) -> None:
     """Ejecutar comando de Alembic de forma segura con timeout"""
     from alembic import command
-    
+
     def _execute():
         cfg = get_alembic_config()
-        
+
         if cmd == "current":
             command.current(cfg, verbose=True)
         elif cmd == "heads":
@@ -170,7 +170,7 @@ def execute_command_safe(cmd: str, args: list, timeout: int = TIMEOUT_SECONDS) -
                 print("[INFO] No hay revisión aplicada")
         else:
             raise ValueError(f"Comando desconocido: {cmd}")
-    
+
     try:
         print(f"[INFO] Ejecutando comando '{cmd}' con timeout de {timeout}s...")
         start_time = time.time()
@@ -204,11 +204,11 @@ def main():
         print("  --verbose, -v    - Modo verbose")
         print("  --timeout N      - Timeout en segundos (default: 30)")
         sys.exit(1)
-    
+
     # Parsear argumentos
     cmd = sys.argv[1].lower()
     args = sys.argv[2:] if len(sys.argv) > 2 else []
-    
+
     # Extraer timeout si está presente
     timeout = TIMEOUT_SECONDS
     if "--timeout" in args:
@@ -219,7 +219,7 @@ def main():
                 args = args[:idx] + args[idx + 2:]
             except ValueError:
                 print("[WARNING] Timeout inválido, usando valor por defecto")
-    
+
     # Ejecutar comando
     execute_command_safe(cmd, args, timeout=timeout)
 

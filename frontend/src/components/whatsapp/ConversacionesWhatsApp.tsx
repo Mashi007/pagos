@@ -57,7 +57,7 @@ export function ConversacionesWhatsApp({
   const [perPage, setPerPage] = useState(20)
   const [filtros, setFiltros] = useState<FiltrosConversaciones>({})
   const [busqueda, setBusqueda] = useState('')
-  
+
   // Estado para envío de mensajes
   const [numeroDestino, setNumeroDestino] = useState(numeroTelefono || '')
   const [mensajeTexto, setMensajeTexto] = useState('')
@@ -232,13 +232,13 @@ export function ConversacionesWhatsApp({
 
     // Buscar cliente primero
     const resultadoBusqueda = await buscarCliente(numeroDestino)
-    
+
     // Esperar un momento para que el estado se actualice
     await new Promise(resolve => setTimeout(resolve, 100))
-    
+
     // Verificar si el cliente existe
     const clienteActual = clienteInfo?.cliente || (clienteId ? { id: clienteId } : null)
-    
+
     // Si no hay cliente y no se está mostrando el modal, mostrarlo
     if (!clienteActual && !clienteId) {
       // Buscar nuevamente para obtener el estado actualizado

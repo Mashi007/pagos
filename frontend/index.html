@@ -41,12 +41,12 @@
         'use strict';
         const originalWarn = console.warn;
         const originalError = console.error;
-        
+
         // Interceptar console.warn inmediatamente
         console.warn = function(...args) {
           const message = args.map(arg => String(arg)).join(' ').toLowerCase();
-          if (message.includes('juego de reglas') || 
-              message.includes('ignoradas') || 
+          if (message.includes('juego de reglas') ||
+              message.includes('ignoradas') ||
               message.includes('mal selector') ||
               message.includes('bad selector') ||
               message.includes('index-') && message.includes('.css:')) {
@@ -54,12 +54,12 @@
           }
           originalWarn.apply(console, args);
         };
-        
+
         // Interceptar console.error inmediatamente
         console.error = function(...args) {
           const message = args.map(arg => String(arg)).join(' ').toLowerCase();
-          if (message.includes('juego de reglas') || 
-              message.includes('ignoradas') || 
+          if (message.includes('juego de reglas') ||
+              message.includes('ignoradas') ||
               message.includes('mal selector') ||
               message.includes('bad selector') ||
               message.includes('index-') && message.includes('.css:')) {
@@ -75,12 +75,12 @@
         // ✅ Interceptar console.warn INMEDIATAMENTE (antes de que se cargue cualquier CSS)
         const originalWarn = console.warn;
         const originalError = console.error;
-        
+
         // Función para verificar si un mensaje debe ser suprimido
         function shouldSuppress(message) {
           if (!message || typeof message !== 'string') return false;
           const lowerMessage = message.toLowerCase();
-          
+
           // ✅ Patrones específicos del warning que estamos viendo
           const patterns = [
             // Patrones principales (español)
@@ -121,14 +121,14 @@
             'menu:',
             'ignoradas debido',
           ];
-          
+
           // Verificar si el mensaje contiene alguno de los patrones
           for (const pattern of patterns) {
             if (lowerMessage.includes(pattern)) {
               return true;
             }
           }
-          
+
           // ✅ Verificar combinaciones específicas (archivo CSS con hash + ignored/mal selector)
           // Captura formatos como: "index-C7ALWOJe.css:1:53929" o "menu:148:25"
           const cssFilePattern = /(index-[a-z0-9]+\.css|menu|\.css):\d+:\d+/i;
@@ -143,7 +143,7 @@
           )) {
             return true;
           }
-          
+
           // ✅ Verificar combinaciones específicas (archivo CSS + ignored/mal selector)
           if ((lowerMessage.includes('.css:') || lowerMessage.includes('index-') || lowerMessage.includes('menu:')) && (
             lowerMessage.includes('ignored') ||
@@ -155,24 +155,24 @@
           )) {
             return true;
           }
-          
+
           // ✅ Verificar el patrón específico "Juego de reglas ignoradas debido a un mal selector"
           // Con o sin información de archivo y línea
-          if (lowerMessage.includes('juego de reglas') && lowerMessage.includes('ignoradas') && 
+          if (lowerMessage.includes('juego de reglas') && lowerMessage.includes('ignoradas') &&
               (lowerMessage.includes('debido') || lowerMessage.includes('mal selector'))) {
             return true;
           }
-          
+
           // ✅ Capturar mensajes que contienen "ignoradas" o "ignored" junto con "selector" y un archivo CSS
-          if ((lowerMessage.includes('ignoradas') || lowerMessage.includes('ignored')) && 
+          if ((lowerMessage.includes('ignoradas') || lowerMessage.includes('ignored')) &&
               (lowerMessage.includes('selector') || lowerMessage.includes('mal selector') || lowerMessage.includes('bad selector')) &&
               (lowerMessage.includes('.css') || lowerMessage.includes('index-') || cssFilePattern.test(message))) {
             return true;
           }
-          
+
           return false;
         }
-        
+
         // Interceptar console.warn
         console.warn = function(...args) {
           // Convertir todos los argumentos a string y unirlos
@@ -181,16 +181,16 @@
             if (arg && typeof arg.toString === 'function') return arg.toString();
             return String(arg);
           }).join(' ');
-          
+
           // Si el mensaje debe ser suprimido, no mostrarlo
           if (shouldSuppress(message)) {
             return; // Silenciar el warning
           }
-          
+
           // Mostrar otros warnings normalmente
           originalWarn.apply(console, args);
         };
-        
+
         // También interceptar console.error para capturar errores similares
         console.error = function(...args) {
           const message = args.map(arg => {
@@ -198,12 +198,12 @@
             if (arg && typeof arg.toString === 'function') return arg.toString();
             return String(arg);
           }).join(' ');
-          
+
           // Suprimir errores de CSS conocidos también
           if (shouldSuppress(message)) {
             return; // Silenciar el error
           }
-          
+
           // Mostrar otros errores normalmente
           originalError.apply(console, args);
         };
@@ -215,7 +215,7 @@
       // Esto ocurre cuando el navegador tiene cache del index.html anterior
       // con referencias a archivos con hashes antiguos que ya no existen
       let reloadAttempted = false;
-      
+
       function reloadPage() {
         if (reloadAttempted) return; // Evitar loops infinitos
         reloadAttempted = true;
@@ -223,13 +223,13 @@
         // Forzar recarga desde el servidor (bypass cache)
         window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
       }
-      
+
       window.addEventListener('error', function(event) {
         // Verificar si es un error de carga de módulo
         if (event.target && event.target.tagName === 'SCRIPT' && event.target.type === 'module') {
           const errorMessage = (event.message || '').toLowerCase();
           const errorSource = (event.filename || event.target.src || '').toLowerCase();
-          
+
           // Detectar errores de módulo que no se pudo cargar
           if (
             errorMessage.includes('failed to fetch dynamically imported module') ||
@@ -244,7 +244,7 @@
           }
         }
       }, true); // Usar capture phase para capturar errores antes de que se propaguen
-      
+
       // También manejar errores no capturados de promesas rechazadas
       window.addEventListener('unhandledrejection', function(event) {
         const reason = (event.reason?.message || event.reason?.toString() || '').toLowerCase();
@@ -285,7 +285,7 @@
           });
         }
       }
-      
+
       // Iniciar verificación cuando el DOM esté listo
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', checkStylesLoaded);
@@ -293,7 +293,7 @@
         // DOM ya está listo
         checkStylesLoaded();
       }
-      
+
       // Fallback: mostrar contenido después de un timeout máximo (evitar bloqueo infinito)
       setTimeout(() => {
         const root = document.getElementById('root');

@@ -91,8 +91,8 @@ pip install scikit-learn==1.6.1
 
 Verificar en la base de datos:
 ```sql
-SELECT table_name 
-FROM information_schema.tables 
+SELECT table_name
+FROM information_schema.tables
 WHERE table_name IN ('modelos_riesgo', 'modelos_impago_cuotas');
 ```
 

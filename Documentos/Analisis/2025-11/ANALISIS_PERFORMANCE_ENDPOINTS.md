@@ -1,6 +1,6 @@
 # 🔍 ANÁLISIS DE PERFORMANCE: Endpoints Dashboard
 
-**Fecha:** 2025-11-06  
+**Fecha:** 2025-11-06
 **Análisis:** Logs de red del navegador
 
 ---

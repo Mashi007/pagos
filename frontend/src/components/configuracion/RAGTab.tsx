@@ -38,7 +38,7 @@ interface DocumentoAI {
 export function RAGTab() {
   // ✅ Por defecto mostrar la pestaña de Gestión de Documentos para facilitar la carga
   const [activeSubTab, setActiveSubTab] = useState('documentos')
-  
+
   // Estados para embeddings
   const [estado, setEstado] = useState<{
     total_documentos: number
@@ -205,7 +205,7 @@ export function RAGTab() {
     } catch (error: any) {
       console.error('Error procesando documento:', error)
       let mensajeError = error?.response?.data?.detail || error?.message || 'Error procesando documento'
-      
+
       // Simplificar mensajes largos de diagnóstico
       if (mensajeError.includes('El archivo físico no existe')) {
         mensajeError = 'El archivo físico no existe en el servidor. Por favor, elimina este documento y súbelo nuevamente.'
@@ -214,7 +214,7 @@ export function RAGTab() {
         const partes = mensajeError.split('\n')
         mensajeError = partes[0] + (partes.length > 1 ? ' (Ver consola para más detalles)' : '')
       }
-      
+
       toast.error(mensajeError, {
         duration: 5000,
       })
@@ -357,7 +357,7 @@ export function RAGTab() {
               {/* Formulario de nuevo documento */}
               <div className="border rounded-lg p-4 space-y-4">
                 <h4 className="font-semibold">Nuevo Documento</h4>
-                
+
                 <div>
                   <label className="text-sm font-medium block mb-2">Título <span className="text-red-500">*</span></label>
                   <Input
@@ -392,8 +392,8 @@ export function RAGTab() {
                   </div>
                 </div>
 
-                <Button 
-                  onClick={handleSubirDocumento} 
+                <Button
+                  onClick={handleSubirDocumento}
                   disabled={subiendoDocumento || !nuevoDocumento.titulo || !nuevoDocumento.archivo}
                   className="w-full"
                 >
@@ -414,7 +414,7 @@ export function RAGTab() {
               {/* Lista de documentos */}
               <div className="border-t pt-4">
                 <h4 className="font-semibold mb-4">Documentos Existentes</h4>
-                
+
                 {cargandoDocumentos ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-blue-600" />

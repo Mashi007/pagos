@@ -16,12 +16,12 @@ def verificar_variables_entorno():
     print("=" * 80)
     print("1. VERIFICANDO VARIABLES DE ENTORNO")
     print("=" * 80)
-    
+
     # Verificar archivo .env
     env_file = Path(__file__).parent.parent / ".env"
     if env_file.exists():
         print(f"✅ Archivo .env encontrado: {env_file}")
-        
+
         # Intentar cargar con python-dotenv
         try:
             from dotenv import load_dotenv
@@ -36,7 +36,7 @@ def verificar_variables_entorno():
                         os.environ[key] = value
     else:
         print(f"⚠️ Archivo .env NO encontrado en: {env_file}")
-    
+
     # Verificar DATABASE_URL
     database_url = os.getenv("DATABASE_URL")
     if database_url:
@@ -54,12 +54,12 @@ def verificar_importaciones():
     print("\n" + "=" * 80)
     print("2. VERIFICANDO IMPORTACIONES")
     print("=" * 80)
-    
+
     try:
         print("📦 Importando app.core.config...")
         from app.core.config import settings
         print("✅ app.core.config importado correctamente")
-        
+
         print("📦 Verificando DATABASE_URL en settings...")
         if hasattr(settings, 'DATABASE_URL'):
             db_url = settings.DATABASE_URL
@@ -68,13 +68,13 @@ def verificar_importaciones():
         else:
             print("❌ DATABASE_URL no está en settings")
             return False
-            
+
     except Exception as e:
         print(f"❌ Error al importar app.core.config: {e}")
         import traceback
         traceback.print_exc()
         return False
-    
+
     try:
         print("📦 Importando app.db.base...")
         from app.db.base import Base
@@ -84,7 +84,7 @@ def verificar_importaciones():
         import traceback
         traceback.print_exc()
         return False
-    
+
     try:
         print("📦 Importando app.models...")
         import app.models  # noqa: F401
@@ -94,7 +94,7 @@ def verificar_importaciones():
         import traceback
         traceback.print_exc()
         return False
-    
+
     return True
 
 def verificar_conexion_bd():
@@ -102,25 +102,25 @@ def verificar_conexion_bd():
     print("\n" + "=" * 80)
     print("3. VERIFICANDO CONEXIÓN A BASE DE DATOS")
     print("=" * 80)
-    
+
     try:
         from app.core.config import settings
         from sqlalchemy import create_engine, text
-        
+
         database_url = settings.DATABASE_URL
         if not database_url:
             print("❌ DATABASE_URL no está configurada")
             return False
-        
+
         print("🔌 Intentando conectar a la base de datos...")
         engine = create_engine(database_url, pool_pre_ping=True)
-        
+
         with engine.connect() as conn:
             result = conn.execute(text("SELECT 1"))
             result.fetchone()
             print("✅ Conexión a la base de datos exitosa")
             return True
-            
+
     except Exception as e:
         print(f"❌ Error al conectar a la base de datos: {e}")
         import traceback
@@ -132,21 +132,21 @@ def verificar_alembic():
     print("\n" + "=" * 80)
     print("4. VERIFICANDO CONFIGURACIÓN DE ALEMBIC")
     print("=" * 80)
-    
+
     alembic_ini = Path(__file__).parent.parent / "alembic.ini"
     if alembic_ini.exists():
         print(f"✅ alembic.ini encontrado: {alembic_ini}")
     else:
         print(f"❌ alembic.ini NO encontrado en: {alembic_ini}")
         return False
-    
+
     alembic_dir = Path(__file__).parent.parent / "alembic"
     if alembic_dir.exists():
         print(f"✅ Directorio alembic encontrado: {alembic_dir}")
     else:
         print(f"❌ Directorio alembic NO encontrado en: {alembic_dir}")
         return False
-    
+
     versions_dir = alembic_dir / "versions"
     if versions_dir.exists():
         migrations = list(versions_dir.glob("*.py"))
@@ -154,14 +154,14 @@ def verificar_alembic():
     else:
         print(f"❌ Directorio versions NO encontrado en: {versions_dir}")
         return False
-    
+
     env_py = alembic_dir / "env.py"
     if env_py.exists():
         print(f"✅ env.py encontrado: {env_py}")
     else:
         print(f"❌ env.py NO encontrado en: {env_py}")
         return False
-    
+
     return True
 
 def main():
@@ -171,33 +171,33 @@ def main():
     if sys.platform == 'win32':
         import io
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    
+
     print("\n" + "=" * 80)
     print("DIAGNOSTICO DE ALEMBIC")
     print("=" * 80)
     print(f"📁 Directorio de trabajo: {os.getcwd()}")
     print(f"📁 Directorio del script: {Path(__file__).parent.parent}")
     print()
-    
+
     resultados = []
-    
+
     # Ejecutar verificaciones
     resultados.append(("Variables de entorno", verificar_variables_entorno()))
     resultados.append(("Importaciones", verificar_importaciones()))
     resultados.append(("Conexión BD", verificar_conexion_bd()))
     resultados.append(("Configuración Alembic", verificar_alembic()))
-    
+
     # Resumen
     print("\n" + "=" * 80)
     print("📊 RESUMEN")
     print("=" * 80)
-    
+
     for nombre, resultado in resultados:
         estado = "✅ OK" if resultado else "❌ FALLO"
         print(f"  {estado} - {nombre}")
-    
+
     todos_ok = all(resultado for _, resultado in resultados)
-    
+
     if todos_ok:
         print("\n✅ Todas las verificaciones pasaron. Puedes ejecutar Alembic.")
         return 0

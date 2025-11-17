@@ -19,14 +19,14 @@ El error se debía a dos problemas:
 ### Cambio 1: Eliminado cast `::integer`
 ```sql
 -- ❌ ANTES (causaba error)
-CREATE INDEX idx_pagos_extract_year_month 
+CREATE INDEX idx_pagos_extract_year_month
 ON pagos (
     EXTRACT(YEAR FROM fecha_pago)::integer,  -- ❌ Error aquí
     EXTRACT(MONTH FROM fecha_pago)::integer
 );
 
 -- ✅ DESPUÉS (corregido)
-CREATE INDEX idx_pagos_date_trunc_month 
+CREATE INDEX idx_pagos_date_trunc_month
 ON pagos (
     DATE_TRUNC('month', fecha_pago)  -- ✅ Sin cast, usa DATE_TRUNC
 );
@@ -60,7 +60,7 @@ Las queries en el código usan `EXTRACT(YEAR FROM fecha_pago)`, pero PostgreSQL 
 Después de ejecutar el script corregido, verificar que los índices se crearon:
 
 ```sql
-SELECT 
+SELECT
     schemaname,
     tablename,
     indexname,

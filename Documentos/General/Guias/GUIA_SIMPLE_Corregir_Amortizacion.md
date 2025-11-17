@@ -1,6 +1,6 @@
 # 📋 GUÍA SIMPLE: Qué Corregir en la Tabla de Amortización
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Objetivo:** Explicar de forma simple qué problemas hay y cómo solucionarlos
 
 ---
@@ -32,7 +32,7 @@ Estas 18 cuotas probablemente son **pagos antiguos** o **migrados desde otro sis
 Ejecuta este query en DBeaver para ver las 18 cuotas:
 
 ```sql
-SELECT 
+SELECT
     c.id AS cuota_id,
     c.prestamo_id,
     c.numero_cuota,
@@ -67,7 +67,7 @@ WHERE c.total_pagado >= c.monto_cuota
   AND c.estado = 'PENDIENTE';
 ```
 
-**Resultado esperado:** 
+**Resultado esperado:**
 - ✅ Se actualizan 18 cuotas
 - ✅ Cambian de `PENDIENTE` a `PAGADO`
 
@@ -78,7 +78,7 @@ WHERE c.total_pagado >= c.monto_cuota
 Ejecuta este query para verificar:
 
 ```sql
-SELECT 
+SELECT
     'VERIFICACIÓN' AS paso,
     COUNT(*) AS cuotas_completas_pendientes
 FROM cuotas
@@ -86,7 +86,7 @@ WHERE total_pagado >= monto_cuota
   AND estado = 'PENDIENTE';
 ```
 
-**Resultado esperado:** 
+**Resultado esperado:**
 - ✅ Debe mostrar `0` cuotas completas pero PENDIENTE
 
 ---
@@ -135,7 +135,7 @@ Si quieres hacerlo todo de una vez, ejecuta este script completo:
 -- ================================================================
 
 -- 1. Ver cuántas hay antes
-SELECT 
+SELECT
     'ANTES' AS momento,
     COUNT(*) AS cuotas_completas_pendientes
 FROM cuotas
@@ -150,7 +150,7 @@ WHERE c.total_pagado >= c.monto_cuota
   AND c.estado = 'PENDIENTE';
 
 -- 3. Ver cuántas quedan después
-SELECT 
+SELECT
     'DESPUÉS' AS momento,
     COUNT(*) AS cuotas_completas_pendientes
 FROM cuotas
@@ -158,7 +158,7 @@ WHERE total_pagado >= monto_cuota
   AND estado = 'PENDIENTE';
 
 -- 4. Resumen final
-SELECT 
+SELECT
     'RESUMEN FINAL' AS tipo,
     COUNT(*) AS total_cuotas,
     COUNT(CASE WHEN estado = 'PAGADO' THEN 1 END) AS cuotas_pagadas,

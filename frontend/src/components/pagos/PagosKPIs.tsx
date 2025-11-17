@@ -1,8 +1,8 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { 
-  CreditCard, 
-  DollarSign, 
+import {
+  CreditCard,
+  DollarSign,
   TrendingUp,
   CheckCircle,
   Clock,
@@ -20,7 +20,7 @@ interface PagosKPIsProps {
   isLoading?: boolean
 }
 
-export function PagosKPIs({ 
+export function PagosKPIs({
   totalPagos,
   totalPagado,
   pagosHoy,

@@ -17,11 +17,11 @@ Se ejecuta en cada commit a `main` y `develop`, y en cada Pull Request.
 **Configuración:** `.flake8`
 - **Longitud máxima de líneas:** 120 caracteres
 - **Errores críticos verificados:** `E9, F63, F7, F82` (sintaxis, funciones no definidas, etc.)
-- **Análisis completo:** 
+- **Análisis completo:**
   - Complejidad máxima: 10
   - Longitud de línea: 127
   - Modo no bloqueante (`--exit-zero`)
-  
+
 **Qué verifica:**
 - ✅ Errores de sintaxis
 - ✅ Funciones no definidas

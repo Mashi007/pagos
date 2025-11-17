@@ -37,7 +37,7 @@ Deberás completar estos campos:
 
 #### 📋 INFORMACIÓN LABORAL
 - **Años en el Empleo**: Ej: 3
-- **Tipo de Empleo**: 
+- **Tipo de Empleo**:
   - Formal (mejor puntuación)
   - Independiente
   - Contratado
@@ -63,7 +63,7 @@ El sistema calculará automáticamente:
 
 #### 📈 RESULTADOS:
 - **Puntuación Total**: 0-100 puntos
-- **Clasificación de Riesgo**: 
+- **Clasificación de Riesgo**:
   - BAJO (80-100 puntos)
   - MODERADO (60-79 puntos)
   - ALTO (40-59 puntos)

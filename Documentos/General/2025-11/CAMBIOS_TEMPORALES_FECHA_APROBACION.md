@@ -97,7 +97,7 @@ Para verificar que los cambios funcionan correctamente:
 
 ```sql
 -- Verificar que fecha_aprobacion tiene fechas variadas
-SELECT 
+SELECT
     COUNT(DISTINCT fecha_aprobacion::date) AS fechas_unicas,
     MIN(fecha_aprobacion::date) AS fecha_min,
     MAX(fecha_aprobacion::date) AS fecha_max
@@ -109,7 +109,7 @@ WHERE estado = 'APROBADO' AND fecha_aprobacion IS NOT NULL;
 
 ---
 
-**Fecha de creación:** Noviembre 2025  
-**Estado:** Activo (temporal)  
+**Fecha de creación:** Noviembre 2025
+**Estado:** Activo (temporal)
 **Última revisión:** Noviembre 2025
 

@@ -1,6 +1,6 @@
 # 🔍 Verificación de Endpoints de Reportes
 
-**Fecha:** 2025-11  
+**Fecha:** 2025-11
 **Objetivo:** Verificar que todos los reportes estén conectados a la base de datos y que los endpoints apunten correctamente.
 
 ---

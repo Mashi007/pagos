@@ -1,6 +1,6 @@
 # ✅ Verificación de Endpoints del Módulo Cobranzas
 
-**Fecha:** 2025-11-XX  
+**Fecha:** 2025-11-XX
 **Objetivo:** Verificar que todos los endpoints del backend coincidan con las llamadas del frontend
 
 ---
@@ -235,7 +235,7 @@ async getInformeClientesAtrasados(params?: {
   if (params?.dias_retraso_max) searchParams.append('dias_retraso_max', params.dias_retraso_max.toString())
   if (params?.analista) searchParams.append('analista', params.analista)
   if (params?.formato) searchParams.append('formato', params.formato)
-  
+
   const url = `${this.baseUrl}/informes/clientes-atrasados?${searchParams.toString()}`
   // /api/v1/cobranzas/informes/clientes-atrasados?...
   return await apiClient.get(url)
@@ -294,7 +294,7 @@ async getInformeMontosPeriodo(params?: {
   if (params?.fecha_inicio) searchParams.append('fecha_inicio', params.fecha_inicio)
   if (params?.fecha_fin) searchParams.append('fecha_fin', params.fecha_fin)
   if (params?.formato) searchParams.append('formato', params.formato)
-  
+
   const url = `${this.baseUrl}/informes/montos-vencidos-periodo?${searchParams.toString()}`
   // /api/v1/cobranzas/informes/montos-vencidos-periodo?...
   return await apiClient.get(url)
@@ -434,6 +434,6 @@ async getInformeResumenEjecutivo(formato: 'json' | 'pdf' | 'excel' = 'json'): Pr
 
 ---
 
-**Última actualización:** 2025-11-XX  
+**Última actualización:** 2025-11-XX
 **Estado:** ✅ VERIFICACIÓN COMPLETA - TODOS LOS ENDPOINTS CORRECTOS
 

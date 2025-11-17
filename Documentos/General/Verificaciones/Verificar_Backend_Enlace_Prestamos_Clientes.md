@@ -22,7 +22,7 @@
    ```python
    # ❌ ACTUAL (backend/app/models/prestamo.py línea 24):
    cliente_id = Column(Integer, nullable=False, index=True)  # FK a clientes.id
-   
+
    # ✅ DEBERÍA SER:
    from sqlalchemy import ForeignKey
    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False, index=True)

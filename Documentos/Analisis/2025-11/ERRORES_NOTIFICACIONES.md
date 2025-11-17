@@ -1,6 +1,6 @@
 # 🚨 ERRORES CRÍTICOS: Módulo de Notificaciones
 
-**Fecha:** 2025-11-06  
+**Fecha:** 2025-11-06
 **Análisis:** Logs del backend
 
 ---
@@ -35,8 +35,8 @@ LINE 2: ...r_id, notificaciones.tipo AS notificaciones_tipo, notificaci...
 
 **Error:**
 ```
-RequestValidationError: [{'type': 'int_parsing', 'loc': ('path', 'notificacion_id'), 
-'msg': 'Input should be a valid integer, unable to parse string as an integer', 
+RequestValidationError: [{'type': 'int_parsing', 'loc': ('path', 'notificacion_id'),
+'msg': 'Input should be a valid integer, unable to parse string as an integer',
 'input': 'plantillas', ...}]
 ```
 
@@ -144,9 +144,9 @@ except Exception as e:
 
 **Después de las correcciones:**
 
-✅ `/api/v1/notificaciones/` - Lista notificaciones correctamente  
-✅ `/api/v1/notificaciones/plantillas` - Lista plantillas correctamente  
-✅ `/api/v1/notificaciones/{id}` - Obtiene notificación por ID correctamente  
+✅ `/api/v1/notificaciones/` - Lista notificaciones correctamente
+✅ `/api/v1/notificaciones/plantillas` - Lista plantillas correctamente
+✅ `/api/v1/notificaciones/{id}` - Obtiene notificación por ID correctamente
 ✅ Sin errores 500 en endpoints de notificaciones
 
 ---

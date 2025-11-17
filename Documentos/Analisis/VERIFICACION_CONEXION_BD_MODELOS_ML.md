@@ -106,8 +106,8 @@ python scripts/verificar_modelos_ml_bd.py
 
 ```sql
 -- Verificar si las tablas existen
-SELECT table_name 
-FROM information_schema.tables 
+SELECT table_name
+FROM information_schema.tables
 WHERE table_name IN ('modelos_riesgo', 'modelos_impago_cuotas');
 
 -- Verificar estructura de modelos_riesgo

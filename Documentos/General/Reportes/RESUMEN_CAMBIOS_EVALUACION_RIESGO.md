@@ -9,7 +9,7 @@
 1. **TABLA: `prestamos`** (Formulario "Nuevo Préstamo")
    - Guarda: Datos del préstamo (monto, cuotas, modalidad, etc.)
    - Conectado desde: `CrearPrestamoForm.tsx` → Backend API → Tabla `prestamos`
-   
+
 2. **TABLA: `prestamos_evaluacion`** (Formulario "Evaluación de Riesgo")
    - Guarda: Evaluación completa con los 7 criterios y 100 puntos
    - Conectado desde: `EvaluacionRiesgoForm.tsx` → Backend API → Tabla `prestamos_evaluacion`

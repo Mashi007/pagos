@@ -53,7 +53,7 @@
 #### 1. ✅ Tendencia Financiamiento (Area Chart)
 - **Endpoint:** `/api/v1/dashboard/financiamiento-tendencia-mensual`
 - **Tablas:** `prestamos`
-- **Query:** 
+- **Query:**
   - Nuevos: `db.query(func.count(Prestamo.id), func.sum(Prestamo.total_financiamiento)).filter(Prestamo.estado == "APROBADO", Prestamo.fecha_registro >= fecha_mes_inicio)`
   - Acumulado: `db.query(func.sum(Prestamo.total_financiamiento)).filter(Prestamo.estado == "APROBADO", Prestamo.fecha_registro <= fecha_mes_fin)`
 - **Código:** `backend/app/api/v1/endpoints/dashboard.py` líneas 2154-2183
@@ -68,7 +68,7 @@
 
 #### 3. ✅ Cobranzas Mensuales (Bar Chart)
 - **Endpoint:** `/api/v1/dashboard/cobranzas-mensuales`
-- **Tablas:** 
+- **Tablas:**
   - `cuotas` (JOIN con `prestamos`) → Cobranzas planificadas
   - `pagos_staging` → Pagos reales
 - **Query:**

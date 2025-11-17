@@ -5,22 +5,22 @@
 
 (() => {
   console.log('🔍 Buscando apiClient en el frontend...');
-  
+
   // Intentar acceder al apiClient desde el contexto de React
   // Primero, intentar importar dinámicamente
   const obtenerToken = () => {
     // Intentar obtener el token de localStorage o sessionStorage
     const rememberMe = localStorage.getItem('remember_me') === 'true';
-    const token = rememberMe 
-      ? localStorage.getItem('access_token') 
+    const token = rememberMe
+      ? localStorage.getItem('access_token')
       : sessionStorage.getItem('access_token');
-    
+
     if (!token) {
       console.error('❌ No se encontró token de autenticación');
       console.log('💡 Por favor, usa el botón "Guardar" de la interfaz en lugar de este código');
       return null;
     }
-    
+
     // Verificar si el token está expirado
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
@@ -32,15 +32,15 @@
     } catch (e) {
       console.warn('⚠️ No se pudo verificar expiración del token, continuando...');
     }
-    
+
     return token;
   };
-  
+
   const token = obtenerToken();
   if (!token) {
     return;
   }
-  
+
   // Obtener la configuración actual del formulario
   const obtenerConfiguracion = () => {
     // Intentar obtener los valores del formulario desde el DOM
@@ -55,14 +55,14 @@
       smtp_use_tls: 'true',
       modo_pruebas: 'false'
     };
-    
+
     console.warn('⚠️ Este código no puede leer los valores del formulario automáticamente');
     console.log('💡 Por favor, usa el botón "Guardar" de la interfaz');
     return config;
   };
-  
+
   const config = obtenerConfiguracion();
-  
+
   // Realizar la petición con el token correcto
   fetch('/api/v1/configuracion/email/configuracion', {
     method: 'PUT',
@@ -74,18 +74,18 @@
   })
   .then(async (response) => {
     const data = await response.json();
-    
+
     if (!response.ok) {
       // Si la respuesta no es OK, lanzar error
       throw new Error(data.detail || `Error ${response.status}: ${response.statusText}`);
     }
-    
+
     return data;
   })
   .then((data) => {
     console.log('✅ Configuración guardada exitosamente:', data);
     alert('✅ Configuración guardada exitosamente');
-    
+
     // Recargar la página para actualizar el estado
     setTimeout(() => {
       window.location.reload();

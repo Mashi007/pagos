@@ -1,7 +1,7 @@
 # 🔍 Auditoría Integral: Módulo Cobranzas y Módulos Asociados
 
-**Fecha:** $(date)  
-**Alcance:** Módulo Cobranzas + Módulos Integrados  
+**Fecha:** $(date)
+**Alcance:** Módulo Cobranzas + Módulos Integrados
 **Objetivo:** Identificar y corregir inconsistencias entre módulos
 
 ---

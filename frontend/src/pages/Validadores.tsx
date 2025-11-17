@@ -54,7 +54,7 @@ export function Validadores() {
         'nombre': 'nombre',
         'apellido': 'apellido',
       }
-      
+
       const campoBackend = campoMapper[campoTest] || campoTest
       const resultado = await validadoresService.validarCampo(campoBackend, valorTest, 'VENEZUELA')
       setResultadoTest(resultado)
@@ -167,7 +167,7 @@ export function Validadores() {
                   />
                 </div>
 
-                <Button 
+                <Button
                   onClick={handleTestValidacion}
                   disabled={!campoTest || !valorTest || isLoading}
                   className="w-full"
@@ -192,7 +192,7 @@ export function Validadores() {
                     className="mt-4"
                   >
                     <Card className={
-                      resultadoTest.validacion?.valido 
+                      resultadoTest.validacion?.valido
                         ? "border-green-500 bg-green-50"
                         : "border-red-500 bg-red-50"
                     }>

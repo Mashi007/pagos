@@ -59,7 +59,7 @@ Basándote en la imagen de configuración que compartiste, tienes:
 - El token es una cadena larga que comienza con `EAA`
 - Ejemplo: `EAAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 
-**⚠️ IMPORTANTE**: 
+**⚠️ IMPORTANTE**:
 - Los tokens temporales expiran en 1 hora
 - Para producción, necesitas generar un token permanente
 - **Copia el token completo** (es muy largo, asegúrate de copiarlo todo)
@@ -83,7 +83,7 @@ Basándote en la imagen de configuración que compartiste, tienes:
 - Ejemplo: `123456789012345` o `12345678901234567`
 - Puede estar etiquetado como "Phone number ID" o simplemente mostrar el número
 
-**⚠️ IMPORTANTE**: 
+**⚠️ IMPORTANTE**:
 - Este es el ID del número de teléfono que usarás para enviar mensajes
 - Debe estar verificado en Meta Business
 - Si no tienes un número, necesitas agregar uno primero
@@ -141,7 +141,7 @@ Basándote en la imagen de configuración que compartiste, tienes:
 - Ejemplo: `kohde_whatsapp_token_2024` o `mi_token_secreto`
 - **IMPORTANTE**: Debe ser el mismo en Meta y en tu aplicación
 
-**⚠️ IMPORTANTE**: 
+**⚠️ IMPORTANTE**:
 - Este token es para verificar que los webhooks vienen de Meta
 - Solo es necesario si vas a recibir mensajes de clientes
 - Si solo vas a enviar mensajes, puedes dejarlo vacío

@@ -18,7 +18,7 @@
 
 #### **Consulta:** `/api/v1/dashboard/evolucion-pagos`
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM fecha_pago)::integer as año,
     EXTRACT(MONTH FROM fecha_pago)::integer as mes,
     COUNT(*) as cantidad,
@@ -29,7 +29,7 @@ WHERE fecha_pago >= :fecha_inicio
   AND monto_pagado IS NOT NULL
   AND monto_pagado > 0
   AND activo = TRUE
-GROUP BY 
+GROUP BY
     EXTRACT(YEAR FROM fecha_pago),
     EXTRACT(MONTH FROM fecha_pago)
 ORDER BY año, mes
@@ -37,7 +37,7 @@ ORDER BY año, mes
 
 **Índice Requerido:**
 ```sql
-CREATE INDEX idx_pagos_extract_year_month 
+CREATE INDEX idx_pagos_extract_year_month
 ON pagos (
     EXTRACT(YEAR FROM fecha_pago)::integer,
     EXTRACT(MONTH FROM fecha_pago)::integer
@@ -54,7 +54,7 @@ WHERE fecha_pago IS NOT NULL
 
 #### **Consulta:** `/api/v1/dashboard/cobranzas-mensuales`
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
     EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
     COALESCE(SUM(c.monto_cuota), 0) as cobranzas
@@ -69,7 +69,7 @@ ORDER BY año, mes
 
 **Índice Requerido:**
 ```sql
-CREATE INDEX idx_cuotas_extract_year_month_vencimiento 
+CREATE INDEX idx_cuotas_extract_year_month_vencimiento
 ON cuotas (
     EXTRACT(YEAR FROM fecha_vencimiento)::integer,
     EXTRACT(MONTH FROM fecha_vencimiento)::integer
@@ -83,7 +83,7 @@ WHERE fecha_vencimiento IS NOT NULL;
 
 #### **Consulta:** `/api/v1/dashboard/financiamiento-tendencia-mensual`
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM fecha_registro)::integer as año,
     EXTRACT(MONTH FROM fecha_registro)::integer as mes,
     COUNT(*) as cantidad,
@@ -98,7 +98,7 @@ ORDER BY año, mes
 
 **Índice Requerido:**
 ```sql
-CREATE INDEX idx_prestamos_extract_year_month_registro 
+CREATE INDEX idx_prestamos_extract_year_month_registro
 ON prestamos (
     EXTRACT(YEAR FROM fecha_registro)::integer,
     EXTRACT(MONTH FROM fecha_registro)::integer
@@ -135,7 +135,7 @@ WHERE p.fecha_pago >= :fecha_inicio
 **Índices Requeridos:**
 ```sql
 -- Para JOIN por prestamo_id
-CREATE INDEX idx_pagos_prestamo_id_activo_fecha 
+CREATE INDEX idx_pagos_prestamo_id_activo_fecha
 ON pagos (prestamo_id, activo, fecha_pago)
 WHERE prestamo_id IS NOT NULL
   AND activo = TRUE
@@ -144,7 +144,7 @@ WHERE prestamo_id IS NOT NULL
   AND monto_pagado > 0;
 
 -- Para JOIN por cedula
-CREATE INDEX idx_pagos_cedula_activo_fecha 
+CREATE INDEX idx_pagos_cedula_activo_fecha
 ON pagos (cedula, activo, fecha_pago)
 WHERE cedula IS NOT NULL
   AND activo = TRUE
@@ -153,15 +153,15 @@ WHERE cedula IS NOT NULL
   AND monto_pagado > 0;
 
 -- Para filtros de prestamos
-CREATE INDEX idx_prestamos_estado_analista_concesionario 
+CREATE INDEX idx_prestamos_estado_analista_concesionario
 ON prestamos (estado, analista, concesionario)
 WHERE estado = 'APROBADO';
 
-CREATE INDEX idx_prestamos_estado_producto_modelo 
+CREATE INDEX idx_prestamos_estado_producto_modelo
 ON prestamos (estado, producto, modelo_vehiculo)
 WHERE estado = 'APROBADO';
 
-CREATE INDEX idx_prestamos_estado_cedula 
+CREATE INDEX idx_prestamos_estado_cedula
 ON prestamos (estado, cedula)
 WHERE estado = 'APROBADO'
   AND cedula IS NOT NULL;
@@ -290,7 +290,7 @@ ANALYZE clientes;
 ```sql
 -- Ejemplo: Verificar índice en query de evolución de pagos
 EXPLAIN ANALYZE
-SELECT 
+SELECT
     EXTRACT(YEAR FROM fecha_pago)::integer as año,
     EXTRACT(MONTH FROM fecha_pago)::integer as mes,
     COUNT(*) as cantidad,
@@ -301,13 +301,13 @@ WHERE fecha_pago >= '2024-01-01'::date
   AND monto_pagado IS NOT NULL
   AND monto_pagado > 0
   AND activo = TRUE
-GROUP BY 
+GROUP BY
     EXTRACT(YEAR FROM fecha_pago),
     EXTRACT(MONTH FROM fecha_pago)
 ORDER BY año, mes;
 ```
 
-**Buscar en el resultado:** 
+**Buscar en el resultado:**
 - ✅ `Index Scan using idx_pagos_extract_year_month` (ideal)
 - ✅ `Bitmap Index Scan using idx_pagos_extract_year_month` (bueno)
 - ❌ `Seq Scan on pagos` (malo - índice no se usa)

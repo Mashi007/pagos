@@ -1,6 +1,6 @@
 # 🔍 Análisis del Código de Entrenamiento de AI
 
-**Fecha:** 2025-11-14  
+**Fecha:** 2025-11-14
 **Objetivo:** Revisar y analizar el código propuesto para entrenamiento de modelos de AI
 
 ---
@@ -75,7 +75,7 @@ deuda_total = float(prestamo.total_financiamiento) - total_pagado
 ratio_deuda_ingreso = deuda_total / ingreso_estimado if ingreso_estimado > 0 else 0
 ```
 
-**Problema:** 
+**Problema:**
 - El ingreso se estima como 30% del financiamiento, lo cual es muy simplificado
 - No se usa el ingreso real del cliente si está disponible
 - Puede generar features poco precisas
@@ -201,11 +201,11 @@ except Exception as e:
 
 ### 6. **Inconsistencia en Features entre Entrenamiento y Predicción**
 
-**Ubicación:** 
+**Ubicación:**
 - Entrenamiento: `backend/app/api/v1/endpoints/ai_training.py:814-825`
 - Predicción: `backend/app/api/v1/endpoints/ai_training.py:988-995`
 
-**Problema:** 
+**Problema:**
 - Entrenamiento usa 7 features
 - Predicción solo usa 4 features (falta `deuda_total`, `dias_ultimo_prestamo`, `numero_prestamos_previos`)
 
@@ -267,7 +267,7 @@ def load_model_from_path(self, model_path: str, scaler_path: Optional[str] = Non
         if not model_file.exists():
             logger.error(f"Modelo no encontrado: {model_path}")
             return False
-        
+
         # Validar que sea un archivo pickle válido
         try:
             with open(model_file, "rb") as f:
@@ -278,11 +278,11 @@ def load_model_from_path(self, model_path: str, scaler_path: Optional[str] = Non
         except Exception as e:
             logger.error(f"Error validando archivo de modelo: {e}")
             return False
-        
+
         # Cargar modelo
         with open(model_file, "rb") as f:
             self.models["risk_model"] = pickle.load(f)
-        
+
         # ... resto del código
 ```
 

@@ -83,8 +83,8 @@ Total cuotas: 45,059
 Puedes ejecutar este query para ver el desglose exacto:
 
 ```sql
-SELECT 
-    CASE 
+SELECT
+    CASE
         WHEN total_pagado >= monto_cuota THEN '✅ PAGADAS (100%)'
         WHEN total_pagado > 0 THEN '⚠️ PAGO PARCIAL'
         ELSE '❌ SIN PAGO'
@@ -94,8 +94,8 @@ SELECT
     SUM(total_pagado) AS total_pagado,
     ROUND(AVG(total_pagado * 100.0 / NULLIF(monto_cuota, 0)), 2) AS porcentaje_promedio
 FROM cuotas
-GROUP BY 
-    CASE 
+GROUP BY
+    CASE
         WHEN total_pagado >= monto_cuota THEN '✅ PAGADAS (100%)'
         WHEN total_pagado > 0 THEN '⚠️ PAGO PARCIAL'
         ELSE '❌ SIN PAGO'

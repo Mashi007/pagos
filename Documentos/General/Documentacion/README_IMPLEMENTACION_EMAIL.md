@@ -88,9 +88,9 @@ Antes de ejecutar los scripts de inserción, necesitas tener listos estos valore
 **Pasos:**
 1. Ejecutar la Query 1 de `verificar_email_simple.sql`:
    ```sql
-   SELECT 
+   SELECT
        clave,
-       CASE 
+       CASE
            WHEN clave IN ('smtp_password', 'smtp_user') THEN '*** (oculto)'
            ELSE valor
        END AS valor
@@ -105,11 +105,11 @@ Antes de ejecutar los scripts de inserción, necesitas tener listos estos valore
 
 3. Ejecutar la Query 2 de `verificar_email_simple.sql`:
    ```sql
-   SELECT 
+   SELECT
        'smtp_host' AS configuracion,
-       CASE WHEN EXISTS (SELECT 1 FROM configuracion_sistema WHERE categoria = 'EMAIL' AND clave = 'smtp_host' AND valor IS NOT NULL AND valor != '') 
-            THEN '✅ OK' 
-            ELSE '❌ FALTANTE' 
+       CASE WHEN EXISTS (SELECT 1 FROM configuracion_sistema WHERE categoria = 'EMAIL' AND clave = 'smtp_host' AND valor IS NOT NULL AND valor != '')
+            THEN '✅ OK'
+            ELSE '❌ FALTANTE'
        END AS estado
    -- ... (resto de la query)
    ```

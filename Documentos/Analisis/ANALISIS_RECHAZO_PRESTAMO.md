@@ -69,7 +69,7 @@ Según el servicio (`prestamo_evaluacion_service.py` línea 290-295):
 En la imagen, **NINGUNA** de estas señales está marcada:
 
 - ❌ Cédula Falsa
-- ❌ Ingresos No Verificables  
+- ❌ Ingresos No Verificables
 - ❌ Historial Malo
 - ❌ Litigio Legal
 - ❌ Más de Un Préstamo Activo
@@ -84,7 +84,7 @@ En la imagen, **NINGUNA** de estas señales está marcada:
 
 1. **Riesgo Alto (35-59 puntos):** El solicitante tiene un perfil de riesgo elevado
 2. **Requiere Mitigación:** Se necesita un garante obligatorio
-3. **Condiciones Estrictas:** 
+3. **Condiciones Estrictas:**
    - Tasa de 18% (más alta que la normal de 8%)
    - Plazo reducido a 24 meses
    - Enganche mínimo del 30%

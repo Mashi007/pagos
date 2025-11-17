@@ -31,7 +31,7 @@ def obtener_resumen_prestamos_cliente(
     # ❌ PROBLEMA: Query individual por cada préstamo (N+1)
     for row in prestamos:
         cuotas = db.query(Cuota).filter(Cuota.prestamo_id == row.id).all()
-        
+
         saldo_pendiente = Decimal("0.00")
         cuotas_en_mora = 0
 
@@ -249,17 +249,17 @@ creditos_nuevos_anterior = int(resultado.creditos_anterior or 0)
 BEGIN;
 
 -- 1. Índice para GROUP BY por año/mes en préstamos
-CREATE INDEX IF NOT EXISTS idx_prestamos_fecha_aprobacion_ym 
+CREATE INDEX IF NOT EXISTS idx_prestamos_fecha_aprobacion_ym
 ON prestamos (
     EXTRACT(YEAR FROM fecha_aprobacion),
     EXTRACT(MONTH FROM fecha_aprobacion),
     estado
 )
-WHERE estado = 'APROBADO' 
+WHERE estado = 'APROBADO'
   AND fecha_aprobacion IS NOT NULL;
 
 -- 2. Índice para GROUP BY por año/mes en cuotas
-CREATE INDEX IF NOT EXISTS idx_cuotas_fecha_vencimiento_ym 
+CREATE INDEX IF NOT EXISTS idx_cuotas_fecha_vencimiento_ym
 ON cuotas (
     EXTRACT(YEAR FROM fecha_vencimiento),
     EXTRACT(MONTH FROM fecha_vencimiento)
@@ -267,24 +267,24 @@ ON cuotas (
 WHERE fecha_vencimiento IS NOT NULL;
 
 -- 3. Índice compuesto para JOINs eficientes
-CREATE INDEX IF NOT EXISTS idx_cuotas_prestamo_fecha_vencimiento 
+CREATE INDEX IF NOT EXISTS idx_cuotas_prestamo_fecha_vencimiento
 ON cuotas (prestamo_id, fecha_vencimiento, estado, total_pagado, monto_cuota);
 
 -- 4. Índice para búsquedas por cédula
-CREATE INDEX IF NOT EXISTS idx_prestamos_cedula_estado 
+CREATE INDEX IF NOT EXISTS idx_prestamos_cedula_estado
 ON prestamos (cedula, estado)
 WHERE estado IN ('APROBADO', 'FINALIZADO');
 
 -- 5. Índice para filtros de fecha_aprobacion con estado y analista
-CREATE INDEX IF NOT EXISTS idx_prestamos_aprobacion_estado_analista 
+CREATE INDEX IF NOT EXISTS idx_prestamos_aprobacion_estado_analista
 ON prestamos (fecha_aprobacion, estado, analista, concesionario)
-WHERE estado = 'APROBADO' 
+WHERE estado = 'APROBADO'
   AND fecha_aprobacion IS NOT NULL;
 
 -- 6. Índice para pagos por fecha
-CREATE INDEX IF NOT EXISTS idx_pagos_fecha_pago_activo 
+CREATE INDEX IF NOT EXISTS idx_pagos_fecha_pago_activo
 ON pagos (fecha_pago, activo, monto_pagado)
-WHERE activo = TRUE 
+WHERE activo = TRUE
   AND monto_pagado > 0;
 
 COMMIT;
@@ -316,7 +316,7 @@ with open('backend/scripts/migracion_indices_dashboard.sql') as f:
 ### ❌ CÓDIGO ACTUAL (SQL directo):
 ```python
 query_cuotas_sql = text("""
-    SELECT 
+    SELECT
         EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
         EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
         COALESCE(SUM(c.monto_cuota), 0) as total_cuotas_programadas
@@ -327,7 +327,7 @@ query_cuotas_sql = text("""
       AND (:analista IS NULL OR (p.analista = :analista OR p.producto_financiero = :analista))
       AND (:concesionario IS NULL OR p.concesionario = :concesionario)
       AND (:modelo IS NULL OR (p.producto = :modelo OR p.modelo_vehiculo = :modelo))
-    GROUP BY 
+    GROUP BY
         EXTRACT(YEAR FROM c.fecha_vencimiento),
         EXTRACT(MONTH FROM c.fecha_vencimiento)
     ORDER BY año, mes
@@ -406,21 +406,21 @@ def obtener_financiamiento_tendencia_mensual(
         "fecha_fin": str(fecha_fin) if fecha_fin else None,
         "meses": meses
     }
-    
+
     cache_key = _get_cache_key("financiamiento-tendencia", filtros)
     cached_result = cache_backend.get(cache_key)
-    
+
     if cached_result:
         logger.info(f"✅ [financiamiento-tendencia] Cache HIT: {cache_key}")
         return cached_result
-    
+
     # ... código de query ...
-    
+
     resultado = {"meses": meses_data, ...}
-    
+
     # Cache por 30 minutos (datos históricos cambian poco)
     cache_backend.set(cache_key, resultado, ttl=1800)
-    
+
     return resultado
 ```
 
@@ -452,8 +452,8 @@ def obtener_financiamiento_tendencia_mensual(
 
 ```sql
 -- Verificar que los índices se usen
-EXPLAIN ANALYZE 
-SELECT 
+EXPLAIN ANALYZE
+SELECT
     EXTRACT(YEAR FROM fecha_aprobacion),
     EXTRACT(MONTH FROM fecha_aprobacion),
     COUNT(*)

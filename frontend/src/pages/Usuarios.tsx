@@ -24,7 +24,7 @@ export function Usuarios() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingUsuario, setEditingUsuario] = useState<User | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  
+
   const [formData, setFormData] = useState<UserCreate>({
     email: '',
     nombre: '',
@@ -69,13 +69,13 @@ export function Usuarios() {
       setLoading(true)
       setError(null)
       logger.debug('Actualizando usuarios', { endpoint: '/api/v1/usuarios' })
-      
+
       const response = await userService.listarUsuarios(1, 100)
-      logger.debug('Respuesta API recibida', { 
-        total: response.total, 
-        itemsCount: response.items?.length || 0 
+      logger.debug('Respuesta API recibida', {
+        total: response.total,
+        itemsCount: response.items?.length || 0
       })
-      
+
       if (response.items && Array.isArray(response.items)) {
         setUsuarios(response.items)
         logger.debug('Usuarios cargados exitosamente', { count: response.items.length })
@@ -100,11 +100,11 @@ export function Usuarios() {
         '⚠️ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este usuario?\n\n' +
         'Esta acción NO se puede deshacer y el usuario será borrado completamente de la base de datos.'
       )
-      
+
       if (!confirmar) {
         return
       }
-      
+
       await userService.eliminarUsuario(id)
       logger.userAction('eliminar_usuario', { userId: id })
       toast.success('✅ Usuario eliminado PERMANENTEMENTE de la base de datos')
@@ -118,16 +118,16 @@ export function Usuarios() {
   const handleToggleActivo = async (usuario: User) => {
     try {
       await userService.toggleActivo(usuario.id, !usuario.is_active)
-      logger.userAction('toggle_usuario_activo', { 
-        userId: usuario.id, 
-        nuevoEstado: !usuario.is_active 
+      logger.userAction('toggle_usuario_activo', {
+        userId: usuario.id,
+        nuevoEstado: !usuario.is_active
       })
       toast.success(`Usuario ${usuario.is_active ? 'desactivado' : 'activado'} exitosamente`)
       cargarUsuarios() // Recargar lista
     } catch (err) {
-      logger.apiError(`/api/v1/usuarios/${usuario.id}/toggle`, err, { 
-        action: 'toggleActivo', 
-        userId: usuario.id 
+      logger.apiError(`/api/v1/usuarios/${usuario.id}/toggle`, err, {
+        action: 'toggleActivo',
+        userId: usuario.id
       })
       toast.error('Error al cambiar estado del usuario')
     }
@@ -153,12 +153,12 @@ export function Usuarios() {
     if (!formData.email || !formData.nombre || !formData.apellido) {
       return false
     }
-    
+
     // Si estamos creando un nuevo usuario, la contraseña es obligatoria
     if (!editingUsuario && !formData.password) {
       return false
     }
-    
+
     // Si hay una contraseña (ya sea en creación o actualización), debe cumplir todos los requisitos
     if (formData.password && formData.password.trim() !== '') {
       const passwordValidation = validatePassword(formData.password)
@@ -166,22 +166,22 @@ export function Usuarios() {
         return false
       }
     }
-    
+
     return true
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // Validar formulario antes de enviar
     if (!isFormValid()) {
       toast.error('Por favor completa todos los campos requeridos y asegúrate de que la contraseña cumpla con todos los requisitos')
       return
     }
-    
+
     try {
       setIsSubmitting(true)
-      
+
       if (editingUsuario) {
         // Actualizar usuario existente - construir UserUpdate correctamente
         // IMPORTANTE: Incluir todos los campos que queremos actualizar, incluso si no cambiaron
@@ -194,14 +194,14 @@ export function Usuarios() {
           is_admin: Boolean(formData.is_admin), // ✅ Forzar conversión a booleano explícito
           is_active: formData.is_active,
         }
-        
+
         // ✅ CRÍTICO: Validar que editingUsuario.id existe y es válido
         if (!editingUsuario || !editingUsuario.id) {
           console.error('❌ [Usuarios] ERROR: editingUsuario o editingUsuario.id es inválido:', editingUsuario)
           toast.error('Error: Usuario a editar no válido')
           return
         }
-        
+
         // ✅ CRÍTICO: Logging detallado del usuario que se está actualizando
         console.log('📤 [Usuarios] Enviando actualización:', {
           userId: editingUsuario.id,
@@ -214,7 +214,7 @@ export function Usuarios() {
           formData_is_admin_type: typeof formData.is_admin,
           endpoint: `/api/v1/usuarios/${editingUsuario.id}`
         })
-        
+
         // Incluir cargo del formulario (valor que el usuario está editando)
         // Si el cargo está vacío o solo tiene espacios, enviar null para limpiar el campo
         if (formData.cargo && formData.cargo.trim() !== '') {
@@ -223,16 +223,16 @@ export function Usuarios() {
           // Si está vacío, enviar null para que se limpie en la BD
           updateData.cargo = null
         }
-        
+
         // Incluir password solo si se proporcionó uno nuevo (no vacío)
         // Si está vacío, NO lo incluimos para que el backend no intente actualizarlo
         const passwordChanged = formData.password && formData.password.trim() !== ''
         if (passwordChanged) {
           updateData.password = formData.password.trim()
         }
-        
+
         await userService.actualizarUsuario(editingUsuario.id, updateData)
-        
+
         // ✅ Si se cambió la contraseña del usuario actual, forzar logout y redirigir al login
         if (passwordChanged && currentUser && editingUsuario.id === currentUser.id) {
           toast.success('Contraseña cambiada exitosamente. Debes volver a iniciar sesión.')
@@ -254,17 +254,17 @@ export function Usuarios() {
           is_active: formData.is_active,
           password: formData.password,
         }
-        
+
         // Incluir cargo solo si tiene valor (no vacío)
         if (formData.cargo && formData.cargo.trim() !== '') {
           createData.cargo = formData.cargo.trim()
         }
         // Si está vacío, no incluirlo (será null en la BD)
-        
+
         await userService.crearUsuario(createData)
         toast.success('Usuario creado exitosamente')
       }
-      
+
       setShowCreateForm(false)
       setEditingUsuario(null)
       resetForm()
@@ -274,7 +274,7 @@ export function Usuarios() {
       })
       cargarUsuarios()
     } catch (err: unknown) {
-      logger.apiError('/api/v1/usuarios', err, { 
+      logger.apiError('/api/v1/usuarios', err, {
         action: editingUsuario ? 'actualizarUsuario' : 'crearUsuario',
         editing: !!editingUsuario
       })
@@ -326,8 +326,8 @@ export function Usuarios() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={cargarUsuarios}
             disabled={loading}
             className="flex items-center gap-2"
@@ -358,7 +358,7 @@ export function Usuarios() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -375,7 +375,7 @@ export function Usuarios() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -392,7 +392,7 @@ export function Usuarios() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -519,16 +519,16 @@ export function Usuarios() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end space-x-2">
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="sm"
                           onClick={() => handleEdit(usuario)}
                           title="Editar usuario"
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="sm"
                           onClick={() => handleToggleActivo(usuario)}
                           title={usuario.is_active ? "Desactivar" : "Activar"}
@@ -539,8 +539,8 @@ export function Usuarios() {
                             <UserCheck className="w-4 h-4 text-green-600" />
                           )}
                         </Button>
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="sm"
                           onClick={() => handleEliminar(usuario.id)}
                           title="Eliminar usuario"
@@ -560,11 +560,11 @@ export function Usuarios() {
 
       {/* Modal de Crear/Editar Usuario */}
       {showCreateForm && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={handleCloseForm}
         >
-          <div 
+          <div
             className="bg-white rounded-lg w-full max-w-md flex flex-col max-h-[90vh] shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >

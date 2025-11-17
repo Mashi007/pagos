@@ -3,15 +3,15 @@
 ## 🔍 Diferencia entre "Cuotas Programadas" y "Monto Pagado"
 
 ### ✅ **Cuotas Programadas por Mes**
-**¿Qué representa?** 
+**¿Qué representa?**
 - Suma de `monto_cuota` de todas las cuotas que **VENCEN** en ese mes
 - Respuesta: **"¿Cuánto DEBERÍAMOS COBRAR este mes?"**
 
 **Cálculo:**
 ```sql
-SELECT SUM(monto_cuota) 
-FROM cuotas 
-WHERE fecha_vencimiento >= primer_dia_mes 
+SELECT SUM(monto_cuota)
+FROM cuotas
+WHERE fecha_vencimiento >= primer_dia_mes
   AND fecha_vencimiento <= ultimo_dia_mes
 ```
 
@@ -28,9 +28,9 @@ WHERE fecha_vencimiento >= primer_dia_mes
 
 **Cálculo:**
 ```sql
-SELECT SUM(monto_pagado) 
-FROM pagos 
-WHERE fecha_pago >= primer_dia_mes 
+SELECT SUM(monto_pagado)
+FROM pagos
+WHERE fecha_pago >= primer_dia_mes
   AND fecha_pago <= ultimo_dia_mes
   AND activo = TRUE
 ```

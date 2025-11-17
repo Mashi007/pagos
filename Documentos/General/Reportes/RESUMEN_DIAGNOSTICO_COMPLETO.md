@@ -77,9 +77,9 @@ SQL Error [42703]: ERROR: column pagos.cedula_cliente does not exist
 1. **Ejecutar diagnóstico previo:**
    ```sql
    -- Verificar estado actual
-   SELECT column_name, data_type 
-   FROM information_schema.columns 
-   WHERE table_name = 'pagos' 
+   SELECT column_name, data_type
+   FROM information_schema.columns
+   WHERE table_name = 'pagos'
      AND column_name IN ('cedula', 'cedula_cliente');
    ```
 
@@ -92,8 +92,8 @@ SQL Error [42703]: ERROR: column pagos.cedula_cliente does not exist
 3. **Verificar resultado:**
    ```sql
    -- Confirmar que la columna existe
-   SELECT COUNT(*) 
-   FROM pagos 
+   SELECT COUNT(*)
+   FROM pagos
    WHERE cedula_cliente IS NOT NULL;
    ```
 

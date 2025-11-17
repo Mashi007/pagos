@@ -1,7 +1,7 @@
 # ⚠️ ANÁLISIS DE IMPACTO - ELIMINACIÓN DE ARCHIVOS SQL
 
-**Fecha:** 2025-01-27  
-**Acción:** Eliminación de TODOS los archivos SQL del proyecto  
+**Fecha:** 2025-01-27
+**Acción:** Eliminación de TODOS los archivos SQL del proyecto
 **Total de archivos:** 95 archivos `.sql`
 
 ---

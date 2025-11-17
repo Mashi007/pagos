@@ -1,6 +1,6 @@
 # 📊 EXPLICACIÓN DETALLADA: CÓMO SE CALCULA LA MOROSIDAD
 
-**Fecha:** 2025-01-04  
+**Fecha:** 2025-01-04
 **Endpoint:** `/api/v1/dashboard/evolucion-morosidad`
 
 ---
@@ -95,13 +95,13 @@ if modelo:
 
 ```sql
 -- Líneas 2453-2467
-SELECT 
+SELECT
     EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
     EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
     COALESCE(SUM(c.monto_cuota), 0) as morosidad
 FROM cuotas c
 INNER JOIN prestamos p ON c.prestamo_id = p.id
-WHERE 
+WHERE
     p.estado = 'APROBADO'
     AND c.fecha_vencimiento >= '2024-08-01'
     AND c.fecha_vencimiento < '2025-01-04'
@@ -138,7 +138,7 @@ año  | mes | morosidad
 # Línea 2470
 result = db.execute(query_sql)
 morosidad_por_mes = {
-    (int(row[0]), int(row[1])): float(row[2] or Decimal("0")) 
+    (int(row[0]), int(row[1])): float(row[2] or Decimal("0"))
     for row in result
 }
 ```
@@ -154,7 +154,7 @@ morosidad_por_mes = {
 }
 ```
 
-**Clave:** `(año, mes)` como tupla  
+**Clave:** `(año, mes)` como tupla
 **Valor:** `morosidad` como float
 
 ---
@@ -170,15 +170,15 @@ nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", 
 while current_date <= hoy:  # Mientras no lleguemos a hoy
     año_mes = current_date.year  # 2024
     num_mes = current_date.month  # 8
-    
+
     # Buscar morosidad en el diccionario, si no existe = 0.0
     morosidad_mes = morosidad_por_mes.get((año_mes, num_mes), 0.0)
-    
+
     meses_data.append({
         "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",  # "Ago 2024"
         "morosidad": morosidad_mes,  # 65000.0
     })
-    
+
     # Avanzar al siguiente mes
     current_date = _obtener_fechas_mes_siguiente(num_mes, año_mes)
 ```
@@ -325,6 +325,6 @@ MOROSIDAD_MES = SUM(monto_cuota)
 
 ---
 
-**Documento generado automáticamente**  
+**Documento generado automáticamente**
 **Última actualización:** 2025-01-04
 

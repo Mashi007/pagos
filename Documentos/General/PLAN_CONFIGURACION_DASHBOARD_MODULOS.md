@@ -111,7 +111,7 @@ INNER JOIN clientes cl ON cl.id = p.cliente_id AND cl.estado != 'INACTIVO' AND c
 
 ```python
 # En query SQL (línea ~4530), agregar JOIN con préstamos y clientes:
-SELECT 
+SELECT
     EXTRACT(YEAR FROM p.fecha_pago)::integer as año,
     EXTRACT(MONTH FROM p.fecha_pago)::integer as mes,
     COUNT(*) as cantidad,
@@ -127,7 +127,7 @@ WHERE p.fecha_pago >= :fecha_inicio
   AND p.monto_pagado IS NOT NULL
   AND p.monto_pagado > 0
   AND p.activo = TRUE
-GROUP BY 
+GROUP BY
     EXTRACT(YEAR FROM p.fecha_pago),
     EXTRACT(MONTH FROM p.fecha_pago)
 ORDER BY año, mes
@@ -316,8 +316,8 @@ query_sql = text("""
 query_sql = text("""
     SELECT ...
     FROM prestamos p
-    INNER JOIN clientes cl ON cl.id = p.cliente_id 
-        AND cl.estado != 'INACTIVO' 
+    INNER JOIN clientes cl ON cl.id = p.cliente_id
+        AND cl.estado != 'INACTIVO'
         AND cl.activo = true
     WHERE p.estado = 'APROBADO'
 """)
@@ -364,8 +364,8 @@ query_sql = text("""
         (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
         OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
     )
-    INNER JOIN clientes cl ON cl.id = pr.cliente_id 
-        AND cl.estado != 'INACTIVO' 
+    INNER JOIN clientes cl ON cl.id = pr.cliente_id
+        AND cl.estado != 'INACTIVO'
         AND cl.activo = true
     WHERE p.activo = TRUE
 """)

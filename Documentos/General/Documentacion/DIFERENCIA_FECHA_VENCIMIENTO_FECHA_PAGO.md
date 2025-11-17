@@ -89,7 +89,7 @@ Estado: PENDIENTE (o ATRASADO si fecha_vencimiento < CURRENT_DATE)
 
 ```sql
 -- Cuota generada inicialmente
-SELECT 
+SELECT
     numero_cuota,
     fecha_vencimiento,  -- 2025-11-30 (programada)
     fecha_pago,         -- NULL (aún no pagada)
@@ -110,7 +110,7 @@ WHERE prestamo_id = 3708 AND numero_cuota = 1;
 
 ```sql
 -- Después de registrar un pago el 2025-11-28
-SELECT 
+SELECT
     numero_cuota,
     fecha_vencimiento,  -- 2025-11-30 (NO cambió - es fija)
     fecha_pago,         -- 2025-11-28 (se actualizó - fecha real de pago)
@@ -137,7 +137,7 @@ WHERE prestamo_id = 3708 AND numero_cuota = 1;
 
 ```sql
 -- Cuotas vencidas (fecha_vencimiento pasó, pero no pagadas)
-SELECT 
+SELECT
     numero_cuota,
     fecha_vencimiento,
     fecha_pago,
@@ -159,7 +159,7 @@ WHERE prestamo_id = 3708
 
 ```sql
 -- Pagos adelantados (fecha_pago antes de fecha_vencimiento)
-SELECT 
+SELECT
     numero_cuota,
     fecha_vencimiento,
     fecha_pago,
@@ -179,7 +179,7 @@ WHERE prestamo_id = 3708
 
 ```sql
 -- Pagos tardíos (fecha_pago después de fecha_vencimiento)
-SELECT 
+SELECT
     numero_cuota,
     fecha_vencimiento,
     fecha_pago,
@@ -311,7 +311,7 @@ Resultado automático:
 
 ## ✅ CONCLUSIÓN
 
-**`fecha_vencimiento`** = "¿Cuándo DEBE pagarse?" (programada, fija)  
+**`fecha_vencimiento`** = "¿Cuándo DEBE pagarse?" (programada, fija)
 **`fecha_pago`** = "¿Cuándo SE PAGÓ realmente?" (real, se actualiza)
 
 **Analogía:**

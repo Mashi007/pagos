@@ -1,7 +1,7 @@
 # 📋 Estructura Base de Tablas - Base de Datos
 
-> **Documento de Referencia Principal**  
-> Este documento contiene la estructura completa y actualizada de todas las tablas principales del sistema.  
+> **Documento de Referencia Principal**
+> Este documento contiene la estructura completa y actualizada de todas las tablas principales del sistema.
 > Última actualización: 2025-11-06 (verificado desde BD real)
 
 ---
@@ -258,7 +258,7 @@
 ### En `cuotas`:
 
 #### **`dias_morosidad`** (integer, default: 0)
-**Tabla:** `cuotas`  
+**Tabla:** `cuotas`
 **Función:** `_actualizar_morosidad_cuota()` en `backend/app/api/v1/endpoints/pagos.py`
 
 **Campos utilizados para el cálculo:**
@@ -279,7 +279,7 @@
 ---
 
 #### **`monto_morosidad`** (numeric(12,2), default: 0.00)
-**Tabla:** `cuotas`  
+**Tabla:** `cuotas`
 **Función:** `_actualizar_morosidad_cuota()` en `backend/app/api/v1/endpoints/pagos.py`
 
 **Campos utilizados para el cálculo:**
@@ -350,7 +350,7 @@ monto_morosidad = MAX(0, monto_pendiente)  # Nunca negativo
 
 ---
 
-**Última actualización:** 2025-11-06  
-**Fuente:** Verificado desde base de datos real mediante `OBTENER_ESTRUCTURA_REAL_TABLAS.sql`  
+**Última actualización:** 2025-11-06
+**Fuente:** Verificado desde base de datos real mediante `OBTENER_ESTRUCTURA_REAL_TABLAS.sql`
 **Actualizaciones:** Incluye reglas de conciliación y cálculo de morosidad confirmadas
 

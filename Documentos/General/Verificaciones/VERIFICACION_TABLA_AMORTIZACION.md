@@ -1,6 +1,6 @@
 # ✅ VERIFICACIÓN DE TABLA DE AMORTIZACIÓN
 
-**Fecha:** 27 de Enero 2025  
+**Fecha:** 27 de Enero 2025
 **Estado:** ✅ INSTALADO Y FUNCIONAL
 
 ---
@@ -109,7 +109,7 @@ Para cada cuota:
 ### Resumen Total
 
 - ✅ Total Capital
-- ✅ Total Intereses  
+- ✅ Total Intereses
 - ✅ Monto Total
 - ✅ Cuotas Pagadas / Total
 
@@ -148,7 +148,7 @@ Saldo Nuevo = Saldo Anterior - Capital
 ### Intervalos según Modalidad
 
 - **MENSUAL:** 30 días entre cuotas
-- **QUINCENAL:** 15 días entre cuotas  
+- **QUINCENAL:** 15 días entre cuotas
 - **SEMANAL:** 7 días entre cuotas
 
 ### Tasa de Interés 0%

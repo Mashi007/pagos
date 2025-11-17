@@ -1,7 +1,7 @@
 # 🔧 FIX: Error de Sintaxis en Migración 001
 
-**Fecha:** 2025-11-06  
-**Problema:** Error de sintaxis en `001_expandir_cliente_financiamiento.py`  
+**Fecha:** 2025-11-06
+**Problema:** Error de sintaxis en `001_expandir_cliente_financiamiento.py`
 **Estado:** ✅ CORREGIDO
 
 ---

@@ -65,7 +65,7 @@ class ConversacionesWhatsAppService {
     filtros?: FiltrosConversaciones
   ): Promise<ListaConversacionesResponse> {
     const params: any = { page, per_page: perPage }
-    
+
     if (filtros?.cliente_id) {
       params.cliente_id = filtros.cliente_id
     }

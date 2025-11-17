@@ -133,7 +133,7 @@ Basado en ejecución de `VERIFICAR_PRESTAMOS_ID_Y_AMORTIZACION.sql`
 
 ```sql
 -- Verificar datos del préstamo crítico
-SELECT 
+SELECT
     id,
     cedula,
     nombres,
@@ -164,7 +164,7 @@ WHERE id = 3708;
 
 ```sql
 -- Préstamos con cuotas incompletas
-SELECT 
+SELECT
     p.id,
     p.cedula,
     p.nombres,
@@ -206,31 +206,31 @@ def aprobar_prestamo(
     current_user: User = Depends(get_current_user),
 ):
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-    
+
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
+
     # Validar fecha_base_calculo
     if not prestamo.fecha_base_calculo:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="No se puede aprobar un préstamo sin fecha_base_calculo"
         )
-    
+
     # Cambiar estado
     prestamo.estado = "APROBADO"
     prestamo.fecha_aprobacion = datetime.now()
     db.commit()
-    
+
     # Generar cuotas
     try:
         generar_tabla_amortizacion(prestamo_id, db)
-        
+
         # Verificar que se generaron todas las cuotas
         cuotas_generadas = db.query(Cuota).filter(
             Cuota.prestamo_id == prestamo_id
         ).count()
-        
+
         if cuotas_generadas != prestamo.numero_cuotas:
             # Revertir aprobación o marcar error
             prestamo.estado = "EN_REVISION"
@@ -245,7 +245,7 @@ def aprobar_prestamo(
         prestamo.estado = "EN_REVISION"
         db.commit()
         raise HTTPException(status_code=500, detail=f"Error al generar cuotas: {str(e)}")
-    
+
     return {"message": "Préstamo aprobado y cuotas generadas correctamente"}
 ```
 

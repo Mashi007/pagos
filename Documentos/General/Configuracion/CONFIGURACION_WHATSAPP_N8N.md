@@ -71,7 +71,7 @@ Para eventos POST (mensajes y estados):
    - **Authentication**: None
    - **Send Body**: `Yes`
    - **Body Content Type**: `JSON`
-   - **Body**: 
+   - **Body**:
      ```json
      {{ $json.body }}
      ```
@@ -79,7 +79,7 @@ Para eventos POST (mensajes y estados):
      ```json
      {{ $json }}
      ```
-   - **Headers**: 
+   - **Headers**:
      - `Content-Type: application/json`
      - `X-Hub-Signature-256: {{ $json.headers['x-hub-signature-256'] }}` (si existe, opcional)
 

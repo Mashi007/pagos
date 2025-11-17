@@ -87,14 +87,14 @@ frontend/
 class ClienteRepository:
     def __init__(self, db: Session):
         self.db = db
-    
+
     def create(self, cliente_data: ClienteCreate) -> Cliente:
         cliente = Cliente(**cliente_data.dict())
         self.db.add(cliente)
         self.db.commit()
         self.db.refresh(cliente)
         return cliente
-    
+
     def get_by_id(self, cliente_id: int) -> Optional[Cliente]:
         return self.db.query(Cliente).filter(Cliente.id == cliente_id).first()
 ```
@@ -104,17 +104,17 @@ class ClienteRepository:
 class ClienteService:
     def __init__(self, repository: ClienteRepository):
         self.repository = repository
-    
+
     def crear_cliente(self, cliente_data: ClienteCreate) -> Cliente:
         # Validaciones de negocio
         self._validar_cliente(cliente_data)
-        
+
         # Crear cliente
         cliente = self.repository.create(cliente_data)
-        
+
         # Post-procesamiento
         self._notificar_creacion(cliente)
-        
+
         return cliente
 ```
 
@@ -138,20 +138,20 @@ def crear_cliente(
 ```typescript
 export const useClientes = () => {
   const queryClient = useQueryClient()
-  
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['clientes'],
     queryFn: clienteService.getClientes,
     staleTime: 5 * 60 * 1000, // 5 minutos
   })
-  
+
   const createCliente = useMutation({
     mutationFn: clienteService.createCliente,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
     },
   })
-  
+
   return {
     clientes: data?.data || [],
     isLoading,
@@ -185,20 +185,20 @@ class ErrorBoundary extends Component<Props, State> {
     super(props)
     this.state = { hasError: false }
   }
-  
+
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true }
   }
-  
+
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Error capturado:', error, errorInfo)
   }
-  
+
   render() {
     if (this.state.hasError) {
       return <ErrorFallback />
     }
-    
+
     return this.props.children
   }
 }
@@ -246,13 +246,13 @@ def procesar_clientes(
 def crear_cliente(cliente_data: ClienteCreate) -> Cliente:
     """
     Crear un nuevo cliente en el sistema.
-    
+
     Args:
         cliente_data: Datos del cliente a crear
-        
+
     Returns:
         Cliente creado con ID asignado
-        
+
     Raises:
         HTTPException: Si hay errores de validación
     """

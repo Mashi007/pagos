@@ -8,7 +8,7 @@ La tasa de interés viene de **la evaluación de riesgo** y se aplica al présta
 
 ## 📋 Flujo Completo
 
-### 1️⃣ **Evaluación de Riesgo** 
+### 1️⃣ **Evaluación de Riesgo**
 ```python
 # backend/app/services/prestamo_evaluacion_service.py (líneas 552-582)
 
@@ -109,12 +109,12 @@ monto_capital = monto_cuota - monto_interes
 
 **Respuesta: Debes verificar en la tabla `prestamos_evaluacion`:**
 ```sql
-SELECT 
+SELECT
     prestamo_id,
     clasificacion_riesgo,
     tasa_interes_aplicada,
     decision_final
-FROM prestamos_evaluacion 
+FROM prestamos_evaluacion
 WHERE prestamo_id = 9;
 ```
 
@@ -132,21 +132,21 @@ Ejecuta en **DBeaver**:
 
 ```sql
 -- Ver qué tasa tiene actualmente el préstamo
-SELECT 
+SELECT
     id,
     tasa_interes,
     estado
-FROM prestamos 
+FROM prestamos
 WHERE id = 9;
 
 -- Ver la clasificación de riesgo
-SELECT 
+SELECT
     prestamo_id,
     clasificacion_riesgo,
     tasa_interes_aplicada,
     puntuacion_total,
     decision_final
-FROM prestamos_evaluacion 
+FROM prestamos_evaluacion
 WHERE prestamo_id = 9;
 ```
 

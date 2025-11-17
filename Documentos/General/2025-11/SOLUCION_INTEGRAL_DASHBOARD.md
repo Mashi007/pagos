@@ -1,7 +1,7 @@
 # 🔍 SOLUCIÓN INTEGRAL DEL DASHBOARD - ANÁLISIS EXHAUSTIVO
 
-**Fecha:** 2025-01-06  
-**Problema:** Más de 1 día y 20+ correcciones sin resolver problemas de raíz  
+**Fecha:** 2025-01-06
+**Problema:** Más de 1 día y 20+ correcciones sin resolver problemas de raíz
 **Objetivo:** Solución integral, no parches
 
 ---
@@ -59,8 +59,8 @@ def normalize_to_date(fecha) -> Optional[date]:
 
 # Uso en el código:
 fechas_disponibles = [
-    normalize_to_date(f) 
-    for f in [primera_aprobacion, primera_cuota, primera_pago] 
+    normalize_to_date(f)
+    for f in [primera_aprobacion, primera_cuota, primera_pago]
     if f is not None
 ]
 if fechas_disponibles:
@@ -78,7 +78,7 @@ def obtener_primera_fecha_desde_2024(db: Session) -> date:
             Prestamo.estado == "APROBADO",
             func.extract("year", Prestamo.fecha_aprobacion) >= 2024
         ).scalar()
-        
+
         # Buscar primera fecha de cuota
         primera_cuota = db.query(func.min(Cuota.fecha_vencimiento)).join(
             Prestamo, Cuota.prestamo_id == Prestamo.id
@@ -86,21 +86,21 @@ def obtener_primera_fecha_desde_2024(db: Session) -> date:
             Prestamo.estado == "APROBADO",
             func.extract("year", Cuota.fecha_vencimiento) >= 2024
         ).scalar()
-        
+
         # Buscar primera fecha de pago
         primera_pago = db.query(func.min(Pago.fecha_pago)).filter(
             Pago.activo.is_(True),
             Pago.monto_pagado > 0,
             func.extract("year", Pago.fecha_pago) >= 2024
         ).scalar()
-        
+
         # Normalizar todas a date
         fechas = [
             normalize_to_date(f)
             for f in [primera_aprobacion, primera_cuota, primera_pago]
             if f is not None
         ]
-        
+
         if fechas:
             return min(fechas)
         return date(2024, 1, 1)
@@ -128,8 +128,8 @@ validate_graph_data(meses_data, ["mes", "monto_nuevos", ...])
 
 ```python
 def validate_graph_data(
-    data: list, 
-    required_fields: list, 
+    data: list,
+    required_fields: list,
     non_numeric_fields: Optional[list] = None
 ) -> tuple[bool, Optional[str]]:
     # Campos que por defecto no son numéricos
@@ -141,7 +141,7 @@ def validate_graph_data(
 ```python
 required_fields = ["mes", "monto_nuevos", "monto_cuotas_programadas", ...]
 is_valid, error_msg = validate_graph_data(
-    meses_data, 
+    meses_data,
     required_fields,
     non_numeric_fields=["mes"]  # ✅ Especificar campos no numéricos
 )
@@ -174,19 +174,19 @@ def obtener_primera_fecha_desde_2024(db: Session) -> date:
 
 ```sql
 -- Índices para optimizar queries del dashboard
-CREATE INDEX IF NOT EXISTS idx_prestamos_estado_fecha_aprobacion 
-ON prestamos(estado, fecha_aprobacion) 
+CREATE INDEX IF NOT EXISTS idx_prestamos_estado_fecha_aprobacion
+ON prestamos(estado, fecha_aprobacion)
 WHERE estado = 'APROBADO';
 
-CREATE INDEX IF NOT EXISTS idx_cuotas_fecha_vencimiento_estado 
-ON cuotas(fecha_vencimiento, estado) 
+CREATE INDEX IF NOT EXISTS idx_cuotas_fecha_vencimiento_estado
+ON cuotas(fecha_vencimiento, estado)
 WHERE estado != 'PAGADO';
 
-CREATE INDEX IF NOT EXISTS idx_pagos_activo_fecha_pago 
-ON pagos(activo, fecha_pago) 
+CREATE INDEX IF NOT EXISTS idx_pagos_activo_fecha_pago
+ON pagos(activo, fecha_pago)
 WHERE activo = true;
 
-CREATE INDEX IF NOT EXISTS idx_cuotas_prestamo_fecha_estado 
+CREATE INDEX IF NOT EXISTS idx_cuotas_prestamo_fecha_estado
 ON cuotas(prestamo_id, fecha_vencimiento, estado);
 ```
 
@@ -198,7 +198,7 @@ def obtener_financiamiento_tendencia_optimizado(db: Session, ...):
     # Una sola query con CTE
     query = text("""
         WITH nuevos_financiamientos AS (
-            SELECT 
+            SELECT
                 DATE_TRUNC('month', fecha_aprobacion) as mes,
                 COUNT(*) as cantidad,
                 SUM(total_financiamiento) as monto
@@ -208,7 +208,7 @@ def obtener_financiamiento_tendencia_optimizado(db: Session, ...):
             GROUP BY DATE_TRUNC('month', fecha_aprobacion)
         ),
         cuotas_programadas AS (
-            SELECT 
+            SELECT
                 DATE_TRUNC('month', c.fecha_vencimiento) as mes,
                 SUM(c.monto_cuota) as monto
             FROM cuotas c
@@ -217,7 +217,7 @@ def obtener_financiamiento_tendencia_optimizado(db: Session, ...):
               AND c.fecha_vencimiento >= :fecha_inicio
             GROUP BY DATE_TRUNC('month', c.fecha_vencimiento)
         )
-        SELECT 
+        SELECT
             nf.mes,
             nf.cantidad,
             nf.monto as monto_nuevos,
@@ -248,7 +248,7 @@ def obtener_financiamiento_tendencia_optimizado(db: Session, ...):
 ```python
 def verificar_y_corregir_inconsistencias(db: Session):
     """Verifica y corrige inconsistencias en datos"""
-    
+
     # 1. Cuotas marcadas como PAGADO sin pagos
     cuotas_pagadas_sin_pagos = db.query(Cuota).join(
         Prestamo, Cuota.prestamo_id == Prestamo.id
@@ -257,19 +257,19 @@ def verificar_y_corregir_inconsistencias(db: Session):
         Prestamo.estado == "APROBADO",
         ~exists().where(Pago.cuota_id == Cuota.id)
     ).all()
-    
+
     for cuota in cuotas_pagadas_sin_pagos:
         # Verificar si realmente está pagada
         total_pagado = db.query(func.sum(Pago.monto_pagado)).filter(
             Pago.cuota_id == cuota.id,
             Pago.activo == True
         ).scalar() or Decimal("0")
-        
+
         if total_pagado < cuota.monto_cuota:
             # Marcar como PENDIENTE si no está completamente pagada
             cuota.estado = "PENDIENTE"
             logger.warning(f"Corrigiendo cuota {cuota.id}: PAGADO sin pagos suficientes")
-    
+
     # 2. Cuotas con pagos completos pero no marcadas como PAGADO
     cuotas_con_pagos = db.query(Cuota).join(
         Prestamo, Cuota.prestamo_id == Prestamo.id
@@ -277,20 +277,20 @@ def verificar_y_corregir_inconsistencias(db: Session):
         Cuota.estado != "PAGADO",
         Prestamo.estado == "APROBADO"
     ).all()
-    
+
     for cuota in cuotas_con_pagos:
         total_pagado = db.query(func.sum(Pago.monto_pagado)).filter(
             Pago.cuota_id == cuota.id,
             Pago.activo == True
         ).scalar() or Decimal("0")
-        
+
         if total_pagado >= cuota.monto_cuota:
             cuota.estado = "PAGADO"
             cuota.fecha_pago = db.query(func.max(Pago.fecha_pago)).filter(
                 Pago.cuota_id == cuota.id
             ).scalar()
             logger.info(f"Corrigiendo cuota {cuota.id}: Marcada como PAGADO")
-    
+
     db.commit()
 ```
 
@@ -305,23 +305,23 @@ def verificar_integridad_datos(
     """Verifica integridad de datos y reporta inconsistencias"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores")
-    
+
     inconsistencias = []
-    
+
     # Verificar cuotas sin préstamos
     cuotas_sin_prestamo = db.query(func.count(Cuota.id)).join(
         Prestamo, Cuota.prestamo_id == Prestamo.id, isouter=True
     ).filter(Prestamo.id == None).scalar()
-    
+
     if cuotas_sin_prestamo > 0:
         inconsistencias.append({
             "tipo": "cuotas_sin_prestamo",
             "cantidad": cuotas_sin_prestamo,
             "severidad": "ALTA"
         })
-    
+
     # ... más verificaciones
-    
+
     return {
         "status": "ok" if not inconsistencias else "inconsistencias_encontradas",
         "inconsistencias": inconsistencias,
@@ -347,7 +347,7 @@ def verificar_integridad_datos(
 ```python
 class CalculosDashboard:
     """Clase centralizada para todos los cálculos del dashboard"""
-    
+
     @staticmethod
     def calcular_cartera_total(
         db: Session,
@@ -365,7 +365,7 @@ class CalculosDashboard:
             query, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
         return query.scalar() or Decimal("0")
-    
+
     @staticmethod
     def calcular_cartera_vencida(
         db: Session,
@@ -391,7 +391,7 @@ class CalculosDashboard:
             query, analista, concesionario, modelo, None, None
         )
         return query.scalar() or Decimal("0")
-    
+
     @staticmethod
     def calcular_morosidad_mensual(
         db: Session,
@@ -403,7 +403,7 @@ class CalculosDashboard:
         """Calcula morosidad de un mes específico (NO acumulativa)"""
         # Último día del mes
         ultimo_dia = date(mes.year, mes.month, monthrange(mes.year, mes.month)[1])
-        
+
         # Cuotas que vencen en ese mes
         cuotas_mes = (
             db.query(Cuota)
@@ -416,20 +416,20 @@ class CalculosDashboard:
                 )
             )
         )
-        
+
         # Aplicar filtros
         if analista or concesionario or modelo:
             cuotas_mes = FiltrosDashboard.aplicar_filtros_cuota(
                 cuotas_mes, analista, concesionario, modelo, None, None
             )
-        
+
         # Calcular monto programado
         monto_programado = (
             db.query(func.sum(Cuota.monto_cuota))
             .select_from(cuotas_mes.subquery())
             .scalar() or Decimal("0")
         )
-        
+
         # Calcular monto pagado
         monto_pagado = (
             db.query(func.sum(Pago.monto_pagado))
@@ -445,7 +445,7 @@ class CalculosDashboard:
             )
             .scalar() or Decimal("0")
         )
-        
+
         return monto_programado - monto_pagado
 ```
 

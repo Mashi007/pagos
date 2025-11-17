@@ -4,7 +4,7 @@
 
 La migración `20251104_add_group_by_indexes` crea **índices funcionales** sobre tablas grandes:
 
-1. **`pagos_staging`**: 
+1. **`pagos_staging`**:
    - Índice sobre `EXTRACT(YEAR FROM fecha_pago::timestamp)`
    - Índice compuesto sobre `EXTRACT(YEAR, MONTH FROM fecha_pago::timestamp)`
    - **Tabla grande**: ~13,959 registros (según logs recientes)
@@ -211,8 +211,8 @@ WHERE fecha_pago IS NOT NULL AND fecha_pago != '';
 
 2. **Verificar estado de índices:**
    ```sql
-   SELECT indexname, indexdef 
-   FROM pg_indexes 
+   SELECT indexname, indexdef
+   FROM pg_indexes
    WHERE tablename IN ('pagos_staging', 'cuotas')
    AND indexname LIKE 'idx_%_extract%';
    ```

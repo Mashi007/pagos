@@ -49,10 +49,10 @@ interface FormData {
   estadoDireccion: string  // Estado (nuevo campo)
   fechaNacimiento: string
   ocupacion: string  // ✅ MÁXIMO 2 palabras
-  
+
   // Estado - OBLIGATORIO
   estado: 'ACTIVO' | 'INACTIVO' | 'FINALIZADO'
-  
+
   // Notas - OBLIGATORIO (default 'NA')
   notas: string
 }
@@ -150,29 +150,29 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   const [validations, setValidations] = useState<ValidationResult[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showExcelUploader, setShowExcelUploader] = useState(false)
-  
+
   // ✅ Función para extraer el número de teléfono de la BD (+581234567890 → 1234567890)
   const extraerNumeroTelefono = (telefonoCompleto: string): string => {
     if (!telefonoCompleto) return ''
-    
+
     // Si empieza con +58, eliminar el prefijo
     if (telefonoCompleto.startsWith('+58')) {
       return telefonoCompleto.substring(3)
     }
-    
+
     // Si ya es solo el número, devolverlo
     return telefonoCompleto.replace(/\D/g, '').slice(0, 10)
   }
-  
+
   // Pre-cargar datos del cliente si se está editando
   useEffect(() => {
     if (cliente) {
       console.log('📝 MODO EDITAR - Cargando datos del cliente:', cliente)
       console.log('📝 Datos completos del cliente recibidos:', JSON.stringify(cliente, null, 2))
-      
+
       // Dividir nombres si vienen unificados de la BD
       let nombresValue = cliente.nombres || ''
-      
+
       // Función local para convertir fecha
       const convertirFechaLocal = (fechaISO: string): string => {
         // Si ya está en formato DD/MM/YYYY, devolverla tal cual
@@ -189,7 +189,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         }
         return fechaISO
       }
-      
+
       // ✅ Función para parsear dirección estructurada desde la BD
       const parsearDireccion = (direccionCompleta: string) => {
         if (!direccionCompleta) {
@@ -203,7 +203,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
             estadoDireccion: ''
           }
         }
-        
+
         // Intentar parsear si está en formato JSON
         try {
           const parsed = JSON.parse(direccionCompleta)
@@ -242,9 +242,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
           }
         }
       }
-      
+
       const direccionData = parsearDireccion(typeof cliente.direccion === 'string' ? cliente.direccion : '')
-      
+
       const newFormData: FormData = {
         cedula: typeof cliente.cedula === 'string' ? cliente.cedula : '',
         nombres: typeof nombresValue === 'string' ? nombresValue : '',  // ✅ nombres unificados
@@ -256,15 +256,15 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         estado: (typeof cliente.estado === 'string' && ['ACTIVO', 'INACTIVO', 'FINALIZADO'].includes(cliente.estado)) ? cliente.estado as 'ACTIVO' | 'INACTIVO' | 'FINALIZADO' : 'ACTIVO',  // ✅ Mantener estado del cliente existente en edición
         notas: typeof cliente.notas === 'string' ? cliente.notas : 'No hay observacion'
       }
-      
+
       console.log('📝 MODO EDITAR - Datos formateados para cargar:', newFormData)
-      
+
       // ✅ Asegurar que los datos se carguen correctamente
       setFormData(newFormData)
-      
+
       // ✅ Limpiar validaciones previas al cargar datos de edición
       setValidations([])
-      
+
       console.log('✅ MODO EDITAR - Formulario cargado con datos del cliente')
     } else {
       // ✅ Si no hay cliente, resetear el formulario a valores por defecto
@@ -287,7 +287,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       })
     }
   }, [cliente])
-  
+
 
   // ✅ Validaciones personalizadas para nombres y ocupacion
   // Regla: Mínimo 2 palabras, máximo 7 palabras en nombres+apellidos
@@ -298,27 +298,27 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     if (!nombres || nombres.trim() === '') {
       return { field: 'nombres', isValid: false, message: 'Nombres y apellidos requeridos' }
     }
-    
+
     // Dividir en palabras, filtrando espacios vacíos y espacios múltiples
     const words = nombres.trim().split(/\s+/).filter(w => w.length > 0)
     const wordCount = words.length
-    
+
     // Si está escribiendo (palabra incompleta al final), no contar esa última palabra si no tiene espacio después
     // Esto permite escribir libremente hasta 7 palabras completas
     const textEndsWithSpace = nombres.trim().endsWith(' ')
-    
+
     // Validar mínimo 2 palabras (solo cuando el usuario ha terminado de escribir)
     // Si está escribiendo la primera o segunda palabra, permitir continuar
     if (wordCount < 2 && textEndsWithSpace) {
       return { field: 'nombres', isValid: false, message: 'Mínimo 2 palabras requeridas (nombre + apellido)' }
     }
-    
+
     // Validar máximo 7 palabras
     // Solo mostrar error si hay más de 7 palabras completas (con espacios)
     if (wordCount > 7) {
       return { field: 'nombres', isValid: false, message: `Máximo 7 palabras permitidas (tienes ${wordCount})` }
     }
-    
+
     // Si hay exactamente 7 palabras o menos y cumple mínimo, validar estructura
     if (wordCount >= 2 && wordCount <= 7) {
       // Validar que cada palabra tenga mínimo 2 caracteres
@@ -326,19 +326,19 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       if (invalidWords.length > 0) {
         return { field: 'nombres', isValid: false, message: 'Cada palabra debe tener mínimo 2 caracteres' }
       }
-      
+
       // Si tiene entre 2 y 7 palabras válidas, está correcto
       return { field: 'nombres', isValid: true, message: `${wordCount} palabra${wordCount > 1 ? 's' : ''} - Válido` }
     }
-    
+
     // Si está escribiendo la primera palabra, solo mostrar mensaje informativo, no error
     if (wordCount === 1 && !textEndsWithSpace) {
       return { field: 'nombres', isValid: false, message: 'Agrega más palabras (mínimo 2, máximo 7)' }
     }
-    
+
     return { field: 'nombres', isValid: false, message: 'Mínimo 2 palabras requeridas (nombre + apellido)' }
   }
-  
+
   const validateOcupacion = (ocupacion: string): ValidationResult => {
     if (isNN(ocupacion)) {
       return { field: 'ocupacion', isValid: true, message: 'Valor omitido por NN' }
@@ -346,21 +346,21 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     if (!ocupacion || ocupacion.trim() === '') {
       return { field: 'ocupacion', isValid: false, message: 'Ocupación requerida' }
     }
-    
+
     // Validar longitud mínima
     if (ocupacion.trim().length < 2) {
       return { field: 'ocupacion', isValid: false, message: 'Mínimo 2 caracteres' }
     }
-    
+
     const words = ocupacion.trim().split(/\s+/).filter(w => w.length > 0)
-    
+
     if (words.length > 2) {
       return { field: 'ocupacion', isValid: false, message: 'Máximo 2 palabras permitidas en ocupación' }
     }
-    
+
     return { field: 'ocupacion', isValid: true, message: 'Ocupación válida' }
   }
-  
+
   // ✅ Validación para descripción (mínimo 5 palabras)
   const validateDescripcion = (descripcion: string): ValidationResult => {
     if (isNN(descripcion)) {
@@ -369,16 +369,16 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     if (!descripcion || descripcion.trim() === '') {
       return { field: 'descripcion', isValid: true, message: '' }  // Descripción es opcional
     }
-    
+
     // Dividir en palabras, filtrando espacios vacíos
     const words = descripcion.trim().split(/\s+/).filter(w => w.length > 0)
     const wordCount = words.length
-    
+
     // Validar mínimo 5 palabras
     if (wordCount < 5) {
       return { field: 'descripcion', isValid: false, message: `Mínimo 5 palabras requeridas (tienes ${wordCount})` }
     }
-    
+
     return { field: 'descripcion', isValid: true, message: `${wordCount} palabras - Válido` }
   }
 
@@ -399,7 +399,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     if ((!formData.estadoDireccion || formData.estadoDireccion.trim() === '') && !isNN(formData.estadoDireccion)) {
       return { field: 'direccion', isValid: false, message: 'Estado es requerido' }
     }
-    
+
     return { field: 'direccion', isValid: true, message: 'Dirección válida' }
   }
 
@@ -411,25 +411,25 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     if (!telefono || telefono.trim() === '') {
       return { field: 'telefono', isValid: false, message: 'Teléfono requerido' }
     }
-    
+
     // Remover espacios y caracteres no numéricos
     const numeroLimpio = telefono.replace(/\D/g, '')
-    
+
     // Validar que tenga exactamente 10 dígitos
     if (numeroLimpio.length !== 10) {
       return { field: 'telefono', isValid: false, message: 'El teléfono debe tener exactamente 10 dígitos' }
     }
-    
+
     // Validar que no empiece por 0
     if (numeroLimpio.startsWith('0')) {
       return { field: 'telefono', isValid: false, message: 'El teléfono no puede empezar por 0' }
     }
-    
+
     // Validar que todos los caracteres sean dígitos (0-9)
     if (!/^\d{10}$/.test(numeroLimpio)) {
       return { field: 'telefono', isValid: false, message: 'El teléfono solo puede contener números (0-9)' }
     }
-    
+
     return { field: 'telefono', isValid: true, message: 'Teléfono válido' }
   }
 
@@ -440,19 +440,19 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     if (!fecha || fecha.trim() === '') {
       return { field: 'fechaNacimiento', isValid: false, message: 'Fecha de nacimiento requerida' }
     }
-    
+
     // Validar formato DD/MM/YYYY
     const fechaFormatRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/
     if (!fechaFormatRegex.test(fecha.trim())) {
       return { field: 'fechaNacimiento', isValid: false, message: 'Formato inválido. Use: DD/MM/YYYY' }
     }
-    
+
     // Extraer día, mes y año
     const [, dia, mes, ano] = fecha.trim().match(fechaFormatRegex)!
     const diaNum = parseInt(dia, 10)
     const mesNum = parseInt(mes, 10)
     const anoNum = parseInt(ano, 10)
-    
+
     // Validar rangos
     if (diaNum < 1 || diaNum > 31) {
       return { field: 'fechaNacimiento', isValid: false, message: 'Día inválido (1-31)' }
@@ -463,35 +463,35 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     if (anoNum < 1900 || anoNum > 2100) {
       return { field: 'fechaNacimiento', isValid: false, message: 'Año inválido (1900-2100)' }
     }
-    
+
     // Validar que la fecha sea válida (ej: no 31/02/2025)
     const fechaNac = new Date(anoNum, mesNum - 1, diaNum)
     if (fechaNac.getDate() !== diaNum || fechaNac.getMonth() !== mesNum - 1 || fechaNac.getFullYear() !== anoNum) {
       return { field: 'fechaNacimiento', isValid: false, message: 'Fecha inválida (ej: 31/02 no existe)' }
     }
-    
+
     // ✅ Validar que la fecha sea pasada (no futura ni hoy)
     const hoy = new Date()
     hoy.setHours(0, 0, 0, 0)
     if (fechaNac >= hoy) {
       return { field: 'fechaNacimiento', isValid: false, message: 'La fecha de nacimiento no puede ser futura o de hoy' }
     }
-    
+
     // ✅ Validar que tenga al menos 21 años cumplidos
     const fecha21 = new Date(anoNum + 21, mesNum - 1, diaNum)
     if (fecha21 > hoy) {
       return { field: 'fechaNacimiento', isValid: false, message: 'Debe tener al menos 21 años cumplidos' }
     }
-    
+
     // ✅ Validar que tenga como máximo 60 años cumplidos
     const fecha60 = new Date(anoNum + 60, mesNum - 1, diaNum)
     if (fecha60 <= hoy) {
       return { field: 'fechaNacimiento', isValid: false, message: 'No puede tener más de 60 años cumplidos' }
     }
-    
+
     return { field: 'fechaNacimiento', isValid: true, message: 'Fecha válida' }
   }
-  
+
   // ✅ Función para formatear texto a Title Case preservando espacio final mientras se escribe
   const toTitleCase = (text: string): string => {
     if (!text) return text
@@ -520,7 +520,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
   const formatOcupacion = (text: string): string => {
     if (!text || text.trim() === '') return text
-    
+
     // Aplicar Title Case a ocupación también
     return toTitleCase(text)
   }
@@ -528,16 +528,16 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   // ✅ Función para formatear cédula: convertir letra inicial (E, J, V, Z) a mayúscula
   const formatCedula = (text: string): string => {
     if (!text || text.trim() === '') return text
-    
+
     // Si el primer carácter es una letra (e, j, v, z), convertirla a mayúscula
     const firstChar = text.charAt(0).toUpperCase()
     const validLetters = ['E', 'J', 'V', 'Z']
-    
+
     // Si la primera letra es E, J, V o Z (en minúscula o mayúscula), convertirla a mayúscula
     if (validLetters.includes(firstChar)) {
       return firstChar + text.slice(1)
     }
-    
+
     // Si no es una letra válida al inicio, devolver tal cual (puede ser solo números)
     return text
   }
@@ -557,34 +557,34 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     if (!email || email.trim() === '') {
       return { field: 'email', isValid: false, message: 'Email requerido' }
     }
-    
+
     const emailTrimmed = email.trim()
-    
+
     // Validar que no tenga espacios intermedios
     if (emailTrimmed.includes(' ')) {
       return { field: 'email', isValid: false, message: 'El email no puede contener espacios' }
     }
-    
+
     // Validar que no tenga comas
     if (emailTrimmed.includes(',')) {
       return { field: 'email', isValid: false, message: 'El email no puede contener comas' }
     }
-    
+
     // Validar que tenga arroba
     if (!emailTrimmed.includes('@')) {
       return { field: 'email', isValid: false, message: 'El email debe contener un @' }
     }
-    
+
     // Validar que tenga extensión válida (.com, .edu, .gob, etc.)
     // Extensión debe ser de al menos 2 caracteres alfabéticos después del último punto
     const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
     if (!emailPattern.test(emailTrimmed)) {
       return { field: 'email', isValid: false, message: 'El email debe tener una extensión válida (.com, .edu, .gob, etc.)' }
     }
-    
+
     return { field: 'email', isValid: true, message: 'Email válido' }
   }
-  
+
   // Validaciones usando el servicio de validadores del backend
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
     // Mapeo de campos del formulario a tipos de validadores del backend
@@ -597,7 +597,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     }
 
     const tipoValidador = campoMapper[field]
-    
+
     // Si no hay validador del backend para este campo, usar validación local simple
     if (!tipoValidador) {
       if (!value) {
@@ -609,22 +609,22 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     // Validar con el backend
     try {
       const resultado = await validadoresService.validarCampo(tipoValidador, value, 'VENEZUELA')
-      
+
       if (resultado.validacion.valido) {
-        return { 
-          field, 
-          isValid: true, 
-          message: resultado.validacion.mensaje || 'Campo válido' 
+        return {
+          field,
+          isValid: true,
+          message: resultado.validacion.mensaje || 'Campo válido'
         }
       } else {
         // Incluir sugerencia en el mensaje de error
         const errorMsg = resultado.validacion.error || 'Campo inválido'
         const sugerencia = resultado.validacion.sugerencia || ''
         const mensajeCompleto = sugerencia ? `${errorMsg}. ${sugerencia}` : errorMsg
-        
-        return { 
-          field, 
-          isValid: false, 
+
+        return {
+          field,
+          isValid: false,
           message: mensajeCompleto
         }
       }
@@ -640,9 +640,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   const handleInputChange = async (field: keyof FormData, value: string) => {
     console.log(`🔧 Cambio en campo: ${field}, nuevo valor: ${value}`)
     console.log(`🔧 Modo edición: ${cliente ? 'SÍ' : 'NO'}`)
-    
+
     let formattedValue = value
-    
+
     // ✅ Aplicar autoformato en tiempo real (tanto creación como edición)
     if (field === 'cedula') {
       formattedValue = formatCedula(value)
@@ -654,13 +654,13 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       // ✅ Autoformato email a minúsculas en tiempo real
       formattedValue = formatEmail(value)
     }
-    
+
     // ✅ Actualizar el estado del formulario
     setFormData(prev => ({ ...prev, [field]: formattedValue }))
-    
+
     // ✅ Validar con funciones personalizadas o backend según el campo (TANTO creación como edición)
     let validation: ValidationResult
-    
+
     if (field === 'nombres') {
       // ✅ Validar nombres DESPUÉS del formateo para verificar 2-7 palabras
       validation = validateNombres(formattedValue)
@@ -698,7 +698,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         }
       }
     }
-    
+
     // ✅ Agregar validación al estado (tanto creación como edición)
     setValidations(prev => {
       const filtered = prev.filter(v => v.field !== field)
@@ -711,13 +711,13 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     if (cliente) {
       return true
     }
-    
+
     const requiredFields: (keyof FormData)[] = [
-      'cedula', 'nombres', 'telefono', 'email', 
+      'cedula', 'nombres', 'telefono', 'email',
       'callePrincipal', 'parroquia', 'municipio', 'ciudad', 'estadoDireccion',
       'fechaNacimiento', 'ocupacion'
     ]
-    
+
     // ✅ Solo en modo creación: validar nombres, ocupacion, direccion, fechaNacimiento, telefono y email con funciones personalizadas
     const nombresValidation = validateNombres(formData.nombres)
     const ocupacionValidation = validateOcupacion(formData.ocupacion)
@@ -725,7 +725,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     const fechaNacimientoValidation = validateFechaNacimiento(formData.fechaNacimiento)
     const telefonoValidation = validateTelefono(formData.telefono)
     const emailValidation = validateEmail(formData.email)
-    
+
     // Agregar validaciones personalizadas al estado
     const nombresValidationResult = validations.find(v => v.field === 'nombres')
     const ocupacionValidationResult = validations.find(v => v.field === 'ocupacion')
@@ -733,49 +733,49 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     const fechaNacimientoValidationResult = validations.find(v => v.field === 'fechaNacimiento')
     const telefonoValidationResult = validations.find(v => v.field === 'telefono')
     const emailValidationResult = validations.find(v => v.field === 'email')
-    
+
     if (!nombresValidationResult || nombresValidationResult.isValid !== nombresValidation.isValid) {
       setValidations(prev => {
         const filtered = prev.filter(v => v.field !== 'nombres')
         return [...filtered, nombresValidation]
       })
     }
-    
+
     if (!ocupacionValidationResult || ocupacionValidationResult.isValid !== ocupacionValidation.isValid) {
       setValidations(prev => {
         const filtered = prev.filter(v => v.field !== 'ocupacion')
         return [...filtered, ocupacionValidation]
       })
     }
-    
+
     if (!direccionValidationResult || direccionValidationResult.isValid !== direccionValidation.isValid) {
       setValidations(prev => {
         const filtered = prev.filter(v => v.field !== 'direccion')
         return [...filtered, direccionValidation]
       })
     }
-    
+
     if (!fechaNacimientoValidationResult || fechaNacimientoValidationResult.isValid !== fechaNacimientoValidation.isValid) {
       setValidations(prev => {
         const filtered = prev.filter(v => v.field !== 'fechaNacimiento')
         return [...filtered, fechaNacimientoValidation]
       })
     }
-    
+
     if (!telefonoValidationResult || telefonoValidationResult.isValid !== telefonoValidation.isValid) {
       setValidations(prev => {
         const filtered = prev.filter(v => v.field !== 'telefono')
         return [...filtered, telefonoValidation]
       })
     }
-    
+
     if (!emailValidationResult || emailValidationResult.isValid !== emailValidation.isValid) {
       setValidations(prev => {
         const filtered = prev.filter(v => v.field !== 'email')
         return [...filtered, emailValidation]
       })
     }
-    
+
     // Validar campos de dirección
     const direccionValida = direccionValidation.isValid &&
       formData.callePrincipal &&
@@ -783,7 +783,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       formData.municipio &&
       formData.ciudad &&
       formData.estadoDireccion
-    
+
     return requiredFields.every(field => {
       // Usar validaciones personalizadas para nombres, ocupacion, direccion, fechaNacimiento y telefono
       if (field === 'nombres') {
@@ -805,7 +805,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       if (['callePrincipal', 'parroquia', 'municipio', 'ciudad', 'estadoDireccion'].includes(field)) {
         return direccionValida && formData[field]
       }
-      
+
       const validation = validations.find(v => v.field === field)
       return validation?.isValid && formData[field]
     })
@@ -813,7 +813,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // ✅ VALIDACIÓN: Permitir vacío solo si el usuario ingresó 'NN'
     if ((!formData.callePrincipal || !formData.callePrincipal.trim()) && !isNN(formData.callePrincipal)) {
       alert('⚠️ ERROR: Debe completar el campo Calle Principal')
@@ -843,7 +843,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       alert('⚠️ ERROR: Debe completar el campo Ocupación')
       return
     }
-    
+
     // ✅ Validar descripción: si tiene contenido, debe tener mínimo 5 palabras
     if (formData.descripcion && formData.descripcion.trim() && !isNN(formData.descripcion)) {
       const descripcionValidation = validateDescripcion(formData.descripcion)
@@ -852,22 +852,22 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         return
       }
     }
-    
+
     if (!isFormValid()) {
       return
     }
 
     setIsSubmitting(true)
-    
+
     try {
       // ✅ Normalizar 'nn'→'' y concatenar +58 con el número de teléfono
       const telefonoLimpio = blankIfNN(formData.telefono).replace(/\D/g, '').slice(0, 10)
       const telefonoCompleto = `+58${telefonoLimpio}`
-      
+
       // ✅ Normalizar 'nn'→'' y formatear campos a Title Case antes de guardar
       const nombresFormateado = toTitleCase(blankIfNN(formData.nombres))
       const ocupacionFormateada = toTitleCase(blankIfNN(formData.ocupacion))
-      
+
       // ✅ Construir dirección como JSON estructurado con formateo Title Case
       const direccionCompleta = JSON.stringify({
         callePrincipal: toTitleCase(blankIfNN(formData.callePrincipal)),
@@ -878,7 +878,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         ciudad: toTitleCase(blankIfNN(formData.ciudad)),
         estado: toTitleCase(blankIfNN(formData.estadoDireccion))
       })
-      
+
       const clienteData = {
         cedula: formatCedula(blankIfNN(formData.cedula)),  // ✅ Cédula con letra inicial en mayúscula
         nombres: nombresFormateado,  // ✅ nombres formateados con Title Case
@@ -921,10 +921,10 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         detail,
         message
       })
-      
+
       // Mostrar mensaje de error al usuario
       let errorMessageUser = 'Error al crear el cliente. Por favor, intente nuevamente.'
-      
+
       if (isAxiosError(error)) {
         const errorDetail = getErrorDetail(error)
         const responseData = error.response?.data as { message?: string } | undefined
@@ -981,7 +981,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
   if (showExcelUploader) {
     return (
-      <ExcelUploader 
+      <ExcelUploader
         onClose={() => {
           setShowExcelUploader(false)
           // Solo cerrar ExcelUploader, mantener CrearClienteForm abierto
@@ -1210,7 +1210,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     Dirección <span className="text-red-500">*</span>
                   </label>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">
@@ -1314,7 +1314,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     />
                   </div>
                 </div>
-                
+
                 {getFieldValidation('direccion') && getFieldValidation('direccion')?.isValid === false && (
                   <div className="text-xs flex items-center gap-1 text-red-600 font-medium">
                     <XCircle className="w-3 h-3" />

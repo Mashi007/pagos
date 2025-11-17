@@ -3,7 +3,7 @@
 ## 📊 Tabla y Campos Utilizados
 
 ### Tabla Principal
-**Tabla:** `prestamos`  
+**Tabla:** `prestamos`
 **Modelo:** `Prestamo` (backend/app/models/prestamo.py)
 
 ### Campos Utilizados
@@ -25,7 +25,7 @@ query_base = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
 ```python
 query_base = query_base.filter(
     and_(
-        Prestamo.total_financiamiento.isnot(None), 
+        Prestamo.total_financiamiento.isnot(None),
         Prestamo.total_financiamiento > 0
     )
 )
@@ -37,11 +37,11 @@ El endpoint usa **OR** entre estos 3 campos para filtrar por fecha:
 - **Campo 1:** `fecha_registro`
   - **Tipo:** `TIMESTAMP`
   - **Uso:** Fecha de registro del préstamo
-  
+
 - **Campo 2:** `fecha_aprobacion`
   - **Tipo:** `TIMESTAMP`
   - **Uso:** Fecha de aprobación del préstamo
-  
+
 - **Campo 3:** `fecha_base_calculo`
   - **Tipo:** `Date`
   - **Uso:** Fecha base para cálculo de amortizaciones
@@ -73,13 +73,13 @@ El endpoint usa **OR** entre estos 3 campos para filtrar por fecha:
 
 ### Query Base
 ```sql
-SELECT * FROM prestamos 
+SELECT * FROM prestamos
 WHERE estado = 'APROBADO'
 ```
 
 ### Con Filtros de Fecha (OR entre fechas)
 ```sql
-SELECT * FROM prestamos 
+SELECT * FROM prestamos
 WHERE estado = 'APROBADO'
 AND (
     (fecha_registro IS NOT NULL AND fecha_registro >= :fecha_inicio AND fecha_registro <= :fecha_fin)
@@ -92,7 +92,7 @@ AND (
 
 ### Con Filtro de Monto Válido
 ```sql
-SELECT * FROM prestamos 
+SELECT * FROM prestamos
 WHERE estado = 'APROBADO'
 AND total_financiamiento IS NOT NULL
 AND total_financiamiento > 0
@@ -100,8 +100,8 @@ AND total_financiamiento > 0
 
 ### Query Final para Rangos
 ```sql
-SELECT 
-    CASE 
+SELECT
+    CASE
         WHEN total_financiamiento >= 0 AND total_financiamiento < 300 THEN '0-300'
         WHEN total_financiamiento >= 300 AND total_financiamiento < 600 THEN '300-600'
         -- ... más rangos
@@ -129,16 +129,16 @@ GROUP BY rango
 2. **`total_financiamiento` > 0**
    - ¿Hay préstamos con monto válido?
    ```sql
-   SELECT COUNT(*) FROM prestamos 
-   WHERE estado = 'APROBADO' 
-   AND total_financiamiento IS NOT NULL 
+   SELECT COUNT(*) FROM prestamos
+   WHERE estado = 'APROBADO'
+   AND total_financiamiento IS NOT NULL
    AND total_financiamiento > 0;
    ```
 
 3. **Fechas en rango**
    - ¿Hay préstamos con fechas en el rango especificado?
    ```sql
-   SELECT COUNT(*) FROM prestamos 
+   SELECT COUNT(*) FROM prestamos
    WHERE estado = 'APROBADO'
    AND total_financiamiento > 0
    AND (
@@ -180,13 +180,13 @@ python scripts/auditoria_financiamiento_rangos.py
 SELECT COUNT(*) FROM prestamos WHERE estado = 'APROBADO';
 
 -- Préstamos con monto válido
-SELECT COUNT(*) FROM prestamos 
-WHERE estado = 'APROBADO' 
-AND total_financiamiento IS NOT NULL 
+SELECT COUNT(*) FROM prestamos
+WHERE estado = 'APROBADO'
+AND total_financiamiento IS NOT NULL
 AND total_financiamiento > 0;
 
 -- Préstamos en rango del año 2025
-SELECT COUNT(*) FROM prestamos 
+SELECT COUNT(*) FROM prestamos
 WHERE estado = 'APROBADO'
 AND total_financiamiento > 0
 AND (

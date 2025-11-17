@@ -1,7 +1,7 @@
 # Análisis de Logs del Backend - Rapicredit API
 
-**Fecha:** 2025-11-10  
-**Servicio:** pagos-f2qf.onrender.com (Backend FastAPI)  
+**Fecha:** 2025-11-10
+**Servicio:** pagos-f2qf.onrender.com (Backend FastAPI)
 **URL:** https://pagos-f2qf.onrender.com
 
 ## 📊 Resumen Ejecutivo

@@ -2,8 +2,8 @@ import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEven
 import toast from 'react-hot-toast'
 import { getErrorMessage, isAxiosError } from '@/types/errors'
 import { env } from '@/config/env'
-import { 
-  safeGetItem, 
+import {
+  safeGetItem,
   safeGetSessionItem,
   safeSetItem,
   safeSetSessionItem,
@@ -43,14 +43,14 @@ function isTokenExpired(token: string): boolean {
     // JWT tiene formato: header.payload.signature
     const parts = token.split('.')
     if (parts.length !== 3) return true
-    
+
     // Decodificar payload (base64url)
     const payload = parts[1]
     // Reemplazar caracteres base64url y agregar padding si es necesario
     const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
     const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
     const decoded = JSON.parse(atob(padded))
-    
+
     // Verificar expiración (exp está en segundos Unix timestamp)
     if (decoded.exp) {
       const expirationTime = decoded.exp * 1000 // Convertir a milisegundos
@@ -58,7 +58,7 @@ function isTokenExpired(token: string): boolean {
       // Considerar expirado si falta menos de 5 segundos (margen de seguridad)
       return now >= (expirationTime - 5000)
     }
-    
+
     return false // Si no tiene exp, asumir que no expira
   } catch (error) {
     // Si hay error al decodificar, asumir que está expirado
@@ -106,14 +106,14 @@ class ApiClient {
         // NO agregar token a endpoints de autenticación
         const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh']
         const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint))
-        
+
         if (!isAuthEndpoint) {
           // Obtener token de forma segura
           const rememberMe = safeGetItem('remember_me', false)
-          let token = rememberMe 
-            ? safeGetItem('access_token', '') 
+          let token = rememberMe
+            ? safeGetItem('access_token', '')
             : safeGetSessionItem('access_token', '')
-          
+
           // ✅ Limpiar token: remover espacios, saltos de línea, y prefijo "Bearer " si existe
           if (token) {
             token = token.trim()
@@ -121,7 +121,7 @@ class ApiClient {
             if (token.startsWith('Bearer ')) {
               token = token.substring(7).trim()
             }
-            
+
             // Verificar que el token tenga el formato correcto (3 segmentos separados por puntos)
             const parts = token.split('.')
             if (parts.length !== 3) {
@@ -130,30 +130,30 @@ class ApiClient {
               this.refreshTokenExpired = true
               this.cancelAllPendingRequests()
               clearAuthStorage()
-              
+
               if (window.location.pathname !== '/login' && !this.isRedirectingToLogin) {
                 this.isRedirectingToLogin = true
                 window.location.replace('/login')
               }
-              
+
               const error = new Error('Token inválido. Por favor, inicia sesión nuevamente.')
               ;(error as any).isCancelled = true
               return Promise.reject(error)
             }
-            
+
             // ✅ Verificar si el token está expirado ANTES de enviar el request
             if (isTokenExpired(token)) {
               // Token expirado - marcar flag, cancelar requests pendientes y redirigir
               this.refreshTokenExpired = true
               this.cancelAllPendingRequests()
               clearAuthStorage()
-              
+
               // Redirigir inmediatamente si no estamos ya en login
               if (window.location.pathname !== '/login' && !this.isRedirectingToLogin) {
                 this.isRedirectingToLogin = true
                 window.location.replace('/login')
               }
-              
+
               const error = new Error('Token expirado. Redirigiendo al login...')
               ;(error as any).isCancelled = true
               return Promise.reject(error)
@@ -161,14 +161,14 @@ class ApiClient {
             config.headers.Authorization = `Bearer ${token}`
           }
         }
-        
+
         // ✅ Crear AbortController para este request y rastrearlo
         const controller = new AbortController()
         const requestId = `${config.method}-${config.url}-${Date.now()}`
         config.signal = controller.signal
         ;(config as any).__requestId = requestId // Guardar ID para limpiar después
         this.requestCancellers.set(requestId, controller)
-        
+
         return config
       },
       (error) => {
@@ -188,7 +188,7 @@ class ApiClient {
       },
       async (error) => {
         const originalRequest = error.config
-        
+
         // ✅ Limpiar AbortController cuando el request falla
         if (originalRequest) {
           const requestId = (originalRequest as any).__requestId
@@ -202,7 +202,7 @@ class ApiClient {
           // No intentar refresh en endpoints de autenticación
           const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh']
           const isAuthEndpoint = authEndpoints.some(endpoint => originalRequest.url?.includes(endpoint))
-          
+
           if (isAuthEndpoint) {
             // En endpoints de auth, simplemente propagar el error sin intentar refresh
             this.handleError(error)
@@ -231,10 +231,10 @@ class ApiClient {
 
           try {
             const rememberMe = safeGetItem('remember_me', false)
-            const refreshToken = rememberMe 
-              ? safeGetItem('refresh_token', '') 
+            const refreshToken = rememberMe
+              ? safeGetItem('refresh_token', '')
               : safeGetSessionItem('refresh_token', '')
-              
+
             if (!refreshToken) {
               throw new Error('No refresh token available')
             }
@@ -251,7 +251,7 @@ class ApiClient {
                 },
                 validateStatus: (status) => status < 400, // Lanzar error para 4xx y 5xx
               })
-              
+
               response = await refreshClient.post('/api/v1/auth/refresh', {
                 refresh_token: refreshToken,
               })
@@ -263,14 +263,14 @@ class ApiClient {
               // Para otros errores (red, timeout, etc.), propagar el error
               throw error
             }
-            
+
             // Verificar si la respuesta es válida
             if (!response || !response.data || !response.data.access_token) {
               throw new Error('Refresh token inválido o expirado')
             }
-            
+
             const { access_token, refresh_token: newRefreshToken } = response.data
-            
+
             // Guardar en el almacenamiento correspondiente usando funciones seguras
             if (rememberMe) {
               safeSetItem('access_token', access_token)
@@ -289,29 +289,29 @@ class ApiClient {
           } catch (refreshError: any) {
             // ✅ Marcar que el refresh token está expirado para cancelar requests futuros
             this.refreshTokenExpired = true
-            
+
             // ✅ Cancelar todos los requests pendientes
             this.cancelAllPendingRequests()
-            
+
             // Si no se puede renovar el token, limpiar datos y redirigir al login
             this.processQueue(refreshError, null)
             clearAuthStorage()
-            
+
             // Evitar mostrar toasts durante el redirect
             const isAlreadyRedirecting = window.location.pathname === '/login' || this.isRedirectingToLogin
-            
+
             if (!isAlreadyRedirecting) {
               this.isRedirectingToLogin = true
-              
+
               // Log para debugging (solo en desarrollo)
               if (process.env.NODE_ENV === 'development') {
                 console.warn('🔄 Refresh token falló. Redirigiendo al login...', refreshError)
               }
-              
+
               // ✅ Redirigir inmediatamente sin delay para evitar más requests
               window.location.replace('/login')
             }
-            
+
             return Promise.reject(refreshError)
           } finally {
             this.isRefreshing = false
@@ -368,10 +368,10 @@ class ApiClient {
       // Error del servidor
       const { status, data } = error.response
       const responseData = data as { detail?: string | Array<{ loc?: string[]; msg?: string }>; message?: string } | undefined
-      
+
       // Evitar mostrar toast de 401 cuando está siendo manejado por el interceptor
       const isBeingHandledByInterceptor = (error.config as { _retry?: boolean } | undefined)?._retry !== undefined
-      
+
       switch (status) {
         case 400:
           // Error de validación o cliente duplicado (misma cédula y mismo nombre)
@@ -408,10 +408,10 @@ class ApiClient {
           break
         case 500:
           // Mostrar el mensaje de error específico del backend si está disponible
-          const errorDetail = typeof responseData?.detail === 'string' 
-            ? responseData.detail 
+          const errorDetail = typeof responseData?.detail === 'string'
+            ? responseData.detail
             : responseData?.message || 'Error interno del servidor'
-          
+
           // Logging detallado para diagnóstico
           console.error('❌ [ApiClient] Error 500 del servidor:', {
             detail: errorDetail,
@@ -421,7 +421,7 @@ class ApiClient {
             status: error.response?.status,
             fullError: error
           })
-          
+
           // Mostrar toast con el mensaje del backend (ahora más específico)
           toast.error(errorDetail, { duration: 10000 })
           break
@@ -452,7 +452,7 @@ class ApiClient {
       // Error de red - puede ser que el servidor esté reiniciando
       const errorCode = (error as any).code || ''
       const errorMessage = error.message || ''
-      
+
       // No mostrar toast para errores de conexión durante el inicio (servidor reiniciando)
       // Estos errores son temporales y se resuelven automáticamente
       if (
@@ -465,7 +465,7 @@ class ApiClient {
         console.warn('⚠️ Servidor no disponible temporalmente. Esto es normal durante reinicios.')
         return
       }
-      
+
       toast.error('Error de conexión. Verifique su conexión a internet.')
     } else {
       // Error de configuración
@@ -476,17 +476,17 @@ class ApiClient {
   // Métodos HTTP
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     // Detectar endpoints lentos y usar timeout extendido
-    const isSlowEndpoint = url.includes('/dashboard/') || 
+    const isSlowEndpoint = url.includes('/dashboard/') ||
                           url.includes('/notificaciones-previas') ||
                           url.includes('/admin') ||
                           url.includes('/evolucion') ||
                           url.includes('/tendencia')
-    
+
     const defaultTimeout = isSlowEndpoint ? SLOW_ENDPOINT_TIMEOUT_MS : DEFAULT_TIMEOUT_MS
     // Priorizar timeout explícito si se proporciona, sino usar el calculado
     const timeout = config?.timeout ?? defaultTimeout
     const finalConfig = { ...config, timeout }
-    
+
     const response: AxiosResponse<T> = await this.client.get(url, finalConfig)
     return response.data
   }
@@ -494,18 +494,18 @@ class ApiClient {
   async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     try {
       // Detectar endpoints lentos (entrenamiento ML, etc.) y usar timeout extendido
-      const isSlowEndpoint = url.includes('/ml-riesgo/entrenar') || 
+      const isSlowEndpoint = url.includes('/ml-riesgo/entrenar') ||
                             url.includes('/ml-impago/entrenar') ||
                             url.includes('/fine-tuning/iniciar') ||
                             url.includes('/rag/generar-embeddings')
-      
+
       const defaultTimeout = isSlowEndpoint ? 300000 : DEFAULT_TIMEOUT_MS // 5 minutos para ML, 30s por defecto
       // Priorizar timeout explícito si se proporciona, sino usar el calculado
       const timeout = config?.timeout ?? defaultTimeout
       const finalConfig = { ...config, timeout }
-      
+
       const response: AxiosResponse<T> = await this.client.post(url, data, finalConfig)
-      
+
       // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
       if (response.status >= 400 && response.status < 500) {
         console.error('❌ [ApiClient] POST recibió error 4xx:', { url, status: response.status, data: response.data })
@@ -515,7 +515,7 @@ class ApiClient {
         error.isAxiosError = true
         throw error
       }
-      
+
       return response.data
     } catch (error) {
       console.error('❌ [ApiClient] POST error:', { url, error })
@@ -528,7 +528,7 @@ class ApiClient {
     try {
       const response: AxiosResponse<T> = await this.client.put(url, data, config)
       console.log('✅ [ApiClient] PUT response:', { url, status: response.status, data: response.data })
-      
+
       // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
       if (response.status >= 400 && response.status < 500) {
         console.error('❌ [ApiClient] PUT recibió error 4xx:', { url, status: response.status, data: response.data })
@@ -538,7 +538,7 @@ class ApiClient {
         error.isAxiosError = true
         throw error
       }
-      
+
       return response.data
     } catch (error) {
       console.error('❌ [ApiClient] PUT error:', { url, error })
@@ -602,7 +602,7 @@ class ApiClient {
     try {
       // Limpiar localStorage
       safeClear()
-      // Limpiar sessionStorage  
+      // Limpiar sessionStorage
       safeClearSession()
       // Limpiar específicamente tokens de auth
       clearAuthStorage()
@@ -644,7 +644,7 @@ export function buildUrl(baseUrl: string, params?: Record<string, any>): string 
   if (!params) return baseUrl
 
   const searchParams = new URLSearchParams()
-  
+
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {
       if (Array.isArray(value)) {

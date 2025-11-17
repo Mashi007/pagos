@@ -1,6 +1,6 @@
 # 📋 Correcciones de Formato - Flake8
 
-**Fecha:** 2025-11-06  
+**Fecha:** 2025-11-06
 **Problemas Corregidos:** Trailing whitespace, comparaciones con True, f-strings sin placeholders, variable no usada
 
 ---

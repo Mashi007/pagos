@@ -4,7 +4,7 @@
 
 ### 📍 **Ubicación del Código Real:**
 
-**Archivo**: `backend/app/services/whatsapp_service.py`  
+**Archivo**: `backend/app/services/whatsapp_service.py`
 **Función**: `test_connection()` (líneas 524-564)
 
 ---
@@ -20,25 +20,25 @@ async def test_connection(self) -> Dict[str, Any]:
     """
     # 1. Recargar configuración desde BD
     self._cargar_configuracion()
-    
+
     # 2. Verificar credenciales
     if not self.access_token or not self.phone_number_id:
         return {"success": False, "message": "Credenciales no configuradas"}
-    
+
     # 3. ✅ CONSTRUIR URL REAL de Meta API
     url = f"{self.api_url}/{self.phone_number_id}"
     # Ejemplo: https://graph.facebook.com/v18.0/627189243818989
-    
+
     # 4. ✅ CREAR HEADERS REALES con tu Access Token
     headers = {
         "Authorization": f"Bearer {self.access_token}",
     }
-    
+
     # 5. ✅ HACER REQUEST HTTP REAL a Meta
     async with httpx.AsyncClient(timeout=self.timeout) as client:
         response = await client.get(url, headers=headers)
         # ↑ ESTO HACE UNA LLAMADA HTTP REAL A graph.facebook.com
-        
+
         # 6. ✅ META RESPONDE REALMENTE
         if response.status_code == 200:
             # Meta ACEPTÓ: Token válido, Phone Number ID correcto
@@ -113,7 +113,7 @@ async with httpx.AsyncClient(timeout=self.timeout) as client:
 
 ### Código del Test Completo:
 
-**Archivo**: `backend/app/api/v1/endpoints/configuracion.py`  
+**Archivo**: `backend/app/api/v1/endpoints/configuracion.py`
 **Función**: `test_completo_whatsapp()` (líneas 1985-2230)
 
 ```python
@@ -125,10 +125,10 @@ try:
     whatsapp_service = WhatsAppService(db=db)
     # ✅ LLAMADA REAL a test_connection() que hace HTTP request a Meta
     resultado_conexion = await whatsapp_service.test_connection()
-    
+
     test_conexion["exito"] = resultado_conexion.get("success", False)
     test_conexion["detalles"]["respuesta"] = resultado_conexion.get("message", "Sin respuesta")
-    
+
     # Si success = True, significa que Meta respondió 200 OK
     # Si success = False, significa que Meta respondió con error (401, 400, etc.)
 ```

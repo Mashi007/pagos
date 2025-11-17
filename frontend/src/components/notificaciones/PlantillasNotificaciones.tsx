@@ -76,7 +76,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
   }
 
   const tiposSugeridos = [
-    'PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES', 'PAGO_DIA_0', 
+    'PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES', 'PAGO_DIA_0',
     'PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO', 'PREJUDICIAL'
   ]
 
@@ -184,12 +184,12 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     }
 
     const variablesPrecargadas: NotificacionVariable[] = []
-    
+
     Object.entries(CAMPOS_DISPONIBLES).forEach(([tabla, campos]) => {
       campos.forEach(({ campo, descripcion }) => {
         // Generar nombre de variable: tabla_campo (ej: cliente_nombres, cuota_monto_cuota)
         const nombreVariable = `${tabla.slice(0, tabla.length - 1)}_${campo}` // Remover 's' final
-        
+
         variablesPrecargadas.push({
           id: undefined, // Variables precargadas no tienen ID
           nombre_variable: nombreVariable,
@@ -200,7 +200,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
         } as NotificacionVariable)
       })
     })
-    
+
     return variablesPrecargadas
   }
 
@@ -208,16 +208,16 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     try {
       const vars = await notificacionService.listarVariables(true) // Solo variables activas
       const variablesUsuario = vars || []
-      
+
       // Generar variables precargadas y combinarlas con las del usuario
       const variablesPrecargadas = generarVariablesPrecargadas()
-      
+
       // Combinar: las variables del usuario tienen prioridad (por nombre_variable)
       const nombresVariablesUsuario = new Set(variablesUsuario.map(v => v.nombre_variable))
       const variablesPrecargadasFiltradas = variablesPrecargadas.filter(
         v => !nombresVariablesUsuario.has(v.nombre_variable)
       )
-      
+
       // Combinar ambas listas
       const todasLasVariables = [...variablesUsuario, ...variablesPrecargadasFiltradas]
       setVariablesConfiguradas(todasLasVariables)
@@ -239,7 +239,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
       // Buscar la plantilla en la lista cargada para asegurar que esté actualizada
       const plantillaEncontrada = plantillas.find(p => p.id === plantillaInicial.id)
       const plantillaACargar = plantillaEncontrada || plantillaInicial
-      
+
       setSelected(plantillaACargar)
       setNombre(plantillaACargar.nombre)
       setTipo(plantillaACargar.tipo)
@@ -249,10 +249,10 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
       setEncabezado('')
       setCuerpo(plantillaACargar.cuerpo)
       setFirma('')
-      
+
       // Cambiar a la pestaña de armar plantilla
       setActiveTab('armar')
-      
+
       // Notificar que la plantilla fue cargada
       if (onPlantillaCargada) {
         onPlantillaCargada()
@@ -270,23 +270,23 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
   // Filtrar plantillas
   useEffect(() => {
     let filtradas = [...plantillas]
-    
+
     if (busqueda) {
-      filtradas = filtradas.filter(p => 
+      filtradas = filtradas.filter(p =>
         p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
         p.tipo.toLowerCase().includes(busqueda.toLowerCase()) ||
         p.asunto?.toLowerCase().includes(busqueda.toLowerCase())
       )
     }
-    
+
     if (filtroTipo) {
       filtradas = filtradas.filter(p => p.tipo === filtroTipo)
     }
-    
+
     if (filtroActiva !== null) {
       filtradas = filtradas.filter(p => Boolean(p.activa) === filtroActiva)
     }
-    
+
     setPlantillasFiltradas(filtradas)
   }, [plantillas, busqueda, filtroTipo, filtroActiva])
 
@@ -361,25 +361,25 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
 
   const variablesFiltradas = useMemo(() => {
     let filtradas = variablesConfiguradas
-    
+
     // Filtrar por tabla
     if (filtroTablaVariable) {
       filtradas = filtradas.filter(v => v.tabla === filtroTablaVariable)
     }
-    
+
     // Filtrar por búsqueda
     if (busquedaVariable) {
-      filtradas = filtradas.filter(v => 
+      filtradas = filtradas.filter(v =>
         v.nombre_variable.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
         (v.descripcion ?? '').toLowerCase().includes(busquedaVariable.toLowerCase()) ||
         v.tabla.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
         v.campo_bd.toLowerCase().includes(busquedaVariable.toLowerCase())
       )
     }
-    
+
     return filtradas
   }, [variablesConfiguradas, busquedaVariable, filtroTablaVariable])
-  
+
   // Agrupar variables por tabla
   const variablesPorTabla = useMemo(() => {
     const agrupadas: Record<string, NotificacionVariable[]> = {}
@@ -391,7 +391,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     })
     return agrupadas
   }, [variablesFiltradas])
-  
+
   // Obtener tablas únicas
   const tablasUnicas = useMemo(() => {
     return Array.from(new Set(variablesConfiguradas.map(v => v.tabla))).sort()
@@ -433,7 +433,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
   const validarObligatorias = (tipoValidar?: string): string | null => {
     const tipoAValidar = tipoValidar || tipo
     if (!tipoAValidar) return null
-    
+
     // Reglas básicas por tipo
     const requeridasPorTipo: Record<string, string[]> = {
       'PAGO_5_DIAS_ANTES': ['nombre', 'monto', 'fecha_vencimiento'],
@@ -517,7 +517,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
       for (const tipoSeleccionado of tiposSeleccionados) {
         try {
           const nombrePlantilla = `${nombre} - ${todosLosTipos.find(t => t.valor === tipoSeleccionado)?.label || tipoSeleccionado}`
-          
+
           const payload = {
             nombre: nombrePlantilla,
             tipo: tipoSeleccionado,
@@ -555,9 +555,9 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
       toast.error('Seleccione una plantilla para eliminar')
       return
     }
-    
+
     if (!window.confirm(`¿Eliminar plantilla "${selected.nombre}"?`)) return
-    
+
     try {
       await notificacionService.eliminarPlantilla(selected.id)
       toast.success('Plantilla eliminada exitosamente')
@@ -573,7 +573,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
       toast.error('Seleccione una plantilla para exportar')
       return
     }
-    
+
     try {
       const data = await notificacionService.exportarPlantilla(selected.id)
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -600,7 +600,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     try {
       const text = await file.text()
       const data = JSON.parse(text)
-      
+
       if (!data.nombre || !data.tipo || !data.asunto || !data.cuerpo) {
         toast.error('Archivo JSON inválido: faltan campos obligatorios')
         return
@@ -615,12 +615,12 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
       setActiva(Boolean(data.activa))
       setSelected(null)
       setActiveTab('armar')
-      
+
       toast.success('Plantilla importada. Revise y guarde cuando esté lista.')
     } catch (error: any) {
       toast.error('Error al leer el archivo JSON: ' + (error.message || 'Formato inválido'))
     }
-    
+
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -684,7 +684,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
   // Organizar plantillas por categoría (para el resumen)
   const plantillasPorCategoria = useMemo(() => {
     const organizadas: Record<string, NotificacionPlantilla[]> = {}
-    
+
     plantillasFiltradas.forEach(plantilla => {
       const mapeo = mapeoTipos[plantilla.tipo as keyof typeof mapeoTipos]
       if (mapeo) {
@@ -750,7 +750,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
               <label className="text-sm text-gray-600 mb-2 block">
                 Tipos de Notificación {selected ? '(Edición - Solo un tipo)' : '(Seleccione uno o más para crear múltiples plantillas)'}
               </label>
-              
+
               {selected ? (
                 // Al editar, mostrar solo el tipo actual
                 <select value={tipo} onChange={e=>setTipo(e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
@@ -937,7 +937,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                       ))}
                     </select>
                   </div>
-                  
+
                   {/* Búsqueda de variables */}
                   <div className="relative">
                     <label className="text-xs font-semibold text-gray-700 mb-1 block">Buscar variable:</label>
@@ -960,9 +960,9 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                 ) : variablesFiltradas.length === 0 ? (
                   <div className="text-center py-8 text-sm text-gray-500 bg-white rounded-lg border-2 border-dashed border-gray-300">
                     <p className="font-medium">No se encontraron variables con ese criterio.</p>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       className="mt-2"
                       onClick={() => {
                         setBusquedaVariable('')
@@ -998,7 +998,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                                       {'{{'}{v.nombre_variable}{'}}'}
                                     </code>
                                   </div>
-                                  
+
                                   {/* Mapeo a BD - Destacado */}
                                   <div className="mb-1">
                                     <div className="text-xs text-gray-500 mb-0.5">Mapea a:</div>
@@ -1006,7 +1006,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                                       <span className="font-semibold text-gray-900">{v.tabla}</span>.<span className="text-blue-700">{v.campo_bd}</span>
                                     </div>
                                   </div>
-                                  
+
                                   {/* Descripción si existe */}
                                   {v.descripcion && (
                                     <div className="text-xs text-gray-600 mt-2 italic border-l-2 border-blue-200 pl-2">
@@ -1014,7 +1014,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                                     </div>
                                   )}
                                 </div>
-                                
+
                                 {/* Botón de inserción mejorado */}
                                 <Button
                                   size="sm"
@@ -1092,24 +1092,24 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
             <div className="mb-6 space-y-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input 
-                  value={busqueda} 
+                <Input
+                  value={busqueda}
                   onChange={e => setBusqueda(e.target.value)}
-                  placeholder="Buscar plantillas..." 
+                  placeholder="Buscar plantillas..."
                   className="pl-10"
                 />
               </div>
               <div className="flex gap-2">
-                <select 
-                  value={filtroTipo} 
+                <select
+                  value={filtroTipo}
                   onChange={e => setFiltroTipo(e.target.value)}
                   className="flex-1 border rounded px-2 py-1 text-sm"
                 >
                   <option value="">Todos los tipos</option>
                   {tiposSugeridos.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
-                <select 
-                  value={filtroActiva === null ? '' : String(filtroActiva)} 
+                <select
+                  value={filtroActiva === null ? '' : String(filtroActiva)}
                   onChange={e => setFiltroActiva(e.target.value === '' ? null : e.target.value === 'true')}
                   className="border rounded px-2 py-1 text-sm"
                 >
@@ -1234,5 +1234,4 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
 }
 
 export default PlantillasNotificaciones
-
 

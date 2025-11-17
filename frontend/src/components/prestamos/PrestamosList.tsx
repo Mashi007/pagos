@@ -46,7 +46,7 @@ export function PrestamosList() {
   const { data, isLoading, error } = usePrestamos(filters, page)
   const deletePrestamo = useDeletePrestamo()
   const { canEditPrestamo, canDeletePrestamo, canApprovePrestamo, canViewEvaluacionRiesgo } = usePermissions()
-  
+
   // Obtener opciones para los selects
   const { data: concesionarios = [] } = useConcesionariosActivos()
   const { data: analistas = [] } = useAnalistasActivos()
@@ -175,7 +175,7 @@ export function PrestamosList() {
           queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
           queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
           // Forzar refetch inmediato ignorando staleTime
-          await queryClient.refetchQueries({ 
+          await queryClient.refetchQueries({
             queryKey: prestamoKeys.all,
             exact: false,
             type: 'active'
@@ -203,7 +203,7 @@ export function PrestamosList() {
           queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
           queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
           // Forzar refetch inmediato ignorando staleTime
-          await queryClient.refetchQueries({ 
+          await queryClient.refetchQueries({
             queryKey: prestamoKeys.all,
             exact: false,
             type: 'active'
@@ -236,7 +236,7 @@ export function PrestamosList() {
           <h1 className="text-3xl font-bold text-gray-900">Préstamos</h1>
           <p className="text-gray-600 mt-1">Gestión de préstamos y financiamiento</p>
         </div>
-        <Button 
+        <Button
           size="lg"
           onClick={() => setShowCrearPrestamo(true)}
           className="px-8 py-6 text-base font-semibold min-w-[200px]"
@@ -466,7 +466,7 @@ export function PrestamosList() {
         </CardHeader>
         <CardContent>
           {isLoading && <div className="text-center py-8">Cargando...</div>}
-          
+
           {error && (
             <div className="text-center py-8 text-red-600">
               Error al cargar préstamos
@@ -500,8 +500,8 @@ export function PrestamosList() {
                           <div className="flex items-center gap-1">
                             <DollarSign className="h-4 w-4 text-green-600" />
                             <span className="font-semibold">
-                              {typeof prestamo.total_financiamiento === 'number' 
-                                ? prestamo.total_financiamiento.toFixed(2) 
+                              {typeof prestamo.total_financiamiento === 'number'
+                                ? prestamo.total_financiamiento.toFixed(2)
                                 : '0.00'}
                             </span>
                           </div>
@@ -563,7 +563,7 @@ export function PrestamosList() {
                                         )}
 
                             {/* Editar removido por política: no editable */}
-                            
+
                             {/* Botón Eliminar - Solo Admin */}
                             {canDeletePrestamo() ? (
                               <Button

@@ -24,25 +24,25 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      
+
     steps:
       - name: 📥 Checkout código
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Para análisis completo de git
-      
+
       - name: 🐍 Configurar Python
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
-      
+
       - name: 📦 Instalar dependencias backend
         run: |
           cd ${{ env.BACKEND_DIR }}
           pip install -r requirements.txt
           pip install flake8 black isort mypy
-      
+
       - name: 🔍 Linting con flake8
         run: |
           cd ${{ env.BACKEND_DIR }}
@@ -53,23 +53,23 @@ jobs:
           FLAKE8_CRITICAL_EXIT=${PIPESTATUS[0]}
           cat flake8-critical-output.txt
           echo "::endgroup::"
-          
+
           echo "🔍 Ejecutando flake8 - análisis completo..."
           echo "::group::Flake8 - Análisis Completo"
           flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
           echo "::endgroup::"
-          
+
           # Guardar en archivos para artifacts (siempre generar logs)
           flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics > flake8-critical.log 2>&1 || true
           flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics > flake8-full.log 2>&1
-          
+
           # Fallar si hubo errores críticos
           if [ $FLAKE8_CRITICAL_EXIT -ne 0 ]; then
             echo "❌ ERROR: Errores críticos de Flake8 detectados (sintaxis, funciones no definidas)."
             echo "Revisa flake8-critical.log para más detalles."
             exit 1
           fi
-      
+
       - name: 🎨 Formateo con black
         run: |
           cd ${{ env.BACKEND_DIR }}
@@ -79,7 +79,7 @@ jobs:
           echo "::endgroup::"
           # También guardar en archivo para artifacts
           black --check --diff app/ > black.log 2>&1 || true
-      
+
       - name: 🔧 Aplicar correcciones de Black automáticamente
         run: |
           cd ${{ env.BACKEND_DIR }}
@@ -102,7 +102,7 @@ jobs:
           else
             echo "⏭️  Último commit fue de Black, saltando corrección automática"
           fi
-      
+
       - name: 📝 Ordenamiento de imports con isort
         run: |
           cd ${{ env.BACKEND_DIR }}
@@ -116,7 +116,7 @@ jobs:
           cat isort.log
           echo "::endgroup::"
           # NO hacer exit aquí - permitir que la corrección automática se ejecute
-      
+
       - name: 🔧 Aplicar correcciones de Isort automáticamente
         run: |
           cd ${{ env.BACKEND_DIR }}
@@ -142,7 +142,7 @@ jobs:
           else
             echo "⏭️  Último commit fue de Isort, saltando corrección automática"
           fi
-      
+
       - name: 🔒 Verificación de tipos con mypy
         run: |
           cd ${{ env.BACKEND_DIR }}
@@ -152,7 +152,7 @@ jobs:
           echo "::endgroup::"
           # También guardar en archivo para artifacts
           mypy app/ --ignore-missing-imports > mypy.log 2>&1 || true
-      
+
       # Verificar que los logs existan antes de subirlos
       - name: 🔍 Verificar logs generados
         if: always()
@@ -171,7 +171,7 @@ jobs:
               echo "  ⚠️ $log: NO ENCONTRADO"
             fi
           done
-      
+
       # Guardar TODOS los logs como artifacts descargables
       - name: 📊 Subir logs de calidad de código
         if: always()
@@ -186,7 +186,7 @@ jobs:
             ${{ env.BACKEND_DIR }}/isort.log
             ${{ env.BACKEND_DIR }}/mypy.log
           if-no-files-found: warn
-      
+
       # Guardar output completo del job
       - name: 💾 Guardar logs completos del job
         if: always()
@@ -194,7 +194,7 @@ jobs:
           cd ${{ env.BACKEND_DIR }}
           echo "## 📋 Resumen del Análisis de Calidad" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Verificar errores críticos de Flake8
           if [ -f "flake8-critical.log" ] && [ -s "flake8-critical.log" ]; then
             # Contar líneas que empiezan con "app/" y limpiar el resultado
@@ -215,7 +215,7 @@ jobs:
           else
             echo "✅ Flake8: Sin errores críticos" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           # Verificar errores de Isort
           if [ -f "isort.log" ] && [ -s "isort.log" ]; then
             # Isort genera "ERROR:" cuando hay imports incorrectos
@@ -233,7 +233,7 @@ jobs:
           else
             echo "✅ Isort: Imports correctos" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ Formateo: black aplicado" >> $GITHUB_STEP_SUMMARY
           echo "✅ Tipos: mypy verificado" >> $GITHUB_STEP_SUMMARY
@@ -250,7 +250,7 @@ jobs:
     name: 🧪 Pruebas Backend
     runs-on: ubuntu-latest
     needs: code-quality
-    
+
     services:
       postgres:
         image: postgres:15
@@ -264,47 +264,47 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-    
+
     steps:
       - name: 📥 Checkout código
         uses: actions/checkout@v4
-      
+
       - name: 🐍 Configurar Python
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
-      
+
       - name: 📦 Instalar dependencias backend
         run: |
           cd ${{ env.BACKEND_DIR }}
           pip install -r requirements.txt
           pip install pytest-cov pytest-asyncio httpx
-      
+
       - name: 🔧 Configurar variables de entorno de prueba
         run: |
           echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_db" >> $GITHUB_ENV
           echo "SECRET_KEY=test-secret-key-for-ci" >> $GITHUB_ENV
           echo "ENVIRONMENT=testing" >> $GITHUB_ENV
           echo "DEBUG=true" >> $GITHUB_ENV
-      
+
       - name: 🗄️ Ejecutar migraciones de prueba
         run: |
           cd ${{ env.BACKEND_DIR }}
           alembic upgrade head
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-      
+
       - name: 🧪 Ejecutar pruebas unitarias
         run: |
           cd ${{ env.BACKEND_DIR }}
           pytest tests/unit/ -v --cov=app --cov-report=xml --cov-report=html
-      
+
       - name: 🔗 Ejecutar pruebas de integración
         run: |
           cd ${{ env.BACKEND_DIR }}
           pytest tests/integration/ -v --cov=app --cov-report=xml --cov-report=html
-      
+
       - name: 📊 Subir reporte de cobertura
         uses: codecov/codecov-action@v3
         with:
@@ -320,53 +320,53 @@ jobs:
     name: 🧪 Pruebas Frontend
     runs-on: ubuntu-latest
     needs: code-quality
-    
+
     steps:
       - name: 📥 Checkout código
         uses: actions/checkout@v4
-      
+
       - name: 📦 Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
-      
+
       - name: 📦 Instalar dependencias frontend
         run: |
           cd ${{ env.FRONTEND_DIR }}
           npm ci
-      
+
       - name: 🔍 Linting con ESLint
         run: |
           cd ${{ env.FRONTEND_DIR }}
           npm run lint
-      
+
       - name: 🎨 Formateo con Prettier
         run: |
           cd ${{ env.FRONTEND_DIR }}
           npm run format:check
-      
+
       - name: 🔒 Verificación de tipos TypeScript
         run: |
           cd ${{ env.FRONTEND_DIR }}
           npm run type-check
-      
+
       - name: 🧪 Ejecutar pruebas unitarias
         run: |
           cd ${{ env.FRONTEND_DIR }}
           npm run test:unit
-      
+
       - name: 🔗 Ejecutar pruebas de integración
         run: |
           cd ${{ env.FRONTEND_DIR }}
           npm run test:integration
-      
+
       - name: 📊 Generar reporte de cobertura
         run: |
           cd ${{ env.FRONTEND_DIR }}
           npm run test:coverage
-      
+
       - name: 📊 Subir reporte de cobertura frontend
         uses: codecov/codecov-action@v3
         with:
@@ -382,45 +382,45 @@ jobs:
     name: 🏗️ Build y Verificación
     runs-on: ubuntu-latest
     needs: [backend-tests, frontend-tests]
-    
+
     steps:
       - name: 📥 Checkout código
         uses: actions/checkout@v4
-      
+
       - name: 🐍 Configurar Python
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
-      
+
       - name: 📦 Instalar dependencias backend
         run: |
           cd ${{ env.BACKEND_DIR }}
           pip install -r requirements.txt
-      
+
       - name: 📦 Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
-      
+
       - name: 📦 Instalar dependencias frontend
         run: |
           cd ${{ env.FRONTEND_DIR }}
           npm ci
-      
+
       - name: 🏗️ Build frontend
         run: |
           cd ${{ env.FRONTEND_DIR }}
           npm run build
-      
+
       - name: 📦 Verificar build frontend
         run: |
           cd ${{ env.FRONTEND_DIR }}
           ls -la dist/
           du -sh dist/
-      
+
       - name: 🔍 Verificar archivos críticos
         run: |
           echo "Verificando archivos críticos..."
@@ -437,11 +437,11 @@ jobs:
     needs: [build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
-    
+
     steps:
       - name: 📥 Checkout código
         uses: actions/checkout@v4
-      
+
       - name: 🚀 Despliegue a Render
         uses: render-actions/deploy@v1
         with:
@@ -449,12 +449,12 @@ jobs:
           api-key: ${{ secrets.RENDER_API_KEY }}
           wait-for-success: true
           timeout: 600
-      
+
       - name: 🔍 Verificar health check
         run: |
           echo "Esperando que el servicio esté disponible..."
           sleep 30
-          
+
           # Intentar health check múltiples veces
           for i in {1..5}; do
             if curl -f "${{ secrets.RENDER_SERVICE_URL }}/api/v1/health/render"; then
@@ -465,12 +465,12 @@ jobs:
               sleep 30
             fi
           done
-      
+
       - name: 📊 Verificar métricas de despliegue
         run: |
           echo "Verificando métricas del despliegue..."
           curl -s "${{ secrets.RENDER_SERVICE_URL }}/api/v1/health/detailed" | jq '.'
-      
+
       - name: 📱 Notificar éxito
         if: success()
         uses: 8398a7/action-slack@v3
@@ -495,11 +495,11 @@ jobs:
     needs: [build]
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
     environment: staging
-    
+
     steps:
       - name: 📥 Checkout código
         uses: actions/checkout@v4
-      
+
       - name: 🚀 Despliegue a Render Staging
         uses: render-actions/deploy@v1
         with:
@@ -507,12 +507,12 @@ jobs:
           api-key: ${{ secrets.RENDER_API_KEY }}
           wait-for-success: true
           timeout: 600
-      
+
       - name: 🔍 Verificar health check staging
         run: |
           echo "Esperando que el servicio de staging esté disponible..."
           sleep 30
-          
+
           for i in {1..3}; do
             if curl -f "${{ secrets.RENDER_STAGING_URL }}/api/v1/health/render"; then
               echo "✅ Health check staging exitoso"
@@ -522,7 +522,7 @@ jobs:
               sleep 30
             fi
           done
-      
+
       - name: 📱 Notificar staging
         if: success()
         uses: 8398a7/action-slack@v3
@@ -545,7 +545,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [code-quality, backend-tests, frontend-tests, build]
     if: failure()
-    
+
     steps:
       - name: 📱 Notificar fallo
         uses: 8398a7/action-slack@v3

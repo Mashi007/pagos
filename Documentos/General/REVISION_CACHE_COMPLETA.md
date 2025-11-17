@@ -1,6 +1,6 @@
 # 🔄 REVISIÓN COMPLETA DEL SISTEMA DE CACHÉ
 
-**Fecha:** 2025-11-05  
+**Fecha:** 2025-11-05
 **Archivo Principal:** `backend/app/core/cache.py`
 
 ---
@@ -310,7 +310,7 @@ REDIS_SOCKET_TIMEOUT=5
 
 ---
 
-**Generado:** 2025-11-05  
-**Revisor:** Auto (AI Assistant)  
+**Generado:** 2025-11-05
+**Revisor:** Auto (AI Assistant)
 **Versión:** 1.0
 

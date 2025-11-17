@@ -6,8 +6,8 @@
 // Método 1: Buscar por texto
 const buscarBotonPorTexto = () => {
   const buttons = Array.from(document.querySelectorAll('button'));
-  const guardarButton = buttons.find(b => 
-    b.textContent.includes('Guardar') || 
+  const guardarButton = buttons.find(b =>
+    b.textContent.includes('Guardar') ||
     b.textContent.includes('guardar') ||
     b.textContent.includes('Guardar Configuración')
   );
@@ -18,8 +18,8 @@ const buscarBotonPorTexto = () => {
 const buscarBotonPorAtributos = () => {
   // Buscar botones con clase que contenga "blue" o "save"
   const buttons = Array.from(document.querySelectorAll('button'));
-  return buttons.find(b => 
-    b.className.includes('blue') || 
+  return buttons.find(b =>
+    b.className.includes('blue') ||
     b.className.includes('bg-blue') ||
     b.getAttribute('type') === 'button'
   );
@@ -60,26 +60,26 @@ if (botonGuardar) {
     visible: botonGuardar.offsetParent !== null,
     texto: botonGuardar.textContent.trim()
   });
-  
+
   // Habilitar el botón
   botonGuardar.disabled = false;
   botonGuardar.style.opacity = '1';
   botonGuardar.style.cursor = 'pointer';
   botonGuardar.style.pointerEvents = 'auto';
-  
+
   // Asegurar que sea visible
   botonGuardar.style.display = 'flex';
   botonGuardar.style.visibility = 'visible';
-  
+
   console.log('✅ Botón habilitado y visible');
   console.log('Nuevo estado:', {
     disabled: botonGuardar.disabled,
     visible: botonGuardar.offsetParent !== null
   });
-  
+
   // Hacer scroll hasta el botón
   botonGuardar.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  
+
 } else {
   console.log('❌ No se encontró el botón de Guardar');
   console.log('💡 Intenta hacer scroll hacia abajo en la página para ver si el botón está más abajo');

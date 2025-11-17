@@ -70,7 +70,7 @@ python scripts/test_endpoint_rangos.py
    ```bash
    # Primero ver qué haría (dry-run)
    python scripts/ajustar_fechas_prestamos.py
-   
+
    # Si está bien, ejecutar los cambios
    python scripts/ajustar_fechas_prestamos.py --execute
    ```

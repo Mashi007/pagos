@@ -34,7 +34,7 @@ per_page: int = Query(20, ge=1, le=1000, description="Tamano de pagina")
 
 ### 2. Con 3000 clientes necesitarías:
 - Página 1: `per_page=1000` → Clientes 1-1000
-- Página 2: `per_page=1000` → Clientes 1001-2000  
+- Página 2: `per_page=1000` → Clientes 1001-2000
 - Página 3: `per_page=1000` → Clientes 2001-3000
 - Página 4: `per_page=1000` → Clientes 3001-3000+ (si hay más)
 

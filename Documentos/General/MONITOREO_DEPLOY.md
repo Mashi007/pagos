@@ -81,7 +81,7 @@ GET https://pagos-f2qf.onrender.com/api/v1/health/render
 ### 3. Probar los Endpoints
 Abre el frontend y prueba:
 - ✅ Analistas: https://rapicredit.onrender.com/analistas
-- ✅ Concesionarios: https://rapicredit.onrender.com/concesionarios  
+- ✅ Concesionarios: https://rapicredit.onrender.com/concesionarios
 - ✅ Modelos: https://rapicredit.onrender.com/modelos-vehiculos
 
 ### 4. Revisar Logs en Tiempo Real

@@ -170,19 +170,19 @@ DashboardMenu (Menú Principal)
 - 📋 **Ver Financiamientos Activos Detalle**
   - Tabla con filtros avanzados
   - Búsqueda, paginación, exportación
-  
+
 - 📊 **Análisis por Estado Completo**
   - Comparativas históricas
   - Transiciones de estados
-  
+
 - 📈 **Distribución por Concesionario Avanzada**
   - Treemap con todos los concesionarios
   - Drill-down por concesionario
-  
+
 - 📅 **Tendencias Temporales Detalladas**
   - Gráficos de múltiples períodos
   - Comparativas año sobre año
-  
+
 - 🎯 **Análisis por Tipo de Producto**
   - Segmentación adicional
   - Comparativas cruzadas

@@ -104,7 +104,7 @@ El sistema ya registra auditoría automáticamente en estos casos:
 ### 2. Ver en DBeaver:
 ```sql
 -- Ver auditoría del préstamo #9 (Juan García)
-SELECT 
+SELECT
     id,
     fecha_cambio,
     usuario,
@@ -113,7 +113,7 @@ SELECT
     valor_nuevo,
     accion,
     observaciones
-FROM prestamos_auditoria 
+FROM prestamos_auditoria
 WHERE prestamo_id = 9
 ORDER BY fecha_cambio DESC;
 ```

@@ -34,13 +34,13 @@ def auditoria_completa():
         print("-" * 80)
         total_aprobados = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
         print(f"✅ Total préstamos con estado='APROBADO': {total_aprobados:,}")
-        
+
         if total_aprobados == 0:
             total_todos = db.query(Prestamo).count()
             print(f"⚠️  No hay préstamos APROBADOS. Total préstamos en BD: {total_todos:,}")
             print("   → PROBLEMA: No hay préstamos aprobados en la base de datos")
             return
-        
+
         print()
 
         # 2. VERIFICAR PRÉSTAMOS CON total_financiamiento VÁLIDO
@@ -54,7 +54,7 @@ def auditoria_completa():
             )
         ).count()
         print(f"✅ Préstamos aprobados con total_financiamiento > 0: {prestamos_validos:,}")
-        
+
         prestamos_null = db.query(Prestamo).filter(
             and_(
                 Prestamo.estado == "APROBADO",
@@ -62,7 +62,7 @@ def auditoria_completa():
             )
         ).count()
         print(f"⚠️  Préstamos aprobados con total_financiamiento NULL: {prestamos_null:,}")
-        
+
         prestamos_cero = db.query(Prestamo).filter(
             and_(
                 Prestamo.estado == "APROBADO",
@@ -70,11 +70,11 @@ def auditoria_completa():
             )
         ).count()
         print(f"⚠️  Préstamos aprobados con total_financiamiento = 0: {prestamos_cero:,}")
-        
+
         if prestamos_validos == 0:
             print("   → PROBLEMA: No hay préstamos con total_financiamiento > 0")
             return
-        
+
         print()
 
         # 3. VERIFICAR FECHAS DE PRÉSTAMOS
@@ -82,7 +82,7 @@ def auditoria_completa():
         print("-" * 80)
         hoy = date.today()
         año_actual = hoy.year
-        
+
         # Préstamos con fecha_registro
         con_fecha_registro = db.query(Prestamo).filter(
             and_(
@@ -93,7 +93,7 @@ def auditoria_completa():
             )
         ).count()
         print(f"✅ Con fecha_registro: {con_fecha_registro:,}")
-        
+
         # Préstamos con fecha_aprobacion
         con_fecha_aprobacion = db.query(Prestamo).filter(
             and_(
@@ -104,7 +104,7 @@ def auditoria_completa():
             )
         ).count()
         print(f"✅ Con fecha_aprobacion: {con_fecha_aprobacion:,}")
-        
+
         # Préstamos con fecha_base_calculo
         con_fecha_base = db.query(Prestamo).filter(
             and_(
@@ -115,7 +115,7 @@ def auditoria_completa():
             )
         ).count()
         print(f"✅ Con fecha_base_calculo: {con_fecha_base:,}")
-        
+
         # Préstamos SIN ninguna fecha
         sin_ninguna_fecha = db.query(Prestamo).filter(
             and_(
@@ -128,7 +128,7 @@ def auditoria_completa():
             )
         ).count()
         print(f"⚠️  Sin ninguna fecha (todas NULL): {sin_ninguna_fecha:,}")
-        
+
         print()
 
         # 4. VERIFICAR PRÉSTAMOS EN RANGO DEL AÑO ACTUAL
@@ -136,9 +136,9 @@ def auditoria_completa():
         print("-" * 80)
         fecha_inicio_año = date(año_actual, 1, 1)
         fecha_fin_año = date(año_actual, 12, 31)
-        
+
         print(f"Rango: {fecha_inicio_año} a {fecha_fin_año}")
-        
+
         # Con filtros de fecha (usando FiltrosDashboard)
         query_con_fecha = db.query(Prestamo).filter(Prestamo.estado == "APROBADO")
         query_con_fecha = FiltrosDashboard.aplicar_filtros_prestamo(
@@ -149,7 +149,7 @@ def auditoria_completa():
         )
         prestamos_en_rango = query_con_fecha.count()
         print(f"✅ Préstamos válidos en rango del año actual: {prestamos_en_rango:,}")
-        
+
         # Sin filtros de fecha
         query_sin_fecha = db.query(Prestamo).filter(
             and_(
@@ -160,17 +160,17 @@ def auditoria_completa():
         )
         prestamos_sin_filtro_fecha = query_sin_fecha.count()
         print(f"✅ Préstamos válidos sin filtros de fecha: {prestamos_sin_filtro_fecha:,}")
-        
+
         if prestamos_en_rango == 0 and prestamos_sin_filtro_fecha > 0:
             print(f"⚠️  PROBLEMA: Los filtros de fecha están excluyendo todos los préstamos")
             print(f"   → El endpoint debería usar datos sin filtros de fecha como fallback")
-        
+
         print()
 
         # 5. VERIFICAR RANGOS DE FECHAS DE PRÉSTAMOS
         print("📊 PASO 5: Análisis de rangos de fechas")
         print("-" * 80)
-        
+
         # Obtener fechas mínimas y máximas
         min_fecha_registro = db.query(func.min(Prestamo.fecha_registro)).filter(
             and_(
@@ -180,7 +180,7 @@ def auditoria_completa():
                 Prestamo.fecha_registro.isnot(None)
             )
         ).scalar()
-        
+
         max_fecha_registro = db.query(func.max(Prestamo.fecha_registro)).filter(
             and_(
                 Prestamo.estado == "APROBADO",
@@ -189,7 +189,7 @@ def auditoria_completa():
                 Prestamo.fecha_registro.isnot(None)
             )
         ).scalar()
-        
+
         min_fecha_aprobacion = db.query(func.min(Prestamo.fecha_aprobacion)).filter(
             and_(
                 Prestamo.estado == "APROBADO",
@@ -198,7 +198,7 @@ def auditoria_completa():
                 Prestamo.fecha_aprobacion.isnot(None)
             )
         ).scalar()
-        
+
         max_fecha_aprobacion = db.query(func.max(Prestamo.fecha_aprobacion)).filter(
             and_(
                 Prestamo.estado == "APROBADO",
@@ -207,22 +207,22 @@ def auditoria_completa():
                 Prestamo.fecha_aprobacion.isnot(None)
             )
         ).scalar()
-        
+
         print(f"📅 fecha_registro: {min_fecha_registro} a {max_fecha_registro}")
         print(f"📅 fecha_aprobacion: {min_fecha_aprobacion} a {max_fecha_aprobacion}")
-        
+
         if min_fecha_registro and min_fecha_registro.year > año_actual:
             print(f"⚠️  PROBLEMA: La fecha_registro mínima ({min_fecha_registro}) es mayor al año actual")
         if min_fecha_aprobacion and min_fecha_aprobacion.year > año_actual:
             print(f"⚠️  PROBLEMA: La fecha_aprobacion mínima ({min_fecha_aprobacion}) es mayor al año actual")
-        
+
         print()
 
         # 6. RESUMEN Y RECOMENDACIONES
         print("📋 RESUMEN Y RECOMENDACIONES")
         print("=" * 80)
         print()
-        
+
         if total_aprobados == 0:
             print("❌ PROBLEMA CRÍTICO: No hay préstamos aprobados en la base de datos")
             print("   Acción: Verificar que los datos se hayan migrado correctamente")
@@ -254,7 +254,7 @@ def auditoria_completa():
                 print(f"✅ Hay {prestamos_en_rango:,} préstamos en el rango del año actual")
             else:
                 print(f"⚠️  No hay préstamos en el rango del año actual, pero hay {prestamos_sin_filtro_fecha:,} sin filtros")
-        
+
         print()
 
     except Exception as e:

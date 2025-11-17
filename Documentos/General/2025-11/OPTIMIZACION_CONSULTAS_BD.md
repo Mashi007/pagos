@@ -157,16 +157,16 @@ query_nuevos = (
 **Solución: Crear índices funcionales**
 ```sql
 -- ✅ Índice funcional para GROUP BY por año/mes
-CREATE INDEX IF NOT EXISTS idx_prestamos_fecha_aprobacion_ym 
+CREATE INDEX IF NOT EXISTS idx_prestamos_fecha_aprobacion_ym
 ON prestamos (
     EXTRACT(YEAR FROM fecha_aprobacion),
     EXTRACT(MONTH FROM fecha_aprobacion)
 )
-WHERE estado = 'APROBADO' 
+WHERE estado = 'APROBADO'
   AND fecha_aprobacion IS NOT NULL;
 
 -- ✅ Índice compuesto para filtros adicionales
-CREATE INDEX IF NOT EXISTS idx_prestamos_aprobacion_estado_analista 
+CREATE INDEX IF NOT EXISTS idx_prestamos_aprobacion_estado_analista
 ON prestamos (fecha_aprobacion, estado, analista, concesionario)
 WHERE estado = 'APROBADO';
 ```
@@ -184,7 +184,7 @@ WHERE estado = 'APROBADO';
 ```python
 # ❌ SQL directo sin usar índices eficientemente
 query_cuotas_sql = text("""
-    SELECT 
+    SELECT
         EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
         EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
         COALESCE(SUM(c.monto_cuota), 0) as total_cuotas_programadas
@@ -237,17 +237,17 @@ query_cuotas = FiltrosDashboard.aplicar_filtros_cuota(
 -- ============================================================================
 
 -- 1. Índice para GROUP BY por año/mes en préstamos
-CREATE INDEX IF NOT EXISTS idx_prestamos_fecha_aprobacion_ym 
+CREATE INDEX IF NOT EXISTS idx_prestamos_fecha_aprobacion_ym
 ON prestamos (
     EXTRACT(YEAR FROM fecha_aprobacion),
     EXTRACT(MONTH FROM fecha_aprobacion),
     estado
 )
-WHERE estado = 'APROBADO' 
+WHERE estado = 'APROBADO'
   AND fecha_aprobacion IS NOT NULL;
 
 -- 2. Índice para GROUP BY por año/mes en cuotas
-CREATE INDEX IF NOT EXISTS idx_cuotas_fecha_vencimiento_ym 
+CREATE INDEX IF NOT EXISTS idx_cuotas_fecha_vencimiento_ym
 ON cuotas (
     EXTRACT(YEAR FROM fecha_vencimiento),
     EXTRACT(MONTH FROM fecha_vencimiento)
@@ -255,17 +255,17 @@ ON cuotas (
 WHERE fecha_vencimiento IS NOT NULL;
 
 -- 3. Índice compuesto para JOINs eficientes
-CREATE INDEX IF NOT EXISTS idx_cuotas_prestamo_fecha_vencimiento 
+CREATE INDEX IF NOT EXISTS idx_cuotas_prestamo_fecha_vencimiento
 ON cuotas (prestamo_id, fecha_vencimiento, estado, total_pagado, monto_cuota);
 
 -- 4. Índice para filtros de fecha en pagos
-CREATE INDEX IF NOT EXISTS idx_pagos_fecha_pago_activo 
+CREATE INDEX IF NOT EXISTS idx_pagos_fecha_pago_activo
 ON pagos (fecha_pago, activo, monto_pagado)
-WHERE activo = TRUE 
+WHERE activo = TRUE
   AND monto_pagado > 0;
 
 -- 5. Índice para búsquedas por cédula
-CREATE INDEX IF NOT EXISTS idx_prestamos_cedula_estado 
+CREATE INDEX IF NOT EXISTS idx_prestamos_cedula_estado
 ON prestamos (cedula, estado)
 WHERE estado IN ('APROBADO', 'FINALIZADO');
 ```

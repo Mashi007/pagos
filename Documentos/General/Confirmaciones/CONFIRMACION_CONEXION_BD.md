@@ -13,7 +13,7 @@
 - `tasa_interes`, `producto`, `producto_financiero`
 - `estado`, `fecha_solicitud`, `fecha_aprobacion`
 
-### ✅ TABLA 2: `prestamos_evaluacion`  
+### ✅ TABLA 2: `prestamos_evaluacion`
 **Formulario**: Evaluación de Riesgo (`EvaluacionRiesgoForm.tsx`)
 **Endpoint**: `POST /api/v1/prestamos/{prestamo_id}/evaluar-riesgo`
 **Campos principales**:
@@ -38,7 +38,7 @@ SELECT * FROM prestamos_evaluacion ORDER BY id DESC LIMIT 10;
 
 ### Consulta 3: Relación entre préstamos y evaluaciones
 ```sql
-SELECT 
+SELECT
     p.id AS prestamo_id,
     p.cedula,
     p.nombres,
@@ -54,12 +54,12 @@ ORDER BY p.id DESC;
 
 ### Consulta 4: Contar registros
 ```sql
-SELECT 
+SELECT
     'prestamos' AS tabla,
     COUNT(*) AS total
 FROM prestamos
 UNION ALL
-SELECT 
+SELECT
     'prestamos_evaluacion' AS tabla,
     COUNT(*) AS total
 FROM prestamos_evaluacion;
@@ -68,14 +68,14 @@ FROM prestamos_evaluacion;
 ### Consulta 5: Ver estructura de columnas
 ```sql
 -- Para prestamos
-SELECT column_name, data_type 
-FROM information_schema.columns 
+SELECT column_name, data_type
+FROM information_schema.columns
 WHERE table_name = 'prestamos'
 ORDER BY ordinal_position;
 
 -- Para prestamos_evaluacion
-SELECT column_name, data_type 
-FROM information_schema.columns 
+SELECT column_name, data_type
+FROM information_schema.columns
 WHERE table_name = 'prestamos_evaluacion'
 ORDER BY ordinal_position;
 ```
@@ -86,13 +86,13 @@ ORDER BY ordinal_position;
 
 ### ✅ Confirmado: Formularios conectados a tablas separadas
 
-1. **Formulario "Nuevo Préstamo"** 
+1. **Formulario "Nuevo Préstamo"**
    → Guarda en tabla `prestamos`
    → Archivo: `CrearPrestamoForm.tsx`
    → Endpoint: `/api/v1/prestamos`
 
 2. **Formulario "Evaluación de Riesgo"**
-   → Guarda en tabla `prestamos_evaluacion`  
+   → Guarda en tabla `prestamos_evaluacion`
    → Archivo: `EvaluacionRiesgoForm.tsx`
    → Endpoint: `/api/v1/prestamos/{id}/evaluar-riesgo`
 

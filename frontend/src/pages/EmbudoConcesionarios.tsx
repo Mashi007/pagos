@@ -36,26 +36,26 @@ import { Label } from '@/components/ui/label'
 
 // Estados del embudo de concesionarios
 const ESTADOS_EMBUDO = [
-  { 
-    id: 'activo', 
-    label: 'Venta asignada', 
-    color: 'bg-green-50 border-green-200', 
+  {
+    id: 'activo',
+    label: 'Venta asignada',
+    color: 'bg-green-50 border-green-200',
     headerColor: 'bg-green-100 text-green-800',
     icon: CheckCircle,
     count: 0
   },
-  { 
-    id: 'pendiente', 
-    label: 'Pendiente requisitos', 
-    color: 'bg-yellow-50 border-yellow-200', 
+  {
+    id: 'pendiente',
+    label: 'Pendiente requisitos',
+    color: 'bg-yellow-50 border-yellow-200',
     headerColor: 'bg-yellow-100 text-yellow-800',
     icon: Clock,
     count: 0
   },
-  { 
-    id: 'inactivo', 
-    label: 'Agregar embudo', 
-    color: 'bg-gray-50 border-gray-200', 
+  {
+    id: 'inactivo',
+    label: 'Agregar embudo',
+    color: 'bg-gray-50 border-gray-200',
     headerColor: 'bg-gray-100 text-gray-800',
     icon: XCircle,
     count: 0
@@ -67,26 +67,26 @@ const mapearEstadoConcesionario = (concesionario: Concesionario, prestamos: Pres
   if (!concesionario.activo) {
     return 'inactivo'
   }
-  
+
   // Si tiene préstamos aprobados, está activo
-  const prestamosAprobados = prestamos.filter(p => 
+  const prestamosAprobados = prestamos.filter(p =>
     p.concesionario === concesionario.nombre && p.estado === 'APROBADO'
   )
-  
+
   if (prestamosAprobados.length > 0) {
     return 'activo'
   }
-  
+
   // Si tiene préstamos en revisión o draft, está pendiente
-  const prestamosPendientes = prestamos.filter(p => 
-    p.concesionario === concesionario.nombre && 
+  const prestamosPendientes = prestamos.filter(p =>
+    p.concesionario === concesionario.nombre &&
     (p.estado === 'EN_REVISION' || p.estado === 'DRAFT')
   )
-  
+
   if (prestamosPendientes.length > 0) {
     return 'pendiente'
   }
-  
+
   // Si está activo pero sin préstamos, está pendiente
   return 'pendiente'
 }
@@ -124,26 +124,26 @@ export function EmbudoConcesionarios() {
     nombre: '',
     activo: true
   })
-  
+
   // Configuración de campos de tarjetas
   const [camposTarjeta, setCamposTarjeta] = useState<CamposTarjetaConfig>(() => {
     const saved = localStorage.getItem('embudo_concesionarios_campos')
     return saved ? JSON.parse(saved) : CAMPOS_DEFAULT
   })
-  
+
   const createConcesionarioMutation = useCreateConcesionario()
 
   // Obtener concesionarios reales desde configuración/concesionarios
-  const { 
-    data: concesionariosData, 
+  const {
+    data: concesionariosData,
     isLoading: isLoadingConcesionarios,
     error: errorConcesionarios,
     refetch: refetchConcesionarios
   } = useConcesionarios({ limit: 1000 })
 
   // Obtener todos los préstamos para calcular estadísticas
-  const { 
-    data: prestamosData, 
+  const {
+    data: prestamosData,
     isLoading: isLoadingPrestamos,
     error: errorPrestamos
   } = usePrestamos(
@@ -153,7 +153,7 @@ export function EmbudoConcesionarios() {
   )
 
   // Obtener todos los clientes para vincular con préstamos
-  const { 
+  const {
     data: clientesData,
     error: errorClientes
   } = useClientes(undefined, 1, 1000)
@@ -177,32 +177,32 @@ export function EmbudoConcesionarios() {
       const concesionarioActualizado = concesionariosEnEmbudo.get(concesionario.id)
       return concesionarioActualizado || concesionario
     })
-    
+
     // Agregar concesionarios que no están en la API pero sí en concesionariosEnEmbudo
     concesionariosEnEmbudo.forEach((concesionario) => {
       if (!concesionariosAPI.find(c => c.id === concesionario.id)) {
         concesionariosAPI.push(concesionario)
       }
     })
-    
+
     return concesionariosAPI
   }, [concesionarios, concesionariosEnEmbudo])
 
   // Calcular estadísticas por concesionario
   const concesionariosConEstadisticas = useMemo(() => {
     return todosConcesionarios.map(concesionario => {
-      const prestamosConcesionario = prestamos.filter(p => 
+      const prestamosConcesionario = prestamos.filter(p =>
         p.concesionario === concesionario.nombre
       )
-      
+
       const prestamosAprobados = prestamosConcesionario.filter(p => p.estado === 'APROBADO')
-      
+
       // Obtener clientes únicos de los préstamos
       const clientesIds = new Set(prestamosConcesionario.map(p => p.cliente_id))
       const clientesAsignados = clientes.filter(c => clientesIds.has(c.id))
-      
+
       // Calcular monto total de préstamos aprobados
-      const montoTotal = prestamosAprobados.reduce((sum, p) => 
+      const montoTotal = prestamosAprobados.reduce((sum, p) =>
         sum + Number(p.total_financiamiento || 0), 0
       )
 
@@ -227,8 +227,8 @@ export function EmbudoConcesionarios() {
   }, [todosConcesionarios, prestamos, clientes, estadosManuales])
 
   // Concesionario seleccionado y sus datos
-  const concesionarioSeleccionado = concesionarioSeleccionadoId 
-    ? Number(concesionarioSeleccionadoId) 
+  const concesionarioSeleccionado = concesionarioSeleccionadoId
+    ? Number(concesionarioSeleccionadoId)
     : null
   const concesionarioDetalle = concesionarioSeleccionado
     ? concesionariosConEstadisticas.find(c => c.id === concesionarioSeleccionado)
@@ -254,7 +254,7 @@ export function EmbudoConcesionarios() {
   // Búsqueda de concesionarios para agregar
   const concesionariosBuscados = useMemo(() => {
     if (!searchConcesionario || searchConcesionario.length < 2) return []
-    return concesionarios.filter(c => 
+    return concesionarios.filter(c =>
       c.nombre.toLowerCase().includes(searchConcesionario.toLowerCase()) &&
       !concesionariosEnEmbudo.has(c.id)
     )
@@ -289,7 +289,7 @@ export function EmbudoConcesionarios() {
     if (!nuevoConcesionario.nombre.trim()) {
       return
     }
-    
+
     try {
       const creado = await createConcesionarioMutation.mutateAsync(nuevoConcesionario)
       // Agregar el nuevo concesionario al embudo
@@ -321,12 +321,12 @@ export function EmbudoConcesionarios() {
     const concesionariosParaEstadisticas = concesionarioSeleccionado
       ? concesionariosConEstadisticas.filter(c => c.id === concesionarioSeleccionado)
       : concesionariosConEstadisticas
-    
+
     // Usar los mismos datos que concesionariosPorEstado para garantizar coincidencia
     const activos = concesionariosPorEstado.find(e => e.id === 'activo')?.count || 0
     const pendientes = concesionariosPorEstado.find(e => e.id === 'pendiente')?.count || 0
     const inactivos = concesionariosPorEstado.find(e => e.id === 'inactivo')?.count || 0
-    
+
     return {
       total: concesionariosParaEstadisticas.length,
       activos,
@@ -343,7 +343,7 @@ export function EmbudoConcesionarios() {
   // Clientes y préstamos del concesionario seleccionado
   const clientesYprestamosDetalle = useMemo(() => {
     if (!concesionarioDetalle) return []
-    
+
     // Agrupar por cliente y mostrar sus préstamos
     const clientesMap = new Map<number, {
       cliente: typeof clientes[0]
@@ -521,7 +521,7 @@ export function EmbudoConcesionarios() {
                   }}>
                     Cancelar
                   </Button>
-                  <Button 
+                  <Button
                     onClick={handleCrearConcesionario}
                     disabled={!nuevoConcesionario.nombre.trim() || createConcesionarioMutation.isPending}
                   >
@@ -541,7 +541,7 @@ export function EmbudoConcesionarios() {
               </div>
             </DialogContent>
           </Dialog>
-          
+
           {/* Diálogo de Configuración de Tarjetas */}
           <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
             <DialogContent className="max-w-md">
@@ -654,8 +654,8 @@ export function EmbudoConcesionarios() {
                   </div>
                 </div>
                 <div className="flex justify-end gap-2 pt-4 border-t">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={() => {
                       setCamposTarjeta(CAMPOS_DEFAULT)
                       localStorage.setItem('embudo_concesionarios_campos', JSON.stringify(CAMPOS_DEFAULT))
@@ -689,7 +689,7 @@ export function EmbudoConcesionarios() {
             'inactivo': 'text-gray-600'
           }
           const color = colorMap[estado.id] || 'text-gray-600'
-          
+
           return (
             <Card key={estado.id}>
               <CardContent className="pt-6">
@@ -846,9 +846,9 @@ export function EmbudoConcesionarios() {
                                         </p>
                                       </div>
                                       <div className="flex gap-1">
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
                                           className="h-7 w-7"
                                           onClick={(e) => {
                                             e.stopPropagation()
@@ -859,9 +859,9 @@ export function EmbudoConcesionarios() {
                                         >
                                           <Eye className="h-3.5 w-3.5" />
                                         </Button>
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
                                           className="h-7 w-7"
                                           onClick={(e) => {
                                             e.stopPropagation()
@@ -871,9 +871,9 @@ export function EmbudoConcesionarios() {
                                           <Edit className="h-3.5 w-3.5" />
                                         </Button>
                                         {concesionariosEnEmbudo.has(concesionario.id) && (
-                                          <Button 
-                                            variant="ghost" 
-                                            size="icon" 
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
                                             className="h-7 w-7 text-red-600 hover:text-red-700"
                                             onClick={(e) => {
                                               e.stopPropagation()
@@ -886,7 +886,7 @@ export function EmbudoConcesionarios() {
                                         )}
                                       </div>
                                     </div>
-                                    
+
                                     <div className="space-y-2 pt-2 border-t border-gray-100">
                                       <div className="grid grid-cols-2 gap-2 pt-2">
                                         <div className="bg-blue-50 rounded p-2">
@@ -948,9 +948,9 @@ export function EmbudoConcesionarios() {
                                   )}
                                 </div>
                                 <div className="flex gap-1">
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     className="h-7 w-7"
                                     onClick={(e) => {
                                       e.stopPropagation()
@@ -961,9 +961,9 @@ export function EmbudoConcesionarios() {
                                   >
                                     <Eye className="h-3.5 w-3.5" />
                                   </Button>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     className="h-7 w-7"
                                     onClick={(e) => {
                                       e.stopPropagation()
@@ -974,7 +974,7 @@ export function EmbudoConcesionarios() {
                                   </Button>
                                 </div>
                               </div>
-                              
+
                               {(camposTarjeta.mostrarClientes || camposTarjeta.mostrarPrestamos || camposTarjeta.mostrarMontoTotal || camposTarjeta.mostrarFechaRegistro) && (
                                 <div className="space-y-2 pt-2 border-t border-gray-100">
                                   {(camposTarjeta.mostrarClientes || camposTarjeta.mostrarPrestamos) && (
@@ -1054,16 +1054,16 @@ export function EmbudoConcesionarios() {
                           <p className="text-xs text-gray-500">Tel: {cliente.telefono}</p>
                         )}
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-7 w-7"
                         onClick={() => window.open(`/clientes/${cliente.id}`, '_blank')}
                       >
                         <Link className="h-3.5 w-3.5" />
                       </Button>
                     </div>
-                    
+
                     <div className="space-y-2 mt-2 pt-2 border-t border-gray-200">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-gray-600">Préstamos:</span>
@@ -1071,15 +1071,15 @@ export function EmbudoConcesionarios() {
                           {prestamosCliente.length}
                         </Badge>
                       </div>
-                      
+
                       {prestamosCliente.map((prestamo) => (
                         <div key={prestamo.id} className="bg-white rounded p-2 border border-gray-100">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-xs font-medium text-gray-700">
                               Préstamo #{prestamo.id}
                             </span>
-                            <Badge 
-                              variant="outline" 
+                            <Badge
+                              variant="outline"
                               className={`text-xs ${
                                 prestamo.estado === 'APROBADO' ? 'border-green-500 text-green-700' :
                                 prestamo.estado === 'EN_REVISION' ? 'border-yellow-500 text-yellow-700' :
@@ -1121,7 +1121,7 @@ export function EmbudoConcesionarios() {
                           </div>
                         </div>
                       ))}
-                      
+
                       {montoTotal > 0 && (
                         <div className="flex items-center justify-between pt-1 border-t border-gray-200">
                           <span className="text-xs font-semibold text-gray-700">Total:</span>

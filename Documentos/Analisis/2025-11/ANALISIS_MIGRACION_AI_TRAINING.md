@@ -1,7 +1,7 @@
 # 🔍 Análisis de Migración AI Training - Opciones para Migraciones Largas
 
-**Fecha:** 2025-11-14  
-**Migración:** `20250114_create_ai_training_tables.py`  
+**Fecha:** 2025-11-14
+**Migración:** `20250114_create_ai_training_tables.py`
 **Líneas:** ~207 líneas
 
 ---
@@ -11,7 +11,7 @@
 ### Estructura Actual
 La migración crea **4 tablas** en una sola migración:
 1. `conversaciones_ai` - ~75 líneas
-2. `fine_tuning_jobs` - ~30 líneas  
+2. `fine_tuning_jobs` - ~30 líneas
 3. `documento_ai_embeddings` - ~25 líneas
 4. `modelos_riesgo` - ~35 líneas
 
@@ -184,16 +184,16 @@ from app.core.config import settings
 def verificar_tablas_ai():
     engine = create_engine(settings.DATABASE_URL)
     inspector = inspect(engine)
-    
+
     tablas_requeridas = [
         'conversaciones_ai',
         'fine_tuning_jobs',
         'documento_ai_embeddings',
         'modelos_riesgo'
     ]
-    
+
     tablas_existentes = inspector.get_table_names()
-    
+
     for tabla in tablas_requeridas:
         if tabla in tablas_existentes:
             print(f"✅ {tabla} existe")

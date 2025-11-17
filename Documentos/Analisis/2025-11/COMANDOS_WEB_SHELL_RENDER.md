@@ -1,7 +1,7 @@
 # 🖥️ COMANDOS PARA WEB SHELL DE RENDER
 
-**Fecha:** 2025-11-06  
-**Servicio:** Backend (`pagos`)  
+**Fecha:** 2025-11-06
+**Servicio:** Backend (`pagos`)
 **Propósito:** Ejecutar migraciones y verificar Redis
 
 ---

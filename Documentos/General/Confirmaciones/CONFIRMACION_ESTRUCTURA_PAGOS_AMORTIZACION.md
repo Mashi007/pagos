@@ -11,13 +11,13 @@
 def generar_tabla_amortizacion(prestamo: Prestamo, fecha_base: date, db: Session):
     # 1. Elimina cuotas existentes si las hay
     db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).delete()
-    
+
     # 2. Calcula cada cuota según:
     #    - monto_cuota (ej: $140.00)
     #    - monto_capital (parte de capital de la cuota)
     #    - monto_interes (parte de interés de la cuota)
     #    - fecha_vencimiento (fecha límite de pago)
-    
+
     # 3. Inicializa cada cuota con:
     cuota = Cuota(
         prestamo_id=prestamo.id,
@@ -79,30 +79,30 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
         Cuota.prestamo_id == pago.prestamo_id,    # ✅ VERIFICA préstamo_id
         Cuota.estado != "PAGADO"                  # ✅ Solo cuotas pendientes
     ).order_by(Cuota.numero_cuota).all()          # ✅ Orden secuencial
-    
+
     saldo_restante = pago.monto_pagado
-    
+
     for cuota in cuotas:  # ✅ ITERA sobre cada cuota de la amortización
         # ✅ PASO 2: Calcular cuánto falta para completar la cuota
         monto_faltante = cuota.monto_cuota - cuota.total_pagado
-        
+
         # ✅ PASO 3: Aplicar solo lo necesario (o el saldo disponible)
         monto_aplicar = min(saldo_restante, monto_faltante)
-        
+
         # ✅ PASO 4: Actualizar campos de la CUOTA en la tabla de amortización
         cuota.capital_pagado += capital_aplicar      # ✅ INCREMENTA lo pagado
         cuota.interes_pagado += interes_aplicar
         cuota.total_pagado += monto_aplicar
         cuota.capital_pendiente -= capital_aplicar   # ✅ DISMINUYE lo pendiente
         cuota.interes_pendiente -= interes_aplicar
-        
+
         # ✅ PASO 5: Verificar estado según regla de negocio
         if cuota.total_pagado >= cuota.monto_cuota:  # ✅ COMPARACIÓN CON monto_cuota
             cuota.estado = "PAGADO"
         elif cuota.total_pagado > 0:
             # Estado ATRASADO si vencida, PENDIENTE si no
             cuota.estado = "ATRASADO" if vencida else "PENDIENTE"
-        
+
         saldo_restante -= monto_aplicar
 ```
 

@@ -1,6 +1,6 @@
 # 📋 Instrucciones: Migraciones AI Training Separadas
 
-**Fecha:** 2025-11-14  
+**Fecha:** 2025-11-14
 **Estado:** ✅ Migraciones creadas (Opción 1 implementada)
 
 ---
@@ -97,10 +97,10 @@ alembic upgrade head
 
 ## 📊 Ventajas de las Migraciones Separadas
 
-✅ **Mantenibilidad:** Cada migración es pequeña y enfocada (~50-70 líneas)  
-✅ **Rollback Selectivo:** Puedes hacer rollback de una tabla específica  
-✅ **Revisión Fácil:** Más fácil de revisar y aprobar en PRs  
-✅ **Idempotentes:** Todas tienen verificación `_table_exists()`  
+✅ **Mantenibilidad:** Cada migración es pequeña y enfocada (~50-70 líneas)
+✅ **Rollback Selectivo:** Puedes hacer rollback de una tabla específica
+✅ **Revisión Fácil:** Más fácil de revisar y aprobar en PRs
+✅ **Idempotentes:** Todas tienen verificación `_table_exists()`
 ✅ **Orden Claro:** Dependencias explícitas en `down_revision`
 
 ---

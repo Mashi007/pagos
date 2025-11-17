@@ -68,7 +68,7 @@ class NotificacionService {
     const params = new URLSearchParams()
     if (tipo) params.append('tipo', tipo)
     params.append('solo_activas', String(soloActivas))
-    
+
     return await apiClient.get<NotificacionPlantilla[]>(`${this.baseUrl}/plantillas?${params}`)
   }
 
@@ -104,7 +104,7 @@ class NotificacionService {
     params.append('per_page', String(per_page))
     if (estado) params.append('estado', estado)
     if (canal) params.append('canal', canal)
-    
+
     return await apiClient.get<{ items: Notificacion[], total: number, page: number, page_size: number, total_pages: number }>(`${this.baseUrl}/?${params}`)
   }
 
@@ -121,7 +121,7 @@ class NotificacionService {
   async listarNotificacionesPrevias(estado?: string): Promise<{ items: any[], total: number, dias_5: number, dias_3: number, dias_1: number }> {
     const params = new URLSearchParams()
     if (estado) params.append('estado', estado)
-    
+
     // Usar timeout extendido para este endpoint que puede tardar más
     return await apiClient.get<{ items: any[], total: number, dias_5: number, dias_3: number, dias_1: number }>(
       `/api/v1/notificaciones-previas/?${params}`,
@@ -132,7 +132,7 @@ class NotificacionService {
   async listarNotificacionesRetrasadas(estado?: string): Promise<{ items: any[], total: number, dias_1: number, dias_3: number, dias_5: number }> {
     const params = new URLSearchParams()
     if (estado) params.append('estado', estado)
-    
+
     return await apiClient.get<{ items: any[], total: number, dias_1: number, dias_3: number, dias_5: number }>(
       `/api/v1/notificaciones-retrasadas/?${params}`,
       { timeout: 120000 } // 2 minutos de timeout
@@ -142,7 +142,7 @@ class NotificacionService {
   async listarNotificacionesPrejudiciales(estado?: string): Promise<{ items: any[], total: number }> {
     const params = new URLSearchParams()
     if (estado) params.append('estado', estado)
-    
+
     return await apiClient.get<{ items: any[], total: number }>(
       `/api/v1/notificaciones-prejudicial/?${params}`,
       { timeout: 120000 } // 2 minutos de timeout
@@ -152,7 +152,7 @@ class NotificacionService {
   async listarNotificacionesDiaPago(estado?: string): Promise<{ items: any[], total: number }> {
     const params = new URLSearchParams()
     if (estado) params.append('estado', estado)
-    
+
     return await apiClient.get<{ items: any[], total: number }>(
       `/api/v1/notificaciones-dia-pago/?${params}`,
       { timeout: 120000 } // 2 minutos de timeout
@@ -163,7 +163,7 @@ class NotificacionService {
   async listarVariables(activa?: boolean): Promise<NotificacionVariable[]> {
     const params = new URLSearchParams()
     if (activa !== undefined) params.append('activa', String(activa))
-    
+
     return await apiClient.get<NotificacionVariable[]>(`${this.baseUrl}/variables?${params}`)
   }
 
@@ -203,11 +203,11 @@ class EmailConfigService {
       ...config,
       smtp_password: config.smtp_password ? '***' : '(vacío)'
     })
-    
+
     try {
       // Usar timeout extendido para validación SMTP (puede tardar hasta 10-15 segundos)
       const resultado = await apiClient.put(
-        `${this.baseUrl}/email/configuracion`, 
+        `${this.baseUrl}/email/configuracion`,
         config,
         { timeout: 60000 } // 60 segundos para permitir validación SMTP
       )
@@ -271,7 +271,7 @@ class WhatsAppConfigService {
       ...config,
       access_token: config.access_token ? '***' : '(vacío)'
     })
-    
+
     try {
       const resultado = await apiClient.put(`${this.baseUrl}/whatsapp/configuracion`, config)
       console.log('✅ [WhatsAppConfigService] Respuesta exitosa:', resultado)

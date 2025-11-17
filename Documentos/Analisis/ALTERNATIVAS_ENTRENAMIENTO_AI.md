@@ -115,9 +115,9 @@ import json
 class AITrainingService:
     def __init__(self, api_key: str):
         self.client = openai.OpenAI(api_key=api_key)
-    
+
     def preparar_datos_entrenamiento(
-        self, 
+        self,
         conversaciones: List[Dict]
     ) -> str:
         """Preparar datos en formato JSONL para fine-tuning"""
@@ -130,15 +130,15 @@ class AITrainingService:
                     {"role": "assistant", "content": conv["respuesta"]}
                 ]
             })
-        
+
         # Guardar como JSONL
         archivo_jsonl = "training_data.jsonl"
         with open(archivo_jsonl, "w") as f:
             for item in datos:
                 f.write(json.dumps(item) + "\n")
-        
+
         return archivo_jsonl
-    
+
     def crear_archivo_entrenamiento(self, archivo_jsonl: str):
         """Subir archivo a OpenAI"""
         with open(archivo_jsonl, "rb") as f:
@@ -147,10 +147,10 @@ class AITrainingService:
                 purpose="fine-tune"
             )
         return file.id
-    
+
     def iniciar_entrenamiento(
-        self, 
-        file_id: str, 
+        self,
+        file_id: str,
         modelo_base: str = "gpt-4o"  # gpt-4o-mini no está disponible para fine-tuning
     ):
         """Iniciar job de fine-tuning"""
@@ -159,7 +159,7 @@ class AITrainingService:
             model=modelo_base
         )
         return job.id
-    
+
     def verificar_estado(self, job_id: str):
         """Verificar estado del entrenamiento"""
         job = self.client.fine_tuning.jobs.retrieve(job_id)
@@ -222,7 +222,7 @@ class RAGService:
             self.model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
         else:
             self.client = openai.OpenAI()
-    
+
     def generar_embedding(self, texto: str) -> List[float]:
         """Generar embedding para un texto"""
         if self.use_openai:
@@ -233,7 +233,7 @@ class RAGService:
             return response.data[0].embedding
         else:
             return self.model.encode(texto).tolist()
-    
+
     def buscar_documentos_relevantes(
         self,
         pregunta: str,
@@ -242,7 +242,7 @@ class RAGService:
     ) -> List[Dict]:
         """Buscar documentos más relevantes usando embeddings"""
         pregunta_embedding = self.generar_embedding(pregunta)
-        
+
         # Calcular similitud con cada documento
         scores = []
         for doc in documentos:
@@ -253,7 +253,7 @@ class RAGService:
                     np.linalg.norm(pregunta_embedding) * np.linalg.norm(doc_embedding)
                 )
                 scores.append((similarity, doc))
-        
+
         # Ordenar por similitud y retornar top_k
         scores.sort(reverse=True, key=lambda x: x[0])
         return [doc for _, doc in scores[:top_k]]
@@ -311,40 +311,40 @@ import pandas as pd
 def train_risk_model(self, training_data: list) -> bool:
     """
     Entrenar modelo de riesgo crediticio
-    
+
     Args:
         training_data: Lista de diccionarios con datos históricos
-        
+
     Returns:
         bool: True si se entrenó exitosamente
     """
     try:
         # Convertir a DataFrame
         df = pd.DataFrame(training_data)
-        
+
         # Definir características (features)
         feature_columns = [
             'edad', 'ingreso', 'deuda_total', 'ratio_deuda_ingreso',
             'historial_pagos', 'dias_ultimo_prestamo', 'numero_prestamos_previos'
         ]
-        
+
         # Variable objetivo
         target_column = 'riesgo'  # 'bajo', 'medio', 'alto'
-        
+
         # Preparar datos
         X = df[feature_columns]
         y = df[target_column].map({'bajo': 0, 'medio': 1, 'alto': 2})
-        
+
         # Dividir en train/test
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42, stratify=y
         )
-        
+
         # Escalar características
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
-        
+
         # Entrenar modelo
         model = RandomForestClassifier(
             n_estimators=100,
@@ -353,22 +353,22 @@ def train_risk_model(self, training_data: list) -> bool:
             class_weight='balanced'
         )
         model.fit(X_train_scaled, y_train)
-        
+
         # Evaluar
         y_pred = model.predict(X_test_scaled)
         accuracy = accuracy_score(y_test, y_pred)
         logger.info(f"✅ Modelo entrenado. Accuracy: {accuracy:.2%}")
         logger.info(f"\n{classification_report(y_test, y_pred)}")
-        
+
         # Guardar modelo y scaler
         self.models["risk_model"] = model
         self.scalers["risk_scaler"] = scaler
-        
+
         # Guardar en archivo
         self.save_models()
-        
+
         return True
-        
+
     except Exception as e:
         logger.error(f"Error entrenando modelo: {e}", exc_info=True)
         return False
@@ -497,7 +497,7 @@ Respuesta final
 
 ---
 
-**Fecha de Análisis**: 2025-01-XX  
-**Versión**: 1.0  
+**Fecha de Análisis**: 2025-01-XX
+**Versión**: 1.0
 **Autor**: Análisis Automático del Código
 

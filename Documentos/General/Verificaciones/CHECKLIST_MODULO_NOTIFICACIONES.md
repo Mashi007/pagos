@@ -1,6 +1,6 @@
 # ✅ CHECKLIST MÓDULO NOTIFICACIONES Y PLANTILLAS
 
-**Fecha revisión:** 2025-10-30  
+**Fecha revisión:** 2025-10-30
 **Estado general:** 🟢 **FUNCIONAL** (requiere configuración externa para scheduler)
 
 ---

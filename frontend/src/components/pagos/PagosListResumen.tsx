@@ -63,7 +63,7 @@ export function PagosListResumen() {
     try {
       toast.loading('Generando PDF...')
       const blob = await pagoService.descargarPDFPendientes(cedula)
-      
+
       // Crear URL temporal y descargar
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -73,7 +73,7 @@ export function PagosListResumen() {
       a.click()
       document.body.removeChild(a)
       window.URL.revokeObjectURL(url)
-      
+
       toast.dismiss()
       toast.success('PDF descargado exitosamente')
     } catch (error: unknown) {
@@ -106,8 +106,8 @@ export function PagosListResumen() {
               value={filters.cedula}
               onChange={e => handleFilterChange('cedula', e.target.value)}
             />
-            <Select 
-              value={filters.estado || 'all'} 
+            <Select
+              value={filters.estado || 'all'}
               onValueChange={value => handleFilterChange('estado', value)}
             >
               <SelectTrigger>
@@ -153,8 +153,8 @@ export function PagosListResumen() {
                   </thead>
                   <tbody>
                     {data?.items?.map((item: UltimoPago) => (
-                      <tr 
-                        key={`${item.cedula}-${item.pago_id}`} 
+                      <tr
+                        key={`${item.cedula}-${item.pago_id}`}
                         className="border-b hover:bg-gray-50 cursor-pointer"
                         onClick={() => handleDescargarPDF(item.cedula)}
                       >
@@ -165,7 +165,7 @@ export function PagosListResumen() {
                           ${item.monto_ultimo_pago.toFixed(2)}
                         </td>
                         <td className="px-4 py-3">
-                          {item.fecha_ultimo_pago 
+                          {item.fecha_ultimo_pago
                             ? new Date(item.fecha_ultimo_pago).toLocaleDateString()
                             : 'N/A'}
                         </td>
@@ -179,8 +179,8 @@ export function PagosListResumen() {
                         </td>
                         <td className="px-4 py-3">{item.total_prestamos}</td>
                         <td className="px-4 py-3">
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="outline"
                             onClick={(e) => {
                               e.stopPropagation()

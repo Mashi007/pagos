@@ -72,6 +72,7 @@ class Ticket(Base):
                     "apellidos": self.cliente.apellidos,
                     "cedula": self.cliente.cedula,
                     "telefono": self.cliente.telefono,
+                    "email": self.cliente.email,
                 }
                 if self.cliente
                 else None

@@ -108,7 +108,7 @@ ROLLBACK;
 ### Query 1: Verificar pagos vinculados
 
 ```sql
-SELECT 
+SELECT
     COUNT(*) as total_pagos_vinculados,
     COUNT(DISTINCT prestamo_id) as prestamos_afectados,
     SUM(monto_pagado) as monto_total
@@ -125,7 +125,7 @@ WHERE activo = true
 ### Query 2: Verificar cuotas con pagos
 
 ```sql
-SELECT 
+SELECT
     COUNT(*) as total_cuotas,
     COUNT(CASE WHEN total_pagado > 0 THEN 1 END) as cuotas_con_pagos,
     SUM(total_pagado) as monto_total_pagado
@@ -141,7 +141,7 @@ WHERE p.estado = 'APROBADO';
 ### Query 3: Verificar morosidad mensual
 
 ```sql
-SELECT 
+SELECT
     TO_CHAR(DATE_TRUNC('month', c.fecha_vencimiento), 'YYYY-MM') as mes,
     SUM(c.monto_cuota) as monto_programado,
     SUM(COALESCE(c.total_pagado, 0)) as monto_pagado,

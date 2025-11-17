@@ -359,7 +359,7 @@ class AITrainingService {
   }): Promise<{ job_id: string; mensaje: string }> {
     // Usar timeout extendido (5 minutos) para entrenamiento ML que puede tardar mucho
     const response = await apiClient.post<{ job_id: string; mensaje: string }>(
-      `${this.baseUrl}/ml-riesgo/entrenar`, 
+      `${this.baseUrl}/ml-riesgo/entrenar`,
       params || {},
       { timeout: 300000 } // 5 minutos
     )

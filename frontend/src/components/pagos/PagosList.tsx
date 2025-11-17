@@ -76,18 +76,18 @@ export function PagosList() {
     try {
       toast.loading('Generando informe de pagos con errores...', { id: 'descargar-errores' })
       const { blob, filename } = await pagoService.descargarPagosConErrores()
-      
+
       // Crear URL temporal y descargar
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
       link.download = filename
-      
+
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
-      
+
       toast.success('Informe descargado correctamente', { id: 'descargar-errores' })
     } catch (error) {
       console.error('Error descargando informe de errores:', error)
@@ -127,7 +127,7 @@ export function PagosList() {
             Registrar Pago
           </Button>
           <Button
-            variant="outline" 
+            variant="outline"
             onClick={handleDescargarPagosConErrores}
             className="border-red-500 text-red-600 hover:bg-red-50"
           >
@@ -216,8 +216,8 @@ export function PagosList() {
                   <p className="text-gray-600 text-sm">
                     {error instanceof Error ? error.message : 'Error desconocido'}
                   </p>
-                  <Button 
-                    className="mt-4" 
+                  <Button
+                    className="mt-4"
                     onClick={() => queryClient.refetchQueries({ queryKey: ['pagos'] })}
                   >
                     Reintentar
@@ -228,13 +228,13 @@ export function PagosList() {
                   <CreditCard className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600 font-semibold mb-2">No se encontraron pagos</p>
                   <p className="text-gray-500 text-sm">
-                    {data?.total === 0 
+                    {data?.total === 0
                       ? 'No hay pagos registrados en el sistema.'
                       : 'No hay pagos que coincidan con los filtros aplicados.'}
                   </p>
                   {(filters.cedula || filters.estado || filters.fechaDesde || filters.fechaHasta || filters.analista) && (
-                    <Button 
-                      className="mt-4" 
+                    <Button
+                      className="mt-4"
                       variant="outline"
                       onClick={() => setFilters({
                         cedula: '',
@@ -289,9 +289,9 @@ export function PagosList() {
                               )}
                             </td>
                             <td className="px-4 py-3">
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
+                              <Button
+                                size="sm"
+                                variant="outline"
                                 title="Editar Pago"
                                 onClick={() => {
                                   setPagoEditando(pago)
@@ -347,8 +347,8 @@ export function PagosList() {
           pagoInicial={pagoEditando ? {
             cedula_cliente: pagoEditando.cedula_cliente,
             prestamo_id: pagoEditando.prestamo_id,
-            fecha_pago: typeof pagoEditando.fecha_pago === 'string' 
-              ? pagoEditando.fecha_pago.split('T')[0] 
+            fecha_pago: typeof pagoEditando.fecha_pago === 'string'
+              ? pagoEditando.fecha_pago.split('T')[0]
               : new Date(pagoEditando.fecha_pago).toISOString().split('T')[0],
             monto_pagado: pagoEditando.monto_pagado,
             numero_documento: pagoEditando.numero_documento,
@@ -363,41 +363,41 @@ export function PagosList() {
             console.log('🔄 onSuccess llamado - Iniciando actualización de dashboard...')
             setShowRegistrarPago(false)
             setPagoEditando(null)
-            
+
             try {
               // Invalidar todas las queries relacionadas con pagos primero
               console.log('🔀 Invalidando queries de pagos...')
               await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-              
+
               // Invalidar queries de KPIs y dashboard que puedan depender de pagos
               console.log('🔀 Invalidando queries de KPIs y dashboard...')
               await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // ✅ Invalidar específicamente pagos-kpis
               await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
               await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
-              
+
               // Invalidar también la query de últimos pagos (resumen)
               await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
-              
+
               // Refetch inmediato de KPIs para actualización en tiempo real
               await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
-              
+
               // Refetch de todas las queries relacionadas con pagos (no solo activas)
               // Esto asegura que las queries se actualicen incluso si no están montadas
               console.log('🔁 Ejecutando refetch de queries de pagos...')
-              const refetchResult = await queryClient.refetchQueries({ 
+              const refetchResult = await queryClient.refetchQueries({
                 queryKey: ['pagos'],
                 exact: false
               })
-              
+
               // Refetch también de queries activas para actualización inmediata
-              const activeRefetchResult = await queryClient.refetchQueries({ 
+              const activeRefetchResult = await queryClient.refetchQueries({
                 queryKey: ['pagos'],
                 exact: false,
                 type: 'active'
               })
-              
+
               console.log('✅ Refetch completado:', { refetchResult, activeRefetchResult })
-              
+
               toast.success('Pago registrado exitosamente. El dashboard se ha actualizado.')
             } catch (error) {
               console.error('❌ Error actualizando dashboard:', error)

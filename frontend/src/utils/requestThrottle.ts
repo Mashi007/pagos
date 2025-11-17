@@ -76,13 +76,13 @@ class RequestThrottler {
     delayBetweenBatches = 200
   ): Promise<T[]> {
     const results: T[] = [];
-    
+
     for (let i = 0; i < requests.length; i += batchSize) {
       const batch = requests.slice(i, i + batchSize);
       const batchResults = await Promise.allSettled(
         batch.map(req => this.execute(req))
       );
-      
+
       // Procesar resultados
       batchResults.forEach((result, index) => {
         if (result.status === 'fulfilled') {

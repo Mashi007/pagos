@@ -1,6 +1,6 @@
 # ✅ VERIFICACIÓN DE ENDPOINTS - MÓDULO NOTIFICACIONES
 
-**Fecha:** 2025-10-30  
+**Fecha:** 2025-10-30
 **Problema reportado:** Error 500 en `GET /api/v1/notificaciones/plantillas?solo_activas=false`
 
 ---
@@ -22,7 +22,7 @@ Error 500 probablemente causado por:
 
 #### 2. ✅ **Serialización manual en otros endpoints**
 - `POST /plantillas` - Crear
-- `PUT /plantillas/{id}` - Actualizar  
+- `PUT /plantillas/{id}` - Actualizar
 - `GET /plantillas/{id}` - Obtener
 
 #### 3. ✅ **Mejor manejo de errores**

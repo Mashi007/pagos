@@ -1,7 +1,7 @@
 # Análisis de Logs del Servidor - Rapicredit Frontend
 
-**Fecha:** 2025-11-10  
-**Servicio:** rapicredit-frontend (Render)  
+**Fecha:** 2025-11-10
+**Servicio:** rapicredit-frontend (Render)
 **URL:** https://rapicredit.onrender.com
 
 ## 📊 Resumen Ejecutivo

@@ -30,18 +30,18 @@ app.disable('x-powered-by');
 app.use((req, res, next) => {
   // Prevenir MIME sniffing
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  
+
   // Prevenir clickjacking
   res.setHeader('X-Frame-Options', 'DENY');
-  
+
   // XSS Protection
   res.setHeader('X-XSS-Protection', '1; mode=block');
-  
+
   // HSTS - Solo en producción
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
-  
+
   // Content Security Policy
   res.setHeader(
     'Content-Security-Policy',
@@ -52,13 +52,13 @@ app.use((req, res, next) => {
     "font-src 'self' data:; " +
     "connect-src 'self' " + API_URL
   );
-  
+
   // Referrer Policy
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  
+
   // Permissions Policy
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-  
+
   next();
 });
 
@@ -86,7 +86,7 @@ app.use(compression({
 // Reducir logging en producción para mejorar rendimiento
 // En Render, PORT siempre está configurado, así que si PORT existe y NODE_ENV no es 'development', es producción
 const isDevelopment = process.env.NODE_ENV === 'development';
-const isProduction = process.env.NODE_ENV === 'production' || 
+const isProduction = process.env.NODE_ENV === 'production' ||
                      (process.env.PORT && process.env.NODE_ENV !== 'development');
 
 // Log de diagnóstico solo al inicio
@@ -154,31 +154,31 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
       // Este callback se ejecuta DESPUÉS del pathRewrite
       // El proxyReq ya tiene el path reescrito y el query string se preserva automáticamente
       // IMPORTANTE: NO debemos modificar el query string manualmente - http-proxy-middleware lo maneja
-      
+
       // Solo loggear detalles en desarrollo
       if (isDevelopment) {
         const queryString = proxyReq.path.includes('?') ? proxyReq.path.split('?')[1] : '';
         console.log(`➡️  [${req.method}] Proxying: ${req.path}`);
         console.log(`   Target: ${API_URL}${proxyReq.path}`);
       }
-      
+
       // Asegurar que los headers se copien correctamente
       const authHeader = req.headers.authorization || req.headers.Authorization;
       if (authHeader) {
         proxyReq.setHeader('Authorization', authHeader);
       }
-      
+
       // Copiar otros headers importantes
       if (req.headers.cookie) {
         proxyReq.setHeader('Cookie', req.headers.cookie);
       }
-      
+
       // Configurar timeout para evitar peticiones colgadas
       proxyReq.setTimeout(60000); // 60 segundos
     },
     onProxyRes: (proxyRes, req, res) => {
       const status = proxyRes.statusCode;
-      
+
       // ✅ OPTIMIZACIÓN: Agregar cache headers para respuestas exitosas de GET
       // Esto reduce la carga en el backend para datos que no cambian frecuentemente
       if (status >= 200 && status < 300 && req.method === 'GET') {
@@ -189,9 +189,9 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
           '/api/v1/analistas',
           '/api/v1/configuracion'
         ];
-        
+
         const isCacheable = cacheableEndpoints.some(endpoint => req.path.includes(endpoint));
-        
+
         if (isCacheable) {
           // Cache por 5 minutos para datos que cambian poco
           res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
@@ -203,7 +203,7 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         }
       }
-      
+
       // Solo loggear errores en producción, todo en desarrollo
       if (!isDevelopment && status >= 400) {
         const emoji = status >= 400 ? '❌' : '⚠️';
@@ -231,12 +231,12 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
       }
     }
   });
-  
+
   // IMPORTANTE: Usar app.use('/api', ...) para que Express maneje el routing
   // Esto asegura que SOLO rutas que empiecen con /api pasen por el proxy
   // Las rutas como /clientes, /assets/*.js, etc. NO pasarán por aquí
   app.use('/api', proxyMiddleware);
-  
+
   // También registrar explícitamente para debug
   console.log('✅ Proxy middleware registrado para rutas /api/*');
 } else {
@@ -344,7 +344,7 @@ app.get('*', (req, res) => {
     console.warn(`⚠️  Ruta /api no capturada por proxy: ${req.method} ${req.path}`);
     return res.status(404).json({ error: 'API endpoint not found' });
   }
-  
+
   // ✅ CRÍTICO: Si es una ruta de assets y no se encontró el archivo, devolver 404
   // NO servir index.html para archivos de assets que no existen
   // IMPORTANTE: No devolver JSON para archivos estáticos, solo 404 simple
@@ -363,7 +363,7 @@ app.get('*', (req, res) => {
     }
     return res.status(404).send('Not Found');
   }
-  
+
   // ✅ También devolver 404 para otros archivos estáticos que no existen (favicon, imágenes, etc.)
   const staticFileExtensions = ['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.eot'];
   const isStaticFile = staticFileExtensions.some(ext => req.path.endsWith(ext));
@@ -382,7 +382,7 @@ app.get('*', (req, res) => {
     }
     return res.status(404).send('Not Found');
   }
-  
+
   // Si llegamos aquí, NO es un archivo estático
   // Es una ruta de la SPA (como /clientes, /dashboard) → servir index.html
   // React Router manejará la ruta en el cliente

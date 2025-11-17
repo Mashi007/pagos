@@ -1,6 +1,6 @@
 # 🔧 FIX: Error "current transaction is aborted"
 
-**Fecha**: 2025-11-04  
+**Fecha**: 2025-11-04
 **Error**: `sqlalchemy.exc.InternalError: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block`
 
 ---
@@ -13,7 +13,7 @@ Cuando una query falla dentro de una transacción en PostgreSQL, la transacción
 ```
 File "dashboard.py", line 1111, in dashboard_administrador
     total_financiamiento_operaciones = float(total_financiamiento_query.scalar() or Decimal("0"))
-sqlalchemy.exc.InternalError: (psycopg2.errors.InFailedSqlTransaction) 
+sqlalchemy.exc.InternalError: (psycopg2.errors.InFailedSqlTransaction)
 current transaction is aborted, commands ignored until end of transaction block
 ```
 

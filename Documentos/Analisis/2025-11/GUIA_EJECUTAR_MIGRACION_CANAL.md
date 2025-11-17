@@ -1,7 +1,7 @@
 # 📋 GUÍA: Ejecutar Migración para Columna 'canal'
 
-**Fecha:** 2025-11-06  
-**Problema:** Columna 'canal' no existe en tabla 'notificaciones'  
+**Fecha:** 2025-11-06
+**Problema:** Columna 'canal' no existe en tabla 'notificaciones'
 **Solución:** Ejecutar migración de Alembic existente
 
 ---
@@ -133,9 +133,9 @@ ix_notificaciones_canal | CREATE INDEX ix_notificaciones_canal ON public.notific
 
 ```sql
 -- Verificar si la columna ya existe
-SELECT column_name 
+SELECT column_name
 FROM information_schema.columns
-WHERE table_name = 'notificaciones' 
+WHERE table_name = 'notificaciones'
   AND column_name = 'canal';
 
 -- Si no existe, agregarla
@@ -143,15 +143,15 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'notificaciones' 
+        WHERE table_name = 'notificaciones'
           AND column_name = 'canal'
     ) THEN
-        ALTER TABLE notificaciones 
+        ALTER TABLE notificaciones
         ADD COLUMN canal VARCHAR(20);
-        
-        CREATE INDEX IF NOT EXISTS ix_notificaciones_canal 
+
+        CREATE INDEX IF NOT EXISTS ix_notificaciones_canal
         ON notificaciones(canal);
-        
+
         RAISE NOTICE 'Columna canal agregada exitosamente';
     ELSE
         RAISE NOTICE 'Columna canal ya existe';
@@ -190,7 +190,7 @@ curl -X GET "https://pagos-f2qf.onrender.com/api/v1/notificaciones/?page=1&per_p
 **Solución:**
 1. Verificar estado real de la BD:
    ```sql
-   SELECT column_name FROM information_schema.columns 
+   SELECT column_name FROM information_schema.columns
    WHERE table_name = 'notificaciones';
    ```
 
@@ -222,9 +222,9 @@ curl -X GET "https://pagos-f2qf.onrender.com/api/v1/notificaciones/?page=1&per_p
 
 **Después de ejecutar la migración:**
 
-✅ Columna `canal` existe en tabla `notificaciones`  
-✅ Índice `ix_notificaciones_canal` creado  
-✅ Endpoint `/api/v1/notificaciones/` funciona sin errores  
+✅ Columna `canal` existe en tabla `notificaciones`
+✅ Índice `ix_notificaciones_canal` creado
+✅ Endpoint `/api/v1/notificaciones/` funciona sin errores
 ✅ Sin mensajes de error en logs del backend
 
 ---

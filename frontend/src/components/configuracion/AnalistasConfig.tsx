@@ -40,13 +40,13 @@ export function AnalistasConfig() {
   }
 
   // Usar hooks de React Query
-  const { 
-    data: analistas, 
-    isLoading: loading, 
+  const {
+    data: analistas,
+    isLoading: loading,
     error,
     refetch
   } = useAnalistasActivos()
-  
+
   const createAnalistaMutation = useCreateAnalista()
   const updateAnalistaMutation = useUpdateAnalista()
   const deleteAnalistaMutation = useDeleteAnalista()
@@ -64,7 +64,7 @@ export function AnalistasConfig() {
         await createAnalistaMutation.mutateAsync(formData)
         toast.success('✅ Analista creado exitosamente')
       }
-      
+
       resetForm()
       // Refrescar la lista automáticamente
       refetch()
@@ -90,11 +90,11 @@ export function AnalistasConfig() {
         '⚠️ ¿Estás seguro de que quieres ELIMINAR este analista?\n\n' +
         'Esta acción NO se puede deshacer.'
       )
-      
+
       if (!confirmar) {
         return
       }
-      
+
       await deleteAnalistaMutation.mutateAsync(id)
       toast.success('✅ Analista eliminado exitosamente')
       // Refrescar la lista automáticamente
@@ -237,7 +237,7 @@ export function AnalistasConfig() {
                   required
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Estado *
@@ -267,10 +267,10 @@ export function AnalistasConfig() {
                   La fecha se establece automáticamente al día de hoy
                 </p>
               </div>
-              
+
               <div className="flex items-center space-x-2 pt-4">
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={createAnalistaMutation.isPending || updateAnalistaMutation.isPending}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
@@ -324,15 +324,15 @@ export function AnalistasConfig() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {analista.created_at 
+                    {analista.created_at
                       ? (() => {
                           const date = new Date(analista.created_at)
-                          return isNaN(date.getTime()) 
-                            ? '01/10/2025' 
-                            : date.toLocaleDateString('es-VE', { 
-                                year: 'numeric', 
-                                month: '2-digit', 
-                                day: '2-digit' 
+                          return isNaN(date.getTime())
+                            ? '01/10/2025'
+                            : date.toLocaleDateString('es-VE', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit'
                               })
                         })()
                       : '01/10/2025'}
@@ -362,7 +362,7 @@ export function AnalistasConfig() {
               ))}
             </TableBody>
           </Table>
-          
+
           {filteredAnalistas.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               {searchTerm ? 'No se encontraron analistas con ese nombre' : 'No hay analistas disponibles'}

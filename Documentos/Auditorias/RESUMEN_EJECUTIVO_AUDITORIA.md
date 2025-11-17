@@ -1,6 +1,6 @@
 # 📋 RESUMEN EJECUTIVO - AUDITORÍA COMPLETA
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Sistema:** Sistema de Pagos RapiCredit
 
 ---

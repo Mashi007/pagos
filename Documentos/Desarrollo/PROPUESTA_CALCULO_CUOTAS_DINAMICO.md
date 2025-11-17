@@ -22,7 +22,7 @@ Pero según **TABLA 9: CONDICIONES SEGÚN NIVEL DE RIESGO**, el plazo máximo de
 
 **FASE 1: Creación del Préstamo (DRAFT)**
 - Usuario ingresa monto y modalidad
-- Se asigna un número de cuotas temporal: 
+- Se asigna un número de cuotas temporal:
   - MENSUAL: 36 (valor por defecto)
   - QUINCENAL: 72
   - SEMANAL: 144
@@ -46,18 +46,18 @@ Pero según **TABLA 9: CONDICIONES SEGÚN NIVEL DE RIESGO**, el plazo máximo de
 
 ```python
 def calcular_cuotas_dinamico(
-    total: Decimal, 
-    modalidad: str, 
+    total: Decimal,
+    modalidad: str,
     plazo_maximo_meses: int = None  # Si no se especifica, usa valores por defecto
 ) -> tuple[int, Decimal]:
     """
     Calcula cuotas considerando el plazo máximo del análisis de riesgo.
-    
+
     Args:
         total: Monto total del préstamo
         modalidad: MENSUAL, QUINCENAL, SEMANAL
         plazo_maximo_meses: Plazo máximo en meses (desde evaluación de riesgo)
-    
+
     Returns:
         (numero_cuotas, cuota_periodo)
     """
@@ -77,7 +77,7 @@ def calcular_cuotas_dinamico(
             cuotas = 72
         elif modalidad == "SEMANAL":
             cuotas = 144
-    
+
     cuota_periodo = total / Decimal(cuotas)
     return cuotas, cuota_periodo
 ```
@@ -113,7 +113,7 @@ const [plazoMaximo, setPlazoMaximo] = useState<number | null>(null)
 
 const calcularCuotas = (total: number, modalidad: string, plazoMax?: number) => {
   let cuotas = 36 // Default MENSUAL
-  
+
   if (plazoMax) {
     // Si ya hay evaluación de riesgo, usar plazo máximo
     if (modalidad === 'QUINCENAL') cuotas = plazoMax * 2
@@ -124,7 +124,7 @@ const calcularCuotas = (total: number, modalidad: string, plazoMax?: number) => 
     if (modalidad === 'QUINCENAL') cuotas = 72
     else if (modalidad === 'SEMANAL') cuotas = 144
   }
-  
+
   const cuota = total / cuotas
   setNumeroCuotas(cuotas)
   setCuotaPeriodo(cuota)
@@ -143,24 +143,24 @@ def actualizar_cuotas_segun_riesgo(
     Actualiza el número de cuotas y cuota_periodo después de evaluación de riesgo.
     """
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-    
+
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
+
     # Recalcular cuotas según plazo máximo
     numero_cuotas, cuota_periodo = calcular_cuotas_dinamico(
         prestamo.total_financiamiento,
         prestamo.modalidad_pago,
         plazo_maximo_meses
     )
-    
+
     # Actualizar préstamo
     prestamo.numero_cuotas = numero_cuotas
     prestamo.cuota_periodo = cuota_periodo
-    
+
     db.commit()
     db.refresh(prestamo)
-    
+
     return prestamo
 ```
 
@@ -175,27 +175,27 @@ def aprobar_prestamo_con_condiciones(
     current_user: User = Depends(get_current_user)
 ):
     """Aprueba un préstamo y aplica condiciones según riesgo"""
-    
+
     prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-    
+
     # 1. Actualizar cuotas según plazo máximo
     actualizar_cuotas_segun_riesgo(prestamo_id, datos_aprobacion['plazo_maximo'], db)
-    
+
     # 2. Aplicar tasa de interés
     prestamo.tasa_interes = datos_aprobacion['tasa_interes']
     prestamo.fecha_base_calculo = datos_aprobacion.get('fecha_base_calculo')
-    
+
     # 3. Cambiar estado
     prestamo.estado = "APROBADO"
     prestamo.usuario_aprobador = current_user.email
     prestamo.fecha_aprobacion = datetime.utcnow()
-    
+
     db.commit()
-    
+
     # 4. Generar tabla de amortización
     if prestamo.fecha_base_calculo:
         generar_amortizacion(prestamo, prestamo.fecha_base_calculo, db)
-    
+
     return prestamo
 ```
 

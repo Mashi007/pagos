@@ -57,13 +57,13 @@ class AuditoriaService {
       console.log('🔍 Filtros enviados:', filters)
       const response = await apiClient.get<AuditoriaListResponse>(this.baseUrl, { params: filters })
       console.log('📦 Respuesta recibida del servidor:', response)
-      
+
       // Validar que la respuesta tenga la estructura esperada
       if (!response || typeof response !== 'object') {
         console.error('❌ Respuesta inválida:', response)
         throw new Error('Respuesta inválida del servidor')
       }
-      
+
       // Asegurar que tenga la estructura esperada
       const validResponse: AuditoriaListResponse = {
         items: Array.isArray(response.items) ? response.items : [],
@@ -72,7 +72,7 @@ class AuditoriaService {
         page_size: typeof response.page_size === 'number' ? response.page_size : 10,
         total_pages: typeof response.total_pages === 'number' ? response.total_pages : 1
       }
-      
+
       console.log('✅ Respuesta validada:', validResponse)
       return validResponse
     } catch (error: any) {
@@ -82,7 +82,7 @@ class AuditoriaService {
         response: error?.response?.data,
         status: error?.response?.status
       })
-      
+
       // Re-lanzar el error para que el componente pueda manejarlo
       throw error
     }
@@ -139,23 +139,23 @@ class AuditoriaService {
   async descargarExcel(filters?: Omit<AuditoriaFilters, 'skip' | 'limit' | 'ordenar_por' | 'orden'>): Promise<void> {
     try {
       const blob = await this.exportarExcel(filters)
-      
+
       // Crear URL del blob
       const url = window.URL.createObjectURL(blob)
-      
+
       // Crear elemento de descarga
       const link = document.createElement('a')
       link.href = url
-      
+
       // Generar nombre de archivo con timestamp
       const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')
       link.download = `auditoria_${timestamp}.xlsx`
-      
+
       // Descargar archivo
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      
+
       // Limpiar URL
       window.URL.revokeObjectURL(url)
     } catch (error) {

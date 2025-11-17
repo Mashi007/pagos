@@ -134,32 +134,32 @@ Debes crear 7 plantillas con estos tipos:
         <div class="header">
             <h1>📧 RapiCredit</h1>
         </div>
-        
+
         <div class="content">
             <h2>Recordatorio de Pago</h2>
-            
+
             <p>Estimado/a <strong>{{nombre}}</strong>,</p>
-            
+
             <p>Le recordamos que tiene un pago pendiente:</p>
-            
+
             <div class="details">
                 <p><strong>📋 Crédito ID:</strong> {{credito_id}}</p>
                 <p><strong>💵 Cuota:</strong> {{numero_cuota}}</p>
                 <p><strong>💰 Monto:</strong> {{monto}} VES</p>
                 <p><strong>📅 Fecha de vencimiento:</strong> {{fecha_vencimiento}}</p>
             </div>
-            
+
             <div class="alert">
                 <p><strong>⚠️ Importante:</strong></p>
                 <p>Por favor, realice su pago a tiempo para evitar cargos adicionales.</p>
             </div>
-            
+
             <p>Si ya realizó el pago, puede ignorar este mensaje.</p>
-            
+
             <p>Saludos cordiales,<br>
             <strong>Equipo RapiCredit</strong></p>
         </div>
-        
+
         <div class="footer">
             <p>Este es un email automático, por favor no responda.</p>
             <p>© 2025 RapiCredit. Todos los derechos reservados.</p>

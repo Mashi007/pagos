@@ -61,7 +61,7 @@ export const safeConsole = {
 // Función para migrar un archivo específico de forma segura
 export const migrateFileToLogger = (filePath: string) => {
   console.log(`🔄 Migrando ${filePath} a logger estructurado...`)
-  
+
   // Esta función se puede usar para migrar archivos específicos
   // Por ahora solo registra la intención
   logger.info(`Migration planned for ${filePath}`, {

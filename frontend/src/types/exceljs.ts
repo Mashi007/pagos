@@ -1,7 +1,7 @@
 /**
  * Tipos y helpers para exceljs (alternativa segura a xlsx)
  * ExcelJS es una librería moderna y segura para trabajar con archivos Excel
- * 
+ *
  * ✅ OPTIMIZACIÓN: Todos los imports son dinámicos para reducir el bundle inicial
  * Las librerías se cargan solo cuando se necesitan (lazy loading)
  */
@@ -40,21 +40,21 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
       throw new Error('Workbook no está disponible en ExcelJS')
     }
     const workbook = new Workbook()
-  
+
   let buffer: ArrayBuffer
   if (file instanceof File) {
     buffer = await file.arrayBuffer()
   } else {
     buffer = file
   }
-  
+
     await workbook.xlsx.load(buffer)
     const worksheet = workbook.getWorksheet(1) || workbook.worksheets[0]
-    
+
     if (!worksheet) {
       throw new Error('El archivo Excel no contiene hojas de cálculo')
     }
-    
+
     const data: any[][] = []
     worksheet.eachRow((row, rowNumber) => {
       const rowData: any[] = []
@@ -63,7 +63,7 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
       })
       data.push(rowData)
     })
-    
+
     return data
   } catch (error) {
     // ✅ Capturar errores durante la lectura del archivo Excel
@@ -85,15 +85,15 @@ export async function createAndDownloadExcel(
     }
     const workbook = new Workbook()
     const worksheet = workbook.addWorksheet(sheetName)
-    
+
     if (data.length === 0) {
       throw new Error('No hay datos para exportar')
     }
-    
+
     // Agregar encabezados
     const headers = Object.keys(data[0])
     worksheet.addRow(headers)
-    
+
     // Estilizar encabezados
     const headerRow = worksheet.getRow(1)
     headerRow.font = { bold: true }
@@ -102,13 +102,13 @@ export async function createAndDownloadExcel(
       pattern: 'solid',
       fgColor: { argb: 'FFE0E0E0' }
     }
-    
+
     // Agregar datos
     data.forEach(row => {
       const values = headers.map(header => row[header] ?? '')
       worksheet.addRow(values)
     })
-    
+
     // Ajustar ancho de columnas automáticamente
     worksheet.columns.forEach((column, index) => {
       if (column) {
@@ -128,11 +128,11 @@ export async function createAndDownloadExcel(
         column.width = Math.min(maxLength + 2, 50)
       }
     })
-  
+
     // Generar buffer y descargar
     const buffer = await workbook.xlsx.writeBuffer()
-    const blob = new Blob([buffer], { 
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -160,16 +160,16 @@ export async function createMultiSheetExcel(
       throw new Error('Workbook no está disponible en ExcelJS')
     }
     const workbook = new Workbook()
-    
+
     sheets.forEach(({ name, data }) => {
       if (data.length === 0) return
-      
+
       const worksheet = workbook.addWorksheet(name)
       const headers = Object.keys(data[0])
-      
+
       // Agregar encabezados
       worksheet.addRow(headers)
-      
+
       // Estilizar encabezados
       const headerRow = worksheet.getRow(1)
       headerRow.font = { bold: true }
@@ -178,13 +178,13 @@ export async function createMultiSheetExcel(
         pattern: 'solid',
         fgColor: { argb: 'FFE0E0E0' }
       }
-      
+
       // Agregar datos
       data.forEach(row => {
         const values = headers.map(header => row[header] ?? '')
         worksheet.addRow(values)
       })
-      
+
       // Ajustar ancho de columnas
       worksheet.columns.forEach((column, index) => {
         if (column) {
@@ -205,11 +205,11 @@ export async function createMultiSheetExcel(
         }
       })
     })
-  
+
     // Generar buffer y descargar
     const buffer = await workbook.xlsx.writeBuffer()
-    const blob = new Blob([buffer], { 
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')

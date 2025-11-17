@@ -66,7 +66,7 @@ Relaciones:
 # Backend - Aplicar filtros automáticamente
 query = db.query(Prestamo)
 query = FiltrosDashboard.aplicar_filtros_prestamo(
-    query, 
+    query,
     analista=analista,
     concesionario=concesionario,
     modelo=modelo,
@@ -110,7 +110,7 @@ Al hacer click en cualquier punto/barra/segmento:
   - Abrir modal o drawer con información detallada
   - Mostrar tabla con registros que componen ese punto
   - Filtros adicionales específicos para ese detalle
-  
+
 - ✅ **Ejemplo de Detalle al Click:**
   ```
   Click en: "Analista Juan Pérez - $450K morosidad"
@@ -792,7 +792,7 @@ Gráfico tipo **Treemap** que representa la morosidad agrupada por analista, inc
 #### **Datos a Mostrar por Rectángulo:**
 - **Label:** Nombre del Analista
 - **Valor Principal:** Monto total de morosidad O cantidad de clientes (pendiente confirmación)
-- **Información Adicional:** 
+- **Información Adicional:**
   - Cantidad de clientes en mora
   - Monto promedio de morosidad por cliente
   - Días promedio de atraso (opcional)
@@ -1062,14 +1062,14 @@ Gráfico tipo **Donut/Pie Chart** que representa la distribución de préstamos 
 - ⚠️ **Nota:** El filtro por concesionario no aplica aquí (la agrupación ES por concesionario)
 
 #### **Interactividad:**
-- **Hover:** 
+- **Hover:**
   - Resaltar segmento
   - Mostrar tooltip con:
     - Nombre del concesionario
     - Porcentaje exacto
     - Cantidad de préstamos
     - Monto total (opcional)
-  
+
 - **Click:** (Opcional)
   - Filtrar otros gráficos del dashboard por ese concesionario
   - O abrir detalle del concesionario
@@ -1361,7 +1361,7 @@ Gráfico tipo **Bar Chart Divergente** (barras horizontales que se extienden des
     - Categoría
     - Valor exacto (porcentaje y absoluto)
     - Cantidad de préstamos
-    
+
 - **Click:** (Opcional)
   - Filtrar otros gráficos por esa categoría
   - O abrir detalle de la categoría
@@ -1673,7 +1673,7 @@ Gráfico tipo **Line Chart** (líneas de tendencia) que muestra **Cuentas por Co
 - ✅ **Cuando se genera un nuevo crédito:**
   - Se recalcula la proyección considerando el nuevo monto
   - Se actualiza el total de cuentas por cobrar
-  
+
 - ✅ **Cuando se actualizan amortizaciones:**
   - Se recalcula cuotas en días
   - Se ajusta proyección según nuevos vencimientos
@@ -1843,13 +1843,13 @@ Response:
 for dia in dias_restantes_mes_actual:
     # Base: Tendencia del mes
     base = promedio_historico_mes
-    
+
     # Ajuste por nuevos créditos
     nuevos_creditos_hoy = sumar_nuevos_creditos(dia)
-    
+
     # Ajuste por amortizaciones actualizadas
     amortizaciones_ajuste = calcular_impacto_amortizaciones(dia)
-    
+
     # Proyección
     proyeccion = base + nuevos_creditos_hoy + amortizaciones_ajuste
 ```
@@ -1860,13 +1860,13 @@ for dia in dias_restantes_mes_actual:
 for mes in proximos_N_meses:
     # Tendencia histórica
     tendencia = calcular_tendencia_historica()
-    
+
     # Tasa de crecimiento
     tasa_crecimiento = calcular_tasa_crecimiento_promedio()
-    
+
     # Estacionalidad (si aplica)
     factor_estacional = obtener_factor_estacional(mes)
-    
+
     # Proyección
     proyeccion = valor_actual * (1 + tasa_crecimiento) * factor_estacional
 ```
@@ -1887,7 +1887,7 @@ for mes in proximos_N_meses:
 **Cálculo:**
 ```sql
 -- Pseudocódigo SQL
-SELECT 
+SELECT
     fecha_pago as fecha,
     COUNT(*) as cuotas_por_dia,
     SUM(capital_pendiente + interes_pendiente + monto_mora) as monto_total
@@ -2026,21 +2026,21 @@ def calcular_cuotas_por_dia(fecha_inicio, fecha_fin, filtros):
         Cuota.fecha_pago >= fecha_inicio,
         Cuota.fecha_pago <= fecha_fin
     )
-    
+
     # Aplicar filtros
     query = FiltrosDashboard.aplicar_filtros_cuota(query, filtros)
-    
+
     # Agrupar por fecha de vencimiento
     resultado = query.with_entities(
         Cuota.fecha_pago.label('fecha'),
         func.count(Cuota.id).label('cantidad_cuotas'),
         func.sum(
-            Cuota.capital_pendiente + 
-            Cuota.interes_pendiente + 
+            Cuota.capital_pendiente +
+            Cuota.interes_pendiente +
             Cuota.monto_mora
         ).label('monto_total')
     ).group_by(Cuota.fecha_pago).order_by(Cuota.fecha_pago).all()
-    
+
     return resultado
 ```
 
@@ -2060,7 +2060,7 @@ useEffect(() => {
   const interval = setInterval(() => {
     refetch();
   }, POLLING_INTERVALS.normal);
-  
+
   return () => clearInterval(interval);
 }, [refetch]);
 ```

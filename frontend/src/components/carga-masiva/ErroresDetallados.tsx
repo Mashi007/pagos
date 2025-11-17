@@ -49,7 +49,7 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
   }
 
   const generarHeadersCSV = (): string[] => {
-    return tipo === 'clientes' 
+    return tipo === 'clientes'
       ? ['cedula', 'nombre', 'telefono', 'email', 'error', 'correccion_sugerida']
       : ['cedula', 'fecha', 'monto_pagado', 'documento_pago', 'error', 'correccion_sugerida']
   }
@@ -79,7 +79,7 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
   const generarArchivoCorreccion = (): void => {
     const headers = generarHeadersCSV()
     const datosCorreccion = generarDatosCorreccion()
-    
+
     const csvContent = [headers, ...datosCorreccion]
       .map(row => row.map(cell => `"${cell}"`).join(','))
       .join('\n')
@@ -102,7 +102,7 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
         return value
       }
     }
-    
+
     return 'Revisar datos y formato'
   }
 
@@ -129,7 +129,7 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
         return value
       }
     }
-    
+
     return 'Validación'
   }
 
@@ -189,7 +189,7 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
             title={`${errores.length} registros requieren corrección manual`}
             description="Estos registros no pudieron procesarse automáticamente. Descarga la lista para corregirlos y volver a cargar."
           />
-          
+
           {/* Tabla de errores mejorada */}
           <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
             <Table>
@@ -286,7 +286,7 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
               </motion.div>
             )
           ))}
-          
+
           {/* Instrucciones mejoradas */}
             <div className={`bg-gradient-to-r from-blue-50 to-blue-100 p-${GRID_GAP} rounded-lg border border-blue-200`}>
             <h4 className="font-bold text-blue-900 mb-4 flex items-center">

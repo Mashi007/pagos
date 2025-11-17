@@ -133,11 +133,11 @@ Este script:
 
 ```sql
 -- Para queries con GROUP BY por año/mes en cuotas
-CREATE INDEX IF NOT EXISTS idx_cuotas_fecha_vencimiento_funcional 
+CREATE INDEX IF NOT EXISTS idx_cuotas_fecha_vencimiento_funcional
 ON cuotas (EXTRACT(YEAR FROM fecha_vencimiento), EXTRACT(MONTH FROM fecha_vencimiento));
 
 -- Para queries con GROUP BY por año/mes en pagos_staging
-CREATE INDEX IF NOT EXISTS idx_pagos_staging_fecha_pago_funcional 
+CREATE INDEX IF NOT EXISTS idx_pagos_staging_fecha_pago_funcional
 ON pagos_staging (EXTRACT(YEAR FROM fecha_pago::timestamp), EXTRACT(MONTH FROM fecha_pago::timestamp))
 WHERE fecha_pago IS NOT NULL AND fecha_pago != '';
 ```
@@ -168,9 +168,9 @@ CREATE INDEX IF NOT EXISTS idx_clientes_cedula ON clientes(cedula);
 3. **Verificar que se crearon** con:
 
 ```sql
-SELECT indexname, indexdef 
-FROM pg_indexes 
-WHERE tablename = 'cuotas' 
+SELECT indexname, indexdef
+FROM pg_indexes
+WHERE tablename = 'cuotas'
 ORDER BY indexname;
 ```
 

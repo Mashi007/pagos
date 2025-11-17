@@ -17,7 +17,7 @@ export function Auditoria() {
   const [total, setTotal] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(50)
-  
+
   // Filtros
   const [filtros, setFiltros] = useState({
     usuario_email: '',
@@ -53,7 +53,7 @@ export function Auditoria() {
     try {
       setLoading(true)
       setError(null)
-      
+
       const params = {
         skip: (currentPage - 1) * pageSize,
         limit: pageSize,
@@ -65,12 +65,12 @@ export function Auditoria() {
         ordenar_por: filtros.ordenar_por,
         orden: filtros.orden
       }
-      
+
       console.log('📡 Llamando a API: /api/v1/auditoria con params:', params)
       const response = await auditoriaService.listarAuditoria(params)
       console.log('✅ Respuesta API:', response)
       console.log('📊 Items recibidos:', response.items?.length || 0, 'Total:', response.total)
-      
+
       if (response.items && response.items.length > 0) {
         setAuditorias(response.items)
         setTotal(response.total)
@@ -196,8 +196,8 @@ export function Auditoria() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            onClick={() => cargarEstadisticas(true)} 
+          <Button
+            onClick={() => cargarEstadisticas(true)}
             variant="outline"
             disabled={loading}
             title="Actualizar estadísticas"
@@ -230,7 +230,7 @@ export function Auditoria() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -247,7 +247,7 @@ export function Auditoria() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -264,7 +264,7 @@ export function Auditoria() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -301,7 +301,7 @@ export function Auditoria() {
                 onChange={(e) => setFiltros({ ...filtros, usuario_email: e.target.value })}
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium mb-1">Módulo</label>
               <Select value={filtros.modulo} onValueChange={(value) => setFiltros({ ...filtros, modulo: value })}>
@@ -321,7 +321,7 @@ export function Auditoria() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium mb-1">Acción</label>
               <Select value={filtros.accion} onValueChange={(value) => setFiltros({ ...filtros, accion: value })}>
@@ -343,7 +343,7 @@ export function Auditoria() {
               </Select>
             </div>
           </div>
-          
+
           <div className="grid gap-4 md:grid-cols-2 mt-4">
             <div>
               <label className="block text-sm font-medium mb-1">Fecha Desde</label>
@@ -353,7 +353,7 @@ export function Auditoria() {
                 onChange={(e) => setFiltros({ ...filtros, fecha_desde: e.target.value })}
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium mb-1">Fecha Hasta</label>
               <Input
@@ -363,7 +363,7 @@ export function Auditoria() {
               />
             </div>
           </div>
-          
+
           <div className="flex gap-2 mt-4">
             <Button onClick={handleFiltrar}>
               <Search className="w-4 h-4 mr-2" />
@@ -458,7 +458,7 @@ export function Auditoria() {
               )}
             </TableBody>
           </Table>
-          
+
           {/* Paginación */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-4">

@@ -76,7 +76,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   const getEstadoBadge = (estado: string) => {
     // Normalizar estado a mayúsculas para comparación
     const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
-    
+
     const badges = {
       PENDIENTE: 'bg-yellow-100 text-yellow-800',
       PAGADO: 'bg-green-100 text-green-800',  // ✅ Corregido: BD usa "PAGADO" no "PAGADA"
@@ -91,7 +91,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   const getEstadoLabel = (estado: string) => {
     // Normalizar estado a mayúsculas para comparación
     const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
-    
+
     const labels: Record<string, string> = {
       PENDIENTE: 'Pendiente',
       PAGADO: 'Pagado',      // ✅ Corregido: BD usa "PAGADO"
@@ -108,7 +108,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
       toast.error('No hay datos para exportar')
       return
     }
-    
+
     const prestamoInfo = {
       id: prestamo.id,
       cedula: prestamo.cedula,
@@ -118,7 +118,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
       modalidad_pago: prestamo.modalidad_pago,
       fecha_requerimiento: prestamo.fecha_requerimiento
     }
-    
+
     try {
       await exportarAExcel(cuotas, prestamoInfo)
       toast.success('Exportando a Excel...')
@@ -132,7 +132,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
       toast.error('No hay datos para exportar')
       return
     }
-    
+
     const prestamoInfo = {
       id: prestamo.id,
       cedula: prestamo.cedula,
@@ -142,7 +142,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
       modalidad_pago: prestamo.modalidad_pago,
       fecha_requerimiento: prestamo.fecha_requerimiento
     }
-    
+
     try {
       await exportarAPDF(cuotas, prestamoInfo)
       toast.success('PDF exportado exitosamente')
@@ -270,7 +270,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
               {cuotasVisibles.map((cuota: Cuota) => {
                 // Determinar el estado real basado en los datos
                 const estadoReal = determinarEstadoReal(cuota)
-                
+
                 return (
                   <TableRow key={cuota.id}>
                     <TableCell className="font-medium">{cuota.numero_cuota}</TableCell>

@@ -167,7 +167,7 @@ Después de ejecutar, verificar:
 
 ```sql
 -- Verificar que el préstamo crítico ahora tiene cuotas
-SELECT 
+SELECT
     p.id,
     p.cedula,
     p.numero_cuotas as esperadas,
@@ -178,7 +178,7 @@ WHERE p.id = 3708
 GROUP BY p.id, p.cedula, p.numero_cuotas;
 
 -- Verificar préstamos con cuotas incompletas
-SELECT 
+SELECT
     p.id,
     p.cedula,
     p.numero_cuotas as esperadas,

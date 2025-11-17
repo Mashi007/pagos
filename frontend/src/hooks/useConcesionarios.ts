@@ -89,11 +89,11 @@ export function useUpdateConcesionario() {
         concesionarioKeys.detail(updatedConcesionario.id),
         updatedConcesionario
       )
-      
+
       // Invalidar listas
       queryClient.invalidateQueries({ queryKey: concesionarioKeys.lists() })
       queryClient.invalidateQueries({ queryKey: concesionarioKeys.activos() })
-      
+
       toast.success('Concesionario actualizado exitosamente')
     },
     onError: (error: any) => {

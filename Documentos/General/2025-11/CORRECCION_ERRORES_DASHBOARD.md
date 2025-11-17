@@ -58,7 +58,7 @@ useEffect(() => {
 ```
 
 ### 4. ⚠️ Errores de CSS (No Críticos)
-**Problema:** 
+**Problema:**
 - Error al interpretar el valor para '-webkit-text-size-adjust'
 - Juego de reglas ignoradas debido a un mal selector
 

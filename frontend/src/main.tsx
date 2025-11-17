@@ -82,8 +82,8 @@ if (!rootElement) {
       <div style="padding: 20px; font-family: sans-serif; text-align: center;">
         <h1 style="color: #dc2626;">Error al cargar la aplicación</h1>
         <p style="color: #6b7280; margin: 10px 0;">Ha ocurrido un error al inicializar la aplicación.</p>
-        <button 
-          onclick="window.location.reload()" 
+        <button
+          onclick="window.location.reload()"
           style="padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; margin-top: 10px;"
         >
           Recargar página
@@ -99,55 +99,55 @@ window.addEventListener('error', (event) => {
   if (event.error && !event.error.name?.includes('NS_ERROR_FAILURE')) {
     // Solo loggear si no es un error conocido que ya estamos manejando
     const errorMessage = event.error?.message || event.message || ''
-    const isKnownError = errorMessage.includes('radix-ui') || 
+    const isKnownError = errorMessage.includes('radix-ui') ||
                         errorMessage.includes('exceljs') ||
                         errorMessage.includes('useState') ||
                         errorMessage.includes('form-libs')
-    
+
     if (!isKnownError && process.env.NODE_ENV === 'development') {
       console.error('⚠️ Error capturado:', event.error || event.message)
     }
   }
-  
+
   // Manejador global de errores para capturar NS_ERROR_FAILURE y otros errores de React
   // ✅ Capturar errores NS_ERROR_FAILURE que ocurren en Firefox (especialmente con ExcelJS y Radix UI)
   if (event.error && event.error.name === 'NS_ERROR_FAILURE') {
     // Este error generalmente ocurre cuando se intenta actualizar el estado después del desmontaje
     // o durante la inicialización de módulos dinámicos (como ExcelJS o Radix UI)
     // Ya está siendo manejado por useIsMounted, pero lo capturamos para evitar que se muestre en consola
-    
+
     // ✅ Verificar si el error está relacionado con Radix UI
     const stackTrace = event.error?.stack || event.error?.toString() || ''
-    const isRadixUIError = stackTrace.includes('radix-ui') || 
+    const isRadixUIError = stackTrace.includes('radix-ui') ||
                           stackTrace.includes('radix') ||
                           (event.filename && event.filename.includes('radix'))
-    
+
     // ✅ Verificar si el error está relacionado con useState durante la inicialización
-    const isUseStateError = stackTrace.includes('useState') || 
+    const isUseStateError = stackTrace.includes('useState') ||
                            stackTrace.includes('form-libs') ||
                            (event.filename && event.filename.includes('form-libs'))
-    
+
     // ✅ Capturar errores de Radix UI relacionados con useState durante la inicialización
     if (isRadixUIError || isUseStateError) {
       event.preventDefault() // Prevenir que el error se propague
       event.stopPropagation() // Detener la propagación del evento
       return false // Retornar false para indicar que el error fue manejado
     }
-    
+
     // ✅ Capturar errores relacionados con ExcelJS durante la inicialización
     if (event.filename && event.filename.includes('exceljs')) {
       event.preventDefault()
       event.stopPropagation()
       return false
     }
-    
+
     // ✅ Capturar otros errores NS_ERROR_FAILURE genéricos (solo si no son críticos)
     // No capturamos todos los NS_ERROR_FAILURE para no ocultar errores importantes
     event.preventDefault()
     event.stopPropagation()
     return false
   }
-  
+
   // ✅ Capturar errores relacionados con Radix UI en el stack trace
   if (event.error && event.error.stack) {
     const stackTrace = event.error.stack.toLowerCase()
@@ -160,7 +160,7 @@ window.addEventListener('error', (event) => {
       }
     }
   }
-  
+
   // ✅ Capturar errores relacionados con React/Radix UI en el mensaje
   if (event.error && typeof event.error.message === 'string') {
     const errorMessage = event.error.message.toLowerCase()
@@ -179,36 +179,36 @@ window.addEventListener('unhandledrejection', (event) => {
     // ✅ Verificar si el error está relacionado con Radix UI o useState
     const reasonMessage = event.reason?.message || event.reason?.toString() || ''
     const reasonStack = event.reason?.stack || ''
-    const isRadixUIError = reasonMessage.includes('radix-ui') || 
+    const isRadixUIError = reasonMessage.includes('radix-ui') ||
                           reasonMessage.includes('radix') ||
                           reasonStack.includes('radix-ui') ||
                           reasonStack.includes('radix') ||
                           reasonMessage.includes('form-libs') ||
                           reasonStack.includes('form-libs')
-    
+
     if (isRadixUIError) {
       event.preventDefault() // Prevenir que el error se propague
       event.stopPropagation() // Detener la propagación
       return false
     }
-    
+
     // ✅ Capturar errores relacionados con ExcelJS
     if (reasonMessage.includes('exceljs') || reasonStack.includes('exceljs')) {
       event.preventDefault()
       event.stopPropagation()
       return false
     }
-    
+
     // ✅ Capturar otros errores NS_ERROR_FAILURE genéricos (solo si no son críticos)
     event.preventDefault()
     event.stopPropagation()
     return false
   }
-  
+
   // ✅ Capturar errores relacionados con Radix UI en promesas rechazadas
   const reasonMessage = event.reason?.message || event.reason?.toString() || ''
   const reasonStack = event.reason?.stack || ''
-  if ((reasonMessage.includes('radix-ui') || reasonMessage.includes('radix') || 
+  if ((reasonMessage.includes('radix-ui') || reasonMessage.includes('radix') ||
        reasonStack.includes('radix-ui') || reasonStack.includes('radix')) &&
       (reasonMessage.includes('usestate') || reasonMessage.includes('form-libs') ||
        reasonStack.includes('usestate') || reasonStack.includes('form-libs'))) {

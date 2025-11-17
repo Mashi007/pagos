@@ -300,7 +300,7 @@ Por favor, mejora la respuesta incorporando el feedback. Responde SOLO con el JS
 Tu tarea es mejorar preguntas y respuestas para que sean IDEALES para entrenar un modelo de IA que responderá preguntas sobre una base de datos de préstamos y cobranzas.
 
 OBJETIVOS DE MEJORA:
-1. **Preguntas**: 
+1. **Preguntas**:
    - Deben ser claras, específicas y directas
    - Deben incluir referencias explícitas a tablas y campos cuando sea relevante (ej: "¿Qué es el campo X en la tabla Y?")
    - Deben usar terminología técnica precisa de la base de datos

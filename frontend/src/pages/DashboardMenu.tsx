@@ -122,7 +122,7 @@ export function DashboardMenu() {
         const params = construirParams(periodo)
         // Usar timeout extendido para endpoints lentos
         const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`, { timeout: 60000 }) as {
-          financieros?: { 
+          financieros?: {
             ingresosCapital: number
             ingresosInteres: number
             ingresosMora: number
@@ -154,7 +154,7 @@ export function DashboardMenu() {
     queryFn: async () => {
       const params = construirFiltrosObject(periodo) // ✅ Pasar período para calcular fechas
       const queryParams = new URLSearchParams()
-      
+
       // ✅ Si no hay fecha_inicio en filtros, usar septiembre 2024 como fecha de inicio
       if (!params.fecha_inicio) {
         queryParams.append('fecha_inicio', '2024-09-01') // Desde septiembre 2024
@@ -168,14 +168,14 @@ export function DashboardMenu() {
           queryParams.append('fecha_inicio', params.fecha_inicio)
         }
       }
-      
+
       Object.entries(params).forEach(([key, value]) => {
         // No agregar fecha_inicio dos veces
         if (key !== 'fecha_inicio' && value) {
           queryParams.append(key, value.toString())
         }
       })
-      
+
       const response = await apiClient.get(
         `/api/v1/dashboard/financiamiento-tendencia-mensual?${queryParams.toString()}`
       ) as { meses: Array<{ mes: string; cantidad_nuevos: number; monto_nuevos: number; total_acumulado: number; monto_cuotas_programadas: number; monto_pagado: number; morosidad: number; morosidad_mensual: number }> }
@@ -464,7 +464,7 @@ export function DashboardMenu() {
 
 
   const [isRefreshing, setIsRefreshing] = useState(false)
-  
+
   // NOTA: No necesitamos invalidar queries manualmente aquí
   // React Query detecta automáticamente los cambios en queryKey (que incluye JSON.stringify(filtros))
   // y refetch automáticamente cuando cambian los filtros o el período
@@ -485,7 +485,7 @@ export function DashboardMenu() {
       await queryClient.invalidateQueries({ queryKey: ['morosidad-analista'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['evolucion-pagos-menu'], exact: false })
-      
+
       // Refrescar todas las queries activas
       await queryClient.refetchQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['dashboard-menu'], exact: false })
@@ -498,7 +498,7 @@ export function DashboardMenu() {
       await queryClient.refetchQueries({ queryKey: ['morosidad-analista'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['evolucion-pagos-menu'], exact: false })
-      
+
       // También refrescar la query de kpisPrincipales usando su refetch
       await refetch()
     } catch (error) {
@@ -532,8 +532,8 @@ export function DashboardMenu() {
     // Inicializar todas las bandas de $200 desde $0 hasta el máximo
     for (let i = 0; i <= maxMonto; i += 200) {
       const bandaMax = i + 200
-      const etiqueta = bandaMax > maxMonto && i > 0 
-        ? `$${i.toLocaleString()}+` 
+      const etiqueta = bandaMax > maxMonto && i > 0
+        ? `$${i.toLocaleString()}+`
         : `$${i.toLocaleString()} - $${bandaMax.toLocaleString()}`
       bandas[etiqueta] = 0
     }
@@ -542,31 +542,31 @@ export function DashboardMenu() {
     datosFinanciamientoRangos.rangos.forEach(rango => {
       const cantidad = rango.cantidad_prestamos
       const montoPromedio = rango.monto_total / (cantidad || 1)
-      
+
       // Extraer límites del rango
       const match = rango.categoria.match(/\$(\d+)/g)
       if (match) {
         const montos = match.map(m => parseInt(m.replace('$', '').replace(/,/g, '')))
         const minRango = montos[0] || 0
         const maxRango = rango.categoria.includes('+') ? maxMonto : (montos[1] || montos[0] + 300)
-        
+
         // Distribuir proporcionalmente en las bandas de $200
         for (let i = 0; i <= maxMonto; i += 200) {
           const bandaMin = i
           const bandaMax = i + 200
-          
+
           // Calcular intersección entre el rango y la banda
           const interseccionMin = Math.max(bandaMin, minRango)
           const interseccionMax = Math.min(bandaMax, maxRango)
-          
+
           if (interseccionMin < interseccionMax) {
             const porcentaje = (interseccionMax - interseccionMin) / (maxRango - minRango)
             const cantidadAsignada = Math.round(cantidad * porcentaje)
-            
-            const etiqueta = bandaMax > maxMonto && i > 0 
-              ? `$${i.toLocaleString()}+` 
+
+            const etiqueta = bandaMax > maxMonto && i > 0
+              ? `$${i.toLocaleString()}+`
               : `$${i.toLocaleString()} - $${bandaMax.toLocaleString()}`
-            
+
             if (bandas[etiqueta] !== undefined) {
               bandas[etiqueta] += cantidadAsignada
             }
@@ -589,7 +589,7 @@ export function DashboardMenu() {
       })
       .filter(item => item.cantidad > 0) // Solo mostrar bandas con datos
       .sort((a, b) => b.montoMin - a.montoMin) // Ordenar de mayor a menor (valores grandes arriba)
-    
+
     // Formatear etiquetas de manera más legible
     // El orden es descendente (mayor a menor), así los valores más grandes aparecen arriba en el gráfico vertical
     return bandasArray.map(item => ({
@@ -717,7 +717,7 @@ export function DashboardMenu() {
                 <KpiCardLarge
                   title="Cuotas Programadas"
                   value={kpisPrincipales.cuotas_programadas?.valor_actual || 0}
-                  subtitle={kpisPrincipales.porcentaje_cuotas_pagadas !== undefined 
+                  subtitle={kpisPrincipales.porcentaje_cuotas_pagadas !== undefined
                     ? `% Cuotas pagadas: ${kpisPrincipales.porcentaje_cuotas_pagadas.toFixed(1)}%`
                     : undefined}
                   icon={FileText}
@@ -821,19 +821,19 @@ export function DashboardMenu() {
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis 
-                          dataKey="mes" 
+                        <XAxis
+                          dataKey="mes"
                           tick={{ fontSize: 12 }}
                           angle={-45}
                           textAnchor="end"
                           height={80}
                         />
-                        <YAxis 
+                        <YAxis
                           tick={{ fontSize: 12 }}
                           tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
                           label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft' }}
                         />
-                        <Tooltip 
+                        <Tooltip
                           formatter={(value: number, name: string) => {
                             const labels: Record<string, string> = {
                               'monto_nuevos': 'Total Financiamiento',
@@ -846,36 +846,36 @@ export function DashboardMenu() {
                           labelFormatter={(label) => `Mes: ${label}`}
                         />
                         <Legend />
-                        <Area 
-                          type="monotone" 
-                          dataKey="monto_nuevos" 
-                          stroke="#3b82f6" 
+                        <Area
+                          type="monotone"
+                          dataKey="monto_nuevos"
+                          stroke="#3b82f6"
                           fillOpacity={0.6}
-                          fill="url(#colorFinanciamiento)" 
+                          fill="url(#colorFinanciamiento)"
                           name="Total Financiamiento"
                         />
-                        <Area 
-                          type="monotone" 
-                          dataKey="monto_cuotas_programadas" 
-                          stroke="#10b981" 
+                        <Area
+                          type="monotone"
+                          dataKey="monto_cuotas_programadas"
+                          stroke="#10b981"
                           fillOpacity={0.6}
-                          fill="url(#colorPagosProgramados)" 
+                          fill="url(#colorPagosProgramados)"
                           name="Total Pagos Programados"
                         />
-                        <Area 
-                          type="monotone" 
-                          dataKey="monto_pagado" 
-                          stroke="#f59e0b" 
+                        <Area
+                          type="monotone"
+                          dataKey="monto_pagado"
+                          stroke="#f59e0b"
                           fillOpacity={0.6}
-                          fill="url(#colorPagosReales)" 
+                          fill="url(#colorPagosReales)"
                           name="Total Pagos Reales"
                         />
-                        <Area 
-                          type="monotone" 
-                          dataKey="morosidad_mensual" 
-                          stroke="#ef4444" 
+                        <Area
+                          type="monotone"
+                          dataKey="morosidad_mensual"
+                          stroke="#ef4444"
                           fillOpacity={0.6}
-                          fill="url(#colorMorosidad)" 
+                          fill="url(#colorMorosidad)"
                           name="Morosidad"
                         />
                       </AreaChart>
@@ -905,26 +905,26 @@ export function DashboardMenu() {
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
                   <ResponsiveContainer width="100%" height={450}>
-                    <BarChart 
-                      data={datosBandas200} 
+                    <BarChart
+                      data={datosBandas200}
                       layout="vertical"
                       margin={{ top: 10, right: 40, left: 120, bottom: 20 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
-                      <XAxis 
+                      <XAxis
                         type="number"
                         domain={[0, 'dataMax']}
                         tick={{ fontSize: 11, fill: '#6b7280' }}
                         tickFormatter={(value) => value.toLocaleString('es-EC')}
-                        label={{ 
-                          value: 'Cantidad de Préstamos', 
-                          position: 'insideBottom', 
+                        label={{
+                          value: 'Cantidad de Préstamos',
+                          position: 'insideBottom',
                           offset: -10,
                           style: { textAnchor: 'middle', fill: '#374151', fontSize: 12, fontWeight: 600 }
                         }}
                         allowDecimals={false}
                       />
-                      <YAxis 
+                      <YAxis
                         type="category"
                         dataKey="categoriaFormateada"
                         width={115}
@@ -932,9 +932,9 @@ export function DashboardMenu() {
                         interval={0}
                         tickLine={false}
                       />
-                      <Tooltip 
+                      <Tooltip
                         formatter={(value: number) => [
-                          `${value.toLocaleString('es-EC')} préstamos`, 
+                          `${value.toLocaleString('es-EC')} préstamos`,
                           'Cantidad'
                         ]}
                         labelFormatter={(label) => `Banda: ${label}`}
@@ -946,12 +946,12 @@ export function DashboardMenu() {
                         }}
                         cursor={{ fill: 'rgba(99, 102, 241, 0.1)' }}
                       />
-                      <Legend 
+                      <Legend
                         wrapperStyle={{ paddingTop: '10px' }}
                         iconType="rect"
                       />
-                      <Bar 
-                        dataKey="cantidad" 
+                      <Bar
+                        dataKey="cantidad"
                         radius={[0, 6, 6, 0]}
                         name="Cantidad de Préstamos"
                       >
@@ -960,8 +960,8 @@ export function DashboardMenu() {
                           const intensity = entry.cantidad / Math.max(...datosBandas200.map(d => d.cantidad))
                           const opacity = 0.6 + (intensity * 0.4)
                           return (
-                            <Cell 
-                              key={`cell-${index}`} 
+                            <Cell
+                              key={`cell-${index}`}
                               fill={`rgba(99, 102, 241, ${opacity})`}
                             />
                           )
@@ -998,11 +998,11 @@ export function DashboardMenu() {
                     <ResponsiveContainer width="100%" height={450}>
                       <BarChart data={datosCobranzaFechas.dias} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis 
-                          dataKey="nombre_fecha" 
+                        <XAxis
+                          dataKey="nombre_fecha"
                           tick={{ fontSize: 12 }}
                         />
-                        <YAxis 
+                        <YAxis
                           domain={[0, 'dataMax']}
                           tickCount={6}
                           tick={{ fontSize: 11 }}
@@ -1012,14 +1012,14 @@ export function DashboardMenu() {
                             }
                             return `$${value}`
                           }}
-                          label={{ 
-                            value: 'Monto (USD)', 
-                            angle: -90, 
+                          label={{
+                            value: 'Monto (USD)',
+                            angle: -90,
                             position: 'insideLeft',
                             style: { textAnchor: 'middle', fontSize: 12, fontWeight: 600 }
                           }}
                         />
-                        <Tooltip 
+                        <Tooltip
                           formatter={(value: number) => [formatCurrency(value), '']}
                           labelFormatter={(label) => `Fecha: ${label}`}
                           contentStyle={{
@@ -1061,26 +1061,26 @@ export function DashboardMenu() {
                   <ResponsiveContainer width="100%" height={400}>
                     <BarChart data={datosConcesionarios} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        type="number" 
+                      <XAxis
+                        type="number"
                         allowDecimals={false}
                         tickFormatter={(value) => value.toLocaleString('es-EC')}
                       />
-                      <YAxis 
-                        type="category" 
-                        dataKey="concesionario" 
+                      <YAxis
+                        type="category"
+                        dataKey="concesionario"
                         width={140}
                         tick={{ fontSize: 12 }}
                       />
-                      <Tooltip 
+                      <Tooltip
                         formatter={(value: number, name: string) => [
                           `${Math.round(value).toLocaleString('es-EC')} préstamos`,
                           'Cantidad'
                         ]}
                         labelFormatter={(label) => `Concesionario: ${label}`}
                       />
-                      <Bar 
-                        dataKey="cantidad_prestamos" 
+                      <Bar
+                        dataKey="cantidad_prestamos"
                         fill="#8b5cf6"
                         radius={[0, 4, 4, 0]}
                       >
@@ -1113,26 +1113,26 @@ export function DashboardMenu() {
                   <ResponsiveContainer width="100%" height={400}>
                     <BarChart data={datosModelos} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        type="number" 
+                      <XAxis
+                        type="number"
                         allowDecimals={false}
                         tickFormatter={(value) => value.toLocaleString('es-EC')}
                       />
-                        <YAxis 
-                        type="category" 
-                        dataKey="modelo" 
+                        <YAxis
+                        type="category"
+                        dataKey="modelo"
                         width={140}
                         tick={{ fontSize: 12 }}
                         />
-                            <Tooltip 
+                            <Tooltip
                         formatter={(value: number, name: string) => [
                           `${Math.round(value).toLocaleString('es-EC')} préstamos`,
                           'Cantidad'
                         ]}
                         labelFormatter={(label) => `Modelo: ${label}`}
                       />
-                      <Bar 
-                        dataKey="cantidad_prestamos" 
+                      <Bar
+                        dataKey="cantidad_prestamos"
                         fill="#f59e0b"
                         radius={[0, 4, 4, 0]}
                       >
@@ -1232,24 +1232,24 @@ export function DashboardMenu() {
                   <ResponsiveContainer width="100%" height={400}>
                     <BarChart data={datosMorosidadAnalista} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="analista" 
+                      <XAxis
+                        dataKey="analista"
                         angle={-45}
                         textAnchor="end"
                         height={80}
                         tick={{ fontSize: 12 }}
                       />
-                      <YAxis 
+                      <YAxis
                         label={{ value: 'Morosidad Total', angle: -90, position: 'insideLeft' }}
                       />
-                      <Tooltip 
+                      <Tooltip
                         formatter={(value: number) => [`${formatCurrency(value)}`, 'Morosidad Total']}
                         labelFormatter={(label) => `Analista: ${label}`}
                       />
                       <Legend />
-                      <Bar 
-                        dataKey="total_morosidad" 
-                        fill="#f97316" 
+                      <Bar
+                        dataKey="total_morosidad"
+                        fill="#f97316"
                         name="Morosidad Total"
                         radius={[4, 4, 0, 0]}
                       />

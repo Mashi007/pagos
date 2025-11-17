@@ -35,7 +35,7 @@ const renderHookWithQueryClient = (hook: () => any) => {
       {children}
     </QueryClientProvider>
   )
-  
+
   return renderHook(hook, { wrapper })
 }
 
@@ -47,7 +47,7 @@ describe('useAuth', () => {
 
   it('debería inicializar sin usuario autenticado', () => {
     const { result } = renderHookWithQueryClient(() => useAuth())
-    
+
     expect(result.current.user).toBeNull()
     expect(result.current.isAuthenticated).toBe(false)
     expect(result.current.isLoading).toBe(false)
@@ -75,7 +75,7 @@ describe('useAuth', () => {
     } as Response)
 
     const { result } = renderHookWithQueryClient(() => useAuth())
-    
+
     await waitFor(async () => {
       await result.current.login('test@example.com', 'password123')
     })
@@ -93,7 +93,7 @@ describe('useAuth', () => {
     } as Response)
 
     const { result } = renderHookWithQueryClient(() => useAuth())
-    
+
     await waitFor(async () => {
       try {
         await result.current.login('invalid@example.com', 'wrongpassword')
@@ -109,9 +109,9 @@ describe('useAuth', () => {
   it('debería hacer logout correctamente', async () => {
     // Simular usuario autenticado
     localStorage.setItem('token', 'mock-token')
-    
+
     const { result } = renderHookWithQueryClient(() => useAuth())
-    
+
     await waitFor(async () => {
       await result.current.logout()
     })

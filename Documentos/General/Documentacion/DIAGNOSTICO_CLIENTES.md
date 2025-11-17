@@ -39,7 +39,7 @@
 - El navegador o proxy puede estar cacheando la respuesta 404
 - El proxy del frontend puede tener configuración cacheada
 
-**Solución**: 
+**Solución**:
 - Limpiar caché del navegador (Ctrl+Shift+Delete)
 - Verificar logs del proxy en Render
 

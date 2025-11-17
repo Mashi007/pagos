@@ -44,7 +44,7 @@ def _conciliar_pago(pago: Pago, db: Session, numero_documento: str) -> bool:
 def _actualizar_estado_cuota(cuota, fecha_hoy: date, db: Session = None, ...):
     # Verificar si todos los pagos están conciliados
     todos_conciliados = _verificar_pagos_conciliados_cuota(db, cuota.id, cuota.prestamo_id)
-    
+
     if cuota.total_pagado >= cuota.monto_cuota:
         if todos_conciliados:
             cuota.estado = "PAGADO"  # ✅ Solo si TODOS los pagos están conciliados
@@ -182,17 +182,17 @@ Si se desea actualizar automáticamente el estado de las cuotas al conciliar, se
    ```python
    def _conciliar_pago(pago: Pago, db: Session, numero_documento: str) -> bool:
        # ... actualizar pago ...
-       
+
        # ✅ ACTUALIZAR CUOTAS si tiene prestamo_id
        if pago.prestamo_id:
            cuotas = db.query(Cuota).filter(
                Cuota.prestamo_id == pago.prestamo_id,
                Cuota.total_pagado > 0
            ).all()
-           
+
            for cuota in cuotas:
                _actualizar_estado_cuota(cuota, date.today(), db)
-       
+
        db.commit()
    ```
 

@@ -26,7 +26,7 @@ export interface Cliente {
   direccion?: string
   fecha_nacimiento?: string
   ocupacion?: string
-  
+
   // Datos del financiamiento (coincide con backend)
   total_financiamiento?: number
   cuota_inicial?: number
@@ -34,18 +34,18 @@ export interface Cliente {
   fecha_entrega?: string
   numero_amortizaciones?: number
   modalidad_pago?: string
-  
+
   // Estados (coincide con backend)
   estado: 'ACTIVO' | 'INACTIVO' | 'MORA' | 'FINALIZADO'
   activo: boolean
   estado_financiero?: string
   dias_mora: number
-  
+
   // Auditoría
   fecha_registro: string
   fecha_actualizacion?: string
   usuario_registro?: string
-  
+
   // Notas
   notas?: string
 }
@@ -66,14 +66,14 @@ export interface ClienteForm {
   direccion?: string
   fecha_nacimiento?: string
   ocupacion?: string
-  
+
   // Datos del financiamiento (coincide con backend)
   total_financiamiento?: number
   cuota_inicial?: number
   fecha_entrega?: string
   numero_amortizaciones?: number
   modalidad_pago?: string
-  
+
   // Notas
   notas?: string
 }

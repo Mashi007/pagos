@@ -1,7 +1,7 @@
 # 🔍 AUDITORÍA DE ARCHIVOS SQL OBSOLETOS
 
-**Fecha:** 2025-01-27  
-**Auditor:** Sistema de Auditoría Automatizada  
+**Fecha:** 2025-01-27
+**Auditor:** Sistema de Auditoría Automatizada
 **Objetivo:** Identificar y documentar archivos SQL obsoletos en el proyecto
 
 ---
@@ -21,9 +21,9 @@
 
 ### 1. **`scripts/verificar_clientes_activos.sql`**
 
-**Ubicación:** `scripts/verificar_clientes_activos.sql`  
-**Última modificación:** 2025-11-09 (18 días)  
-**Tamaño:** 3,929 bytes  
+**Ubicación:** `scripts/verificar_clientes_activos.sql`
+**Última modificación:** 2025-11-09 (18 días)
+**Tamaño:** 3,929 bytes
 **Tipo:** Script de verificación/diagnóstico
 
 **Descripción:**
@@ -48,9 +48,9 @@
 
 ### 2. **`scripts/consultar_notificaciones_previas.sql`**
 
-**Ubicación:** `scripts/consultar_notificaciones_previas.sql`  
-**Última modificación:** 2025-11-08 (19 días)  
-**Tamaño:** 12,309 bytes  
+**Ubicación:** `scripts/consultar_notificaciones_previas.sql`
+**Última modificación:** 2025-11-08 (19 días)
+**Tamaño:** 12,309 bytes
 **Tipo:** Script de consulta/análisis
 
 **Descripción:**
@@ -80,9 +80,9 @@
 
 ### 3. **`scripts/actualizar_enum_notificaciones.sql`**
 
-**Ubicación:** `scripts/actualizar_enum_notificaciones.sql`  
-**Última modificación:** 2025-11-08 (19 días)  
-**Tamaño:** 5,166 bytes  
+**Ubicación:** `scripts/actualizar_enum_notificaciones.sql`
+**Última modificación:** 2025-11-08 (19 días)
+**Tamaño:** 5,166 bytes
 **Tipo:** Script de migración manual
 
 **Descripción:**
@@ -124,9 +124,9 @@
 
 ### 4. **`backend/scripts/consultas_reportes_faltantes.sql`**
 
-**Ubicación:** `backend/scripts/consultas_reportes_faltantes.sql`  
-**Última modificación:** 2025-11-08 (19 días)  
-**Tamaño:** 13,211 bytes  
+**Ubicación:** `backend/scripts/consultas_reportes_faltantes.sql`
+**Última modificación:** 2025-11-08 (19 días)
+**Tamaño:** 13,211 bytes
 **Tipo:** Script de consulta/análisis
 
 **Descripción:**
@@ -199,8 +199,8 @@ Según documentación previa (`ANALISIS_IMPACTO_ELIMINAR_SQL.md`):
 1. **Verificar `actualizar_enum_notificaciones.sql`:**
    ```sql
    -- Ejecutar en la BD para verificar si los valores ya existen:
-   SELECT enumlabel 
-   FROM pg_enum 
+   SELECT enumlabel
+   FROM pg_enum
    WHERE enumtypid = (SELECT oid FROM pg_type WHERE typname = 'tiponotificacion')
    ORDER BY enumsortorder;
    ```
@@ -284,7 +284,7 @@ El proyecto tenía **4 archivos SQL** identificados:
 - ✅ Código Python usa strings directamente ("PAGO_5_DIAS_ANTES", "PREJUDICIAL", etc.)
 - ✅ Script de enum era obsoleto porque nunca se implementó el enum en PostgreSQL
 
-**Impacto:** 
+**Impacto:**
 - 🟢 **NINGUNO** - Scripts no críticos, no referenciados, no se ejecutan automáticamente
 - ✅ **SEGURO** - Todos eliminados sin impacto
 

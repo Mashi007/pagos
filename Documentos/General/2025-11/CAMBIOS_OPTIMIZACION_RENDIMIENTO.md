@@ -1,6 +1,6 @@
 # ✅ CAMBIOS APLICADOS: OPTIMIZACIÓN DE RENDIMIENTO
 
-**Fecha:** 2025-11-06  
+**Fecha:** 2025-11-06
 **Objetivo:** Mejorar tiempos de respuesta del dashboard
 
 ---

@@ -17,7 +17,7 @@ Al aprobar automáticamente un préstamo (decision_final = "APROBADO_AUTOMATICO"
 
 ### Código Corregido
 
-**Archivo:** `backend/app/api/v1/endpoints/prestamos.py`  
+**Archivo:** `backend/app/api/v1/endpoints/prestamos.py`
 **Líneas:** 795-819
 
 **Cambio realizado:**
@@ -51,17 +51,17 @@ WHERE estado = 'APROBADO' AND numero_cuotas = 36;
 -- 2. Eliminar cuotas incorrectas
 DELETE FROM cuotas
 WHERE prestamo_id IN (
-    SELECT id FROM prestamos 
+    SELECT id FROM prestamos
     WHERE estado = 'APROBADO' AND numero_cuotas = 36
 );
 
 -- 3. Corregir numero_cuotas
 UPDATE prestamos
-SET 
+SET
     numero_cuotas = 12,
     cuota_periodo = total_financiamiento / 12.0
-WHERE 
-    estado = 'APROBADO' 
+WHERE
+    estado = 'APROBADO'
     AND numero_cuotas = 36;
 
 -- 4. Verificar
@@ -86,17 +86,17 @@ POST https://tu-api.com/api/v1/prestamos/{prestamo_id}/generar-amortizacion
 Ejecuta en DBeaver:
 
 ```sql
-SELECT 
+SELECT
     id,
     nombres,
     numero_cuotas,
     cuota_periodo,
     estado
-FROM 
+FROM
     prestamos
-WHERE 
+WHERE
     estado = 'APROBADO'
-ORDER BY 
+ORDER BY
     id DESC
 LIMIT 5;
 ```

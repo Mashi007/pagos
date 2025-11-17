@@ -32,7 +32,7 @@
 construirParams = (periodo: string = 'mes') => {
   const params = new URLSearchParams()
   params.append('periodo', periodo)
-  
+
   // ✅ Aplica TODOS los filtros disponibles:
   if (filtros.analista) params.append('analista', ...)
   if (filtros.concesionario) params.append('concesionario', ...)
@@ -40,7 +40,7 @@ construirParams = (periodo: string = 'mes') => {
   if (filtros.fecha_inicio) params.append('fecha_inicio', ...)
   if (filtros.fecha_fin) params.append('fecha_fin', ...)
   if (filtros.consolidado) params.append('consolidado', 'true')
-  
+
   return params.toString()
 }
 

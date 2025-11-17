@@ -7,7 +7,7 @@ Este directorio contiene scripts útiles para el mantenimiento del proyecto.
 ### fix_critical_syntax_errors.py
 **Propósito**: Corregir errores críticos de sintaxis de forma automática
 **Uso**: `python fix_critical_syntax_errors.py`
-**Descripción**: 
+**Descripción**:
 - Corrige triple-quoted strings no terminadas
 - Corrige imports incompletos
 - Corrige errores de indentación

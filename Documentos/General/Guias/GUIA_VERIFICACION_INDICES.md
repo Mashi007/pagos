@@ -60,7 +60,7 @@ Seq Scan on pagos
 **Query de Prueba:**
 ```sql
 EXPLAIN ANALYZE
-SELECT 
+SELECT
     EXTRACT(YEAR FROM fecha_pago)::integer as año,
     EXTRACT(MONTH FROM fecha_pago)::integer as mes,
     COUNT(*) as cantidad,
@@ -71,7 +71,7 @@ WHERE fecha_pago >= '2024-01-01'::date
   AND monto_pagado IS NOT NULL
   AND monto_pagado > 0
   AND activo = TRUE
-GROUP BY 
+GROUP BY
     EXTRACT(YEAR FROM fecha_pago),
     EXTRACT(MONTH FROM fecha_pago)
 ORDER BY año, mes;
@@ -93,7 +93,7 @@ ORDER BY año, mes;
 **Query de Prueba:**
 ```sql
 EXPLAIN ANALYZE
-SELECT 
+SELECT
     EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
     EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
     COALESCE(SUM(c.monto_cuota), 0) as cobranzas
@@ -117,7 +117,7 @@ ORDER BY año, mes;
 **Query de Prueba:**
 ```sql
 EXPLAIN ANALYZE
-SELECT 
+SELECT
     EXTRACT(YEAR FROM fecha_registro)::integer as año,
     EXTRACT(MONTH FROM fecha_registro)::integer as mes,
     COUNT(*) as cantidad,
@@ -163,7 +163,7 @@ WHERE p.fecha_pago >= '2024-01-01'::date
 **Query de Prueba:**
 ```sql
 EXPLAIN ANALYZE
-SELECT 
+SELECT
     c.prestamo_id,
     COUNT(c.id) as cuotas_vencidas,
     SUM(c.monto_cuota) as total_adeudado
@@ -230,8 +230,8 @@ LIMIT 20;
 
 ## Resumen
 
-✅ **Índices creados:** 5/5 críticos  
-✅ **ANALYZE ejecutado:** Todas las tablas  
-✅ **Verificación:** Usar script `verificar_uso_indices.sql`  
+✅ **Índices creados:** 5/5 críticos
+✅ **ANALYZE ejecutado:** Todas las tablas
+✅ **Verificación:** Usar script `verificar_uso_indices.sql`
 ✅ **Performance esperada:** Mejora de 70-85% en endpoints
 

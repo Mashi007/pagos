@@ -68,7 +68,7 @@ Puedes agregar un endpoint temporal para verificar:
 def cache_status():
     from app.core.cache import cache_backend
     backend_type = type(cache_backend).__name__
-    
+
     return {
         "backend": backend_type,
         "is_redis": backend_type == "RedisCache",
@@ -109,7 +109,7 @@ def cache_status():
    ```bash
    # Docker
    docker ps | grep redis
-   
+
    # O probar conexión
    redis-cli ping
    ```

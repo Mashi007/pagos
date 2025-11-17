@@ -18,7 +18,7 @@
   - ✅ Máximo **7 palabras** (nombres + apellidos combinados)
   - ✅ Cada palabra debe tener mínimo 2 caracteres
   - ✅ Campo obligatorio
-- **Formato Automático**: 
+- **Formato Automático**:
   - **Title Case** en tiempo real (primera letra mayúscula de cada palabra)
   - Ejemplo: `juan carlos pérez gonzález` → `Juan Carlos Pérez González`
 - **Mensajes de Error**:
@@ -48,7 +48,7 @@
 
 ### 4. **Email** (`email`)
 - **Validador Backend**: `email` (validación mediante API)
-- **Formato Automático**: 
+- **Formato Automático**:
   - Convertido a **minúsculas** al guardar
 - **Validación**: Realizada por backend a través del servicio de validadores
 
@@ -133,7 +133,7 @@
   - ✅ Máximo **2 palabras**
   - ✅ Mínimo 2 caracteres por palabra
   - ✅ Campo obligatorio
-- **Formato Automático**: 
+- **Formato Automático**:
   - **Title Case** en tiempo real
   - Ejemplo: `gerente general` → `Gerente General`
 - **Mensajes de Error**:
@@ -176,7 +176,7 @@
 - **Regla**: No se puede crear o actualizar un cliente si **YA EXISTE** otro cliente con:
   - La misma **cédula** **O**
   - El mismo **nombre completo** (case-insensitive, sin espacios extras)
-- **Validación**: 
+- **Validación**:
   - Se valida en el backend al crear (`crear_cliente`) y actualizar (`actualizar_cliente`)
   - Comparación case-insensitive para nombres
   - No permite guardar si coincide con igual cédula **Y/O** nombres

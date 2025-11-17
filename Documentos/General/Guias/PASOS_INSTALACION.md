@@ -20,7 +20,7 @@ Ejecuta:
 npm install
 ```
 
-**Resultado esperado**: 
+**Resultado esperado**:
 - Debería mostrar "added X packages"
 - Toma unos minutos (descarga librerías)
 - Al final dice "added X packages, and audited X packages in Xs"
@@ -35,7 +35,7 @@ Ejecuta:
 npm list jspdf jspdf-autotable
 ```
 
-**Resultado esperado**: 
+**Resultado esperado**:
 ```
 frontend@x.x.x
 ├── jspdf@2.5.1
@@ -52,7 +52,7 @@ Ejecuta:
 npm run dev
 ```
 
-**Resultado esperado**: 
+**Resultado esperado**:
 - Inicia el servidor en `http://localhost:5173` (o similar)
 - Muestra "Local: http://localhost:5173"
 

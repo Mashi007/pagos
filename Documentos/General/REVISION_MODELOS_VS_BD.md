@@ -1,6 +1,6 @@
 # 🔍 REVISIÓN COMPLETA: Modelos de Código vs Estructura Real de BD
 
-**Fecha de Revisión:** 2025-10-31  
+**Fecha de Revisión:** 2025-10-31
 **Objetivo:** Verificar que todos los campos usados en el código existan realmente en los modelos y en la BD
 
 ---
@@ -29,7 +29,7 @@
 **Ubicación del error:**
 - `backend/app/api/v1/endpoints/kpis.py` (línea 112)
 
-**Problema:** 
+**Problema:**
 - El modelo `Cliente` NO tiene campo `analista_id`
 - La relación entre `Cliente` y `Analista` NO existe directamente
 
@@ -291,9 +291,9 @@ Para verificar que todos los campos existen:
 
 3. **Verificar estructura real de BD en PostgreSQL:**
    ```sql
-   SELECT column_name, data_type, is_nullable 
-   FROM information_schema.columns 
-   WHERE table_name = 'clientes' 
+   SELECT column_name, data_type, is_nullable
+   FROM information_schema.columns
+   WHERE table_name = 'clientes'
    ORDER BY ordinal_position;
    ```
 

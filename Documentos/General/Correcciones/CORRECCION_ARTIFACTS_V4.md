@@ -35,8 +35,8 @@ Se actualizaron **todas las instancias** de `v3` a `v4` en los workflows:
 
 ## 📊 **Verificación**
 
-✅ **Antes:** 9 instancias de `@v3`  
-✅ **Después:** 9 instancias de `@v4`  
+✅ **Antes:** 9 instancias de `@v3`
+✅ **Después:** 9 instancias de `@v4`
 ✅ **Sin instancias restantes de v3**
 
 ---
@@ -125,6 +125,6 @@ with:
 
 ---
 
-**Fecha de corrección:** 2025-01-30  
+**Fecha de corrección:** 2025-01-30
 **Estado:** ✅ **CORREGIDO Y VERIFICADO**
 

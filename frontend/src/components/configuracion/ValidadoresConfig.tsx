@@ -26,7 +26,7 @@ export function ValidadoresConfig() {
   const [configuracion, setConfiguracion] = useState<ValidadoresConfig | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  
+
   // Estado para pruebas
   const [pruebas, setPruebas] = useState<PruebaValidadores>({
     telefono: '',
@@ -66,7 +66,7 @@ export function ValidadoresConfig() {
     try {
       setEjecutandoPrueba(true)
       const datosPrueba = { ...pruebas }
-      
+
       // Solo incluir campos que tengan valor
       Object.keys(datosPrueba).forEach(key => {
         if (!datosPrueba[key as keyof PruebaValidadores]) {
@@ -134,7 +134,7 @@ export function ValidadoresConfig() {
       fecha: Calendar,
       email: Mail
     }
-    
+
     const IconComponent = iconos[tipo as keyof typeof iconos] || Info
 
     return (
@@ -169,7 +169,7 @@ export function ValidadoresConfig() {
                   </ul>
                 </div>
               </div>
-              
+
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <h5 className="font-medium text-green-700 mb-2">✅ Ejemplos Válidos</h5>
@@ -202,7 +202,7 @@ export function ValidadoresConfig() {
                   <strong>Longitud:</strong> {config.paises_soportados.venezuela.longitud}
                 </div>
               </div>
-              
+
               <div className="mt-4">
                 <strong>Requisitos:</strong>
                 <ul className="mt-1 space-y-1 text-sm">
@@ -359,8 +359,8 @@ export function ValidadoresConfig() {
             </div>
             <div>
               <label className="text-sm font-medium">País (Teléfono)</label>
-              <Select 
-                value={pruebas.pais_telefono} 
+              <Select
+                value={pruebas.pais_telefono}
                 onValueChange={(value) => setPruebas(prev => ({ ...prev, pais_telefono: value }))}
               >
                 <SelectTrigger>
@@ -382,8 +382,8 @@ export function ValidadoresConfig() {
             </div>
             <div>
               <label className="text-sm font-medium">País (Cédula)</label>
-              <Select 
-                value={pruebas.pais_cedula} 
+              <Select
+                value={pruebas.pais_cedula}
                 onValueChange={(value) => setPruebas(prev => ({ ...prev, pais_cedula: value }))}
               >
                 <SelectTrigger>
@@ -414,8 +414,8 @@ export function ValidadoresConfig() {
           </div>
 
           <div className="flex space-x-2">
-            <Button 
-              onClick={ejecutarPruebas} 
+            <Button
+              onClick={ejecutarPruebas}
               disabled={ejecutandoPrueba}
               className="bg-blue-600 hover:bg-blue-700"
             >
@@ -468,7 +468,7 @@ export function ValidadoresConfig() {
                           </Badge>
                         )}
                       </div>
-                      
+
                       <div className="text-sm space-y-1">
                         <div><strong>Original:</strong> {resultado.valor_original}</div>
                         {resultado.valor_formateado && (

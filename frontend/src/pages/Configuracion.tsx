@@ -124,7 +124,7 @@ export function Configuracion() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [seccionActiva, setSeccionActiva] = useState('general')
-  
+
   // Leer el parámetro tab de la URL
   useEffect(() => {
     const tab = searchParams.get('tab')
@@ -150,12 +150,12 @@ export function Configuracion() {
       setLoading(true)
       setError(null)
       console.log('🔄 Cargando configuración general...')
-      
+
       const config = await configuracionGeneralService.obtenerConfiguracionGeneral()
       console.log('✅ Configuración general cargada:', config)
-      
+
       setConfiguracionGeneral(config)
-      
+
       // Actualizar también el mock para compatibilidad
       setConfiguracion(prev => ({
         ...prev,
@@ -181,14 +181,14 @@ export function Configuracion() {
     try {
       setLoading(true)
       setError(null)
-      
+
       console.log(`🔄 Actualizando ${campo} a:`, valor)
-      
+
       const updateData = { [campo]: valor }
       const response = await configuracionGeneralService.actualizarConfiguracionGeneral(updateData)
-      
+
       console.log('✅ Configuración actualizada:', response)
-      
+
       // Actualizar estado local
       setConfiguracionGeneral(prev => prev ? { ...prev, [campo]: valor } : null)
       setConfiguracion(prev => ({
@@ -198,10 +198,10 @@ export function Configuracion() {
           [campo]: valor
         }
       }))
-      
+
       // Mostrar mensaje de éxito
       toast.success(`${campo} actualizado exitosamente`)
-      
+
     } catch (err) {
       console.error('❌ Error actualizando configuración:', err)
       setError(`Error al actualizar ${campo}`)
@@ -213,10 +213,10 @@ export function Configuracion() {
 
   const secciones = [
     { id: 'general', nombre: 'General', icono: Globe },
-    { 
-      id: 'herramientas', 
-      nombre: 'Herramientas', 
-      icono: Wrench, 
+    {
+      id: 'herramientas',
+      nombre: 'Herramientas',
+      icono: Wrench,
       submenu: true,
       items: [
         { id: 'notificaciones', nombre: 'Notificaciones', icono: Bell },
@@ -240,7 +240,7 @@ export function Configuracion() {
   const handleGuardar = async () => {
     try {
       setLoading(true)
-      
+
       // Guardar cambios de configuración general si hay cambios pendientes
       if (configuracionGeneral && cambiosPendientes) {
         // Mapeo de campos frontend a backend
@@ -250,12 +250,12 @@ export function Configuracion() {
           'zonaHoraria': 'zona_horaria',
           'moneda': 'moneda'
         }
-        
+
         // Actualizar cada campo que haya cambiado
         for (const [campoFrontend, campoBackend] of Object.entries(camposMap)) {
           const valorFrontend = configuracion.general[campoFrontend as keyof typeof configuracion.general]
           const valorBackend = configuracionGeneral[campoBackend as keyof typeof configuracionGeneral]
-          
+
           if (valorFrontend && valorFrontend !== valorBackend) {
             await actualizarConfiguracionGeneral(campoBackend, String(valorFrontend))
           }
@@ -265,37 +265,37 @@ export function Configuracion() {
         // Verificar explícitamente que el logo esté guardado en la BD
         if (logoPreview && logoInfo) {
           console.log('✅ Verificando que logo esté guardado en BD:', logoInfo)
-          
+
           // Verificar que el logo_filename esté persistido en la BD
           const configResponse = await fetch('/api/v1/configuracion/general')
           if (!configResponse.ok) {
             throw new Error(`Error ${configResponse.status} obteniendo configuración`)
           }
-          
+
           const updatedConfig = await configResponse.json()
           console.log('✅ Configuración general recargada:', updatedConfig)
-          
+
           // Verificar que logo_filename esté en la BD y coincida con el logo subido
           if (updatedConfig.logo_filename) {
             if (updatedConfig.logo_filename === logoInfo.filename) {
               console.log('✅ Logo confirmado y guardado correctamente en BD:', updatedConfig.logo_filename)
-              
+
               // Actualizar estado local con configuración recargada
               setConfiguracionGeneral(updatedConfig)
-              
+
               // Disparar evento para actualizar todos los componentes Logo con la información completa
-              window.dispatchEvent(new CustomEvent('logoUpdated', { 
-                detail: { 
+              window.dispatchEvent(new CustomEvent('logoUpdated', {
+                detail: {
                   confirmed: true,
-                  filename: logoInfo.filename, 
-                  url: logoInfo.url 
-                } 
+                  filename: logoInfo.filename,
+                  url: logoInfo.url
+                }
               }))
-              
+
               // Limpiar estado después de confirmar
               setLogoPreview(null)
               setLogoInfo(null)
-              
+
               toast.success('Logo guardado exitosamente en la base de datos')
             } else {
               console.warn('⚠️ Logo filename en BD no coincide:', {
@@ -314,10 +314,10 @@ export function Configuracion() {
             throw new Error('Logo no encontrado en BD después de guardar')
           }
         }
-        
+
         // Marcar cambios como guardados solo si no hubo errores
         setCambiosPendientes(false)
-        
+
         // Mostrar mensaje de éxito general solo si no hay logo (el logo ya mostró su mensaje)
         if (!logoPreview || !logoInfo) {
           toast.success('Configuración guardada exitosamente')
@@ -334,7 +334,7 @@ export function Configuracion() {
 
   const handleCambio = (seccion: string, campo: string, valor: string | number | boolean | null) => {
     console.log(`🔄 Cambio en ${seccion}.${campo}:`, valor)
-    
+
     setConfiguracion(prev => ({
       ...prev,
       [seccion]: {
@@ -342,9 +342,9 @@ export function Configuracion() {
         [campo]: valor
       }
     }))
-    
+
     setCambiosPendientes(true)
-    
+
     // NO actualizar automáticamente en el backend
     // El usuario debe hacer clic en "Guardar" para persistir los cambios
   }
@@ -414,13 +414,13 @@ export function Configuracion() {
       // Marcar como cambio pendiente para activar botón Guardar
       // Esto permite al usuario validar/confirmar antes de aplicar el cambio
       setCambiosPendientes(true)
-      
+
       toast.success('Logo cargado. Haga clic en "Guardar" para confirmar el cambio.')
 
       // Disparar evento para actualizar componentes Logo inmediatamente
       // (aunque luego se confirmará al hacer clic en Guardar)
-      window.dispatchEvent(new CustomEvent('logoUpdated', { 
-        detail: { filename: result.filename, url: result.url } 
+      window.dispatchEvent(new CustomEvent('logoUpdated', {
+        detail: { filename: result.filename, url: result.url }
       }))
     } catch (error: unknown) {
       console.error('Error cargando logo:', error)
@@ -517,13 +517,13 @@ export function Configuracion() {
                 <strong>📏 Tamaño máximo:</strong> 2MB. Se recomienda usar SVG para mejor calidad.
               </p>
             </div>
-            
+
             {/* Preview del logo actual o nuevo */}
             {logoPreview && (
               <div className="flex items-center justify-center p-4 bg-white rounded-lg border border-blue-200">
-                <img 
-                  src={logoPreview} 
-                  alt="Vista previa del logo" 
+                <img
+                  src={logoPreview}
+                  alt="Vista previa del logo"
                   className="max-h-24 max-w-48 object-contain"
                 />
               </div>
@@ -548,9 +548,9 @@ export function Configuracion() {
                     </>
                   )}
                 </div>
-                <input 
-                  type="file" 
-                  className="hidden" 
+                <input
+                  type="file"
+                  className="hidden"
                   accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg"
                   onChange={handleCargarLogo}
                   disabled={uploadingLogo}
@@ -594,7 +594,7 @@ export function Configuracion() {
           <label className="text-sm font-medium">Notificaciones Push</label>
         </div>
       </div>
-      
+
       <div className="grid gap-4 md:grid-cols-2">
         <div>
           <label className="text-sm font-medium">Servidor SMTP</label>
@@ -690,7 +690,7 @@ export function Configuracion() {
           </Select>
         </div>
       </div>
-      
+
       <div className="grid gap-4 md:grid-cols-2">
         <div className="flex items-center space-x-2">
           <input
@@ -782,7 +782,7 @@ export function Configuracion() {
           />
         </div>
       </div>
-      
+
       <div className="grid gap-4 md:grid-cols-2">
         <div className="flex items-center space-x-2">
           <input
@@ -803,7 +803,7 @@ export function Configuracion() {
           <label className="text-sm font-medium">Comprimir Backups</label>
         </div>
       </div>
-      
+
       <div>
         <label className="text-sm font-medium">Último Backup</label>
         <Input
@@ -836,7 +836,7 @@ export function Configuracion() {
           />
         </div>
       </div>
-      
+
       <div className="grid gap-4 md:grid-cols-2">
         <div className="flex items-center space-x-2">
           <input

@@ -158,7 +158,7 @@ Si el solicitante tiene **3 años** trabajando:
 ## ✅ CÓMO CALCULAR LA PUNTUACIÓN FINAL
 
 ```
-Puntuación Final = 
+Puntuación Final =
     Ratio Endeudamiento (0-25) +
     Ratio Cobertura (0-20) +
     Historial Crediticio (0-20) +
@@ -175,11 +175,10 @@ Total Máximo: 100 puntos
 
 **Pregunta:** "¿Qué escala se usa aquí?"
 
-**Respuesta:** 
+**Respuesta:**
 - **Campo:** Años de Empleo
 - **Escala:** Números (años) con decimales permitidos
 - **Ejemplos válidos:** 0, 0.5 (6 meses), 1, 2.5, 5, 10, etc.
 - **Puntos:** De 2 a 15 puntos según el rango
 - **Peso:** 15% de la puntuación total (0-100)
-
 

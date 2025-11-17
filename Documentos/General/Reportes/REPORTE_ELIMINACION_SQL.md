@@ -1,6 +1,6 @@
 # 📋 Reporte de Eliminación de Archivos SQL Obsoletos
 
-**Fecha**: 2025-01-27  
+**Fecha**: 2025-01-27
 **Objetivo**: Limpiar archivos SQL duplicados y obsoletos relacionados con configuración de email
 
 ---
@@ -142,6 +142,6 @@
 
 ---
 
-**Fecha de ejecución**: 2025-01-27  
+**Fecha de ejecución**: 2025-01-27
 **Estado**: ✅ COMPLETADO
 

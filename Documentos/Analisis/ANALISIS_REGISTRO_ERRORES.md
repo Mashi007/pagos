@@ -203,7 +203,7 @@ Muestra el estado de cada log en la salida del workflow.
     # SIN || true - debe fallar si hay errores críticos
     flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
     echo "::endgroup::"
-    
+
     # Guardar en log para artifacts
     flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics > flake8-critical.log 2>&1 || true
 ```
@@ -224,7 +224,7 @@ Muestra el estado de cada log en la salida del workflow.
     # SIN || true - debe fallar si hay errores
     isort --check-only --diff app/
     echo "::endgroup::"
-    
+
     # También guardar en archivo para artifacts
     isort --check-only --diff app/ > isort.log 2>&1 || true
 ```
@@ -239,11 +239,11 @@ Muestra el estado de cada log en la salida del workflow.
     # Generar log primero
     isort --check-only --diff app/ > isort.log 2>&1
     ISORT_EXIT_CODE=$?
-    
+
     # Mostrar output
     cat isort.log
     echo "::endgroup::"
-    
+
     # Fallar si hay errores
     if [ $ISORT_EXIT_CODE -ne 0 ]; then
       echo "❌ Errores de orden de imports detectados. Ejecuta 'isort app/' para corregir."
@@ -264,7 +264,7 @@ Muestra el estado de cada log en la salida del workflow.
     cd ${{ env.BACKEND_DIR }}
     echo "## 🚨 Revisión de Errores Críticos" >> $GITHUB_STEP_SUMMARY
     echo "" >> $GITHUB_STEP_SUMMARY
-    
+
     if [ -f "flake8-critical.log" ] && [ -s "flake8-critical.log" ]; then
       ERROR_COUNT=$(grep -c "^app/" flake8-critical.log 2>/dev/null || echo "0")
       if [ "$ERROR_COUNT" -gt 0 ]; then
@@ -274,7 +274,7 @@ Muestra el estado de cada log en la salida del workflow.
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
       fi
     fi
-    
+
     if [ -f "isort.log" ] && [ -s "isort.log" ]; then
       ISORT_ERRORS=$(grep -c "ERROR:" isort.log 2>/dev/null || echo "0")
       if [ "$ISORT_ERRORS" -gt 0 ]; then
@@ -442,6 +442,6 @@ ERROR: /path/to/file.py Imports are incorrectly sorted and/or formatted.
 
 ---
 
-**Última actualización:** 2025-01-30  
+**Última actualización:** 2025-01-30
 **Estado:** ✅ **CORRECCIONES APLICADAS Y VERIFICADAS**
 

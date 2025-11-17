@@ -18,29 +18,29 @@ from app.models.pago_staging import PagoStaging
 
 def verificar_conexion():
     """Verifica la conexión a la base de datos y la tabla pagos_staging"""
-    
+
     # Obtener DATABASE_URL del entorno
     database_url = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/pagos_db")
-    
+
     print("=" * 70)
     print("VERIFICACIÓN DE CONEXIÓN A pagos_staging")
     print("=" * 70)
     print(f"\n📊 DATABASE_URL: {database_url.split('@')[1] if '@' in database_url else database_url}")
-    
+
     try:
         # Crear engine
         engine = create_engine(database_url, pool_pre_ping=True)
-        
+
         # Crear sesión
         SessionLocal = sessionmaker(bind=engine)
         db = SessionLocal()
-        
+
         print("\n✅ Conexión a la base de datos: OK")
-        
+
         # Verificar que la tabla existe
         inspector = inspect(engine)
         tablas = inspector.get_table_names()
-        
+
         if "pagos_staging" in tablas:
             print("✅ Tabla 'pagos_staging' existe en la base de datos")
         else:
@@ -48,24 +48,24 @@ def verificar_conexion():
             print(f"   Tablas disponibles: {', '.join(tablas[:10])}...")
             db.close()
             return False
-        
+
         # Verificar estructura de la tabla
         columnas = inspector.get_columns("pagos_staging")
         print(f"\n📋 Estructura de la tabla 'pagos_staging':")
         print(f"   Total de columnas: {len(columnas)}")
-        columnas_importantes = ['id', 'cedula_cliente', 'cedula', 'prestamo_id', 
+        columnas_importantes = ['id', 'cedula_cliente', 'cedula', 'prestamo_id',
                                 'fecha_pago', 'monto_pagado', 'estado', 'conciliado']
         for col in columnas_importantes:
             if any(c['name'] == col for c in columnas):
                 print(f"   ✅ {col}")
             else:
                 print(f"   ⚠️  {col} (no encontrada)")
-        
+
         # Verificar que el modelo puede hacer consultas
         try:
             total_registros = db.query(PagoStaging).count()
             print(f"\n📊 Total de registros en pagos_staging: {total_registros}")
-            
+
             if total_registros > 0:
                 # Obtener un registro de ejemplo
                 ejemplo = db.query(PagoStaging).first()
@@ -78,12 +78,12 @@ def verificar_conexion():
                 print(f"   Conciliado: {ejemplo.conciliado}")
             else:
                 print("\n⚠️  La tabla está vacía (esto puede ser normal si no hay datos)")
-            
+
         except Exception as e:
             print(f"\n❌ Error al consultar pagos_staging: {e}")
             db.close()
             return False
-        
+
         # Verificar consultas con SQL directo
         try:
             resultado = db.execute(text("SELECT COUNT(*) FROM pagos_staging"))
@@ -93,12 +93,12 @@ def verificar_conexion():
             print(f"\n❌ Error en consulta SQL directa: {e}")
             db.close()
             return False
-        
+
         # Verificar esquema
         try:
             resultado = db.execute(text("""
-                SELECT table_schema, table_name 
-                FROM information_schema.tables 
+                SELECT table_schema, table_name
+                FROM information_schema.tables
                 WHERE table_name = 'pagos_staging'
             """))
             esquemas = resultado.fetchall()
@@ -110,14 +110,14 @@ def verificar_conexion():
                 print("\n⚠️  No se pudo determinar el esquema")
         except Exception as e:
             print(f"\n⚠️  Error al verificar esquema: {e}")
-        
+
         db.close()
-        
+
         print("\n" + "=" * 70)
         print("✅ VERIFICACIÓN COMPLETA: Todo está correcto")
         print("=" * 70)
         return True
-        
+
     except Exception as e:
         print(f"\n❌ ERROR DE CONEXIÓN: {e}")
         print(f"   Tipo de error: {type(e).__name__}")

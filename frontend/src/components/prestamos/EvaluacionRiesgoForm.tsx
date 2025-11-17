@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { 
-  Calculator, 
+import {
+  Calculator,
   AlertCircle,
   X,
   CheckCircle,
@@ -45,12 +45,12 @@ interface EvaluacionFormData {
   ingresos_mensuales: number
   gastos_fijos_mensuales: number
   otras_deudas: number
-  
+
   // Criterio 2: Estabilidad Laboral
   meses_trabajo: number
   tipo_empleo: string
   sector_economico: string
-  
+
   // Criterio 3: Referencias (3 referencias individuales)
   referencia1_observaciones: string
   referencia1_calificacion: number  // 3=Recomendable, 2=Dudosa, 1=No recomendable
@@ -58,12 +58,12 @@ interface EvaluacionFormData {
   referencia2_calificacion: number
   referencia3_observaciones: string
   referencia3_calificacion: number
-  
+
   // Criterio 4: Arraigo Geográfico (7 puntos - sin tipo_vivienda)
   familia_cercana: boolean
   familia_pais: boolean
   minutos_trabajo: number
-  
+
   // Criterio 5: Perfil Sociodemográfico
   tipo_vivienda_detallado: string
   zona_urbana: boolean
@@ -81,10 +81,10 @@ interface EvaluacionFormData {
   necesidades_especiales: boolean
   viven_con_ex: boolean
   embarazo_actual: boolean
-  
+
   // Criterio 6: Edad
   edad: number
-  
+
   // Criterio 7: Capacidad de Maniobra (no requiere campos adicionales)
 }
 
@@ -101,7 +101,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   const [showFormularioAprobacion, setShowFormularioAprobacion] = useState(false)
   const [resumenPrestamos, setResumenPrestamos] = useState<any | null>(null)
   const [bloqueadoPorMora, setBloqueadoPorMora] = useState<boolean>(false)
-  
+
   // Estado para condiciones editables de aprobación
   const [condicionesAprobacion, setCondicionesAprobacion] = useState({
     tasa_interes: 0.0,
@@ -109,19 +109,19 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     fecha_base_calculo: new Date().toISOString().split('T')[0],
     observaciones: ''
   })
-  
+
   const aplicarCondiciones = useAplicarCondicionesAprobacion()
   const updatePrestamo = useUpdatePrestamo()
 
   // (moved below formData) - reglas de completitud por sección
-  
+
   // Calcular edad automáticamente desde la cédula del préstamo
   useEffect(() => {
     const calcularEdad = async () => {
       try {
         // Obtener información del cliente por su cédula usando el servicio
         const response = await clienteService.getClientes({ cedula: prestamo.cedula })
-        
+
         if (response && response.data && response.data.length > 0) {
           const cliente = response.data[0]
           if (cliente.fecha_nacimiento) {
@@ -130,11 +130,11 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
             const nacimiento = new Date(cliente.fecha_nacimiento)
             let años = hoy.getFullYear() - nacimiento.getFullYear()
             const diferenciaMeses = hoy.getMonth() - nacimiento.getMonth()
-            
+
             if (diferenciaMeses < 0 || (diferenciaMeses === 0 && hoy.getDate() < nacimiento.getDate())) {
               años -= 1
             }
-            
+
             // Calcular meses adicionales
             let meses = 0
             if (hoy.getMonth() >= nacimiento.getMonth()) {
@@ -148,7 +148,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                 meses -= 1
               }
             }
-            
+
             // Edad en años decimales
             const edadDecimal = años + (meses / 12)
             setClienteEdad(edadDecimal)
@@ -158,7 +158,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         console.error('Error calculando edad:', error)
       }
     }
-    
+
     calcularEdad()
   }, [prestamo.cedula])
 
@@ -193,22 +193,22 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
       setShowFormularioAprobacion(true)
     }
   }, [resultado])
-  
+
   if (!isAdmin) {
     return null
   }
-  
+
   const [formData, setFormData] = useState<EvaluacionFormData>({
     // Criterio 1: Capacidad de Pago (33 puntos)
     ingresos_mensuales: 0,
     gastos_fijos_mensuales: 0,
     otras_deudas: 0,
-    
+
     // Criterio 2: Estabilidad Laboral (23 puntos)
     meses_trabajo: 0,
     tipo_empleo: 'empleado_formal',
     sector_economico: 'servicios_esenciales',
-    
+
     // Criterio 3: Referencias Personales (9 puntos)
     referencia1_observaciones: '',
     referencia1_calificacion: 0,
@@ -216,12 +216,12 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     referencia2_calificacion: 0,
     referencia3_observaciones: '',
     referencia3_calificacion: 0,
-    
+
     // Criterio 4: Arraigo Geográfico (7 puntos - sin tipo_vivienda)
     familia_cercana: false,
     familia_pais: false,
     minutos_trabajo: 0,
-    
+
     // Criterio 5: Perfil Sociodemográfico (17 puntos)
     tipo_vivienda_detallado: 'alquiler_1_3',
     zona_urbana: false,
@@ -239,10 +239,10 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     necesidades_especiales: false,
     viven_con_ex: false,
     embarazo_actual: false,
-    
+
     // Criterio 6: Edad del Cliente (10 puntos)
     edad: 0,
-    
+
     // Criterio 7: Capacidad de Maniobra (5 puntos - NO requiere campos adicionales)
     // Se calcula automáticamente: Saldo Residual = Ingresos - Gastos - Deudas - Cuota
   })
@@ -266,7 +266,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
       setShowSection('situacion')
       return
     }
-    
+
     const correo = user?.email || 'usuario@dominio'
     const confirmacion = window.confirm(
       '⚠️ CONFIRMACIÓN IMPORTANTE\n\n' +
@@ -277,12 +277,12 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
       '✓ Los valores de anticipo son reales\n\n' +
       '¿Desea proceder con la evaluación?'
     )
-    
+
     if (!confirmacion) {
       toast('Evaluación cancelada')
       return
     }
-    
+
     setIsLoading(true)
 
     try {
@@ -291,12 +291,12 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         ingresos_mensuales: formData.ingresos_mensuales,
         gastos_fijos_mensuales: formData.gastos_fijos_mensuales,
         otras_deudas: formData.otras_deudas,
-        
+
         // Criterio 2
         meses_trabajo: formData.meses_trabajo,
         tipo_empleo: formData.tipo_empleo,
         sector_economico: formData.sector_economico,
-        
+
     // Criterio 3: Referencias individuales
     referencia1_observaciones: formData.referencia1_observaciones,
     referencia1_calificacion: formData.referencia1_calificacion,
@@ -304,12 +304,12 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     referencia2_calificacion: formData.referencia2_calificacion,
     referencia3_observaciones: formData.referencia3_observaciones,
     referencia3_calificacion: formData.referencia3_calificacion,
-        
+
         // Criterio 4 (sin tipo_vivienda)
         familia_cercana: formData.familia_cercana,
         familia_pais: formData.familia_pais,
         minutos_trabajo: formData.minutos_trabajo,
-        
+
         // Criterio 5
         tipo_vivienda_detallado: formData.tipo_vivienda_detallado,
         zona_urbana: formData.zona_urbana,
@@ -327,10 +327,10 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         necesidades_especiales: formData.necesidades_especiales,
         viven_con_ex: formData.viven_con_ex,
         embarazo_actual: formData.embarazo_actual,
-        
+
         // Criterio 6: Edad calculada automáticamente
         edad: clienteEdad || 0,
-        
+
         // Criterio 7: Capacidad de Maniobra
         // Se calcula automáticamente con los datos del Criterio 1
       }
@@ -340,7 +340,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
       // Cambiar automáticamente a la pestaña de resultado
       setTimeout(() => setShowSection('resultado'), 100)
       toast.success('✅ Fase 1 Completada: Evaluación de Riesgo guardada. El préstamo ahora está en estado EVALUADO.')
-      
+
       // IMPORTANTE: onSuccess actualiza el dashboard y cambia el icono de calculadora a aprobación
       // Esperar 2 segundos para que el usuario vea el resultado antes de cerrar
       setTimeout(() => {
@@ -859,7 +859,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                 </SelectContent>
               </Select>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center space-x-2">
                     <input
@@ -1147,7 +1147,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   </p>
                 </div>
               </div>
-              
+
               {/* PREVISUALIZACIÓN EN TIEMPO REAL */}
               {(() => {
                 const ingresos = formData.ingresos_mensuales || 0
@@ -1156,11 +1156,11 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                 const cuotaNueva = prestamo.cuota_periodo || 0
                 const saldoResidual = ingresos - gastosFijos - otrasDeudas - cuotaNueva
                 const porcentaje = ingresos > 0 ? (saldoResidual / ingresos) * 100 : 0
-                
+
                 let puntos = 0
                 let categoria = ''
                 let icono = ''
-                
+
                 if (porcentaje >= 15) {
                   puntos = 5
                   categoria = 'Holgado'
@@ -1174,26 +1174,26 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   categoria = 'Insuficiente'
                   icono = '❌'
                 }
-                
+
                 return (
                   <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                     <h4 className="font-semibold text-green-900 mb-3">📊 PREVISUALIZACIÓN - CÁLCULO EN TIEMPO REAL</h4>
-                    
+
                     {/* Desglose del cálculo */}
                     <div className="bg-white p-3 rounded border border-green-100 mb-3">
                       <div className="grid grid-cols-2 gap-2 text-sm mb-2">
                         <div className="text-gray-600">💰 Ingresos Mensuales:</div>
                         <div className="font-semibold">${ingresos.toFixed(2)}</div>
-                        
+
                         <div className="text-gray-600">- Gastos Fijos:</div>
                         <div className="font-semibold">-${gastosFijos.toFixed(2)}</div>
-                        
+
                         <div className="text-gray-600">- Otras Deudas:</div>
                         <div className="font-semibold">-${otrasDeudas.toFixed(2)}</div>
-                        
+
                         <div className="text-gray-600">- Cuota Préstamo:</div>
                         <div className="font-semibold">-${cuotaNueva.toFixed(2)}</div>
-                        
+
                         <div className="border-t pt-2 font-bold text-green-700">
                           💵 Saldo Residual:
                         </div>
@@ -1202,7 +1202,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Porcentaje y categoría */}
                     <div className="grid grid-cols-2 gap-3 mb-3">
                       <div className="bg-white p-3 rounded border">
@@ -1218,7 +1218,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Puntos */}
                     <div className="bg-white p-3 rounded border text-center">
                       <div className="text-xs text-gray-600 mb-1">PUNTOS QUE OBTENDRÍA:</div>
@@ -1226,7 +1226,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                         {puntos} / 5 pts
                       </div>
                     </div>
-                    
+
                     {saldoResidual < 0 && (
                       <div className="bg-red-100 p-2 rounded border border-red-300 mt-3">
                         <p className="text-xs text-red-800 font-semibold">
@@ -1237,7 +1237,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   </div>
                 )
               })()}
-              
+
               <div className="bg-amber-50 p-3 rounded border border-amber-200">
                 <p className="text-xs text-amber-800 font-semibold mb-2">⚡ ESTE CRITERIO SE CALCULA AUTOMÁTICAMENTE</p>
                 <p className="text-xs text-amber-700">
@@ -1284,7 +1284,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       </Badge>
                     </div>
                     </div>
-                
+
                 {/* Mostrar y editar condiciones de aprobación */}
                 {resultado.sugerencias && (
                   <div className="bg-blue-50 p-4 rounded border border-blue-200">
@@ -1299,7 +1299,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                         {showFormularioAprobacion ? 'Ocultar Edición' : 'Editar Condiciones'}
                       </Button>
                     </div>
-                    
+
                     {!showFormularioAprobacion ? (
                       // Vista de solo lectura
                       <div className="grid grid-cols-3 gap-4">
@@ -1344,7 +1344,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                               Sugerido: {resultado.sugerencias.tasa_interes_sugerida || 8.0}%
                             </p>
                           </div>
-                          
+
                           <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700">
                               Plazo Máximo (meses) <span className="text-red-500">*</span>
@@ -1364,7 +1364,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                               Sugerido: {resultado.sugerencias.plazo_maximo_sugerido || 36} meses
                             </p>
                           </div>
-                          
+
                           <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700">
                               Fecha de Desembolso <span className="text-red-500">*</span>
@@ -1387,7 +1387,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                             </p>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-gray-700">
                             Observaciones
@@ -1407,7 +1407,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     )}
                   </div>
                 )}
-                
+
                 {resultado.requisitos_adicionales && (
                   <div className="bg-white p-3 rounded border">
                     <p className="text-sm font-medium mb-2">Requisitos Adicionales:</p>
@@ -1428,10 +1428,10 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <div className="text-sm text-gray-600 mb-1">Nivel de Riesgo ML</div>
-                          <Badge 
+                          <Badge
                             className={`text-lg ${
-                              resultado.prediccion_ml.riesgo_level === 'Bajo' 
-                                ? 'bg-green-600 text-white' 
+                              resultado.prediccion_ml.riesgo_level === 'Bajo'
+                                ? 'bg-green-600 text-white'
                                 : resultado.prediccion_ml.riesgo_level === 'Medio'
                                 ? 'bg-yellow-600 text-white'
                                 : 'bg-red-600 text-white'
@@ -1448,7 +1448,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                           </div>
                         </div>
                       </div>
-                      
+
                       {resultado.prediccion_ml.recommendation && (
                         <div className="bg-white p-3 rounded border border-purple-200">
                           <div className="text-sm font-medium text-gray-700 mb-1">Recomendación ML:</div>
@@ -1609,8 +1609,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       <div className="mt-3 pt-3 border-t border-blue-300">
                         <p className="font-semibold text-purple-700 mb-1">🔄 SIGUIENTE PASO: Fase 2 - Aprobación</p>
                         <p className="text-xs">
-                          El icono de <strong>calculadora (Calculator)</strong> en el dashboard desaparecerá y será reemplazado 
-                          por el icono de <strong>verde (CheckCircle2)</strong> para "Aprobar Crédito". 
+                          El icono de <strong>calculadora (Calculator)</strong> en el dashboard desaparecerá y será reemplazado
+                          por el icono de <strong>verde (CheckCircle2)</strong> para "Aprobar Crédito".
                           Haga clic en ese nuevo icono para continuar con la asignación de:
                         </p>
                         <ul className="list-disc list-inside mt-2 space-y-1 text-xs text-blue-700">
@@ -1624,12 +1624,12 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   </div>
                 </div>
               </div>
-              
+
               {/* Botones de acción */}
               <div className="flex justify-end gap-3">
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => {
                     onSuccess() // Actualizar dashboard
                     onClose() // Cerrar formulario

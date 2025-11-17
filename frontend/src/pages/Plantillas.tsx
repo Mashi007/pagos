@@ -28,7 +28,7 @@ export function Plantillas() {
         </TabsList>
 
         <TabsContent value="plantillas" className="mt-6">
-          <PlantillasNotificaciones 
+          <PlantillasNotificaciones
             plantillaInicial={plantillaAEditar}
             onPlantillaCargada={() => setPlantillaAEditar(null)}
           />
@@ -43,5 +43,4 @@ export function Plantillas() {
 }
 
 export default Plantillas
-
 

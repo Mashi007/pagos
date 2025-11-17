@@ -24,7 +24,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
   })
   const [isLoading, setIsLoading] = useState(false)
   const [sugerencias, setSugerencias] = useState<any>(null)
-  
+
   const aplicarCondiciones = useAplicarCondicionesAprobacion()
 
   // Obtener sugerencias desde la última evaluación de riesgo
@@ -51,7 +51,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
   const handleAprobar = async () => {
     console.log('🔄 handleAprobar llamado')
     console.log('📋 Condiciones:', condicionesAprobacion)
-    
+
     // Validaciones
     if (!condicionesAprobacion.fecha_base_calculo) {
       console.error('❌ Validación fallida: fecha_base_calculo vacía')
@@ -71,7 +71,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
 
     console.log('✅ Validaciones pasadas')
 
-    const mensajeConfirmacion = 
+    const mensajeConfirmacion =
       `¿Desea aprobar este préstamo con las siguientes condiciones?\n\n` +
       `• Tasa de Interés: ${condicionesAprobacion.tasa_interes}%\n` +
       `• Plazo Máximo: ${condicionesAprobacion.plazo_maximo} meses\n` +
@@ -84,7 +84,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
 
     console.log('✅ Confirmación aceptada por el usuario')
     setIsLoading(true)
-    
+
     try {
       const condiciones = {
         estado: 'APROBADO',
@@ -154,7 +154,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
             <div className="space-y-6">
               <div className="bg-blue-50 p-4 rounded border border-blue-200">
                 <h5 className="font-semibold text-blue-900 mb-4">📋 Condiciones para Aprobación:</h5>
-                
+
                 <div className="bg-white p-4 rounded border border-blue-300 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
@@ -182,7 +182,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
                         />
                       </div>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">
                         Plazo Máximo (meses) <span className="text-red-500">*</span>
@@ -203,7 +203,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
                         placeholder="36"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">
                         Fecha de Desembolso <span className="text-red-500">*</span>
@@ -226,7 +226,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
                       </p>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">
                       Observaciones
@@ -248,7 +248,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
                 <Button type="button" variant="outline" onClick={onClose}>
                   Cancelar
                 </Button>
-                <Button 
+                <Button
                   type="button"
                   className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={(e) => {
@@ -259,14 +259,14 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
                     handleAprobar()
                   }}
                   disabled={
-                    isLoading || 
-                    !condicionesAprobacion.fecha_base_calculo || 
-                    condicionesAprobacion.tasa_interes < 0 || 
-                    condicionesAprobacion.tasa_interes > 100 || 
+                    isLoading ||
+                    !condicionesAprobacion.fecha_base_calculo ||
+                    condicionesAprobacion.tasa_interes < 0 ||
+                    condicionesAprobacion.tasa_interes > 100 ||
                     condicionesAprobacion.plazo_maximo <= 0
                   }
                   title={
-                    !condicionesAprobacion.fecha_base_calculo 
+                    !condicionesAprobacion.fecha_base_calculo
                       ? 'Debe seleccionar una fecha de desembolso'
                       : condicionesAprobacion.tasa_interes < 0 || condicionesAprobacion.tasa_interes > 100
                       ? 'La tasa de interés debe estar entre 0 y 100%'

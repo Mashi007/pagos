@@ -12,7 +12,7 @@ Verificar que el préstamo #9 (Juan García) se aprobó automáticamente despué
 Ejecuta esta query en DBeaver:
 
 ```sql
-SELECT 
+SELECT
     id,
     cedula,
     nombres,
@@ -24,9 +24,9 @@ SELECT
     fecha_base_calculo,        -- ← DEBE TENER FECHA (hoy + 1 mes)
     usuario_aprobador,         -- ← DEBE TENER EMAIL
     observaciones              -- ← DEBE CONTENER "Aprobación automática"
-FROM 
-    prestamos 
-WHERE 
+FROM
+    prestamos
+WHERE
     id = 9;
 ```
 
@@ -42,7 +42,7 @@ WHERE
 ## 📋 PASO 2: Verificar Evaluación de Riesgo
 
 ```sql
-SELECT 
+SELECT
     id,
     prestamo_id,
     puntuacion_total,          -- ← DEBE SER: 96.50
@@ -52,11 +52,11 @@ SELECT
     plazo_maximo,
     requisitos_adicionales,
     created_at
-FROM 
-    prestamos_evaluacion 
-WHERE 
+FROM
+    prestamos_evaluacion
+WHERE
     prestamo_id = 9
-ORDER BY 
+ORDER BY
     created_at DESC
 LIMIT 1;
 ```
@@ -72,7 +72,7 @@ LIMIT 1;
 ## 💰 PASO 3: Verificar Tabla de Amortización
 
 ```sql
-SELECT 
+SELECT
     id,
     numero_cuota,
     fecha_vencimiento,
@@ -82,11 +82,11 @@ SELECT
     saldo_capital_inicial,
     saldo_capital_final,
     estado
-FROM 
-    cuotas 
-WHERE 
+FROM
+    cuotas
+WHERE
     prestamo_id = 9
-ORDER BY 
+ORDER BY
     numero_cuota;
 ```
 
@@ -100,7 +100,7 @@ ORDER BY
 ## 📝 PASO 4: Verificar Auditoría
 
 ```sql
-SELECT 
+SELECT
     id,
     usuario,
     accion,
@@ -108,11 +108,11 @@ SELECT
     estado_anterior,
     estado_nuevo,
     created_at
-FROM 
-    prestamo_auditoria 
-WHERE 
+FROM
+    prestamo_auditoria
+WHERE
     prestamo_id = 9
-ORDER BY 
+ORDER BY
     created_at DESC
 LIMIT 10;
 ```
@@ -130,7 +130,7 @@ LIMIT 10;
 Ejecuta esta query final para ver TODO en una vista:
 
 ```sql
-SELECT 
+SELECT
     'Préstamo' as componente,
     p.id,
     p.estado,
@@ -138,14 +138,14 @@ SELECT
     p.fecha_base_calculo,
     NULL as puntuacion,
     NULL as decision
-FROM 
+FROM
     prestamos p
-WHERE 
+WHERE
     p.id = 9
 
 UNION ALL
 
-SELECT 
+SELECT
     'Evaluación' as componente,
     e.prestamo_id as id,
     NULL as estado,
@@ -153,14 +153,14 @@ SELECT
     NULL as fecha_base_calculo,
     e.puntuacion_total as puntuacion,
     e.decision_final as decision
-FROM 
+FROM
     prestamos_evaluacion e
-WHERE 
+WHERE
     e.prestamo_id = 9
-    
+
 UNION ALL
 
-SELECT 
+SELECT
     'Cuotas' as componente,
     prestamo_id as id,
     NULL as estado,
@@ -168,11 +168,11 @@ SELECT
     NULL as fecha_base_calculo,
     COUNT(*) as puntuacion,
     NULL as decision
-FROM 
+FROM
     cuotas
-WHERE 
+WHERE
     prestamo_id = 9
-GROUP BY 
+GROUP BY
     prestamo_id;
 ```
 

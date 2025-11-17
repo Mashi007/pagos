@@ -103,7 +103,7 @@ export function DashboardCobranza() {
       const response = await apiClient.get(
         `/api/v1/dashboard/cobranza-por-dia?${queryString}`
       ) as { dias: Array<{ fecha: string; total_a_cobrar: number; pagos: number; morosidad: number }> }
-      
+
       // Filtrar solo días del mes actual
       const hoy = new Date()
       const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1)

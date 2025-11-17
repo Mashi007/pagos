@@ -163,14 +163,14 @@ def aplicar_condiciones_aprobacion(
     # Línea 933 - Actualiza tasa de interés
     if "tasa_interes" in condiciones:
         prestamo.tasa_interes = Decimal(str(condiciones["tasa_interes"]))
-    
+
     # Línea 938 - Actualiza fecha base de cálculo
     if "fecha_base_calculo" in condiciones:
         prestamo.fecha_base_calculo = date_parse(condiciones["fecha_base_calculo"]).date()
-    
+
     # Línea 961 - GUARDA EN BASE DE DATOS
     db.commit()
-    
+
     # Línea 181 - Genera tabla de amortización con valores actualizados
     generar_amortizacion(prestamo, fecha, db)
 ```
@@ -377,12 +377,12 @@ app.include_router(prestamos.router, prefix="/api/v1/prestamos", tags=["prestamo
 
 **TODAS LAS CONEXIONES ESTÁN VERIFICADAS Y FUNCIONAN CORRECTAMENTE:**
 
-✅ **Frontend → Servicio:** Conectado  
-✅ **Servicio → Backend:** Endpoints registrados correctamente  
-✅ **Backend → Base de Datos:** `db.commit()` persiste cambios  
-✅ **Formulario Editable:** Permite modificar tasa e interés y fecha  
-✅ **Actualización en BD:** Los valores editados se guardan en PostgreSQL  
-✅ **Generación de Amortización:** Se crea con valores actualizados  
+✅ **Frontend → Servicio:** Conectado
+✅ **Servicio → Backend:** Endpoints registrados correctamente
+✅ **Backend → Base de Datos:** `db.commit()` persiste cambios
+✅ **Formulario Editable:** Permite modificar tasa e interés y fecha
+✅ **Actualización en BD:** Los valores editados se guardan en PostgreSQL
+✅ **Generación de Amortización:** Se crea con valores actualizados
 
 **El formulario está 100% conectado y funcional.**
 

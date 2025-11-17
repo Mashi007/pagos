@@ -133,7 +133,7 @@ class PagoService {
     if (filters?.modelo) params.append('modelo', filters.modelo)
     if (filters?.fecha_inicio) params.append('fecha_inicio', filters.fecha_inicio)
     if (filters?.fecha_fin) params.append('fecha_fin', filters.fecha_fin)
-    
+
     const queryString = params.toString()
     return await apiClient.get(`${this.baseUrl}/stats${queryString ? '?' + queryString : ''}`)
   }
@@ -150,7 +150,7 @@ class PagoService {
     const params = new URLSearchParams()
     if (mes !== undefined) params.append('mes', mes.toString())
     if (año !== undefined) params.append('año', año.toString())
-    
+
     const queryString = params.toString()
     return await apiClient.get(`${this.baseUrl}/kpis${queryString ? '?' + queryString : ''}`)
   }
@@ -210,7 +210,7 @@ class PagoService {
         responseType: 'blob',
       }
     )
-    
+
     // Extraer nombre del archivo del header Content-Disposition
     let filename = 'pagos_con_errores.xlsx'
     const contentDisposition = response.headers['content-disposition']
@@ -220,7 +220,7 @@ class PagoService {
         filename = filenameMatch[1].replace(/['"]/g, '')
       }
     }
-    
+
     return { blob: response.data as Blob, filename }
   }
 }

@@ -1,6 +1,6 @@
 # 🗑️ ARCHIVOS OBSOLETOS ELIMINADOS
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Acción:** Eliminación de archivos obsoletos de diagnóstico/analíticos
 
 ---

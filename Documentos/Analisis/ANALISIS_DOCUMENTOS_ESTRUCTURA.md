@@ -8,33 +8,33 @@ Identificar documentos obsoletos y consolidar la documentación de estructura de
 ## 📊 Documentos Encontrados
 
 ### 1. ✅ **ESTRUCTURA_COMPLETA_TABLAS_BD.md** (backend/docs/)
-**Estado:** ✅ **MANTENER Y ACTUALIZAR**  
-**Razón:** Documento más completo con todas las tablas y columnas detalladas.  
+**Estado:** ✅ **MANTENER Y ACTUALIZAR**
+**Razón:** Documento más completo con todas las tablas y columnas detalladas.
 **Acción:** Actualizar como documento de referencia completo.
 
 ### 2. ⚠️ **ESTRUCTURA_TABLAS_CONFIRMADA.md** (backend/scripts/)
-**Estado:** ⚠️ **CONSOLIDAR**  
-**Razón:** Contiene información útil (reglas de negocio, configuración) pero duplica estructura.  
-**Acción:** 
+**Estado:** ⚠️ **CONSOLIDAR**
+**Razón:** Contiene información útil (reglas de negocio, configuración) pero duplica estructura.
+**Acción:**
 - Mover reglas de negocio a documento separado si es necesario
 - Mantener solo si tiene información única no cubierta en el informe base
 
 ### 3. ❌ **ESTRUCTURA_REAL_TABLA_CUOTAS.md** (backend/docs/)
-**Estado:** ❌ **ELIMINAR**  
-**Razón:** 
+**Estado:** ❌ **ELIMINAR**
+**Razón:**
 - Solo cubre tabla `cuotas` (ya está en informe completo)
 - Parece ser respuesta a pregunta específica, no documento de referencia
 - Información duplicada
 
 ### 4. ❌ **CONFIRMACION_CAMPOS_REALES_BD.md** (backend/docs/)
-**Estado:** ❌ **ELIMINAR**  
-**Razón:** 
+**Estado:** ❌ **ELIMINAR**
+**Razón:**
 - Resumen parcial de campos clave
 - Información completamente cubierta en `ESTRUCTURA_COMPLETA_TABLAS_BD.md`
 - Duplicación innecesaria
 
 ### 5. ✅ **INSTRUCCIONES_OBTENER_ESTRUCTURA.md** (backend/docs/)
-**Estado:** ✅ **MANTENER**  
+**Estado:** ✅ **MANTENER**
 **Razón:** Instrucciones útiles para ejecutar script SQL de verificación.
 
 ---
@@ -42,8 +42,8 @@ Identificar documentos obsoletos y consolidar la documentación de estructura de
 ## 📝 Propuesta de Consolidación
 
 ### Documento Base Principal
-**Nombre:** `ESTRUCTURA_BASE_TABLAS_BD.md` (NUEVO - creado)  
-**Ubicación:** `backend/docs/`  
+**Nombre:** `ESTRUCTURA_BASE_TABLAS_BD.md` (NUEVO - creado)
+**Ubicación:** `backend/docs/`
 **Contenido:**
 - Estructura completa de tablas principales (`clientes`, `prestamos`, `cuotas`, `pagos`)
 - Relaciones (Foreign Keys)
@@ -52,16 +52,16 @@ Identificar documentos obsoletos y consolidar la documentación de estructura de
 - Referencias rápidas para búsquedas y KPIs
 
 ### Documento de Referencia Completo
-**Nombre:** `ESTRUCTURA_COMPLETA_TABLAS_BD.md` (ACTUALIZAR)  
-**Ubicación:** `backend/docs/`  
+**Nombre:** `ESTRUCTURA_COMPLETA_TABLAS_BD.md` (ACTUALIZAR)
+**Ubicación:** `backend/docs/`
 **Contenido:**
 - Todas las tablas del sistema (no solo principales)
 - Estructura detallada con todas las columnas
 - Información completa para consultas exhaustivas
 
 ### Documento de Configuración
-**Nombre:** `ESTRUCTURA_TABLAS_CONFIRMADA.md` (EVALUAR)  
-**Ubicación:** `backend/scripts/` → Mover a `backend/docs/` si se mantiene  
+**Nombre:** `ESTRUCTURA_TABLAS_CONFIRMADA.md` (EVALUAR)
+**Ubicación:** `backend/scripts/` → Mover a `backend/docs/` si se mantiene
 **Contenido:**
 - Reglas de negocio detalladas
 - Checklist de configuración

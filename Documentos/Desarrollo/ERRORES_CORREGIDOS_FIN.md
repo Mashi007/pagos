@@ -1,6 +1,6 @@
 # ✅ TODOS LOS ERRORES DE FLAKE8 CORREGIDOS
 
-**Commit final**: `49893ed`  
+**Commit final**: `49893ed`
 **Fecha**: 2025-10-26
 
 ---
@@ -10,10 +10,10 @@
 ### 1. **E203 - Whitespace before ':'** ✅
 **Archivo**: `backend/app/services/validators_service.py`
 
-- **Línea 81**: `telefono_limpio[len(config["codigo_pais"]) :]` 
+- **Línea 81**: `telefono_limpio[len(config["codigo_pais"]) :]`
   - **Corregido**: `telefono_limpio[len(config["codigo_pais"]):]`
-  
-- **Línea 808**: `monto_limpio[ultimo_coma + 1 :]` 
+
+- **Línea 808**: `monto_limpio[ultimo_coma + 1 :]`
   - **Corregido**: `monto_limpio[ultimo_coma + 1:]`
 
 ### 2. **E501 - Line too long** ✅

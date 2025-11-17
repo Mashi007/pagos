@@ -20,12 +20,12 @@ def _guardar_logo_en_bd(db: Session, logo_filename: str) -> None:
     else:
         logo_config = ConfiguracionSistema(...)  # Crea nuevo
         db.add(logo_config)
-    
+
     db.commit()  # ✅ PERSISTE EN BD (permanente)
     db.refresh(logo_config)  # ✅ VERIFICA QUE SE GUARDÓ
 ```
 
-**✅ Verificación**: 
+**✅ Verificación**:
 - Usa `db.commit()` que persiste permanentemente en PostgreSQL
 - Usa `db.refresh()` para verificar que se guardó correctamente
 - **NO usa caché temporal** - Solo BD como fuente de verdad
@@ -38,7 +38,7 @@ const checkCustomLogo = async () => {
   // PRIMERO: Consultar BD desde /api/v1/configuracion/general
   const configResponse = await fetch('/api/v1/configuracion/general')
   const config = await configResponse.json()
-  
+
   if (config.logo_filename) {
     // Construir URL del logo desde BD
     const logoUrl = `/api/v1/configuracion/logo/${config.logo_filename}?t=${Date.now()}`
@@ -84,11 +84,11 @@ def obtener_configuracion_general(db: Session = Depends(get_db)):
         ConfiguracionSistema.categoria == "GENERAL",
         ConfiguracionSistema.clave == "logo_filename",
     ).first()
-    
+
     if logo_config:
         logo_filename = logo_config.valor
         config["logo_filename"] = logo_filename  # Retorna desde BD
-    
+
     return config
 ```
 

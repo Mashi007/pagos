@@ -101,12 +101,12 @@ class ValidadoresService {
       valor,
       pais
     }
-    
+
     // Agregar moneda solo para campos de monto
     if ((campo === 'monto' || campo === 'ingreso_mensual' || campo === 'total_financiamiento') && moneda) {
       body.moneda = moneda
     }
-    
+
     return await apiClient.post<ValidacionResponse>(`${this.baseUrl}/validar-campo`, body)
   }
 
@@ -117,12 +117,12 @@ class ValidadoresService {
       valor,
       pais
     }
-    
+
     // Agregar moneda solo para campos de monto
     if ((campo === 'monto' || campo === 'ingreso_mensual' || campo === 'total_financiamiento') && moneda) {
       body.moneda = moneda
     }
-    
+
     return await apiClient.post(`${this.baseUrl}/formatear-tiempo-real`, body)
   }
 

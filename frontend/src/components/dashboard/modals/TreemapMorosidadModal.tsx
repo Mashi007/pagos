@@ -92,12 +92,12 @@ export function TreemapMorosidadModal({ isOpen, onClose }: TreemapMorosidadModal
     if (active && payload && payload.length) {
       const data = payload[0].payload
       if (!data) return null
-      
+
       const value = typeof data.value === 'number' ? data.value : 0
       const cantidadClientes = typeof data.cantidad_clientes === 'number' ? data.cantidad_clientes : 0
       const cantidadCuotas = typeof data.cantidad_cuotas_atrasadas === 'number' ? data.cantidad_cuotas_atrasadas : 0
       const promedio = typeof data.promedio_morosidad_por_cliente === 'number' ? data.promedio_morosidad_por_cliente : 0
-      
+
       return (
         <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg">
           <p className="font-bold text-lg mb-2">{typeof data.name === 'string' ? data.name : 'N/A'}</p>

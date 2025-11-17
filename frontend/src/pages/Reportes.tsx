@@ -101,11 +101,11 @@ export function Reportes() {
   const queryClient = useQueryClient()
 
   // Obtener resumen del dashboard para KPIs
-  const { 
-    data: resumenData, 
-    isLoading: loadingResumen, 
+  const {
+    data: resumenData,
+    isLoading: loadingResumen,
     isError: errorResumen,
-    refetch: refetchResumen 
+    refetch: refetchResumen
   } = useQuery({
     queryKey: ['reportes-resumen'],
     queryFn: () => reporteService.getResumenDashboard(),
@@ -122,10 +122,10 @@ export function Reportes() {
       toast.loading(`Generando reporte de ${tipo}...`)
 
       const fechaCorte = new Date().toISOString().split('T')[0]
-      
+
       if (tipo === 'CARTERA') {
         const blob = await reporteService.exportarReporteCartera(formato, fechaCorte)
-        
+
         // Crear enlace de descarga
         const url = window.URL.createObjectURL(blob)
         const link = document.createElement('a')
@@ -135,7 +135,7 @@ export function Reportes() {
         link.click()
         document.body.removeChild(link)
         window.URL.revokeObjectURL(url)
-        
+
         toast.dismiss()
         toast.success(`Reporte de ${tipo} generado exitosamente`)
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
@@ -145,12 +145,12 @@ export function Reportes() {
         const fechaFin = new Date()
         const fechaInicio = new Date()
         fechaInicio.setMonth(fechaInicio.getMonth() - 1)
-        
+
         const reporte = await reporteService.getReportePagos(
           fechaInicio.toISOString().split('T')[0],
           fechaFin.toISOString().split('T')[0]
         )
-        
+
         toast.dismiss()
         toast.success(`Reporte de ${tipo} obtenido exitosamente`)
         console.log('Reporte de pagos:', reporte)
@@ -345,7 +345,7 @@ export function Reportes() {
               const IconComponent = tipo.icon
               const isGenerando = generandoReporte === tipo.value
               const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'FINANCIERO', 'ASESORES', 'PRODUCTOS'].includes(tipo.value)
-              
+
               return (
                 <Card
                   key={tipo.value}

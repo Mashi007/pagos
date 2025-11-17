@@ -1,7 +1,7 @@
 # 🔒 MIGRACIÓN DE ÍNDICES - SEGURA Y EFICIENTE
 
-**Fecha:** 2025-01-27  
-**Archivo:** `backend/alembic/versions/20250127_add_performance_indexes.py`  
+**Fecha:** 2025-01-27
+**Archivo:** `backend/alembic/versions/20250127_add_performance_indexes.py`
 **Estado:** ✅ Lista para ejecutar
 
 ---
@@ -80,7 +80,7 @@ alembic history
 ### **PostgreSQL:**
 ```sql
 -- Verificar índices creados
-SELECT 
+SELECT
     schemaname,
     tablename,
     indexname,
@@ -94,7 +94,7 @@ ORDER BY tablename, indexname;
 ### **Verificar Performance:**
 ```sql
 -- Verificar uso de índices
-SELECT 
+SELECT
     schemaname,
     tablename,
     indexname,

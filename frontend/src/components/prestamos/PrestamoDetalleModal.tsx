@@ -21,7 +21,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
   const [activeTab, setActiveTab] = useState<'detalles' | 'amortizacion' | 'auditoria'>('detalles')
   const [prediccionImpago, setPrediccionImpago] = useState<any>(null)
   const [cargandoPrediccion, setCargandoPrediccion] = useState(false)
-  
+
   // Recargar datos completos del préstamo
   const { data: prestamo, isLoading } = usePrestamo(prestamoInitial.id)
 
@@ -208,8 +208,8 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                     <div>
                       <label className="text-sm text-gray-600">Total de Financiamiento</label>
                       <p className="text-2xl font-bold text-green-600">
-                        ${typeof prestamoData.total_financiamiento === 'number' 
-                          ? prestamoData.total_financiamiento.toFixed(2) 
+                        ${typeof prestamoData.total_financiamiento === 'number'
+                          ? prestamoData.total_financiamiento.toFixed(2)
                           : '0.00'}
                       </p>
                     </div>
@@ -229,16 +229,16 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                     <div>
                       <label className="text-sm text-gray-600">Cuota por Período</label>
                       <p className="text-xl font-semibold">
-                        ${typeof prestamoData.cuota_periodo === 'number' 
-                          ? prestamoData.cuota_periodo.toFixed(2) 
+                        ${typeof prestamoData.cuota_periodo === 'number'
+                          ? prestamoData.cuota_periodo.toFixed(2)
                           : '0.00'}
                       </p>
                     </div>
                     <div>
                       <label className="text-sm text-gray-600">Tasa de Interés</label>
                       <p className="font-medium">
-                        {typeof prestamoData.tasa_interes === 'number' 
-                          ? (prestamoData.tasa_interes * 100).toFixed(2) + '%' 
+                        {typeof prestamoData.tasa_interes === 'number'
+                          ? (prestamoData.tasa_interes * 100).toFixed(2) + '%'
                           : '0.00%'}
                       </p>
                     </div>
@@ -311,7 +311,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                           </div>
                           {prediccionImpago.modelo_usado && (
                             <div className="pt-2 text-xs text-gray-500">
-                              Modelo: {prediccionImpago.modelo_usado.nombre} v{prediccionImpago.modelo_usado.version} 
+                              Modelo: {prediccionImpago.modelo_usado.nombre} v{prediccionImpago.modelo_usado.version}
                               {' '}({prediccionImpago.modelo_usado.algoritmo})
                               {prediccionImpago.modelo_usado.accuracy && (
                                 <> - Accuracy: {(prediccionImpago.modelo_usado.accuracy * 100).toFixed(1)}%</>

@@ -10,10 +10,10 @@ interface SimpleProtectedRouteProps {
   fallbackPath?: string
 }
 
-export function SimpleProtectedRoute({ 
-  children, 
+export function SimpleProtectedRoute({
+  children,
   requireAdmin = false,  // Cambio clave: requiredRoles → requireAdmin
-  fallbackPath = '/login' 
+  fallbackPath = '/login'
 }: SimpleProtectedRouteProps) {
   const { isAuthenticated, user, isLoading } = useSimpleAuth()
   const location = useLocation()
@@ -58,7 +58,7 @@ export function SimpleProtectedRoute({
               </p>
             </div>
           </div>
-          
+
           <div className="space-y-3">
             <button
               onClick={() => window.history.back()}
@@ -66,7 +66,7 @@ export function SimpleProtectedRoute({
             >
               ← Volver a la página anterior
             </button>
-            
+
             <button
               onClick={() => window.location.href = '/dashboard'}
               className="w-full bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors font-medium"
@@ -74,7 +74,7 @@ export function SimpleProtectedRoute({
               Ir al Dashboard
             </button>
           </div>
-          
+
           <div className="mt-6 pt-6 border-t border-gray-200">
             <p className="text-xs text-gray-500">
               Si cree que esto es un error, contacte al administrador del sistema.

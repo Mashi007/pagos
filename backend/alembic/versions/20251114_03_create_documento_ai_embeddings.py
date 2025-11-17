@@ -73,7 +73,7 @@ def downgrade():
                     op.drop_index(idx['name'], table_name='documento_ai_embeddings')
                 except Exception:
                     pass
-            
+
             # Eliminar tabla
             op.drop_table('documento_ai_embeddings')
             print("✅ Tabla 'documento_ai_embeddings' eliminada exitosamente")

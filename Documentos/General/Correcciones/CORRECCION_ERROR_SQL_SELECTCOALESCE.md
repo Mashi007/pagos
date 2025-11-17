@@ -1,7 +1,7 @@
 # 🔧 Corrección: Errores SQL en Dashboard
 
-**Fecha:** 2025-11-06  
-**Problemas:** 
+**Fecha:** 2025-11-06
+**Problemas:**
 1. Error 500 en endpoint `/api/v1/dashboard/resumen-financiamiento-pagado` - Error de sintaxis SQL `SELECTCOALESCE`
 2. Error 500 en múltiples endpoints - Error de sintaxis SQL `GROUP BYEXTRACT`
 3. Error `column prestamos.valor_activo does not exist` en consultas de `Prestamo`

@@ -1,7 +1,7 @@
 # ✅ ESTADO FINAL - MÓDULO CLIENTES
 
-**Fecha**: 2025-10-26  
-**Commit final**: `0915df2`  
+**Fecha**: 2025-10-26
+**Commit final**: `0915df2`
 **Estado**: ✅ **CORREGIDO - LISTO PARA DESPLEGAR**
 
 ---
@@ -25,7 +25,7 @@
 - **Corregido**: Agregado `# noqa: E203`
 
 ### 4. **ExcelUploader tabla** ✅
-- **Cambios**: 
+- **Cambios**:
   - Eliminada columna "Apellidos" del thead
   - Eliminada columna "Apellidos" del tbody
   - Cambiado thead a "Nombres y Apellidos"

@@ -7,12 +7,12 @@ import { create } from 'zustand'
 import { User, LoginForm } from '@/types'
 import { authService } from '@/services/authService'
 import toast from 'react-hot-toast'
-import { 
-  safeGetItem, 
-  safeSetItem, 
-  safeGetSessionItem, 
+import {
+  safeGetItem,
+  safeSetItem,
+  safeGetSessionItem,
   safeSetSessionItem,
-  clearAuthStorage 
+  clearAuthStorage
 } from '@/utils/storage'
 
 interface SimpleAuthState {
@@ -31,10 +31,10 @@ interface SimpleAuthState {
 const hasAuthData = (): boolean => {
   try {
     const rememberMe = safeGetItem('remember_me', false)
-    const user = rememberMe 
-      ? safeGetItem('user', null) 
+    const user = rememberMe
+      ? safeGetItem('user', null)
       : safeGetSessionItem('user', null)
-    const token = rememberMe 
+    const token = rememberMe
       ? safeGetItem('access_token', null)
       : safeGetSessionItem('access_token', null)
     return !!(user && token)
@@ -54,18 +54,18 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
   initializeAuth: async () => {
     // ✅ CRÍTICO: Marcar como loading al inicio para evitar redirecciones durante la verificación
     set({ isLoading: true })
-    
+
     try {
       const rememberMe = safeGetItem('remember_me', false)
-      const user = rememberMe 
-        ? safeGetItem('user', null) 
+      const user = rememberMe
+        ? safeGetItem('user', null)
         : safeGetSessionItem('user', null)
-      
+
       // Verificar que también existe un token de acceso
-      const token = rememberMe 
+      const token = rememberMe
         ? safeGetItem('access_token', null)
         : safeGetSessionItem('access_token', null)
-      
+
       // Si hay usuario pero no hay token, limpiar todo
       if (user && !token) {
         set({
@@ -77,12 +77,12 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
         clearAuthStorage()
         return
       }
-      
+
       if (user && token) {
         // CRÍTICO: Siempre verificar con el backend al inicializar
         try {
           const freshUser = await authService.getCurrentUser()
-          
+
           if (freshUser) {
             set({
               user: freshUser,
@@ -125,10 +125,10 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
   // Login con persistencia segura
   login: async (credentials: LoginForm): Promise<void> => {
     set({ isLoading: true, error: null })
-    
+
     try {
       const response = await authService.login(credentials)
-      
+
       // El authService ya guarda los datos de forma segura
       set({
         user: response.user,
@@ -141,11 +141,11 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
     } catch (error: any) {
       // Extraer mensaje de error del backend (puede estar en detail o message)
       let errorMessage = 'Error al iniciar sesión'
-      
+
       if (error.response?.data) {
         // El backend FastAPI devuelve 'detail' para errores HTTP
         errorMessage = error.response.data.detail || error.response.data.message || errorMessage
-        
+
         // Si es un array (errores de validación), tomar el primer mensaje
         if (Array.isArray(errorMessage)) {
           errorMessage = errorMessage[0]?.msg || errorMessage[0] || errorMessage
@@ -153,7 +153,7 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
       } else if (error.message) {
         errorMessage = error.message
       }
-      
+
       set({
         user: null,
         isAuthenticated: false,
@@ -190,11 +190,11 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
   refreshUser: async () => {
     try {
       const freshUser = await authService.getCurrentUser()
-      
+
       if (!freshUser) {
         throw new Error('Usuario no encontrado en la respuesta del servidor')
       }
-      
+
       set({
         user: freshUser,
         isAuthenticated: true,
@@ -203,9 +203,9 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
       })
     } catch (error: any) {
       // NO hacer logout automático, solo mostrar error
-      set({ 
+      set({
         error: error.message || 'Error al actualizar usuario',
-        isLoading: false 
+        isLoading: false
       })
     }
   },

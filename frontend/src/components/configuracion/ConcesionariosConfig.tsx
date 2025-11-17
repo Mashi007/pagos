@@ -34,17 +34,17 @@ export function ConcesionariosConfig() {
   const [archivoExcel, setArchivoExcel] = useState<File | null>(null)
 
   // Usar hooks de React Query
-  const { 
-    data: concesionariosData, 
-    isLoading: loading, 
+  const {
+    data: concesionariosData,
+    isLoading: loading,
     error,
     refetch
   } = useConcesionarios({ limit: 1000 })
-  
+
   const deleteConcesionarioMutation = useDeleteConcesionario()
   const updateConcesionarioMutation = useUpdateConcesionario()
   const createConcesionarioMutation = useCreateConcesionario()
-  
+
   const concesionarios = concesionariosData?.items || []
 
   const handleEliminar = async (id: number) => {
@@ -54,11 +54,11 @@ export function ConcesionariosConfig() {
         '⚠️ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este concesionario?\n\n' +
         'Esta acción NO se puede deshacer y el concesionario será borrado completamente de la base de datos.'
       )
-      
+
       if (!confirmar) {
         return
       }
-      
+
       await deleteConcesionarioMutation.mutateAsync(id)
     } catch (err) {
       console.error('Error:', err)
@@ -69,35 +69,35 @@ export function ConcesionariosConfig() {
     if (!nombre.trim()) {
       return 'El nombre es requerido'
     }
-    
+
     // Limpiar espacios extras
     const nombreLimpio = nombre.trim().replace(/\s+/g, ' ')
-    
+
     // Verificar cantidad de palabras (mínimo 2, máximo 4)
     const palabras = nombreLimpio.split(' ')
-    
+
     if (palabras.length < 2) {
       return 'Debe ingresar al menos 2 palabras (Nombre y Apellido)'
     }
-    
+
     if (palabras.length > 4) {
       return 'Debe ingresar máximo 4 palabras'
     }
-    
+
     // Verificar que cada palabra tenga al menos 2 caracteres
     for (const palabra of palabras) {
       if (palabra.length < 2) {
         return 'Cada palabra debe tener al menos 2 caracteres'
       }
     }
-    
+
     return ''
   }
 
   const formatNombre = (nombre: string): string => {
     // Limpiar espacios extras
     const nombreLimpio = nombre.trim().replace(/\s+/g, ' ')
-    
+
     // Capitalizar primera letra de cada palabra
     return nombreLimpio.split(' ').map(word => {
       if (word.length === 0) return word
@@ -117,20 +117,20 @@ export function ConcesionariosConfig() {
 
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // Validar nombre
     const error = validateNombre(formData.nombre)
     if (error) {
       setValidationError(error)
       return
     }
-    
+
     setValidationError('')
-    
+
     try {
       // Formatear nombre (capitalizar primera letra de cada palabra)
       const nombreFormateado = formatNombre(formData.nombre)
-      
+
       if (editingConcesionario) {
         // Al editar, mantener el estado actual
         await updateConcesionarioMutation.mutateAsync({
@@ -306,15 +306,15 @@ export function ConcesionariosConfig() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {concesionario.created_at 
+                    {concesionario.created_at
                       ? (() => {
                           const date = new Date(concesionario.created_at)
-                          return isNaN(date.getTime()) 
-                            ? '01/10/2025' 
-                            : date.toLocaleDateString('es-VE', { 
-                                year: 'numeric', 
-                                month: '2-digit', 
-                                day: '2-digit' 
+                          return isNaN(date.getTime())
+                            ? '01/10/2025'
+                            : date.toLocaleDateString('es-VE', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit'
                               })
                         })()
                       : '01/10/2025'}
@@ -344,7 +344,7 @@ export function ConcesionariosConfig() {
               ))}
             </TableBody>
           </Table>
-          
+
           {filteredConcesionarios.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               {searchTerm ? 'No se encontraron concesionarios con ese nombre' : 'No hay concesionarios disponibles'}
@@ -459,11 +459,11 @@ export function ConcesionariosConfig() {
 
       {/* Create/Edit Form Modal */}
       {showCreateForm && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
           onClick={resetForm}
         >
-          <div 
+          <div
             className="bg-white rounded-lg shadow-xl max-w-md w-full"
             onClick={(e) => e.stopPropagation()}
           >
@@ -520,8 +520,8 @@ export function ConcesionariosConfig() {
                   )}
 
                   <div className="flex items-center space-x-2 pt-4">
-                    <Button 
-                      type="submit" 
+                    <Button
+                      type="submit"
                       disabled={createConcesionarioMutation.isPending || updateConcesionarioMutation.isPending}
                       className="bg-blue-600 hover:bg-blue-700"
                     >

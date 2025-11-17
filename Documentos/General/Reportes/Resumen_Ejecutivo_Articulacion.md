@@ -1,6 +1,6 @@
 # 📊 RESUMEN EJECUTIVO: ARTICULACIÓN PRESTAMOS - MÓDULO PAGOS
 
-**Fecha:** $(date)  
+**Fecha:** $(date)
 **Estado de Verificación:** ✅ COMPLETO
 
 ---
@@ -30,7 +30,7 @@
 - **Estado:** 3,707 préstamos con cuotas generadas
 
 #### ✅ id → pagos.prestamo_id
-- **Modelo Python:** `prestamo_id = Column(Integer, nullable=True, index=True)` 
+- **Modelo Python:** `prestamo_id = Column(Integer, nullable=True, index=True)`
 - **Contexto Migración:** `prestamo_id = NULL` es el default normal
   - Los pagos migrados del sistema anterior NO tienen `prestamo_id` asignado
   - Los préstamos ya pagados (clientes FINALIZADOS) no tienen pagos vinculados (ya pagaron en sistema anterior)

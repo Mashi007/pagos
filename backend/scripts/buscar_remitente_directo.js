@@ -4,19 +4,19 @@
 
 (() => {
   console.log('🔍 BUSCANDO "Email del Remitente"\n');
-  
+
   // Buscar todos los elementos que contengan "Remitente"
   const todosLosElementos = Array.from(document.querySelectorAll('*'));
   let inputRemitente = null;
-  
+
   todosLosElementos.forEach(elem => {
     const texto = elem.textContent || '';
-    if (texto.includes('Email del Remitente') || 
+    if (texto.includes('Email del Remitente') ||
         (texto.includes('Remitente') && texto.includes('Email'))) {
-      
+
       console.log('✅ Encontrado texto "Remitente"');
       console.log(`   Elemento: ${elem.tagName}, Texto: "${texto.substring(0, 100)}"`);
-      
+
       // Buscar el input más cercano
       // 1. Buscar en el mismo contenedor
       const contenedor = elem.closest('div');
@@ -27,7 +27,7 @@
           console.log('   → Input encontrado en el mismo contenedor');
         }
       }
-      
+
       // 2. Buscar en el siguiente hermano
       if (!inputRemitente) {
         let siguiente = elem.nextElementSibling;
@@ -43,7 +43,7 @@
           intentos++;
         }
       }
-      
+
       // 3. Buscar en el padre
       if (!inputRemitente) {
         let padre = elem.parentElement;
@@ -61,25 +61,25 @@
       }
     }
   });
-  
+
   if (inputRemitente) {
     const valor = inputRemitente.value || '';
     console.log(`\n✅ Input de Remitente encontrado:`);
     console.log(`   Valor actual: "${valor}"`);
-    
+
     if (!valor || valor.trim() === '') {
       console.log(`\n❌ ESTÁ VACÍO - Llenando automáticamente...`);
-      
+
       // Llenar el campo
       inputRemitente.value = 'pafo.kampei@gmail.com';
-      
+
       // Disparar TODOS los eventos posibles para React
       const eventos = ['input', 'change', 'blur', 'keyup'];
       eventos.forEach(tipo => {
         const evento = new Event(tipo, { bubbles: true, cancelable: true });
         inputRemitente.dispatchEvent(evento);
       });
-      
+
       // También intentar con InputEvent
       try {
         const inputEvent = new InputEvent('input', {
@@ -92,14 +92,14 @@
       } catch (e) {
         // InputEvent puede no estar disponible en todos los navegadores
       }
-      
+
       // Hacer foco y scroll
       inputRemitente.focus();
       inputRemitente.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      
+
       // Seleccionar el texto para que el usuario vea que se llenó
       inputRemitente.select();
-      
+
       console.log(`✅ Campo llenado con: pafo.kampei@gmail.com`);
       console.log(`✅ Eventos disparados`);
       console.log(`\n💡 Verifica si el botón "Guardar" se habilitó.`);
@@ -113,7 +113,7 @@
     console.log(`\n💡 Intenta buscar manualmente el campo en la página.`);
     console.log(`   Debería estar después del campo "Email (Usuario Gmail / Google Workspace)"`);
   }
-  
+
   return { inputRemitente, valor: inputRemitente?.value || '' };
 })();
 

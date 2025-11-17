@@ -1,7 +1,7 @@
 # 🔧 SOLUCIONES INTEGRALES PARA PROBLEMAS DEL DASHBOARD
 
-**Fecha:** 2025-01-06  
-**Análisis:** Investigación exhaustiva con SQL en DBeaver  
+**Fecha:** 2025-01-06
+**Análisis:** Investigación exhaustiva con SQL en DBeaver
 **Estado:** CRÍTICO - Problemas de integridad y lógica identificados
 
 ---
@@ -95,7 +95,7 @@ python scripts/reconciliar_pagos_cuotas.py --apply
 **Paso 4: Verificar en SQL**
 ```sql
 -- Verificar pagos vinculados después de reconciliación
-SELECT 
+SELECT
     COUNT(*) as total_cuotas,
     COUNT(CASE WHEN total_pagado > 0 THEN 1 END) as cuotas_con_pagos,
     SUM(total_pagado) as monto_total_pagado
@@ -133,7 +133,7 @@ Crear una vista materializada que vincule pagos y cuotas usando múltiples estra
 **SQL para crear vista:**
 ```sql
 CREATE MATERIALIZED VIEW pagos_cuotas_reconciliados AS
-SELECT 
+SELECT
     c.id as cuota_id,
     c.prestamo_id,
     c.numero_cuota,
@@ -170,8 +170,8 @@ SELECT
              OR
              (pa.cedula = p.cedula AND DATE(pa.fecha_pago) = c.fecha_vencimiento)
              OR
-             (pa.cedula = p.cedula 
-              AND DATE(pa.fecha_pago) BETWEEN c.fecha_vencimiento - INTERVAL '30 days' 
+             (pa.cedula = p.cedula
+              AND DATE(pa.fecha_pago) BETWEEN c.fecha_vencimiento - INTERVAL '30 days'
               AND c.fecha_vencimiento + INTERVAL '30 days')
          )
            AND pa.activo = true),
@@ -181,10 +181,10 @@ FROM cuotas c
 INNER JOIN prestamos p ON c.prestamo_id = p.id
 WHERE p.estado = 'APROBADO';
 
-CREATE INDEX idx_pagos_cuotas_reconciliados_prestamo 
+CREATE INDEX idx_pagos_cuotas_reconciliados_prestamo
 ON pagos_cuotas_reconciliados(prestamo_id, numero_cuota);
 
-CREATE INDEX idx_pagos_cuotas_reconciliados_fecha 
+CREATE INDEX idx_pagos_cuotas_reconciliados_fecha
 ON pagos_cuotas_reconciliados(fecha_vencimiento);
 
 -- Actualizar periódicamente (cada hora o después de registrar pagos)
@@ -199,7 +199,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY pagos_cuotas_reconciliados;
 
 ```sql
 -- 1. Verificar pagos vinculados después de reconciliación
-SELECT 
+SELECT
     COUNT(*) as total_cuotas,
     COUNT(CASE WHEN total_pagado > 0 THEN 1 END) as cuotas_con_pagos,
     SUM(total_pagado) as monto_total_pagado
@@ -208,7 +208,7 @@ INNER JOIN prestamos p ON c.prestamo_id = p.id
 WHERE p.estado = 'APROBADO';
 
 -- 2. Verificar morosidad mensual con pagos
-SELECT 
+SELECT
     TO_CHAR(DATE_TRUNC('month', c.fecha_vencimiento), 'YYYY-MM') as mes,
     SUM(c.monto_cuota) as monto_programado,
     SUM(COALESCE(c.total_pagado, 0)) as monto_pagado,
@@ -221,7 +221,7 @@ GROUP BY DATE_TRUNC('month', c.fecha_vencimiento)
 ORDER BY mes DESC;
 
 -- 3. Comparar con vista materializada (si se crea)
-SELECT 
+SELECT
     TO_CHAR(DATE_TRUNC('month', fecha_vencimiento), 'YYYY-MM') as mes,
     SUM(monto_cuota) as monto_programado,
     SUM(total_pagado_combinado) as monto_pagado,

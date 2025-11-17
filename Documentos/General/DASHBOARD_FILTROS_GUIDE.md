@@ -45,15 +45,15 @@ def mi_nuevo_kpi(
     query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
         Prestamo.activo.is_(True)
     )
-    
+
     # 2. ✅ APLICAR FILTROS AUTOMÁTICAMENTE
     query = FiltrosDashboard.aplicar_filtros_prestamo(
         query, analista, concesionario, modelo, fecha_inicio, fecha_fin
     )
-    
+
     # 3. Ejecutar query
     resultado = query.scalar() or Decimal("0")
-    
+
     return {"mi_kpi": float(resultado)}
 ```
 
@@ -84,7 +84,7 @@ import { useDashboardFiltros } from '@/hooks/useDashboardFiltros'
 
 export function Dashboard() {
   const [filtros, setFiltros] = useState<DashboardFiltros>({})
-  
+
   // ✅ Usar hook centralizado
   const { construirFiltrosObject, construirParams } = useDashboardFiltros(filtros)
 
@@ -96,13 +96,13 @@ export function Dashboard() {
       return await apiClient.get(`/api/v1/mi-endpoint?${params}`)
     },
   })
-  
+
   // O si el servicio acepta objeto:
   const { data: otroKpi } = useQuery({
     queryKey: ['otro-kpi', filtros],
     queryFn: () => servicio.getData(construirFiltrosObject()),
   })
-  
+
   return <div>...</div>
 }
 ```
@@ -134,13 +134,13 @@ def cartera_por_estado(
         Prestamo.estado,
         func.sum(Prestamo.total_financiamiento)
     ).filter(Prestamo.activo.is_(True))
-    
+
     base_query = FiltrosDashboard.aplicar_filtros_prestamo(
         base_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
     )
-    
+
     resultados = base_query.group_by(Prestamo.estado).all()
-    
+
     return {
         "datos": [
             {"estado": estado, "total": float(total)}

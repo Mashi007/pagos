@@ -5,13 +5,13 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { PasswordField } from '@/components/ui/PasswordField'
 import { usePassword } from '@/hooks/usePassword'
-import { 
-  Users, 
-  Plus, 
-  Search, 
+import {
+  Users,
+  Plus,
+  Search,
   Eye,
-  Edit2, 
-  Trash2, 
+  Edit2,
+  Trash2,
   UserCheck,
   UserX,
   Shield,
@@ -50,22 +50,22 @@ export default function UsuariosConfig() {
           pais: 'VENEZUELA'
         })
       })
-      
+
       if (response.ok) {
         const result = await response.json()
         if (result.validacion && result.validacion.valido) {
-          return { 
-            isValid: true, 
-            formattedValue: result.validacion.valor_formateado 
+          return {
+            isValid: true,
+            formattedValue: result.validacion.valor_formateado
           }
         } else {
           // Mostrar error y sugerencia si está disponible
           const errorMsg = result.validacion?.error || 'Formato de email inválido'
           const sugerencia = result.validacion?.sugerencia || ''
           const mensajeCompleto = sugerencia ? `${errorMsg}. ${sugerencia}` : errorMsg
-          
-          return { 
-            isValid: false, 
+
+          return {
+            isValid: false,
             message: mensajeCompleto
           }
         }
@@ -73,13 +73,13 @@ export default function UsuariosConfig() {
     } catch (error) {
       console.warn('Error validando email con backend, usando validación local:', error)
     }
-    
+
     // Fallback: validación local
     const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
     if (!emailPattern.test(email.toLowerCase())) {
       return { isValid: false, message: 'Formato: usuario@dominio.com' }
     }
-    
+
     return { isValid: true, formattedValue: email.toLowerCase() }
   }
 
@@ -125,12 +125,12 @@ export default function UsuariosConfig() {
     if (!formData.email || !formData.nombre || !formData.apellido) {
       return false
     }
-    
+
     // Si estamos creando un nuevo usuario, la contraseña es obligatoria
     if (!editingUser && !formData.password) {
       return false
     }
-    
+
     // Si hay una contraseña (ya sea en creación o actualización), debe cumplir todos los requisitos
     if (formData.password && formData.password.trim() !== '') {
       const passwordValidation = validatePassword(formData.password)
@@ -138,18 +138,18 @@ export default function UsuariosConfig() {
         return false
       }
     }
-    
+
     return true
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!isFormValid()) {
       toast.error('Por favor completa todos los campos requeridos')
       return
     }
-    
+
     try {
       // Validar email con el validador del sistema
       const emailValidation = await validateEmailWithSystem(formData.email)
@@ -157,7 +157,7 @@ export default function UsuariosConfig() {
         toast.error(emailValidation.message || 'Email inválido')
         return
       }
-      
+
       if (editingUser) {
         // Actualizar
         const updateData: UserUpdate = {
@@ -168,12 +168,12 @@ export default function UsuariosConfig() {
           is_admin: formData.is_admin,  // Cambio clave: rol → is_admin
           is_active: formData.is_active
         }
-        
+
         // Solo incluir password si se proporcionó
         if (formData.password) {
           updateData.password = formData.password
         }
-        
+
         await userService.actualizarUsuario(editingUser.id, updateData)
         toast.success('Usuario actualizado exitosamente')
       } else {
@@ -190,7 +190,7 @@ export default function UsuariosConfig() {
         await userService.crearUsuario(createData)
         toast.success('Usuario creado exitosamente')
       }
-      
+
       setShowModal(false)
       resetForm()
       loadUsuarios()
@@ -223,7 +223,7 @@ export default function UsuariosConfig() {
     if (!confirm(`¿Estás seguro de eliminar el usuario ${usuario.nombre} ${usuario.apellido} (${usuario.email})?`)) {
       return
     }
-    
+
     try {
       await userService.eliminarUsuario(usuario.id)
       toast.success('Usuario eliminado exitosamente')
@@ -251,7 +251,7 @@ export default function UsuariosConfig() {
     resetForm()
   }
 
-  const filteredUsuarios = usuarios.filter(user => 
+  const filteredUsuarios = usuarios.filter(user =>
     (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (user.nombre && user.nombre.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (user.apellido && user.apellido.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -336,9 +336,9 @@ export default function UsuariosConfig() {
               <AlertCircle className="h-5 w-5" />
               <span>{error}</span>
             </div>
-            <Button 
+            <Button
               onClick={loadUsuarios}
-              variant="outline" 
+              variant="outline"
               size="sm"
               className="ml-4"
             >
@@ -409,8 +409,8 @@ export default function UsuariosConfig() {
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          usuario.is_active 
-                            ? 'bg-green-100 text-green-800' 
+                          usuario.is_active
+                            ? 'bg-green-100 text-green-800'
                             : 'bg-red-100 text-red-800'
                         }`}>
                           {usuario.is_active ? (
@@ -427,7 +427,7 @@ export default function UsuariosConfig() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
-                        {usuario.last_login 
+                        {usuario.last_login
                           ? new Date(usuario.last_login).toLocaleDateString('es-ES', {
                               day: '2-digit',
                               month: '2-digit',
@@ -697,8 +697,8 @@ export default function UsuariosConfig() {
                     <p className="text-sm font-medium text-gray-500">Estado</p>
                     <p className="text-sm text-gray-900 mt-1">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        viewingUser.is_active 
-                          ? 'bg-green-100 text-green-800' 
+                        viewingUser.is_active
+                          ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
                         {viewingUser.is_active ? 'Activo' : 'Inactivo'}
@@ -718,7 +718,7 @@ export default function UsuariosConfig() {
                   <div>
                     <p className="text-sm font-medium text-gray-500">Último acceso</p>
                     <p className="text-sm text-gray-900 mt-1">
-                      {viewingUser.last_login 
+                      {viewingUser.last_login
                         ? new Date(viewingUser.last_login).toLocaleDateString('es-ES', {
                             day: '2-digit',
                             month: 'long',

@@ -57,9 +57,9 @@ El script corregido usa `GREATEST(0, monto_cuota - total_pagado)` en todas las c
 
 ```sql
 -- Verificación ejecutada:
-SELECT COUNT(CASE 
-    WHEN ABS(monto_morosidad - GREATEST(0, monto_cuota - COALESCE(total_pagado, 0))) > 0.01 
-    THEN 1 
+SELECT COUNT(CASE
+    WHEN ABS(monto_morosidad - GREATEST(0, monto_cuota - COALESCE(total_pagado, 0))) > 0.01
+    THEN 1
 END) as inconsistencias_restantes
 FROM cuotas;
 -- Resultado: 0
@@ -71,11 +71,11 @@ FROM cuotas;
 
 ```sql
 -- Verificación ejecutada:
-SELECT COUNT(CASE 
-    WHEN fecha_pago IS NULL 
-         AND fecha_vencimiento < CURRENT_DATE 
-         AND dias_morosidad != (CURRENT_DATE - fecha_vencimiento)::INTEGER 
-    THEN 1 
+SELECT COUNT(CASE
+    WHEN fecha_pago IS NULL
+         AND fecha_vencimiento < CURRENT_DATE
+         AND dias_morosidad != (CURRENT_DATE - fecha_vencimiento)::INTEGER
+    THEN 1
 END) as inconsistencias_dias
 FROM cuotas
 WHERE fecha_pago IS NULL AND fecha_vencimiento < CURRENT_DATE;

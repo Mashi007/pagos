@@ -107,7 +107,7 @@ export function ConfirmacionDuplicadoModal({
                     Cliente con datos similares encontrado
                   </h3>
                   <p className="text-orange-700">
-                    Se encontró un cliente existente con la misma cédula y datos personales similares. 
+                    Se encontró un cliente existente con la misma cédula y datos personales similares.
                     ¿Desea crear otro perfil de cliente con los mismos datos?
                   </p>
                 </div>
@@ -241,7 +241,7 @@ export function ConfirmacionDuplicadoModal({
                 <div>
                   <h4 className="font-semibold text-yellow-800 mb-1">Importante</h4>
                   <p className="text-yellow-700 text-sm">
-                    Al confirmar, se creará un nuevo perfil de cliente independiente. 
+                    Al confirmar, se creará un nuevo perfil de cliente independiente.
                     Cada perfil será tratado como un préstamo diferente en el sistema.
                   </p>
                 </div>

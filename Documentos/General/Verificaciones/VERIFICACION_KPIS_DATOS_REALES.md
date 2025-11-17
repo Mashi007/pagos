@@ -2,7 +2,7 @@
 
 Este documento verifica que todos los KPIs del dashboard estén conectados a datos reales de la base de datos según la estructura documentada en `ESTRUCTURA_BASE_TABLAS_BD.md`.
 
-**Última actualización:** 2025-11-06  
+**Última actualización:** 2025-11-06
 **Fuente de verificación:** `backend/docs/ESTRUCTURA_BASE_TABLAS_BD.md`
 
 ---
@@ -44,7 +44,7 @@ Este documento verifica que todos los KPIs del dashboard estén conectados a dat
 - **Campos usados:**
   - `prestamos.cedula` ✅ (existe según estructura BD)
   - `prestamos.estado` ✅ (existe según estructura BD)
-- **Query:** 
+- **Query:**
   - Activos: `COUNT(DISTINCT cedula) WHERE estado = 'APROBADO'`
   - Finalizados: `COUNT(DISTINCT cedula) WHERE estado = 'FINALIZADO'`
   - Inactivos: `COUNT(DISTINCT cedula) WHERE estado NOT IN ('APROBADO', 'FINALIZADO')`
@@ -68,7 +68,7 @@ Este documento verifica que todos los KPIs del dashboard estén conectados a dat
     - `pagos.activo` ✅ (existe según estructura BD)
     - `pagos.prestamo_id` ✅ (existe según estructura BD, FK a prestamos.id)
     - `pagos.cedula` ✅ (existe según estructura BD)
-- **Lógica:** 
+- **Lógica:**
   ```sql
   Morosidad = SUM(GREATEST(0, monto_programado_mes - monto_pagado_mes))
   ```
@@ -324,8 +324,8 @@ Todos los KPIs del dashboard están correctamente conectados a las tablas y camp
 
 ---
 
-**Última verificación:** 2025-11-06  
-**Verificado por:** Sistema de verificación automática  
+**Última verificación:** 2025-11-06
+**Verificado por:** Sistema de verificación automática
 **Estado:** ✅ **APROBADO - TODOS LOS KPIs CONECTADOS A DATOS REALES**
 
 ---

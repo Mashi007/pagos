@@ -83,7 +83,7 @@ Dashboard (PrestamosList.tsx)
        # Aplicar condiciones desde evaluación
        if fecha_base_calculo:
            prestamo.fecha_base_calculo = fecha_base_calculo
-       
+
        # Si se aprueba y tiene fecha_base_calculo, generar tabla de amortización
        if prestamo.fecha_base_calculo:
            fecha = date_parse(prestamo.fecha_base_calculo).date()

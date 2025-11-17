@@ -1,7 +1,7 @@
 # 🔍 AUDITORÍA - INTEGRACIÓN DASHBOARD MÓDULO PRÉSTAMOS
 
-**Fecha de Auditoría:** 28 de Enero 2025  
-**Auditor:** AI Assistant  
+**Fecha de Auditoría:** 28 de Enero 2025
+**Auditor:** AI Assistant
 **Versión del Sistema:** 1.0.0
 
 ---
@@ -36,17 +36,17 @@ export function useUpdatePrestamo() {
     onSuccess: (data, variables) => {
       // 1. Actualizar cache con respuesta del servidor
       queryClient.setQueryData(prestamoKeys.detail(variables.id), data)
-      
+
       // 2. Invalidar todas las queries relacionadas
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
       queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
-      
+
       // 3. Refetch forzado para asegurar actualización
-      queryClient.refetchQueries({ 
+      queryClient.refetchQueries({
         queryKey: prestamoKeys.all,
-        exact: false 
+        exact: false
       })
-      
+
       toast.success('Préstamo actualizado exitosamente')
     },
     onError: (error: any) => {
@@ -269,17 +269,17 @@ const prestamoData = {
 onSuccess: (data, variables) => {
   // Actualizar datos del cache directamente con la respuesta del servidor
   queryClient.setQueryData(prestamoKeys.detail(variables.id), data)
-  
+
   // Invalidar todas las queries para forzar refetch
   queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
   queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
-  
+
   // Refetch específico para asegurar actualización
-  queryClient.refetchQueries({ 
+  queryClient.refetchQueries({
     queryKey: prestamoKeys.all,
-    exact: false 
+    exact: false
   })
-  
+
   toast.success('Préstamo actualizado exitosamente')
 }
 ```

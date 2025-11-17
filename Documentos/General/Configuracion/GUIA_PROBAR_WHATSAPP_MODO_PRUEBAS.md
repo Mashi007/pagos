@@ -12,7 +12,7 @@ Verificar que WhatsApp aceptó la conexión y que la configuración funciona cor
 
 1. **Ve a**: Configuración → WhatsApp
 2. **Selecciona**: "Pruebas (Todos los mensajes a número de prueba)"
-3. **Configura el Teléfono de Pruebas**: 
+3. **Configura el Teléfono de Pruebas**:
    - Ingresa tu número de WhatsApp con código de país
    - Ejemplo: `+593983000700` o `+584121234567`
    - **IMPORTANTE**: Este número debe estar registrado en WhatsApp y ser accesible

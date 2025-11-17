@@ -1,7 +1,7 @@
 # 🔍 Diagnóstico: Módulo Cobranzas No Carga Datos
 
-**Fecha:** 2025-11-XX  
-**Problema:** El módulo de cobranzas no carga datos, muestra "Network Error"  
+**Fecha:** 2025-11-XX
+**Problema:** El módulo de cobranzas no carga datos, muestra "Network Error"
 **Prioridad:** 🔴 CRÍTICA
 
 ---
@@ -10,13 +10,13 @@
 
 1. **Error en consola del navegador:**
    ```
-   Error cargando dashboard: 
+   Error cargando dashboard:
    Object { message: "Network Error", name: "AxiosError", code: "ERR_NETWORK", ... }
    ```
 
 2. **Error de carga de módulo:**
    ```
-   TypeError: error loading dynamically imported module: 
+   TypeError: error loading dynamically imported module:
    https://rapicredit.onrender.com/assets/Cobranzas-CCoATXe_.js
    ```
 
@@ -55,9 +55,9 @@ private baseUrl = '/api/v1/cobranzas'
 **Componente con manejo de errores:**
 ```typescript
 // frontend/src/pages/Cobranzas.tsx
-const { 
-  data: resumen, 
-  isLoading: cargandoResumen, 
+const {
+  data: resumen,
+  isLoading: cargandoResumen,
   isError: errorResumen,
   error: errorResumenDetalle,
   refetch: refetchResumen
@@ -114,7 +114,7 @@ const {
    ```bash
    # Verificar logs del backend
    tail -f backend/logs/app.log
-   
+
    # Verificar que el puerto esté escuchando
    netstat -an | grep 8000  # o el puerto configurado
    ```
@@ -162,8 +162,8 @@ const SLOW_ENDPOINT_TIMEOUT_MS = 120000 // Aumentar a 2 minutos
 
 // O específicamente para cobranzas
 async getResumen(): Promise<ResumenCobranzas> {
-  return await apiClient.get(`${this.baseUrl}/resumen`, { 
-    timeout: 120000 
+  return await apiClient.get(`${this.baseUrl}/resumen`, {
+    timeout: 120000
   })
 }
 ```
@@ -305,7 +305,7 @@ async getResumen(): Promise<ResumenCobranzas> {
   const url = `${this.baseUrl}/resumen`
   console.log('🔍 [Cobranzas] Iniciando petición a:', url)
   console.log('🔍 [Cobranzas] Base URL:', this.baseUrl)
-  
+
   try {
     const startTime = Date.now()
     const result = await apiClient.get(url)
@@ -368,6 +368,6 @@ Content-Type: application/json
 
 ---
 
-**Última actualización:** 2025-11-XX  
+**Última actualización:** 2025-11-XX
 **Estado:** 🔴 En investigación
 

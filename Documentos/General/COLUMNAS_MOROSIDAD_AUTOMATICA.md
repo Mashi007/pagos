@@ -62,7 +62,7 @@ Las columnas se actualizan automáticamente cuando:
 
 ### Función Helper
 
-**Ubicación:** `backend/app/api/v1/endpoints/pagos.py`  
+**Ubicación:** `backend/app/api/v1/endpoints/pagos.py`
 **Función:** `_actualizar_morosidad_cuota(cuota, fecha_hoy)`
 
 ```python
@@ -86,7 +86,7 @@ def _actualizar_morosidad_cuota(cuota, fecha_hoy: date) -> None:
                 cuota.dias_morosidad = 0
     else:
         cuota.dias_morosidad = 0
-    
+
     # 2. Calcular monto_morosidad
     monto_pendiente = cuota.monto_cuota - (cuota.total_pagado or Decimal("0.00"))
     cuota.monto_morosidad = max(Decimal("0.00"), monto_pendiente)
@@ -136,13 +136,13 @@ monto_pendiente = cuota.monto_morosidad
 
 ```sql
 -- Índice para queries de morosidad por días
-CREATE INDEX idx_cuotas_dias_morosidad 
-ON cuotas(dias_morosidad) 
+CREATE INDEX idx_cuotas_dias_morosidad
+ON cuotas(dias_morosidad)
 WHERE dias_morosidad > 0;
 
 -- Índice para queries de morosidad por monto
-CREATE INDEX idx_cuotas_monto_morosidad 
-ON cuotas(monto_morosidad) 
+CREATE INDEX idx_cuotas_monto_morosidad
+ON cuotas(monto_morosidad)
 WHERE monto_morosidad > 0;
 ```
 
@@ -150,7 +150,7 @@ WHERE monto_morosidad > 0;
 
 **Antes:**
 ```sql
-SELECT 
+SELECT
     (CURRENT_DATE - c.fecha_vencimiento)::INTEGER as dias_atraso,
     (c.monto_cuota - COALESCE(c.total_pagado, 0)) as monto_pendiente
 FROM cuotas c
@@ -160,7 +160,7 @@ WHERE c.fecha_vencimiento < CURRENT_DATE
 
 **Después:**
 ```sql
-SELECT 
+SELECT
     c.dias_morosidad,
     c.monto_morosidad
 FROM cuotas c
@@ -198,7 +198,7 @@ monto = cuota.monto_morosidad
 
 ```sql
 -- Verificar cuotas con morosidad
-SELECT 
+SELECT
     COUNT(*) as total_cuotas,
     COUNT(CASE WHEN dias_morosidad > 0 THEN 1 END) as cuotas_con_dias_morosidad,
     COUNT(CASE WHEN monto_morosidad > 0 THEN 1 END) as cuotas_con_monto_morosidad,
@@ -207,7 +207,7 @@ SELECT
 FROM cuotas;
 
 -- Verificar consistencia
-SELECT 
+SELECT
     COUNT(*) as total_cuotas,
     COUNT(CASE WHEN ABS(monto_morosidad - (monto_cuota - COALESCE(total_pagado, 0))) > 0.01 THEN 1 END) as inconsistencias
 FROM cuotas;

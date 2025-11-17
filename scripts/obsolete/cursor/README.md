@@ -30,6 +30,6 @@ Estos scripts fueron **archivados** porque:
 
 ---
 
-**Fecha de archivado**: 2025-01-XX  
+**Fecha de archivado**: 2025-01-XX
 **Razón**: Scripts temporales de mantenimiento del IDE, no del proyecto
 

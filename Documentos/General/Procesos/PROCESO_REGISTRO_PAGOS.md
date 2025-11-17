@@ -1,6 +1,6 @@
 # 📋 Proceso de Registro de Pagos (Manual y Masivo)
 
-> **Documento actualizado con nombres reales de tablas y campos**  
+> **Documento actualizado con nombres reales de tablas y campos**
 > Última actualización: 2025-11-06
 
 ---
@@ -9,7 +9,7 @@
 
 **Cuando se registra un pago (manual o masivo), se crea un registro en la tabla `pagos` con el campo `pagos.monto_pagado`.**
 
-**IMPORTANTE:** 
+**IMPORTANTE:**
 1. El pago **DEBE estar relacionado con un préstamo** (`pagos.prestamo_id`). Si no se proporciona `prestamo_id` en el request, el sistema lo busca automáticamente por `cedula` y `estado = 'APROBADO'` (tanto en pago manual como en carga masiva).
 2. **Los pagos SOLO se aplican a cuotas cuando están conciliados** (`pagos.conciliado = True` o `pagos.verificado_concordancia = 'SI'`). Si el pago NO está conciliado, NO se puede actualizar la tabla `cuotas`.
 3. Cuando un pago se concilia, se aplica automáticamente a las cuotas correspondientes, actualizando `cuotas.total_pagado`.
@@ -22,8 +22,8 @@
 
 #### **1.1. Pago Manual**
 
-**Endpoint:** `POST /api/v1/pagos/`  
-**Archivo:** `backend/app/api/v1/endpoints/pagos.py`  
+**Endpoint:** `POST /api/v1/pagos/`
+**Archivo:** `backend/app/api/v1/endpoints/pagos.py`
 **Función:** `crear_pago()` (líneas 596-669)
 
 **Proceso:**
@@ -70,8 +70,8 @@ db.commit()  # ⭐ SE GUARDA EN pagos.monto_pagado
 
 #### **1.2. Pago Masivo (Carga desde Excel)**
 
-**Endpoint:** `POST /api/v1/pagos/cargar-masiva`  
-**Archivo:** `backend/app/api/v1/endpoints/pagos_upload.py`  
+**Endpoint:** `POST /api/v1/pagos/cargar-masiva`
+**Archivo:** `backend/app/api/v1/endpoints/pagos_upload.py`
 **Función:** `_procesar_fila_pago()` (líneas 85-160)
 
 **Proceso:**
@@ -94,7 +94,7 @@ if pago_existente:
 
 # 3. ✅ BUSCAR PRÉSTAMO AUTOMÁTICAMENTE por cédula
 prestamo = db.query(Prestamo).filter(
-    Prestamo.cedula == cedula, 
+    Prestamo.cedula == cedula,
     Prestamo.estado == "APROBADO"
 ).first()
 
@@ -132,8 +132,8 @@ db.commit()  # ⭐ SE GUARDA EN pagos.monto_pagado
 
 ### **FASE 2: APLICAR PAGO A CUOTAS (Automático - Solo si está conciliado)**
 
-**Función:** `aplicar_pago_a_cuotas()` (líneas 1251-1306)  
-**Se ejecuta automáticamente cuando el pago se concilia**  
+**Función:** `aplicar_pago_a_cuotas()` (líneas 1251-1306)
+**Se ejecuta automáticamente cuando el pago se concilia**
 **⚠️ IMPORTANTE: Solo se ejecuta si:**
 - `pago.prestamo_id` NO es NULL
 - **Y** `pago.conciliado = True` **O** `pago.verificado_concordancia = 'SI'`
@@ -365,7 +365,7 @@ cuota.interes_pagado += interes_aplicar
 prestamo_id = pago_data.prestamo_id  # Del request (puede ser None)
 if not prestamo_id:
     prestamo = db.query(Prestamo).filter(
-        Prestamo.cedula == cedula, 
+        Prestamo.cedula == cedula,
         Prestamo.estado == "APROBADO"
     ).first()
     if prestamo:
@@ -381,7 +381,7 @@ def aplicar_pago_a_cuotas(pago: Pago, db: Session, current_user: User):
         if not verificado_ok:
             logger.warning("Pago NO está conciliado. No se aplicará a cuotas.")
             return 0  # ⚠️ NO SE APLICA A CUOTAS
-    
+
     # Verificar prestamo_id
     if not pago.prestamo_id:
         logger.warning("Pago no tiene prestamo_id. No se aplicará a cuotas.")

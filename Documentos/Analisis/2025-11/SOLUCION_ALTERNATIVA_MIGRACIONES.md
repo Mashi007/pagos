@@ -1,7 +1,7 @@
 # 🔧 SOLUCIÓN ALTERNATIVA: Agregar Columna 'canal' Directamente
 
-**Fecha:** 2025-11-06  
-**Problema:** Múltiples archivos de migración tienen errores de sintaxis  
+**Fecha:** 2025-11-06
+**Problema:** Múltiples archivos de migración tienen errores de sintaxis
 **Solución:** Agregar columna directamente con SQL
 
 ---
@@ -50,13 +50,13 @@ BEGIN
           AND column_name = 'canal'
     ) THEN
         -- Agregar columna
-        ALTER TABLE notificaciones 
+        ALTER TABLE notificaciones
         ADD COLUMN canal VARCHAR(20);
-        
+
         -- Crear índice
-        CREATE INDEX IF NOT EXISTS ix_notificaciones_canal 
+        CREATE INDEX IF NOT EXISTS ix_notificaciones_canal
         ON notificaciones(canal);
-        
+
         RAISE NOTICE '✅ Columna canal agregada exitosamente';
     ELSE
         RAISE NOTICE 'ℹ️ Columna canal ya existe';
@@ -87,27 +87,27 @@ from sqlalchemy import text
 with engine.connect() as conn:
     # Verificar si existe
     result = conn.execute(text("""
-        SELECT column_name 
+        SELECT column_name
         FROM information_schema.columns
-        WHERE table_name = 'notificaciones' 
+        WHERE table_name = 'notificaciones'
           AND column_name = 'canal'
     """))
-    
+
     if result.fetchone():
         print("✅ Columna canal ya existe")
     else:
         # Agregar columna
         conn.execute(text("""
-            ALTER TABLE notificaciones 
+            ALTER TABLE notificaciones
             ADD COLUMN canal VARCHAR(20)
         """))
-        
+
         # Crear índice
         conn.execute(text("""
-            CREATE INDEX IF NOT EXISTS ix_notificaciones_canal 
+            CREATE INDEX IF NOT EXISTS ix_notificaciones_canal
             ON notificaciones(canal)
         """))
-        
+
         conn.commit()
         print("✅ Columna canal agregada exitosamente")
 EOF
@@ -155,9 +155,9 @@ EOF
 
 **Después de ejecutar SQL directo:**
 
-✅ Columna `canal` existe en tabla `notificaciones`  
-✅ Índice `ix_notificaciones_canal` creado  
-✅ Endpoint `/api/v1/notificaciones/` funciona sin errores  
+✅ Columna `canal` existe en tabla `notificaciones`
+✅ Índice `ix_notificaciones_canal` creado
+✅ Endpoint `/api/v1/notificaciones/` funciona sin errores
 ✅ Sin mensajes de error en logs del backend
 
 ---

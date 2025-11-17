@@ -98,14 +98,14 @@ export function VisualizacionBD() {
   }
 
   const clientesFiltrados = clientes.filter(cliente => {
-    const matchesSearch = 
+    const matchesSearch =
       cliente.cedula.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cliente.apellido.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cliente.email.toLowerCase().includes(searchTerm.toLowerCase())
-    
+
     const matchesEstado = !filterEstado || cliente.estado === filterEstado
-    
+
     return matchesSearch && matchesEstado
   })
 
@@ -346,7 +346,7 @@ export function VisualizacionBD() {
                         <TableCell>{cliente.email}</TableCell>
                         <TableCell>${cliente.monto_prestamo.toLocaleString()}</TableCell>
                         <TableCell>
-                          <Badge 
+                          <Badge
                             variant={
                               cliente.estado === 'ACTIVO' ? 'success' :
                               cliente.estado === 'MORA' ? 'destructive' :

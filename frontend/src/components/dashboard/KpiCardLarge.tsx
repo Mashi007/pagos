@@ -98,13 +98,13 @@ export function KpiCardLarge({
           <div className={`${textSize} font-black ${color} mb-2 leading-tight tracking-tight w-full`}>
             {formatValue()}
           </div>
-          
+
           {/* Variación mejorada con icono y mejor diseño */}
           {variation && variation.percent !== undefined && typeof variation.percent === 'number' && (
             <div className="flex items-center gap-2 mt-3">
               <div className={`flex items-center gap-1 px-2 py-1 rounded-md ${
-                variation.percent >= 0 
-                  ? 'bg-green-50 text-green-700' 
+                variation.percent >= 0
+                  ? 'bg-green-50 text-green-700'
                   : 'bg-red-50 text-red-700'
               }`}>
                 {variation.percent >= 0 ? (

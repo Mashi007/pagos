@@ -1,6 +1,6 @@
 # ✅ CONFIRMACIÓN: SISTEMA DE GENERACIÓN DE TABLAS DE AMORTIZACIÓN
 
-**Fecha de verificación:** 31 de octubre de 2025  
+**Fecha de verificación:** 31 de octubre de 2025
 **Estado:** ✅ COMPLETO Y OPERATIVO
 
 ---
@@ -91,7 +91,7 @@ def generar_tabla_amortizacion(
 ) -> List[Cuota]:
     """
     Genera tabla de amortización para un préstamo aprobado.
-    
+
     Proceso:
     1. Elimina cuotas existentes si las hay
     2. Valida datos del préstamo
@@ -145,7 +145,7 @@ def generar_tabla_amortizacion(
 ```python
 if nuevo_estado == "APROBADO":
     # ... otras acciones ...
-    
+
     # Si se aprueba y tiene fecha_base_calculo, generar tabla de amortización
     if prestamo.fecha_base_calculo:
         try:
@@ -404,6 +404,6 @@ python scripts/python/Generar_Cuotas_Masivas.py
 
 **✅ SISTEMA COMPLETAMENTE OPERATIVO Y VALIDADO**
 
-**Fecha de confirmación:** 31 de octubre de 2025  
+**Fecha de confirmación:** 31 de octubre de 2025
 **Responsable:** Sistema de verificación automática
 

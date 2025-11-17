@@ -1,6 +1,6 @@
 # ✅ Correcciones de Errores Críticos Flake8 - 2025
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Archivo:** `backend/app/api/v1/endpoints/configuracion.py`
 
 ---
@@ -10,7 +10,7 @@
 Se corrigieron **18 errores críticos** detectados por flake8:
 
 - ✅ **F821 (undefined name)**: 4 errores corregidos
-- ✅ **E722 (bare except)**: 5 errores corregidos  
+- ✅ **E722 (bare except)**: 5 errores corregidos
 - ✅ **E712 (comparison to True)**: 9 errores corregidos
 
 **Total:** 18 errores críticos corregidos

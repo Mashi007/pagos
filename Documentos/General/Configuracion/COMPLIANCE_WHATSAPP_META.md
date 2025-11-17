@@ -51,7 +51,7 @@
 ### 1. **Opt-in/Opt-out (Consentimiento)** ⚠️
 - **Estado**: No implementado
 - **Requerido por Meta**: Sí, es obligatorio obtener consentimiento antes de enviar
-- **Recomendación**: 
+- **Recomendación**:
   - Agregar campo `whatsapp_consent` en tabla de clientes
   - Registrar fecha y método de consentimiento
   - Verificar consentimiento antes de enviar

@@ -1,5 +1,5 @@
 # 🔍 Auditoría Integral del Sistema ML
-**Fecha:** 2025-11-17  
+**Fecha:** 2025-11-17
 **Alcance:** Modelos ML Riesgo e Impago - Backend, Frontend, Integración
 
 ---
@@ -127,7 +127,7 @@ El sistema de Machine Learning está operativo con ambos modelos (Riesgo e Impag
    ```python
    # Antes (incorrecto):
    logger.info(f"ROC AUC: {roc_auc:.4f if roc_auc else 'N/A'}")
-   
+
    # Después (correcto):
    roc_auc_str = f"{roc_auc:.4f}" if roc_auc is not None else "N/A"
    logger.info(f"ROC AUC: {roc_auc_str}")
@@ -223,11 +223,11 @@ El sistema de Machine Learning está operativo con ambos modelos (Riesgo e Impag
 
 1. **Detección automática de endpoints lentos:**
    ```typescript
-   const isSlowEndpoint = url.includes('/ml-riesgo/entrenar') || 
+   const isSlowEndpoint = url.includes('/ml-riesgo/entrenar') ||
                          url.includes('/ml-impago/entrenar') ||
                          url.includes('/fine-tuning/iniciar') ||
                          url.includes('/rag/generar-embeddings')
-   
+
    const defaultTimeout = isSlowEndpoint ? 300000 : DEFAULT_TIMEOUT_MS
    ```
 
@@ -490,6 +490,6 @@ El sistema de Machine Learning está **completamente funcional** con ambos model
 
 ---
 
-**Auditoría completada:** 2025-11-17  
+**Auditoría completada:** 2025-11-17
 **Estado:** ✅ Sistema funcional y listo para producción
 

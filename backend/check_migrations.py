@@ -18,7 +18,7 @@ if sys.platform == "win32":
             sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     except (AttributeError, ValueError):
         pass  # Si falla, continuar sin cambiar
-    
+
     try:
         if hasattr(sys.stderr, 'buffer'):
             if sys.stderr.encoding != 'utf-8':
@@ -27,7 +27,7 @@ if sys.platform == "win32":
             sys.stderr.reconfigure(encoding='utf-8', errors='replace')
     except (AttributeError, ValueError):
         pass  # Si falla, continuar sin cambiar
-    
+
     # También configurar la variable de entorno para Python
     os.environ['PYTHONIOENCODING'] = 'utf-8'
 

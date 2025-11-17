@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { 
-  Bell, 
-  Search, 
-  Filter, 
+import {
+  Bell,
+  Search,
+  Filter,
   AlertTriangle,
   Calendar,
   User,
@@ -38,14 +38,14 @@ export function Notificaciones() {
   const [filterCanal, setFilterCanal] = useState<string>('')
   const [page, setPage] = useState(1)
   const perPage = 20
-  
+
   // Estado para controlar qué grupos de días están expandidos
   const [gruposExpandidos, setGruposExpandidos] = useState<Record<string, boolean>>({
     '5': false,  // Por defecto, todos contraídos
     '3': false,
     '1': false
   })
-  
+
   const toggleGrupo = (dias: string) => {
     setGruposExpandidos(prev => ({
       ...prev,
@@ -123,19 +123,19 @@ export function Notificaciones() {
   const notificaciones = notificacionesData?.items || []
   const total = notificacionesData?.total || 0
   const totalPages = notificacionesData?.total_pages || 0
-  
+
   // Datos de notificaciones previas
   const notificacionesPrevias = notificacionesPreviasData?.items || []
   const totalPrevias = notificacionesPreviasData?.total || 0
-  
+
   // Datos de notificaciones del día de pago
   const notificacionesDiaPago = notificacionesDiaPagoData?.items || []
   const totalDiaPago = notificacionesDiaPagoData?.total || 0
-  
+
   // Datos de notificaciones retrasadas
   const notificacionesRetrasadas = notificacionesRetrasadasData?.items || []
   const totalRetrasadas = notificacionesRetrasadasData?.total || 0
-  
+
   // Datos de notificaciones prejudiciales
   const notificacionesPrejudiciales = notificacionesPrejudicialesData?.items || []
   const totalPrejudiciales = notificacionesPrejudicialesData?.total || 0
@@ -171,14 +171,14 @@ export function Notificaciones() {
       return false
     }
 
-    const matchesSearch = 
+    const matchesSearch =
       (notif.asunto || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (notif.mensaje || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (notif.cliente_nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       notif.tipo.toLowerCase().includes(searchTerm.toLowerCase())
-    
+
     const matchesCanal = !filterCanal || notif.canal === filterCanal
-    
+
     return matchesSearch && matchesCanal
   })
 
@@ -335,7 +335,7 @@ export function Notificaciones() {
             'Correo': notif.correo || '',
             'Teléfono': notif.telefono || '',
             'Días antes de vencimiento': notif.dias_antes_vencimiento || '',
-            'Fecha vencimiento': notif.fecha_vencimiento 
+            'Fecha vencimiento': notif.fecha_vencimiento
               ? new Date(notif.fecha_vencimiento).toLocaleDateString('es-ES')
               : '',
             'Cuota #': notif.numero_cuota || '',
@@ -352,10 +352,10 @@ export function Notificaciones() {
             'Canal': notif.canal || '',
             'Estado': notif.estado || '',
             'Cliente ID': notif.cliente_id || '',
-            'Fecha Creación': notif.fecha_creacion 
+            'Fecha Creación': notif.fecha_creacion
               ? new Date(notif.fecha_creacion).toLocaleString('es-ES')
               : '',
-            'Fecha Envío': notif.fecha_envio 
+            'Fecha Envío': notif.fecha_envio
               ? new Date(notif.fecha_envio).toLocaleString('es-ES')
               : '',
             'Error': notif.error_mensaje || ''
@@ -373,7 +373,7 @@ export function Notificaciones() {
         estado === 'PENDIENTE' ? 'Pendientes' : 'Fallidas',
         nombreArchivo
       )
-      
+
       toast.success(`Archivo Excel descargado: ${nombreArchivo}`)
     } catch (error) {
       console.error('Error al descargar Excel:', error)
@@ -405,14 +405,14 @@ export function Notificaciones() {
           {activeTab !== 'configuracion' && (
             <div className="flex space-x-2">
               <Button variant="outline" onClick={handleRefresh} disabled={
-                activeTab === 'previa' ? isLoadingPrevias 
+                activeTab === 'previa' ? isLoadingPrevias
                 : activeTab === 'dia-pago' ? isLoadingDiaPago
                 : activeTab === 'retrasado' ? isLoadingRetrasadas
                 : activeTab === 'prejudicial' ? isLoadingPrejudiciales
                 : isLoading
               }>
                 <RefreshCw className={`w-4 h-4 mr-2 ${
-                  (activeTab === 'previa' ? isLoadingPrevias 
+                  (activeTab === 'previa' ? isLoadingPrevias
                   : activeTab === 'dia-pago' ? isLoadingDiaPago
                   : activeTab === 'retrasado' ? isLoadingRetrasadas
                   : activeTab === 'prejudicial' ? isLoadingPrejudiciales
@@ -674,25 +674,25 @@ export function Notificaciones() {
                     (() => {
                       const datos = activeTab === 'previa' ? notificacionesPrevias : notificacionesRetrasadas
                       const campoDias = activeTab === 'previa' ? 'dias_antes_vencimiento' : 'dias_atrasado'
-                      
+
                       const grupos = {
                         '5': datos.filter(n => n[campoDias] === 5),
                         '3': datos.filter(n => n[campoDias] === 3),
                         '1': datos.filter(n => n[campoDias] === 1)
                       }
-                      
+
                       // Orden de visualización: 5, 3, 1
                       const ordenGrupos = ['5', '3', '1']
                       const textoDias = activeTab === 'previa' ? 'días antes del vencimiento' : 'días atrasado'
-                      
+
                       return (
                         <div className="space-y-4">
                           {ordenGrupos.map((dias) => {
                             const notificacionesGrupo = grupos[dias as keyof typeof grupos]
                             if (notificacionesGrupo.length === 0) return null
-                            
+
                             const estaExpandido = gruposExpandidos[dias]
-                            
+
                             return (
                               <div key={dias} className="border rounded-lg overflow-hidden bg-white shadow-sm">
                                 {/* Encabezado del grupo (clickeable) */}
@@ -714,12 +714,12 @@ export function Notificaciones() {
                                     </span>
                                   </div>
                                 </button>
-                                
+
                                 {/* Tarjetas del grupo (colapsable) */}
                                 {estaExpandido && (
                                   <div className="px-4 pb-4 space-y-4 border-t border-gray-100">
                                     {notificacionesGrupo.map((notificacion) => (
-                                    <Card 
+                                    <Card
                                       key={`${notificacion.prestamo_id}-${notificacion[campoDias]}`}
                                       className="bg-yellow-50 border-yellow-200 hover:shadow-md transition-shadow"
                                     >
@@ -730,14 +730,14 @@ export function Notificaciones() {
                                             <div className="mt-1">
                                               <Bell className="w-5 h-5 text-blue-600" />
                                             </div>
-                                            
+
                                             {/* Contenido principal */}
                                             <div className="flex-1 space-y-2">
                                               {/* Nombre y cédula */}
                                               <div className="font-bold text-gray-900">
                                                 {notificacion.nombre || 'N/A'} - {notificacion.cedula || 'N/A'}
                                               </div>
-                                              
+
                                               {/* Detalles */}
                                               <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-sm">
                                                 <div className="text-gray-700">
@@ -751,7 +751,7 @@ export function Notificaciones() {
                                                 </div>
                                                 <div className="text-gray-700">
                                                   <span className="font-medium">Fecha vencimiento:</span> {
-                                                    notificacion.fecha_vencimiento 
+                                                    notificacion.fecha_vencimiento
                                                       ? new Date(notificacion.fecha_vencimiento).toLocaleDateString('es-ES')
                                                       : 'N/A'
                                                   }
@@ -767,7 +767,7 @@ export function Notificaciones() {
                                               </div>
                                             </div>
                                           </div>
-                                          
+
                                           {/* Badges a la derecha */}
                                           <div className="flex flex-col items-end gap-2 ml-4">
                                             {getEstadoBadge(notificacion.estado)}
@@ -791,7 +791,7 @@ export function Notificaciones() {
                     // Notificaciones del día de pago (sin agrupar, ordenadas alfabéticamente)
                     <div className="space-y-4">
                       {notificacionesDiaPago.map((notificacion) => (
-                        <Card 
+                        <Card
                           key={`${notificacion.prestamo_id}-${notificacion.numero_cuota}`}
                           className="bg-yellow-50 border-yellow-200 hover:shadow-md transition-shadow"
                         >
@@ -802,14 +802,14 @@ export function Notificaciones() {
                                 <div className="mt-1">
                                   <Bell className="w-5 h-5 text-blue-600" />
                                 </div>
-                                
+
                                 {/* Contenido principal */}
                                 <div className="flex-1 space-y-2">
                                   {/* Nombre y cédula */}
                                   <div className="font-bold text-gray-900">
                                     {notificacion.nombre || 'N/A'} - {notificacion.cedula || 'N/A'}
                                   </div>
-                                  
+
                                   {/* Detalles */}
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-sm">
                                     <div className="text-gray-700">
@@ -823,7 +823,7 @@ export function Notificaciones() {
                                     </div>
                                     <div className="text-gray-700">
                                       <span className="font-medium">Fecha vencimiento:</span> {
-                                        notificacion.fecha_vencimiento 
+                                        notificacion.fecha_vencimiento
                                           ? new Date(notificacion.fecha_vencimiento).toLocaleDateString('es-ES')
                                           : 'N/A'
                                       }
@@ -839,7 +839,7 @@ export function Notificaciones() {
                                   </div>
                                 </div>
                               </div>
-                              
+
                               {/* Badges a la derecha */}
                               <div className="flex flex-col items-end gap-2 ml-4">
                                 {getEstadoBadge(notificacion.estado)}
@@ -856,7 +856,7 @@ export function Notificaciones() {
                     // Notificaciones prejudiciales (sin agrupar, ordenadas por fecha más antigua)
                     <div className="space-y-4">
                       {notificacionesPrejudiciales.map((notificacion) => (
-                        <Card 
+                        <Card
                           key={`${notificacion.prestamo_id}-${notificacion.numero_cuota}`}
                           className="bg-yellow-50 border-yellow-200 hover:shadow-md transition-shadow"
                         >
@@ -867,14 +867,14 @@ export function Notificaciones() {
                                 <div className="mt-1">
                                   <Bell className="w-5 h-5 text-blue-600" />
                                 </div>
-                                
+
                                 {/* Contenido principal */}
                                 <div className="flex-1 space-y-2">
                                   {/* Nombre y cédula */}
                                   <div className="font-bold text-gray-900">
                                     {notificacion.nombre || 'N/A'} - {notificacion.cedula || 'N/A'}
                                   </div>
-                                  
+
                                   {/* Detalles */}
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-sm">
                                     <div className="text-gray-700">
@@ -888,7 +888,7 @@ export function Notificaciones() {
                                     </div>
                                     <div className="text-gray-700">
                                       <span className="font-medium">Fecha vencimiento:</span> {
-                                        notificacion.fecha_vencimiento 
+                                        notificacion.fecha_vencimiento
                                           ? new Date(notificacion.fecha_vencimiento).toLocaleDateString('es-ES')
                                           : 'N/A'
                                       }
@@ -911,7 +911,7 @@ export function Notificaciones() {
                                   </div>
                                 </div>
                               </div>
-                              
+
                               {/* Badges a la derecha */}
                               <div className="flex flex-col items-end gap-2 ml-4">
                                 {getEstadoBadge(notificacion.estado)}
@@ -928,7 +928,7 @@ export function Notificaciones() {
                     // Notificaciones normales (sin agrupar)
                     <div className="space-y-4">
                       {filteredNotificaciones.map((notificacion) => (
-                        <Card 
+                        <Card
                           key={notificacion.id}
                           className="bg-yellow-50 border-yellow-200 hover:shadow-md transition-shadow"
                         >
@@ -939,19 +939,19 @@ export function Notificaciones() {
                                 <div className="mt-1">
                                   <Bell className="w-5 h-5 text-blue-600" />
                                 </div>
-                                
+
                                 {/* Contenido principal */}
                                 <div className="flex-1 space-y-2">
                                   {/* Asunto */}
                                   <div className="font-bold text-gray-900">
                                     {notificacion.asunto || 'Sin asunto'}
                                   </div>
-                                  
+
                                   {/* Mensaje */}
                                   <div className="text-gray-700 text-sm">
                                     {notificacion.mensaje || 'Sin mensaje'}
                                   </div>
-                                  
+
                                   {/* Detalles adicionales */}
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-sm">
                                     <div className="text-gray-700">
@@ -975,7 +975,7 @@ export function Notificaciones() {
                                   </div>
                                 </div>
                               </div>
-                              
+
                               {/* Badges a la derecha */}
                               <div className="flex flex-col items-end gap-2 ml-4">
                                 {getEstadoBadge(notificacion.estado)}
@@ -1015,8 +1015,8 @@ export function Notificaciones() {
                 {/* Paginación */}
                 {(activeTab !== 'previa' && activeTab !== 'dia-pago' && activeTab !== 'retrasado' && activeTab !== 'prejudicial') && totalPages > 1 && (
                   <div className="flex justify-center items-center space-x-2 pt-4">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={() => setPage(Math.max(1, page - 1))}
                       disabled={page === 1}
                     >
@@ -1025,8 +1025,8 @@ export function Notificaciones() {
                     <span className="text-sm text-gray-600">
                       Página {page} de {totalPages} ({total} total)
                     </span>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={() => setPage(Math.min(totalPages, page + 1))}
                       disabled={page >= totalPages}
                     >

@@ -2,9 +2,9 @@
 
 ## Estado de Ejecución
 
-**Fecha:** 2025-11-05 09:55:36 ECT  
-**Tiempo de Ejecución:** 7.0 segundos  
-**Resultado:** ✅ **ÉXITO**  
+**Fecha:** 2025-11-05 09:55:36 ECT
+**Tiempo de Ejecución:** 7.0 segundos
+**Resultado:** ✅ **ÉXITO**
 **Filas Actualizadas:** 0 (normal para `CREATE INDEX IF NOT EXISTS`)
 
 ---
@@ -33,7 +33,7 @@ O ejecutar directamente en PostgreSQL:
 
 ```sql
 -- Verificar índices críticos
-SELECT 
+SELECT
     tablename,
     indexname,
     indexdef
@@ -102,7 +102,7 @@ Después de crear los índices, probar una query típica para verificar que se u
 ```sql
 -- Query de prueba: evolución de pagos
 EXPLAIN ANALYZE
-SELECT 
+SELECT
     EXTRACT(YEAR FROM fecha_pago)::integer as año,
     EXTRACT(MONTH FROM fecha_pago)::integer as mes,
     COUNT(*) as cantidad,
@@ -113,7 +113,7 @@ WHERE fecha_pago >= '2024-01-01'::date
   AND monto_pagado IS NOT NULL
   AND monto_pagado > 0
   AND activo = TRUE
-GROUP BY 
+GROUP BY
     EXTRACT(YEAR FROM fecha_pago),
     EXTRACT(MONTH FROM fecha_pago)
 ORDER BY año, mes;

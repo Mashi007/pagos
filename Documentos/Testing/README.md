@@ -152,7 +152,7 @@ export default defineConfig({
 def test_cedula_valida_venezolana():
     validador = ValidadorCedula()
     resultado = validador.validar("V12345678")
-    
+
     assert resultado["valido"] is True
     assert resultado["pais"] == "VENEZUELA"
 ```
@@ -161,7 +161,7 @@ def test_cedula_valida_venezolana():
 ```typescript
 it('debería renderizar el formulario correctamente', () => {
   renderWithRouter(<CrearClienteForm />)
-  
+
   expect(screen.getByLabelText(/cédula/i)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /guardar/i })).toBeInTheDocument()
 })
@@ -177,7 +177,7 @@ def test_crear_cliente_exitoso(test_client, auth_headers, sample_cliente_data):
         json=sample_cliente_data,
         headers=auth_headers
     )
-    
+
     assert response.status_code == 201
     assert response.json()["cedula"] == sample_cliente_data["cedula"]
 ```
@@ -186,14 +186,14 @@ def test_crear_cliente_exitoso(test_client, auth_headers, sample_cliente_data):
 ```typescript
 it('debería cargar lista de clientes', async () => {
   const mockClientes = [{ id: 1, cedula: 'V12345678' }]
-  
+
   vi.mocked(fetch).mockResolvedValueOnce({
     ok: true,
     json: () => Promise.resolve({ data: mockClientes })
   })
-  
+
   const { result } = renderHookWithQueryClient(() => useClientes())
-  
+
   await waitFor(() => {
     expect(result.current.clientes).toEqual(mockClientes)
   })

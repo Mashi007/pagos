@@ -60,7 +60,7 @@ def verificar_auditoria():
             try:
                 count_auditoria = db.query(Auditoria).count()
                 print(f"✅ Tabla 'auditoria': {count_auditoria:,} registros")
-                
+
                 if count_auditoria > 0:
                     # Mostrar algunos ejemplos
                     ejemplos = db.query(Auditoria).order_by(Auditoria.fecha.desc()).limit(3).all()
@@ -77,7 +77,7 @@ def verificar_auditoria():
             try:
                 count_prestamos = db.query(PrestamoAuditoria).count()
                 print(f"✅ Tabla 'prestamos_auditoria': {count_prestamos:,} registros")
-                
+
                 if count_prestamos > 0:
                     # Mostrar algunos ejemplos
                     ejemplos = db.query(PrestamoAuditoria).order_by(PrestamoAuditoria.fecha_cambio.desc()).limit(3).all()
@@ -94,7 +94,7 @@ def verificar_auditoria():
             try:
                 count_pagos = db.query(PagoAuditoria).count()
                 print(f"✅ Tabla 'pagos_auditoria': {count_pagos:,} registros")
-                
+
                 if count_pagos > 0:
                     # Mostrar algunos ejemplos
                     ejemplos = db.query(PagoAuditoria).order_by(PagoAuditoria.fecha_cambio.desc()).limit(3).all()

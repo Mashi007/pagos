@@ -38,19 +38,19 @@ if env_file.exists():
 try:
     from alembic import command
     from alembic.config import Config
-    
+
     cfg = Config(str(backend_dir / "alembic.ini"))
-    
+
     database_url = os.getenv("DATABASE_URL")
     if database_url:
         cfg.set_main_option("sqlalchemy.url", database_url)
-    
+
     # Ejecutar comando
     if len(sys.argv) < 2:
         cmd = "current"
     else:
         cmd = sys.argv[1].lower()
-    
+
     if cmd == "current":
         command.current(cfg, verbose=True)
     elif cmd == "heads":
@@ -62,7 +62,7 @@ try:
         print(f"Comando desconocido: {cmd}")
         print("Comandos: current, heads, upgrade [target]")
         sys.exit(1)
-        
+
 except Exception as e:
     print(f"Error: {e}", file=sys.stderr)
     sys.exit(1)

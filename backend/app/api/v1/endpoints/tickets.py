@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import and_, inspect, or_, text
 from sqlalchemy.exc import OperationalError, ProgrammingError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
@@ -55,7 +55,7 @@ def _crear_tabla_si_no_existe(db: Session) -> bool:
             creado_en TIMESTAMP NOT NULL DEFAULT now(),
             actualizado_en TIMESTAMP NOT NULL DEFAULT now()
         );
-        
+
         CREATE INDEX IF NOT EXISTS ix_tickets_id ON tickets(id);
         CREATE INDEX IF NOT EXISTS ix_tickets_titulo ON tickets(titulo);
         CREATE INDEX IF NOT EXISTS ix_tickets_cliente_id ON tickets(cliente_id);
@@ -153,7 +153,8 @@ async def listar_tickets(
                     detail="La tabla 'tickets' no existe. Ejecuta las migraciones: alembic upgrade head",
                 )
 
-        query = db.query(Ticket)
+        # Query con eager loading de la relación cliente para evitar consultas N+1
+        query = db.query(Ticket).options(joinedload(Ticket.cliente))
 
         # Filtros
         if cliente_id:
@@ -180,7 +181,7 @@ async def listar_tickets(
                 logger.warning(f"⚠️ Error al contar tickets, intentando crear tabla: {count_error}")
                 if _crear_tabla_si_no_existe(db):
                     db.refresh(Ticket)
-                    query = db.query(Ticket)
+                    query = db.query(Ticket).options(joinedload(Ticket.cliente))
                     if cliente_id:
                         query = query.filter(Ticket.cliente_id == cliente_id)
                     if conversacion_whatsapp_id:
@@ -220,7 +221,7 @@ async def listar_tickets(
             logger.warning(f"⚠️ Error de base de datos, intentando crear tabla: {db_error}")
             if _crear_tabla_si_no_existe(db):
                 try:
-                    query = db.query(Ticket)
+                    query = db.query(Ticket).options(joinedload(Ticket.cliente))
                     if cliente_id:
                         query = query.filter(Ticket.cliente_id == cliente_id)
                     if conversacion_whatsapp_id:
@@ -304,7 +305,11 @@ async def crear_ticket(
 
         db.add(nuevo_ticket)
         db.commit()
+        # Refrescar con eager loading de cliente para que to_dict() funcione correctamente
         db.refresh(nuevo_ticket)
+        # Cargar explícitamente la relación cliente si existe
+        if nuevo_ticket.cliente_id:
+            nuevo_ticket.cliente  # Esto activa la carga lazy si no está cargada
 
         # Si hay conversación_whatsapp_id, actualizar la conversación para vincular el ticket
         if ticket_data.conversacion_whatsapp_id:
@@ -342,7 +347,7 @@ async def obtener_ticket(
                     detail="La tabla 'tickets' no existe. Ejecuta las migraciones: alembic upgrade head",
                 )
 
-        ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+        ticket = db.query(Ticket).options(joinedload(Ticket.cliente)).filter(Ticket.id == ticket_id).first()
 
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket no encontrado")
@@ -374,7 +379,7 @@ async def actualizar_ticket(
                     detail="La tabla 'tickets' no existe. Ejecuta las migraciones: alembic upgrade head",
                 )
 
-        ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+        ticket = db.query(Ticket).options(joinedload(Ticket.cliente)).filter(Ticket.id == ticket_id).first()
 
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket no encontrado")
@@ -425,7 +430,7 @@ async def obtener_tickets_por_conversacion(
                     detail="La tabla 'tickets' no existe. Ejecuta las migraciones: alembic upgrade head",
                 )
 
-        tickets = db.query(Ticket).filter(Ticket.conversacion_whatsapp_id == conversacion_id).all()
+        tickets = db.query(Ticket).options(joinedload(Ticket.cliente)).filter(Ticket.conversacion_whatsapp_id == conversacion_id).all()
 
         return [t.to_dict() for t in tickets]
 

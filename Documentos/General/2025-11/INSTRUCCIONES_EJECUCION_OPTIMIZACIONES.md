@@ -58,8 +58,8 @@ with open('backend/scripts/migracion_indices_dashboard.sql', 'r') as f:
 
 ```sql
 -- Verificar que PostgreSQL use los índices
-EXPLAIN ANALYZE 
-SELECT 
+EXPLAIN ANALYZE
+SELECT
     EXTRACT(YEAR FROM fecha_aprobacion),
     EXTRACT(MONTH FROM fecha_aprobacion),
     COUNT(*)
@@ -80,7 +80,7 @@ curl -X GET "http://localhost:8000/api/v1/prestamos/cedula/1234567890/resumen" \
   -H "Authorization: Bearer tu_token"
 ```
 
-**Antes:** 500-1000ms  
+**Antes:** 500-1000ms
 **Después:** 100-200ms (esperado)
 
 ### 2. Probar KPIs principales (queries combinadas):
@@ -89,7 +89,7 @@ curl -X GET "http://localhost:8000/api/v1/dashboard/kpis-principales" \
   -H "Authorization: Bearer tu_token"
 ```
 
-**Antes:** 2000-3000ms  
+**Antes:** 2000-3000ms
 **Después:** 500-800ms (esperado)
 
 ### 3. Probar tendencia mensual (SQL optimizado):
@@ -98,7 +98,7 @@ curl -X GET "http://localhost:8000/api/v1/dashboard/financiamiento-tendencia-men
   -H "Authorization: Bearer tu_token"
 ```
 
-**Antes:** 2000-5000ms  
+**Antes:** 2000-5000ms
 **Después:** 300-600ms (esperado)
 
 ---

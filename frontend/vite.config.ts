@@ -6,7 +6,7 @@ import type { Plugin } from 'vite'
 // Plugin para eliminar modulepreload de chunks pesados (lazy loading)
 function removeHeavyChunksPreload(): Plugin {
   const heavyChunks = ['exceljs', 'pdf-export', 'jspdf', 'html2canvas', 'jspdf-autotable']
-  
+
   return {
     name: 'remove-heavy-chunks-preload',
     generateBundle(options, bundle) {
@@ -14,7 +14,7 @@ function removeHeavyChunksPreload(): Plugin {
       Object.keys(bundle).forEach(fileName => {
         const chunk = bundle[fileName]
         if (chunk.type === 'chunk') {
-          const isHeavyChunk = heavyChunks.some(name => 
+          const isHeavyChunk = heavyChunks.some(name =>
             fileName.includes(name) || chunk.name?.includes(name)
           )
           if (isHeavyChunk) {
@@ -37,10 +37,10 @@ function removeHeavyChunksPreload(): Plugin {
       // ✅ Eliminar TODOS los modulepreload y preload para chunks pesados (carga bajo demanda)
       // Esto evita que el navegador precargue estos chunks automáticamente
       let modifiedHtml = html
-      
+
       // Lista de nombres de chunks pesados para usar en patrones
       const heavyChunkNames = ['exceljs', 'pdf-export', 'jspdf', 'html2canvas', 'jspdf-autotable']
-      
+
       // Eliminar modulepreload para chunks pesados (múltiples patrones)
       heavyChunkNames.forEach(name => {
         // Patrón 1: rel="modulepreload" ... nombre-chunk
@@ -59,7 +59,7 @@ function removeHeavyChunksPreload(): Plugin {
           ''
         )
       })
-      
+
       // ✅ También eliminar cualquier preload que pueda estar causando la carga prematura
       heavyChunkNames.forEach(name => {
         // Patrón 1: rel="preload" ... nombre-chunk
@@ -78,14 +78,14 @@ function removeHeavyChunksPreload(): Plugin {
           ''
         )
       })
-      
+
       // ✅ Eliminar también cualquier referencia genérica a chunks pesados en links
       const allNamesPattern = heavyChunkNames.join('|')
       modifiedHtml = modifiedHtml.replace(
         new RegExp(`<link[^>]*href=["'][^"']*(${allNamesPattern})[^"']*["'][^>]*>`, 'gi'),
         ''
       )
-      
+
       return modifiedHtml
     },
   }
@@ -126,12 +126,12 @@ export default defineConfig({
         // ✅ CRÍTICO: Excluir chunks pesados de la resolución de dependencias
         // Esto previene que el navegador descubra y precargue estos chunks
         const heavyChunks = ['exceljs', 'pdf-export', 'jspdf', 'html2canvas', 'jspdf-autotable']
-        
+
         // Si el chunk actual es uno pesado, no resolver dependencias
         if (heavyChunks.some(name => filename.includes(name))) {
           return [] // Retornar array vacío = no preload
         }
-        
+
         // Si alguna dependencia es un chunk pesado, excluirla
         return deps.filter(dep => {
           const isHeavy = heavyChunks.some(name => dep.includes(name))
@@ -149,20 +149,20 @@ export default defineConfig({
           if (id.includes('node_modules')) {
             // React core - DEBE estar en chunk principal (undefined = chunk principal)
             // Esto asegura que React esté disponible antes que cualquier otro chunk
-            if ((id.includes('/react/') || id.includes('/react-dom/') || 
+            if ((id.includes('/react/') || id.includes('/react-dom/') ||
                  id.includes('\\react\\') || id.includes('\\react-dom\\')) &&
-                !id.includes('react-router') && 
-                !id.includes('react-hook-form') && 
+                !id.includes('react-router') &&
+                !id.includes('react-hook-form') &&
                 !id.includes('@tanstack/react-query') &&
                 !id.includes('react-hot-toast')) {
               return undefined // undefined = chunk principal (index.js)
             }
-            
+
             // React Router
             if (id.includes('react-router')) {
               return 'router'
             }
-            
+
             // Librerías pesadas de exportación - LAZY LOADING (cargar solo cuando se necesiten)
             // Estas librerías NO se incluyen en el bundle inicial, solo se cargan bajo demanda
             // ✅ EXCELJS: Forzar chunk separado y evitar precarga
@@ -172,44 +172,44 @@ export default defineConfig({
             if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('jspdf-autotable')) {
               return 'pdf-export' // Chunk separado, se carga solo al exportar PDF
             }
-            
+
             // Recharts - separar en chunk propio para lazy loading
             if (id.includes('recharts')) {
               return 'recharts'
             }
-            
+
             // UI libraries
             if (id.includes('framer-motion') || id.includes('lucide-react')) {
               return 'ui-libs'
             }
-            
+
             // State management
             if (id.includes('@tanstack/react-query') || id.includes('zustand')) {
               return 'state-management'
             }
-            
+
             // Form libraries
             if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform')) {
               return 'form-libs'
             }
-            
+
             // Radix UI components - estos dependen de React, así que deben cargarse después
             if (id.includes('@radix-ui')) {
               return 'radix-ui'
             }
-            
+
             // Otras dependencias comunes
             return 'vendor'
           }
-          
+
           // ✅ NO separar hooks y servicios - incluir en chunks principales para evitar 404
           // Los hooks y servicios deben estar disponibles cuando se necesiten
-          if (id.includes('/hooks/useConcesionarios') || 
+          if (id.includes('/hooks/useConcesionarios') ||
               id.includes('/hooks/useAnalistas') ||
               id.includes('/services/notificacionService')) {
             return undefined // undefined = chunk principal
           }
-          
+
           // NO separar DashboardMenu - incluir en chunk principal para evitar problemas de carga
           // Los componentes UI que usa (Radix UI) necesitan React disponible
           // if (id.includes('/pages/DashboardMenu')) {

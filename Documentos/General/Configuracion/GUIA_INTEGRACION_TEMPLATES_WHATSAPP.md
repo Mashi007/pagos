@@ -71,7 +71,7 @@ Categoría: UTILITY
 Idioma: Español (es)
 
 Cuerpo del Mensaje:
-Hola {{1}}, te recordamos que hoy {{2}} vence tu cuota de {{3}} por el monto de {{4}}. 
+Hola {{1}}, te recordamos que hoy {{2}} vence tu cuota de {{3}} por el monto de {{4}}.
 Por favor realiza el pago para evitar intereses de mora.
 
 Parámetros:
@@ -83,7 +83,7 @@ Parámetros:
 
 **Formato en Meta:**
 ```
-Hola {{1}}, te recordamos que hoy {{2}} vence tu cuota de {{3}} por el monto de {{4}}. 
+Hola {{1}}, te recordamos que hoy {{2}} vence tu cuota de {{3}} por el monto de {{4}}.
 Por favor realiza el pago para evitar intereses de mora.
 ```
 
@@ -140,7 +140,7 @@ template_parameters = [
 
 **Cuerpo**:
 ```
-Hola {{1}}, te recordamos que hoy {{2}} vence tu cuota {{3}} por el monto de {{4}} Bs. 
+Hola {{1}}, te recordamos que hoy {{2}} vence tu cuota {{3}} por el monto de {{4}} Bs.
 Por favor realiza el pago para evitar intereses de mora.
 ```
 
@@ -189,7 +189,7 @@ await whatsapp_service.send_message(
 ### **3. Mensaje Final que Recibe el Cliente:**
 
 ```
-Hola Juan Pérez, te recordamos que hoy 15/01/2024 vence tu cuota 5 por el monto de 150.00 Bs. 
+Hola Juan Pérez, te recordamos que hoy 15/01/2024 vence tu cuota 5 por el monto de 150.00 Bs.
 Por favor realiza el pago para evitar intereses de mora.
 ```
 
@@ -205,7 +205,7 @@ Si necesitas un orden diferente de parámetros, modifica `extract_template_param
 @classmethod
 def extract_template_parameters(cls, message: str, variables: Dict[str, str], template_name: Optional[str] = None) -> List[Dict[str, str]]:
     parameters = []
-    
+
     # Orden personalizado según template_name
     if template_name == "notificacion_pago_dia_0":
         # Orden específico para este template
@@ -222,7 +222,7 @@ def extract_template_parameters(cls, message: str, variables: Dict[str, str], te
         for var_name in ["nombre", "monto", "fecha_vencimiento", "numero_cuota"]:
             if var_name in variables:
                 parameters.append({"text": variables[var_name]})
-    
+
     return parameters
 ```
 

@@ -1,7 +1,7 @@
 # 🔍 Auditoría Integral del Módulo de Cobranzas
 
-**Fecha:** $(date)  
-**Módulo:** Cobranzas  
+**Fecha:** $(date)
+**Módulo:** Cobranzas
 **Objetivo:** Identificar y corregir problemas que impiden la carga de datos
 
 ---
@@ -46,9 +46,9 @@ const { data: resumen, isLoading: cargandoResumen } = useQuery({
 
 **Después:**
 ```typescript
-const { 
-  data: resumen, 
-  isLoading: cargandoResumen, 
+const {
+  data: resumen,
+  isLoading: cargandoResumen,
   isError: errorResumen,
   error: errorResumenDetalle,
   refetch: refetchResumen
@@ -77,8 +77,8 @@ Se agregaron componentes de error en todas las secciones:
       Error al cargar clientes atrasados
     </p>
     <p className="text-xs text-red-600 mb-4">
-      {errorClientesDetalle instanceof Error 
-        ? errorClientesDetalle.message 
+      {errorClientesDetalle instanceof Error
+        ? errorClientesDetalle.message
         : 'No se pudieron cargar los datos. Por favor, intenta nuevamente.'}
     </p>
     <Button size="sm" variant="outline" onClick={() => refetchClientes()}>
@@ -135,8 +135,8 @@ useEffect(() => {
   if (errorResumen) {
     console.error('Error cargando resumen de cobranzas:', errorResumenDetalle)
     toast.error('Error al cargar resumen de cobranzas', {
-      description: errorResumenDetalle instanceof Error 
-        ? errorResumenDetalle.message 
+      description: errorResumenDetalle instanceof Error
+        ? errorResumenDetalle.message
         : 'No se pudieron cargar los datos del resumen',
       duration: 5000,
     })

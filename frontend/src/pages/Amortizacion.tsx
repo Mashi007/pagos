@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { 
-  Calculator, 
-  Search, 
-  Filter, 
+import {
+  Calculator,
+  Search,
+  Filter,
   Download,
   Calendar,
   DollarSign,
@@ -251,7 +251,7 @@ export function Amortizacion() {
             <div className="space-y-4">
               {filteredAmortizaciones.map((amortizacion) => {
                 const progreso = calcularProgreso(amortizacion.cuotas_pagadas, amortizacion.cuotas_totales)
-                
+
                 return (
                   <div key={amortizacion.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
                     <div className="flex justify-between items-start mb-4">
@@ -289,7 +289,7 @@ export function Amortizacion() {
                         </Button>
                       </div>
                     </div>
-                    
+
                     {/* Progress Bar */}
                     <div className="mt-4">
                       <div className="flex justify-between text-sm text-gray-600 mb-2">
@@ -297,7 +297,7 @@ export function Amortizacion() {
                         <span>{amortizacion.cuotas_pagadas}/{amortizacion.cuotas_totales} cuotas ({progreso.toFixed(1)}%)</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
+                        <div
                           className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                           style={{ width: `${progreso}%` }}
                         ></div>
@@ -306,7 +306,7 @@ export function Amortizacion() {
                   </div>
                 )
               })}
-              
+
               {filteredAmortizaciones.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
                   <Calculator className="w-12 h-12 mx-auto mb-4 text-gray-300" />

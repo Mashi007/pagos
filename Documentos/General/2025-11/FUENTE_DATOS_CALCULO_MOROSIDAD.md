@@ -1,6 +1,6 @@
 # 📊 FUENTE DE DATOS PARA EL CÁLCULO DE MOROSIDAD
 
-**Fecha:** 2025-01-04  
+**Fecha:** 2025-01-04
 **Endpoint:** `/api/v1/dashboard/evolucion-morosidad`
 
 ---
@@ -11,7 +11,7 @@ El cálculo de morosidad consulta **SOLO 2 tablas**:
 
 ### **1. Tabla `cuotas`** (Principal)
 
-**Ubicación en código:** `backend/app/models/amortizacion.py`  
+**Ubicación en código:** `backend/app/models/amortizacion.py`
 **Nombre de tabla SQL:** `cuotas`
 
 #### **Campos Utilizados:**
@@ -46,7 +46,7 @@ El cálculo de morosidad consulta **SOLO 2 tablas**:
 
 ### **2. Tabla `prestamos`** (Para filtros)
 
-**Ubicación en código:** `backend/app/models/prestamo.py`  
+**Ubicación en código:** `backend/app/models/prestamo.py`
 **Nombre de tabla SQL:** `prestamos`
 
 #### **Campos Utilizados:**
@@ -86,13 +86,13 @@ El cálculo de morosidad consulta **SOLO 2 tablas**:
 ### **Query Completa:**
 
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
     EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
     COALESCE(SUM(c.monto_cuota), 0) as morosidad
 FROM cuotas c
 INNER JOIN prestamos p ON c.prestamo_id = p.id
-WHERE 
+WHERE
     p.estado = 'APROBADO'
     AND c.fecha_vencimiento >= :fecha_inicio
     AND c.fecha_vencimiento < :fecha_fin_total
@@ -227,7 +227,7 @@ cuotas c  INNER JOIN  prestamos p
 ### **Paso 3: Aplicación de Filtros**
 
 ```sql
-WHERE 
+WHERE
     p.estado = 'APROBADO'                    ← Del préstamo
     AND c.fecha_vencimiento >= fecha_inicio   ← De la cuota
     AND c.fecha_vencimiento < hoy              ← De la cuota
@@ -340,11 +340,11 @@ Ejemplo:
 
 ### **Tablas NO Consultadas:**
 
-❌ `pagos_staging`  
-❌ `pagos`  
-❌ `cobros`  
-❌ `pago_cuotas`  
-❌ `clientes`  
+❌ `pagos_staging`
+❌ `pagos`
+❌ `cobros`
+❌ `pago_cuotas`
+❌ `clientes`
 ❌ Cualquier otra tabla
 
 ### **Campos Clave:**
@@ -382,6 +382,6 @@ Ejemplo:
 
 ---
 
-**Documento generado automáticamente**  
+**Documento generado automáticamente**
 **Última actualización:** 2025-01-04
 

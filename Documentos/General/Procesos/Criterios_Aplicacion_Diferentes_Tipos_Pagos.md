@@ -1,6 +1,6 @@
 # 📋 CRITERIOS: Aplicación de Diferentes Tipos de Pagos
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Objetivo:** Documentar todos los criterios que se aplican según el tipo de pago
 
 ---

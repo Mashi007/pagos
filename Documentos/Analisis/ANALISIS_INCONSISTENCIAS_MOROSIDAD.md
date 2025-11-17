@@ -118,7 +118,7 @@ Después de ejecutar, verificar que:
 Si se desea investigar por qué hay sobrepagos:
 ```sql
 -- Ver cuotas con sobrepago
-SELECT 
+SELECT
     id,
     prestamo_id,
     numero_cuota,

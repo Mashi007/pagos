@@ -200,8 +200,8 @@ curl -X GET "https://pagos-f2qf.onrender.com/api/v1/dashboard/evolucion-pagos?me
 
 1. **Verificar en PostgreSQL**:
    ```sql
-   SELECT indexname, indexdef 
-   FROM pg_indexes 
+   SELECT indexname, indexdef
+   FROM pg_indexes
    WHERE tablename IN ('pagos_staging', 'cuotas')
    AND indexname LIKE 'idx_%_extract%';
    ```

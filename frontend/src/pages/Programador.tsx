@@ -499,7 +499,7 @@ export function Programador() {
                       <div><strong>Tipo:</strong> {tarea.tipo}</div>
                       <div><strong>Frecuencia:</strong> {tarea.frecuencia}</div>
                       <div><strong>Hora:</strong> {tarea.hora}</div>
-                      <div><strong>Estado:</strong> 
+                      <div><strong>Estado:</strong>
                         <Badge
                           variant={
                             tarea.estado === 'ACTIVO'
@@ -521,11 +521,11 @@ export function Programador() {
                     <div className="bg-gray-50 p-4 rounded-lg space-y-2">
                       <div><strong>Ejecuciones Exitosas:</strong> {tarea.exitos}</div>
                       <div><strong>Ejecuciones Fallidas:</strong> {tarea.fallos}</div>
-                      <div><strong>Tasa de Éxito:</strong> 
+                      <div><strong>Tasa de Éxito:</strong>
                         {((tarea.exitos / (tarea.exitos + tarea.fallos)) * 100).toFixed(1)}%
                       </div>
                       <div><strong>Última Ejecución:</strong> {formatDate(tarea.ultimaEjecucion)}</div>
-                      <div><strong>Próxima Ejecución:</strong> 
+                      <div><strong>Próxima Ejecución:</strong>
                         {tarea.proximaEjecucion === 'CONTINUO' ? 'Continuo' : formatDate(tarea.proximaEjecucion)}
                       </div>
                     </div>

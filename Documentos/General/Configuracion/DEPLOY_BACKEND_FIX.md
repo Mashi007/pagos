@@ -55,7 +55,7 @@ En los logs del backend, busca:
    ```bash
    # En Render, el código debería estar en:
    # /opt/render/project/src/backend/app/api/v1/endpoints/analistas.py
-   
+
    # Debe tener: @router.get("/", ...)
    # NO debe tener: @router.get("", ...)
    ```

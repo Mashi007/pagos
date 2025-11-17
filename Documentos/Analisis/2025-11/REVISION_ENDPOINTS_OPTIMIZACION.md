@@ -1,6 +1,6 @@
 # 📊 Revisión de Endpoints - Análisis para Optimización
 
-**Fecha:** 2025-11-09  
+**Fecha:** 2025-11-09
 **Objetivo:** Revisar endpoints críticos del sistema para identificar oportunidades de optimización
 
 ---
@@ -23,16 +23,16 @@
    ```python
    # Query 1: KPIs de préstamos (mes actual y anterior)
    kpis_prestamos = db.query(...).filter(...)
-   
+
    # Query 2: Clientes por estado (mes actual)
    query_base_clientes = db.query(Cliente).join(Prestamo, ...)
-   
+
    # Query 3: Clientes por estado (mes anterior)
    query_base_anterior = db.query(Cliente).join(Prestamo, ...)
-   
+
    # Query 4: Morosidad actual
    morosidad_actual = _calcular_morosidad(...)
-   
+
    # Query 5: Morosidad anterior
    morosidad_anterior = _calcular_morosidad(...)
    ```
@@ -71,7 +71,7 @@
    # Query 1: Obtener IDs
    prestamo_ids_query = query_base.with_entities(Prestamo.id)
    prestamo_ids = [row[0] for row in prestamo_ids_result]
-   
+
    # Query 2: Obtener montos
    query_sql = text("SELECT id, total_financiamiento FROM prestamos WHERE id = ANY(:ids)")
    ```
@@ -92,15 +92,15 @@
 
 **Query Optimizada Sugerida:**
 ```sql
-SELECT 
-  CASE 
+SELECT
+  CASE
     WHEN total_financiamiento >= 50000 THEN '50000+'
     ELSE CONCAT('$', FLOOR(total_financiamiento / 300) * 300, ' - $', (FLOOR(total_financiamiento / 300) + 1) * 300)
   END as categoria,
   COUNT(*) as cantidad_prestamos,
   SUM(total_financiamiento) as monto_total
 FROM prestamos
-WHERE estado = 'APROBADO' 
+WHERE estado = 'APROBADO'
   AND total_financiamiento > 0
   -- filtros adicionales
 GROUP BY categoria
@@ -170,8 +170,8 @@ ORDER BY MIN(total_financiamiento);
 
 **Query Optimizada Sugerida:**
 ```sql
-SELECT 
-  CASE 
+SELECT
+  CASE
     WHEN dias_morosidad <= 5 THEN '0-5 días'
     WHEN dias_morosidad <= 15 THEN '5-15 días'
     WHEN dias_morosidad <= 60 THEN '1-2 meses'

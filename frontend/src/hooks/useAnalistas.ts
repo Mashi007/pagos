@@ -89,11 +89,11 @@ export function useUpdateAnalista() {
         analistaKeys.detail(updatedAnalista.id),
         updatedAnalista
       )
-      
+
       // Invalidar listas
       queryClient.invalidateQueries({ queryKey: analistaKeys.lists() })
       queryClient.invalidateQueries({ queryKey: analistaKeys.activos() })
-      
+
       toast.success('Analista actualizado exitosamente')
     },
     onError: (error: any) => {

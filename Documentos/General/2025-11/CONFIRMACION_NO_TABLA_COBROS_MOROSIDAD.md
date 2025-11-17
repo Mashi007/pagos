@@ -1,13 +1,13 @@
 # ✅ CONFIRMACIÓN: NO SE CONSULTA TABLA DE COBROS PARA MOROSIDAD
 
-**Fecha:** 2025-01-04  
+**Fecha:** 2025-01-04
 **Endpoint:** `/api/v1/dashboard/evolucion-morosidad`
 
 ---
 
 ## 📋 RESUMEN
 
-El endpoint de **Evolución de Morosidad** **NO consulta ninguna tabla de "cobros"**, "pagos realizados", "cobros realizados" o similar. 
+El endpoint de **Evolución de Morosidad** **NO consulta ninguna tabla de "cobros"**, "pagos realizados", "cobros realizados" o similar.
 
 **Solo consulta:**
 - ✅ Tabla `cuotas` (campo `estado` y `monto_cuota`)
@@ -31,7 +31,7 @@ INNER JOIN prestamos p ON c.prestamo_id = p.id
 ### **Criterio de Morosidad:**
 
 ```sql
-WHERE 
+WHERE
     p.estado = 'APROBADO'
     AND c.fecha_vencimiento >= :fecha_inicio
     AND c.fecha_vencimiento < :fecha_fin_total
@@ -53,13 +53,13 @@ WHERE
 
 query_sql = text(
     """
-    SELECT 
+    SELECT
         EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
         EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
         COALESCE(SUM(c.monto_cuota), 0) as morosidad
     FROM cuotas c
     INNER JOIN prestamos p ON c.prestamo_id = p.id
-    WHERE 
+    WHERE
         p.estado = 'APROBADO'
         AND c.fecha_vencimiento >= :fecha_inicio
         AND c.fecha_vencimiento < :fecha_fin_total
@@ -140,6 +140,6 @@ La morosidad se calcula **exclusivamente** basándose en:
 
 ---
 
-**Documento generado automáticamente**  
+**Documento generado automáticamente**
 **Última actualización:** 2025-01-04
 

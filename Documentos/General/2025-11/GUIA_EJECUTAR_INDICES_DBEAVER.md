@@ -82,13 +82,13 @@ COMMIT
 Ejecuta esta query en DBeaver para verificar:
 
 ```sql
-SELECT 
+SELECT
     schemaname,
     tablename,
     indexname,
     indexdef
 FROM pg_indexes
-WHERE indexname LIKE 'idx_%_dashboard%' 
+WHERE indexname LIKE 'idx_%_dashboard%'
    OR indexname LIKE 'idx_prestamos_%'
    OR indexname LIKE 'idx_cuotas_%'
    OR indexname LIKE 'idx_pagos_%'
@@ -112,8 +112,8 @@ ORDER BY tablename, indexname;
 Ejecuta primero esta query para ver si ya existen:
 
 ```sql
-SELECT indexname 
-FROM pg_indexes 
+SELECT indexname
+FROM pg_indexes
 WHERE indexname IN (
     'idx_prestamos_fecha_aprobacion_ym',
     'idx_cuotas_fecha_vencimiento_ym',
@@ -137,7 +137,7 @@ WHERE indexname IN (
 Los índices ocupan espacio adicional. Verifica que tengas suficiente:
 
 ```sql
-SELECT 
+SELECT
     pg_size_pretty(pg_database_size(current_database())) as tamaño_bd;
 ```
 
@@ -148,8 +148,8 @@ SELECT
 Después de crear los índices, ejecuta esta query para verificar que PostgreSQL los use:
 
 ```sql
-EXPLAIN ANALYZE 
-SELECT 
+EXPLAIN ANALYZE
+SELECT
     EXTRACT(YEAR FROM fecha_aprobacion),
     EXTRACT(MONTH FROM fecha_aprobacion),
     COUNT(*)
@@ -175,7 +175,7 @@ Si ves `Seq Scan` en lugar de `Index Scan`, los índices no se están usando (pu
 
 ```sql
 -- En lugar de índice funcional, crear índice regular
-CREATE INDEX IF NOT EXISTS idx_prestamos_fecha_aprobacion 
+CREATE INDEX IF NOT EXISTS idx_prestamos_fecha_aprobacion
 ON prestamos (fecha_aprobacion, estado)
 WHERE estado = 'APROBADO' AND fecha_aprobacion IS NOT NULL;
 ```
@@ -186,7 +186,7 @@ WHERE estado = 'APROBADO' AND fecha_aprobacion IS NOT NULL;
 
 ### Error: "out of memory" o "timeout"
 
-**Solución:** 
+**Solución:**
 - Ejecutar índices uno por uno
 - Ejecutar durante horario de menor tráfico
 - Aumentar `work_mem` temporalmente:

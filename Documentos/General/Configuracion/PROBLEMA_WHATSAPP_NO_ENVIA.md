@@ -106,13 +106,13 @@ if resultado_email.get("success"):
     nueva_notif.enviada_en = datetime.utcnow()
     nueva_notif.respuesta_servicio = resultado_email.get("message", "Email enviado exitosamente")
     enviadas += 1
-    
+
     # ✅ AGREGAR: Enviar también por WhatsApp si está disponible
     if cliente.telefono:
         try:
             from app.services.whatsapp_service import WhatsAppService
             whatsapp_service = WhatsAppService(db=db)
-            
+
             # Crear notificación WhatsApp
             notif_whatsapp = Notificacion(
                 cliente_id=cliente_id,
@@ -125,13 +125,13 @@ if resultado_email.get("success"):
             db.add(notif_whatsapp)
             db.commit()
             db.refresh(notif_whatsapp)
-            
+
             # Enviar WhatsApp
             resultado_whatsapp = await whatsapp_service.send_message(
                 to_number=str(cliente.telefono),
                 message=cuerpo,
             )
-            
+
             if resultado_whatsapp.get("success"):
                 notif_whatsapp.estado = "ENVIADA"
                 notif_whatsapp.enviada_en = datetime.utcnow()
@@ -140,7 +140,7 @@ if resultado_email.get("success"):
                 notif_whatsapp.estado = "FALLIDA"
                 notif_whatsapp.error_mensaje = resultado_whatsapp.get("message", "Error desconocido")
                 logger.warning(f"⚠️ Error enviando WhatsApp a {cliente.telefono}: {resultado_whatsapp.get('message')}")
-            
+
             db.commit()
         except Exception as e:
             logger.error(f"❌ Error enviando WhatsApp: {e}")
@@ -171,7 +171,7 @@ if resultado_email.get("success"):
 
 1. **Modo Pruebas**: Si `modo_pruebas: 'true'`, todos los mensajes WhatsApp se redirigen al `telefono_pruebas`. Para enviar a clientes reales, cambiar a `modo_pruebas: 'false'`.
 
-2. **Rate Limits de Meta**: 
+2. **Rate Limits de Meta**:
    - 1,000 mensajes por día (nivel gratuito)
    - 80 mensajes por segundo
    - El sistema maneja estos límites automáticamente

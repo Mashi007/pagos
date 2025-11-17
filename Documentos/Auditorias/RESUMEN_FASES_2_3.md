@@ -29,7 +29,7 @@
 - **Uso:**
   ```python
   from app.core.cache import cache_result
-  
+
   @cache_result(ttl=600, key_prefix="dashboard")
   async def get_dashboard_stats(...):
       ...
@@ -66,7 +66,7 @@
 - **Uso:**
   ```python
   from app.utils.validation import validate_pagination, path_id_gt_zero
-  
+
   @router.get("/{id}")
   def get_resource(
       id: int = Depends(path_id_gt_zero),

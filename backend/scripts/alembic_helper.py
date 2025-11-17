@@ -46,25 +46,25 @@ if env_file.exists():
 try:
     from alembic import command
     from alembic.config import Config
-    
+
     cfg = Config(str(alembic_ini))
-    
+
     # Configurar DATABASE_URL si está disponible
     database_url = os.getenv("DATABASE_URL")
     if database_url:
         cfg.set_main_option("sqlalchemy.url", database_url)
     elif not cfg.get_main_option("sqlalchemy.url"):
         print("[WARNING] DATABASE_URL no está configurada. Algunos comandos pueden fallar.")
-    
+
     # Obtener comando y argumentos
     if len(sys.argv) < 2:
         print("Uso: python scripts/alembic_helper.py [comando] [opciones]")
         print("Comandos disponibles: current, heads, history, upgrade, downgrade, stamp")
         sys.exit(1)
-    
+
     cmd = sys.argv[1].lower()
     args = sys.argv[2:] if len(sys.argv) > 2 else []
-    
+
     if cmd == "current":
         command.current(cfg, verbose=True)
     elif cmd == "heads":
@@ -87,7 +87,7 @@ try:
         print(f"[ERROR] Comando desconocido: {cmd}")
         print("Comandos disponibles: current, heads, history, upgrade, downgrade, stamp")
         sys.exit(1)
-        
+
 except ImportError as e:
     print(f"[ERROR] Alembic no esta instalado: {e}")
     sys.exit(1)

@@ -130,20 +130,20 @@ Para verificar en DBeaver:
 
 ```sql
 -- Ver la sugerencia de tasa en la evaluación
-SELECT 
+SELECT
     prestamo_id,
     clasificacion_riesgo,
     tasa_interes_aplicada,  -- SUGERENCIA
     decision_final
-FROM prestamos_evaluacion 
+FROM prestamos_evaluacion
 WHERE prestamo_id = 9;
 
 -- Ver la tasa REAL aplicada al préstamo
-SELECT 
+SELECT
     id,
     tasa_interes,  -- TASA REAL APLICADA
     estado
-FROM prestamos 
+FROM prestamos
 WHERE id = 9;
 ```
 

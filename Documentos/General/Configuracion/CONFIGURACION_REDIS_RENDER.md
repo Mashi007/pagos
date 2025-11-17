@@ -101,7 +101,7 @@ redis://default:password@red-xxxxx:6379
 
 #### Error: "Connection refused"
 **Causa:** Redis no está corriendo o URL incorrecta
-**Solución:** 
+**Solución:**
 - Verificar que el servicio Redis esté activo en Render
 - Verificar que la URL sea correcta
 

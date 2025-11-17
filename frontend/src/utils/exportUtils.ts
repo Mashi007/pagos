@@ -29,7 +29,7 @@ export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) =>
   try {
     // Importar dinámicamente exceljs
     const { createAndDownloadExcel } = await import('@/types/exceljs')
-    
+
     // Crear datos para Excel
     const datos = cuotas.map(cuota => ({
       'Cuota': cuota.numero_cuota,
@@ -74,7 +74,7 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
       import('jspdf'),
       import('jspdf-autotable')
     ])
-    
+
     // jspdf 3.x usa named export
     const { jsPDF } = jsPDFModule
     // jspdf-autotable 5.x usa default export
@@ -103,9 +103,9 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
 
     // Fecha del reporte
     doc.setFontSize(10)
-    const fechaReporte = new Date().toLocaleDateString('es-ES', { 
-      year: 'numeric', 
-      month: 'long', 
+    const fechaReporte = new Date().toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
@@ -115,7 +115,7 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     // INFORMACIÓN DEL CLIENTE
     doc.setFillColor(245, 245, 250)
     doc.rect(10, 45, 190, 40, 'F')
-    
+
     doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(0, 0, 0)
@@ -133,7 +133,7 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
     doc.text('TABLA DE AMORTIZACIÓN', 15, 92)
-    
+
     // Preparar datos para la tabla
     const datosTabla = cuotas.map(cuota => [
       cuota.numero_cuota.toString(),
@@ -180,7 +180,7 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
 
     doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
     doc.rect(10, resumenY, 190, 20, 'F')
-    
+
     doc.setFontSize(11)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(255, 255, 255)

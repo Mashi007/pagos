@@ -41,17 +41,17 @@ export function Welcome() {
             <div className="inline-flex items-center justify-center w-28 h-28 bg-white rounded-2xl shadow-2xl mb-8 p-4 border-4 border-white/90 ring-4 ring-gray-100/60">
               <Logo size="xl" className="drop-shadow-xl brightness-110 contrast-125" />
             </div>
-            
+
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-6 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-clip-text text-transparent">
               RAPICREDIT
             </h1>
-            
+
             <p className="text-xl sm:text-2xl text-gray-600 font-medium mb-4">
               Sistema de Gestión de Préstamos y Cobranzas
             </p>
-            
+
             <p className="text-lg text-gray-500 max-w-2xl mx-auto mb-12">
-              Plataforma integral para la administración eficiente de operaciones crediticias, 
+              Plataforma integral para la administración eficiente de operaciones crediticias,
               control de pagos y gestión de clientes.
             </p>
           </motion.div>

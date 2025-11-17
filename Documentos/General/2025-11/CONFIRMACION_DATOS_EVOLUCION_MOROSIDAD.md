@@ -1,6 +1,6 @@
 # 📊 CONFIRMACIÓN: FUENTE DE DATOS - GRÁFICO "EVOLUCIÓN DE MOROSIDAD"
 
-**Fecha:** 2025-01-04  
+**Fecha:** 2025-01-04
 **Gráfico:** Evolución de Morosidad (Line Chart)
 
 ---
@@ -165,7 +165,7 @@ def obtener_evolucion_morosidad(
         # Query optimizada: GROUP BY por mes y año (usar bindparams para seguridad)
         query_sql = text(
             """
-            SELECT 
+            SELECT
                 EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
                 EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
                 COALESCE(SUM(c.monto_cuota), 0) as morosidad
@@ -213,13 +213,13 @@ def obtener_evolucion_morosidad(
 ### **Query Principal:**
 
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
     EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
     COALESCE(SUM(c.monto_cuota), 0) as morosidad
 FROM cuotas c
 INNER JOIN prestamos p ON c.prestamo_id = p.id
-WHERE 
+WHERE
     p.estado = 'APROBADO'
     AND c.fecha_vencimiento >= :fecha_inicio
     AND c.fecha_vencimiento < :fecha_fin_total
@@ -349,13 +349,13 @@ GET /api/v1/dashboard/evolucion-morosidad?meses=6&analista=Juan%20Pérez&concesi
 
 3. **Ejecutar query SQL directamente:**
    ```sql
-   SELECT 
+   SELECT
        EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
        EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
        COALESCE(SUM(c.monto_cuota), 0) as morosidad
    FROM cuotas c
    INNER JOIN prestamos p ON c.prestamo_id = p.id
-   WHERE 
+   WHERE
        p.estado = 'APROBADO'
        AND c.fecha_vencimiento >= CURRENT_DATE - INTERVAL '6 months'
        AND c.fecha_vencimiento < CURRENT_DATE
@@ -384,6 +384,6 @@ GET /api/v1/dashboard/evolucion-morosidad?meses=6&analista=Juan%20Pérez&concesi
 
 ---
 
-**Documento generado automáticamente**  
+**Documento generado automáticamente**
 **Última actualización:** 2025-01-04
 

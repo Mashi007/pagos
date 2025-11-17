@@ -102,5 +102,5 @@ Esta carpeta contiene 5 scripts PowerShell esenciales para el sistema RapiCredit
 
 ---
 
-**📅 Última actualización**: 2025-10-16  
+**📅 Última actualización**: 2025-10-16
 **🔧 Estado**: CERTIFICADOS Y LISTOS PARA PRODUCCIÓN

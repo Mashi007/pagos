@@ -97,7 +97,7 @@ if prestamo.fecha_base_calculo:  # ✅ VALIDA QUE TENGA FECHA MANUAL
             fecha = date_parse(prestamo.fecha_base_calculo).date()
         else:
             fecha = prestamo.fecha_base_calculo  # ✅ USA FECHA MANUAL DEL OPERADOR
-        
+
         generar_amortizacion(prestamo, fecha, db)  # ✅ PASA FECHA MANUAL COMO PARÁMETRO
         logger.info(
             f"Tabla de amortización generada para préstamo {prestamo.id} con fecha de desembolso: {fecha}"
@@ -126,12 +126,12 @@ def generar_tabla_amortizacion(
         db: Sesión de base de datos
     """
     # ... código ...
-    
+
     # Generar cada cuota
     for numero_cuota in range(1, prestamo.numero_cuotas + 1):
         # ✅ Fecha de vencimiento CALCULADA desde fecha_base MANUAL
         fecha_vencimiento = fecha_base + timedelta(days=intervalo_dias * numero_cuota)
-        
+
         # Crear cuota con fecha calculada
         cuota = Cuota(
             prestamo_id=prestamo.id,

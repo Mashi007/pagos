@@ -49,12 +49,12 @@ class Logger {
     if (this.isDevelopment) {
       return true // En desarrollo, logear todo
     }
-    
+
     if (this.isProduction) {
       // En producción, solo logear warn y error
       return level === 'warn' || level === 'error'
     }
-    
+
     return true
   }
 
@@ -72,7 +72,7 @@ class Logger {
         error: '\x1b[31m', // Red
         reset: '\x1b[0m'   // Reset
       }
-      
+
       console.log(
         `${colors[entry.level]}[${entry.level.toUpperCase()}]${colors.reset} ` +
         `${entry.timestamp} [${entry.component}] ${entry.message}`,
@@ -80,9 +80,9 @@ class Logger {
       )
     } else {
       // En producción, usar console estándar para compatibilidad
-      const method = entry.level === 'error' ? 'error' : 
+      const method = entry.level === 'error' ? 'error' :
                     entry.level === 'warn' ? 'warn' : 'log'
-      
+
       console[method](JSON.stringify(entry))
     }
   }

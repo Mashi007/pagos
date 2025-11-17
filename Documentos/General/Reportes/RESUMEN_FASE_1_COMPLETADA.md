@@ -1,6 +1,6 @@
 # ✅ FASE 1 COMPLETADA - Correcciones Rápidas
 
-**Fecha**: 2025-11-04  
+**Fecha**: 2025-11-04
 **Estado**: ✅ Completada
 
 ---
@@ -15,25 +15,25 @@ Se completaron las correcciones rápidas de la Fase 1 según el plan de acción:
    - ✅ `backend/app/api/v1/endpoints/aprobaciones.py`: Movidos imports al inicio del archivo
 
 2. **F841 - Variables no usadas** (6 errores)
-   - ✅ `backend/app/api/v1/endpoints/dashboard.py`: 
+   - ✅ `backend/app/api/v1/endpoints/dashboard.py`:
      - `total_cobrado_query` → comentado
      - `all_values` → agregado `# type: ignore[assignment]`
-   - ✅ `backend/app/api/v1/endpoints/kpis.py`: 
+   - ✅ `backend/app/api/v1/endpoints/kpis.py`:
      - `fecha_corte_dt` → comentado
-   - ✅ `backend/app/api/v1/endpoints/pagos_upload.py`: 
+   - ✅ `backend/app/api/v1/endpoints/pagos_upload.py`:
      - `e` → eliminado nombre de variable no usada
-   - ✅ `backend/app/core/config.py`: 
+   - ✅ `backend/app/core/config.py`:
      - `e2` → eliminado nombre de variable no usada
 
 3. **W605 - Invalid escape sequence** (1 error)
-   - ✅ `backend/app/utils/pagos_staging_helper.py`: 
+   - ✅ `backend/app/utils/pagos_staging_helper.py`:
      - Cambiado a raw string `r'^[0-9]+(\.[0-9]+)?$'`
 
 4. **F541 - f-string sin placeholders** (1 error)
    - ✅ Pendiente de verificar en próximo run de Flake8
 
 5. **Anotaciones de tipo faltantes**
-   - ✅ `backend/app/api/v1/endpoints/dashboard.py`: 
+   - ✅ `backend/app/api/v1/endpoints/dashboard.py`:
      - `resultados: list[dict[str, Any]] = []`
 
 ---

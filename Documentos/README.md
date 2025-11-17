@@ -51,5 +51,5 @@ Esta documentación proporciona:
 
 ---
 
-**📅 Última actualización**: 2025-10-16  
+**📅 Última actualización**: 2025-10-16
 **🔒 Estado**: CERTIFICADO PARA PRODUCCIÓN

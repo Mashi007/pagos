@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Generator
 
-from fastapi import HTTPException  # type: ignore[import-untyped]
+from fastapi import HTTPException, RequestValidationError  # type: ignore[import-untyped]
 from sqlalchemy import create_engine, text  # type: ignore[import-untyped]
 from sqlalchemy.ext.declarative import declarative_base  # type: ignore[import-untyped]
 from sqlalchemy.orm import sessionmaker  # type: ignore[import-untyped]
@@ -120,9 +120,14 @@ def get_db() -> Generator:
             # Re-lanzar errores de autenticación sin modificar
             raise e
 
-        # NO sobrescribir HTTPException
+        # NO sobrescribir HTTPException ni RequestValidationError
         if isinstance(e, HTTPException):
             # Re-lanzar HTTPException sin modificar (preservar mensaje)
+            raise e
+        
+        # NO manejar RequestValidationError de FastAPI (errores de validación de parámetros)
+        if isinstance(e, RequestValidationError):
+            # Re-lanzar RequestValidationError sin modificar
             raise e
 
         # Solo manejar errores reales de DB

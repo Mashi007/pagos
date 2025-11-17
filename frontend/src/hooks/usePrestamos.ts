@@ -115,25 +115,25 @@ export function useUpdatePrestamo() {
     onSuccess: async (data, variables) => {
       // Actualizar datos del cache directamente con la respuesta del servidor
       queryClient.setQueryData(prestamoKeys.detail(variables.id), data)
-      
+
       // Si el estado cambió a APROBADO, actualizar todas las listas
       if (data.estado === 'APROBADO') {
         // Remover cache stale para forzar refetch
         queryClient.removeQueries({ queryKey: prestamoKeys.lists() })
         queryClient.removeQueries({ queryKey: prestamoKeys.all })
       }
-      
+
       // Invalidar todas las queries
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
       queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
-      
+
       // Forzar refetch inmediato ignorando staleTime
-      await queryClient.refetchQueries({ 
+      await queryClient.refetchQueries({
         queryKey: prestamoKeys.all,
         exact: false,
         type: 'active'
       })
-      
+
       toast.success('Préstamo actualizado exitosamente. El dashboard se ha actualizado.')
     },
     onError: (error: any) => {
@@ -198,22 +198,22 @@ export function useAplicarCondicionesAprobacion() {
     onSuccess: async (data, variables) => {
       // Actualizar datos del cache directamente con la respuesta del servidor
       queryClient.setQueryData(prestamoKeys.detail(variables.prestamoId), data)
-      
+
       // Remover cache stale para forzar refetch (especialmente importante cuando estado = APROBADO)
       queryClient.removeQueries({ queryKey: prestamoKeys.lists() })
       queryClient.removeQueries({ queryKey: prestamoKeys.all })
-      
+
       // Invalidar todas las queries
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
       queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
-      
+
       // Forzar refetch inmediato ignorando staleTime
-      await queryClient.refetchQueries({ 
+      await queryClient.refetchQueries({
         queryKey: prestamoKeys.all,
         exact: false,
         type: 'active'
       })
-      
+
       toast.success('Préstamo aprobado exitosamente. La tabla de amortización ha sido generada. El dashboard se ha actualizado.')
     },
     onError: (error: any) => {

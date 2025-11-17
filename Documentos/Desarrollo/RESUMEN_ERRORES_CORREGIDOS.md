@@ -3,7 +3,7 @@
 ## 🔍 ERRORES ENCONTRADOS EN LOGS
 
 ### 1. **TypeScript Error - Property 'apellidos' missing** (CRÍTICO)
-- **Archivos afectados**: 
+- **Archivos afectados**:
   - `frontend/src/types/index.ts` - Interface `ClienteForm` tenía `apellidos: string`
   - `frontend/src/components/clientes/CrearClienteForm.tsx` - Referencias a `apellidos`
   - `frontend/src/components/clientes/ConfirmacionDuplicadoModal.tsx` - Referencias a `apellidos`

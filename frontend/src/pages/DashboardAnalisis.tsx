@@ -161,11 +161,11 @@ export function DashboardAnalisis() {
 
   // Calcular variación mes anterior y crecimiento anual desde datos reales
   const variacionMesAnterior = kpisPrincipales?.variacion_mes_anterior || 0
-  
+
   // Calcular crecimiento anual comparando mes actual con mismo mes del año anterior
   // Usar evolucion_mensual si está disponible, o estimar desde variación mensual
   let crecimientoAnual = 0
-  
+
   if (datosEvolucionMensual.length >= 12) {
     // Si tenemos 12 meses de datos, comparar mes actual (último) con mes del año anterior (hace 12 meses)
     const mesActual = datosEvolucionMensual[datosEvolucionMensual.length - 1]

@@ -1,6 +1,6 @@
 # 📊 ANÁLISIS DE LOGS POST-DEPLOY
 
-**Fecha**: 2025-11-04 14:50 UTC  
+**Fecha**: 2025-11-04 14:50 UTC
 **Commit deploy**: `6d8d20fa` - fix: Corregir cálculo de promedio_dias_mora
 
 ---
@@ -50,7 +50,7 @@ Los tiempos altos (19-27 segundos) sugieren que **la migración de índices func
 
 **Endpoints afectados:**
 - `/dashboard/evolucion-pagos` (25.4s)
-- `/dashboard/cobranzas-mensuales` (27.2s)  
+- `/dashboard/cobranzas-mensuales` (27.2s)
 - `/dashboard/evolucion-morosidad` (19.1s)
 
 Estos endpoints usan `GROUP BY EXTRACT(YEAR, MONTH FROM fecha)` que requiere los índices funcionales.
@@ -83,7 +83,7 @@ En Render Dashboard → `pagos-backend` → Logs → Sección "Release":
 **Si tienes acceso a PostgreSQL**, ejecutar:
 
 ```sql
-SELECT 
+SELECT
     tablename,
     indexname,
     indexdef

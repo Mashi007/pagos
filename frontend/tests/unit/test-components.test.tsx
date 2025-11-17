@@ -50,7 +50,7 @@ describe('CrearClienteForm', () => {
 
   it('debería renderizar el formulario correctamente', () => {
     renderWithRouter(<CrearClienteForm />)
-    
+
     expect(screen.getByLabelText(/cédula/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/nombres/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/apellidos/i)).toBeInTheDocument()
@@ -62,10 +62,10 @@ describe('CrearClienteForm', () => {
   it('debería mostrar errores de validación', async () => {
     const user = userEvent.setup()
     renderWithRouter(<CrearClienteForm />)
-    
+
     const submitButton = screen.getByRole('button', { name: /guardar/i })
     await user.click(submitButton)
-    
+
     await waitFor(() => {
       expect(screen.getByText(/cédula es requerida/i)).toBeInTheDocument()
       expect(screen.getByText(/nombres son requeridos/i)).toBeInTheDocument()
@@ -75,24 +75,24 @@ describe('CrearClienteForm', () => {
   it('debería enviar el formulario con datos válidos', async () => {
     const user = userEvent.setup()
     const mockCreateCliente = vi.fn().mockResolvedValue({ id: 1 })
-    
+
     // Mock del servicio
     const { clienteService } = await import('@/services/clienteService')
     clienteService.createCliente = mockCreateCliente
-    
+
     renderWithRouter(<CrearClienteForm />)
-    
+
     // Llenar formulario
     await user.type(screen.getByLabelText(/cédula/i), 'V12345678')
     await user.type(screen.getByLabelText(/nombres/i), 'Juan')
     await user.type(screen.getByLabelText(/apellidos/i), 'Pérez')
     await user.type(screen.getByLabelText(/teléfono/i), '+58412123456')
     await user.type(screen.getByLabelText(/email/i), 'juan@example.com')
-    
+
     // Enviar formulario
     const submitButton = screen.getByRole('button', { name: /guardar/i })
     await user.click(submitButton)
-    
+
     await waitFor(() => {
       expect(mockCreateCliente).toHaveBeenCalledWith({
         cedula: 'V12345678',
@@ -122,21 +122,21 @@ describe('CrearClienteForm', () => {
         }
       }
     })
-    
+
     const { clienteService } = await import('@/services/clienteService')
     clienteService.createCliente = mockCreateCliente
-    
+
     renderWithRouter(<CrearClienteForm />)
-    
+
     // Llenar formulario
     await user.type(screen.getByLabelText(/cédula/i), 'V12345678')
     await user.type(screen.getByLabelText(/nombres/i), 'Juan')
     await user.type(screen.getByLabelText(/apellidos/i), 'Pérez')
-    
+
     // Enviar formulario
     const submitButton = screen.getByRole('button', { name: /guardar/i })
     await user.click(submitButton)
-    
+
     await waitFor(() => {
       expect(screen.getByText(/cédula duplicada/i)).toBeInTheDocument()
       expect(screen.getByText(/¿desea continuar/i)).toBeInTheDocument()
@@ -177,12 +177,12 @@ describe('ClientesList', () => {
       page: 1,
       per_page: 20
     })
-    
+
     const { clienteService } = await import('@/services/clienteService')
     clienteService.getClientes = mockGetClientes
-    
+
     renderWithRouter(<ClientesList />)
-    
+
     await waitFor(() => {
       expect(screen.getByText('Juan Pérez')).toBeInTheDocument()
       expect(screen.getByText('María González')).toBeInTheDocument()
@@ -196,12 +196,12 @@ describe('ClientesList', () => {
       page: 1,
       per_page: 20
     })
-    
+
     const { clienteService } = await import('@/services/clienteService')
     clienteService.getClientes = mockGetClientes
-    
+
     renderWithRouter(<ClientesList />)
-    
+
     await waitFor(() => {
       expect(screen.getByText(/no hay clientes/i)).toBeInTheDocument()
     })
@@ -215,15 +215,15 @@ describe('ClientesList', () => {
       page: 1,
       per_page: 20
     })
-    
+
     const { clienteService } = await import('@/services/clienteService')
     clienteService.getClientes = mockGetClientes
-    
+
     renderWithRouter(<ClientesList />)
-    
+
     const searchInput = screen.getByPlaceholderText(/buscar/i)
     await user.type(searchInput, 'Juan')
-    
+
     await waitFor(() => {
       expect(mockGetClientes).toHaveBeenCalledWith({
         search: 'Juan',
@@ -241,7 +241,7 @@ describe('LoginForm', () => {
 
   it('debería renderizar el formulario de login', () => {
     renderWithRouter(<LoginForm />)
-    
+
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/contraseña/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /iniciar sesión/i })).toBeInTheDocument()
@@ -250,10 +250,10 @@ describe('LoginForm', () => {
   it('debería mostrar errores de validación', async () => {
     const user = userEvent.setup()
     renderWithRouter(<LoginForm />)
-    
+
     const submitButton = screen.getByRole('button', { name: /iniciar sesión/i })
     await user.click(submitButton)
-    
+
     await waitFor(() => {
       expect(screen.getByText(/email es requerido/i)).toBeInTheDocument()
       expect(screen.getByText(/contraseña es requerida/i)).toBeInTheDocument()
@@ -266,18 +266,18 @@ describe('LoginForm', () => {
       access_token: 'mock-token',
       token_type: 'bearer'
     })
-    
+
     const { authService } = await import('@/services/authService')
     authService.login = mockLogin
-    
+
     renderWithRouter(<LoginForm />)
-    
+
     await user.type(screen.getByLabelText(/email/i), 'test@example.com')
     await user.type(screen.getByLabelText(/contraseña/i), 'password123')
-    
+
     const submitButton = screen.getByRole('button', { name: /iniciar sesión/i })
     await user.click(submitButton)
-    
+
     await waitFor(() => {
       expect(mockLogin).toHaveBeenCalledWith({
         email: 'test@example.com',
@@ -296,18 +296,18 @@ describe('LoginForm', () => {
         }
       }
     })
-    
+
     const { authService } = await import('@/services/authService')
     authService.login = mockLogin
-    
+
     renderWithRouter(<LoginForm />)
-    
+
     await user.type(screen.getByLabelText(/email/i), 'invalid@example.com')
     await user.type(screen.getByLabelText(/contraseña/i), 'wrongpassword')
-    
+
     const submitButton = screen.getByRole('button', { name: /iniciar sesión/i })
     await user.click(submitButton)
-    
+
     await waitFor(() => {
       expect(screen.getByText(/credenciales incorrectas/i)).toBeInTheDocument()
     })
@@ -326,7 +326,7 @@ describe('Sidebar', () => {
 
   it('debería renderizar el sidebar correctamente', () => {
     renderWithRouter(<Sidebar user={mockUser} />)
-    
+
     expect(screen.getByText(/clientes/i)).toBeInTheDocument()
     expect(screen.getByText(/préstamos/i)).toBeInTheDocument()
     expect(screen.getByText(/pagos/i)).toBeInTheDocument()
@@ -335,14 +335,14 @@ describe('Sidebar', () => {
   it('debería mostrar opciones de admin para usuarios admin', () => {
     const adminUser = { ...mockUser, is_admin: true }
     renderWithRouter(<Sidebar user={adminUser} />)
-    
+
     expect(screen.getByText(/configuración/i)).toBeInTheDocument()
     expect(screen.getByText(/usuarios/i)).toBeInTheDocument()
   })
 
   it('debería ocultar opciones de admin para usuarios normales', () => {
     renderWithRouter(<Sidebar user={mockUser} />)
-    
+
     expect(screen.queryByText(/configuración/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/usuarios/i)).not.toBeInTheDocument()
   })
@@ -360,14 +360,14 @@ describe('Header', () => {
 
   it('debería renderizar el header correctamente', () => {
     renderWithRouter(<Header user={mockUser} />)
-    
+
     expect(screen.getByText(/sistema de préstamos/i)).toBeInTheDocument()
     expect(screen.getByText(/test user/i)).toBeInTheDocument()
   })
 
   it('debería mostrar botón de logout', () => {
     renderWithRouter(<Header user={mockUser} />)
-    
+
     expect(screen.getByRole('button', { name: /cerrar sesión/i })).toBeInTheDocument()
   })
 })
@@ -375,7 +375,7 @@ describe('Header', () => {
 describe('Footer', () => {
   it('debería renderizar el footer correctamente', () => {
     renderWithRouter(<Footer />)
-    
+
     expect(screen.getByText(/© 2025/i)).toBeInTheDocument()
     expect(screen.getByText(/rapicredit/i)).toBeInTheDocument()
   })

@@ -138,7 +138,7 @@ Si no da error, la tabla está creada correctamente ✅
 
 ```sql
 -- Total de registros cargados
-SELECT 
+SELECT
     'Total registros en tabla temporal' AS metrica,
     COUNT(*) AS cantidad
 FROM fechas_aprobacion_temp;
@@ -150,7 +150,7 @@ FROM fechas_aprobacion_temp;
 
 ```sql
 -- Verificar duplicados por cédula
-SELECT 
+SELECT
     cedula,
     COUNT(*) AS cantidad_veces,
     STRING_AGG(fecha_aprobacion::TEXT, ', ') AS fechas
@@ -166,7 +166,7 @@ HAVING COUNT(*) > 1;
 
 ```sql
 -- Ejemplo de datos cargados (primeros 10)
-SELECT 
+SELECT
     id,
     cedula,
     fecha_aprobacion,
@@ -187,7 +187,7 @@ LIMIT 10;
 
 ```sql
 -- Cuántos préstamos coinciden con las cédulas en la tabla temporal
-SELECT 
+SELECT
     'Préstamos que coinciden con tabla temporal' AS metrica,
     COUNT(DISTINCT p.id) AS cantidad_prestamos
 FROM prestamos p
@@ -201,7 +201,7 @@ WHERE p.estado = 'APROBADO';
 
 ```sql
 -- Préstamos aprobados que NO están en tabla temporal
-SELECT 
+SELECT
     'Préstamos aprobados SIN fecha en tabla temporal' AS metrica,
     COUNT(DISTINCT p.id) AS cantidad
 FROM prestamos p
@@ -222,7 +222,7 @@ WHERE p.estado = 'APROBADO'
 
 ```sql
 -- Total de préstamos que se actualizarán
-SELECT 
+SELECT
     'Préstamos que se actualizarán' AS metrica,
     COUNT(DISTINCT p.id) AS cantidad
 FROM prestamos p
@@ -237,7 +237,7 @@ WHERE p.estado = 'APROBADO';
 ```sql
 -- Actualizar fecha_aprobacion
 UPDATE prestamos p
-SET 
+SET
     fecha_aprobacion = f.fecha_aprobacion::TIMESTAMP,
     fecha_actualizacion = CURRENT_TIMESTAMP
 FROM fechas_aprobacion_temp f
@@ -253,7 +253,7 @@ WHERE p.cedula = f.cedula
 ```sql
 -- Actualizar fecha_base_calculo
 UPDATE prestamos p
-SET 
+SET
     fecha_base_calculo = f.fecha_aprobacion,
     fecha_actualizacion = CURRENT_TIMESTAMP
 FROM fechas_aprobacion_temp f
@@ -272,7 +272,7 @@ WHERE p.cedula = f.cedula
 
 ```sql
 -- Verificar que las fechas se actualizaron
-SELECT 
+SELECT
     'Préstamos con fecha_aprobacion actualizada' AS metrica,
     COUNT(*) AS cantidad
 FROM prestamos p
@@ -281,7 +281,7 @@ WHERE p.estado = 'APROBADO'
     AND DATE(p.fecha_aprobacion) = f.fecha_aprobacion;
 
 -- Verificar coincidencia entre fecha_aprobacion y fecha_base_calculo
-SELECT 
+SELECT
     'Préstamos donde fecha_base_calculo = fecha_aprobacion' AS metrica,
     COUNT(*) AS cantidad
 FROM prestamos
@@ -295,13 +295,13 @@ WHERE estado = 'APROBADO'
 
 ```sql
 -- Ejemplo de préstamos actualizados (primeros 10)
-SELECT 
+SELECT
     p.id,
     p.cedula,
     p.nombres,
     DATE(p.fecha_aprobacion) AS fecha_aprobacion_date,
     p.fecha_base_calculo,
-    CASE 
+    CASE
         WHEN DATE(p.fecha_aprobacion) = p.fecha_base_calculo THEN '✅ COINCIDEN'
         ELSE '❌ NO COINCIDEN'
     END AS verificacion
@@ -335,7 +335,7 @@ DROP TABLE IF EXISTS fechas_aprobacion_temp;
 - **Solución:** Verifica que los encabezados en tu CSV sean exactamente: `cedula,fecha_aprobacion`
 
 ### "0 rows updated"
-- **Solución:** 
+- **Solución:**
   - Verifica que las cédulas en tu CSV coincidan exactamente con las de la base de datos
   - Verifica que los préstamos estén en estado 'APROBADO'
   - Ejecuta el PASO 4 para verificar coincidencias

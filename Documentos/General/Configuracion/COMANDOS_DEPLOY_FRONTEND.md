@@ -203,7 +203,7 @@ Si funciona localmente, el problema puede ser:
 ### Problema: Los cambios no aparecen después del deploy
 
 **Posibles causas:**
-1. **Cache del navegador**: 
+1. **Cache del navegador**:
    - Presiona `Ctrl + Shift + R` (hard refresh)
    - O abre en modo incógnito
 

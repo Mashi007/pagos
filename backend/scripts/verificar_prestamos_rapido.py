@@ -58,10 +58,10 @@ def verificar_rapido():
         año_actual = hoy.year
         fecha_inicio = date(año_actual, 1, 1)
         fecha_fin = date(año_actual, 12, 31)
-        
+
         print(f"📅 Verificando rango del año {año_actual}: {fecha_inicio} a {fecha_fin}")
         print()
-        
+
         # Con al menos una fecha en el rango
         en_rango = db.query(Prestamo).filter(
             and_(
@@ -112,7 +112,7 @@ def verificar_rapido():
             )
         ).count()
         print(f"   • Con fecha_registro: {con_fecha_registro:,}")
-        
+
         con_fecha_aprobacion = db.query(Prestamo).filter(
             and_(
                 Prestamo.estado == "APROBADO",
@@ -122,7 +122,7 @@ def verificar_rapido():
             )
         ).count()
         print(f"   • Con fecha_aprobacion: {con_fecha_aprobacion:,}")
-        
+
         con_fecha_base = db.query(Prestamo).filter(
             and_(
                 Prestamo.estado == "APROBADO",
@@ -132,7 +132,7 @@ def verificar_rapido():
             )
         ).count()
         print(f"   • Con fecha_base_calculo: {con_fecha_base:,}")
-        
+
         sin_ninguna_fecha = db.query(Prestamo).filter(
             and_(
                 Prestamo.estado == "APROBADO",
@@ -156,7 +156,7 @@ def verificar_rapido():
                     Prestamo.fecha_registro.isnot(None)
                 )
             ).scalar()
-            
+
             max_fecha_registro = db.query(func.max(Prestamo.fecha_registro)).filter(
                 and_(
                     Prestamo.estado == "APROBADO",
@@ -165,7 +165,7 @@ def verificar_rapido():
                     Prestamo.fecha_registro.isnot(None)
                 )
             ).scalar()
-            
+
             min_fecha_aprobacion = db.query(func.min(Prestamo.fecha_aprobacion)).filter(
                 and_(
                     Prestamo.estado == "APROBADO",
@@ -174,7 +174,7 @@ def verificar_rapido():
                     Prestamo.fecha_aprobacion.isnot(None)
                 )
             ).scalar()
-            
+
             max_fecha_aprobacion = db.query(func.max(Prestamo.fecha_aprobacion)).filter(
                 and_(
                     Prestamo.estado == "APROBADO",
@@ -183,7 +183,7 @@ def verificar_rapido():
                     Prestamo.fecha_aprobacion.isnot(None)
                 )
             ).scalar()
-            
+
             print("📅 Rangos de fechas:")
             if min_fecha_registro:
                 print(f"   • fecha_registro: {min_fecha_registro} a {max_fecha_registro}")
@@ -196,7 +196,7 @@ def verificar_rapido():
         print("📋 DIAGNÓSTICO:")
         print("=" * 80)
         print()
-        
+
         if aprobados == 0:
             print("❌ PROBLEMA: No hay préstamos con estado='APROBADO'")
             print(f"   → Total préstamos: {total:,}")
@@ -224,7 +224,7 @@ def verificar_rapido():
         else:
             print(f"⚠️  No hay préstamos válidos en ningún caso")
             print(f"   → Préstamos válidos: {sin_filtro_fecha:,}")
-        
+
         print()
 
     except Exception as e:

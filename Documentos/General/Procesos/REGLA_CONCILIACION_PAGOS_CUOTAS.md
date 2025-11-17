@@ -1,6 +1,6 @@
 # 🔒 Regla de Negocio: Conciliación de Pagos y Aplicación a Cuotas
 
-> **Regla crítica del sistema**  
+> **Regla crítica del sistema**
 > Última actualización: 2025-11-06
 
 ---

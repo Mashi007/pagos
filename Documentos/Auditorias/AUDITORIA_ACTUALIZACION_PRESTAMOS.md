@@ -1,7 +1,7 @@
 # 🔍 AUDITORÍA - SISTEMA DE ACTUALIZACIÓN DE PRÉSTAMOS
 
-**Fecha de Auditoría:** 28 de Enero 2025  
-**Auditor:** AI Assistant  
+**Fecha de Auditoría:** 28 de Enero 2025
+**Auditor:** AI Assistant
 **Versión del Sistema:** 1.0.0
 
 ---
@@ -137,29 +137,29 @@ def aplicar_cambios_prestamo(prestamo: Prestamo, prestamo_data: PrestamoUpdate):
 ```python
 class PrestamoAuditoria(Base):
     """Auditoría completa de cambios en préstamos."""
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    
+
     # Referencia al préstamo
     prestamo_id = Column(Integer, nullable=False, index=True)
     cedula = Column(String(20), nullable=False, index=True)
-    
+
     # Usuario que realiza el cambio
     usuario = Column(String(100), nullable=False)  # Email del usuario
-    
+
     # Campo modificado
     campo_modificado = Column(String(100), nullable=False)
     valor_anterior = Column(Text, nullable=True)
     valor_nuevo = Column(Text, nullable=False)
-    
+
     # Contexto del cambio
     accion = Column(String(50), nullable=False)  # "EDITAR", "APROBAR", etc.
     estado_anterior = Column(String(20), nullable=True)
     estado_nuevo = Column(String(20), nullable=True)
-    
+
     # Observaciones adicionales
     observaciones = Column(Text, nullable=True)
-    
+
     # Fecha del cambio
     fecha_cambio = Column(TIMESTAMP, nullable=False, default=func.now())
 ```
@@ -192,17 +192,17 @@ export function useUpdatePrestamo() {
     onSuccess: (data, variables) => {
       // Actualizar datos del cache directamente con la respuesta del servidor
       queryClient.setQueryData(prestamoKeys.detail(variables.id), data)
-      
+
       // Invalidar todas las queries para forzar refetch
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
       queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
-      
+
       // Refetch específico para asegurar actualización
-      queryClient.refetchQueries({ 
+      queryClient.refetchQueries({
         queryKey: prestamoKeys.all,
-        exact: false 
+        exact: false
       })
-      
+
       toast.success('Préstamo actualizado exitosamente')
     },
     onError: (error: any) => {
@@ -227,17 +227,17 @@ export function useUpdatePrestamo() {
 export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestamoFormProps) {
   const createPrestamo = useCreatePrestamo()
   const updatePrestamo = useUpdatePrestamo()
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     try {
       const prestamoData = {
         ...formData,
         numero_cuotas: numeroCuotas,
         cuota_periodo: cuotaPeriodo,
       }
-      
+
       if (prestamo) {
         // Editar préstamo existente
         await updatePrestamo.mutateAsync({
@@ -248,7 +248,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
         // Crear nuevo préstamo
         await createPrestamo.mutateAsync(prestamoData as PrestamoForm)
       }
-      
+
       onSuccess()  // Cierra el modal y refresca la lista
       onClose()
     } catch (error) {

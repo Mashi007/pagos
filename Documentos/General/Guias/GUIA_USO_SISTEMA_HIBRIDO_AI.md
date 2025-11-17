@@ -61,7 +61,7 @@ Asunto: Recordatorio de Pago - {{resumen_bd}}
 Cuerpo:
 Estimado/a {{resumen_bd}},
 
-Le recordamos que tiene un pago pendiente de {{monto}} VES 
+Le recordamos que tiene un pago pendiente de {{monto}} VES
 con fecha de vencimiento {{fecha_vencimiento}}.
 ```
 
@@ -223,7 +223,7 @@ Usuario: "¿Cuántos días de gracia tengo para pagar?"
 Sistema RAG:
 1. Busca en documentos: "Políticas de Pago"
 2. Encuentra: "Los clientes tienen 5 días de gracia después del vencimiento"
-3. Responde: "Según nuestras políticas, tienes 5 días de gracia después 
+3. Responde: "Según nuestras políticas, tienes 5 días de gracia después
    de la fecha de vencimiento de tu cuota."
 ```
 

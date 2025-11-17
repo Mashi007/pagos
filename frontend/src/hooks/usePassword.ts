@@ -26,27 +26,27 @@ export const usePassword = (options: UsePasswordOptions = {}) => {
     const numberChars = '0123456789'
     const symbolChars = '!@#$%^&*'
     const allChars = uppercaseChars + lowercaseChars + numberChars + symbolChars
-    
+
     let newPassword = ''
-    
+
     // Asegurar al menos un carácter de cada tipo
     newPassword += uppercaseChars.charAt(Math.floor(Math.random() * uppercaseChars.length))
     newPassword += lowercaseChars.charAt(Math.floor(Math.random() * lowercaseChars.length))
     newPassword += numberChars.charAt(Math.floor(Math.random() * numberChars.length))
     newPassword += symbolChars.charAt(Math.floor(Math.random() * symbolChars.length))
-    
+
     // Completar hasta longitud deseada
     for (let i = MIN_REQUIRED_CHARS; i < PASSWORD_LENGTH; i++) {
       newPassword += allChars.charAt(Math.floor(Math.random() * allChars.length))
     }
-    
+
     // Mezclar los caracteres
     const shuffledPassword = newPassword.split('').sort(() => Math.random() - 0.5).join('')
-    
+
     setPassword(shuffledPassword)
     options.onPasswordChange?.(shuffledPassword)
     toast.success('Contraseña generada automáticamente')
-    
+
     return shuffledPassword
   }
 

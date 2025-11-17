@@ -70,7 +70,7 @@ Además de los índices del script, ya tienes muchos otros índices útiles:
 - `idx_cuotas_fecha_vencimiento_estado` (fecha_vencimiento + estado)
 - `idx_cuotas_fecha_vencimiento_ym` (EXTRACT año/mes) ✅ **Del script**
 
-**Análisis:** 
+**Análisis:**
 - El índice funcional `idx_cuotas_fecha_vencimiento_ym` es el más específico para GROUP BY
 - Los otros pueden ser útiles para filtros simples
 - **Recomendación:** Mantener todos, cada uno optimiza diferentes queries
@@ -121,8 +121,8 @@ Además de los índices del script, ya tienes muchos otros índices útiles:
 ### 1. **Verificar que los Índices se Usen:**
 ```sql
 -- Verificar uso de índices en una query del dashboard
-EXPLAIN ANALYZE 
-SELECT 
+EXPLAIN ANALYZE
+SELECT
     EXTRACT(YEAR FROM fecha_aprobacion),
     EXTRACT(MONTH FROM fecha_aprobacion),
     COUNT(*)

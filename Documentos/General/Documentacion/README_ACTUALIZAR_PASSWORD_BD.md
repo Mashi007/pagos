@@ -60,7 +60,7 @@ Este script actualiza automáticamente el usuario admin con la contraseña `Casa
 Después de ejecutar cualquiera de los métodos, verifica que funcionó:
 
 ```sql
-SELECT 
+SELECT
     email,
     nombre,
     apellido,

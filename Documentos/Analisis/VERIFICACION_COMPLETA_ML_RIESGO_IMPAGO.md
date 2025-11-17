@@ -157,7 +157,7 @@ async def entrenar_modelo_riesgo(...):
         # Verificar que MLService esté disponible
         if not ML_SERVICE_AVAILABLE or MLService is None:
             raise HTTPException(...)
-        
+
         # Verificar que la tabla existe
         try:
             db.query(ModeloRiesgo).limit(1).all()
@@ -169,7 +169,7 @@ async def entrenar_modelo_riesgo(...):
                     detail="La tabla 'modelos_riesgo' no está creada. Ejecuta las migraciones: alembic upgrade head",
                 )
             raise
-        
+
         # Continuar con el procesamiento...
 ```
 

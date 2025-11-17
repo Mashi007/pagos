@@ -6,9 +6,9 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { 
-  AlertTriangle, 
-  TrendingDown, 
+import {
+  AlertTriangle,
+  TrendingDown,
   DollarSign,
   Users,
   Download,
@@ -50,9 +50,9 @@ export function Cobranzas() {
   const [guardandoAnalista, setGuardandoAnalista] = useState<number | null>(null)
 
   // Query para resumen
-  const { 
-    data: resumen, 
-    isLoading: cargandoResumen, 
+  const {
+    data: resumen,
+    isLoading: cargandoResumen,
     isError: errorResumen,
     error: errorResumenDetalle,
     refetch: refetchResumen
@@ -64,8 +64,8 @@ export function Cobranzas() {
   })
 
   // Query para clientes atrasados
-  const { 
-    data: clientesAtrasados, 
+  const {
+    data: clientesAtrasados,
     isLoading: cargandoClientes,
     isError: errorClientes,
     error: errorClientesDetalle,
@@ -73,8 +73,8 @@ export function Cobranzas() {
   } = useQuery({
     queryKey: ['cobranzas-clientes', filtroDiasRetraso, rangoDiasMin, rangoDiasMax],
     queryFn: () => cobranzasService.getClientesAtrasados(
-      filtroDiasRetraso, 
-      rangoDiasMin, 
+      filtroDiasRetraso,
+      rangoDiasMin,
       rangoDiasMax
     ),
     retry: 2,
@@ -82,8 +82,8 @@ export function Cobranzas() {
   })
 
   // Query para por analista
-  const { 
-    data: porAnalista, 
+  const {
+    data: porAnalista,
     isLoading: cargandoAnalistas,
     isError: errorAnalistas,
     error: errorAnalistasDetalle,
@@ -96,9 +96,9 @@ export function Cobranzas() {
   })
 
   // Query para obtener usuarios activos (para el dropdown de analistas)
-  const { 
-    data: usuariosData, 
-    isLoading: cargandoUsuarios 
+  const {
+    data: usuariosData,
+    isLoading: cargandoUsuarios
   } = useQuery({
     queryKey: ['usuarios-activos'],
     queryFn: async () => {
@@ -110,9 +110,9 @@ export function Cobranzas() {
   })
 
   // Query para obtener analistas activos (para el dropdown de analistas)
-  const { 
-    data: analistasData, 
-    isLoading: cargandoAnalistasData 
+  const {
+    data: analistasData,
+    isLoading: cargandoAnalistasData
   } = useQuery({
     queryKey: ['analistas-activos'],
     queryFn: async () => {
@@ -128,8 +128,8 @@ export function Cobranzas() {
     if (errorResumen) {
       console.error('Error cargando resumen de cobranzas:', errorResumenDetalle)
       toast.error('Error al cargar resumen de cobranzas', {
-        description: errorResumenDetalle instanceof Error 
-          ? errorResumenDetalle.message 
+        description: errorResumenDetalle instanceof Error
+          ? errorResumenDetalle.message
           : 'No se pudieron cargar los datos del resumen',
         duration: 5000,
       })
@@ -140,8 +140,8 @@ export function Cobranzas() {
     if (errorClientes) {
       console.error('Error cargando clientes atrasados:', errorClientesDetalle)
       toast.error('Error al cargar clientes atrasados', {
-        description: errorClientesDetalle instanceof Error 
-          ? errorClientesDetalle.message 
+        description: errorClientesDetalle instanceof Error
+          ? errorClientesDetalle.message
           : 'No se pudieron cargar los clientes atrasados',
         duration: 5000,
       })
@@ -152,8 +152,8 @@ export function Cobranzas() {
     if (errorAnalistas) {
       console.error('Error cargando datos por analista:', errorAnalistasDetalle)
       toast.error('Error al cargar datos por analista', {
-        description: errorAnalistasDetalle instanceof Error 
-          ? errorAnalistasDetalle.message 
+        description: errorAnalistasDetalle instanceof Error
+          ? errorAnalistasDetalle.message
           : 'No se pudieron cargar los datos por analista',
         duration: 5000,
       })
@@ -178,7 +178,7 @@ export function Cobranzas() {
   // Función para expandir/colapsar analista y cargar sus clientes
   const toggleAnalista = async (nombreAnalista: string) => {
     const expandidos = new Set(analistasExpandidos)
-    
+
     if (expandidos.has(nombreAnalista)) {
       // Colapsar
       expandidos.delete(nombreAnalista)
@@ -187,7 +187,7 @@ export function Cobranzas() {
       // Expandir y cargar clientes si no están cargados
       expandidos.add(nombreAnalista)
       setAnalistasExpandidos(expandidos)
-      
+
       if (!clientesPorAnalista[nombreAnalista]) {
         setCargandoClientesAnalista(prev => ({ ...prev, [nombreAnalista]: true }))
         try {
@@ -252,10 +252,10 @@ export function Cobranzas() {
     try {
       // Importar dinámicamente exceljs
       const { createAndDownloadExcel } = await import('@/types/exceljs')
-      
+
       // Obtener columnas del primer objeto si no se especifican
       const keys = columnas || Object.keys(data[0])
-      
+
       // Preparar datos para Excel
       const datosExcel = data.map(item => {
         const row: Record<string, unknown> = {}
@@ -294,7 +294,7 @@ export function Cobranzas() {
       const enviadas = stats.enviadas || 0
       const fallidas = stats.fallidas || 0
       const errores = stats.errores || 0
-      
+
       if (enviadas > 0 || fallidas > 0) {
         toast.success(
           `Notificaciones procesadas: ${enviadas} enviadas${fallidas > 0 ? `, ${fallidas} fallidas` : ''}`,
@@ -352,7 +352,7 @@ export function Cobranzas() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button 
+          <Button
             onClick={ejecutarDiagnostico}
             disabled={mostrandoDiagnostico}
             variant="outline"
@@ -370,7 +370,7 @@ export function Cobranzas() {
               </>
             )}
           </Button>
-          <Button 
+          <Button
             onClick={procesarNotificaciones}
             disabled={procesandoNotificaciones}
             className="flex items-center gap-2"
@@ -387,7 +387,7 @@ export function Cobranzas() {
               </>
             )}
           </Button>
-          <Button 
+          <Button
             variant="outline"
             onClick={() => window.location.href = '/notificaciones'}
             className="flex items-center gap-2"
@@ -433,7 +433,7 @@ export function Cobranzas() {
                   <p className="text-2xl font-bold">{diagnosticoData.diagnosticos?.cuotas_vencidas_incompletas || 0}</p>
                 </div>
               </div>
-              
+
               {diagnosticoData.diagnosticos?.estados_prestamos_con_cuotas_vencidas && (
                 <div>
                   <p className="text-sm font-semibold mb-2">Estados de Préstamos con Cuotas Vencidas:</p>
@@ -477,8 +477,8 @@ export function Cobranzas() {
               <div className="flex-1">
                 <p className="font-semibold">Error al cargar resumen de cobranzas</p>
                 <p className="text-sm text-red-600">
-                  {errorResumenDetalle instanceof Error 
-                    ? errorResumenDetalle.message 
+                  {errorResumenDetalle instanceof Error
+                    ? errorResumenDetalle.message
                     : 'No se pudieron cargar los datos del resumen. Por favor, intenta nuevamente.'}
                 </p>
               </div>
@@ -606,26 +606,26 @@ export function Cobranzas() {
                   onClick={async () => {
                     // Filtrar clientes según búsqueda y filtros para exportar
                     let clientesParaExportar = clientesAtrasados || []
-                    
+
                     // Aplicar filtro de cuotas mínimas
                     if (filtroCuotasMinimas !== undefined) {
                       clientesParaExportar = clientesParaExportar.filter(
                         cliente => (cliente.cuotas_vencidas || 0) >= filtroCuotasMinimas!
                       )
                     }
-                    
+
                     // Aplicar búsqueda
                     if (busquedaResumen.trim()) {
-                      clientesParaExportar = clientesParaExportar.filter(cliente => 
+                      clientesParaExportar = clientesParaExportar.filter(cliente =>
                         cliente.cedula.toLowerCase().includes(busquedaResumen.toLowerCase()) ||
                         cliente.nombres.toLowerCase().includes(busquedaResumen.toLowerCase())
                       )
                     }
-                    
+
                     await exportarAExcel(
                       clientesParaExportar,
-                      busquedaResumen.trim() 
-                        ? `cuotas-impagas-${busquedaResumen.replace(/\s+/g, '-')}` 
+                      busquedaResumen.trim()
+                        ? `cuotas-impagas-${busquedaResumen.replace(/\s+/g, '-')}`
                         : 'cuotas-impagas',
                       ['cedula', 'nombres', 'analista', 'prestamo_id', 'cuotas_vencidas', 'total_adeudado', 'fecha_primera_vencida']
                     )
@@ -635,7 +635,7 @@ export function Cobranzas() {
                   Exportar Excel
                 </Button>
               </div>
-              
+
               {/* Filtros */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 {/* Filtro por cantidad mínima de cuotas impagas */}
@@ -666,7 +666,7 @@ export function Cobranzas() {
                     )}
                   </div>
                 </div>
-                
+
                 {/* Búsqueda */}
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-2 block">
@@ -684,7 +684,7 @@ export function Cobranzas() {
                   </div>
                 </div>
               </div>
-              
+
               {/* Información del filtro activo */}
               {filtroCuotasMinimas !== undefined && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
@@ -714,8 +714,8 @@ export function Cobranzas() {
                   <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-500" />
                   <p className="text-sm font-semibold text-red-800 mb-2">Error al cargar clientes atrasados</p>
                   <p className="text-xs text-red-600 mb-4">
-                    {errorClientesDetalle instanceof Error 
-                      ? errorClientesDetalle.message 
+                    {errorClientesDetalle instanceof Error
+                      ? errorClientesDetalle.message
                       : 'No se pudieron cargar los datos. Por favor, intenta nuevamente.'}
                   </p>
                   <Button size="sm" variant="outline" onClick={() => refetchClientes()}>
@@ -726,7 +726,7 @@ export function Cobranzas() {
                 <div className="text-center py-8">
                   <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
-                    {filtroDiasRetraso 
+                    {filtroDiasRetraso
                       ? `No hay clientes con cuotas impagas con exactamente ${filtroDiasRetraso} días de retraso`
                       : rangoDiasMin !== undefined && rangoDiasMax !== undefined
                       ? `No hay clientes con cuotas impagas con ${rangoDiasMin} a ${rangoDiasMax} días de retraso`
@@ -744,19 +744,19 @@ export function Cobranzas() {
                   {(() => {
                     // Filtrar clientes según búsqueda
                     let clientesFiltrados = busquedaResumen.trim()
-                      ? clientesAtrasados.filter(cliente => 
+                      ? clientesAtrasados.filter(cliente =>
                           cliente.cedula.toLowerCase().includes(busquedaResumen.toLowerCase()) ||
                           cliente.nombres.toLowerCase().includes(busquedaResumen.toLowerCase())
                         )
                       : clientesAtrasados
-                    
+
                     // Aplicar filtro de cuotas mínimas
                     if (filtroCuotasMinimas !== undefined) {
                       clientesFiltrados = clientesFiltrados.filter(
                         cliente => (cliente.cuotas_vencidas || 0) >= filtroCuotasMinimas!
                       )
                     }
-                    
+
                     // Ordenar por número de cuotas impagas (mayor a menor), luego por total adeudado
                     clientesFiltrados = [...clientesFiltrados].sort((a, b) => {
                       const cuotasA = a.cuotas_vencidas || 0
@@ -796,7 +796,7 @@ export function Cobranzas() {
                             )}
                           </div>
                         )}
-                        
+
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b bg-gray-50">
@@ -883,10 +883,10 @@ export function Cobranzas() {
                                     )}
                                   </td>
                                   <td className="p-2 text-center">
-                                    <Badge 
-                                      variant="outline" 
+                                    <Badge
+                                      variant="outline"
                                       className={
-                                        cuotasImpagas >= 5 
+                                        cuotasImpagas >= 5
                                           ? "bg-red-100 text-red-800 border-red-300 font-bold"
                                           : cuotasImpagas >= 3
                                           ? "bg-orange-100 text-orange-800 border-orange-300 font-semibold"
@@ -1141,8 +1141,8 @@ export function Cobranzas() {
                   <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-500" />
                   <p className="text-sm font-semibold text-red-800 mb-2">Error al cargar datos por analista</p>
                   <p className="text-xs text-red-600 mb-4">
-                    {errorAnalistasDetalle instanceof Error 
-                      ? errorAnalistasDetalle.message 
+                    {errorAnalistasDetalle instanceof Error
+                      ? errorAnalistasDetalle.message
                       : 'No se pudieron cargar los datos. Por favor, intenta nuevamente.'}
                   </p>
                   <Button size="sm" variant="outline" onClick={() => refetchAnalistas()}>
@@ -1161,17 +1161,17 @@ export function Cobranzas() {
                     const clientes = clientesPorAnalista[analista.nombre] || []
                     const cargando = cargandoClientesAnalista[analista.nombre] || false
                     const busqueda = busquedaPorAnalista[analista.nombre] || ''
-                    
+
                     // Filtrar clientes según búsqueda
                     const clientesFiltrados = busqueda.trim()
-                      ? clientes.filter(cliente => 
+                      ? clientes.filter(cliente =>
                           cliente.cedula.toLowerCase().includes(busqueda.toLowerCase()) ||
                           cliente.nombres.toLowerCase().includes(busqueda.toLowerCase())
                         )
                       : clientes
-                    
+
                     // Ordenar por total adeudado de mayor a menor
-                    const clientesOrdenados = [...clientesFiltrados].sort((a, b) => 
+                    const clientesOrdenados = [...clientesFiltrados].sort((a, b) =>
                       (b.total_adeudado || 0) - (a.total_adeudado || 0)
                     )
 

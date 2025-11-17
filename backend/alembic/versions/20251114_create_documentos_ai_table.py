@@ -39,33 +39,33 @@ def upgrade():
             sa.Column('id', sa.Integer(), nullable=False),
             sa.Column('titulo', sa.String(length=255), nullable=False),
             sa.Column('descripcion', sa.Text(), nullable=True),
-            
+
             # Información del archivo
             sa.Column('nombre_archivo', sa.String(length=255), nullable=False),
             sa.Column('tipo_archivo', sa.String(length=50), nullable=False),  # pdf, txt, docx, etc.
             sa.Column('ruta_archivo', sa.String(length=500), nullable=False),  # Ruta donde se almacena el archivo
             sa.Column('tamaño_bytes', sa.Integer(), nullable=True),  # Nota: PostgreSQL maneja caracteres especiales automáticamente
-            
+
             # Contenido procesado
             sa.Column('contenido_texto', sa.Text(), nullable=True),  # Texto extraído del documento
             sa.Column('contenido_procesado', sa.Boolean(), server_default=sa.text('false'), nullable=False),  # Si ya se procesó el contenido
-            
+
             # Estado
             sa.Column('activo', sa.Boolean(), server_default=sa.text('true'), nullable=False),
-            
+
             # Auditoría
             sa.Column('creado_en', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
             sa.Column('actualizado_en', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-            
+
             sa.PrimaryKeyConstraint('id')
         )
-        
+
         # Crear índices
         op.create_index(op.f('ix_documentos_ai_id'), 'documentos_ai', ['id'], unique=False)
         op.create_index('ix_documentos_ai_activo', 'documentos_ai', ['activo'], unique=False)
         op.create_index('ix_documentos_ai_contenido_procesado', 'documentos_ai', ['contenido_procesado'], unique=False)
         op.create_index('ix_documentos_ai_tipo_archivo', 'documentos_ai', ['tipo_archivo'], unique=False)
-        
+
         print("✅ Tabla 'documentos_ai' creada exitosamente")
     else:
         print("ℹ️ Tabla 'documentos_ai' ya existe, omitiendo creación...")
@@ -84,22 +84,22 @@ def downgrade():
             op.drop_index('ix_documentos_ai_tipo_archivo', table_name='documentos_ai')
         except Exception:
             pass
-        
+
         try:
             op.drop_index('ix_documentos_ai_contenido_procesado', table_name='documentos_ai')
         except Exception:
             pass
-        
+
         try:
             op.drop_index('ix_documentos_ai_activo', table_name='documentos_ai')
         except Exception:
             pass
-        
+
         try:
             op.drop_index(op.f('ix_documentos_ai_id'), table_name='documentos_ai')
         except Exception:
             pass
-        
+
         # Eliminar tabla
         op.drop_table('documentos_ai')
         print("✅ Tabla 'documentos_ai' eliminada exitosamente")

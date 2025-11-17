@@ -29,7 +29,7 @@ try:
     # Importar módulos necesarios
     from sqlalchemy import create_engine, inspect, text
     from urllib.parse import quote_plus, urlparse, urlunparse
-    
+
     # Cargar .env si existe
     env_file = Path(__file__).parent / "backend" / ".env"
     if env_file.exists():
@@ -44,22 +44,22 @@ try:
                     if line and not line.startswith('#') and '=' in line:
                         key, value = line.split('=', 1)
                         os.environ[key.strip()] = value.strip().strip('"').strip("'")
-    
+
     # Leer DATABASE_URL directamente del entorno
     database_url_raw = os.getenv("DATABASE_URL")
-    
+
     if not database_url_raw:
         print("\n[ERROR] DATABASE_URL no configurado")
         print("Configura DATABASE_URL en backend/.env o como variable de entorno")
         sys.exit(1)
-    
+
     # Manejar encoding igual que session.py
     if isinstance(database_url_raw, bytes):
         try:
             database_url_raw = database_url_raw.decode("utf-8")
         except UnicodeDecodeError:
             database_url_raw = database_url_raw.decode("latin-1", errors="ignore")
-    
+
     # Parsear y reconstruir URL
     if "@" in database_url_raw and "://" in database_url_raw:
         try:
@@ -76,7 +76,7 @@ try:
             database_url = database_url_raw
     else:
         database_url = database_url_raw
-    
+
     # Conectar a BD
     print("\n[1] Conectando a base de datos...")
     try:
@@ -88,16 +88,16 @@ try:
     except Exception as e:
         print(f"    ERROR - No se pudo conectar: {str(e)[:100]}")
         sys.exit(1)
-    
+
     # Verificar tablas
     print("\n[2] Verificando tablas...")
     tablas_existentes = inspector.get_table_names()
-    
+
     tablas_requeridas = {
         'modelos_riesgo': 'Modelos de Riesgo ML',
         'modelos_impago_cuotas': 'Modelos de Impago de Cuotas ML'
     }
-    
+
     todas_existen = True
     for tabla, nombre in tablas_requeridas.items():
         existe = tabla in tablas_existentes
@@ -106,7 +106,7 @@ try:
         print(f"    {simbolo} {tabla:<35} - {estado}")
         if not existe:
             todas_existen = False
-    
+
     # Si existen, mostrar detalles
     if todas_existen:
         print("\n[3] Detalles de las tablas:")
@@ -119,7 +119,7 @@ try:
                 print(f"    {tabla}: {len(columnas)} columnas, {total} registros")
             except Exception as e:
                 print(f"    {tabla}: Error - {str(e)[:80]}")
-    
+
     # Verificar scikit-learn
     print("\n[4] Verificando scikit-learn...")
     try:
@@ -128,7 +128,7 @@ try:
     except ImportError:
         print("    ERROR - scikit-learn NO instalado")
         print("    Instalar con: pip install scikit-learn==1.6.1")
-    
+
     # Resumen
     print("\n" + "=" * 70)
     if todas_existen:
@@ -137,7 +137,7 @@ try:
         print("RESULTADO: FALTAN TABLAS")
         print("Ejecutar: cd backend && alembic upgrade head")
     print("=" * 70)
-    
+
 except ImportError as e:
     print(f"\nERROR: No se pudo importar modulos: {e}")
     print("Asegurate de estar en la raiz del proyecto")

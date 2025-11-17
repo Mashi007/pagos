@@ -5,7 +5,7 @@
 ### Problema Identificado
 El sistema tiene **diferentes tablas de pagos** y **la conciliación está en diferentes tablas**:
 
-1. **Tabla `pagos`**: 
+1. **Tabla `pagos`**:
    - Tabla principal para pagos registrados manualmente
    - **✅ SÍ tiene columna `conciliado`** (Boolean)
    - **✅ SÍ tiene columna `fecha_conciliacion`** (DateTime)

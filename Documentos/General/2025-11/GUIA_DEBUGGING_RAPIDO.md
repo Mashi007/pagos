@@ -299,7 +299,7 @@ Si después de seguir esta guía el problema persiste:
    ```bash
    # Últimos 100 logs con errores
    grep -E "ERROR|WARNING|🚨|⚠️" logs/app.log | tail -100 > debug_logs.txt
-   
+
    # Stack traces completos
    grep -A 30 "ERROR SQL DETECTADO" logs/app.log | tail -50 > sql_errors.txt
    ```
@@ -308,7 +308,7 @@ Si después de seguir esta guía el problema persiste:
    ```bash
    # Health check
    curl https://rapicredit.onrender.com/api/v1/health
-   
+
    # Estado de monitoreo
    curl -H "Authorization: Bearer TOKEN" \
      https://rapicredit.onrender.com/api/v1/configuracion/monitoreo/estado
@@ -346,6 +346,6 @@ SLOW_ENDPOINT_THRESHOLD_MS = 8000  # 8 segundos
 
 ---
 
-**Última actualización:** 2025-11-06  
+**Última actualización:** 2025-11-06
 **Versión:** 1.0
 

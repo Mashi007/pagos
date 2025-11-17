@@ -183,7 +183,7 @@ id | numero_documento      | conciliado | fecha_conciliacion | verificado_concor
 **Excel (Reporte Bancario):**
 ```
 Fecha de Depósito | Número de Documento
-2025-11-06        |  740087407785556  
+2025-11-06        |  740087407785556
 ```
 
 **BD (Tabla `pagos`):**

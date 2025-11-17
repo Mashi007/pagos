@@ -1,6 +1,6 @@
 # 📊 MIGRACIÓN A TABLAS OFICIALES DEL DASHBOARD
 
-**Fecha:** 2025-01-04  
+**Fecha:** 2025-01-04
 **Objetivo:** Migrar todas las consultas del dashboard a usar tablas oficiales de reporting
 
 ---
@@ -188,13 +188,13 @@ def actualizar_tablas_oficiales(...):
 ### **Ejemplo de Consulta Antes:**
 
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
     EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
     COALESCE(SUM(c.monto_cuota), 0) as morosidad
 FROM cuotas c
 INNER JOIN prestamos p ON c.prestamo_id = p.id
-WHERE 
+WHERE
     p.estado = 'APROBADO'
     AND c.fecha_vencimiento >= :fecha_inicio
     AND c.fecha_vencimiento < :fecha_fin_total
@@ -206,12 +206,12 @@ ORDER BY año, mes
 ### **Ejemplo de Consulta Después:**
 
 ```sql
-SELECT 
+SELECT
     año,
     mes,
     morosidad_total as morosidad
 FROM dashboard_morosidad_mensual
-WHERE 
+WHERE
     (año, mes) >= (EXTRACT(YEAR FROM :fecha_inicio)::int, EXTRACT(MONTH FROM :fecha_inicio)::int)
     AND (año, mes) < (EXTRACT(YEAR FROM :fecha_fin)::int, EXTRACT(MONTH FROM :fecha_fin)::int)
 ORDER BY año, mes
@@ -231,6 +231,6 @@ ORDER BY año, mes
 
 ---
 
-**Documento generado automáticamente**  
+**Documento generado automáticamente**
 **Última actualización:** 2025-01-04
 

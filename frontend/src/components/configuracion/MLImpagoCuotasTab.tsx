@@ -53,7 +53,7 @@ export function MLImpagoCuotasTab() {
     try {
       const modelosResponse = await aiTrainingService.listarModelosImpago()
       const activoData = await aiTrainingService.getModeloImpagoActivo().catch(() => null)
-      
+
       // Manejar respuesta que puede ser array o objeto con error
       if (Array.isArray(modelosResponse)) {
         setModelos(modelosResponse)
@@ -90,7 +90,7 @@ export function MLImpagoCuotasTab() {
     const intervalProgreso = setInterval(() => {
       setEstadoEntrenamiento((prev) => {
         if (!prev) return null
-        
+
         let nuevoProgreso = prev.progreso
         let nuevoEstado = prev.estado
         let nuevoMensaje = prev.mensaje
@@ -131,10 +131,10 @@ export function MLImpagoCuotasTab() {
         algoritmo,
         test_size: testSize,
       })
-      
+
       // Limpiar intervalo y mostrar éxito
       clearInterval(intervalProgreso)
-      
+
       setEstadoEntrenamiento({
         estado: 'completado',
         progreso: 100,
@@ -146,7 +146,7 @@ export function MLImpagoCuotasTab() {
       const metricas = resultado.metricas
       const accuracy = metricas?.accuracy ? `${(metricas.accuracy * 100).toFixed(1)}%` : 'N/A'
       const f1 = metricas?.f1_score ? `${(metricas.f1_score * 100).toFixed(1)}%` : 'N/A'
-      
+
       toast.success(
         `Modelo entrenado exitosamente\n` +
         `Accuracy: ${accuracy} | F1 Score: ${f1}`,
@@ -166,7 +166,7 @@ export function MLImpagoCuotasTab() {
     } catch (error: any) {
       // Limpiar intervalo en caso de error
       clearInterval(intervalProgreso)
-      
+
       setEstadoEntrenamiento({
         estado: 'error',
         progreso: 0,
@@ -179,16 +179,16 @@ export function MLImpagoCuotasTab() {
       console.error('Error response data:', error?.response?.data)
       console.error('Error response status:', error?.response?.status)
       console.error('Error response headers:', error?.response?.headers)
-      
+
       // Expandir el objeto de error para ver todos los detalles
       if (error?.response?.data) {
         console.error('📋 Detalles del error del servidor:', JSON.stringify(error.response.data, null, 2))
       }
       console.groupEnd()
-      
+
       // Extraer mensaje de error de diferentes posibles ubicaciones
       let mensajeError = 'Error al entrenar modelo'
-      
+
       // Detectar timeout específicamente
       if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
         mensajeError = 'El entrenamiento está tardando más de lo esperado. El proceso continúa en el servidor. Por favor, espera unos minutos y recarga la página para ver el modelo entrenado.'
@@ -201,9 +201,9 @@ export function MLImpagoCuotasTab() {
       } else if (error?.error?.detail) {
         mensajeError = String(error.error.detail)
       }
-      
+
       console.error('📝 Mensaje de error extraído para mostrar al usuario:', mensajeError)
-      
+
       // Mostrar toast con el mensaje completo
       toast.error(`Error entrenando modelo: ${mensajeError}`, {
         duration: 15000, // 15 segundos para mensajes de timeout
@@ -384,15 +384,15 @@ export function MLImpagoCuotasTab() {
                   : 'Entrenamiento en Progreso'}
               </h4>
             </div>
-            
+
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">{estadoEntrenamiento.mensaje}</span>
                 <span className="font-medium text-blue-600">{Math.round(estadoEntrenamiento.progreso)}%</span>
               </div>
-              
+
               <Progress value={estadoEntrenamiento.progreso} className="h-2.5" />
-              
+
               {estadoEntrenamiento.estado === 'completado' && estadoEntrenamiento.modelo && (
                 <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
                   <div className="text-sm font-semibold text-green-800 mb-2">Modelo Entrenado:</div>
@@ -408,14 +408,14 @@ export function MLImpagoCuotasTab() {
                   </div>
                 </div>
               )}
-              
+
               {estadoEntrenamiento.estado === 'error' && estadoEntrenamiento.error && (
                 <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
                   <div className="text-sm font-semibold text-red-800 mb-1">Error:</div>
                   <div className="text-sm text-red-700">{estadoEntrenamiento.error}</div>
                 </div>
               )}
-              
+
               {estadoEntrenamiento.estado === 'completado' && (
                 <Button
                   onClick={() => setEstadoEntrenamiento(null)}

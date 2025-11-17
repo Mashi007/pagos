@@ -19,7 +19,7 @@ Tienes valores con marcadores `< >` que deben ser reemplazados:
    ```sql
    -- ANTES (con marcadores):
    SET valor = '<TU-EMAIL@gmail.com>', actualizado_en = NOW()
-   
+
    -- DESPUÉS (con tu valor real):
    SET valor = 'miemail@gmail.com', actualizado_en = NOW()
    ```
@@ -32,22 +32,22 @@ Ejecuta estos comandos SQL **reemplazando los valores**:
 
 ```sql
 -- 1. Actualizar SMTP User
-UPDATE configuracion_sistema 
+UPDATE configuracion_sistema
 SET valor = 'TU-EMAIL-REAL@gmail.com', actualizado_en = NOW()
 WHERE categoria = 'EMAIL' AND clave = 'smtp_user';
 
 -- 2. Actualizar SMTP Password (App Password de Gmail)
-UPDATE configuracion_sistema 
+UPDATE configuracion_sistema
 SET valor = 'TU-APP-PASSWORD-AQUI', actualizado_en = NOW()
 WHERE categoria = 'EMAIL' AND clave = 'smtp_password';
 
 -- 3. Actualizar From Email
-UPDATE configuracion_sistema 
+UPDATE configuracion_sistema
 SET valor = 'noreply@rapicredit.com', actualizado_en = NOW()
 WHERE categoria = 'EMAIL' AND clave = 'from_email';
 
 -- 4. Actualizar Email Pruebas (OPCIONAL)
-UPDATE configuracion_sistema 
+UPDATE configuracion_sistema
 SET valor = 'pruebas@ejemplo.com', actualizado_en = NOW()
 WHERE categoria = 'EMAIL' AND clave = 'email_pruebas';
 ```
@@ -56,15 +56,15 @@ WHERE categoria = 'EMAIL' AND clave = 'email_pruebas';
 
 ```sql
 -- Ejemplo con valores reales (NO uses estos, son solo ejemplos):
-UPDATE configuracion_sistema 
+UPDATE configuracion_sistema
 SET valor = 'usuario@gmail.com', actualizado_en = NOW()
 WHERE categoria = 'EMAIL' AND clave = 'smtp_user';
 
-UPDATE configuracion_sistema 
+UPDATE configuracion_sistema
 SET valor = 'abcd efgh ijkl mnop', actualizado_en = NOW()
 WHERE categoria = 'EMAIL' AND clave = 'smtp_password';
 
-UPDATE configuracion_sistema 
+UPDATE configuracion_sistema
 SET valor = 'noreply@rapicredit.com', actualizado_en = NOW()
 WHERE categoria = 'EMAIL' AND clave = 'from_email';
 ```
@@ -84,13 +84,13 @@ WHERE categoria = 'EMAIL' AND clave = 'from_email';
 Ejecuta esta query para verificar:
 
 ```sql
-SELECT 
+SELECT
     clave,
-    CASE 
+    CASE
         WHEN clave IN ('smtp_password', 'smtp_user') THEN '*** (oculto)'
         ELSE valor
     END AS valor,
-    CASE 
+    CASE
         WHEN clave IN ('smtp_host', 'smtp_port', 'smtp_user', 'smtp_password', 'from_email')
         AND (valor IS NULL OR valor = '' OR valor LIKE '<%>')
         THEN '❌ PENDIENTE: Reemplaza el valor'

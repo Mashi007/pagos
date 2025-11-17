@@ -14,11 +14,11 @@ def fix_unterminated_triple_quotes(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         # Buscar triple quotes no cerradas al final del archivo
         lines = content.split('\n')
         fixed_lines = []
-        
+
         for i, line in enumerate(lines):
             # Si la línea tiene triple quotes pero no está cerrada
             if '"""' in line and line.count('"""') == 1:
@@ -30,7 +30,7 @@ def fix_unterminated_triple_quotes(file_path):
                     fixed_lines.append(line)
             else:
                 fixed_lines.append(line)
-        
+
         if fixed_lines != lines:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(fixed_lines))
@@ -45,7 +45,7 @@ def fix_incomplete_imports(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         # Patrones comunes de imports rotos
         patterns = [
             (r'from app\.schemas\.(\w+) import \s*$', r'from app.schemas.\1 import \1Create, \1Update, \1Response'),
@@ -53,11 +53,11 @@ def fix_incomplete_imports(file_path):
             (r'(\w+) = \s*$', r'\1 = None'),
             (r'(\w+) = \s*\n', r'\1 = None\n'),
         ]
-        
+
         original_content = content
         for pattern, replacement in patterns:
             content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
-        
+
         if content != original_content:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
@@ -72,10 +72,10 @@ def fix_indentation_errors(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         lines = content.split('\n')
         fixed_lines = []
-        
+
         for line in lines:
             # Corregir líneas que empiezan con espacios incorrectos
             if re.match(r'^\s{1,3}[a-zA-Z_]', line) and not re.match(r'^\s{4}[a-zA-Z_]', line):
@@ -87,9 +87,9 @@ def fix_indentation_errors(file_path):
                         # Corregir a múltiplo de 4 más cercano
                         new_indent = ' ' * ((len(indent) // 4 + 1) * 4)
                         line = re.sub(r'^\s+', new_indent, line)
-            
+
             fixed_lines.append(line)
-        
+
         if fixed_lines != lines:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(fixed_lines))
@@ -104,11 +104,11 @@ def fix_unmatched_brackets(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         # Buscar líneas con paréntesis/llaves no balanceados
         lines = content.split('\n')
         fixed_lines = []
-        
+
         for line in lines:
             # Si la línea tiene un paréntesis abierto pero no cerrado
             if '(' in line and ')' not in line and not line.strip().endswith(','):
@@ -118,9 +118,9 @@ def fix_unmatched_brackets(file_path):
             elif '{' in line and '}' not in line and not line.strip().endswith(','):
                 # Agregar llave de cierre
                 line = line.rstrip() + '}'
-            
+
             fixed_lines.append(line)
-        
+
         if fixed_lines != lines:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(fixed_lines))
@@ -133,15 +133,15 @@ def fix_unmatched_brackets(file_path):
 def main():
     """Función principal para corregir errores"""
     backend_dir = Path("backend")
-    
+
     if not backend_dir.exists():
         print("[ERROR] Directorio backend no encontrado")
         return
-    
+
     # Archivos con errores críticos según GitHub Actions
     critical_files = [
         "app/api/v1/endpoints/amortizacion.py",
-        "app/api/v1/endpoints/analistas.py", 
+        "app/api/v1/endpoints/analistas.py",
         "app/api/v1/endpoints/aprobaciones.py",
         "app/api/v1/endpoints/architectural_analysis.py",
         "app/api/v1/endpoints/auditoria.py",
@@ -224,15 +224,15 @@ def main():
         "app/utils/date_helpers.py",
         "app/utils/validators.py",
     ]
-    
+
     print(f"[INFO] Iniciando corrección de {len(critical_files)} archivos críticos...")
-    
+
     fixed_count = 0
     for file_path in critical_files:
         full_path = backend_dir / file_path
         if full_path.exists():
             print(f"[INFO] Procesando: {file_path}")
-            
+
             # Aplicar todas las correcciones
             if (fix_unterminated_triple_quotes(full_path) or
                 fix_incomplete_imports(full_path) or
@@ -241,7 +241,7 @@ def main():
                 fixed_count += 1
         else:
             print(f"[WARN] Archivo no encontrado: {file_path}")
-    
+
     print(f"\n[OK] Corrección completada: {fixed_count} archivos corregidos")
     print("[INFO] Ejecuta 'flake8 app/ --count --select=E9,F63,F7,F82' para verificar")
 

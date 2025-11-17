@@ -22,16 +22,16 @@ export function ConciliacionExcelUploader({ onClose, onSuccess }: ConciliacionEx
       // ✅ VALIDACIÓN DE SEGURIDAD: Validar archivo antes de aceptarlo
       const { validateExcelFile } = await import('@/utils/excelValidation')
       const validation = validateExcelFile(selectedFile)
-      
+
       if (!validation.isValid) {
         toast.error(validation.error || 'Archivo inválido')
         return
       }
-      
+
       if (validation.warnings && validation.warnings.length > 0) {
         validation.warnings.forEach(warning => toast.warning(warning))
       }
-      
+
       setFile(selectedFile)
     }
   }
@@ -46,19 +46,19 @@ export function ConciliacionExcelUploader({ onClose, onSuccess }: ConciliacionEx
     try {
       const result = await pagoService.uploadConciliacion(file)
       setResults(result)
-      
+
       if (result.pagos_conciliados > 0) {
         toast.success(`${result.pagos_conciliados} pagos conciliados exitosamente`)
       }
-      
+
       if (result.pagos_no_encontrados > 0) {
         toast.warning(`${result.pagos_no_encontrados} documentos no encontrados en el sistema`)
       }
-      
+
       if (result.errores > 0) {
         toast.error(`${result.errores} errores encontrados`)
       }
-      
+
       if (result.pagos_conciliados > 0) {
         onSuccess()
       }
@@ -106,7 +106,7 @@ export function ConciliacionExcelUploader({ onClose, onSuccess }: ConciliacionEx
                     <li><strong>Número de Documento</strong> (debe coincidir exactamente con un pago existente)</li>
                   </ul>
                   <p className="text-xs text-gray-500 mt-2">
-                    El sistema buscará cada número de documento en los pagos registrados. 
+                    El sistema buscará cada número de documento en los pagos registrados.
                     Si encuentra una coincidencia exacta, marcará el pago como conciliado.
                   </p>
                 </div>

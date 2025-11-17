@@ -1,6 +1,6 @@
 # ✅ RESUMEN: Validaciones de Criterios Implementadas en Frontend
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Archivo:** `frontend/src/components/pagos/RegistrarPagoForm.tsx`
 
 ---

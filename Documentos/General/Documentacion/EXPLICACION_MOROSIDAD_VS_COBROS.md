@@ -10,9 +10,9 @@
 
 **Cobros del mes presente** se calculan así:
 ```sql
-SELECT SUM(monto_pagado) 
-FROM pagos 
-WHERE fecha_pago >= primer_dia_mes 
+SELECT SUM(monto_pagado)
+FROM pagos
+WHERE fecha_pago >= primer_dia_mes
   AND fecha_pago <= ultimo_dia_mes
   AND activo = TRUE
 ```
@@ -33,9 +33,9 @@ WHERE fecha_pago >= primer_dia_mes
 
 **Morosidad del mes** se calcula así:
 ```sql
-SELECT SUM(monto_cuota - total_pagado) 
-FROM cuotas 
-WHERE fecha_vencimiento >= primer_dia_mes 
+SELECT SUM(monto_cuota - total_pagado)
+FROM cuotas
+WHERE fecha_vencimiento >= primer_dia_mes
   AND fecha_vencimiento <= ultimo_dia_mes
   AND estado != 'PAGADO'
 ```

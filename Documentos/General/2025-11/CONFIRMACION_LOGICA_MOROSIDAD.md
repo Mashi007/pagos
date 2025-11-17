@@ -15,7 +15,7 @@
 **Ubicación**: `dashboard.py:3545-3563`
 
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
     EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
     COALESCE(SUM(c.monto_cuota), 0) as total_cuotas_programadas
@@ -35,7 +35,7 @@ GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_venc
 **Ubicación**: `dashboard.py:3663-3683` (sin filtros)
 
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM p.fecha_pago)::integer as año,
     EXTRACT(MONTH FROM p.fecha_pago)::integer as mes,
     COALESCE(SUM(p.monto_pagado), 0) as total_pagado

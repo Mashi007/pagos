@@ -15,7 +15,7 @@ Actualizado según requerimiento: "UNIFICAR EN FECHA DE PAGO, SI DESPUÉS DE FEC
 
 ### Archivo Modificado
 
-**Ubicación:** `backend/app/api/v1/endpoints/pagos.py`  
+**Ubicación:** `backend/app/api/v1/endpoints/pagos.py`
 **Función:** `_aplicar_monto_a_cuota()` (líneas 1013-1077)
 
 ### Lógica Agregada
@@ -25,16 +25,16 @@ Actualizado según requerimiento: "UNIFICAR EN FECHA DE PAGO, SI DESPUÉS DE FEC
 if cuota.fecha_vencimiento and fecha_pago > cuota.fecha_vencimiento:
     # Calcular días de mora
     dias_mora = (fecha_pago - cuota.fecha_vencimiento).days
-    
+
     # Obtener tasa de mora diaria (por defecto desde settings)
     tasa_mora_diaria = Decimal(str(settings.TASA_MORA_DIARIA))  # 0.067% diario
-    
+
     # Calcular monto de mora
     saldo_base_mora = cuota.monto_cuota
     monto_mora = (saldo_base_mora * tasa_mora_diaria * Decimal(dias_mora) / Decimal("100")).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
-    
+
     # Actualizar campos de mora
     cuota.dias_mora = dias_mora
     cuota.monto_mora = monto_mora
@@ -278,8 +278,8 @@ Si una cuota recibe múltiples pagos:
 El sistema registra automáticamente cuando se calcula mora:
 
 ```
-💰 [aplicar_monto_a_cuota] Cuota #1 (Préstamo 3708): 
-   Mora calculada: 15 días, $5.03 
+💰 [aplicar_monto_a_cuota] Cuota #1 (Préstamo 3708):
+   Mora calculada: 15 días, $5.03
    (fecha_pago: 2025-12-15, fecha_vencimiento: 2025-11-30)
 ```
 
@@ -290,7 +290,7 @@ El sistema registra automáticamente cuando se calcula mora:
 ### Consulta para Verificar Mora Calculada
 
 ```sql
-SELECT 
+SELECT
     c.numero_cuota,
     c.fecha_vencimiento,
     c.fecha_pago,
@@ -298,7 +298,7 @@ SELECT
     c.monto_mora,
     c.tasa_mora,
     c.estado,
-    CASE 
+    CASE
         WHEN c.fecha_pago > c.fecha_vencimiento THEN '✅ Mora calculada'
         WHEN c.fecha_pago <= c.fecha_vencimiento THEN '✅ Sin mora'
         ELSE '⏳ Pendiente'

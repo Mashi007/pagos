@@ -1,6 +1,6 @@
 # 📊 RESUMEN: Estado de Amortización Después de Correcciones
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Estado:** Parcialmente corregido
 
 ---
@@ -15,7 +15,7 @@
 ### **2. Cuotas Completas pero PENDIENTE → PARCIALMENTE CORREGIDO**
 - **Antes:** 18 cuotas con `total_pagado >= monto_cuota` pero estado `PENDIENTE`
 - **Después:** 18 cuotas (aún pendientes)
-- **Causa probable:** 
+- **Causa probable:**
   - Pagos históricos/migrados sin registro en tabla `pagos`
   - Pagos no conciliados
 - **Acción necesaria:** Ejecutar script `Corregir_18_Cuotas_Completas_Pendientes.sql`

@@ -1,7 +1,7 @@
 # 📋 PLAN DE AUDITORÍA COMPLETA DEL SISTEMA
 
-**Fecha:** 2025-01-27  
-**Auditor:** Experto en Auditoría de Sistemas Full Stack  
+**Fecha:** 2025-01-27
+**Auditor:** Experto en Auditoría de Sistemas Full Stack
 **Objetivo:** Revisión integral del sistema bajo altos estándares
 
 ---

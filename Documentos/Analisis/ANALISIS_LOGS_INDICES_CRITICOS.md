@@ -154,7 +154,7 @@ Si tienes acceso a la base de datos:
 
 ```sql
 -- Verificar que los índices existen
-SELECT 
+SELECT
     schemaname,
     tablename,
     indexname,

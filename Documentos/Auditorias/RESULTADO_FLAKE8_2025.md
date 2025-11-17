@@ -1,7 +1,7 @@
 # 📊 Resultado de Ejecución de Flake8 - 2025
 
-**Fecha:** 2025-01-27  
-**Python:** 3.13.3  
+**Fecha:** 2025-01-27
+**Python:** 3.13.3
 **Flake8:** 7.3.0
 
 ---

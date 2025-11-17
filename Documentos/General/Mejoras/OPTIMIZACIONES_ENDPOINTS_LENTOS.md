@@ -9,8 +9,8 @@
 ### Endpoints Optimizados
 
 #### 1. `/api/v1/dashboard/financiamiento-por-rangos`
-**Tiempo Anterior:** 5.8-6 segundos  
-**Tiempo Esperado:** 1-2 segundos  
+**Tiempo Anterior:** 5.8-6 segundos
+**Tiempo Esperado:** 1-2 segundos
 **Mejora Esperada:** **70-80%**
 
 **Problema Identificado:**
@@ -47,8 +47,8 @@ distribucion_query = (
 ---
 
 #### 2. `/api/v1/dashboard/evolucion-general-mensual`
-**Tiempo Anterior:** 1.3-1.9 segundos  
-**Tiempo Esperado:** 0.5-1 segundo  
+**Tiempo Anterior:** 1.3-1.9 segundos
+**Tiempo Esperado:** 0.5-1 segundo
 **Mejora Esperada:** **40-50%**
 
 **Problema Identificado:**
@@ -71,7 +71,7 @@ for mes_info in meses_lista:
 # ✅ DESPUÉS: Query única con GROUP BY
 query_morosidad_optimizada = db.execute(
     text("""
-        SELECT 
+        SELECT
             EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
             EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
             COALESCE(SUM(c.monto_cuota), 0) as morosidad
@@ -80,7 +80,7 @@ query_morosidad_optimizada = db.execute(
         WHERE p.estado = 'APROBADO'
           AND c.fecha_vencimiento <= :fecha_limite
           AND c.estado != 'PAGADO'
-        GROUP BY 
+        GROUP BY
             EXTRACT(YEAR FROM c.fecha_vencimiento),
             EXTRACT(MONTH FROM c.fecha_vencimiento)
     """).bindparams(fecha_limite=fecha_ultima_morosidad)

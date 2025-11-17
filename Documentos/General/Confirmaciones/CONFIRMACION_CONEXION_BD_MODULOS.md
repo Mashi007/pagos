@@ -19,7 +19,7 @@ Frontend:
     ↓ usePrestamos() hook
     ↓ prestamoService.getPrestamos()
     ↓ GET /api/v1/prestamos
-    
+
 Backend:
   prestamos.py:listar_prestamos()
     ↓ db.query(Prestamo)
@@ -52,7 +52,7 @@ Frontend:
     ↓ useCreatePrestamo() / useUpdatePrestamo()
     ↓ prestamoService.createPrestamo() / updatePrestamo()
     ↓ POST /api/v1/prestamos o PUT /api/v1/prestamos/{id}
-    
+
 Backend:
   prestamos.py:crear_prestamo() / actualizar_prestamo()
     ↓ db.add(prestamo)
@@ -90,7 +90,7 @@ Frontend:
     ↓ useAplicarCondicionesAprobacion()
     ↓ prestamoService.aplicarCondicionesAprobacion()
     ↓ POST /api/v1/prestamos/{id}/aplicar-condiciones-aprobacion
-    
+
 Backend:
   prestamos.py:aplicar_condiciones_aprobacion()
     ↓ Actualiza prestamo en BD
@@ -135,7 +135,7 @@ Frontend:
     ↓ useQuery()
     ↓ pagoService.getAllPagos()
     ↓ GET /api/v1/pagos
-    
+
 Backend:
   pagos.py:listar_pagos()
     ↓ db.query(Pago)
@@ -170,7 +170,7 @@ Frontend:
   RegistrarPagoForm.tsx
     ↓ pagoService.createPago()
     ↓ POST /api/v1/pagos
-    
+
 Backend:
   pagos.py:crear_pago()
     ↓ Verifica Cliente en BD

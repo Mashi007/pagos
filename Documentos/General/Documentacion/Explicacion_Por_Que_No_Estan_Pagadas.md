@@ -39,7 +39,7 @@ Esto es **NORMAL y ESPERADO** en un sistema de préstamos. Las razones pueden se
 Ejecuta este query para ver cuántas de esas 44,655 cuotas están vencidas:
 
 ```sql
-SELECT 
+SELECT
     'Cuotas SIN PAGO' AS categoria,
     COUNT(*) AS total,
     COUNT(CASE WHEN fecha_vencimiento < CURRENT_DATE THEN 1 END) AS vencidas,
@@ -106,8 +106,8 @@ Ejecuta este script completo para ver el desglose:
 
 ```sql
 -- Ver cuotas sin pago desglosadas por fecha de vencimiento
-SELECT 
-    CASE 
+SELECT
+    CASE
         WHEN fecha_vencimiento < CURRENT_DATE THEN '⚠️ VENCIDAS (EN MORA)'
         WHEN fecha_vencimiento >= CURRENT_DATE THEN '✅ NO VENCIDAS (NORMAL)'
         ELSE '❓ SIN FECHA'
@@ -118,8 +118,8 @@ SELECT
     MAX(fecha_vencimiento) AS ultima_fecha
 FROM cuotas
 WHERE total_pagado = 0
-GROUP BY 
-    CASE 
+GROUP BY
+    CASE
         WHEN fecha_vencimiento < CURRENT_DATE THEN '⚠️ VENCIDAS (EN MORA)'
         WHEN fecha_vencimiento >= CURRENT_DATE THEN '✅ NO VENCIDAS (NORMAL)'
         ELSE '❓ SIN FECHA'

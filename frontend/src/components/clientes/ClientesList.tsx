@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  Search, 
-  Filter, 
-  Plus, 
-  Eye, 
-  Edit, 
-  Trash2, 
+import {
+  Search,
+  Filter,
+  Plus,
+  Eye,
+  Edit,
+  Trash2,
   MoreHorizontal,
   Phone,
   Mail,
@@ -70,7 +70,7 @@ export function ClientesList() {
       console.log('📝 Obteniendo datos completos del cliente ID:', cliente.id)
       const clienteCompleto = await clienteService.getCliente(String(cliente.id))
       console.log('📝 Cliente completo obtenido:', clienteCompleto)
-      
+
       setClienteSeleccionado(clienteCompleto)
       setShowEditarCliente(true)
     } catch (error) {
@@ -88,28 +88,28 @@ export function ClientesList() {
 
   const confirmarEliminacion = async () => {
     if (!clienteSeleccionado) return
-    
+
     try {
       console.log('🗑️ Eliminando cliente:', clienteSeleccionado.id)
-      
+
       // ✅ ACTIVAR: Llamada real a la API para eliminar
       await clienteService.deleteCliente(clienteSeleccionado.id)
-      
+
       console.log('✅ Cliente eliminado exitosamente')
-      
+
       // Refrescar la lista
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
       queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ✅ Actualizar estadísticas
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['kpis'] })
-      
+
       // Cerrar modal
       setShowEliminarCliente(false)
       setClienteSeleccionado(null)
-      
+
       // Mostrar mensaje de éxito - UNA SOLA NOTIFICACIÓN
       showNotification('success', '✅ Cliente eliminado permanentemente de la base de datos')
-      
+
     } catch (error) {
       console.error('❌ Error eliminando cliente:', error)
       showNotification('error', '❌ Error al eliminar el cliente. Intenta nuevamente.')
@@ -218,9 +218,9 @@ export function ClientesList() {
             Gestiona tu cartera de clientes
           </p>
         </div>
-        
+
         <div className="flex gap-2">
-          <Button 
+          <Button
             size="lg"
             onClick={() => setShowCrearCliente(true)}
             className="px-8 py-6 text-base font-semibold min-w-[200px]"
@@ -255,7 +255,7 @@ export function ClientesList() {
                 />
               </div>
             </div>
-            
+
             <Button
               variant="outline"
               onClick={() => setShowFilters(!showFilters)}
@@ -278,7 +278,7 @@ export function ClientesList() {
                   <Filter className="w-4 h-4" />
                   Filtros de Búsqueda
                 </h3>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {/* Cédula de identidad */}
                   <div>
@@ -461,7 +461,7 @@ export function ClientesList() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge 
+                      <Badge
                         variant={cliente.estado === 'ACTIVO' ? 'default' : 'destructive'}
                       >
                         {cliente.estado}
@@ -469,18 +469,18 @@ export function ClientesList() {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm text-gray-600">
-                        {cliente.fecha_actualizacion 
-                          ? formatDate(cliente.fecha_actualizacion) 
-                          : cliente.fecha_registro 
-                            ? formatDate(cliente.fecha_registro) 
+                        {cliente.fecha_actualizacion
+                          ? formatDate(cliente.fecha_actualizacion)
+                          : cliente.fecha_registro
+                            ? formatDate(cliente.fecha_registro)
                             : 'N/A'}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         {/* ✅ BOTÓN VER CONVERSACIONES WHATSAPP */}
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           title="Ver conversaciones de WhatsApp"
                           className="text-blue-600 border-blue-400 bg-blue-50 hover:text-white hover:bg-blue-600 hover:border-blue-600 font-medium cursor-pointer transition-colors"
@@ -491,10 +491,10 @@ export function ClientesList() {
                           <MessageSquare className="w-4 h-4 mr-1" />
                           WhatsApp
                         </Button>
-                        
+
                         {/* ✅ BOTÓN EDITAR - ACTIVO Y FUNCIONAL */}
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           title="Editar cliente"
                           className="text-green-600 border-green-400 bg-green-50 hover:text-white hover:bg-green-600 hover:border-green-600 font-medium cursor-pointer transition-colors"
@@ -506,10 +506,10 @@ export function ClientesList() {
                           <Edit className="w-4 h-4 mr-1" />
                           Editar
                         </Button>
-                        
+
                         {/* ✅ BOTÓN ELIMINAR - ACTIVO Y FUNCIONAL */}
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           title="Eliminar cliente"
                           className="text-red-600 border-red-400 bg-red-50 hover:text-white hover:bg-red-600 hover:border-red-600 font-medium cursor-pointer transition-colors"
@@ -587,7 +587,7 @@ export function ClientesList() {
       {/* Modal Crear Cliente */}
       <AnimatePresence>
         {showCrearCliente && (
-          <CrearClienteForm 
+          <CrearClienteForm
             onClose={() => setShowCrearCliente(false)}
             onSuccess={() => {
               // ✅ CORRECCIÓN: Invalidar queries para actualizar datos
@@ -619,7 +619,7 @@ export function ClientesList() {
       {/* Modal Editar Cliente */}
       <AnimatePresence>
         {showEditarCliente && clienteSeleccionado && (
-          <CrearClienteForm 
+          <CrearClienteForm
             cliente={clienteSeleccionado}
             onClose={() => {
               setShowEditarCliente(false)
@@ -658,7 +658,7 @@ export function ClientesList() {
                   </p>
                 </div>
               </div>
-              
+
               <div className="mb-6">
                 <p className="text-gray-700">
                   ¿Estás seguro de que quieres <span className="font-semibold text-red-600">ELIMINAR PERMANENTEMENTE</span> al cliente{' '}
@@ -673,7 +673,7 @@ export function ClientesList() {
                   Cédula: {clienteSeleccionado.cedula}
                 </p>
               </div>
-              
+
               <div className="flex gap-3 justify-end">
                 <Button
                   variant="outline"
@@ -703,8 +703,8 @@ export function ClientesList() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -50 }}
           className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-md ${
-            notification.type === 'success' 
-              ? 'bg-green-100 border border-green-300 text-green-800' 
+            notification.type === 'success'
+              ? 'bg-green-100 border border-green-300 text-green-800'
               : 'bg-red-100 border border-red-300 text-red-800'
           }`}
         >

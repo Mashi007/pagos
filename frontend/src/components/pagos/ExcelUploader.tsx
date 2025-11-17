@@ -22,16 +22,16 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
       // ✅ VALIDACIÓN DE SEGURIDAD: Validar archivo antes de aceptarlo
       const { validateExcelFile } = await import('@/utils/excelValidation')
       const validation = validateExcelFile(selectedFile)
-      
+
       if (!validation.isValid) {
         toast.error(validation.error || 'Archivo inválido')
         return
       }
-      
+
       if (validation.warnings && validation.warnings.length > 0) {
         validation.warnings.forEach(warning => toast.warning(warning))
       }
-      
+
       setFile(selectedFile)
     }
   }
@@ -46,15 +46,15 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
     try {
       const result = await pagoService.uploadExcel(file)
       setResults(result)
-      
+
       if (result.success > 0) {
         toast.success(`${result.success} pagos registrados exitosamente`)
       }
-      
+
       if (result.errores > 0) {
         toast.warning(`${result.errores} errores encontrados`)
       }
-      
+
       if (result.success > 0) {
         onSuccess()
       }

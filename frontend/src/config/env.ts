@@ -19,11 +19,11 @@ function validateEnv(): EnvConfig {
   const NODE_ENV = import.meta.env.VITE_NODE_ENV || import.meta.env.MODE;
   const APP_NAME = import.meta.env.VITE_APP_NAME || DEFAULT_APP_NAME;
   const APP_VERSION = import.meta.env.VITE_APP_VERSION || DEFAULT_APP_VERSION;
-  
+
   // ✅ PRODUCCIÓN: Usar rutas relativas (el proxy en server.js maneja /api/*)
   // ✅ DESARROLLO: Usar URL absoluta si está configurada
   let API_URL = import.meta.env.VITE_API_URL || '';
-  
+
   if (NODE_ENV === 'production') {
     // En producción, usar rutas relativas para que el proxy funcione
     API_URL = '';

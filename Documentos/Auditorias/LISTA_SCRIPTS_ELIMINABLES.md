@@ -1,6 +1,6 @@
 # 🗑️ Lista de Scripts Eliminables - Proyecto Pagos
 
-**Fecha**: 2025-01-XX  
+**Fecha**: 2025-01-XX
 **Estado**: ✅ Verificado - Sin impacto en otros procesos
 
 ---
@@ -197,6 +197,6 @@ Move-Item "backend\test_gmail_quick.py" -Destination "backend\obsolete\" -Force
 
 ---
 
-**Total de scripts eliminables identificados**: **6 scripts**  
+**Total de scripts eliminables identificados**: **6 scripts**
 **Impacto estimado**: ✅ **CERO** - Eliminación segura
 

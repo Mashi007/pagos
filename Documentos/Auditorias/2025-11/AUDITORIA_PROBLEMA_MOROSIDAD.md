@@ -4,7 +4,7 @@
 
 **Problema Principal**: La línea de "Morosidad Mensual" en el gráfico "MONITOREO FINANCIERO" no se actualiza correctamente y muestra 0 para la mayoría de meses, aunque el backend calcula correctamente los valores.
 
-**Problemas Secundarios**: 
+**Problemas Secundarios**:
 - Gráfico "Cobranzas Mensuales" muestra "No hay datos disponibles"
 - Gráfico "Cobranzas Semanales" muestra "No hay datos disponibles"
 
@@ -28,7 +28,7 @@
 
 3. **Frontend recibe correctamente**: El tipo TypeScript incluye `morosidad_mensual: number`
 
-4. **Gráfico configurado correctamente**: 
+4. **Gráfico configurado correctamente**:
    - Usa `dataKey="morosidad_mensual"`
    - Tiene YAxis secundario (`yAxisId="right"`)
    - Tiene color rojo (#ef4444)

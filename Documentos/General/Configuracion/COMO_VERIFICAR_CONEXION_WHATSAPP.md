@@ -11,17 +11,17 @@ async def test_connection(self):
     # ✅ CONSTRUIR URL REAL de Meta API
     url = f"{self.api_url}/{self.phone_number_id}"
     # Ejemplo: https://graph.facebook.com/v18.0/627189243818989
-    
+
     # ✅ CREAR HEADERS REALES con tu Access Token
     headers = {
         "Authorization": f"Bearer {self.access_token}",
     }
-    
+
     # ✅ HACER REQUEST HTTP REAL A META
     async with httpx.AsyncClient(timeout=self.timeout) as client:
         response = await client.get(url, headers=headers)
         # ↑ ESTO SE CONECTA REALMENTE A graph.facebook.com
-        
+
         # ✅ META RESPONDE REALMENTE
         if response.status_code == 200:
             # Meta ACEPTÓ tu conexión

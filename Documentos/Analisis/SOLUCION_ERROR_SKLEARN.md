@@ -1,6 +1,6 @@
 # ✅ SOLUCIÓN: Error ModuleNotFoundError: No module named 'sklearn'
 
-**Fecha:** 2025-01-14  
+**Fecha:** 2025-01-14
 **Estado:** ✅ **SOLUCIONADO**
 
 ---

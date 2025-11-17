@@ -1,7 +1,7 @@
 # 📋 ERRORES PENDIENTES - Calidad de Código
 
-**Fecha**: 2025-11-04  
-**Última actualización**: 2025-11-04  
+**Fecha**: 2025-11-04
+**Última actualización**: 2025-11-04
 **Estado**: 🔄 En progreso
 
 ---

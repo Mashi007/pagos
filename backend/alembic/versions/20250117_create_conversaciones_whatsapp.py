@@ -36,7 +36,7 @@ def upgrade():
         op.create_table(
             'conversaciones_whatsapp',
             sa.Column('id', sa.Integer(), nullable=False),
-            
+
             # Información del mensaje
             sa.Column('message_id', sa.String(length=100), nullable=True),  # ID de Meta
             sa.Column('from_number', sa.String(length=20), nullable=False),  # Número que envía
@@ -44,35 +44,35 @@ def upgrade():
             sa.Column('message_type', sa.String(length=20), nullable=False),  # text, image, document, etc.
             sa.Column('body', sa.Text(), nullable=True),  # Contenido del mensaje
             sa.Column('timestamp', sa.DateTime(), nullable=False),  # Timestamp de Meta
-            
+
             # Dirección del mensaje
             sa.Column('direccion', sa.String(length=10), nullable=False),  # INBOUND o OUTBOUND
-            
+
             # Relación con cliente
             sa.Column('cliente_id', sa.Integer(), nullable=True),
-            
+
             # Estado y procesamiento
             sa.Column('procesado', sa.Boolean(), nullable=False, server_default=sa.text('false')),
             sa.Column('respuesta_enviada', sa.Boolean(), nullable=False, server_default=sa.text('false')),
             sa.Column('respuesta_id', sa.Integer(), nullable=True),  # ID de la respuesta (self-reference)
-            
+
             # Información de respuesta del bot
             sa.Column('respuesta_bot', sa.Text(), nullable=True),  # Respuesta generada por el bot
             sa.Column('respuesta_meta_id', sa.String(length=100), nullable=True),  # ID de mensaje de respuesta en Meta
-            
+
             # Errores
             sa.Column('error', sa.Text(), nullable=True),  # Error al procesar o responder
-            
+
             # Auditoría
             sa.Column('creado_en', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
             sa.Column('actualizado_en', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-            
+
             # Constraints
             sa.PrimaryKeyConstraint('id'),
             sa.ForeignKeyConstraint(['cliente_id'], ['clientes.id'], ),
             sa.ForeignKeyConstraint(['respuesta_id'], ['conversaciones_whatsapp.id'], ),
         )
-        
+
         # Crear índices
         op.create_index(op.f('ix_conversaciones_whatsapp_id'), 'conversaciones_whatsapp', ['id'], unique=False)
         op.create_index('ix_conversaciones_whatsapp_message_id', 'conversaciones_whatsapp', ['message_id'], unique=True)
@@ -80,7 +80,7 @@ def upgrade():
         op.create_index('ix_conversaciones_whatsapp_timestamp', 'conversaciones_whatsapp', ['timestamp'], unique=False)
         op.create_index('ix_conversaciones_whatsapp_cliente_id', 'conversaciones_whatsapp', ['cliente_id'], unique=False)
         op.create_index('ix_conversaciones_whatsapp_creado_en', 'conversaciones_whatsapp', ['creado_en'], unique=False)
-        
+
         print("✅ Tabla 'conversaciones_whatsapp' creada exitosamente")
     else:
         print("ℹ️ Tabla 'conversaciones_whatsapp' ya existe, omitiendo creación...")
@@ -100,7 +100,7 @@ def downgrade():
                     op.drop_index(idx['name'], table_name='conversaciones_whatsapp')
                 except Exception:
                     pass
-            
+
             # Eliminar tabla
             op.drop_table('conversaciones_whatsapp')
             print("✅ Tabla 'conversaciones_whatsapp' eliminada exitosamente")

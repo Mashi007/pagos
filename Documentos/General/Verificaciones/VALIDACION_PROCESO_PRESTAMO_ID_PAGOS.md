@@ -1,6 +1,6 @@
 # 🔍 Validación: Proceso de Asignación de prestamo_id en Pagos
 
-> **Análisis del proceso actual y recomendaciones**  
+> **Análisis del proceso actual y recomendaciones**
 > Fecha: 2025-11-06
 
 ---
@@ -33,7 +33,7 @@ cuotas_completadas = aplicar_pago_a_cuotas(nuevo_pago, db, current_user)
 ```python
 # Línea 142: ✅ SÍ busca automáticamente el préstamo
 prestamo = db.query(Prestamo).filter(
-    Prestamo.cedula == cedula, 
+    Prestamo.cedula == cedula,
     Prestamo.estado == "APROBADO"
 ).first()
 

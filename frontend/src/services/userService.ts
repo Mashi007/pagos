@@ -58,11 +58,11 @@ export const userService = {
     if (!userId || userId <= 0 || !Number.isInteger(userId)) {
       throw new Error(`ID de usuario inválido: ${userId}`)
     }
-    
+
     // ✅ CRÍTICO: Logging del endpoint que se está llamando
     const endpoint = `/api/v1/usuarios/${userId}`
     console.log(`📤 [userService] Actualizando usuario - userId: ${userId}, endpoint: ${endpoint}`)
-    
+
     return await api.put<User>(endpoint, userData)
   },
 

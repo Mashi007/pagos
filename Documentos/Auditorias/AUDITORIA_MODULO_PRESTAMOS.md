@@ -1,7 +1,7 @@
 # 🔍 AUDITORÍA PROFUNDA - MÓDULO DE PRÉSTAMOS
 
-**Fecha:** 27 de Enero 2025  
-**Auditor:** AI Assistant  
+**Fecha:** 27 de Enero 2025
+**Auditor:** AI Assistant
 **Versión del Módulo:** 1.0.0
 
 ---

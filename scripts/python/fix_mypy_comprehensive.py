@@ -27,11 +27,11 @@ def fix_column_assignments(content: str) -> tuple[str, int]:
     fixes = 0
     lines = content.split("\n")
     new_lines = []
-    
+
     for i, line in enumerate(lines):
         original_line = line
         stripped = line.rstrip()
-        
+
         # Patrón: objeto.attributo = valor (sin type: ignore ya presente)
         if re.match(r"^(\s+)(\w+\.\w+)\s*=\s*(.+?)(\s*#.*)?$", stripped):
             # Verificar que no tenga ya type: ignore
@@ -60,28 +60,28 @@ def fix_column_assignments(content: str) -> tuple[str, int]:
                         indent = len(original_line) - len(original_line.lstrip())
                         line = stripped + "  # type: ignore[assignment]"
                     fixes += 1
-        
+
         new_lines.append(line)
-    
+
     return "\n".join(new_lines), fixes
 
 
 def fix_escape_sequences(content: str) -> tuple[str, int]:
     """Corrige secuencias de escape inválidas usando raw strings."""
     fixes = 0
-    
+
     # Patrón: append("...\\d...") o similar
     patterns = [
         (r'append\("([^"]*\\d[^"]*)"\)', r'append(r"\1")'),
         (r'append\(\'([^\']*\\d[^\']*)\'\)', r"append(r'\1')"),
     ]
-    
+
     for pattern, replacement in patterns:
         matches = re.findall(pattern, content)
         if matches:
             content = re.sub(pattern, replacement, content)
             fixes += len(matches)
-    
+
     return content, fixes
 
 
@@ -91,21 +91,21 @@ def fix_file(file_path: Path) -> tuple[bool, dict[str, int]]:
         content = file_path.read_text(encoding="utf-8")
         original_content = content
         fixes = {}
-        
+
         # Aplicar correcciones
         content, column_fixes = fix_column_assignments(content)
         if column_fixes > 0:
             fixes["column_assignments"] = column_fixes
-        
+
         content, escape_fixes = fix_escape_sequences(content)
         if escape_fixes > 0:
             fixes["escape_sequences"] = escape_fixes
-        
+
         if content != original_content:
             file_path.write_text(content, encoding="utf-8")
             return True, fixes
         return False, {}
-    
+
     except Exception as e:
         print(f"Error procesando {file_path}: {e}")
         return False, {}
@@ -116,7 +116,7 @@ def main():
     files_processed = 0
     files_modified = 0
     total_fixes = {}
-    
+
     for file_path in sorted(BACKEND_PATH.rglob("*.py")):
         if should_process_file(file_path):
             files_processed += 1
@@ -127,7 +127,7 @@ def main():
                     total_fixes[fix_type] = total_fixes.get(fix_type, 0) + count
                 rel_path = file_path.relative_to(BACKEND_PATH.parent.parent)
                 print(f"✅ {rel_path}: {fixes}")
-    
+
     print(f"\n📊 Resumen:")
     print(f"  Archivos procesados: {files_processed}")
     print(f"  Archivos modificados: {files_modified}")

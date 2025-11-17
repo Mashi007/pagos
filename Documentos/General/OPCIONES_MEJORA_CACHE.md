@@ -141,29 +141,29 @@ from pathlib import Path
 
 class FileCache(CacheBackend):
     """Implementación de cache usando archivos"""
-    
+
     def __init__(self, cache_dir: str = "/tmp/rapicredit_cache"):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"✅ FileCache inicializado en: {cache_dir}")
-    
+
     def _get_file_path(self, key: str) -> Path:
         """Obtener ruta del archivo para una clave"""
         # Usar hash para evitar caracteres especiales en nombres de archivo
         key_hash = hashlib.md5(key.encode()).hexdigest()
         return self.cache_dir / f"{key_hash}.cache"
-    
+
     def get(self, key: str) -> Optional[Any]:
         """Obtener valor del cache"""
         try:
             file_path = self._get_file_path(key)
             if not file_path.exists():
                 return None
-            
+
             with open(file_path, 'rb') as f:
                 data = pickle.load(f)
                 value, expiry = data
-                
+
                 if expiry is None or expiry > time.time():
                     return value
                 else:
@@ -173,21 +173,21 @@ class FileCache(CacheBackend):
         except Exception as e:
             logger.error(f"Error leyendo cache: {e}")
             return None
-    
+
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """Guardar valor en cache"""
         try:
             expiry = (time.time() + ttl) if ttl else None
             file_path = self._get_file_path(key)
-            
+
             with open(file_path, 'wb') as f:
                 pickle.dump((value, expiry), f)
-            
+
             return True
         except Exception as e:
             logger.error(f"Error guardando cache: {e}")
             return False
-    
+
     def delete(self, key: str) -> bool:
         """Eliminar valor del cache"""
         try:
@@ -199,7 +199,7 @@ class FileCache(CacheBackend):
         except Exception as e:
             logger.error(f"Error eliminando cache: {e}")
             return False
-    
+
     def clear(self) -> bool:
         """Limpiar todo el cache"""
         try:

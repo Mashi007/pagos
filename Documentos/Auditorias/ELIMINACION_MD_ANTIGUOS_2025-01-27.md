@@ -1,6 +1,6 @@
 # 🗑️ ELIMINACIÓN DE ARCHIVOS .MD ANTIGUOS
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Criterio:** Archivos .md con fecha en el nombre mayor a 2 meses desde la fecha actual
 
 ---

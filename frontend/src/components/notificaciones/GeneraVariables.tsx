@@ -165,7 +165,7 @@ export function GeneraVariables() {
 
   const eliminarVariable = async (id: number) => {
     if (!window.confirm('¿Está seguro de eliminar esta variable?')) return
-    
+
     try {
       await notificacionService.eliminarVariable(id)
       toast.success('Variable eliminada exitosamente')
@@ -191,7 +191,7 @@ export function GeneraVariables() {
     })
   }
 
-  const variablesFiltradas = variables.filter(v => 
+  const variablesFiltradas = variables.filter(v =>
     v.nombre_variable.toLowerCase().includes(busqueda.toLowerCase()) ||
     v.campo_bd.toLowerCase().includes(busqueda.toLowerCase()) ||
     v.tabla.toLowerCase().includes(busqueda.toLowerCase()) ||

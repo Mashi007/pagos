@@ -73,25 +73,25 @@ export function LoginForm() {
   const onSubmit = async (data: LoginFormData) => {
     try {
       clearError()
-      
+
       // Asegurar que remember sea boolean y email en minúsculas
       const loginData = {
         ...data,
         email: data.email.toLowerCase().trim(), // Convertir a minúsculas
         remember: Boolean(data.remember)
       }
-      
+
       await login(loginData)
       navigate(from, { replace: true })
     } catch (error: unknown) {
       // Manejar diferentes tipos de errores
       if (!isAxiosError(error) || !error.response) {
-        setError('root', { 
-          message: 'Error de conexión. Verifica que el servidor esté funcionando.' 
+        setError('root', {
+          message: 'Error de conexión. Verifica que el servidor esté funcionando.'
         })
         return
       }
-      
+
       if (isAxiosError(error) && error.response?.status === 422) {
         // Errores de validación del servidor
         const responseData = error.response.data as { detail?: Array<{ loc?: string[]; msg?: string }> | string } | undefined
@@ -110,7 +110,7 @@ export function LoginForm() {
         const responseData = error.response?.data as { detail?: string; message?: string } | undefined
         const errorDetail = responseData?.detail || responseData?.message
         const errorMessage = errorDetail || 'Credenciales incorrectas. Verifica tu email y contraseña.'
-        setError('root', { 
+        setError('root', {
           message: errorMessage
         })
       } else {
@@ -118,7 +118,7 @@ export function LoginForm() {
         const responseData = error.response?.data as { detail?: string; message?: string } | undefined
         const errorDetail = responseData?.detail || responseData?.message
         const errorMessage = errorDetail || `Error del servidor: ${error.response?.status || 'Desconocido'}`
-        setError('root', { 
+        setError('root', {
           message: errorMessage
         })
       }
@@ -146,7 +146,7 @@ export function LoginForm() {
             <Logo size="xl" className="drop-shadow-xl brightness-110 contrast-125" />
           </div>
         </motion.div>
-            
+
             <div>
               <CardTitle className={`text-${TEXT_SIZE_LARGE}xl font-bold text-gradient text-center`}>
                 RAPICREDIT

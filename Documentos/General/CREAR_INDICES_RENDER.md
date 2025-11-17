@@ -229,7 +229,7 @@ Revisa los logs de Render para confirmar que:
 
 ### Los índices no se crean
 - **Causa**: Puede ser que las columnas no existan o haya un problema de permisos
-- **Solución**: 
+- **Solución**:
   1. Verificar que las tablas existan
   2. Verificar permisos de la base de datos
   3. Revisar logs para ver errores específicos

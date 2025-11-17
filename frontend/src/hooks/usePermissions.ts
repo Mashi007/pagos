@@ -22,11 +22,11 @@ export function usePermissions() {
    */
   const canEditPrestamo = (prestamoEstado: string): boolean => {
     if (!prestamoEstado) return false
-    
+
     if (isAdmin()) {
       return true // Admin puede editar siempre
     }
-    
+
     return prestamoEstado === 'DRAFT' // User solo puede editar DRAFT
   }
 
@@ -70,12 +70,12 @@ export function usePermissions() {
       // Admin puede cambiar a cualquier estado
       return ['DRAFT', 'EN_REVISION', 'APROBADO', 'RECHAZADO']
     }
-    
+
     // User solo puede cambiar de DRAFT a EN_REVISION
     if (currentState === 'DRAFT') {
       return ['EN_REVISION']
     }
-    
+
     return []
   }
 

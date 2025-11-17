@@ -1,7 +1,7 @@
 # 🔍 Auditoría Integral - Modelos ML (Riesgo e Impago)
 
-**Fecha:** 2025-01-XX  
-**Alcance:** Modelos ML de Riesgo Crediticio y Predicción de Impago de Cuotas  
+**Fecha:** 2025-01-XX
+**Alcance:** Modelos ML de Riesgo Crediticio y Predicción de Impago de Cuotas
 **Estado:** ✅ COMPLETADO
 
 ---
@@ -617,7 +617,7 @@ if not ml_service.load_model_from_path(modelo.ruta_archivo):
 
 ---
 
-**Auditoría realizada por:** AI Assistant  
-**Fecha:** 2025-01-XX  
+**Auditoría realizada por:** AI Assistant
+**Fecha:** 2025-01-XX
 **Próxima revisión:** Después de aplicar correcciones
 

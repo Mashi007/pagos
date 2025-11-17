@@ -83,7 +83,7 @@ Ubicación: backend/app/api/v1/endpoints/dashboard.py línea 191
 # Código con error:
 def obtener_cobros_diarios():
     query = db.query(Prestamo).filter(Prestamo.activo.is_(True))  # ❌ ERROR
-    
+
 # Escenario ANTES (BD vacía):
 - Usuario abre dashboard → No hay préstamos → Query no se ejecuta → NO FALLA
 - Sistema funciona "bien" porque nunca llega a ejecutar el código problemático

@@ -1,6 +1,6 @@
 # 📋 ANÁLISIS DE DUPLICIDAD EN EL CÓDIGO
 
-**Fecha:** 2025-01-27  
+**Fecha:** 2025-01-27
 **Objetivo:** Identificar y eliminar código duplicado para mejorar mantenibilidad
 
 ---

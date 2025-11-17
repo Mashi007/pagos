@@ -85,7 +85,7 @@ beforeEach(() => {
     }
     originalConsoleError.call(console, ...args)
   }
-  
+
   console.warn = (...args) => {
     if (
       typeof args[0] === 'string' &&

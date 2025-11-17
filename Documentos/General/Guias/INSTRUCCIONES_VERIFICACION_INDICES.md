@@ -80,43 +80,43 @@ Execution Time: 2500.0 ms
 ## Verificaciones por Índice
 
 ### 1. `idx_pagos_fecha_pago_activo_monto`
-**Query #1 del script**  
-**Resultado Esperado:** `Index Only Scan` o `Index Scan`  
+**Query #1 del script**
+**Resultado Esperado:** `Index Only Scan` o `Index Scan`
 **Tiempo Esperado:** < 1ms
 
 ### 2. `idx_cuotas_fecha_vencimiento_estado`
-**Query #2 del script**  
-**Resultado Esperado:** `Index Scan` o `Bitmap Index Scan`  
+**Query #2 del script**
+**Resultado Esperado:** `Index Scan` o `Bitmap Index Scan`
 **Tiempo Esperado:** < 5ms
 
 ### 3. `idx_prestamos_fecha_registro_estado`
-**Query #3 del script**  
-**Resultado Esperado:** `Index Scan` o `Bitmap Index Scan`  
+**Query #3 del script**
+**Resultado Esperado:** `Index Scan` o `Bitmap Index Scan`
 **Tiempo Esperado:** < 5ms
 
 ### 4. `idx_pagos_prestamo_id_activo_fecha`
-**Query #4 del script**  
-**Resultado Esperado:** `Index Scan`  
+**Query #4 del script**
+**Resultado Esperado:** `Index Scan`
 **Tiempo Esperado:** < 10ms
 
 ### 5. `idx_cuotas_prestamo_estado_fecha_vencimiento`
-**Query #5 del script**  
-**Resultado Esperado:** `Index Scan`  
+**Query #5 del script**
+**Resultado Esperado:** `Index Scan`
 **Tiempo Esperado:** < 50ms
 
 ### 6. `idx_prestamos_estado_analista_concesionario`
-**Query #6 del script**  
-**Resultado Esperado:** `Index Scan` o `Bitmap Index Scan`  
+**Query #6 del script**
+**Resultado Esperado:** `Index Scan` o `Bitmap Index Scan`
 **Tiempo Esperado:** < 10ms
 
 ### 7. `idx_prestamos_estado_cedula`
-**Query #7 del script**  
-**Resultado Esperado:** `Index Scan`  
+**Query #7 del script**
+**Resultado Esperado:** `Index Scan`
 **Tiempo Esperado:** < 10ms
 
 ### 8. `idx_prestamos_usuario_proponente`
-**Query #8 del script**  
-**Resultado Esperado:** `Index Scan`  
+**Query #8 del script**
+**Resultado Esperado:** `Index Scan`
 **Tiempo Esperado:** < 20ms
 
 ---
@@ -172,9 +172,9 @@ Todos los demás índices deberían mostrar resultados similares.
 
 ## Resumen
 
-✅ **Script corregido:** `verificar_uso_indices_puro.sql`  
-✅ **Compatible:** Todas las herramientas GUI  
-✅ **8 verificaciones:** Todos los índices críticos  
+✅ **Script corregido:** `verificar_uso_indices_puro.sql`
+✅ **Compatible:** Todas las herramientas GUI
+✅ **8 verificaciones:** Todos los índices críticos
 ✅ **Fácil de usar:** Ejecutar cada query individualmente
 
 Usa la versión `_puro.sql` para evitar errores de sintaxis.

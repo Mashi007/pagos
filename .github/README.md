@@ -4,7 +4,7 @@
 
 ### Render.com
 - `RENDER_SERVICE_ID`: ID del servicio principal
-- `RENDER_STAGING_SERVICE_ID`: ID del servicio staging  
+- `RENDER_STAGING_SERVICE_ID`: ID del servicio staging
 - `RENDER_API_KEY`: API Key de Render
 - `RENDER_SERVICE_URL`: URL del servicio principal
 - `RENDER_STAGING_URL`: URL del servicio staging

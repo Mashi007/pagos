@@ -78,7 +78,7 @@ for numero_cuota in range(1, prestamo.numero_cuotas + 1):
     fecha_vencimiento = fecha_base + relativedelta(months=numero_cuota)
     monto_interes = saldo_capital * tasa_mensual
     monto_capital = monto_cuota - monto_interes
-    
+
     cuota = Cuota(
         prestamo_id=prestamo.id,
         numero_cuota=numero_cuota,
@@ -266,15 +266,15 @@ if pago.prestamo_id:
         Cuota.prestamo_id == pago.prestamo_id,
         Cuota.total_pagado > 0
     ).all()
-    
+
     for cuota in cuotas:
         todos_conciliados = _verificar_pagos_conciliados_cuota(db, cuota.id, cuota.prestamo_id)
-        
+
         if todos_conciliados:
             _actualizar_estado_cuota(cuota, fecha_hoy, db)
             # Si total_pagado >= monto_cuota → estado = "PAGADO"
             # Si total_pagado < monto_cuota → estado = "PARCIAL" o "PENDIENTE"
-    
+
     db.commit()  # ✅ Commit de las actualizaciones de cuotas
 ```
 

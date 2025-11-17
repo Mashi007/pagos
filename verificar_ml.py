@@ -24,11 +24,11 @@ sys.path.insert(0, str(Path(__file__).parent / "backend"))
 try:
     # Importar directamente desde session para usar la misma configuración
     from app.db.session import engine
-    
+
     print("=" * 70)
     print("VERIFICANDO CONEXION DE MODELOS ML A BASE DE DATOS")
     print("=" * 70)
-    
+
     # Conectar a BD
     print("\n[1] Conectando a base de datos...")
     try:
@@ -42,16 +42,16 @@ try:
         print(f"    ERROR - No se pudo conectar: {str(e)[:100]}")
         print("    Verifica que DATABASE_URL este configurado en .env")
         sys.exit(1)
-    
+
     # Verificar tablas
     print("\n[2] Verificando tablas...")
     tablas_existentes = inspector.get_table_names()
-    
+
     tablas_requeridas = {
         'modelos_riesgo': 'Modelos de Riesgo ML',
         'modelos_impago_cuotas': 'Modelos de Impago de Cuotas ML'
     }
-    
+
     todas_existen = True
     for tabla, nombre in tablas_requeridas.items():
         existe = tabla in tablas_existentes
@@ -60,7 +60,7 @@ try:
         print(f"    {simbolo} {tabla:<35} - {estado}")
         if not existe:
             todas_existen = False
-    
+
     # Si existen, mostrar detalles
     if todas_existen:
         print("\n[3] Detalles de las tablas:")
@@ -73,7 +73,7 @@ try:
                 print(f"    {tabla}: {len(columnas)} columnas, {total} registros")
             except Exception as e:
                 print(f"    {tabla}: Error - {e}")
-    
+
     # Verificar scikit-learn
     print("\n[4] Verificando scikit-learn...")
     try:
@@ -82,7 +82,7 @@ try:
     except ImportError:
         print("    ERROR - scikit-learn NO instalado")
         print("    Instalar con: pip install scikit-learn==1.6.1")
-    
+
     # Resumen
     print("\n" + "=" * 70)
     if todas_existen:
@@ -90,7 +90,7 @@ try:
     else:
         print("RESULTADO: FALTAN TABLAS - Ejecutar: cd backend && alembic upgrade head")
     print("=" * 70)
-    
+
 except ImportError as e:
     print(f"ERROR: No se pudo importar modulos: {e}")
     print("Asegurate de estar en la raiz del proyecto")

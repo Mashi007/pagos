@@ -32,7 +32,7 @@ func.sum(Cuota.monto_cuota).label("total_cuotas_programadas")
 ### Query SQL Completa
 
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
     EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
     SUM(c.monto_cuota) as total_cuotas_programadas  -- ✅ SUM, no COUNT
@@ -41,7 +41,7 @@ INNER JOIN prestamos p ON c.prestamo_id = p.id
 WHERE p.estado = 'APROBADO'
   AND c.fecha_vencimiento >= :fecha_inicio
   AND c.fecha_vencimiento <= :fecha_fin
-GROUP BY 
+GROUP BY
     EXTRACT(YEAR FROM c.fecha_vencimiento),
     EXTRACT(MONTH FROM c.fecha_vencimiento)
 ```

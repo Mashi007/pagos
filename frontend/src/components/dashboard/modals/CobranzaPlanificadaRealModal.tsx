@@ -129,21 +129,21 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
   // Procesar datos para el gráfico
   const datosGrafico = useMemo(() => {
     if (!cobranzaPorDiaData?.dias) return []
-    
+
     return cobranzaPorDiaData.dias.map((d) => {
       const fecha = new Date(d.fecha)
       const planificada = d.cobranza_planificada || d.total_a_cobrar || 0
       const real = d.cobranza_real || d.pagos || 0
       const diferencia = real - planificada
       const porcentajeCumplimiento = planificada > 0 ? (real / planificada) * 100 : 0
-      
+
       return {
         fecha: d.fecha,
         fechaFormateada: fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }),
-        fechaCompleta: fecha.toLocaleDateString('es-ES', { 
-          weekday: 'short', 
-          day: '2-digit', 
-          month: 'short' 
+        fechaCompleta: fecha.toLocaleDateString('es-ES', {
+          weekday: 'short',
+          day: '2-digit',
+          month: 'short'
         }),
         cobranza_planificada: planificada,
         cobranza_real: real,
@@ -191,20 +191,20 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
   }, [datosGrafico])
 
   // Tooltip personalizado
-  const CustomTooltip = ({ 
-    active, 
-    payload, 
-    label 
-  }: { 
+  const CustomTooltip = ({
+    active,
+    payload,
+    label
+  }: {
     active?: boolean
-    payload?: Array<{ 
+    payload?: Array<{
       name?: string
       value?: number
       color?: string
       dataKey?: string
       payload?: any
     }>
-    label?: string | number 
+    label?: string | number
   }) => {
     if (active && payload && payload.length) {
       const data = payload[0]?.payload || payload[0]

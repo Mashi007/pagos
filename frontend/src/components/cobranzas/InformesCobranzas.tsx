@@ -4,9 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { 
-  FileText, 
-  Download, 
+import {
+  FileText,
+  Download,
   FileSpreadsheet,
   BarChart3,
   TrendingUp,
@@ -78,7 +78,7 @@ export function InformesCobranzas() {
   const descargarInforme = async (informeId: string, formato: 'pdf' | 'excel') => {
     try {
       toast.loading(`Generando informe en formato ${formato.toUpperCase()}...`)
-      
+
       switch (informeId) {
         case 'clientes-atrasados':
           await cobranzasService.getInformeClientesAtrasados({
@@ -88,11 +88,11 @@ export function InformesCobranzas() {
             formato,
           })
           break
-          
+
         case 'rendimiento-analista':
           await cobranzasService.getInformeRendimientoAnalista(formato)
           break
-          
+
         case 'montos-periodo':
           await cobranzasService.getInformeMontosPeriodo({
             fecha_inicio: filtros.fecha_inicio || undefined,
@@ -100,16 +100,16 @@ export function InformesCobranzas() {
             formato,
           })
           break
-          
+
         case 'antiguedad-saldos':
           await cobranzasService.getInformeAntiguedadSaldos(formato)
           break
-          
+
         case 'resumen-ejecutivo':
           await cobranzasService.getInformeResumenEjecutivo(formato)
           break
       }
-      
+
       toast.dismiss()
       toast.success(`Informe descargado exitosamente en formato ${formato.toUpperCase()}`)
     } catch (error: any) {
@@ -125,9 +125,9 @@ export function InformesCobranzas() {
       setCargandoInforme(true)
       setDatosInforme(null)
       toast.loading('Cargando informe...')
-      
+
       let datos: any
-      
+
       switch (informeId) {
         case 'clientes-atrasados':
           datos = await cobranzasService.getInformeClientesAtrasados({
@@ -137,11 +137,11 @@ export function InformesCobranzas() {
             formato: 'json',
           })
           break
-          
+
         case 'rendimiento-analista':
           datos = await cobranzasService.getInformeRendimientoAnalista('json')
           break
-          
+
         case 'montos-periodo':
           datos = await cobranzasService.getInformeMontosPeriodo({
             fecha_inicio: filtros.fecha_inicio || undefined,
@@ -149,16 +149,16 @@ export function InformesCobranzas() {
             formato: 'json',
           })
           break
-          
+
         case 'antiguedad-saldos':
           datos = await cobranzasService.getInformeAntiguedadSaldos('json')
           break
-          
+
         case 'resumen-ejecutivo':
           datos = await cobranzasService.getInformeResumenEjecutivo('json')
           break
       }
-      
+
       setDatosInforme(datos)
       toast.dismiss()
       toast.success('Informe cargado correctamente')
@@ -225,7 +225,7 @@ export function InformesCobranzas() {
                       />
                     </div>
                   )}
-                  
+
                   {informe.tieneFiltros && informe.id === 'montos-periodo' && (
                     <div className="space-y-2 border-t pt-4">
                       <Input
@@ -567,10 +567,10 @@ export function InformesCobranzas() {
                 )}
 
                 {/* Mensaje si no hay datos específicos */}
-                {!datosInforme.clientes && 
-                 !datosInforme.datos && 
-                 !datosInforme.meses && 
-                 !datosInforme.rangos && 
+                {!datosInforme.clientes &&
+                 !datosInforme.datos &&
+                 !datosInforme.meses &&
+                 !datosInforme.rangos &&
                  !datosInforme.resumen && (
                   <div className="text-center py-8 text-gray-500">
                     No hay datos disponibles para mostrar en este informe.

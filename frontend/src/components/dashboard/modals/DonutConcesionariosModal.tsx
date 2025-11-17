@@ -75,10 +75,10 @@ export function DonutConcesionariosModal({ isOpen, onClose }: DonutConcesionario
   const datosGrafico = prestamosData?.concesionarios || []
   const datosPrincipales = datosGrafico.filter((d) => d.porcentaje >= umbralPorcentaje)
   const datosOtros = datosGrafico.filter((d) => d.porcentaje < umbralPorcentaje)
-  
+
   const totalOtros = datosOtros.reduce((sum, d) => sum + d.total_prestamos, 0)
-  const porcentajeOtros = datosOtros.length > 0 
-    ? (totalOtros / (prestamosData?.total_general || 1)) * 100 
+  const porcentajeOtros = datosOtros.length > 0
+    ? (totalOtros / (prestamosData?.total_general || 1)) * 100
     : 0
 
   const datosFinales = [
@@ -132,7 +132,7 @@ export function DonutConcesionariosModal({ isOpen, onClose }: DonutConcesionario
   // Label personalizado
   const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: { cx?: number; cy?: number; midAngle?: number; innerRadius?: number; outerRadius?: number; percent?: number }) => {
     if (!percent || percent < 0.05 || !cx || !cy || !midAngle || !innerRadius || !outerRadius) return null
-    
+
     const RADIAN = Math.PI / 180
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5
     const x = cx + radius * Math.cos(-midAngle * RADIAN)

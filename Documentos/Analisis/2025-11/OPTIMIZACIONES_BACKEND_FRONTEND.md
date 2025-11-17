@@ -1,6 +1,6 @@
 # 🚀 OPTIMIZACIONES BACKEND-FRONTEND
 
-**Fecha:** 2025-11-06  
+**Fecha:** 2025-11-06
 **Objetivo:** Mejorar la integración y rendimiento entre backend y frontend basado en análisis de logs
 
 ---
@@ -103,14 +103,14 @@ const data = await throttledRequest(
 **Código:**
 ```typescript
 async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-  const isSlowEndpoint = url.includes('/dashboard/') || 
+  const isSlowEndpoint = url.includes('/dashboard/') ||
                         url.includes('/admin') ||
                         url.includes('/evolucion') ||
                         url.includes('/tendencia')
-  
+
   const timeout = isSlowEndpoint ? SLOW_ENDPOINT_TIMEOUT_MS : DEFAULT_TIMEOUT_MS
   const finalConfig = { ...config, timeout: config?.timeout || timeout }
-  
+
   return (await this.client.get(url, finalConfig)).data
 }
 ```

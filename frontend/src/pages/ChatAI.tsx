@@ -48,9 +48,9 @@ export function ChatAI() {
       const tieneToken = !!(config?.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-'))
       const estaActivo = config?.activo?.toLowerCase() === 'true'
       const configuradoCorrectamente = tieneToken && estaActivo
-      
+
       setAiConfigurado(configuradoCorrectamente)
-      
+
       // Solo mostrar toasts si NO está configurado correctamente Y es la primera vez
       // No mostrar toasts si el usuario ya sabe que no está configurado
       if (!configuradoCorrectamente) {
@@ -80,7 +80,7 @@ export function ChatAI() {
 
     const preguntaTexto = pregunta.trim()
     setPregunta('')
-    
+
     // Agregar mensaje del usuario
     const mensajeUsuario: Mensaje = {
       id: Date.now().toString(),
@@ -119,13 +119,13 @@ export function ChatAI() {
       console.error('Error enviando pregunta:', error)
       const errorDetail = error?.response?.data?.detail || error?.message || 'No se pudo generar la respuesta'
       const statusCode = error?.response?.status
-      
+
       // Si es un error 400 (pregunta rechazada o validación), mostrar mensaje apropiado
       if (statusCode === 400) {
-        const esPreguntaRechazada = errorDetail.includes('solo responde preguntas') || 
+        const esPreguntaRechazada = errorDetail.includes('solo responde preguntas') ||
                                     errorDetail.includes('base de datos') ||
                                     errorDetail.includes('no puede estar vacía')
-        
+
         if (esPreguntaRechazada) {
           // Mostrar mensaje en el chat con explicación
           const mensajeError: Mensaje = {

@@ -80,7 +80,7 @@ def downgrade():
                     op.drop_index(idx['name'], table_name='modelos_riesgo')
                 except Exception:
                     pass
-            
+
             # Eliminar tabla
             op.drop_table('modelos_riesgo')
             print("✅ Tabla 'modelos_riesgo' eliminada exitosamente")

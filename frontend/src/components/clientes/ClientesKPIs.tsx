@@ -1,9 +1,9 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { 
-  Users, 
-  UserCheck, 
-  UserX, 
+import {
+  Users,
+  UserCheck,
+  UserX,
   UserMinus,
   TrendingUp,
   TrendingDown,
@@ -18,14 +18,14 @@ interface ClientesKPIsProps {
   isLoading?: boolean
 }
 
-export function ClientesKPIs({ 
-  activos, 
-  inactivos, 
-  finalizados, 
-  total, 
-  isLoading = false 
+export function ClientesKPIs({
+  activos,
+  inactivos,
+  finalizados,
+  total,
+  isLoading = false
 }: ClientesKPIsProps) {
-  
+
   // Calcular porcentajes
   const porcentajeActivos = total > 0 ? Math.round((activos / total) * 100) : 0
   const porcentajeInactivos = total > 0 ? Math.round((inactivos / total) * 100) : 0

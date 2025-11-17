@@ -29,7 +29,7 @@
 
 **Query SQL:**
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM fecha_aprobacion)::integer as año,
     EXTRACT(MONTH FROM fecha_aprobacion)::integer as mes,
     COUNT(id) as cantidad,
@@ -38,7 +38,7 @@ FROM prestamos
 WHERE estado = 'APROBADO'
   AND fecha_aprobacion >= :fecha_inicio
   AND fecha_aprobacion <= :fecha_fin
-GROUP BY 
+GROUP BY
     EXTRACT(YEAR FROM fecha_aprobacion),
     EXTRACT(MONTH FROM fecha_aprobacion)
 ORDER BY año, mes
@@ -84,7 +84,7 @@ query_nuevos = (
 
 **Query SQL:**
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
     EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
     SUM(c.monto_cuota) as total_cuotas_programadas  -- ✅ SUM, no COUNT
@@ -93,7 +93,7 @@ INNER JOIN prestamos p ON c.prestamo_id = p.id
 WHERE p.estado = 'APROBADO'
   AND c.fecha_vencimiento >= :fecha_inicio
   AND c.fecha_vencimiento <= :fecha_fin
-GROUP BY 
+GROUP BY
     EXTRACT(YEAR FROM c.fecha_vencimiento),
     EXTRACT(MONTH FROM c.fecha_vencimiento)
 ORDER BY año, mes
@@ -144,7 +144,7 @@ query_cuotas = (
 
 **Query SQL (Sin Filtros):**
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM fecha_pago)::integer as año,
     EXTRACT(MONTH FROM fecha_pago)::integer as mes,
     COALESCE(SUM(monto_pagado), 0) as total_pagado
@@ -154,7 +154,7 @@ WHERE fecha_pago >= :fecha_inicio
   AND monto_pagado IS NOT NULL
   AND monto_pagado > 0
   AND activo = TRUE
-GROUP BY 
+GROUP BY
     EXTRACT(YEAR FROM fecha_pago),
     EXTRACT(MONTH FROM fecha_pago)
 ORDER BY año, mes
@@ -162,7 +162,7 @@ ORDER BY año, mes
 
 **Query SQL (Con Filtros - JOIN con prestamos):**
 ```sql
-SELECT 
+SELECT
     EXTRACT(YEAR FROM p.fecha_pago)::integer as año,
     EXTRACT(MONTH FROM p.fecha_pago)::integer as mes,
     COALESCE(SUM(p.monto_pagado), 0) as total_pagado
@@ -178,7 +178,7 @@ WHERE p.fecha_pago >= :fecha_inicio
   AND p.activo = TRUE
   AND pr.estado = 'APROBADO'
   [Filtros adicionales: analista, concesionario, modelo]
-GROUP BY 
+GROUP BY
     EXTRACT(YEAR FROM p.fecha_pago),
     EXTRACT(MONTH FROM p.fecha_pago)
 ORDER BY año, mes
@@ -189,7 +189,7 @@ ORDER BY año, mes
 # Líneas 3463-3480 en dashboard.py (sin filtros)
 query_pagos_sql = text(
     """
-    SELECT 
+    SELECT
         EXTRACT(YEAR FROM fecha_pago)::integer as año,
         EXTRACT(MONTH FROM fecha_pago)::integer as mes,
         COALESCE(SUM(monto_pagado), 0) as total_pagado
@@ -199,7 +199,7 @@ query_pagos_sql = text(
       AND monto_pagado IS NOT NULL
       AND monto_pagado > 0
       AND activo = TRUE
-    GROUP BY 
+    GROUP BY
         EXTRACT(YEAR FROM fecha_pago),
         EXTRACT(MONTH FROM fecha_pago)
     ORDER BY año, mes
@@ -229,7 +229,7 @@ query_pagos_sql = text(
 **Query SQL Optimizada:**
 ```sql
 WITH meses AS (
-    SELECT 
+    SELECT
         generate_series(
             DATE_TRUNC('month', :fecha_inicio::date),
             DATE_TRUNC('month', :fecha_fin::date),
@@ -237,13 +237,13 @@ WITH meses AS (
         )::date as fecha_mes
 ),
 meses_completos AS (
-    SELECT 
+    SELECT
         EXTRACT(YEAR FROM fecha_mes)::int as año,
         EXTRACT(MONTH FROM fecha_mes)::int as mes,
         (fecha_mes + INTERVAL '1 month - 1 day')::date as ultimo_dia_mes
     FROM meses
 )
-SELECT 
+SELECT
     m.año,
     m.mes,
     COALESCE(SUM(c.monto_cuota), 0) as morosidad
@@ -256,7 +256,7 @@ ORDER BY m.año, m.mes
 
 **Query SQL Fallback (por mes):**
 ```sql
-SELECT 
+SELECT
     COALESCE(SUM(c.monto_cuota), 0) as morosidad
 FROM cuotas c
 INNER JOIN prestamos p ON c.prestamo_id = p.id
@@ -271,7 +271,7 @@ WHERE p.estado = 'APROBADO'
 query_morosidad_sql = text(
     f"""
     WITH meses AS (...)
-    SELECT 
+    SELECT
         m.año,
         m.mes,
         COALESCE(SUM(c.monto_cuota), 0) as morosidad

@@ -17,13 +17,13 @@ Estos índices mejoran los endpoints más lentos:
 **Impacto esperado:** Reducción de 2000-3000ms a 300-500ms
 
 ```sql
-CREATE INDEX IF NOT EXISTS idx_pagos_staging_fecha_pago_funcional 
+CREATE INDEX IF NOT EXISTS idx_pagos_staging_fecha_pago_funcional
 ON pagos_staging (
-    EXTRACT(YEAR FROM fecha_pago::timestamp), 
+    EXTRACT(YEAR FROM fecha_pago::timestamp),
     EXTRACT(MONTH FROM fecha_pago::timestamp)
 )
-WHERE fecha_pago IS NOT NULL 
-  AND fecha_pago != '' 
+WHERE fecha_pago IS NOT NULL
+  AND fecha_pago != ''
   AND fecha_pago ~ '^\d{4}-\d{2}-\d{2}';
 ```
 
@@ -32,9 +32,9 @@ WHERE fecha_pago IS NOT NULL
 **Impacto esperado:** Reducción de 1000-2000ms a 200-400ms
 
 ```sql
-CREATE INDEX IF NOT EXISTS idx_cuotas_fecha_vencimiento_funcional 
+CREATE INDEX IF NOT EXISTS idx_cuotas_fecha_vencimiento_funcional
 ON cuotas (
-    EXTRACT(YEAR FROM fecha_vencimiento), 
+    EXTRACT(YEAR FROM fecha_vencimiento),
     EXTRACT(MONTH FROM fecha_vencimiento)
 )
 WHERE fecha_vencimiento IS NOT NULL;
@@ -45,9 +45,9 @@ WHERE fecha_vencimiento IS NOT NULL;
 **Impacto esperado:** Reducción de 5000-10000ms a 500-1000ms
 
 ```sql
-CREATE INDEX IF NOT EXISTS idx_prestamos_fecha_registro_funcional 
+CREATE INDEX IF NOT EXISTS idx_prestamos_fecha_registro_funcional
 ON prestamos (
-    EXTRACT(YEAR FROM fecha_registro), 
+    EXTRACT(YEAR FROM fecha_registro),
     EXTRACT(MONTH FROM fecha_registro)
 )
 WHERE fecha_registro IS NOT NULL
@@ -60,9 +60,9 @@ WHERE fecha_registro IS NOT NULL
 **Mejora:** `/api/v1/dashboard/evolucion-general-mensual`
 
 ```sql
-CREATE INDEX IF NOT EXISTS idx_pagos_fecha_pago_funcional 
+CREATE INDEX IF NOT EXISTS idx_pagos_fecha_pago_funcional
 ON pagos (
-    EXTRACT(YEAR FROM fecha_pago), 
+    EXTRACT(YEAR FROM fecha_pago),
     EXTRACT(MONTH FROM fecha_pago)
 )
 WHERE fecha_pago IS NOT NULL
@@ -73,28 +73,28 @@ WHERE fecha_pago IS NOT NULL
 
 ```sql
 -- Filtros por fecha
-CREATE INDEX IF NOT EXISTS idx_pagos_staging_fecha_pago 
+CREATE INDEX IF NOT EXISTS idx_pagos_staging_fecha_pago
 ON pagos_staging (fecha_pago::timestamp)
 WHERE fecha_pago IS NOT NULL AND fecha_pago != '';
 
-CREATE INDEX IF NOT EXISTS idx_cuotas_fecha_vencimiento 
+CREATE INDEX IF NOT EXISTS idx_cuotas_fecha_vencimiento
 ON cuotas (fecha_vencimiento);
 
-CREATE INDEX IF NOT EXISTS idx_prestamos_fecha_registro 
+CREATE INDEX IF NOT EXISTS idx_prestamos_fecha_registro
 ON prestamos (fecha_registro);
 
 -- JOINs
-CREATE INDEX IF NOT EXISTS idx_cuotas_prestamo_id 
+CREATE INDEX IF NOT EXISTS idx_cuotas_prestamo_id
 ON cuotas (prestamo_id);
 
-CREATE INDEX IF NOT EXISTS idx_prestamos_cedula 
+CREATE INDEX IF NOT EXISTS idx_prestamos_cedula
 ON prestamos (cedula);
 
 -- Filtros por estado
-CREATE INDEX IF NOT EXISTS idx_prestamos_estado 
+CREATE INDEX IF NOT EXISTS idx_prestamos_estado
 ON prestamos (estado);
 
-CREATE INDEX IF NOT EXISTS idx_cuotas_estado 
+CREATE INDEX IF NOT EXISTS idx_cuotas_estado
 ON cuotas (estado);
 ```
 
@@ -131,7 +131,7 @@ Si solo quieres crear índices específicos, copia y ejecuta las queries individ
 ### Verificar que los índices se crearon:
 
 ```sql
-SELECT 
+SELECT
     schemaname,
     tablename,
     indexname,
@@ -146,7 +146,7 @@ ORDER BY tablename, indexname;
 
 ```sql
 EXPLAIN ANALYZE
-SELECT 
+SELECT
     EXTRACT(YEAR FROM fecha_pago::timestamp)::int as año,
     EXTRACT(MONTH FROM fecha_pago::timestamp)::int as mes,
     COALESCE(SUM(monto_pagado::numeric), 0) as pagos
@@ -204,8 +204,8 @@ Después de crear los índices, los tiempos de respuesta deberían mejorar:
 
 2. **Verificar estadísticas:**
    ```sql
-   SELECT relname, n_tup_ins, n_tup_upd, last_analyze 
-   FROM pg_stat_user_tables 
+   SELECT relname, n_tup_ins, n_tup_upd, last_analyze
+   FROM pg_stat_user_tables
    WHERE relname = 'pagos_staging';
    ```
 

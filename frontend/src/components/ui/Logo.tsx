@@ -166,52 +166,52 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           const configResponse = await fetch('/api/v1/configuracion/general', {
             signal: controller.signal,
           })
-          
+
           // ✅ Verificar si el componente sigue montado antes de continuar
           if (!isMounted()) {
             clearTimeout(timeoutId)
             return
           }
-          
+
           if (configResponse.ok) {
             const config = await configResponse.json()
             if (config.logo_filename) {
               // ✅ Si tenemos el nombre del logo, verificar primero si existe antes de intentar cargar
               const logoPath = `/api/v1/configuracion/logo/${config.logo_filename}`
-              
+
               // Verificar si el logo existe con HEAD request (más ligero que GET)
               try {
                 const headResponse = await fetch(logoPath, {
                   method: 'HEAD',
                   signal: controller.signal,
                 })
-                
+
                 // ✅ Verificar si el componente sigue montado antes de continuar
                 if (!isMounted()) {
                   clearTimeout(timeoutId)
                   return
                 }
-                
+
                 if (headResponse.ok) {
                   // Logo existe, usar URL con timestamp
                   const logoUrl = `${logoPath}?t=${Date.now()}`
-                  
+
                   // ✅ Verificar si el logo cambió comparando el filename
                   const logoChanged = logoCache.logoFilename !== config.logo_filename
-                  
+
                   logoCache.logoUrl = logoUrl
                   logoCache.logoFilename = config.logo_filename // ✅ Guardar nombre del archivo
                   logoCache.logoNotFound = false // ✅ Resetear flag
                   logoCache.hasChecked = true
-                  
+
                   // ✅ Solo incrementar versión si el logo realmente cambió
                   if (logoChanged) {
                     logoCache.version += 1
                   }
-                  
+
                   // ✅ Guardar metadatos en localStorage para persistencia
                   saveLogoMetadata(config.logo_filename)
-                  
+
                   if (isMounted()) {
                     // ✅ Actualizar inmediatamente si el logo cambió (filename diferente)
                     // Si el logo no cambió, mantener el URL cacheado pero actualizar el timestamp para evitar caché del navegador
@@ -250,7 +250,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                   }
                   clearTimeout(timeoutId)
                   logoCache.isChecking = false
-                  
+
                   // ✅ Solo notificar si el logo cambió para evitar actualizaciones innecesarias
                   if (logoChanged) {
                     notifyLogoListeners(logoUrl, logoCache.version)
@@ -333,7 +333,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           console.warn('⚠️ Error cargando logo:', getErrorMessage(error))
         }
       }
-      
+
       // Si no encontramos ningún logo, marcar como verificado
       clearTimeout(timeoutId)
       logoCache.hasChecked = true
@@ -348,7 +348,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     // Listener para cambios en el caché compartido
     const handleCacheUpdate = (url: string | null, version: number) => {
       if (!isMounted()) return
-      
+
       // ✅ Extraer filename del URL para comparar si es el mismo logo
       const currentFilename = logoCache.logoFilename
       let newFilename: string | null = null
@@ -356,11 +356,11 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         const urlMatch = url.match(/\/logo\/([^/?]+)/)
         newFilename = urlMatch ? urlMatch[1] : null
       }
-      
+
       // ✅ Solo actualizar si el filename realmente cambió (no solo la versión)
       const filenameChanged = newFilename !== currentFilename
       const hadNoLogo = !currentFilename && !customLogoUrl
-      
+
       if (filenameChanged || hadNoLogo) {
         // ✅ Solo mostrar mensaje si el logo realmente cambió
         if (filenameChanged && currentFilename) {
@@ -397,7 +397,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     }
 
     logoListeners.add(handleCacheUpdate)
-    
+
     // Si el logo ya estaba cacheado, sincronizar versión
     if (logoCache.logoUrl && logoCache.version > 0) {
       setLogoVersion(logoCache.version)
@@ -406,15 +406,15 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     // Escuchar eventos de actualización del logo
     const handleLogoUpdate = (event: CustomEvent) => {
       const { filename, url, confirmed } = event.detail || {}
-      
+
       console.debug('📢 Evento logoUpdated recibido:', { filename, url, confirmed })
-      
+
       // Si solo viene confirmed: true sin filename ni url, ignorar
       if (confirmed && !filename && !url) {
         console.warn('Evento logoUpdated recibido con confirmed pero sin filename/url')
         return
       }
-      
+
       // Cuando se confirma el logo, invalidar caché y recargar desde configuración
       if (confirmed && (filename || url)) {
         console.debug('🔄 Logo confirmado, invalidando caché y recargando desde configuración')
@@ -422,13 +422,13 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         logoCache.logoUrl = null
         logoCache.hasChecked = false
         logoCache.isChecking = false
-        
+
         // Recargar desde configuración general para obtener logo_filename persistido en BD
         fetch('/api/v1/configuracion/general')
           .then(res => res.json())
           .then(async config => {
             let newLogoUrl: string | null = null
-            
+
             if (config.logo_filename) {
               const logoPath = `/api/v1/configuracion/logo/${config.logo_filename}`
               // ✅ Verificar primero si existe con HEAD request
@@ -487,7 +487,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
                 return
               }
             }
-            
+
             if (newLogoUrl) {
               // Actualizar caché y notificar a todos los listeners
               const logoFilename = config?.logo_filename || filename || null
@@ -586,10 +586,10 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           })
         return
       }
-      
+
       // Para actualizaciones no confirmadas (preview durante carga), actualizar directamente
       let newLogoUrl: string | null = null
-      
+
       if (url) {
         // Recargar el logo con timestamp para evitar caché
         newLogoUrl = `${url}?t=${Date.now()}`
@@ -598,7 +598,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         const logoPath = `/api/v1/configuracion/logo/${filename}`
         newLogoUrl = `${logoPath}?t=${Date.now()}`
       }
-      
+
       if (newLogoUrl) {
         // Actualizar cache y notificar a todos los listeners
         console.debug('🔄 Actualizando logo (preview):', newLogoUrl)
@@ -690,9 +690,9 @@ export function Logo({ className, size = 'md' }: LogoProps) {
   // Si ya verificamos y no hay logo personalizado, mostrar SVG por defecto
   // También mostrar SVG mientras verificamos (hasChecked === false)
   return (
-    <svg 
+    <svg
       className={cn(sizeMap[size], className)}
-      viewBox="0 0 48 48" 
+      viewBox="0 0 48 48"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
       aria-label="RAPICREDIT Logo"
@@ -702,12 +702,12 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         <filter id={`shadowR-${uniqueId}`} x="-50%" y="-50%" width="200%" height="200%">
           <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="#000000" floodOpacity="0.25"/>
         </filter>
-        
+
         {/* Filtro de sombra para el círculo naranja */}
         <filter id={`shadowDot-${uniqueId}`} x="-50%" y="-50%" width="200%" height="200%">
           <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#000000" floodOpacity="0.3"/>
         </filter>
-        
+
         {/* Efecto glow para el punto naranja */}
         <filter id={`glowDot-${uniqueId}`}>
           <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
@@ -717,36 +717,36 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           </feMerge>
         </filter>
       </defs>
-      
+
       {/* Letra R estilizada - MÁS GRANDE Y MÁS GRUESA para mejor visibilidad */}
       <g filter={`url(#shadowR-${uniqueId})`}>
         {/* Tallo vertical principal - MÁS GRUESO (9px) */}
         <rect x="7" y="5" width="9" height="28" rx="1.5" className="fill-slate-900"/>
-        
+
         {/* Borde blanco sutil en el tallo para definir mejor los bordes */}
         <rect x="7" y="5" width="9" height="28" rx="1.5" fill="none" stroke="#E0E7FF" strokeWidth="0.5" opacity="0.6"/>
-        
+
         {/* Parte superior curva de la R - MÁS GRANDE */}
-        <path d="M 16 5 L 16 14 Q 16 9 21 9 Q 26 9 27.5 11.5 L 27.5 17 Q 27.5 14.5 25 14.5 L 22 14.5 Q 20 14.5 18.5 15.5 L 16 18 Z" 
+        <path d="M 16 5 L 16 14 Q 16 9 21 9 Q 26 9 27.5 11.5 L 27.5 17 Q 27.5 14.5 25 14.5 L 22 14.5 Q 20 14.5 18.5 15.5 L 16 18 Z"
               className="fill-slate-900"/>
-        
+
         {/* Borde sutil en la parte superior */}
-        <path d="M 16 5 L 16 14 Q 16 9 21 9 Q 26 9 27.5 11.5 L 27.5 17 Q 27.5 14.5 25 14.5 L 22 14.5 Q 20 14.5 18.5 15.5 L 16 18 Z" 
+        <path d="M 16 5 L 16 14 Q 16 9 21 9 Q 26 9 27.5 11.5 L 27.5 17 Q 27.5 14.5 25 14.5 L 22 14.5 Q 20 14.5 18.5 15.5 L 16 18 Z"
               fill="none" stroke="#E0E7FF" strokeWidth="0.5" opacity="0.6"/>
-        
+
         {/* Pierna diagonal de la R - MÁS GRUESA Y EXTENDIDA */}
-        <path d="M 16 19 L 24 11 L 30 11 L 21 19 L 21 21 L 28 27 L 34 27 L 25 21 L 23 21 Z" 
+        <path d="M 16 19 L 24 11 L 30 11 L 21 19 L 21 21 L 28 27 L 34 27 L 25 21 L 23 21 Z"
               className="fill-slate-900"/>
-        
+
         {/* Borde sutil en la pierna */}
-        <path d="M 16 19 L 24 11 L 30 11 L 21 19 L 21 21 L 28 27 L 34 27 L 25 21 L 23 21 Z" 
+        <path d="M 16 19 L 24 11 L 30 11 L 21 19 L 21 21 L 28 27 L 34 27 L 25 21 L 23 21 Z"
               fill="none" stroke="#E0E7FF" strokeWidth="0.5" opacity="0.6"/>
-        
+
         {/* Punta inferior derecha - MÁS PRONUNCIADA */}
-        <path d="M 28 27 L 34 27 L 32 24 L 30 24 Z" 
+        <path d="M 28 27 L 34 27 L 32 24 L 30 24 Z"
               className="fill-slate-900"/>
       </g>
-      
+
       {/* Círculo naranja vibrante - MÁS GRANDE Y MÁS VISIBLE */}
       <g filter={`url(#shadowDot-${uniqueId})`}>
         <circle cx="11" cy="41" r="6" className="fill-orange-600" filter={`url(#glowDot-${uniqueId})`}/>

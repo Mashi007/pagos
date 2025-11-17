@@ -4,8 +4,8 @@
 
 ### Tabla Principal: `cuotas`
 
-**Base de Datos:** PostgreSQL  
-**Schema:** `public`  
+**Base de Datos:** PostgreSQL
+**Schema:** `public`
 **Tabla:** `cuotas`
 
 ---
@@ -124,23 +124,23 @@ class Cuota(Base):
     Modelo para las cuotas de un préstamo
     Representa cada pago periódico que debe hacer el cliente
     """
-    
+
     __tablename__ = "cuotas"
-    
+
     # Claves primarias y foráneas
     id = Column(Integer, primary_key=True, index=True)
     prestamo_id = Column(Integer, ForeignKey("prestamos.id"), nullable=False, index=True)
     numero_cuota = Column(Integer, nullable=False)
-    
+
     # Fechas
     fecha_vencimiento = Column(Date, nullable=False, index=True)
     fecha_pago = Column(Date, nullable=True)
-    
+
     # Montos programados
     monto_cuota = Column(Numeric(12, 2), nullable=False)
     monto_capital = Column(Numeric(12, 2), nullable=False)
     monto_interes = Column(Numeric(12, 2), nullable=False)
-    
+
     # ... (resto de campos)
 ```
 
@@ -183,21 +183,21 @@ class Cuota(Base):
      else:
          fecha_vencimiento = fecha_base + timedelta(days=intervalo_dias * numero_cuota)
      ```
-   
+
    - **Calcular montos:**
      ```python
      monto_cuota = prestamo.cuota_periodo  # Cuota fija (Método Francés)
      monto_interes = saldo_capital * tasa_mensual
      monto_capital = monto_cuota - monto_interes
      ```
-   
+
    - **Actualizar saldo:**
      ```python
      saldo_capital_inicial = saldo_capital
      saldo_capital = saldo_capital - monto_capital
      saldo_capital_final = saldo_capital
      ```
-   
+
    - **Crear registro de cuota:**
      ```python
      cuota = Cuota(
@@ -238,7 +238,7 @@ class Cuota(Base):
 ```python
 if nuevo_estado == "APROBADO":
     prestamo.fecha_aprobacion = datetime.now()
-    
+
     # Si tiene fecha_base_calculo, generar tabla de amortización
     if prestamo.fecha_base_calculo:
         generar_amortizacion(prestamo, prestamo.fecha_base_calculo, db)
@@ -302,7 +302,7 @@ py scripts/generar_cuotas_faltantes.py --prestamo-id 3708
 ### Ver todas las cuotas de un préstamo
 
 ```sql
-SELECT 
+SELECT
     numero_cuota,
     fecha_vencimiento,
     monto_cuota,
@@ -316,7 +316,7 @@ ORDER BY numero_cuota;
 ### Ver cuotas vencidas
 
 ```sql
-SELECT 
+SELECT
     c.numero_cuota,
     c.fecha_vencimiento,
     c.monto_cuota,
@@ -333,7 +333,7 @@ ORDER BY c.fecha_vencimiento;
 ### Ver resumen de cuotas por préstamo
 
 ```sql
-SELECT 
+SELECT
     prestamo_id,
     COUNT(*) as total_cuotas,
     COUNT(CASE WHEN estado = 'PAGADO' THEN 1 END) as cuotas_pagadas,

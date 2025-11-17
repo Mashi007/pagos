@@ -1,6 +1,6 @@
 # 🔍 Revisión Flake8 - Módulo de Pagos
 
-**Archivo:** `backend/app/api/v1/endpoints/pagos.py`  
+**Archivo:** `backend/app/api/v1/endpoints/pagos.py`
 **Fecha:** 2025-01-XX
 
 ## ⚠️ Problemas Encontrados
@@ -130,8 +130,8 @@ Agregar pre-commit hooks para validar antes de commit:
 
 ## 🔧 Estado Actual
 
-**Total de problemas encontrados:** 12  
-**Corregidos:** 0  
+**Total de problemas encontrados:** 12
+**Corregidos:** 0
 **Pendientes:** 12
 
 **Nota:** Muchos de estos problemas están en strings SQL o logs, que Flake8 puede ignorar si están en strings multilínea. Sin embargo, es mejor práctica mantener las líneas bajo 120 caracteres cuando sea posible.

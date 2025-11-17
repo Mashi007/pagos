@@ -57,7 +57,7 @@ export function MLRiesgoTab() {
     try {
       const modelosResponse = await aiTrainingService.listarModelosRiesgo()
       const activoData = await aiTrainingService.getModeloRiesgoActivo().catch(() => null)
-      
+
       // Manejar respuesta que puede ser array o objeto con error
       if (Array.isArray(modelosResponse)) {
         setModelos(modelosResponse)
@@ -116,14 +116,14 @@ export function MLRiesgoTab() {
     const intervalProgreso = setInterval(() => {
       setEstadoJob((prev) => {
         if (!prev) return { status: 'pending', progreso: 0 }
-        
+
         let nuevoProgreso = prev.progreso || 0
         if (nuevoProgreso < 90) {
           nuevoProgreso = Math.min(nuevoProgreso + 1.5, 90)
         } else if (nuevoProgreso < 95) {
           nuevoProgreso = Math.min(nuevoProgreso + 0.5, 95)
         }
-        
+
         return {
           ...prev,
           progreso: nuevoProgreso,
@@ -136,32 +136,32 @@ export function MLRiesgoTab() {
         algoritmo,
         test_size: testSize,
       })
-      
+
       clearInterval(intervalProgreso)
-      
+
       setJobId(result.job_id)
-      setEstadoJob({ 
-        status: 'pending', 
+      setEstadoJob({
+        status: 'pending',
         progreso: 0,
       })
-      
+
       // El modelo se obtendrá cuando se consulte el estado del job
       toast.success('Entrenamiento iniciado. El modelo se creará cuando el proceso termine.')
-      
+
       // Recargar modelos después de 2 segundos
       setTimeout(async () => {
         await cargarModelos()
       }, 2000)
     } catch (error: any) {
       clearInterval(intervalProgreso)
-      
+
       const errorMsg = error?.response?.data?.detail || error?.message || 'Error desconocido'
-      setEstadoJob({ 
-        status: 'failed', 
+      setEstadoJob({
+        status: 'failed',
         progreso: 0,
-        error: errorMsg 
+        error: errorMsg
       })
-      
+
       toast.error(`Error al entrenar modelo: ${errorMsg}`, {
         duration: 10000,
       })
@@ -197,10 +197,10 @@ export function MLRiesgoTab() {
     try {
       const result = await aiTrainingService.activarModeloRiesgo(modeloId)
       toast.success(result.mensaje || (esDesactivacion ? 'Modelo desactivado' : 'Modelo activado exitosamente'))
-      
+
       // Recargar modelos para actualizar el estado
       await cargarModelos()
-      
+
       // Si hay un modelo activo previo y se está cambiando, mostrar mensaje
       if (modeloActivo && modeloActivo.id !== modeloId && !esDesactivacion) {
         toast.info(`Modelo anterior "${modeloActivo.nombre}" ha sido desactivado`)
@@ -365,8 +365,8 @@ export function MLRiesgoTab() {
       {/* Estado de Entrenamiento */}
       {estadoJob && (
         <Card className={
-          estadoJob.status === 'succeeded' 
-            ? 'border-green-200 bg-green-50/50' 
+          estadoJob.status === 'succeeded'
+            ? 'border-green-200 bg-green-50/50'
             : estadoJob.status === 'failed'
             ? 'border-red-200 bg-red-50/50'
             : 'border-blue-200 bg-blue-50/50'

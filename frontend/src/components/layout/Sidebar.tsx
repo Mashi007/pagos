@@ -107,9 +107,9 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Clientes', href: '/clientes', icon: Users },
         { title: 'Venta Servicios', href: '/crm/embudo-clientes', icon: Target },
         { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
-        { 
-          title: 'Notificaciones', 
-          href: '/notificaciones', 
+        {
+          title: 'Notificaciones',
+          href: '/notificaciones',
           icon: Bell,
           badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
         },
@@ -214,21 +214,21 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     if (href === '/dashboard') {
       return location.pathname === '/' || location.pathname === '/dashboard'
     }
-    
+
     // ✅ Para rutas con query parameters, comparar URL completa (EXACTA)
     if (href.includes('?')) {
       // Si el href tiene query params, comparar URL completa EXACTAMENTE
       const currentUrl = `${location.pathname}${location.search}`
       return currentUrl === href
     }
-    
+
     // ✅ Para rutas sin query params, verificar que sea exacta Y que no haya query params en la URL actual
     // Esto evita que /configuracion resalte cuando estás en /configuracion?tab=email
     if (location.search) {
       // Si la URL actual tiene query params pero el href no, NO resaltar
       return false
     }
-    
+
     // ✅ Comparación exacta de pathname para rutas sin query params
     return location.pathname === href
   }
@@ -307,11 +307,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                 <motion.div
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  transition={{ 
-                    type: "spring", 
-                    stiffness: 200, 
+                  transition={{
+                    type: "spring",
+                    stiffness: 200,
                     damping: 15,
-                    delay: 0.1 
+                    delay: 0.1
                   }}
                   whileHover={{ scale: 1.05 }}
                   className="relative w-20 h-20 bg-gradient-to-br from-white via-white to-gray-50 rounded-2xl flex items-center justify-center p-2.5 cursor-pointer transition-all duration-300"
@@ -336,7 +336,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
             )}
             {isCompact && (
               <div className="flex items-center justify-center">
-                <div 
+                <div
                   className="relative w-12 h-12 bg-gradient-to-br from-white via-white to-gray-50 rounded-xl flex items-center justify-center p-1.5 transition-all duration-300"
                   style={{
                     boxShadow: `
@@ -439,7 +439,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                           )
                         )}
                       </button>
-                      
+
                       {/* Submenú desplegable */}
                       <AnimatePresence>
                         {openSubmenus.includes(item.title) && (
@@ -479,8 +479,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                                     <>
                                       <span>{child.title}</span>
                                       {child.badge && (
-                                        <Badge 
-                                          variant="destructive" 
+                                        <Badge
+                                          variant="destructive"
                                           className="ml-auto text-xs min-w-[20px] h-5 flex items-center justify-center px-1.5"
                                         >
                                           {child.badge}
@@ -600,7 +600,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                           <span>Configuración</span>
                         </button>
                         {user?.is_admin === false && (
-                          <button 
+                          <button
                             onClick={async () => {
                               try {
                                 await refreshUser()

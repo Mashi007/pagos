@@ -65,7 +65,7 @@ Crea un token secreto que usarás para verificar el webhook. Puede ser cualquier
 https://rapicredit.onrender.com/api/v1/whatsapp/webhook
 ```
 
-**⚠️ IMPORTANTE**: 
+**⚠️ IMPORTANTE**:
 - Debe ser HTTPS (tu servidor ya lo tiene)
 - Debe ser accesible desde internet (tu servidor ya lo es)
 - No debe tener espacios ni caracteres especiales

@@ -1,6 +1,6 @@
 # 📊 Confirmación: Cálculo de Morosidad
 
-> **Documento de confirmación sobre dónde y cómo se calcula la morosidad**  
+> **Documento de confirmación sobre dónde y cómo se calcula la morosidad**
 > Última actualización: 2025-11-06
 
 ---
@@ -19,7 +19,7 @@
 
 ### **1. Cálculo de `dias_morosidad` (Días de Morosidad)**
 
-**Función:** `_actualizar_morosidad_cuota()`  
+**Función:** `_actualizar_morosidad_cuota()`
 **Ubicación:** `backend/app/api/v1/endpoints/pagos.py` (líneas 994-1030)
 
 **Campos utilizados:**
@@ -57,7 +57,7 @@ else:
 
 ### **2. Cálculo de `monto_morosidad` (Monto de Morosidad en Dinero)**
 
-**Función:** `_actualizar_morosidad_cuota()`  
+**Función:** `_actualizar_morosidad_cuota()`
 **Ubicación:** `backend/app/api/v1/endpoints/pagos.py` (líneas 1023-1025)
 
 **Campos utilizados:**
@@ -130,11 +130,11 @@ monto_morosidad = MAX(0, monto_cuota - total_pagado)
 2. ✅ `cuotas.total_pagado` (suma acumulativa de pagos)
 
 ### **Fórmulas:**
-- **`dias_morosidad`:** 
+- **`dias_morosidad`:**
   - Si pagada: `MAX(0, fecha_pago - fecha_vencimiento)`
   - Si no pagada: `MAX(0, fecha_hoy - fecha_vencimiento)`
-  
-- **`monto_morosidad`:** 
+
+- **`monto_morosidad`:**
   - `MAX(0, monto_cuota - total_pagado)`
 
 ---

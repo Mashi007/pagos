@@ -18,7 +18,7 @@ export function WhatsAppConfig() {
     modo_pruebas: 'true',
     telefono_pruebas: ''
   })
-  
+
   const [mostrarToken, setMostrarToken] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [probando, setProbando] = useState(false)
@@ -138,7 +138,7 @@ export function WhatsAppConfig() {
     try {
       setProbando(true)
       setResultadoPrueba(null)
-      
+
       if (telefonoPruebaDestino && telefonoPruebaDestino.trim()) {
         const telefonoRegex = /^\+?[1-9]\d{9,14}$/
         const telefonoLimpio = telefonoPruebaDestino.replace(/[\s\-\(\)]/g, '')
@@ -155,10 +155,10 @@ export function WhatsAppConfig() {
         mensajePrueba.trim() || undefined
       )
       setResultadoPrueba(resultado)
-      
+
       // ✅ LOG DETALLADO: Mostrar resultado del mensaje de prueba
       console.log('📊 [MENSAJE PRUEBA] Resultado completo:', resultado)
-      
+
       if (resultado.success || resultado.mensaje?.includes('enviado')) {
         console.log('✅ [CONFIRMACIÓN] Mensaje de prueba ENVIADO EXITOSAMENTE')
         console.log('✅ [CONFIRMACIÓN] WhatsApp ACEPTÓ y procesó tu mensaje')
@@ -187,13 +187,13 @@ export function WhatsAppConfig() {
       setEjecutandoTestCompleto(true)
       setResultadoTestCompleto(null)
       toast.info('Ejecutando test completo de WhatsApp...')
-      
+
       const resultado = await whatsappConfigService.testCompletoWhatsApp()
       setResultadoTestCompleto(resultado)
-      
+
       // ✅ LOG DETALLADO: Mostrar resultados del test completo
       console.log('📊 [TEST COMPLETO] Resultado completo:', resultado)
-      
+
       // Verificar específicamente la conexión con Meta API
       const testConexion = resultado.tests?.conexion
       if (testConexion) {
@@ -204,7 +204,7 @@ export function WhatsAppConfig() {
           detalles: testConexion.detalles,
           error: testConexion.error
         })
-        
+
         if (testConexion.exito) {
           console.log('✅ [CONFIRMACIÓN] WhatsApp ACEPTÓ la conexión - Meta respondió 200 OK')
           console.log('✅ [CONFIRMACIÓN] Tu Access Token es VÁLIDO')
@@ -216,7 +216,7 @@ export function WhatsAppConfig() {
           console.error('❌ [CONFIRMACIÓN] Meta respondió con error - Revisa tu configuración')
         }
       }
-      
+
       const resumen = resultado.resumen || {}
       console.log('📈 [RESUMEN TEST]:', {
         total: resumen.total,
@@ -224,7 +224,7 @@ export function WhatsAppConfig() {
         fallidos: resumen.fallidos,
         advertencias: resumen.advertencias
       })
-      
+
       if (resumen.fallidos === 0) {
         toast.success(`✅ Test completo: ${resumen.exitosos}/${resumen.total} tests exitosos`)
         console.log('✅ [RESULTADO FINAL] Todos los tests pasaron - WhatsApp está configurado correctamente')
@@ -530,7 +530,7 @@ export function WhatsAppConfig() {
                   </p>
                 </div>
               )}
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium block mb-2">
@@ -563,7 +563,7 @@ export function WhatsAppConfig() {
                     Si no especificas un mensaje, se usará el mensaje predeterminado
                   </p>
                 </div>
-                
+
                 <Button
                   onClick={handleProbar}
                   disabled={probando || !config.access_token}
@@ -579,8 +579,8 @@ export function WhatsAppConfig() {
           {/* Resultado de la prueba */}
           {resultadoPrueba && (
             <div className={`p-4 rounded-lg border ${
-              resultadoPrueba.mensaje?.includes('enviado') 
-                ? 'bg-green-50 border-green-200' 
+              resultadoPrueba.mensaje?.includes('enviado')
+                ? 'bg-green-50 border-green-200'
                 : 'bg-red-50 border-red-200'
             }`}>
               <div className="flex items-start gap-2">

@@ -214,7 +214,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                       <span>Configuración</span>
                     </button>
                     {user?.is_admin === false && (
-                      <button 
+                      <button
                         onClick={async () => {
                           try {
                             await refreshUser()

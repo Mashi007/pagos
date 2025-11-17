@@ -57,11 +57,11 @@ try:
     from alembic.script import ScriptDirectory
     script = ScriptDirectory.from_config(alembic_cfg)
     heads = script.get_revisions("heads")
-    
+
     print(f"[INFO] Heads detectados: {len(heads)}")
     for head in heads:
         print(f"  - {head.revision}: {head}")
-    
+
     if len(heads) > 1:
         # Actualizar a cada head individualmente
         print(f"[INFO] Múltiples heads detectados, actualizando cada uno...")
@@ -81,9 +81,9 @@ try:
     else:
         print(f"[INFO] Un solo head, actualizando normalmente...")
         command.upgrade(alembic_cfg, "head")
-    
+
     print("[SUCCESS] Migraciones ejecutadas exitosamente")
-    
+
 except Exception as e:
     print(f"[ERROR] Error ejecutando migraciones: {e}")
     import traceback

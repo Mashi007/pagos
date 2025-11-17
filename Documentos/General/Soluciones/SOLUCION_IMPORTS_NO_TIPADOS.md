@@ -1,7 +1,7 @@
 # ✅ SOLUCIÓN: Imports No Tipados (--ignore-missing-imports)
 
-**Fecha**: 2025-11-04  
-**Problema**: Mypy reporta errores de imports no tipados que requieren `--ignore-missing-imports`  
+**Fecha**: 2025-11-04
+**Problema**: Mypy reporta errores de imports no tipados que requieren `--ignore-missing-imports`
 **Estado**: ✅ Resuelto
 
 ---

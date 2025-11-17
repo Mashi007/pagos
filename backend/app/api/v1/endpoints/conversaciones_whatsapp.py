@@ -62,7 +62,7 @@ def _crear_tabla_si_no_existe(db: Session) -> bool:
             creado_en TIMESTAMP NOT NULL DEFAULT now(),
             actualizado_en TIMESTAMP NOT NULL DEFAULT now()
         );
-        
+
         CREATE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_id ON conversaciones_whatsapp(id);
         CREATE UNIQUE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_message_id ON conversaciones_whatsapp(message_id);
         CREATE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_from_number ON conversaciones_whatsapp(from_number);
@@ -81,14 +81,14 @@ def _crear_tabla_si_no_existe(db: Session) -> bool:
             if "tickets" in inspector.get_table_names():
                 # Agregar foreign key constraint si no existe
                 alter_sql = """
-                DO $$ 
+                DO $$
                 BEGIN
                     IF NOT EXISTS (
-                        SELECT 1 FROM pg_constraint 
+                        SELECT 1 FROM pg_constraint
                         WHERE conname = 'conversaciones_whatsapp_ticket_id_fkey'
                     ) THEN
-                        ALTER TABLE conversaciones_whatsapp 
-                        ADD CONSTRAINT conversaciones_whatsapp_ticket_id_fkey 
+                        ALTER TABLE conversaciones_whatsapp
+                        ADD CONSTRAINT conversaciones_whatsapp_ticket_id_fkey
                         FOREIGN KEY (ticket_id) REFERENCES tickets(id);
                     END IF;
                 END $$;

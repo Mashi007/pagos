@@ -91,8 +91,8 @@ Después de ejecutar la migración, verifica que la tabla se creó correctamente
 
 ```sql
 -- Verificar que la tabla existe
-SELECT table_name 
-FROM information_schema.tables 
+SELECT table_name
+FROM information_schema.tables
 WHERE table_name = 'conversaciones_whatsapp';
 
 -- Ver estructura de la tabla

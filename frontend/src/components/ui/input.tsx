@@ -13,11 +13,11 @@ export interface InputProps
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, error, label, helperText, leftIcon, rightIcon, ...props }, ref) => {
     const inputId = React.useId()
-    
+
     return (
       <div className="space-y-2">
         {label && (
-          <label 
+          <label
             htmlFor={inputId}
             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
           >
@@ -25,14 +25,14 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             {props.required && <span className="text-destructive ml-1">*</span>}
           </label>
         )}
-        
+
         <div className="relative">
           {leftIcon && (
             <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
               {leftIcon}
             </div>
           )}
-          
+
           <input
             id={inputId}
             type={type}
@@ -46,18 +46,18 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             {...props}
           />
-          
+
           {rightIcon && (
             <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
               {rightIcon}
             </div>
           )}
         </div>
-        
+
         {error && (
           <p className="text-sm text-destructive">{error}</p>
         )}
-        
+
         {helperText && !error && (
           <p className="text-sm text-muted-foreground">{helperText}</p>
         )}

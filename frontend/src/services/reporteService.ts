@@ -269,7 +269,7 @@ class ReporteService {
       const response = await axiosInstance.get(url, {
         responseType: 'blob',
       })
-      
+
       // Crear un enlace temporal para descargar
       const blob = new Blob([response.data as BlobPart], {
         type: response.headers['content-type'] || 'application/octet-stream'

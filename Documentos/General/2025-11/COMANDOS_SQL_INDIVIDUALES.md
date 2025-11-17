@@ -25,7 +25,7 @@ ANALYZE pagos;
 ## 2. VERIFICAR ESTADÍSTICAS ACTUALIZADAS
 
 ```sql
-SELECT 
+SELECT
     schemaname,
     relname AS tablename,
     last_analyze,
@@ -40,7 +40,7 @@ ORDER BY relname;
 ## 3. VERIFICAR ÍNDICES CREADOS
 
 ```sql
-SELECT 
+SELECT
     tablename,
     indexname
 FROM pg_indexes
@@ -65,7 +65,7 @@ ORDER BY tablename, indexname;
 ## 4. VERIFICAR ESTADO DE ÍNDICES
 
 ```sql
-SELECT 
+SELECT
     i.indexrelid::regclass AS index_name,
     t.relname AS table_name,
     i.indisvalid AS es_valido,
@@ -83,8 +83,8 @@ ORDER BY t.relname, i.indexrelid::regclass;
 ## 5. PROBAR QUERY CON EXPLAIN ANALYZE
 
 ```sql
-EXPLAIN ANALYZE 
-SELECT 
+EXPLAIN ANALYZE
+SELECT
     EXTRACT(YEAR FROM fecha_aprobacion),
     EXTRACT(MONTH FROM fecha_aprobacion),
     COUNT(*)
@@ -102,7 +102,7 @@ GROUP BY EXTRACT(YEAR FROM fecha_aprobacion), EXTRACT(MONTH FROM fecha_aprobacio
 ## 6. VER TAMAÑO DE TABLAS
 
 ```sql
-SELECT 
+SELECT
     tablename,
     pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS tamaño_total,
     pg_size_pretty(pg_relation_size(schemaname||'.'||tablename)) AS tamaño_tabla
@@ -117,7 +117,7 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 ## 7. VER USO DE ÍNDICES
 
 ```sql
-SELECT 
+SELECT
     relname AS tablename,
     indexrelname AS index_name,
     idx_scan AS veces_usado

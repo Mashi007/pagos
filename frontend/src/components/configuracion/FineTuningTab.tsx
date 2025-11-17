@@ -87,7 +87,7 @@ export function FineTuningTab() {
   const [textareaActivo, setTextareaActivo] = useState<'pregunta' | 'respuesta' | null>(null)
   const preguntaTextareaRef = useRef<HTMLTextAreaElement>(null)
   const respuestaTextareaRef = useRef<HTMLTextAreaElement>(null)
-  
+
   // Estados para tablas y campos dinámicos
   const [tablasYCampos, setTablasYCampos] = useState<Record<string, string[]>>({})
   const [cargandoTablasCampos, setCargandoTablasCampos] = useState(false)
@@ -163,9 +163,9 @@ export function FineTuningTab() {
       const start = textarea.selectionStart
       const end = textarea.selectionEnd
       const nuevoValor = valor.substring(0, start) + texto + valor.substring(end)
-      
+
       setValue(nuevoValor)
-      
+
       // Restaurar el foco y posición del cursor
       setTimeout(() => {
         textarea?.focus()
@@ -260,14 +260,14 @@ export function FineTuningTab() {
     setCalificandoId(conversacionId)
     try {
       await aiTrainingService.calificarConversacion(conversacionId, calificacion, feedback)
-      
+
       // Si la calificación es 4+ estrellas, la conversación está lista para entrenamiento
       if (calificacion >= 4) {
         const conversacionesCalificadas = conversaciones.filter(
           (c) => c.calificacion && c.calificacion >= 4
         ).length + 1 // +1 porque acabamos de calificar una
         const MINIMO_REQUERIDO = 10
-        
+
         if (conversacionesCalificadas >= MINIMO_REQUERIDO) {
           toast.success(
             `✅ Conversación calificada (${calificacion} estrellas) - Lista para entrenamiento. ` +
@@ -282,7 +282,7 @@ export function FineTuningTab() {
       } else {
         toast.success(`Conversación calificada (${calificacion} estrellas)`)
       }
-      
+
       setCalificacion(0)
       setFeedback('')
       cargarConversaciones()
@@ -309,9 +309,9 @@ export function FineTuningTab() {
   // Función para detectar feedback negativo (similar a la del backend)
   const detectarFeedbackNegativo = (feedback: string | null | undefined): boolean => {
     if (!feedback) return false
-    
+
     const feedbackLower = feedback.toLowerCase()
-    
+
     // Palabras clave que indican feedback negativo (mismo que backend)
     const palabrasNegativas = [
       "mal", "malo", "incorrecto", "error", "equivocado", "confuso",
@@ -323,10 +323,10 @@ export function FineTuningTab() {
       "compleja", "no responde", "no contesta", "no es lo que busco",
       "no es lo que necesito",
     ]
-    
+
     // Contar palabras negativas
     const conteoNegativo = palabrasNegativas.filter(palabra => feedbackLower.includes(palabra)).length
-    
+
     // Si hay 2 o más palabras negativas, considerar feedback negativo
     return conteoNegativo >= 2
   }
@@ -350,14 +350,14 @@ export function FineTuningTab() {
 
       // Validación temprana: simular filtrado de feedback negativo
       if (filtrarFeedbackNegativo) {
-        const conversacionesConFeedbackNegativo = conversacionesCalificadas.filter(c => 
+        const conversacionesConFeedbackNegativo = conversacionesCalificadas.filter(c =>
           detectarFeedbackNegativo(c.feedback || null)
         )
         const conversacionesDespuesFiltrado = conversacionesCalificadas.length - conversacionesConFeedbackNegativo.length
-        
+
         if (conversacionesDespuesFiltrado < MINIMO_CONVERSACIONES) {
           const mensaje = `⚠️ Advertencia: Después de filtrar feedback negativo, solo quedarían ${conversacionesDespuesFiltrado} conversaciones (se excluirían ${conversacionesConFeedbackNegativo.length}). Se necesitan al menos ${MINIMO_CONVERSACIONES} conversaciones.\n\n¿Deseas continuar de todas formas? El proceso fallará si quedan menos de ${MINIMO_CONVERSACIONES} conversaciones.`
-          
+
           const continuar = window.confirm(mensaje)
           if (!continuar) {
             setPreparando(false)
@@ -377,15 +377,15 @@ export function FineTuningTab() {
         filtrarFeedbackNegativo
       )
       setArchivoId(result.archivo_id)
-      
+
       let mensaje = `Datos preparados: ${result.total_conversaciones} conversaciones`
       if (result.conversaciones_excluidas && result.conversaciones_excluidas > 0) {
         mensaje += ` (${result.conversaciones_excluidas} excluidas por feedback negativo)`
       }
-      
+
       toast.success(mensaje)
       setMostrarFormEntrenamiento(true)
-      
+
       // Recargar estadísticas después de preparar
       if (mostrarEstadisticas) {
         cargarEstadisticasFeedback()
@@ -464,10 +464,10 @@ export function FineTuningTab() {
   }
 
   const handleEliminarTodosJobs = async (soloFallidos: boolean = false) => {
-    const mensaje = soloFallidos 
+    const mensaje = soloFallidos
       ? '¿Estás seguro de que deseas eliminar todos los jobs fallidos? Esta acción no se puede deshacer.'
       : '¿Estás seguro de que deseas eliminar TODOS los jobs completados? Esta acción no se puede deshacer.'
-    
+
     if (!confirm(mensaje)) {
       return
     }
@@ -816,7 +816,7 @@ export function FineTuningTab() {
                 <XCircle className="h-4 w-4" />
               </Button>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               <div className="bg-white rounded-lg p-4 border">
                 <div className="text-sm text-gray-600 mb-1">Total Conversaciones</div>
@@ -869,7 +869,7 @@ export function FineTuningTab() {
                     : 0}% del total
                 </div>
               </div>
-              
+
               <div className="bg-red-50 rounded-lg p-4 border border-red-200">
                 <div className="flex items-center gap-2 mb-2">
                   <TrendingDown className="h-4 w-4 text-red-600" />
@@ -889,7 +889,7 @@ export function FineTuningTab() {
                   </div>
                 )}
               </div>
-              
+
               <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                 <div className="flex items-center gap-2 mb-2">
                   <Info className="h-4 w-4 text-gray-600" />
@@ -914,7 +914,7 @@ export function FineTuningTab() {
                   const cantidad = estadisticasFeedback.distribucion_calificaciones[star] || 0
                   const maxCantidad = Math.max(...Object.values(estadisticasFeedback.distribucion_calificaciones).map(Number), 1)
                   const altura = (cantidad / maxCantidad) * 100
-                  
+
                   return (
                     <div key={star} className="flex-1 flex flex-col items-center">
                       <div className="w-full bg-gray-200 rounded-t relative" style={{ height: '100px' }}>
@@ -1098,7 +1098,7 @@ export function FineTuningTab() {
                   </div>
                   {ultimaActualizacion && (
                     <p className="text-xs text-gray-500 mb-3">
-                      Última actualización: {new Date(ultimaActualizacion).toLocaleString('es-ES')} 
+                      Última actualización: {new Date(ultimaActualizacion).toLocaleString('es-ES')}
                       ({Object.keys(tablasYCampos).length} tablas)
                     </p>
                   )}
@@ -1344,20 +1344,20 @@ export function FineTuningTab() {
                 const conversacionesListas = conversaciones.filter((c) => c.calificacion && c.calificacion >= 4)
                 const totalListas = conversacionesListas.length
                 const MINIMO_REQUERIDO = 10
-                
+
                 // Calcular impacto del filtrado de feedback negativo
                 let conversacionesConFeedbackNegativo = 0
                 let conversacionesDespuesFiltrado = totalListas
                 if (filtrarFeedbackNegativo && totalListas > 0) {
-                  conversacionesConFeedbackNegativo = conversacionesListas.filter(c => 
+                  conversacionesConFeedbackNegativo = conversacionesListas.filter(c =>
                     detectarFeedbackNegativo(c.feedback || null)
                   ).length
                   conversacionesDespuesFiltrado = totalListas - conversacionesConFeedbackNegativo
                 }
-                
+
                 const puedePreparar = totalListas >= MINIMO_REQUERIDO
                 const puedePrepararDespuesFiltrado = conversacionesDespuesFiltrado >= MINIMO_REQUERIDO
-                
+
                 return (
                   <div className="flex items-center gap-2 flex-wrap">
                     {totalListas > 0 && (
@@ -1377,8 +1377,8 @@ export function FineTuningTab() {
                         Filtrar feedback negativo
                       </label>
                       {filtrarFeedbackNegativo && totalListas > 0 && conversacionesConFeedbackNegativo > 0 && (
-                        <Badge 
-                          variant={puedePrepararDespuesFiltrado ? "outline" : "destructive"} 
+                        <Badge
+                          variant={puedePrepararDespuesFiltrado ? "outline" : "destructive"}
                           className="text-xs"
                         >
                           {conversacionesConFeedbackNegativo} excluidas → {conversacionesDespuesFiltrado} disponibles
@@ -1467,7 +1467,7 @@ export function FineTuningTab() {
                           </div>
                           {ultimaActualizacion && (
                             <p className="text-xs text-gray-500 mb-3">
-                              Última actualización: {new Date(ultimaActualizacion).toLocaleString('es-ES')} 
+                              Última actualización: {new Date(ultimaActualizacion).toLocaleString('es-ES')}
                               ({Object.keys(tablasYCampos).length} tablas)
                             </p>
                           )}
@@ -1842,9 +1842,9 @@ export function FineTuningTab() {
             </h4>
             <div className="flex gap-2">
               {jobs.some(job => job.status === 'failed' || job.status === 'cancelled') && (
-                <Button 
-                  onClick={() => handleEliminarTodosJobs(true)} 
-                  variant="outline" 
+                <Button
+                  onClick={() => handleEliminarTodosJobs(true)}
+                  variant="outline"
                   size="sm"
                   className="text-red-600 hover:text-red-700 hover:bg-red-50"
                 >
@@ -1853,9 +1853,9 @@ export function FineTuningTab() {
                 </Button>
               )}
               {jobs.some(job => job.status !== 'pending' && job.status !== 'running') && (
-                <Button 
-                  onClick={() => handleEliminarTodosJobs(false)} 
-                  variant="outline" 
+                <Button
+                  onClick={() => handleEliminarTodosJobs(false)}
+                  variant="outline"
                   size="sm"
                   className="text-red-600 hover:text-red-700 hover:bg-red-50"
                 >
@@ -1912,7 +1912,7 @@ export function FineTuningTab() {
                 const tiempoTranscurridoMs = ahora.getTime() - fechaCreacion.getTime()
                 const minutosTranscurridos = Math.floor(tiempoTranscurridoMs / 60000)
                 const horasTranscurridas = Math.floor(minutosTranscurridos / 60)
-                
+
                 // Formatear tiempo transcurrido
                 let tiempoTranscurridoTexto = ''
                 if (horasTranscurridas > 0) {
@@ -1920,13 +1920,13 @@ export function FineTuningTab() {
                 } else {
                   tiempoTranscurridoTexto = `${minutosTranscurridos}m`
                 }
-                
+
                 // Tiempo estimado según modelo base
                 const tiempoEstimado = '2-4 horas'  // gpt-4o típicamente toma 2-4 horas
-                
+
                 // Verificar si el job usa un modelo obsoleto
                 const modeloObsoleto = job.modelo_base === 'gpt-3.5-turbo' || job.modelo_base === 'gpt-4o-mini'
-                
+
                 return (
                 <div key={job.id} className={`border rounded-lg p-4 ${modeloObsoleto ? 'bg-yellow-50 border-yellow-200' : ''}`}>
                   {modeloObsoleto && (
@@ -1934,7 +1934,7 @@ export function FineTuningTab() {
                       <div className="flex items-start gap-2">
                         <AlertCircle className="h-4 w-4 text-yellow-700 mt-0.5 flex-shrink-0" />
                         <div className="text-yellow-800">
-                          <strong>⚠️ Modelo obsoleto:</strong> Este job usa <code className="bg-yellow-200 px-1 rounded">{job.modelo_base}</code>, que ya no está disponible para fine-tuning. 
+                          <strong>⚠️ Modelo obsoleto:</strong> Este job usa <code className="bg-yellow-200 px-1 rounded">{job.modelo_base}</code>, que ya no está disponible para fine-tuning.
                           Los nuevos jobs usarán <code className="bg-yellow-200 px-1 rounded">gpt-4o</code> automáticamente.
                         </div>
                       </div>
@@ -1974,8 +1974,8 @@ export function FineTuningTab() {
                               Error:
                             </div>
                             <div className="text-red-700 whitespace-pre-wrap break-words">
-                              {typeof job.error === 'string' 
-                                ? job.error 
+                              {typeof job.error === 'string'
+                                ? job.error
                                 : JSON.stringify(job.error, null, 2)}
                             </div>
                           </div>
