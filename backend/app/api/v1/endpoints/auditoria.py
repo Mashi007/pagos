@@ -263,8 +263,8 @@ def listar_auditoria(
                 # Ejecutar consultas con límite optimizado
                 registros_general = query.limit(max_to_load).all()
                 logger.info(f"Registros de auditoría general cargados: {len(registros_general)}")
-        except (ProgrammingError, Exception) as e:
-            logger.warning(f"Error consultando tabla auditoria: {e}, usando lista vacía")
+            except (ProgrammingError, Exception) as e:
+                logger.warning(f"Error consultando tabla auditoria: {e}, usando lista vacía")
                 try:
                     db.rollback()  # ✅ Rollback para restaurar transacción después de error
                 except Exception:
