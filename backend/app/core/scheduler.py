@@ -1032,6 +1032,233 @@ def calcular_notificaciones_prejudiciales_job():
         db.close()
 
 
+def reentrenar_modelo_ml_impago_job():
+    """
+    Job que reentrena automáticamente el modelo ML de impago semanalmente.
+    Compara métricas con el modelo actual y lo activa si es mejor.
+    """
+    db = SessionLocal()
+    try:
+        from datetime import date, datetime
+        from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
+        from app.models.prestamo import Prestamo
+        from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
+        from app.api.v1.endpoints.ai_training import (
+            _obtener_prestamos_aprobados_impago,
+            _procesar_prestamos_para_entrenamiento,
+            _validar_ml_impago_service_disponible,
+            _validar_tabla_modelos_impago,
+        )
+
+        logger.info("=" * 80)
+        logger.info("🤖 [Scheduler] ===== INICIO REENTRENAMIENTO AUTOMÁTICO ML IMPAGO =====")
+        logger.info(f"   Fecha/Hora: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info("=" * 80)
+
+        # Validar que el servicio ML esté disponible
+        if not ML_IMPAGO_SERVICE_AVAILABLE:
+            logger.warning("⚠️ [Scheduler] ML_IMPAGO_SERVICE_AVAILABLE es False, omitiendo reentrenamiento")
+            return
+
+        try:
+            _validar_ml_impago_service_disponible()
+            _validar_tabla_modelos_impago(db)
+        except Exception as e:
+            logger.warning(f"⚠️ [Scheduler] Validaciones fallaron: {e}, omitiendo reentrenamiento")
+            return
+
+        # Obtener préstamos aprobados
+        logger.info("🔍 [Scheduler] Buscando préstamos aprobados para reentrenamiento...")
+        prestamos = _obtener_prestamos_aprobados_impago(db)
+        logger.info(f"📊 [Scheduler] Encontrados {len(prestamos)} préstamos aprobados")
+
+        if len(prestamos) < 10:
+            logger.warning(
+                f"⚠️ [Scheduler] Solo hay {len(prestamos)} préstamos aprobados. "
+                f"Se necesitan al menos 10 para entrenar. Omitiendo reentrenamiento."
+            )
+            return
+
+        # Procesar préstamos para generar datos de entrenamiento
+        ml_service = MLImpagoCuotasService()
+        fecha_actual = date.today()
+        logger.info(f"📅 [Scheduler] Fecha actual para cálculo de features: {fecha_actual}")
+
+        training_data = _procesar_prestamos_para_entrenamiento(prestamos, ml_service, fecha_actual, db)
+
+        if len(training_data) < 10:
+            logger.warning(
+                f"⚠️ [Scheduler] Solo se generaron {len(training_data)} muestras válidas. "
+                f"Se necesitan al menos 10. Omitiendo reentrenamiento."
+            )
+            return
+
+        logger.info(f"📊 [Scheduler] Iniciando entrenamiento con {len(training_data)} muestras...")
+
+        # Entrenar modelo (usar Random Forest por defecto para reentrenamiento automático)
+        try:
+            resultado = ml_service.train_impago_model(
+                training_data,
+                algoritmo="random_forest",  # Algoritmo por defecto para reentrenamiento automático
+                test_size=0.2,
+                random_state=42,
+            )
+        except Exception as train_error:
+            logger.error(f"❌ [Scheduler] Error durante entrenamiento: {train_error}", exc_info=True)
+            return
+
+        if not resultado.get("success"):
+            error_msg = resultado.get("error", "Error desconocido")
+            logger.error(f"❌ [Scheduler] Entrenamiento falló: {error_msg}")
+            return
+
+        # Obtener métricas del nuevo modelo
+        nuevas_metricas = resultado["metrics"]
+        nuevo_accuracy = nuevas_metricas.get("accuracy", 0.0)
+        nuevo_f1 = nuevas_metricas.get("f1_score", 0.0)
+
+        logger.info(f"📈 [Scheduler] Nuevo modelo entrenado:")
+        logger.info(f"   - Accuracy: {nuevo_accuracy:.4f} ({nuevo_accuracy*100:.2f}%)")
+        logger.info(f"   - F1 Score: {nuevo_f1:.4f} ({nuevo_f1*100:.2f}%)")
+        logger.info(f"   - Precision: {nuevas_metricas.get('precision', 0.0):.4f}")
+        logger.info(f"   - Recall: {nuevas_metricas.get('recall', 0.0):.4f}")
+
+        # Obtener modelo actual activo
+        modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
+
+        if modelo_activo:
+            accuracy_actual = modelo_activo.accuracy or 0.0
+            f1_actual = modelo_activo.f1_score or 0.0
+
+            logger.info(f"📊 [Scheduler] Modelo actual activo:")
+            logger.info(f"   - Nombre: {modelo_activo.nombre}")
+            logger.info(f"   - Accuracy: {accuracy_actual:.4f} ({accuracy_actual*100:.2f}%)")
+            logger.info(f"   - F1 Score: {f1_actual:.4f} ({f1_actual*100:.2f}%)")
+
+            # Comparar métricas: activar nuevo modelo si es mejor o igual
+            # Consideramos mejor si accuracy es mayor O si accuracy es igual pero f1 es mayor
+            es_mejor = (nuevo_accuracy > accuracy_actual) or (
+                nuevo_accuracy == accuracy_actual and nuevo_f1 >= f1_actual
+            )
+
+            if es_mejor:
+                logger.info("✅ [Scheduler] Nuevo modelo es mejor o igual. Activando...")
+
+                # Desactivar modelo actual
+                modelo_activo.activo = False
+                db.commit()
+
+                # Crear y activar nuevo modelo
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nuevo_modelo = ModeloImpagoCuotas(
+                    nombre=f"Modelo Impago Cuotas {timestamp} (Auto)",
+                    version="1.0.0",
+                    algoritmo="random_forest",
+                    accuracy=nuevas_metricas["accuracy"],
+                    precision=nuevas_metricas["precision"],
+                    recall=nuevas_metricas["recall"],
+                    f1_score=nuevas_metricas["f1_score"],
+                    roc_auc=nuevas_metricas.get("roc_auc"),
+                    ruta_archivo=resultado["model_path"],
+                    total_datos_entrenamiento=resultado["training_samples"],
+                    total_datos_test=resultado["test_samples"],
+                    test_size=0.2,
+                    random_state=42,
+                    activo=True,
+                    usuario_id=None,  # Reentrenamiento automático, sin usuario específico
+                    descripcion=f"Modelo reentrenado automáticamente el {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} con {len(training_data)} muestras",
+                    features_usadas=",".join(resultado.get("features", [])),
+                )
+
+                db.add(nuevo_modelo)
+                db.commit()
+                db.refresh(nuevo_modelo)
+
+                logger.info(f"✅ [Scheduler] Nuevo modelo activado: {nuevo_modelo.nombre} (ID: {nuevo_modelo.id})")
+                logger.info(
+                    f"📊 [Scheduler] Mejora: Accuracy {accuracy_actual*100:.2f}% → {nuevo_accuracy*100:.2f}% "
+                    f"(+{(nuevo_accuracy-accuracy_actual)*100:.2f}%)"
+                )
+            else:
+                logger.info("⚠️ [Scheduler] Nuevo modelo no es mejor. Manteniendo modelo actual.")
+                logger.info(
+                    f"   Diferencia: Accuracy {nuevo_accuracy*100:.2f}% vs {accuracy_actual*100:.2f}% "
+                    f"({(nuevo_accuracy-accuracy_actual)*100:.2f}%)"
+                )
+
+                # Guardar nuevo modelo como inactivo para referencia histórica
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nuevo_modelo = ModeloImpagoCuotas(
+                    nombre=f"Modelo Impago Cuotas {timestamp} (Auto - No activado)",
+                    version="1.0.0",
+                    algoritmo="random_forest",
+                    accuracy=nuevas_metricas["accuracy"],
+                    precision=nuevas_metricas["precision"],
+                    recall=nuevas_metricas["recall"],
+                    f1_score=nuevas_metricas["f1_score"],
+                    roc_auc=nuevas_metricas.get("roc_auc"),
+                    ruta_archivo=resultado["model_path"],
+                    total_datos_entrenamiento=resultado["training_samples"],
+                    total_datos_test=resultado["test_samples"],
+                    test_size=0.2,
+                    random_state=42,
+                    activo=False,
+                    usuario_id=None,
+                    descripcion=f"Modelo reentrenado automáticamente pero no activado (métricas inferiores al actual) - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                    features_usadas=",".join(resultado.get("features", [])),
+                )
+
+                db.add(nuevo_modelo)
+                db.commit()
+
+        else:
+            # No hay modelo activo, activar el nuevo directamente
+            logger.info("⚠️ [Scheduler] No hay modelo activo. Activando nuevo modelo...")
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            nuevo_modelo = ModeloImpagoCuotas(
+                nombre=f"Modelo Impago Cuotas {timestamp} (Auto)",
+                version="1.0.0",
+                algoritmo="random_forest",
+                accuracy=nuevas_metricas["accuracy"],
+                precision=nuevas_metricas["precision"],
+                recall=nuevas_metricas["recall"],
+                f1_score=nuevas_metricas["f1_score"],
+                roc_auc=nuevas_metricas.get("roc_auc"),
+                ruta_archivo=resultado["model_path"],
+                total_datos_entrenamiento=resultado["training_samples"],
+                total_datos_test=resultado["test_samples"],
+                test_size=0.2,
+                random_state=42,
+                activo=True,
+                usuario_id=None,
+                descripcion=f"Primer modelo activado automáticamente el {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} con {len(training_data)} muestras",
+                features_usadas=",".join(resultado.get("features", [])),
+            )
+
+            db.add(nuevo_modelo)
+            db.commit()
+            db.refresh(nuevo_modelo)
+
+            logger.info(f"✅ [Scheduler] Modelo activado: {nuevo_modelo.nombre} (ID: {nuevo_modelo.id})")
+
+        logger.info("=" * 80)
+        logger.info("✅ [Scheduler] ===== REENTRENAMIENTO AUTOMÁTICO COMPLETADO =====")
+        logger.info("=" * 80)
+
+    except Exception as e:
+        logger.error(f"❌ [Scheduler] Error en reentrenamiento automático ML Impago: {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+
 def iniciar_scheduler():
     """Inicia el scheduler con todas las tareas programadas"""
     global _scheduler_inicializado
@@ -1113,11 +1340,14 @@ def iniciar_scheduler():
         # Marcar como inicializado
         _scheduler_inicializado = True
 
-        logger.info("📅 Jobs programados para ejecutarse diariamente a las 4:00 AM:")
+        logger.info("📅 Jobs programados:")
+        logger.info("   Diariamente a las 4:00 AM:")
         logger.info("   - Notificaciones Previas (5, 3, 1 días antes)")
         logger.info("   - Día de Pago (Día 0)")
         logger.info("   - Notificaciones Retrasadas (1, 3, 5 días atrasado)")
         logger.info("   - Notificaciones Prejudiciales (2+ cuotas atrasadas)")
+        logger.info("   Semanalmente (Domingos a las 3:00 AM):")
+        logger.info("   - Reentrenamiento Automático ML Impago")
         logger.info(
             "📧 Todos los jobs calcularán notificaciones y enviarán correos automáticamente usando plantillas y configuración de email"
         )
