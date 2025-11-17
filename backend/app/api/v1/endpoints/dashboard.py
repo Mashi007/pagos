@@ -2277,55 +2277,91 @@ def _obtener_pagos_por_mes(
     fecha_fin: Optional[date],
 ) -> dict:
     """
-    Obtiene pagos por mes usando total_pagado de cuotas.
+    Obtiene pagos por mes usando la fecha real de pago (fecha_pago) de la tabla pagos.
     Retorna diccionario con (año, mes) como clave y monto como valor.
+    ✅ CORREGIDO: Agrupa por fecha_pago (fecha real de pago) en lugar de fecha_vencimiento.
     """
     import time
 
     from decimal import Decimal
 
     from datetime import datetime
-    from sqlalchemy import func
+    from sqlalchemy import func, text
 
-    from app.models.amortizacion import Cuota
+    from app.models.pago import Pago
     from app.models.prestamo import Prestamo
 
     start_pagos = time.time()
     pagos_por_mes = {}
 
     try:
-        query_pagos = (
-            db.query(
-                func.extract("year", Cuota.fecha_vencimiento).label("año"),
-                func.extract("month", Cuota.fecha_vencimiento).label("mes"),
-                func.sum(Cuota.total_pagado).label("total_pagado"),
-            )
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(Prestamo.estado == "APROBADO", func.extract("year", Cuota.fecha_vencimiento) >= 2024)
-            .group_by(func.extract("year", Cuota.fecha_vencimiento), func.extract("month", Cuota.fecha_vencimiento))
-            .order_by("año", "mes")
+        # ✅ CORRECCIÓN: Usar tabla pagos directamente y agrupar por fecha_pago (fecha real de pago)
+        fecha_inicio_dt = datetime.combine(fecha_inicio_query, datetime.min.time())
+        fecha_fin_dt = datetime.combine(fecha_fin_query, datetime.max.time())
+
+        # Construir filtros para WHERE clause
+        where_conditions = [
+            "p.fecha_pago >= :fecha_inicio",
+            "p.fecha_pago <= :fecha_fin",
+            "p.monto_pagado IS NOT NULL",
+            "p.monto_pagado > 0",
+            "p.activo = TRUE"
+        ]
+        bind_params = {
+            "fecha_inicio": fecha_inicio_dt,
+            "fecha_fin": fecha_fin_dt
+        }
+
+        # Aplicar filtros de analista, concesionario, modelo
+        join_needed = False
+        if analista:
+            where_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+            bind_params["analista"] = analista
+            join_needed = True
+        if concesionario:
+            where_conditions.append("pr.concesionario = :concesionario")
+            bind_params["concesionario"] = concesionario
+            join_needed = True
+        if modelo:
+            where_conditions.append("(pr.producto = :modelo OR pr.modelo_vehiculo = :modelo)")
+            bind_params["modelo"] = modelo
+            join_needed = True
+        if fecha_inicio:
+            where_conditions.append("pr.fecha_aprobacion >= :fecha_inicio_prestamo")
+            bind_params["fecha_inicio_prestamo"] = datetime.combine(fecha_inicio, datetime.min.time())
+            join_needed = True
+        if fecha_fin:
+            where_conditions.append("pr.fecha_aprobacion <= :fecha_fin_prestamo")
+            bind_params["fecha_fin_prestamo"] = datetime.combine(fecha_fin, datetime.max.time())
+            join_needed = True
+
+        where_clause = " AND ".join(where_conditions)
+        join_clause = "INNER JOIN prestamos pr ON p.prestamo_id = pr.id WHERE pr.estado = 'APROBADO' AND" if join_needed else "WHERE"
+
+        query_pagos_sql = text(
+            f"""
+            SELECT
+                EXTRACT(YEAR FROM p.fecha_pago)::integer as año,
+                EXTRACT(MONTH FROM p.fecha_pago)::integer as mes,
+                COALESCE(SUM(p.monto_pagado), 0) as total_pagado
+            FROM pagos p
+            {join_clause} {where_clause}
+            GROUP BY EXTRACT(YEAR FROM p.fecha_pago), EXTRACT(MONTH FROM p.fecha_pago)
+            ORDER BY año, mes
+            """
         )
 
-        query_pagos = FiltrosDashboard.aplicar_filtros_cuota(
-            query_pagos, analista, concesionario, modelo, fecha_inicio, fecha_fin
-        )
-
-        if fecha_inicio_query:
-            query_pagos = query_pagos.filter(Cuota.fecha_vencimiento >= fecha_inicio_query)
-        if fecha_fin_query:
-            query_pagos = query_pagos.filter(Cuota.fecha_vencimiento <= fecha_fin_query)
-
-        resultados_pagos = query_pagos.all()
+        resultados_pagos = db.execute(query_pagos_sql.bindparams(**bind_params))
 
         for row in resultados_pagos:
-            año_mes = int(row.año)
-            num_mes = int(row.mes)
-            monto_total_pagado = float(row.total_pagado or Decimal("0"))
+            año_mes = int(row[0])
+            num_mes = int(row[1])
+            monto_total_pagado = float(row[2] or Decimal("0"))
             pagos_por_mes[(año_mes, num_mes)] = monto_total_pagado
 
         pagos_time = int((time.time() - start_pagos) * 1000)
         logger.info(
-            f"📊 [financiamiento-tendencia] Query pagos completada en {pagos_time}ms, {len(pagos_por_mes)} meses con datos"
+            f"📊 [financiamiento-tendencia] Query pagos por fecha_pago completada en {pagos_time}ms, {len(pagos_por_mes)} meses con datos"
         )
     except Exception as e:
         logger.error(f"⚠️ [financiamiento-tendencia] Error consultando pagos: {e}", exc_info=True)
