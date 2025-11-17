@@ -392,11 +392,6 @@ def obtener_clientes_atrasados(
             # Agregar predicción ML Impago si está disponible
             if ml_service:
                 try:
-                    from datetime import date
-
-                    from app.models.amortizacion import Cuota
-                    from app.models.prestamo import Prestamo
-
                     prestamo = db.query(Prestamo).filter(Prestamo.id == row.prestamo_id).first()
                     if prestamo and prestamo.estado == "APROBADO":
                         cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo.id).order_by(Cuota.numero_cuota).all()
