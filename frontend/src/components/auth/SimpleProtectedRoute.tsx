@@ -17,12 +17,55 @@ export function SimpleProtectedRoute({
 }: SimpleProtectedRouteProps) {
   const { isAuthenticated, user, isLoading } = useSimpleAuth()
   const location = useLocation()
+  const [loadingTimeout, setLoadingTimeout] = React.useState(false)
+
+  // Timeout para evitar loading infinito (10 segundos)
+  React.useEffect(() => {
+    if (isLoading) {
+      const timeout = setTimeout(() => {
+        setLoadingTimeout(true)
+      }, 10000) // 10 segundos
+
+      return () => clearTimeout(timeout)
+    } else {
+      setLoadingTimeout(false)
+    }
+  }, [isLoading])
 
   // Mostrar loading mientras se verifica la autenticación
-  if (isLoading) {
+  if (isLoading && !loadingTimeout) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="lg" text="Verificando autenticación..." />
+      </div>
+    )
+  }
+
+  // Si hay timeout, mostrar mensaje de error y redirigir
+  if (loadingTimeout && !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+          <div className="mb-6">
+            <div className="mx-auto w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Tiempo de espera agotado
+            </h1>
+            <p className="text-gray-600 mb-4">
+              No se pudo verificar la autenticación. Por favor, intente iniciar sesión nuevamente.
+            </p>
+          </div>
+          <button
+            onClick={() => window.location.href = fallbackPath}
+            className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          >
+            Ir al Login
+          </button>
+        </div>
       </div>
     )
   }

@@ -147,7 +147,8 @@ function App() {
           }
         >
           {/* Dashboard - DashboardMenu es el componente principal */}
-          <Route path="dashboard" element={<DashboardMenu />} />
+          {/* Redirigir /dashboard a /dashboard/menu */}
+          <Route path="dashboard" element={<Navigate to="/dashboard/menu" replace />} />
           <Route path="dashboard/menu" element={<DashboardMenu />} />
 
           {/* Clientes */}

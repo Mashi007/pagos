@@ -80,8 +80,14 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
 
       if (user && token) {
         // CRÍTICO: Siempre verificar con el backend al inicializar
+        // ✅ Agregar timeout para evitar bloqueos si el backend no responde
         try {
-          const freshUser = await authService.getCurrentUser()
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Timeout: El servidor no respondió')), 8000) // 8 segundos
+          })
+
+          const userPromise = authService.getCurrentUser()
+          const freshUser = await Promise.race([userPromise, timeoutPromise]) as typeof user
 
           if (freshUser) {
             set({
@@ -94,7 +100,8 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
             throw new Error('Usuario no encontrado en backend')
           }
         } catch (error) {
-          // Si hay error, limpiar todo el almacenamiento y marcar como no autenticado
+          // Si hay error (incluyendo timeout), limpiar todo el almacenamiento y marcar como no autenticado
+          console.warn('Error al verificar autenticación:', error)
           clearAuthStorage()
           set({
             user: null,
@@ -113,6 +120,7 @@ export const useSimpleAuthStore = create<SimpleAuthState>((set) => ({
         })
       }
     } catch (error) {
+      console.warn('Error al inicializar autenticación:', error)
       set({
         user: null,
         isAuthenticated: false,

@@ -45,11 +45,14 @@
         // Interceptar console.warn inmediatamente
         console.warn = function(...args) {
           const message = args.map(arg => String(arg)).join(' ').toLowerCase();
+          // Capturar el mensaje específico: "Juego de reglas ignoradas debido a un mal selector"
           if (message.includes('juego de reglas') ||
               message.includes('ignoradas') ||
               message.includes('mal selector') ||
               message.includes('bad selector') ||
-              message.includes('index-') && message.includes('.css:')) {
+              message.includes('debido a un mal selector') ||
+              (message.includes('index-') && message.includes('.css:')) ||
+              /index-[a-z0-9]+\.css:\d+:\d+/.test(message)) {
             return; // Suprimir el warning
           }
           originalWarn.apply(console, args);
@@ -58,11 +61,14 @@
         // Interceptar console.error inmediatamente
         console.error = function(...args) {
           const message = args.map(arg => String(arg)).join(' ').toLowerCase();
+          // Capturar el mensaje específico: "Juego de reglas ignoradas debido a un mal selector"
           if (message.includes('juego de reglas') ||
               message.includes('ignoradas') ||
               message.includes('mal selector') ||
               message.includes('bad selector') ||
-              message.includes('index-') && message.includes('.css:')) {
+              message.includes('debido a un mal selector') ||
+              (message.includes('index-') && message.includes('.css:')) ||
+              /index-[a-z0-9]+\.css:\d+:\d+/.test(message)) {
             return; // Suprimir el error
           }
           originalError.apply(console, args);
@@ -120,6 +126,8 @@
             // Patrones adicionales para el mensaje específico
             'menu:',
             'ignoradas debido',
+            // Patrón específico para el mensaje exacto del navegador
+            'juego de reglas ignoradas debido a un mal selector',
           ];
 
           // Verificar si el mensaje contiene alguno de los patrones

@@ -28,6 +28,21 @@ export default function removeTextSizeAdjust() {
           // Detectar selectores problemáticos comunes
           let shouldRemove = false;
           let correctedSelector = rule.selector.trim();
+          
+          // ✅ VALIDACIÓN TEMPRANA: Detectar selectores de Tailwind con valores arbitrarios
+          // Estos selectores son válidos pero pueden generar warnings en algunos navegadores
+          // Patrones comunes: .after\:content-\[\'\'\]:after, .after\:top-\[2px\]:after, etc.
+          const isTailwindArbitrarySelector = /(after|before|placeholder|peer-checked):[^:]*\\\[[^\]]*\\\]/.test(correctedSelector) ||
+                                             /\\\[['"]*['"]*\\\]/.test(correctedSelector) ||
+                                             /after\\:content-\\\[/.test(correctedSelector) ||
+                                             /before\\:content-\\\[/.test(correctedSelector);
+          
+          // Si es un selector válido de Tailwind con valores arbitrarios, no lo eliminamos
+          // Solo lo marcamos para que pase todas las validaciones
+          if (isTailwindArbitrarySelector) {
+            // Estos selectores son técnicamente válidos, solo generan warnings del navegador
+            // No los eliminamos, pero los marcamos para evitar falsos positivos
+          }
 
           // Selectores de webkit-scrollbar son válidos incluso con pseudo-clases como :hover
           const isWebkitScrollbarSelector = correctedSelector.includes('webkit-scrollbar');
@@ -167,10 +182,24 @@ export default function removeTextSizeAdjust() {
           // Ejemplo: .after\:left-\[2px\]:after o .placeholder\:text-muted-foreground
           // Estos son válidos en Tailwind pero pueden causar warnings en algunos parsers
           const problematicPattern = /\\\[[^\]]*\\\]/;
-          if (problematicPattern.test(correctedSelector)) {
+          
+          // Detectar selectores de Tailwind con valores arbitrarios en pseudo-elementos
+          // Patrones como: .after\:content-\[\'\'\]:after, .after\:top-\[2px\]:after
+          const tailwindArbitraryPattern = /(after|before|placeholder):[^:]*\\\[[^\]]*\\\]/;
+          
+          if (problematicPattern.test(correctedSelector) || tailwindArbitraryPattern.test(correctedSelector)) {
             // Este es un selector válido de Tailwind con valores arbitrarios escapados
             // No es realmente un error, solo un warning del navegador
             // No lo eliminamos, solo lo marcamos para logging opcional
+            hasProblematicEscapedBrackets = true;
+          }
+          
+          // Detectar y corregir selectores con comillas simples dentro de corchetes escapados
+          // Ejemplo: .after\:content-\[\'\'\]:after -> .after\:content-\[""\]:after
+          // Algunos navegadores tienen problemas con comillas simples en valores arbitrarios
+          if (correctedSelector.includes("\\[''\\]") || correctedSelector.includes("\\[\"\"\\]")) {
+            // Estos selectores son válidos pero pueden causar warnings
+            // Los mantenemos pero los marcamos como potencialmente problemáticos
             hasProblematicEscapedBrackets = true;
           }
 
@@ -275,7 +304,8 @@ export default function removeTextSizeAdjust() {
           }
 
           // Aplicar corrección o eliminación
-          if (shouldRemove) {
+          // ✅ NO eliminar selectores válidos de Tailwind con valores arbitrarios
+          if (shouldRemove && !isTailwindArbitrarySelector) {
             // Solo loggear en desarrollo para no saturar los logs
             if (process.env.NODE_ENV === 'development') {
               console.warn(`[PostCSS] Selector mal formado eliminado: ${rule.selector.substring(0, 100)}${rule.selector.length > 100 ? '...' : ''}`);
@@ -285,8 +315,24 @@ export default function removeTextSizeAdjust() {
             // Aplicar corrección si se hizo algún cambio
             rule.selector = correctedSelector;
           }
+          // Si es un selector válido de Tailwind, lo mantenemos aunque tenga valores arbitrarios
         } catch (e) {
-          // Si hay un error al procesar el selector, eliminarlo silenciosamente
+          // Si hay un error al procesar el selector, verificar si es un selector válido de Tailwind
+          // antes de eliminarlo
+          const selector = rule.selector || '';
+          const isTailwindArbitrarySelector = /(after|before|placeholder|peer-checked):[^:]*\\\[[^\]]*\\\]/.test(selector) ||
+                                             /\\\[['"]*['"]*\\\]/.test(selector) ||
+                                             /after\\:content-\\\[/.test(selector) ||
+                                             /before\\:content-\\\[/.test(selector);
+          
+          // Si es un selector válido de Tailwind, mantenerlo aunque haya un error de procesamiento
+          if (isTailwindArbitrarySelector) {
+            // Estos selectores son válidos, mantenerlos aunque haya un error de procesamiento
+            return;
+          }
+          
+          // Si hay un error al procesar el selector y NO es un selector válido de Tailwind,
+          // eliminarlo silenciosamente
           // Esto previene que el build falle por selectores problemáticos
           // Solo loggear en desarrollo
           if (process.env.NODE_ENV === 'development') {
