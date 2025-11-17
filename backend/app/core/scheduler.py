@@ -3,6 +3,7 @@ Scheduler para tareas automáticas
 Usa APScheduler para ejecutar tareas programadas
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, List
@@ -95,6 +96,82 @@ def _obtener_delay_envio(db: "Session") -> float:
     except Exception as e:
         logger.warning(f"⚠️ Error obteniendo delay de envío: {e}, usando 2 segundos por defecto")
         return 2.0
+
+
+async def _enviar_whatsapp_desde_scheduler(
+    db: "Session",
+    cliente_id: int,
+    tipo_notificacion: str,
+    asunto: str,
+    cuerpo: str,
+    telefono_cliente: str,
+) -> bool:
+    """
+    Función auxiliar para enviar WhatsApp desde el scheduler
+    
+    Args:
+        db: Sesión de base de datos
+        cliente_id: ID del cliente
+        tipo_notificacion: Tipo de notificación
+        asunto: Asunto del mensaje
+        cuerpo: Cuerpo del mensaje
+        telefono_cliente: Teléfono del cliente
+        
+    Returns:
+        True si se envió exitosamente, False si hubo error
+    """
+    try:
+        from app.models.notificacion import Notificacion
+        from app.services.whatsapp_service import WhatsAppService
+
+        # Verificar que el cliente tenga teléfono
+        if not telefono_cliente or not telefono_cliente.strip():
+            return False
+
+        # Crear registro de notificación WhatsApp
+        notif_whatsapp = Notificacion(
+            cliente_id=cliente_id,
+            tipo=tipo_notificacion,
+            canal="WHATSAPP",
+            asunto=asunto,
+            mensaje=cuerpo,
+            estado="PENDIENTE",
+        )
+        db.add(notif_whatsapp)
+        db.commit()
+        db.refresh(notif_whatsapp)
+
+        # Enviar WhatsApp
+        whatsapp_service = WhatsAppService(db=db)
+        resultado_whatsapp = await whatsapp_service.send_message(
+            to_number=str(telefono_cliente),
+            message=cuerpo,
+        )
+
+        if resultado_whatsapp.get("success"):
+            notif_whatsapp.estado = "ENVIADA"
+            notif_whatsapp.enviada_en = datetime.utcnow()
+            notif_whatsapp.respuesta_servicio = resultado_whatsapp.get("message", "WhatsApp enviado exitosamente")
+            db.commit()
+            logger.info(f"✅ WhatsApp enviado a {telefono_cliente} (Cliente {cliente_id}, {tipo_notificacion})")
+            return True
+        else:
+            notif_whatsapp.estado = "FALLIDA"
+            notif_whatsapp.error_mensaje = resultado_whatsapp.get("message", "Error desconocido")
+            notif_whatsapp.intentos = 1
+            db.commit()
+            logger.warning(
+                f"⚠️ Error enviando WhatsApp a {telefono_cliente} (Cliente {cliente_id}): {resultado_whatsapp.get('message')}"
+            )
+            return False
+
+    except Exception as e:
+        logger.error(f"❌ Excepción enviando WhatsApp a {telefono_cliente} (Cliente {cliente_id}): {e}", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return False
 
 
 def calcular_notificaciones_previas_job():
@@ -234,6 +311,42 @@ def calcular_notificaciones_previas_job():
                     logger.info(
                         f"✅ Email enviado a {correo_cliente}{cco_info} (Cliente {cliente_id}, {dias_antes} días antes)"
                     )
+                    
+                    # ✅ Enviar también por WhatsApp si el cliente tiene teléfono
+                    telefono_cliente = resultado.get("telefono", "")
+                    if telefono_cliente and telefono_cliente.strip():
+                        try:
+                            # Intentar usar asyncio.run, si falla porque hay un loop corriendo, usar run_until_complete
+                            try:
+                                asyncio.run(
+                                    _enviar_whatsapp_desde_scheduler(
+                                        db=db,
+                                        cliente_id=cliente_id,
+                                        tipo_notificacion=tipo_notificacion,
+                                        asunto=asunto,
+                                        cuerpo=cuerpo,
+                                        telefono_cliente=telefono_cliente,
+                                    )
+                                )
+                            except RuntimeError:
+                                # Si ya hay un event loop corriendo, crear uno nuevo
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
+                                try:
+                                    loop.run_until_complete(
+                                        _enviar_whatsapp_desde_scheduler(
+                                            db=db,
+                                            cliente_id=cliente_id,
+                                            tipo_notificacion=tipo_notificacion,
+                                            asunto=asunto,
+                                            cuerpo=cuerpo,
+                                            telefono_cliente=telefono_cliente,
+                                        )
+                                    )
+                                finally:
+                                    loop.close()
+                        except Exception as e:
+                            logger.warning(f"⚠️ Error enviando WhatsApp (no crítico): {e}")
                 else:
                     nueva_notif.estado = "FALLIDA"
                     nueva_notif.error_mensaje = resultado_email.get("message", "Error desconocido")
@@ -384,6 +497,42 @@ def calcular_notificaciones_dia_pago_job():
                     enviadas += 1
                     cco_info = f" (CCO: {', '.join(cco_emails)})" if cco_emails else ""
                     logger.info(f"✅ Email enviado a {correo_cliente}{cco_info} (Cliente {cliente_id}, Día de pago)")
+                    
+                    # ✅ Enviar también por WhatsApp si el cliente tiene teléfono
+                    telefono_cliente = resultado.get("telefono", "")
+                    if telefono_cliente and telefono_cliente.strip():
+                        try:
+                            # Intentar usar asyncio.run, si falla porque hay un loop corriendo, usar run_until_complete
+                            try:
+                                asyncio.run(
+                                    _enviar_whatsapp_desde_scheduler(
+                                        db=db,
+                                        cliente_id=cliente_id,
+                                        tipo_notificacion=tipo_notificacion,
+                                        asunto=asunto,
+                                        cuerpo=cuerpo,
+                                        telefono_cliente=telefono_cliente,
+                                    )
+                                )
+                            except RuntimeError:
+                                # Si ya hay un event loop corriendo, crear uno nuevo
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
+                                try:
+                                    loop.run_until_complete(
+                                        _enviar_whatsapp_desde_scheduler(
+                                            db=db,
+                                            cliente_id=cliente_id,
+                                            tipo_notificacion=tipo_notificacion,
+                                            asunto=asunto,
+                                            cuerpo=cuerpo,
+                                            telefono_cliente=telefono_cliente,
+                                        )
+                                    )
+                                finally:
+                                    loop.close()
+                        except Exception as e:
+                            logger.warning(f"⚠️ Error enviando WhatsApp (no crítico): {e}")
                 else:
                     nueva_notif.estado = "FALLIDA"
                     nueva_notif.error_mensaje = resultado_email.get("message", "Error desconocido")
@@ -553,6 +702,42 @@ def calcular_notificaciones_retrasadas_job():
                     logger.info(
                         f"✅ Email enviado a {correo_cliente}{cco_info} (Cliente {cliente_id}, {dias_atrasado} días atrasado)"
                     )
+                    
+                    # ✅ Enviar también por WhatsApp si el cliente tiene teléfono
+                    telefono_cliente = resultado.get("telefono", "")
+                    if telefono_cliente and telefono_cliente.strip():
+                        try:
+                            # Intentar usar asyncio.run, si falla porque hay un loop corriendo, usar run_until_complete
+                            try:
+                                asyncio.run(
+                                    _enviar_whatsapp_desde_scheduler(
+                                        db=db,
+                                        cliente_id=cliente_id,
+                                        tipo_notificacion=tipo_notificacion,
+                                        asunto=asunto,
+                                        cuerpo=cuerpo,
+                                        telefono_cliente=telefono_cliente,
+                                    )
+                                )
+                            except RuntimeError:
+                                # Si ya hay un event loop corriendo, crear uno nuevo
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
+                                try:
+                                    loop.run_until_complete(
+                                        _enviar_whatsapp_desde_scheduler(
+                                            db=db,
+                                            cliente_id=cliente_id,
+                                            tipo_notificacion=tipo_notificacion,
+                                            asunto=asunto,
+                                            cuerpo=cuerpo,
+                                            telefono_cliente=telefono_cliente,
+                                        )
+                                    )
+                                finally:
+                                    loop.close()
+                        except Exception as e:
+                            logger.warning(f"⚠️ Error enviando WhatsApp (no crítico): {e}")
                 else:
                     nueva_notif.estado = "FALLIDA"
                     nueva_notif.error_mensaje = resultado_email.get("message", "Error desconocido")
@@ -719,6 +904,42 @@ def calcular_notificaciones_prejudiciales_job():
                     enviadas += 1
                     cco_info = f" (CCO: {', '.join(cco_emails)})" if cco_emails else ""
                     logger.info(f"✅ Email enviado a {correo_cliente}{cco_info} (Cliente {cliente_id}, Prejudicial)")
+                    
+                    # ✅ Enviar también por WhatsApp si el cliente tiene teléfono
+                    telefono_cliente = resultado.get("telefono", "")
+                    if telefono_cliente and telefono_cliente.strip():
+                        try:
+                            # Intentar usar asyncio.run, si falla porque hay un loop corriendo, usar run_until_complete
+                            try:
+                                asyncio.run(
+                                    _enviar_whatsapp_desde_scheduler(
+                                        db=db,
+                                        cliente_id=cliente_id,
+                                        tipo_notificacion=tipo_notificacion,
+                                        asunto=asunto,
+                                        cuerpo=cuerpo,
+                                        telefono_cliente=telefono_cliente,
+                                    )
+                                )
+                            except RuntimeError:
+                                # Si ya hay un event loop corriendo, crear uno nuevo
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
+                                try:
+                                    loop.run_until_complete(
+                                        _enviar_whatsapp_desde_scheduler(
+                                            db=db,
+                                            cliente_id=cliente_id,
+                                            tipo_notificacion=tipo_notificacion,
+                                            asunto=asunto,
+                                            cuerpo=cuerpo,
+                                            telefono_cliente=telefono_cliente,
+                                        )
+                                    )
+                                finally:
+                                    loop.close()
+                        except Exception as e:
+                            logger.warning(f"⚠️ Error enviando WhatsApp (no crítico): {e}")
                 else:
                     nueva_notif.estado = "FALLIDA"
                     nueva_notif.error_mensaje = resultado_email.get("message", "Error desconocido")

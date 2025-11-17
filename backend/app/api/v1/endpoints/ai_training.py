@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, text
 from sqlalchemy.exc import OperationalError, ProgrammingError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, load_only
 
 from app.api.deps import get_current_user, get_db
 from app.models.conversacion_ai import ConversacionAI
@@ -1534,14 +1534,27 @@ async def entrenar_modelo_impago(
                 detail=f"Error de conexión a la base de datos: {str(db_conn_error)[:200]}",
             )
 
-        # Obtener todos los préstamos aprobados con cuotas (cargar relación cliente si existe)
+        # Obtener todos los préstamos aprobados con cuotas
+        # Para ML Impago solo necesitamos datos del préstamo, no del cliente
         logger.info("🔍 Buscando préstamos aprobados para entrenamiento...")
         try:
+            # Usar load_only para cargar solo las columnas que necesitamos y que existen en la BD
+            # Esto evita errores si hay columnas en el modelo que no existen en la BD (como valor_activo)
             prestamos = (
                 db.query(Prestamo)
                 .filter(Prestamo.estado == "APROBADO")
                 .filter(Prestamo.fecha_aprobacion.isnot(None))
-                .options(joinedload(Prestamo.cliente))
+                .options(
+                    load_only(
+                        Prestamo.id,
+                        Prestamo.cliente_id,
+                        Prestamo.cedula,
+                        Prestamo.nombres,
+                        Prestamo.total_financiamiento,
+                        Prestamo.estado,
+                        Prestamo.fecha_aprobacion,
+                    )
+                )
                 .all()
             )
             logger.info(f"📊 Encontrados {len(prestamos)} préstamos aprobados")
