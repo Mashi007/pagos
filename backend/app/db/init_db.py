@@ -58,14 +58,23 @@ def run_migrations() -> None:
                     logger.warning(f"⚠️ Error actualizando head {head.revision}: {head_error}")
                     # Continuar con el siguiente head
 
-            # Después de actualizar todos los heads, intentar actualizar al merge point
+            # Después de actualizar todos los heads, intentar actualizar a los merge points conocidos
+            merge_points = ["9537ffbe05a6", "20250117_conversaciones_whatsapp"]
+            for merge_revision in merge_points:
+                try:
+                    merge_point = script.get_revision(merge_revision)
+                    if merge_point:
+                        logger.info(f"📌 Actualizando a merge point {merge_revision}...")
+                        command.upgrade(alembic_cfg, merge_revision)
+                except Exception as merge_error:
+                    logger.warning(f"⚠️ No se pudo actualizar al merge point {merge_revision} (puede que ya esté aplicado): {merge_error}")
+            
+            # Finalmente, intentar actualizar a head para asegurar que todas las migraciones estén aplicadas
             try:
-                merge_point = script.get_revision("9537ffbe05a6")
-                if merge_point:
-                    logger.info("📌 Actualizando a merge point 9537ffbe05a6 (incluye migraciones AI training)...")
-                    command.upgrade(alembic_cfg, "9537ffbe05a6")
-            except Exception as merge_error:
-                logger.warning(f"⚠️ No se pudo actualizar al merge point (puede que ya esté aplicado): {merge_error}")
+                logger.info("📌 Actualizando a head final...")
+                command.upgrade(alembic_cfg, "head")
+            except Exception as head_error:
+                logger.warning(f"⚠️ No se pudo actualizar a head final: {head_error}")
         else:
             # Un solo head, actualizar normalmente
             command.upgrade(alembic_cfg, "head")

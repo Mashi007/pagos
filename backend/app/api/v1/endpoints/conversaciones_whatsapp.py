@@ -8,7 +8,8 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, inspect, or_, text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -19,6 +20,63 @@ from app.services.whatsapp_service import WhatsAppService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _verificar_tabla_existe(db: Session) -> bool:
+    """Verificar si la tabla conversaciones_whatsapp existe"""
+    try:
+        inspector = inspect(db.bind)
+        return 'conversaciones_whatsapp' in inspector.get_table_names()
+    except Exception:
+        return False
+
+
+def _crear_tabla_si_no_existe(db: Session) -> bool:
+    """Crear la tabla conversaciones_whatsapp si no existe (fallback)"""
+    try:
+        if _verificar_tabla_existe(db):
+            return True
+        
+        logger.warning("⚠️ Tabla conversaciones_whatsapp no existe, intentando crearla...")
+        
+        # Crear tabla usando SQL directo
+        create_table_sql = """
+        CREATE TABLE IF NOT EXISTS conversaciones_whatsapp (
+            id SERIAL PRIMARY KEY,
+            message_id VARCHAR(100) UNIQUE,
+            from_number VARCHAR(20) NOT NULL,
+            to_number VARCHAR(20) NOT NULL,
+            message_type VARCHAR(20) NOT NULL,
+            body TEXT,
+            timestamp TIMESTAMP NOT NULL,
+            direccion VARCHAR(10) NOT NULL,
+            cliente_id INTEGER REFERENCES clientes(id),
+            procesado BOOLEAN NOT NULL DEFAULT false,
+            respuesta_enviada BOOLEAN NOT NULL DEFAULT false,
+            respuesta_id INTEGER REFERENCES conversaciones_whatsapp(id),
+            respuesta_bot TEXT,
+            respuesta_meta_id VARCHAR(100),
+            error TEXT,
+            creado_en TIMESTAMP NOT NULL DEFAULT now(),
+            actualizado_en TIMESTAMP NOT NULL DEFAULT now()
+        );
+        
+        CREATE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_id ON conversaciones_whatsapp(id);
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_message_id ON conversaciones_whatsapp(message_id);
+        CREATE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_from_number ON conversaciones_whatsapp(from_number);
+        CREATE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_timestamp ON conversaciones_whatsapp(timestamp);
+        CREATE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_cliente_id ON conversaciones_whatsapp(cliente_id);
+        CREATE INDEX IF NOT EXISTS ix_conversaciones_whatsapp_creado_en ON conversaciones_whatsapp(creado_en);
+        """
+        
+        db.execute(text(create_table_sql))
+        db.commit()
+        logger.info("✅ Tabla conversaciones_whatsapp creada exitosamente (fallback)")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Error creando tabla conversaciones_whatsapp (fallback): {e}", exc_info=True)
+        db.rollback()
+        return False
 
 
 class EnviarMensajeRequest(BaseModel):
@@ -39,10 +97,18 @@ async def listar_conversaciones_whatsapp(
 ):
     """
     Listar conversaciones de WhatsApp para el CRM
-
+    
     Permite ver todas las conversaciones entre clientes y el bot
     """
     try:
+        # Verificar si la tabla existe, si no, intentar crearla
+        if not _verificar_tabla_existe(db):
+            if not _crear_tabla_si_no_existe(db):
+                raise HTTPException(
+                    status_code=503,
+                    detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head"
+                )
+        
         query = db.query(ConversacionWhatsApp)
 
         # Filtros
@@ -70,6 +136,41 @@ async def listar_conversaciones_whatsapp(
             },
         }
 
+    except HTTPException:
+        raise
+    except (ProgrammingError, OperationalError) as db_error:
+        error_str = str(db_error).lower()
+        if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+            # Intentar crear la tabla como fallback
+            if _crear_tabla_si_no_existe(db):
+                # Reintentar la query
+                try:
+                    query = db.query(ConversacionWhatsApp)
+                    if cliente_id:
+                        query = query.filter(ConversacionWhatsApp.cliente_id == cliente_id)
+                    if from_number:
+                        query = query.filter(ConversacionWhatsApp.from_number.like(f"%{from_number}%"))
+                    if direccion:
+                        query = query.filter(ConversacionWhatsApp.direccion == direccion.upper())
+                    query = query.order_by(ConversacionWhatsApp.timestamp.desc())
+                    total = query.count()
+                    conversaciones = query.offset((page - 1) * per_page).limit(per_page).all()
+                    return {
+                        "conversaciones": [c.to_dict() for c in conversaciones],
+                        "paginacion": {
+                            "page": page,
+                            "per_page": per_page,
+                            "total": total,
+                            "pages": (total + per_page - 1) // per_page,
+                        },
+                    }
+                except Exception:
+                    pass
+            raise HTTPException(
+                status_code=503,
+                detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head"
+            )
+        raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(db_error)}")
     except Exception as e:
         logger.error(f"Error listando conversaciones WhatsApp: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
@@ -188,6 +289,14 @@ async def obtener_estadisticas_conversaciones(
     Obtener estadísticas de conversaciones de WhatsApp
     """
     try:
+        # Verificar si la tabla existe, si no, intentar crearla
+        if not _verificar_tabla_existe(db):
+            if not _crear_tabla_si_no_existe(db):
+                raise HTTPException(
+                    status_code=503,
+                    detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head"
+                )
+        
         from sqlalchemy import func
 
         # Total de conversaciones
@@ -220,6 +329,27 @@ async def obtener_estadisticas_conversaciones(
             "ultimas_24h": ultimas_24h_count,
         }
 
+    except HTTPException:
+        raise
+    except (ProgrammingError, OperationalError) as db_error:
+        error_str = str(db_error).lower()
+        if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+            if not _crear_tabla_si_no_existe(db):
+                raise HTTPException(
+                    status_code=503,
+                    detail="La tabla 'conversaciones_whatsapp' no existe. Ejecuta las migraciones: alembic upgrade head"
+                )
+            # Si se creó, retornar estadísticas vacías
+            return {
+                "total": 0,
+                "inbound": 0,
+                "outbound": 0,
+                "con_cliente": 0,
+                "sin_cliente": 0,
+                "respuestas_enviadas": 0,
+                "ultimas_24h": 0,
+            }
+        raise HTTPException(status_code=500, detail=f"Error de base de datos: {str(db_error)}")
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
