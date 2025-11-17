@@ -74,7 +74,7 @@ def _crear_tabla_si_no_existe(db: Session) -> bool:
 
         db.execute(text(create_table_sql))
         db.commit()
-        
+
         # Intentar agregar foreign key a tickets si la tabla existe (después de crear la tabla)
         try:
             inspector = inspect(db.bind)
@@ -98,7 +98,7 @@ def _crear_tabla_si_no_existe(db: Session) -> bool:
         except Exception as e:
             logger.warning(f"⚠️ No se pudo agregar foreign key a tickets (puede que la tabla no exista aún): {e}")
             db.rollback()
-        
+
         logger.info("✅ Tabla conversaciones_whatsapp creada exitosamente (fallback)")
         return True
     except Exception as e:
