@@ -3036,24 +3036,62 @@ async def crear_documento_ai(
         # Generar nombre único para el archivo
         nombre_unico = f"{uuid.uuid4()}{extension}"
         ruta_archivo = upload_dir / nombre_unico
-        ruta_archivo = ruta_archivo.resolve()
+        ruta_archivo_absoluta = ruta_archivo.resolve()
 
         # Guardar archivo
-        tamaño_bytes = await _guardar_archivo_documento(archivo, ruta_archivo)
+        tamaño_bytes = await _guardar_archivo_documento(archivo, ruta_archivo_absoluta)
+        
+        # Verificar que el archivo existe después de guardarlo
+        if not ruta_archivo_absoluta.exists():
+            logger.error(f"❌ Archivo no existe después de guardarlo: {ruta_archivo_absoluta}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error: El archivo no se guardó correctamente en {ruta_archivo_absoluta}"
+            )
+        
+        logger.info(f"✅ Archivo guardado exitosamente: {ruta_archivo_absoluta} ({tamaño_bytes} bytes)")
+        
+        # Guardar ruta relativa al directorio base para mayor portabilidad
+        # Esto ayuda cuando el sistema de archivos es efímero (como en Render)
+        from app.core.config import settings
+        if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
+            base_upload_dir = Path(settings.UPLOAD_DIR).resolve()
+        else:
+            base_upload_dir = Path("uploads").resolve()
+        
+        # Calcular ruta relativa desde el directorio base
+        try:
+            ruta_relativa = ruta_archivo_absoluta.relative_to(base_upload_dir)
+            ruta_para_bd = str(ruta_relativa)
+            logger.debug(f"   Ruta relativa calculada: {ruta_para_bd}")
+        except ValueError:
+            # Si no se puede calcular relativa, usar absoluta
+            ruta_para_bd = str(ruta_archivo_absoluta)
+            logger.warning(f"⚠️ No se pudo calcular ruta relativa, usando absoluta: {ruta_para_bd}")
 
-        # Crear registro en BD
+        # Crear registro en BD - guardar tanto ruta absoluta como nombre único para búsqueda
         nuevo_documento = _crear_registro_documento_ai(
             db=db,
             titulo=titulo,
             descripcion=descripcion,
             nombre_archivo_original=nombre_archivo_original,
             tipo_archivo_db=tipo_archivo_db,
-            ruta_archivo=ruta_archivo,
+            ruta_archivo=ruta_para_bd,  # Usar ruta relativa si es posible
             tamaño_bytes=tamaño_bytes,
         )
+        
+        # Guardar también el nombre único en un campo adicional si existe (para búsqueda rápida)
+        # Por ahora usamos el nombre_archivo para almacenar el nombre original
+        # y la ruta_archivo para la ruta (que puede ser relativa o absoluta)
+        
+        # Verificar nuevamente que el archivo existe después de crear el registro
+        if not ruta_archivo_absoluta.exists():
+            logger.warning(f"⚠️ Archivo desapareció después de crear registro en BD: {ruta_archivo_absoluta}")
+            logger.warning(f"   Esto puede indicar un problema con el sistema de archivos efímero")
+            logger.warning(f"   El documento se creó en BD pero el archivo físico no está disponible")
 
         # Procesar documento automáticamente (extraer texto)
-        _procesar_documento_creado(db, nuevo_documento, ruta_archivo, tipo_archivo_db)
+        _procesar_documento_creado(db, nuevo_documento, ruta_archivo_absoluta, tipo_archivo_db)
 
         logger.info(f"✅ Documento AI creado: {titulo} ({nombre_archivo_original})")
 
@@ -3235,6 +3273,47 @@ def _buscar_archivo_por_id(
     return None, False
 
 
+def _buscar_archivo_por_nombre_uuid(
+    nombre_archivo_original: str, extension: str, base_dir: Path, rutas_intentadas: list
+) -> tuple:
+    """
+    Busca archivo por nombre UUID (formato: {uuid}{extension}).
+    Útil cuando el archivo se guardó con UUID pero la ruta absoluta cambió.
+    Retorna (ruta_archivo, archivo_encontrado) o (None, False)
+    """
+    from pathlib import Path
+    import re
+
+    upload_dir = base_dir / "documentos_ai"
+    if not upload_dir.exists():
+        return None, False
+
+    # Si el nombre original parece ser un UUID (36 caracteres con guiones)
+    uuid_pattern = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
+    
+    # Buscar archivos que coincidan con el patrón UUID + extensión
+    for archivo_en_dir in upload_dir.iterdir():
+        if archivo_en_dir.is_file():
+            nombre_archivo = archivo_en_dir.name
+            # Verificar si el nombre del archivo contiene un UUID y la extensión correcta
+            if extension and nombre_archivo.endswith(extension):
+                # Extraer la parte antes de la extensión
+                nombre_sin_ext = nombre_archivo[:-len(extension)]
+                if uuid_pattern.match(nombre_sin_ext):
+                    # Si el nombre original también tiene UUID, comparar
+                    if nombre_archivo_original and uuid_pattern.search(nombre_archivo_original):
+                        uuid_original = uuid_pattern.search(nombre_archivo_original).group()
+                        if uuid_original in nombre_sin_ext:
+                            logger.info(f"✅ Archivo encontrado por UUID en nombre: {archivo_en_dir.resolve()}")
+                            return archivo_en_dir.resolve(), True
+                    # Si no hay nombre original con UUID, pero el archivo tiene UUID y la extensión coincide
+                    elif not nombre_archivo_original or nombre_archivo_original == nombre_archivo:
+                        logger.info(f"✅ Archivo encontrado por UUID (sin nombre original): {archivo_en_dir.resolve()}")
+                        return archivo_en_dir.resolve(), True
+
+    return None, False
+
+
 def _buscar_archivo_por_tamaño_extension(
     nombre_archivo_original: str,
     extension: str,
@@ -3322,13 +3401,27 @@ def _buscar_archivo_documento(
         f"🔍 Buscando archivo para documento ID {documento_id}: "
         f"nombre={nombre_archivo_original}, ruta_original={ruta_original}"
     )
+    
+    # Log detallado de la información del documento
+    logger.debug(
+        f"   Documento en BD: titulo={documento.titulo}, "
+        f"nombre_archivo={documento.nombre_archivo}, "
+        f"tipo={documento.tipo_archivo}, "
+        f"tamaño={documento.tamaño_bytes} bytes, "
+        f"ruta_archivo={documento.ruta_archivo}"
+    )
 
     # Estrategia 1: Ruta absoluta (la ruta guardada en BD)
     if ruta_original:
+        ruta_original_path = Path(ruta_original)
+        logger.debug(f"   Intentando ruta absoluta: {ruta_original_path}")
+        logger.debug(f"   Es absoluta: {ruta_original_path.is_absolute()}, Existe: {ruta_original_path.exists()}")
+        
         ruta_archivo, archivo_encontrado = _buscar_archivo_ruta_absoluta(ruta_original)
         if archivo_encontrado:
+            logger.info(f"✅ Archivo encontrado en ruta absoluta guardada en BD")
             return ruta_archivo, True, rutas_intentadas
-        rutas_intentadas.append(f"Ruta absoluta (BD): {Path(ruta_original)} (no existe)")
+        rutas_intentadas.append(f"Ruta absoluta (BD): {ruta_original_path} (no existe)")
     
     # Estrategia 1.5: Intentar resolver la ruta relativa desde la ruta guardada
     if ruta_original and not Path(ruta_original).is_absolute():
@@ -3338,6 +3431,23 @@ def _buscar_archivo_documento(
                 logger.info(f"✅ Archivo encontrado en ruta relativa desde BD: {ruta_intento.resolve()}")
                 return ruta_intento.resolve(), True, rutas_intentadas
             rutas_intentadas.append(f"Ruta relativa desde BD: {ruta_intento} (no existe)")
+    
+    # Estrategia 1.6: Extraer nombre de archivo UUID de la ruta guardada y buscarlo
+    if ruta_original:
+        import re
+        uuid_pattern = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
+        # Extraer el nombre del archivo de la ruta (puede ser absoluta o relativa)
+        nombre_archivo_de_ruta = Path(ruta_original).name
+        if uuid_pattern.search(nombre_archivo_de_ruta):
+            # Si la ruta contiene un UUID, buscar ese archivo específico
+            for base_dir in directorios_base:
+                upload_dir = base_dir / "documentos_ai"
+                if upload_dir.exists():
+                    archivo_candidato = upload_dir / nombre_archivo_de_ruta
+                    if archivo_candidato.exists() and archivo_candidato.is_file():
+                        logger.info(f"✅ Archivo encontrado por nombre UUID extraído de ruta: {archivo_candidato.resolve()}")
+                        return archivo_candidato.resolve(), True, rutas_intentadas
+                    rutas_intentadas.append(f"Búsqueda por UUID de ruta: {archivo_candidato} (no existe)")
 
     # Estrategias 2-5: Buscar en directorios base
     for base_dir in directorios_base:
@@ -3361,6 +3471,12 @@ def _buscar_archivo_documento(
         if not archivo_encontrado:
             ruta_archivo, archivo_encontrado = _buscar_archivo_por_id(
                 documento_id, extension, base_dir, rutas_intentadas
+            )
+
+        # Estrategia 4.5: Por nombre UUID (nuevo - para archivos guardados con UUID)
+        if not archivo_encontrado:
+            ruta_archivo, archivo_encontrado = _buscar_archivo_por_nombre_uuid(
+                nombre_archivo_original, extension, base_dir, rutas_intentadas
             )
 
         # Estrategia 5: Por tamaño y extensión
