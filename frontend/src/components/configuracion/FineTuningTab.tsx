@@ -51,7 +51,7 @@ export function FineTuningTab() {
 
   // Estados para nuevo entrenamiento
   const [mostrarFormEntrenamiento, setMostrarFormEntrenamiento] = useState(false)
-  const [modeloBase, setModeloBase] = useState('gpt-3.5-turbo')
+  const [modeloBase, setModeloBase] = useState('gpt-4o-mini')
   const [archivoId, setArchivoId] = useState('')
 
   // Estados para crear conversación manual
@@ -1751,8 +1751,8 @@ export function FineTuningTab() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gpt-3.5-turbo">gpt-3.5-turbo</SelectItem>
-                    <SelectItem value="gpt-4">gpt-4</SelectItem>
+                    <SelectItem value="gpt-4o-mini">gpt-4o-mini (Recomendado - Económico)</SelectItem>
+                    <SelectItem value="gpt-4o">gpt-4o (Más potente)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1808,9 +1808,12 @@ export function FineTuningTab() {
                 <div className="text-xs text-blue-800">
                   <strong>⏱️ Tiempos típicos de entrenamiento:</strong>
                   <ul className="mt-1 ml-4 list-disc space-y-0.5">
-                    <li><strong>gpt-3.5-turbo:</strong> 10-30 minutos (depende del tamaño del archivo)</li>
-                    <li><strong>gpt-4:</strong> 2-4 horas</li>
+                    <li><strong>gpt-4o-mini:</strong> 10-30 minutos (depende del tamaño del archivo)</li>
+                    <li><strong>gpt-4o:</strong> 2-4 horas</li>
                   </ul>
+                  <p className="mt-1 text-blue-600">
+                    <strong>⚠️ Nota:</strong> gpt-3.5-turbo ya no está disponible para fine-tuning debido a políticas de seguridad de OpenAI.
+                  </p>
                   <p className="mt-2 text-blue-700">
                     El sistema actualiza automáticamente el estado cada 10 segundos. Los jobs pueden tardar más tiempo si OpenAI tiene alta demanda.
                   </p>

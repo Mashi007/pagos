@@ -8,7 +8,8 @@
 ## 📋 Resumen Ejecutivo
 
 El proyecto implementa un sistema completo de entrenamiento de AI con tres componentes principales:
-1. **Fine-tuning de OpenAI** (GPT-3.5/GPT-4)
+1. **Fine-tuning de OpenAI** (GPT-4o-mini/GPT-4o)
+   - Nota: GPT-3.5-turbo ya no está disponible para fine-tuning debido a políticas de seguridad de OpenAI
 2. **RAG (Retrieval-Augmented Generation)** con embeddings
 3. **Machine Learning para análisis de riesgo crediticio**
 

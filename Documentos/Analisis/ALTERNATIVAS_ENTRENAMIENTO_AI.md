@@ -97,8 +97,9 @@ Entrenar un modelo personalizado de OpenAI usando datos históricos de conversac
 
 3. **Entrenamiento**:
    - Usar OpenAI Fine-tuning API
-   - Modelos soportados: `gpt-3.5-turbo`, `gpt-4`
-   - Costo: ~$0.008 por 1K tokens de entrenamiento
+   - Modelos soportados: `gpt-4o-mini` (recomendado, económico), `gpt-4o` (más potente)
+   - Nota: `gpt-3.5-turbo` ya no está disponible para fine-tuning debido a políticas de seguridad
+   - Costo: ~$0.008 por 1K tokens de entrenamiento (gpt-4o-mini)
 
 4. **Integración**:
    - Actualizar endpoint para usar modelo fine-tuned
@@ -150,7 +151,7 @@ class AITrainingService:
     def iniciar_entrenamiento(
         self, 
         file_id: str, 
-        modelo_base: str = "gpt-3.5-turbo"
+        modelo_base: str = "gpt-4o-mini"  # gpt-3.5-turbo ya no está disponible
     ):
         """Iniciar job de fine-tuning"""
         job = self.client.fine_tuning.jobs.create(

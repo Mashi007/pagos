@@ -83,7 +83,7 @@ class PrepararDatosRequest(BaseModel):
 
 class IniciarFineTuningRequest(BaseModel):
     archivo_id: str
-    modelo_base: str = "gpt-3.5-turbo"
+    modelo_base: str = "gpt-4o-mini"  # gpt-3.5-turbo ya no está disponible para fine-tuning
     epochs: Optional[int] = None
     learning_rate: Optional[float] = None
 
