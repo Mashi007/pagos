@@ -141,24 +141,12 @@ export function MLRiesgoTab() {
       
       setJobId(result.job_id)
       setEstadoJob({ 
-        status: 'succeeded', 
-        progreso: 100,
-        modelo: result.modelo 
+        status: 'pending', 
+        progreso: 0,
       })
       
-      // Notificación mejorada con métricas
-      const modelo = result.modelo
-      const accuracy = modelo?.accuracy ? `${(modelo.accuracy * 100).toFixed(1)}%` : 'N/A'
-      const f1 = modelo?.f1_score ? `${(modelo.f1_score * 100).toFixed(1)}%` : 'N/A'
-      
-      toast.success(
-        `Modelo entrenado exitosamente\n` +
-        `Accuracy: ${accuracy} | F1 Score: ${f1}`,
-        {
-          duration: 8000,
-          description: `Modelo: ${modelo?.nombre || 'N/A'}`,
-        }
-      )
+      // El modelo se obtendrá cuando se consulte el estado del job
+      toast.success('Entrenamiento iniciado. El modelo se creará cuando el proceso termine.')
       
       // Recargar modelos después de 2 segundos
       setTimeout(async () => {

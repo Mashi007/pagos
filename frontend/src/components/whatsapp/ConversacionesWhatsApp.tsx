@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   MessageSquare,
-  Send,
-  Inbox,
+  ArrowRight,
+  Mail,
   Phone,
   Calendar,
   User,
@@ -14,8 +14,9 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  Bot,
-  UserPlus,
+  Brain,
+  UserPlus as UserPlusIcon,
+  Plus,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,7 +24,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import {
   conversacionesWhatsAppService,
@@ -276,22 +277,16 @@ export function ConversacionesWhatsApp({
   }
 
   // Cuando se crea un cliente nuevo, actualizar la info
-  const handleClienteCreado = async (clienteCreado: any) => {
-    setMostrarCrearCliente(false)
-    setClienteInfo({
-      encontrado: true,
-      cliente: {
-        id: clienteCreado.id,
-        cedula: clienteCreado.cedula,
-        nombres: clienteCreado.nombres,
-        telefono: clienteCreado.telefono,
-        email: clienteCreado.email || '',
-      },
+  const handleClienteCreado = () => {
+    // El callback onClienteCreated no recibe parámetros, así que buscamos el cliente
+    buscarCliente(numeroDestino).then(() => {
+      // Intentar enviar el mensaje nuevamente si hay uno pendiente
+      if (mensajeTexto.trim()) {
+        setTimeout(() => {
+          handleEnviarMensaje()
+        }, 500)
+      }
     })
-    // Intentar enviar el mensaje nuevamente
-    if (mensajeTexto.trim()) {
-      await handleEnviarMensaje()
-    }
   }
 
   // Efecto para buscar cliente cuando cambia el número
@@ -327,7 +322,7 @@ export function ConversacionesWhatsApp({
                   <p className="text-sm text-gray-600">Recibidos</p>
                   <p className="text-2xl font-bold text-green-600">{estadisticas.inbound}</p>
                 </div>
-                <Inbox className="h-8 w-8 text-green-600" />
+                <Mail className="h-8 w-8 text-green-600" />
               </div>
             </CardContent>
           </Card>
@@ -338,7 +333,7 @@ export function ConversacionesWhatsApp({
                   <p className="text-sm text-gray-600">Enviados</p>
                   <p className="text-2xl font-bold text-blue-600">{estadisticas.outbound}</p>
                 </div>
-                <Send className="h-8 w-8 text-blue-600" />
+                <ArrowRight className="h-8 w-8 text-blue-600" />
               </div>
             </CardContent>
           </Card>
@@ -468,9 +463,9 @@ export function ConversacionesWhatsApp({
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
                       {conversacion.direccion === 'INBOUND' ? (
-                        <Inbox className="h-4 w-4 text-blue-600" />
+                        <Mail className="h-4 w-4 text-blue-600" />
                       ) : (
-                        <Send className="h-4 w-4 text-green-600" />
+                        <ArrowRight className="h-4 w-4 text-green-600" />
                       )}
                       <Badge
                         variant={conversacion.direccion === 'INBOUND' ? 'default' : 'secondary'}
@@ -479,7 +474,7 @@ export function ConversacionesWhatsApp({
                       </Badge>
                       {conversacion.direccion === 'OUTBOUND' && (
                         <Badge variant="outline" className="bg-green-100">
-                          <Bot className="h-3 w-3 mr-1" />
+                          <Brain className="h-3 w-3 mr-1" />
                           Bot
                         </Badge>
                       )}
@@ -526,7 +521,7 @@ export function ConversacionesWhatsApp({
                     {conversacion.respuesta_bot && conversacion.direccion === 'INBOUND' && (
                       <div className="mt-2 p-3 bg-green-100 rounded border border-green-200">
                         <div className="flex items-center gap-2 mb-1">
-                          <Bot className="h-3 w-3 text-green-700" />
+                          <Brain className="h-3 w-3 text-green-700" />
                           <span className="text-xs font-semibold text-green-700">Respuesta del Bot:</span>
                         </div>
                         <p className="text-sm text-green-900 whitespace-pre-wrap">
@@ -573,7 +568,7 @@ export function ConversacionesWhatsApp({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Send className="h-5 w-5" />
+            <ArrowRight className="h-5 w-5" />
             Enviar Mensaje
           </CardTitle>
           <CardDescription>
@@ -609,7 +604,7 @@ export function ConversacionesWhatsApp({
                     onClick={() => setMostrarCrearCliente(true)}
                     className="whitespace-nowrap"
                   >
-                    <UserPlus className="h-4 w-4 mr-2" />
+                    <Plus className="h-4 w-4 mr-2" />
                     Crear Cliente
                   </Button>
                 )}
@@ -649,7 +644,7 @@ export function ConversacionesWhatsApp({
                   </>
                 ) : (
                   <>
-                    <Send className="h-4 w-4 mr-2" />
+                    <ArrowRight className="h-4 w-4 mr-2" />
                     Enviar Mensaje
                   </>
                 )}
@@ -664,9 +659,9 @@ export function ConversacionesWhatsApp({
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Crear Cliente Nuevo</DialogTitle>
-            <DialogDescription>
+            <p className="text-sm text-gray-600 mt-2">
               El cliente con el número {numeroDestino} no existe. Por favor crea el cliente primero para poder enviar mensajes.
-            </DialogDescription>
+            </p>
           </DialogHeader>
           <CrearClienteForm
             cliente={{
