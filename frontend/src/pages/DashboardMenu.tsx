@@ -513,21 +513,29 @@ export function DashboardMenu() {
 
   // Procesar datos de financiamiento por rangos en bandas de $200 USD
   const datosBandas200 = useMemo(() => {
-    if (!datosFinanciamientoRangos?.rangos || datosFinanciamientoRangos.rangos.length === 0) {
-      return []
-    }
-
-    // Crear bandas de $200 USD
-    const bandas: Record<string, number> = {}
-    const maxMonto = Math.max(...datosFinanciamientoRangos.rangos.map(r => {
-      // Extraer el monto máximo del rango
-      const match = r.categoria.match(/\$(\d+)/g)
-      if (match) {
-        const montos = match.map(m => parseInt(m.replace('$', '').replace(/,/g, '')))
-        return Math.max(...montos)
+    try {
+      if (!datosFinanciamientoRangos?.rangos || datosFinanciamientoRangos.rangos.length === 0) {
+        return []
       }
-      return 0
-    }))
+
+      // Crear bandas de $200 USD
+      const bandas: Record<string, number> = {}
+      const montosExtraidos = datosFinanciamientoRangos.rangos.map(r => {
+        // Extraer el monto máximo del rango
+        const match = r.categoria.match(/\$(\d+)/g)
+        if (match) {
+          const montos = match.map(m => parseInt(m.replace('$', '').replace(/,/g, '')))
+          return Math.max(...montos)
+        }
+        return 0
+      }).filter(m => !isNaN(m) && m > 0) // Filtrar valores inválidos
+      
+      // Si no hay montos válidos, retornar array vacío
+      if (montosExtraidos.length === 0) {
+        return []
+      }
+      
+      const maxMonto = Math.max(...montosExtraidos)
 
     // Inicializar todas las bandas de $200 desde $0 hasta el máximo
     for (let i = 0; i <= maxMonto; i += 200) {
@@ -590,14 +598,22 @@ export function DashboardMenu() {
       .filter(item => item.cantidad > 0) // Solo mostrar bandas con datos
       .sort((a, b) => b.montoMin - a.montoMin) // Ordenar de mayor a menor (valores grandes arriba)
 
-    // Formatear etiquetas de manera más legible
-    // El orden es descendente (mayor a menor), así los valores más grandes aparecen arriba en el gráfico vertical
-    return bandasArray.map(item => ({
-      ...item,
-      categoriaFormateada: item.categoria.replace(/,/g, '') // Remover comas para mejor visualización
-    }))
+      // Formatear etiquetas de manera más legible
+      // El orden es descendente (mayor a menor), así los valores más grandes aparecen arriba en el gráfico vertical
+      return bandasArray.map(item => ({
+        ...item,
+        categoriaFormateada: item.categoria.replace(/,/g, '') // Remover comas para mejor visualización
+      }))
+    } catch (error) {
+      console.error('Error procesando datos de financiamiento por rangos:', error)
+      return [] // Retornar array vacío en caso de error
+    }
   }, [datosFinanciamientoRangos])
 
+  // ✅ Asegurar que el componente siempre renderice, incluso si hay errores
+  // Si hay un error crítico en las queries principales, mostrar mensaje pero no bloquear
+  const hasCriticalError = errorOpcionesFiltros || errorKPIs
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="container mx-auto px-4 py-8 space-y-8">
@@ -627,6 +643,22 @@ export function DashboardMenu() {
             </div>
           </div>
         </motion.div>
+        
+        {/* Mensaje de error si hay problemas críticos */}
+        {hasCriticalError && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-yellow-50 border border-yellow-200 rounded-lg p-4"
+          >
+            <div className="flex items-center gap-2 text-yellow-800">
+              <AlertTriangle className="h-5 w-5" />
+              <p className="text-sm font-medium">
+                Algunos datos no se pudieron cargar. Por favor, recarga la página o intenta más tarde.
+              </p>
+            </div>
+          </motion.div>
+        )}
 
         {/* BARRA DE FILTROS Y BOTONES ARRIBA - OCULTA */}
         {false && (
