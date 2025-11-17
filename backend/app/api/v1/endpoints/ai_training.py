@@ -1558,7 +1558,7 @@ async def entrenar_modelo_impago(
         prestamos_procesados = 0
         prestamos_con_cuotas = 0
         prestamos_con_features = 0
-        
+
         for prestamo in prestamos:
             prestamos_procesados += 1
             try:
@@ -1573,7 +1573,7 @@ async def entrenar_modelo_impago(
                     if prestamos_procesados % 10 == 0:  # Log cada 10 préstamos
                         logger.debug(f"Préstamo {prestamo.id}: {len(cuotas) if cuotas else 0} cuotas (necesita mínimo 2)")
                     continue  # Necesitamos al menos 2 cuotas para tener historial
-                
+
                 prestamos_con_cuotas += 1
 
                 # Extraer features del historial de pagos
@@ -1603,7 +1603,7 @@ async def entrenar_modelo_impago(
                     # Agregar a datos de entrenamiento
                     training_data.append({**features, "target": target})
                     prestamos_con_features += 1
-                    
+
                     if prestamos_con_features % 5 == 0:  # Log cada 5 muestras generadas
                         logger.info(f"✅ Generadas {prestamos_con_features} muestras de entrenamiento...")
                 except Exception as e:
@@ -1620,7 +1620,7 @@ async def entrenar_modelo_impago(
             f"   - Préstamos con features válidas: {prestamos_con_features}\n"
             f"   - Muestras de entrenamiento generadas: {len(training_data)}"
         )
-        
+
         if len(training_data) < 10:
             raise HTTPException(
                 status_code=400,
