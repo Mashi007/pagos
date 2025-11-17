@@ -2738,6 +2738,181 @@ def _limpiar_y_normalizar_texto(texto: str) -> str:
     return texto
 
 
+# ============================================================================
+# FUNCIONES HELPER PARA CREAR DOCUMENTO AI - Refactorización
+# ============================================================================
+
+
+def _validar_archivo_documento_ai(archivo: UploadFile) -> tuple[str, str]:
+    """
+    Valida el archivo y retorna (tipo_archivo_db, extension).
+    Lanza HTTPException si el archivo no es válido.
+    """
+    from pathlib import Path
+
+    tipos_permitidos = [
+        "application/pdf",
+        "text/plain",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ]
+    extensiones_permitidas = {".pdf": "pdf", ".txt": "txt", ".docx": "docx"}
+
+    # Obtener extensión primero (más confiable que content_type)
+    nombre_archivo_original = archivo.filename or "documento"
+    extension = Path(nombre_archivo_original).suffix.lower()
+
+    if extension not in extensiones_permitidas:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Extensión de archivo no permitida: {extension}. Extensiones permitidas: .pdf, .txt, .docx",
+        )
+
+    tipo_archivo_db = extensiones_permitidas[extension]
+
+    # Validar content_type si está disponible (puede ser None en algunos casos)
+    tipo_archivo = archivo.content_type
+    if tipo_archivo:
+        # Validación flexible: verificar si el tipo coincide o si es un tipo genérico aceptable
+        tipos_validos = tipos_permitidos + [
+            "application/octet-stream",  # Tipo genérico que algunos navegadores usan
+            "application/x-pdf",  # Variante de PDF
+        ]
+
+        # Si el content_type no coincide exactamente, verificar por extensión
+        if tipo_archivo not in tipos_validos:
+            # Permitir si la extensión es válida (algunos navegadores no envían content_type correcto)
+            logger.warning(
+                f"⚠️ Content-Type '{tipo_archivo}' no está en la lista permitida, pero extensión '{extension}' es válida. Continuando..."
+            )
+    else:
+        # Si no hay content_type, confiar en la extensión
+        logger.info(f"ℹ️ No se recibió Content-Type, validando solo por extensión: {extension}")
+
+    return tipo_archivo_db, extension
+
+
+def _obtener_directorio_uploads() -> Path:
+    """
+    Obtiene el directorio de uploads para documentos AI.
+    Retorna Path del directorio.
+    """
+    from pathlib import Path
+
+    from app.core.config import settings
+
+    # Usar UPLOAD_DIR de configuración si está disponible, sino usar relativo
+    if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
+        base_upload_dir = Path(settings.UPLOAD_DIR).resolve()
+    else:
+        base_upload_dir = Path("uploads").resolve()
+
+    upload_dir = base_upload_dir / "documentos_ai"
+    try:
+        upload_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as dir_error:
+        logger.error(f"❌ Error creando directorio de uploads: {dir_error}")
+        raise HTTPException(status_code=500, detail=f"Error creando directorio de almacenamiento: {str(dir_error)}")
+
+    return upload_dir
+
+
+async def _guardar_archivo_documento(archivo: UploadFile, ruta_archivo: Path) -> int:
+    """
+    Guarda el archivo en disco.
+    Retorna tamaño en bytes.
+    Lanza HTTPException si falla.
+    """
+    try:
+        contenido = await archivo.read()
+        tamaño_bytes = len(contenido)
+
+        with open(ruta_archivo, "wb") as f:
+            f.write(contenido)
+        return tamaño_bytes
+    except Exception as file_error:
+        logger.error(f"❌ Error guardando archivo: {file_error}")
+        raise HTTPException(status_code=500, detail=f"Error guardando archivo: {str(file_error)}")
+
+
+def _crear_registro_documento_ai(
+    db: Session,
+    titulo: str,
+    descripcion: Optional[str],
+    nombre_archivo_original: str,
+    tipo_archivo_db: str,
+    ruta_archivo: Path,
+    tamaño_bytes: int,
+) -> DocumentoAI:
+    """
+    Crea el registro del documento en la base de datos.
+    Retorna DocumentoAI creado.
+    Lanza HTTPException si falla.
+    """
+    import os
+
+    try:
+        nuevo_documento = DocumentoAI(
+            titulo=titulo,
+            descripcion=descripcion,
+            nombre_archivo=nombre_archivo_original,
+            tipo_archivo=tipo_archivo_db,
+            ruta_archivo=str(ruta_archivo),
+            tamaño_bytes=tamaño_bytes,
+            contenido_procesado=False,
+            activo=True,
+        )
+
+        db.add(nuevo_documento)
+        db.commit()
+        db.refresh(nuevo_documento)
+        return nuevo_documento
+    except Exception as db_error:
+        # Si hay error de BD, intentar eliminar el archivo guardado
+        try:
+            if ruta_archivo.exists():
+                os.remove(ruta_archivo)
+        except Exception:
+            pass
+
+        error_msg = str(db_error)
+        error_type = type(db_error).__name__
+
+        # Verificar si es error de tabla no existe
+        is_table_missing = (
+            "does not exist" in error_msg.lower()
+            or "no such table" in error_msg.lower()
+            or ("relation" in error_msg.lower() and "does not exist" in error_msg.lower())
+            or "UndefinedTable" in error_type
+        )
+
+        if is_table_missing:
+            raise HTTPException(
+                status_code=500,
+                detail="La tabla de documentos AI no existe. Por favor, ejecuta las migraciones de base de datos.",
+            )
+        raise
+
+
+def _procesar_documento_creado(db: Session, documento: DocumentoAI, ruta_archivo: Path, tipo_archivo_db: str) -> None:
+    """
+    Procesa el documento creado extrayendo su texto.
+    No lanza excepciones, solo registra errores.
+    """
+    try:
+        texto_extraido = _extraer_texto_documento(str(ruta_archivo), tipo_archivo_db)
+        if texto_extraido:
+            documento.contenido_texto = texto_extraido
+            documento.contenido_procesado = True
+            db.commit()
+            db.refresh(documento)
+            logger.info(f"✅ Documento procesado automáticamente: {len(texto_extraido)} caracteres")
+        else:
+            logger.warning(f"⚠️ No se pudo extraer texto del documento: {documento.titulo}")
+    except Exception as proc_error:
+        logger.error(f"❌ Error procesando documento automáticamente: {proc_error}", exc_info=True)
+        # No fallar la creación si el procesamiento falla
+
+
 def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
     """
     Extrae texto de un documento según su tipo
@@ -2847,140 +3022,38 @@ async def crear_documento_ai(
         raise HTTPException(status_code=403, detail="Solo administradores pueden crear documentos AI")
 
     try:
-        import os
         from pathlib import Path
 
-        # Validar tipo de archivo
-        tipos_permitidos = [
-            "application/pdf",
-            "text/plain",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        ]
-        extensiones_permitidas = {".pdf": "pdf", ".txt": "txt", ".docx": "docx"}
-
-        # Obtener extensión primero (más confiable que content_type)
-        nombre_archivo_original = archivo.filename or "documento"
-        extension = Path(nombre_archivo_original).suffix.lower()
-
-        if extension not in extensiones_permitidas:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Extensión de archivo no permitida: {extension}. Extensiones permitidas: .pdf, .txt, .docx",
-            )
-
-        tipo_archivo_db = extensiones_permitidas[extension]
-
-        # Validar content_type si está disponible (puede ser None en algunos casos)
-        tipo_archivo = archivo.content_type
-        if tipo_archivo:
-            # Validación flexible: verificar si el tipo coincide o si es un tipo genérico aceptable
-            tipos_validos = tipos_permitidos + [
-                "application/octet-stream",  # Tipo genérico que algunos navegadores usan
-                "application/x-pdf",  # Variante de PDF
-            ]
-
-            # Si el content_type no coincide exactamente, verificar por extensión
-            if tipo_archivo not in tipos_validos:
-                # Permitir si la extensión es válida (algunos navegadores no envían content_type correcto)
-                logger.warning(
-                    f"⚠️ Content-Type '{tipo_archivo}' no está en la lista permitida, pero extensión '{extension}' es válida. Continuando..."
-                )
-        else:
-            # Si no hay content_type, confiar en la extensión
-            logger.info(f"ℹ️ No se recibió Content-Type, validando solo por extensión: {extension}")
-
-        # Crear directorio de almacenamiento si no existe
-        from app.core.config import settings
-
-        # Usar UPLOAD_DIR de configuración si está disponible, sino usar relativo
-        if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
-            base_upload_dir = Path(settings.UPLOAD_DIR).resolve()
-        else:
-            base_upload_dir = Path("uploads").resolve()
-
-        upload_dir = base_upload_dir / "documentos_ai"
-        try:
-            upload_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as dir_error:
-            logger.error(f"❌ Error creando directorio de uploads: {dir_error}")
-            raise HTTPException(status_code=500, detail=f"Error creando directorio de almacenamiento: {str(dir_error)}")
-
-        # Generar nombre único para el archivo
         import uuid
 
+        # Validar archivo
+        tipo_archivo_db, extension = _validar_archivo_documento_ai(archivo)
+        nombre_archivo_original = archivo.filename or "documento"
+
+        # Obtener directorio de uploads
+        upload_dir = _obtener_directorio_uploads()
+
+        # Generar nombre único para el archivo
         nombre_unico = f"{uuid.uuid4()}{extension}"
         ruta_archivo = upload_dir / nombre_unico
-        # Asegurar que la ruta sea absoluta
         ruta_archivo = ruta_archivo.resolve()
 
         # Guardar archivo
-        try:
-            contenido = await archivo.read()
-            tamaño_bytes = len(contenido)
-
-            with open(ruta_archivo, "wb") as f:
-                f.write(contenido)
-        except Exception as file_error:
-            logger.error(f"❌ Error guardando archivo: {file_error}")
-            raise HTTPException(status_code=500, detail=f"Error guardando archivo: {str(file_error)}")
+        tamaño_bytes = await _guardar_archivo_documento(archivo, ruta_archivo)
 
         # Crear registro en BD
-        try:
-            nuevo_documento = DocumentoAI(
-                titulo=titulo,
-                descripcion=descripcion,
-                nombre_archivo=nombre_archivo_original,
-                tipo_archivo=tipo_archivo_db,
-                ruta_archivo=str(ruta_archivo),
-                tamaño_bytes=tamaño_bytes,
-                contenido_procesado=False,
-                activo=True,
-            )
-
-            db.add(nuevo_documento)
-            db.commit()
-            db.refresh(nuevo_documento)
-        except Exception as db_error:
-            # Si hay error de BD, intentar eliminar el archivo guardado
-            try:
-                if ruta_archivo.exists():
-                    os.remove(ruta_archivo)
-            except Exception:
-                pass
-
-            error_msg = str(db_error)
-            error_type = type(db_error).__name__
-
-            # Verificar si es error de tabla no existe
-            is_table_missing = (
-                "does not exist" in error_msg.lower()
-                or "no such table" in error_msg.lower()
-                or ("relation" in error_msg.lower() and "does not exist" in error_msg.lower())
-                or "UndefinedTable" in error_type
-            )
-
-            if is_table_missing:
-                raise HTTPException(
-                    status_code=500,
-                    detail="La tabla de documentos AI no existe. Por favor, ejecuta las migraciones de base de datos.",
-                )
-            else:
-                raise
+        nuevo_documento = _crear_registro_documento_ai(
+            db=db,
+            titulo=titulo,
+            descripcion=descripcion,
+            nombre_archivo_original=nombre_archivo_original,
+            tipo_archivo_db=tipo_archivo_db,
+            ruta_archivo=ruta_archivo,
+            tamaño_bytes=tamaño_bytes,
+        )
 
         # Procesar documento automáticamente (extraer texto)
-        try:
-            texto_extraido = _extraer_texto_documento(str(ruta_archivo), tipo_archivo_db)
-            if texto_extraido:
-                nuevo_documento.contenido_texto = texto_extraido
-                nuevo_documento.contenido_procesado = True
-                db.commit()
-                db.refresh(nuevo_documento)
-                logger.info(f"✅ Documento procesado automáticamente: {len(texto_extraido)} caracteres")
-            else:
-                logger.warning(f"⚠️ No se pudo extraer texto del documento: {titulo}")
-        except Exception as proc_error:
-            logger.error(f"❌ Error procesando documento automáticamente: {proc_error}", exc_info=True)
-            # No fallar la creación si el procesamiento falla
+        _procesar_documento_creado(db, nuevo_documento, ruta_archivo, tipo_archivo_db)
 
         logger.info(f"✅ Documento AI creado: {titulo} ({nombre_archivo_original})")
 
