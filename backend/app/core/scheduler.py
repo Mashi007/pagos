@@ -108,7 +108,7 @@ async def _enviar_whatsapp_desde_scheduler(
 ) -> bool:
     """
     Función auxiliar para enviar WhatsApp desde el scheduler
-    
+
     Args:
         db: Sesión de base de datos
         cliente_id: ID del cliente
@@ -116,7 +116,7 @@ async def _enviar_whatsapp_desde_scheduler(
         asunto: Asunto del mensaje
         cuerpo: Cuerpo del mensaje
         telefono_cliente: Teléfono del cliente
-        
+
     Returns:
         True si se envió exitosamente, False si hubo error
     """
@@ -311,7 +311,7 @@ def calcular_notificaciones_previas_job():
                     logger.info(
                         f"✅ Email enviado a {correo_cliente}{cco_info} (Cliente {cliente_id}, {dias_antes} días antes)"
                     )
-                    
+
                     # ✅ Enviar también por WhatsApp si el cliente tiene teléfono
                     telefono_cliente = resultado.get("telefono", "")
                     if telefono_cliente and telefono_cliente.strip():
@@ -497,7 +497,7 @@ def calcular_notificaciones_dia_pago_job():
                     enviadas += 1
                     cco_info = f" (CCO: {', '.join(cco_emails)})" if cco_emails else ""
                     logger.info(f"✅ Email enviado a {correo_cliente}{cco_info} (Cliente {cliente_id}, Día de pago)")
-                    
+
                     # ✅ Enviar también por WhatsApp si el cliente tiene teléfono
                     telefono_cliente = resultado.get("telefono", "")
                     if telefono_cliente and telefono_cliente.strip():
@@ -702,7 +702,7 @@ def calcular_notificaciones_retrasadas_job():
                     logger.info(
                         f"✅ Email enviado a {correo_cliente}{cco_info} (Cliente {cliente_id}, {dias_atrasado} días atrasado)"
                     )
-                    
+
                     # ✅ Enviar también por WhatsApp si el cliente tiene teléfono
                     telefono_cliente = resultado.get("telefono", "")
                     if telefono_cliente and telefono_cliente.strip():
@@ -904,7 +904,7 @@ def calcular_notificaciones_prejudiciales_job():
                     enviadas += 1
                     cco_info = f" (CCO: {', '.join(cco_emails)})" if cco_emails else ""
                     logger.info(f"✅ Email enviado a {correo_cliente}{cco_info} (Cliente {cliente_id}, Prejudicial)")
-                    
+
                     # ✅ Enviar también por WhatsApp si el cliente tiene teléfono
                     telefono_cliente = resultado.get("telefono", "")
                     if telefono_cliente and telefono_cliente.strip():
