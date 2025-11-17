@@ -1188,8 +1188,22 @@ def _obtener_prestamos_aprobados(db: Session) -> list:
         return prestamos_query.all()
     except Exception as e:
         error_msg = str(e).lower()
-        if "valor_activo" in error_msg or "does not exist" in error_msg:
-            logger.warning("⚠️ Columna valor_activo no existe en BD, usando query directo")
+        # Hacer rollback si la transacción está abortada
+        if "aborted" in error_msg or "InFailedSqlTransaction" in str(e):
+            logger.warning("⚠️ Transacción abortada detectada, haciendo rollback antes de reintentar")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+        
+        if "valor_activo" in error_msg or "does not exist" in error_msg or "aborted" in error_msg or "InFailedSqlTransaction" in str(e):
+            logger.warning("⚠️ Error en query inicial, haciendo rollback y usando query directo")
+            # Asegurar rollback antes de continuar
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            
             from sqlalchemy import select
 
             stmt = select(
@@ -1872,8 +1886,22 @@ def _obtener_prestamos_aprobados_impago(db: Session) -> list:
         return prestamos_query.all()
     except Exception as e:
         error_msg = str(e).lower()
-        if "valor_activo" in error_msg or "does not exist" in error_msg:
-            logger.warning("⚠️ Columna valor_activo no existe en BD, usando query directo")
+        # Hacer rollback si la transacción está abortada
+        if "aborted" in error_msg or "InFailedSqlTransaction" in str(e):
+            logger.warning("⚠️ [ML-IMPAGO] Transacción abortada detectada, haciendo rollback antes de reintentar")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+        
+        if "valor_activo" in error_msg or "does not exist" in error_msg or "aborted" in error_msg or "InFailedSqlTransaction" in str(e):
+            logger.warning("⚠️ [ML-IMPAGO] Error en query inicial, haciendo rollback y usando query directo")
+            # Asegurar rollback antes de continuar
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            
             from sqlalchemy import select
 
             stmt = (
@@ -2115,6 +2143,19 @@ async def entrenar_modelo_impago(
         _validar_tabla_modelos_impago(db)
         _verificar_conexion_bd(db)
 
+        # Verificar y limpiar transacción antes de obtener préstamos
+        try:
+            from sqlalchemy import text
+            db.execute(text("SELECT 1"))
+        except Exception as test_error:
+            error_str = str(test_error)
+            if "aborted" in error_str.lower() or "InFailedSqlTransaction" in error_str:
+                logger.warning("⚠️ [ML-IMPAGO] Transacción abortada detectada al inicio, haciendo rollback preventivo")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+        
         # Obtener préstamos
         logger.info("🔍 Buscando préstamos aprobados para entrenamiento...")
         prestamos = _obtener_prestamos_aprobados_impago(db)
@@ -2222,6 +2263,8 @@ async def entrenar_modelo_impago(
             detail_msg = "Error al dividir datos. Puede ser por pocas muestras de alguna clase."
         elif "cuota" in error_msg.lower() or "fecha_vencimiento" in error_msg.lower() or "Cuota" in error_msg:
             detail_msg = "Error accediendo a datos de cuotas. Verifica la integridad de los datos."
+        elif "aborted" in error_msg.lower() or "InFailedSqlTransaction" in error_msg:
+            detail_msg = "Error de transacción SQL abortada. Esto puede ocurrir si una consulta anterior falló. Intenta nuevamente."
         elif "does not exist" in error_msg.lower() or "no such table" in error_msg.lower():
             detail_msg = "La tabla de modelos de impago no está creada. Ejecuta las migraciones: alembic upgrade head"
         elif "AttributeError" in error_type or "'NoneType' object has no attribute" in error_msg:
