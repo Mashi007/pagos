@@ -107,6 +107,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
     # Excepción no esperada - manejar según ambiente
     import traceback
+
     error_traceback = traceback.format_exc()
     logger.error(
         f"❌ [GLOBAL EXCEPTION HANDLER] Unhandled exception: {type(exc).__name__}: {str(exc)}\n"
@@ -125,7 +126,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     # Determinar mensaje de error según el tipo
     error_type = type(exc).__name__
     error_msg = str(exc)
-    
+
     # Mensajes más descriptivos según el tipo de error
     if "ValidationError" in error_type or "Pydantic" in error_type:
         detail_msg = f"Error de validación: {error_msg[:200]}"
@@ -141,7 +142,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         detail_msg = f"Error de importación: {error_msg[:200]}. Verifica que todas las dependencias estén instaladas."
     else:
         detail_msg = f"Error interno ({error_type}): {error_msg[:300]}"
-    
+
     # En producción, mostrar mensaje descriptivo pero no el traceback completo
     if settings.ENVIRONMENT == "production":
         return JSONResponse(
