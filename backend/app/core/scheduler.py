@@ -143,14 +143,14 @@ async def _enviar_whatsapp_desde_scheduler(
 
         # Enviar WhatsApp
         whatsapp_service = WhatsAppService(db=db)
-        
+
         # ✅ INTEGRACIÓN CON TEMPLATES DE META
         # Intentar usar template si está configurado
         from app.services.whatsapp_template_mapper import WhatsAppTemplateMapper
-        
+
         template_name = WhatsAppTemplateMapper.get_template_name(tipo_notificacion)
         template_parameters = None
-        
+
         if template_name:
             # Extraer variables del mensaje para los parámetros del template
             # Obtener variables desde la BD si es posible
@@ -159,23 +159,20 @@ async def _enviar_whatsapp_desde_scheduler(
                 from app.models.prestamo import Prestamo
                 from app.models.cuota import Cuota
                 from app.services.variables_notificacion_service import VariablesNotificacionService
-                
+
                 cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
                 if cliente:
                     # Intentar obtener préstamo y cuota si están disponibles
                     prestamo = None
                     cuota = None
-                    
+
                     # Buscar préstamo activo del cliente
                     if cliente.prestamos:
                         prestamo = next((p for p in cliente.prestamos if p.estado == "ACTIVO"), None)
                         if prestamo and prestamo.cuotas:
                             # Buscar cuota más próxima a vencer
-                            cuota = next(
-                                (c for c in prestamo.cuotas if c.estado == "PENDIENTE"),
-                                None
-                            )
-                    
+                            cuota = next((c for c in prestamo.cuotas if c.estado == "PENDIENTE"), None)
+
                     # Construir variables
                     variables_service = VariablesNotificacionService(db=db)
                     variables = variables_service.construir_variables_desde_bd(
@@ -183,14 +180,12 @@ async def _enviar_whatsapp_desde_scheduler(
                         prestamo=prestamo,
                         cuota=cuota,
                     )
-                    
+
                     # Extraer parámetros del template
                     template_parameters = WhatsAppTemplateMapper.extract_template_parameters(
-                        message=cuerpo,
-                        variables=variables,
-                        template_name=template_name
+                        message=cuerpo, variables=variables, template_name=template_name
                     )
-                    
+
                     logger.info(
                         f"📋 [TEMPLATE] Usando template '{template_name}' con {len(template_parameters)} parámetros "
                         f"para notificación {tipo_notificacion}"
@@ -200,7 +195,7 @@ async def _enviar_whatsapp_desde_scheduler(
                     f"⚠️ [TEMPLATE] Error extrayendo variables para template '{template_name}': {e}. "
                     f"Usando mensaje completo como parámetro único."
                 )
-        
+
         # Enviar mensaje (con template si está configurado, sin template si no)
         resultado_whatsapp = await whatsapp_service.send_message(
             to_number=str(telefono_cliente),

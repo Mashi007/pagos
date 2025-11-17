@@ -321,7 +321,7 @@ async def _procesar_estados(statuses: list, db: Session) -> int:
 async def _procesar_mensajes_recibidos(messages: list, db: Session) -> int:
     """
     Procesar mensajes recibidos de clientes
-    
+
     ✅ BOT DE WHATSAPP IMPLEMENTADO:
     - Guarda mensajes en BD (tabla conversaciones_whatsapp)
     - Busca cliente por número de teléfono

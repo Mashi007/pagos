@@ -31,10 +31,10 @@ class WhatsAppTemplateMapper:
     def get_template_name(cls, tipo_notificacion: str) -> Optional[str]:
         """
         Obtener nombre del template de Meta para un tipo de notificación
-        
+
         Args:
             tipo_notificacion: Tipo de notificación (ej: "PAGO_DIA_0")
-            
+
         Returns:
             Nombre del template de Meta o None si no hay mapeo
         """
@@ -42,28 +42,25 @@ class WhatsAppTemplateMapper:
 
     @classmethod
     def extract_template_parameters(
-        cls, 
-        message: str, 
-        variables: Dict[str, str],
-        template_name: Optional[str] = None
+        cls, message: str, variables: Dict[str, str], template_name: Optional[str] = None
     ) -> List[Dict[str, str]]:
         """
         Extraer parámetros del template desde el mensaje y variables
-        
+
         Esta función intenta extraer los valores de las variables más comunes
         que se usan en los templates de notificaciones de pagos.
-        
+
         Args:
             message: Mensaje completo (puede contener variables {{variable}})
             variables: Diccionario de variables disponibles
             template_name: Nombre del template (opcional, para lógica específica)
-            
+
         Returns:
             Lista de parámetros para el template de Meta
             Formato: [{"text": "valor1"}, {"text": "valor2"}, ...]
         """
         parameters = []
-        
+
         # Variables comunes en templates de notificaciones de pagos
         # Orden: nombre, monto, fecha_vencimiento, numero_cuota, credito_id
         common_vars = [
@@ -74,14 +71,14 @@ class WhatsAppTemplateMapper:
             "credito_id",
             "dias_atraso",
         ]
-        
+
         # Extraer valores de variables comunes
         for var_name in common_vars:
             if var_name in variables:
                 value = str(variables[var_name]).strip()
                 if value:  # Solo agregar si tiene valor
                     parameters.append({"text": value})
-        
+
         # Si no se encontraron variables, usar el mensaje completo como único parámetro
         if not parameters:
             logger.warning(
@@ -93,17 +90,17 @@ class WhatsAppTemplateMapper:
             for var_name, var_value in variables.items():
                 clean_message = clean_message.replace(f"{{{{{var_name}}}}}", var_value)
             parameters = [{"text": clean_message}]
-        
+
         return parameters
 
     @classmethod
     def should_use_template(cls, tipo_notificacion: str) -> bool:
         """
         Determinar si se debe usar template para un tipo de notificación
-        
+
         Args:
             tipo_notificacion: Tipo de notificación
-            
+
         Returns:
             True si hay template configurado, False si no
         """
@@ -113,9 +110,8 @@ class WhatsAppTemplateMapper:
     def get_all_mapped_templates(cls) -> Dict[str, str]:
         """
         Obtener todos los templates mapeados
-        
+
         Returns:
             Diccionario tipo_notificacion -> template_name
         """
         return cls.TEMPLATE_MAP.copy()
-

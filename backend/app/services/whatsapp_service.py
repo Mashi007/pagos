@@ -355,16 +355,15 @@ class WhatsAppService:
                 # Si no, usar el mensaje completo como único parámetro
                 if template_parameters:
                     # Usar parámetros específicos del template
-                    body_parameters = [
-                        {"type": "text", "text": param.get("text", "")}
-                        for param in template_parameters
-                    ]
+                    body_parameters = [{"type": "text", "text": param.get("text", "")} for param in template_parameters]
                     logger.info(f"📋 [TEMPLATE] Usando {len(template_parameters)} parámetros para template '{template_name}'")
                 else:
                     # Fallback: usar mensaje completo como único parámetro
                     body_parameters = [{"type": "text", "text": message}]
-                    logger.warning(f"⚠️ [TEMPLATE] No se proporcionaron parámetros, usando mensaje completo como parámetro único")
-                
+                    logger.warning(
+                        f"⚠️ [TEMPLATE] No se proporcionaron parámetros, usando mensaje completo como parámetro único"
+                    )
+
                 payload = {
                     "messaging_product": "whatsapp",
                     "to": numero_destinatario,
@@ -455,7 +454,7 @@ class WhatsAppService:
                 )
                 logger.error(f"❌ [ERROR DETALLADO] Status Code: {response.status_code}")
                 logger.error(f"❌ [ERROR DETALLADO] Error Data: {error_data}")
-                
+
                 # ⚠️ ADVERTENCIA ESPECÍFICA: Si es error 400 y no hay template, probablemente es ventana de 24h
                 if response.status_code == 400 and not template_name:
                     logger.warning(
@@ -572,7 +571,7 @@ Equipo de {settings.APP_NAME}
     async def test_connection(self) -> Dict[str, Any]:
         """
         Probar conexión con Meta Developers API
-        
+
         ✅ ESTA FUNCIÓN HACE UNA LLAMADA HTTP REAL A META:
         - Se conecta a graph.facebook.com
         - Envía tu Access Token real
@@ -604,7 +603,7 @@ Equipo de {settings.APP_NAME}
             logger.info("📡 [TEST CONEXIÓN] Enviando request HTTP real a graph.facebook.com...")
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.get(url, headers=headers)
-                
+
                 # ✅ META RESPONDIÓ REALMENTE
                 logger.info(f"📥 [TEST CONEXIÓN] Meta respondió con código HTTP: {response.status_code}")
 
