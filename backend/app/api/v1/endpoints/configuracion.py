@@ -3209,9 +3209,12 @@ def _buscar_archivo_por_id(
 
     upload_dir = base_dir / "documentos_ai"
     if not upload_dir.exists():
-        rutas_intentadas.append(f"Búsqueda por ID en: {upload_dir}")
+        rutas_intentadas.append(f"Búsqueda por ID en: {upload_dir} (directorio no existe)")
         return None, False
 
+    rutas_intentadas.append(f"Búsqueda por ID en: {upload_dir}")
+    
+    # Buscar archivos que contengan el ID del documento
     for archivo_en_dir in upload_dir.iterdir():
         if archivo_en_dir.is_file():
             # Buscar archivos que contengan el ID del documento
@@ -3220,8 +3223,15 @@ def _buscar_archivo_por_id(
                 if not extension or archivo_en_dir.suffix == extension:
                     logger.info(f"✅ Archivo encontrado por ID en nombre: {archivo_en_dir.resolve()}")
                     return archivo_en_dir.resolve(), True
+    
+    # También buscar por cualquier archivo con la extensión correcta si solo hay uno
+    # (útil cuando el archivo se guardó con UUID pero no tiene el ID en el nombre)
+    if extension:
+        archivos_con_extension = [f for f in upload_dir.iterdir() if f.is_file() and f.suffix == extension]
+        if len(archivos_con_extension) == 1:
+            logger.info(f"✅ Archivo encontrado por extensión única: {archivos_con_extension[0].resolve()}")
+            return archivos_con_extension[0].resolve(), True
 
-    rutas_intentadas.append(f"Búsqueda por ID en: {upload_dir}")
     return None, False
 
 
@@ -3313,13 +3323,21 @@ def _buscar_archivo_documento(
         f"nombre={nombre_archivo_original}, ruta_original={ruta_original}"
     )
 
-    # Estrategia 1: Ruta absoluta
-    ruta_archivo, archivo_encontrado = _buscar_archivo_ruta_absoluta(ruta_original)
-    if archivo_encontrado:
-        return ruta_archivo, True, rutas_intentadas
-
+    # Estrategia 1: Ruta absoluta (la ruta guardada en BD)
     if ruta_original:
-        rutas_intentadas.append(f"Ruta absoluta: {Path(ruta_original)}")
+        ruta_archivo, archivo_encontrado = _buscar_archivo_ruta_absoluta(ruta_original)
+        if archivo_encontrado:
+            return ruta_archivo, True, rutas_intentadas
+        rutas_intentadas.append(f"Ruta absoluta (BD): {Path(ruta_original)} (no existe)")
+    
+    # Estrategia 1.5: Intentar resolver la ruta relativa desde la ruta guardada
+    if ruta_original and not Path(ruta_original).is_absolute():
+        for base_dir in directorios_base:
+            ruta_intento = base_dir / ruta_original
+            if ruta_intento.exists() and ruta_intento.is_file():
+                logger.info(f"✅ Archivo encontrado en ruta relativa desde BD: {ruta_intento.resolve()}")
+                return ruta_intento.resolve(), True, rutas_intentadas
+            rutas_intentadas.append(f"Ruta relativa desde BD: {ruta_intento} (no existe)")
 
     # Estrategias 2-5: Buscar en directorios base
     for base_dir in directorios_base:
@@ -3370,18 +3388,31 @@ def _validar_archivo_encontrado(
     from pathlib import Path
 
     if not archivo_encontrado or not ruta_archivo or not ruta_archivo.exists():
+        # Construir mensaje de error más detallado
+        rutas_info = '\n'.join(rutas_intentadas[:10])  # Mostrar hasta 10 rutas intentadas
+        if len(rutas_intentadas) > 10:
+            rutas_info += f"\n... y {len(rutas_intentadas) - 10} rutas más"
+        
         mensaje_error = (
-            f"El archivo físico no existe para el documento '{documento.titulo}' (ID: {documento_id}). "
+            f"El archivo físico no existe para el documento '{documento.titulo}' (ID: {documento_id}).\n\n"
+            f"Información del documento:\n"
+            f"- Nombre archivo: {documento.nombre_archivo}\n"
+            f"- Ruta guardada en BD: {documento.ruta_archivo}\n"
+            f"- Tipo: {documento.tipo_archivo}\n"
+            f"- Tamaño: {documento.tamaño_bytes} bytes\n\n"
+            f"Rutas intentadas ({len(rutas_intentadas)}):\n{rutas_info}\n\n"
             f"El archivo puede haber sido eliminado del servidor o nunca se subió correctamente. "
             f"Por favor, elimina este documento y súbelo nuevamente."
         )
 
         logger.error(
             f"❌ Archivo no encontrado después de {len(rutas_intentadas)} intentos. "
-            f"Documento: {documento.titulo}, Nombre archivo: {documento.nombre_archivo}, "
+            f"Documento: {documento.titulo} (ID: {documento_id}), "
+            f"Nombre archivo: {documento.nombre_archivo}, "
             f"Ruta original: {documento.ruta_archivo}. "
-            f"Rutas intentadas: {', '.join(rutas_intentadas[:5])}..."
+            f"Rutas intentadas: {len(rutas_intentadas)}"
         )
+        logger.debug(f"Rutas intentadas detalladas: {rutas_intentadas}")
 
         raise HTTPException(status_code=400, detail=mensaje_error)
 
