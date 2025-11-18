@@ -15,7 +15,7 @@ import {
   Plus,
   FileText,
   Clock,
-  PaperPlane,
+  ArrowRight,
   X,
   Upload,
 } from 'lucide-react'
@@ -712,7 +712,7 @@ export function Comunicaciones({
                   {enviando ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <PaperPlane className="h-4 w-4" />
+                    <ArrowRight className="h-4 w-4" />
                   )}
                 </Button>
               </div>
