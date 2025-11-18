@@ -3,7 +3,7 @@ Modelo de Ticket de Atención
 Almacena tickets de atención al cliente vinculados con conversaciones de WhatsApp
 """
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
