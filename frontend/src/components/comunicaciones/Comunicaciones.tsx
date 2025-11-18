@@ -15,10 +15,9 @@ import {
   Plus,
   FileText,
   Clock,
-  Send,
+  PaperPlane,
   X,
   Upload,
-  ArrowUpCircle,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -342,7 +341,7 @@ export function Comunicaciones({
     setCreandoTicket(true)
     try {
       // Subir archivos si hay
-      let archivosJson = null
+      let archivosJson: string | null = null
       if (ticketForm.archivos.length > 0) {
         // TODO: Implementar subida de archivos
         // Por ahora, solo guardamos los nombres
@@ -713,7 +712,7 @@ export function Comunicaciones({
                   {enviando ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Send className="h-4 w-4" />
+                    <PaperPlane className="h-4 w-4" />
                   )}
                 </Button>
               </div>
