@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 240  # 4 horas
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    # ENCRYPTION_KEY para encriptar datos sensibles (API Keys, etc.)
+    # Si no se proporciona, se genera automáticamente desde SECRET_KEY
+    # Para producción, se recomienda generar una clave Fernet y configurarla como variable de entorno
+    # Generar con: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    ENCRYPTION_KEY: Optional[str] = Field(default=None)  # type: ignore[call-overload]
 
     # ============================================
     # CORS

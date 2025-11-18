@@ -168,8 +168,9 @@ def _handle_database_error(e: Exception, operation: str) -> HTTPException:
 
 
 def _obtener_openai_api_key(db: Session) -> str:
-    """Obtener API key de OpenAI desde configuración"""
+    """Obtener API key de OpenAI desde configuración (desencriptada)"""
     from app.models.configuracion_sistema import ConfiguracionSistema
+    from app.core.encryption import decrypt_api_key
 
     config = (
         db.query(ConfiguracionSistema)
@@ -185,7 +186,8 @@ def _obtener_openai_api_key(db: Session) -> str:
     if not config or not config.valor:
         raise HTTPException(status_code=400, detail="OpenAI API Key no configurado")
 
-    return config.valor
+    # Desencriptar API Key si está encriptada
+    return decrypt_api_key(config.valor)
 
 
 # ============================================

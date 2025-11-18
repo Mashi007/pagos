@@ -33,6 +33,7 @@ python-jose[cryptography]>=3.4.0
 PyJWT==2.8.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.1.1
+cryptography>=41.0.0  # Para encriptación de API Keys con Fernet
 
 # ============================================
 # DATE AND TIME

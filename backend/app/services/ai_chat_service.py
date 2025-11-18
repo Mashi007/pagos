@@ -39,7 +39,10 @@ class AIChatService:
         _validar_configuracion_ai(self.config_dict)
 
         # Extraer parámetros de configuración
-        self.openai_api_key = self.config_dict.get("openai_api_key", "")
+        # Desencriptar API Key si está encriptada
+        from app.core.encryption import decrypt_api_key
+        encrypted_api_key = self.config_dict.get("openai_api_key", "")
+        self.openai_api_key = decrypt_api_key(encrypted_api_key) if encrypted_api_key else ""
         
         # ✅ PRIORIDAD: Si hay un modelo fine-tuned activo, usarlo en lugar del modelo base
         modelo_fine_tuned = self.config_dict.get("modelo_fine_tuned", "")

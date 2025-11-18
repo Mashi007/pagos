@@ -2544,6 +2544,8 @@ def actualizar_configuracion_ai(
         )
 
     try:
+        from app.core.encryption import encrypt_api_key
+        
         configuraciones = []
         for clave, valor in config_data.items():
             config = (
@@ -2555,14 +2557,41 @@ def actualizar_configuracion_ai(
                 .first()
             )
 
+            # Encriptar API Key si es openai_api_key
+            valor_guardar = str(valor)
+            if clave == "openai_api_key" and valor and str(valor).strip():
+                valor_plano = str(valor).strip()
+                # Verificar si ya está encriptada (para evitar re-encriptar)
+                from app.core.encryption import is_encrypted
+                if not is_encrypted(valor_plano):
+                    try:
+                        valor_guardar = encrypt_api_key(valor_plano)
+                        logger.info("✅ API Key encriptada antes de guardar")
+                    except Exception as e:
+                        logger.error(f"❌ Error encriptando API Key: {e}", exc_info=True)
+                        # 🔴 CRÍTICO: No guardar sin encriptar en producción
+                        from app.core.config import settings
+                        if settings.ENVIRONMENT == "production":
+                            raise HTTPException(
+                                status_code=500,
+                                detail="No se pudo encriptar la API Key. Error crítico de seguridad."
+                            )
+                        # En desarrollo, permitir guardar sin encriptar con advertencia
+                        logger.warning("⚠️ ADVERTENCIA: API Key guardada sin encriptar (solo desarrollo)")
+                        valor_guardar = valor_plano
+                else:
+                    # Ya está encriptada, mantenerla así
+                    valor_guardar = valor_plano
+                    logger.info("✅ API Key ya estaba encriptada")
+
             if config:
-                config.valor = str(valor)  # type: ignore[assignment]
+                config.valor = valor_guardar  # type: ignore[assignment]
                 configuraciones.append(config)  # type: ignore[arg-type]
             else:
                 nueva_config = ConfiguracionSistema(
                     categoria="AI",
                     clave=clave,
-                    valor=str(valor),
+                    valor=valor_guardar,
                     tipo_dato="STRING" if clave != "activo" else "BOOLEAN",
                     visible_frontend=True,
                 )
@@ -4245,7 +4274,8 @@ def obtener_metricas_ai(
         activo_value = config_dict.get("activo") or "false"
         ai_activo = str(activo_value).lower() in ("true", "1", "yes", "on")
         modelo_configurado = config_dict.get("modelo") or "gpt-3.5-turbo"
-        api_key = config_dict.get("openai_api_key") or ""
+        from app.core.encryption import decrypt_api_key
+        api_key = decrypt_api_key(config_dict.get("openai_api_key") or "") if config_dict.get("openai_api_key") else ""
         tiene_token = bool(api_key and api_key.strip())
 
         return {
@@ -4357,7 +4387,8 @@ async def probar_configuracion_ai(
         config_dict = {config.clave: config.valor for config in configs}
 
         # Verificar que haya token configurado
-        openai_api_key = config_dict.get("openai_api_key", "")
+        from app.core.encryption import decrypt_api_key
+        openai_api_key = decrypt_api_key(config_dict.get("openai_api_key", ""))
         if not openai_api_key:
             raise HTTPException(status_code=400, detail="OpenAI API Key no configurado")
 
@@ -6001,12 +6032,36 @@ def _obtener_configuracion_ai_con_reintento(db: Session) -> list:
             raise
 
 
+def _obtener_api_key_desencriptada(config_dict: Dict[str, str]) -> str:
+    """
+    Obtiene y desencripta la API Key de OpenAI desde el diccionario de configuración.
+    
+    Args:
+        config_dict: Diccionario con la configuración de AI
+        
+    Returns:
+        API Key desencriptada (texto plano)
+    """
+    from app.core.encryption import decrypt_api_key
+    
+    encrypted_api_key = config_dict.get("openai_api_key", "")
+    if not encrypted_api_key:
+        return ""
+    
+    try:
+        return decrypt_api_key(encrypted_api_key)
+    except Exception as e:
+        logger.warning(f"Error desencriptando API Key, usando valor original: {e}")
+        # Si falla la desencriptación, retornar el valor original (compatibilidad)
+        return encrypted_api_key
+
+
 def _validar_configuracion_ai(config_dict: Dict[str, str]) -> None:
     """
     Valida que la configuración de AI esté completa y activa.
     Lanza HTTPException si hay problemas.
     """
-    openai_api_key = config_dict.get("openai_api_key", "")
+    openai_api_key = _obtener_api_key_desencriptada(config_dict)
     if not openai_api_key:
         raise HTTPException(status_code=400, detail="OpenAI API Key no configurado")
 
