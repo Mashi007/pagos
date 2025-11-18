@@ -17,6 +17,10 @@ import {
   Clock,
   X,
   Upload,
+  Bot,
+  UserCircle,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -38,6 +42,7 @@ import { formatDate } from '@/utils'
 import { toast } from 'sonner'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { mockComunicaciones, mockNombresClientes } from '@/data/mockComunicaciones'
+import { conversacionesWhatsAppService } from '@/services/conversacionesWhatsAppService'
 
 interface ComunicacionesProps {
   clienteId?: number
@@ -80,6 +85,7 @@ export function Comunicaciones({
   const [mensajeTexto, setMensajeTexto] = useState('')
   const [asuntoEmail, setAsuntoEmail] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [modoAutomatico, setModoAutomatico] = useState(true) // Automático por defecto
   
   // Estado para creación de cliente y ticket
   const [mostrarCrearCliente, setMostrarCrearCliente] = useState(false)
@@ -432,20 +438,43 @@ export function Comunicaciones({
     }
   }
 
-  // Enviar mensaje
+  // Enviar mensaje (manual o automático)
   const handleEnviarMensaje = async () => {
     if (!conversacionActual || !mensajeTexto.trim()) return
 
     setEnviando(true)
     try {
-      // Aquí implementarías la lógica de envío según el tipo
-      toast.success('Mensaje enviado (funcionalidad en desarrollo)')
-      setMensajeTexto('')
-      setAsuntoEmail('')
-      setTimeout(() => refetch(), 1000)
+      if (conversacionActual.tipo === 'whatsapp') {
+        // Enviar mensaje de WhatsApp
+        // El contacto es el número que envió el mensaje (from_contact para INBOUND)
+        // Necesitamos obtener el número correcto desde la última comunicación
+        const ultimaComunicacion = conversacionActual.ultimaComunicacion
+        const numeroDestino = ultimaComunicacion.direccion === 'INBOUND' 
+          ? ultimaComunicacion.from_contact 
+          : ultimaComunicacion.to_contact
+        
+        const resultado = await conversacionesWhatsAppService.enviarMensaje(
+          numeroDestino,
+          mensajeTexto,
+          conversacionActual.cliente_id || undefined
+        )
+        
+        if (resultado.success) {
+          toast.success('Mensaje enviado exitosamente')
+          setMensajeTexto('')
+          setAsuntoEmail('')
+          // Refrescar comunicaciones
+          setTimeout(() => refetch(), 1000)
+        } else {
+          toast.error('Error enviando mensaje')
+        }
+      } else if (conversacionActual.tipo === 'email') {
+        // TODO: Implementar envío de email
+        toast.info('Envío de email en desarrollo')
+      }
     } catch (error: any) {
       console.error('Error enviando mensaje:', error)
-      toast.error('Error enviando mensaje')
+      toast.error(error?.response?.data?.detail || 'Error enviando mensaje')
     } finally {
       setEnviando(false)
     }
@@ -716,6 +745,42 @@ export function Comunicaciones({
 
             {/* Input para enviar mensaje */}
             <div className="p-4 border-t border-gray-200 bg-gradient-to-r from-white to-gray-50 shadow-lg">
+              {/* Botón Manual/Automático (solo para WhatsApp) */}
+              {conversacionActual.tipo === 'whatsapp' && (
+                <div className="flex items-center justify-between mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2">
+                    {modoAutomatico ? (
+                      <Bot className="h-4 w-4 text-blue-600" />
+                    ) : (
+                      <UserCircle className="h-4 w-4 text-gray-600" />
+                    )}
+                    <span className="text-sm font-medium text-gray-700">
+                      Modo: <span className={modoAutomatico ? 'text-blue-600 font-bold' : 'text-gray-600 font-bold'}>
+                        {modoAutomatico ? 'Automático (Bot)' : 'Manual'}
+                      </span>
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setModoAutomatico(!modoAutomatico)}
+                    className="flex items-center gap-2"
+                  >
+                    {modoAutomatico ? (
+                      <>
+                        <ToggleRight className="h-4 w-4 text-blue-600" />
+                        <span className="text-xs">Cambiar a Manual</span>
+                      </>
+                    ) : (
+                      <>
+                        <ToggleLeft className="h-4 w-4 text-gray-600" />
+                        <span className="text-xs">Cambiar a Automático</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+              
               {conversacionActual.tipo === 'email' && (
                 <Input
                   placeholder="Asunto..."
@@ -724,29 +789,45 @@ export function Comunicaciones({
                   className="mb-2"
                 />
               )}
-              <div className="flex gap-2">
-                <Textarea
-                  placeholder={conversacionActual.tipo === 'whatsapp' ? 'Escribe un mensaje...' : 'Escribe tu respuesta...'}
-                  value={mensajeTexto}
-                  onChange={(e) => setMensajeTexto(e.target.value)}
-                  className="flex-1 min-h-[80px]"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                      handleEnviarMensaje()
-                    }
-                  }}
-                />
-                <Button onClick={handleEnviarMensaje} disabled={!mensajeTexto.trim() || enviando}>
-                  {enviando ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Enviando...
-                    </>
-                  ) : (
-                    'Enviar'
-                  )}
-                </Button>
-              </div>
+              
+              {/* En modo automático, mostrar info; en manual, mostrar input */}
+              {conversacionActual.tipo === 'whatsapp' && modoAutomatico ? (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <Bot className="h-5 w-5 text-blue-600 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-blue-900">Bot Automático Activo</p>
+                      <p className="text-xs text-blue-700 mt-1">
+                        El bot responderá automáticamente a los mensajes recibidos. Cambia a modo manual para enviar mensajes personalizados.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Textarea
+                    placeholder={conversacionActual.tipo === 'whatsapp' ? 'Escribe un mensaje...' : 'Escribe tu respuesta...'}
+                    value={mensajeTexto}
+                    onChange={(e) => setMensajeTexto(e.target.value)}
+                    className="flex-1 min-h-[80px]"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                        handleEnviarMensaje()
+                      }
+                    }}
+                  />
+                  <Button onClick={handleEnviarMensaje} disabled={!mensajeTexto.trim() || enviando}>
+                    {enviando ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      'Enviar'
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           </>
         )}

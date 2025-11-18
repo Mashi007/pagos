@@ -215,15 +215,46 @@ class WhatsAppBotService:
             Respuesta del Chat AI o None si hay error
         """
         try:
-            from app.api.v1.endpoints.configuracion import chat_ai_service
+            from app.services.ai_chat_service import AIChatService
+            from app.api.v1.endpoints.configuracion import _obtener_configuracion_ai_con_reintento, _validar_configuracion_ai
 
-            # Construir contexto del cliente
-            # contexto = f"Cliente: {cliente.nombres}, Cédula: {cliente.cedula}"  # Variable no usada
+            # Verificar que la configuración AI esté activa
+            configs = _obtener_configuracion_ai_con_reintento(self.db)
+            if not configs:
+                logger.debug("Configuración AI no encontrada, usando respuestas básicas")
+                return None
 
-            # Consultar Chat AI
-            # Nota: Esto requiere que el servicio de Chat AI esté disponible
-            # Por ahora retornamos None para usar respuestas básicas
-            return None
+            config_dict = {config.clave: config.valor for config in configs}
+            
+            # Verificar que AI esté activo
+            activo = config_dict.get("activo", "false").lower() in ("true", "1", "yes", "on")
+            if not activo:
+                logger.debug("AI no está activo, usando respuestas básicas")
+                return None
+
+            # Validar configuración (puede lanzar HTTPException)
+            try:
+                _validar_configuracion_ai(config_dict)
+            except Exception as e:
+                logger.warning(f"Configuración AI inválida: {e}")
+                return None
+
+            # Inicializar servicio AI
+            ai_service = AIChatService(db=self.db)
+            ai_service.inicializar_configuracion()
+
+            # Construir pregunta con contexto del cliente
+            pregunta_con_contexto = f"Cliente: {cliente.nombres} {cliente.apellidos or ''}, Cédula: {cliente.cedula}. Pregunta: {pregunta}"
+
+            # Procesar pregunta con AI
+            resultado = await ai_service.procesar_pregunta(pregunta_con_contexto)
+
+            if resultado.get("success") and resultado.get("respuesta"):
+                logger.info(f"✅ Respuesta AI generada para cliente {cliente.id}")
+                return resultado["respuesta"]
+            else:
+                logger.warning(f"AI no generó respuesta válida: {resultado.get('error', 'Unknown error')}")
+                return None
 
         except Exception as e:
             logger.warning(f"Error consultando Chat AI: {e}")
