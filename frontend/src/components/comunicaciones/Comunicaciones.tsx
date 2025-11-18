@@ -15,7 +15,6 @@ import {
   Plus,
   FileText,
   Clock,
-  ArrowRight,
   X,
   Upload,
 } from 'lucide-react'
@@ -710,9 +709,12 @@ export function Comunicaciones({
                 />
                 <Button onClick={handleEnviarMensaje} disabled={!mensajeTexto.trim() || enviando}>
                   {enviando ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Enviando...
+                    </>
                   ) : (
-                    <ArrowRight className="h-4 w-4" />
+                    'Enviar'
                   )}
                 </Button>
               </div>
