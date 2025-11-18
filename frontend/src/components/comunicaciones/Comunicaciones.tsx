@@ -37,6 +37,7 @@ import { userService } from '@/services/userService'
 import { formatDate } from '@/utils'
 import { toast } from 'sonner'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
+import { mockComunicaciones, mockNombresClientes } from '@/data/mockComunicaciones'
 
 interface ComunicacionesProps {
   clienteId?: number
@@ -111,7 +112,11 @@ export function Comunicaciones({
     queryFn: () => comunicacionesService.listarComunicaciones(1, 1000, undefined, clienteId),
   })
 
-  const todasComunicaciones = comunicacionesData?.comunicaciones || []
+  // Usar mockdata si no hay datos reales (en desarrollo siempre, en producción solo si no hay datos)
+  const usarMockData = (!comunicacionesData?.comunicaciones || comunicacionesData.comunicaciones.length === 0) || process.env.NODE_ENV === 'development'
+  const todasComunicaciones = usarMockData && (!comunicacionesData?.comunicaciones || comunicacionesData.comunicaciones.length === 0) 
+    ? mockComunicaciones 
+    : (comunicacionesData?.comunicaciones || [])
 
   // Cargar usuarios al montar
   useEffect(() => {
@@ -143,7 +148,8 @@ export function Comunicaciones({
         
         // Si tiene cliente_id, intentar obtener nombre del cliente
         if (comm.cliente_id) {
-          nombre = `Cliente #${comm.cliente_id}`
+          // Usar nombre del mockdata si está disponible
+          nombre = mockNombresClientes[comm.cliente_id] || `Cliente #${comm.cliente_id}`
         }
 
         // Determinar si está leído (procesado = true)
@@ -472,24 +478,24 @@ export function Comunicaciones({
   }
 
   return (
-    <div className="flex h-[calc(100vh-200px)] gap-4">
+    <div className="flex h-[calc(100vh-200px)] gap-4 bg-gray-50 rounded-lg overflow-hidden shadow-sm">
       {/* COLUMNA IZQUIERDA: Lista de conversaciones */}
-      <div className="w-80 flex-shrink-0 border-r border-gray-200 flex flex-col">
+      <div className="w-80 flex-shrink-0 border-r border-gray-200 flex flex-col bg-white shadow-sm">
         {/* Header con búsqueda */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center gap-2 mb-3">
-            <h2 className="text-lg font-semibold">Comunicaciones</h2>
-            <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+        <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-gray-900">Comunicaciones</h2>
+            <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading} className="hover:bg-blue-100">
+              <RefreshCw className={`h-4 w-4 text-blue-600 ${isLoading ? 'animate-spin' : ''}`} />
             </Button>
           </div>
           <div className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             <Input
               placeholder="Buscar conversaciones..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              className="pl-8"
+              className="pl-9 bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -514,8 +520,8 @@ export function Comunicaciones({
             <div className="divide-y divide-gray-100">
               {/* Separador visual para no leídos */}
               {conversacionesFiltradas.some(c => !c.leido || c.noLeidos > 0) && (
-                <div className="px-3 py-2 bg-blue-50 border-b border-blue-200">
-                  <p className="text-xs font-semibold text-blue-700">NO LEÍDOS</p>
+                <div className="px-4 py-2.5 bg-gradient-to-r from-blue-50 to-blue-100 border-b-2 border-blue-300">
+                  <p className="text-xs font-bold text-blue-800 uppercase tracking-wide">No Leídos</p>
                 </div>
               )}
               
@@ -529,30 +535,38 @@ export function Comunicaciones({
                 return (
                   <div key={conversacion.id}>
                     {mostrarSeparadorLeidos && (
-                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
-                        <p className="text-xs font-semibold text-gray-600">LEÍDOS</p>
+                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                        <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Leídos</p>
                       </div>
                     )}
                     <div
                       onClick={() => handleSeleccionarConversacion(conversacion)}
-                      className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
-                        conversacionSeleccionada === conversacion.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''
-                      } ${conversacion.noLeidos > 0 ? 'font-semibold' : ''}`}
+                      className={`p-4 cursor-pointer transition-all duration-200 ${
+                        conversacionSeleccionada === conversacion.id 
+                          ? 'bg-gradient-to-r from-blue-50 to-blue-100 border-l-4 border-blue-600 shadow-sm' 
+                          : 'hover:bg-gray-50 border-l-4 border-transparent'
+                      } ${conversacion.noLeidos > 0 ? 'font-semibold bg-blue-50/50' : ''}`}
                     >
                       <div className="flex items-start justify-between mb-1">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <div className="flex-shrink-0">
                             {conversacion.tipo === 'whatsapp' ? (
-                              <MessageSquare className="h-4 w-4 text-green-600" />
+                              <div className="p-1.5 rounded-full bg-green-100">
+                                <MessageSquare className="h-4 w-4 text-green-600" />
+                              </div>
                             ) : (
-                              <Mail className="h-4 w-4 text-purple-600" />
+                              <div className="p-1.5 rounded-full bg-purple-100">
+                                <Mail className="h-4 w-4 text-purple-600" />
+                              </div>
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm truncate">{conversacion.nombre}</span>
+                              <span className={`text-sm truncate ${conversacion.noLeidos > 0 ? 'text-gray-900' : 'text-gray-700'}`}>
+                                {conversacion.nombre}
+                              </span>
                               {conversacion.esNuevo && (
-                                <Badge variant="destructive" className="text-xs px-1.5 py-0">
+                                <Badge variant="destructive" className="text-xs px-2 py-0.5 font-bold animate-pulse">
                                   NUEVO
                                 </Badge>
                               )}
@@ -560,16 +574,17 @@ export function Comunicaciones({
                           </div>
                         </div>
                         {conversacion.noLeidos > 0 && (
-                          <Badge variant="default" className="ml-2 flex-shrink-0">
+                          <Badge className="ml-2 flex-shrink-0 bg-blue-600 text-white font-bold min-w-[24px] justify-center">
                             {conversacion.noLeidos}
                           </Badge>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500 truncate mt-1">
-                        {conversacion.ultimaComunicacion.body?.substring(0, 50) || '[Sin contenido]'}
-                        {conversacion.ultimaComunicacion.body && conversacion.ultimaComunicacion.body.length > 50 && '...'}
+                      <div className="text-xs text-gray-600 truncate mt-2 line-clamp-2">
+                        {conversacion.ultimaComunicacion.body?.substring(0, 60) || conversacion.ultimaComunicacion.subject || '[Sin contenido]'}
+                        {conversacion.ultimaComunicacion.body && conversacion.ultimaComunicacion.body.length > 60 && '...'}
                       </div>
-                      <div className="text-xs text-gray-400 mt-1">
+                      <div className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
                         {formatearFecha(conversacion.ultimaComunicacion.timestamp)}
                       </div>
                     </div>
@@ -582,37 +597,51 @@ export function Comunicaciones({
       </div>
 
       {/* COLUMNA CENTRO: Vista de conversación */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 bg-white rounded-lg shadow-sm">
         {!conversacionActual ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-white">
             <div className="text-center">
-              <MessageSquare className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-              <p className="text-gray-500">Selecciona una conversación para ver los mensajes</p>
+              <div className="p-4 rounded-full bg-blue-100 w-20 h-20 flex items-center justify-center mx-auto mb-4">
+                <MessageSquare className="h-10 w-10 text-blue-600" />
+              </div>
+              <p className="text-gray-600 font-medium">Selecciona una conversación para ver los mensajes</p>
+              <p className="text-sm text-gray-400 mt-2">Los mensajes aparecerán aquí</p>
             </div>
           </div>
         ) : (
           <>
             {/* Header de conversación */}
-            <div className="p-4 border-b border-gray-200 bg-white">
+            <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div>
+                  <div className="p-2 rounded-lg bg-white shadow-sm">
                     {conversacionActual.tipo === 'whatsapp' ? (
-                      <MessageSquare className="h-6 w-6 text-green-600" />
+                      <div className="p-2 rounded-full bg-green-100">
+                        <MessageSquare className="h-5 w-5 text-green-600" />
+                      </div>
                     ) : (
-                      <Mail className="h-6 w-6 text-purple-600" />
+                      <div className="p-2 rounded-full bg-purple-100">
+                        <Mail className="h-5 w-5 text-purple-600" />
+                      </div>
                     )}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{conversacionActual.nombre}</h3>
+                      <h3 className="font-bold text-gray-900">{conversacionActual.nombre}</h3>
                       {conversacionActual.esNuevo && (
-                        <Badge variant="destructive" className="text-xs">
+                        <Badge variant="destructive" className="text-xs font-bold animate-pulse">
                           NUEVO
                         </Badge>
                       )}
                     </div>
-                    <p className="text-sm text-gray-500">{conversacionActual.contacto}</p>
+                    <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
+                      {conversacionActual.tipo === 'whatsapp' ? (
+                        <Phone className="h-3 w-3" />
+                      ) : (
+                        <Mail className="h-3 w-3" />
+                      )}
+                      {conversacionActual.contacto}
+                    </p>
                   </div>
                 </div>
                 {conversacionActual.esNuevo && (
@@ -655,10 +684,10 @@ export function Comunicaciones({
                     className={`flex ${mensaje.direccion === 'INBOUND' ? 'justify-start' : 'justify-end'}`}
                   >
                     <div
-                      className={`max-w-[70%] rounded-lg p-3 ${
+                      className={`max-w-[70%] rounded-xl p-4 shadow-sm ${
                         mensaje.direccion === 'INBOUND'
-                          ? 'bg-white border border-gray-200'
-                          : 'bg-blue-600 text-white'
+                          ? 'bg-white border border-gray-200 shadow-md'
+                          : 'bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg'
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
@@ -686,7 +715,7 @@ export function Comunicaciones({
             </div>
 
             {/* Input para enviar mensaje */}
-            <div className="p-4 border-t border-gray-200 bg-white">
+            <div className="p-4 border-t border-gray-200 bg-gradient-to-r from-white to-gray-50 shadow-lg">
               {conversacionActual.tipo === 'email' && (
                 <Input
                   placeholder="Asunto..."
@@ -724,32 +753,42 @@ export function Comunicaciones({
       </div>
 
       {/* COLUMNA DERECHA: Panel de Tickets */}
-      <div className="w-96 flex-shrink-0 border-l border-gray-200 flex flex-col bg-white">
+      <div className="w-96 flex-shrink-0 border-l border-gray-200 flex flex-col bg-white shadow-sm rounded-lg">
         {!conversacionActual ? (
-          <div className="flex items-center justify-center h-full p-4">
+          <div className="flex items-center justify-center h-full p-4 bg-gradient-to-br from-gray-50 to-white">
             <div className="text-center">
-              <FileText className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-              <p className="text-sm text-gray-500">Selecciona una conversación para ver los tickets</p>
+              <div className="p-4 rounded-full bg-gray-100 w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <FileText className="h-8 w-8 text-gray-400" />
+              </div>
+              <p className="text-sm text-gray-600 font-medium">Selecciona una conversación para ver los tickets</p>
+              <p className="text-xs text-gray-400 mt-2">Los tickets aparecerán aquí</p>
             </div>
           </div>
         ) : (
           <>
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="font-semibold flex items-center gap-2">
-                <FileText className="h-5 w-5" />
+            <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-blue-100">
+                  <FileText className="h-5 w-5 text-blue-600" />
+                </div>
                 Tickets
               </h3>
               {conversacionActual.esNuevo && (
-                <p className="text-xs text-orange-600 mt-1">Crea un cliente para gestionar tickets</p>
+                <p className="text-xs text-orange-600 mt-2 font-medium bg-orange-50 px-2 py-1 rounded">
+                  ⚠️ Crea un cliente para gestionar tickets
+                </p>
               )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {/* Formulario para crear ticket */}
               {!ticketEditando && (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm">Crear Nuevo Ticket</CardTitle>
+                <Card className="border-2 border-blue-100 shadow-md">
+                  <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-white">
+                    <CardTitle className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                      <Plus className="h-4 w-4 text-blue-600" />
+                      Crear Nuevo Ticket
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <Input
@@ -989,25 +1028,41 @@ export function Comunicaciones({
                   {ticketsCliente.map((ticket) => (
                     <Card
                       key={ticket.id}
-                      className="p-3 cursor-pointer hover:bg-gray-50"
+                      className="p-4 cursor-pointer hover:shadow-md transition-all duration-200 border-2 hover:border-blue-300"
                       onClick={() => setTicketEditando(ticket)}
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">{ticket.titulo}</div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            #{ticket.id} • {ticket.estado}
+                          <div className="font-bold text-sm text-gray-900 truncate">{ticket.titulo}</div>
+                          <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                            <span className="font-semibold">#{ticket.id}</span>
+                            <span>•</span>
+                            <Badge 
+                              variant={ticket.estado === 'resuelto' ? 'default' : ticket.estado === 'cerrado' ? 'secondary' : 'outline'} 
+                              className="text-xs"
+                            >
+                              {ticket.estado}
+                            </Badge>
                           </div>
                         </div>
-                        <Badge variant={ticket.prioridad === 'urgente' ? 'destructive' : 'outline'} className="text-xs">
+                        <Badge 
+                          variant={ticket.prioridad === 'urgente' ? 'destructive' : ticket.prioridad === 'media' ? 'default' : 'secondary'} 
+                          className="text-xs font-bold"
+                        >
                           {ticket.prioridad}
                         </Badge>
                       </div>
-                      <p className="text-xs text-gray-600 line-clamp-2">{ticket.descripcion}</p>
+                      <p className="text-xs text-gray-600 line-clamp-2 mt-2">{ticket.descripcion}</p>
                       {ticket.fecha_limite && (
-                        <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                        <div className="text-xs text-blue-600 mt-2 flex items-center gap-1 font-medium bg-blue-50 px-2 py-1 rounded">
                           <Calendar className="h-3 w-3" />
-                          {new Date(ticket.fecha_limite).toLocaleDateString('es-ES')}
+                          {new Date(ticket.fecha_limite).toLocaleDateString('es-ES', { 
+                            day: '2-digit', 
+                            month: 'short', 
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
                         </div>
                       )}
                     </Card>
