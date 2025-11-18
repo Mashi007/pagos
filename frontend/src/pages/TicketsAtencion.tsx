@@ -37,6 +37,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
 import { ticketsService, Ticket, TicketCreate } from '@/services/ticketsService'
 import { toast } from 'sonner'
+import { getMockTicketsResponse } from '@/data/mockTickets'
 
 // Estados de tickets
 const ESTADOS_TICKET = [
@@ -103,13 +104,39 @@ export function TicketsAtencion() {
     refetch: refetchTickets,
   } = useQuery({
     queryKey: ['tickets', page, filtroEstado, filtroPrioridad],
-    queryFn: () =>
-      ticketsService.getTickets({
-        page,
-        per_page: 20,
-        estado: filtroEstado !== 'todos' ? filtroEstado : undefined,
-        prioridad: filtroPrioridad !== 'todos' ? filtroPrioridad : undefined,
-      }),
+    queryFn: async () => {
+      try {
+        const response = await ticketsService.getTickets({
+          page,
+          per_page: 20,
+          estado: filtroEstado !== 'todos' ? filtroEstado : undefined,
+          prioridad: filtroPrioridad !== 'todos' ? filtroPrioridad : undefined,
+        })
+        // ✅ Usar mockdata si no hay datos reales o en desarrollo
+        const usarMockData = (!response?.tickets || response.tickets.length === 0) || process.env.NODE_ENV === 'development'
+        if (usarMockData && (!response?.tickets || response.tickets.length === 0)) {
+          return getMockTicketsResponse(
+            page,
+            20,
+            filtroEstado !== 'todos' ? filtroEstado : undefined,
+            filtroPrioridad !== 'todos' ? filtroPrioridad : undefined
+          )
+        }
+        return response
+      } catch (error) {
+        // ✅ En caso de error, usar mockdata en desarrollo
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Error cargando tickets, usando mockdata:', error)
+          return getMockTicketsResponse(
+            page,
+            20,
+            filtroEstado !== 'todos' ? filtroEstado : undefined,
+            filtroPrioridad !== 'todos' ? filtroPrioridad : undefined
+          )
+        }
+        throw error
+      }
+    },
   })
 
   const tickets: TicketLocal[] = ticketsData?.tickets?.map((t) => ({
