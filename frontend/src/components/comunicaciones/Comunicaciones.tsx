@@ -88,6 +88,7 @@ export function Comunicaciones({
   // Estado para creación de cliente y ticket
   const [mostrarCrearCliente, setMostrarCrearCliente] = useState(false)
   const [creandoClienteAuto, setCreandoClienteAuto] = useState(false)
+  const [clienteRecienCreado, setClienteRecienCreado] = useState<{ contacto: string; tipo: string } | null>(null)
   const [ticketForm, setTicketForm] = useState({
     titulo: '',
     descripcion: '',
@@ -230,6 +231,19 @@ export function Comunicaciones({
     if (!conversacionSeleccionada) return null
     return conversacionesAgrupadas.find((c) => c.id === conversacionSeleccionada) || null
   }, [conversacionSeleccionada, conversacionesAgrupadas])
+
+  // Efecto para buscar conversación actualizada después de crear cliente
+  useEffect(() => {
+    if (clienteRecienCreado && conversacionesAgrupadas.length > 0) {
+      const conversacionActualizada = conversacionesAgrupadas.find(
+        (c) => c.contacto === clienteRecienCreado.contacto && c.tipo === clienteRecienCreado.tipo
+      )
+      if (conversacionActualizada) {
+        setConversacionSeleccionada(conversacionActualizada.id)
+        setClienteRecienCreado(null) // Limpiar flag
+      }
+    }
+  }, [clienteRecienCreado, conversacionesAgrupadas])
 
   // Cargar mensajes cuando se selecciona una conversación
   useEffect(() => {
@@ -505,12 +519,12 @@ export function Comunicaciones({
   }
 
   return (
-    <div className="flex h-[calc(100vh-200px)] gap-4 bg-gray-50 rounded-lg overflow-hidden shadow-sm">
+    <div className="flex h-[calc(100vh-120px)] gap-0 bg-white overflow-hidden">
       {/* COLUMNA IZQUIERDA: Lista de conversaciones */}
-      <div className="w-80 flex-shrink-0 border-r border-gray-200 flex flex-col bg-white shadow-sm">
+      <div className="w-80 flex-shrink-0 border-r border-gray-200 flex flex-col bg-white">
         {/* Header con búsqueda */}
-        <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
-          <div className="flex items-center justify-between mb-3">
+        <div className="p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+          <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-bold text-gray-900">Comunicaciones</h2>
             <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading} className="hover:bg-blue-100">
               <RefreshCw className={`h-4 w-4 text-blue-600 ${isLoading ? 'animate-spin' : ''}`} />
@@ -568,9 +582,9 @@ export function Comunicaciones({
                     )}
                     <div
                       onClick={() => handleSeleccionarConversacion(conversacion)}
-                      className={`p-4 cursor-pointer transition-all duration-200 ${
+                      className={`p-3 cursor-pointer transition-all duration-200 ${
                         conversacionSeleccionada === conversacion.id 
-                          ? 'bg-gradient-to-r from-blue-50 to-blue-100 border-l-4 border-blue-600 shadow-sm' 
+                          ? 'bg-gradient-to-r from-blue-50 to-blue-100 border-l-4 border-blue-600' 
                           : 'hover:bg-gray-50 border-l-4 border-transparent'
                       } ${conversacion.noLeidos > 0 ? 'font-semibold bg-blue-50/50' : ''}`}
                     >
@@ -624,7 +638,7 @@ export function Comunicaciones({
       </div>
 
       {/* COLUMNA CENTRO: Vista de conversación */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white rounded-lg shadow-sm">
+      <div className="flex-1 flex flex-col min-w-0 bg-white">
         {!conversacionActual ? (
           <div className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-white">
             <div className="text-center">
@@ -638,7 +652,7 @@ export function Comunicaciones({
         ) : (
           <>
             {/* Header de conversación */}
-            <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50 shadow-sm">
+            <div className="p-3 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-white shadow-sm">
@@ -675,27 +689,17 @@ export function Comunicaciones({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleCrearCliente(conversacionActual)}
-                    disabled={creandoClienteAuto}
+                    onClick={() => setMostrarCrearCliente(true)}
                   >
-                    {creandoClienteAuto ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Creando...
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Crear Cliente
-                      </>
-                    )}
+                    <Plus className="h-4 w-4 mr-2" />
+                    Crear Cliente
                   </Button>
                 )}
               </div>
             </div>
 
             {/* Mensajes */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+            <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50">
               {cargandoMensajes === conversacionActual.id ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
@@ -711,7 +715,7 @@ export function Comunicaciones({
                     className={`flex ${mensaje.direccion === 'INBOUND' ? 'justify-start' : 'justify-end'}`}
                   >
                     <div
-                      className={`max-w-[70%] rounded-xl p-4 shadow-sm ${
+                      className={`max-w-[75%] rounded-lg p-3 shadow-sm ${
                         mensaje.direccion === 'INBOUND'
                           ? 'bg-white border border-gray-200 shadow-md'
                           : 'bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg'
@@ -742,10 +746,10 @@ export function Comunicaciones({
             </div>
 
             {/* Input para enviar mensaje */}
-            <div className="p-4 border-t border-gray-200 bg-gradient-to-r from-white to-gray-50 shadow-lg">
+            <div className="p-3 border-t border-gray-200 bg-gradient-to-r from-white to-gray-50">
               {/* Botón Manual/Automático (solo para WhatsApp) */}
               {conversacionActual.tipo === 'whatsapp' && (
-                <div className="flex items-center justify-between mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center justify-between mb-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-center gap-2">
                     {modoAutomatico ? (
                       <Zap className="h-4 w-4 text-blue-600" />
@@ -825,7 +829,7 @@ export function Comunicaciones({
       </div>
 
       {/* COLUMNA DERECHA: Panel de Tickets */}
-      <div className="w-96 flex-shrink-0 border-l border-gray-200 flex flex-col bg-white shadow-sm rounded-lg">
+      <div className="w-96 flex-shrink-0 border-l border-gray-200 flex flex-col bg-white">
         {!conversacionActual ? (
           <div className="flex items-center justify-center h-full p-4 bg-gradient-to-br from-gray-50 to-white">
             <div className="text-center">
@@ -838,7 +842,7 @@ export function Comunicaciones({
           </div>
         ) : (
           <>
-            <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+            <div className="p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
               <h3 className="font-bold text-gray-900 flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-blue-100">
                   <FileText className="h-5 w-5 text-blue-600" />
@@ -852,17 +856,17 @@ export function Comunicaciones({
               )}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
               {/* Formulario para crear ticket */}
               {!ticketEditando && (
                 <Card className="border-2 border-blue-100 shadow-md">
-                  <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-white">
+                  <CardHeader className="pb-2 pt-3 px-3 bg-gradient-to-r from-blue-50 to-white">
                     <CardTitle className="text-sm font-bold text-gray-900 flex items-center gap-2">
                       <Plus className="h-4 w-4 text-blue-600" />
                       Crear Nuevo Ticket
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-3">
+                  <CardContent className="space-y-2 p-3">
                     <Input
                       placeholder="Título del ticket"
                       value={ticketForm.titulo}
@@ -1101,7 +1105,7 @@ export function Comunicaciones({
                   {ticketsCliente.map((ticket) => (
                     <Card
                       key={ticket.id}
-                      className="p-4 cursor-pointer hover:shadow-md transition-all duration-200 border-2 hover:border-blue-300"
+                      className="p-3 cursor-pointer hover:shadow-md transition-all duration-200 border-2 hover:border-blue-300"
                       onClick={() => setTicketEditando(ticket)}
                     >
                       <div className="flex items-start justify-between mb-2">
@@ -1146,6 +1150,56 @@ export function Comunicaciones({
           </>
         )}
       </div>
+
+      {/* Formulario para Crear Cliente */}
+      {mostrarCrearCliente && conversacionActual && (
+        <CrearClienteForm
+          cliente={{
+            // Pre-llenar con datos de la conversación
+            // No incluir 'id' para que se trate como creación, no edición
+            telefono: conversacionActual.tipo === 'whatsapp' ? conversacionActual.contacto : '',
+            email: conversacionActual.tipo === 'email' ? conversacionActual.contacto : '',
+            nombres: conversacionActual.nombre !== conversacionActual.contacto ? conversacionActual.nombre : '',
+          }}
+          onClose={() => {
+            setMostrarCrearCliente(false)
+          }}
+          onSuccess={() => {
+            // Al guardar exitosamente, cerrar el formulario y volver a Comunicaciones
+            setMostrarCrearCliente(false)
+            // Guardar información de la conversación actual para buscarla después
+            if (conversacionActual?.contacto && conversacionActual?.tipo) {
+              setClienteRecienCreado({
+                contacto: conversacionActual.contacto,
+                tipo: conversacionActual.tipo,
+              })
+            }
+            
+            // Actualizar comunicaciones para reflejar el nuevo cliente
+            queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
+            
+            setTimeout(() => {
+              refetch()
+              toast.success('Cliente creado exitosamente. Las comunicaciones se han actualizado.')
+            }, 500)
+          }}
+          onClienteCreated={() => {
+            // Cuando se crea el cliente, actualizar comunicaciones
+            queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
+            // Guardar información para buscar la conversación actualizada
+            if (conversacionActual?.contacto && conversacionActual?.tipo) {
+              setClienteRecienCreado({
+                contacto: conversacionActual.contacto,
+                tipo: conversacionActual.tipo,
+              })
+            }
+            
+            setTimeout(() => {
+              refetch()
+            }, 500)
+          }}
+        />
+      )}
     </div>
   )
 }
