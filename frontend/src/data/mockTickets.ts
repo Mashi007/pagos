@@ -60,7 +60,7 @@ export const mockTickets: Ticket[] = [
     id: 3,
     titulo: 'Solicitud de información sobre préstamos',
     descripcion: 'Cliente interesado en obtener un préstamo personal. Solicita información sobre tasas de interés, requisitos y montos disponibles.',
-    cliente_id: null,
+    cliente_id: undefined,
     cliente: 'Pedro Sánchez',
     clienteData: {
       id: 12,

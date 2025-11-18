@@ -4,11 +4,75 @@
 -- ============================================================================
 -- Este script audita toda la configuración relacionada con AI:
 -- 1. Configuraciones de AI en configuracion_sistema
--- 2. Documentos AI cargados
--- 3. Variables de prompt personalizadas
--- 4. Embeddings de documentos (RAG)
+-- 2. Documentos AI cargados (tabla: documentos_ai)
+-- 3. Variables de prompt personalizadas (tabla: ai_prompt_variables)
+-- 4. Embeddings de documentos (RAG) (tabla: documento_ai_embeddings)
 -- 5. Conversaciones de AI (si existe)
 -- ============================================================================
+-- NOTA: Si alguna tabla no existe, esa sección retornará 0 filas
+-- IMPORTANTE: Si obtienes error "relation does not exist", ejecuta las secciones
+-- por separado o usa el archivo: auditoria_ai_por_secciones.sql
+-- ============================================================================
+-- NOMBRES CORRECTOS DE TABLAS:
+-- - documentos_ai (NO documento_ai)
+-- - documento_ai_embeddings (NO documento_embedding)
+-- - ai_prompt_variables (NO ai_prompt_variable)
+-- ============================================================================
+
+-- Verificar existencia de tablas (opcional - solo informativo)
+SELECT 
+    '=== VERIFICACIÓN DE TABLAS ===' AS tipo,
+    'configuracion_sistema' AS tabla,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'configuracion_sistema'
+        ) THEN '✅ Existe'
+        ELSE '❌ No existe'
+    END AS estado
+
+UNION ALL
+
+SELECT 
+    'Verificación',
+    'documentos_ai',
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'documentos_ai'
+        ) THEN '✅ Existe'
+        ELSE '❌ No existe (ejecutar migración)'
+    END
+
+UNION ALL
+
+SELECT 
+    'Verificación',
+    'documento_ai_embeddings',
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'documento_ai_embeddings'
+        ) THEN '✅ Existe'
+        ELSE '⚠️ No existe (opcional - para RAG)'
+    END
+
+UNION ALL
+
+SELECT 
+    'Verificación',
+    'ai_prompt_variables',
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'ai_prompt_variables'
+        ) THEN '✅ Existe'
+        ELSE '⚠️ No existe (opcional - para prompts personalizados)'
+    END;
 
 -- ============================================================================
 -- 1. CONFIGURACIÓN DE AI EN configuracion_sistema
@@ -154,7 +218,7 @@ SELECT
         WHEN SUM(tamaño_bytes) < 1024 * 1024 THEN ROUND(SUM(tamaño_bytes)::numeric / 1024, 2) || ' KB'
         ELSE ROUND(SUM(tamaño_bytes)::numeric / (1024 * 1024), 2) || ' MB'
     END AS tamaño_total_formateado
-FROM documento_ai;
+FROM documentos_ai;
 
 -- ============================================================================
 -- 6. VARIABLES DE PROMPT PERSONALIZADAS
