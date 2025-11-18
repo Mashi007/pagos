@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   MessageSquare,
@@ -78,6 +78,8 @@ export function Comunicaciones({
   // Estado para carga de mensajes (solo cuando se selecciona)
   const [mensajesCargados, setMensajesCargados] = useState<Map<string, ComunicacionUnificada[]>>(new Map())
   const [cargandoMensajes, setCargandoMensajes] = useState<string | null>(null)
+  // ✅ Ref para rastrear conversaciones cargadas sin causar re-renders
+  const conversacionesCargadasRef = useRef<Set<string>>(new Set())
   
   // Estado para envío de mensajes
   const [mensajeTexto, setMensajeTexto] = useState('')
@@ -114,14 +116,16 @@ export function Comunicaciones({
     refetch,
   } = useQuery({
     queryKey: ['comunicaciones', clienteId],
-    queryFn: () => comunicacionesService.listarComunicaciones(1, 1000, undefined, clienteId),
+    queryFn: () => comunicacionesService.listarComunicaciones(1, 100, undefined, clienteId),
   })
 
-  // Usar mockdata si no hay datos reales (en desarrollo siempre, en producción solo si no hay datos)
-  const usarMockData = (!comunicacionesData?.comunicaciones || comunicacionesData.comunicaciones.length === 0) || process.env.NODE_ENV === 'development'
-  const todasComunicaciones = usarMockData && (!comunicacionesData?.comunicaciones || comunicacionesData.comunicaciones.length === 0) 
-    ? mockComunicaciones 
-    : (comunicacionesData?.comunicaciones || [])
+  // ✅ Optimizado: Usar useMemo para evitar recálculos innecesarios
+  const todasComunicaciones = useMemo(() => {
+    const usarMockData = (!comunicacionesData?.comunicaciones || comunicacionesData.comunicaciones.length === 0) || process.env.NODE_ENV === 'development'
+    return usarMockData && (!comunicacionesData?.comunicaciones || comunicacionesData.comunicaciones.length === 0) 
+      ? mockComunicaciones 
+      : (comunicacionesData?.comunicaciones || [])
+  }, [comunicacionesData?.comunicaciones])
 
   // Cargar usuarios al montar
   useEffect(() => {
@@ -249,39 +253,37 @@ export function Comunicaciones({
   useEffect(() => {
     if (!conversacionActual) return
     
-    // Si ya están cargados, no volver a cargar
-    if (mensajesCargados.has(conversacionActual.id)) return
+    // ✅ Verificar si ya están cargados usando ref (no causa re-renders)
+    if (conversacionesCargadasRef.current.has(conversacionActual.id)) {
+      return // Ya están cargados, no hacer nada
+    }
     
     // Cargar mensajes de esta conversación específica
     setCargandoMensajes(conversacionActual.id)
     
-    const cargarMensajes = async () => {
-      try {
-        // Filtrar comunicaciones de esta conversación específica
-        const mensajes = todasComunicaciones.filter(
-          (comm) => {
-            const idBase = comm.cliente_id ? `cliente_${comm.cliente_id}` : `contacto_${comm.from_contact}`
-            const id = `${idBase}_${comm.tipo}`
-            return id === conversacionActual.id
-          }
-        )
-        
-        // Ordenar por fecha/hora
-        mensajes.sort((a, b) => {
-          return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-        })
-        
-        setMensajesCargados(prev => new Map(prev).set(conversacionActual.id, mensajes))
-      } catch (error) {
-        console.error('Error cargando mensajes:', error)
-        toast.error('Error cargando mensajes')
-      } finally {
-        setCargandoMensajes(null)
+    // Filtrar comunicaciones de esta conversación específica
+    const mensajes = todasComunicaciones.filter(
+      (comm) => {
+        const idBase = comm.cliente_id ? `cliente_${comm.cliente_id}` : `contacto_${comm.from_contact}`
+        const id = `${idBase}_${comm.tipo}`
+        return id === conversacionActual.id
       }
-    }
+    )
     
-    cargarMensajes()
-  }, [conversacionActual, todasComunicaciones, mensajesCargados])
+    // Ordenar por fecha/hora
+    mensajes.sort((a, b) => {
+      return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    })
+    
+    // Actualizar mensajes cargados y marcar como cargado en el ref
+    setMensajesCargados(prev => {
+      const nuevoMap = new Map(prev)
+      nuevoMap.set(conversacionActual.id, mensajes)
+      conversacionesCargadasRef.current.add(conversacionActual.id)
+      return nuevoMap
+    })
+    setCargandoMensajes(null)
+  }, [conversacionActual, todasComunicaciones.length]) // ✅ Solo dependencias estables - removido mensajesCargados (usa ref para verificar)
 
   // Obtener mensajes de la conversación actual
   const mensajesOrdenados = useMemo(() => {
@@ -331,8 +333,8 @@ export function Comunicaciones({
       
       if (resultado.success && resultado.cliente) {
         toast.success('Cliente creado exitosamente')
+        // ✅ invalidateQueries ya dispara refetch automáticamente, no necesitamos setTimeout
         queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
-        setTimeout(() => refetch(), 500)
       }
     } catch (error: any) {
       console.error('Error creando cliente:', error)
@@ -354,9 +356,8 @@ export function Comunicaciones({
     // Si es nuevo, primero crear cliente
     if (conversacionActual.esNuevo) {
       await handleCrearCliente(conversacionActual)
-      // Esperar a que se actualice la conversación
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      await refetch()
+      // ✅ invalidateQueries ya dispara refetch automáticamente, no necesitamos setTimeout
+      queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
       toast.info('Cliente creado. Por favor, crea el ticket nuevamente.')
       return
     }
@@ -475,8 +476,8 @@ export function Comunicaciones({
           toast.success('Mensaje enviado exitosamente')
           setMensajeTexto('')
           setAsuntoEmail('')
-          // Refrescar comunicaciones
-          setTimeout(() => refetch(), 1000)
+          // ✅ invalidateQueries ya dispara refetch automáticamente
+          queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
         } else {
           toast.error('Error enviando mensaje')
         }
@@ -1175,16 +1176,12 @@ export function Comunicaciones({
               })
             }
             
-            // Actualizar comunicaciones para reflejar el nuevo cliente
+            // ✅ Actualizar comunicaciones para reflejar el nuevo cliente
             queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
-            
-            setTimeout(() => {
-              refetch()
-              toast.success('Cliente creado exitosamente. Las comunicaciones se han actualizado.')
-            }, 500)
+            toast.success('Cliente creado exitosamente. Las comunicaciones se han actualizado.')
           }}
           onClienteCreated={() => {
-            // Cuando se crea el cliente, actualizar comunicaciones
+            // ✅ Cuando se crea el cliente, actualizar comunicaciones
             queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
             // Guardar información para buscar la conversación actualizada
             if (conversacionActual?.contacto && conversacionActual?.tipo) {
@@ -1193,10 +1190,6 @@ export function Comunicaciones({
                 tipo: conversacionActual.tipo,
               })
             }
-            
-            setTimeout(() => {
-              refetch()
-            }, 500)
           }}
         />
       )}

@@ -106,7 +106,10 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
+        // ✅ Evitar duplicar fecha_inicio y fecha_fin ya que se agregan manualmente después
+        if (key !== 'fecha_inicio' && key !== 'fecha_fin' && value) {
+          queryParams.append(key, value.toString())
+        }
       })
       queryParams.append('fecha_inicio', fechasVista.fecha_inicio)
       queryParams.append('fecha_fin', fechasVista.fecha_fin)

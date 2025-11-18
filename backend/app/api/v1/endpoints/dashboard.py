@@ -4292,7 +4292,7 @@ def obtener_pagos_conciliados(
 
 
 @router.get("/financiamiento-por-rangos")
-@cache_result(ttl=300, key_prefix="dashboard")  # ✅ Agregar cache para mejorar performance
+@cache_result(ttl=600, key_prefix="dashboard")  # Cache por 10 minutos (optimizado para reducir carga)
 def obtener_financiamiento_por_rangos(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
@@ -5306,7 +5306,7 @@ def obtener_cuentas_cobrar_tendencias(
 
 
 @router.get("/financiamiento-tendencia-mensual")
-@cache_result(ttl=600, key_prefix="dashboard")  # Cache por 10 minutos (datos históricos)
+@cache_result(ttl=900, key_prefix="dashboard")  # Cache por 15 minutos (datos históricos - optimizado)
 def obtener_financiamiento_tendencia_mensual(
     meses: int = Query(12, description="Número de meses a mostrar (últimos N meses)"),
     analista: Optional[str] = Query(None),
@@ -5444,7 +5444,7 @@ def obtener_financiamiento_tendencia_mensual(
 
 
 @router.get("/cobranzas-semanales")
-@cache_result(ttl=600, key_prefix="dashboard")  # Cache por 10 minutos (datos históricos)
+@cache_result(ttl=900, key_prefix="dashboard")  # Cache por 15 minutos (datos históricos - optimizado)
 def obtener_cobranzas_semanales(
     semanas: int = Query(12, description="Número de semanas a mostrar (últimas N semanas)"),
     analista: Optional[str] = Query(None),
@@ -5781,7 +5781,7 @@ def obtener_cobros_por_analista(
 
 
 @router.get("/evolucion-morosidad")
-@cache_result(ttl=600, key_prefix="dashboard")  # Cache por 10 minutos (datos históricos)
+@cache_result(ttl=900, key_prefix="dashboard")  # Cache por 15 minutos (datos históricos - optimizado)
 def obtener_evolucion_morosidad(
     meses: int = Query(6, description="Número de meses a mostrar (últimos N meses)"),
     analista: Optional[str] = Query(None),
@@ -5932,7 +5932,7 @@ def obtener_evolucion_morosidad(
 
 
 @router.get("/evolucion-pagos")
-@cache_result(ttl=600, key_prefix="dashboard")  # Cache por 10 minutos (datos históricos)
+@cache_result(ttl=900, key_prefix="dashboard")  # Cache por 15 minutos (datos históricos - optimizado)
 def obtener_evolucion_pagos(
     meses: int = Query(6, description="Número de meses a mostrar (últimos N meses)"),
     analista: Optional[str] = Query(None),

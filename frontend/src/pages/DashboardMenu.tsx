@@ -182,7 +182,7 @@ export function DashboardMenu() {
       const meses = response.meses
       return meses
     },
-    staleTime: 5 * 60 * 1000, // 5 minutos - balance entre frescura y rendimiento
+    staleTime: 15 * 60 * 1000, // 15 minutos - optimizado para datos históricos
     enabled: !!kpisPrincipales, // ✅ Solo carga después de KPIs (lazy loading)
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
   })
@@ -274,7 +274,7 @@ export function DashboardMenu() {
         }
       }
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000, // 10 minutos - optimizado para reducir carga
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
     retry: 1, // ✅ Permitir 1 reintento para errores de red
@@ -394,8 +394,9 @@ export function DashboardMenu() {
       }
       return response
     },
-    staleTime: 5 * 60 * 1000, // 5 minutos
+    staleTime: 15 * 60 * 1000, // 15 minutos - optimizado para datos históricos
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
+    refetchOnWindowFocus: false, // Reducir peticiones automáticas
   })
 
   const { data: datosMorosidadAnalista, isLoading: loadingMorosidadAnalista } = useQuery({
@@ -428,14 +429,17 @@ export function DashboardMenu() {
       // ✅ Pasar fecha_inicio desde enero 2025 en lugar de meses
       queryParams.append('fecha_inicio', '2025-01-01')
       Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
+        // ✅ Evitar duplicar fecha_inicio ya que se agregó manualmente arriba
+        if (key !== 'fecha_inicio' && value) {
+          queryParams.append(key, value.toString())
+        }
       })
       const response = await apiClient.get(
         `/api/v1/dashboard/evolucion-morosidad?${queryParams.toString()}`
       ) as { meses: Array<{ mes: string; morosidad: number }> }
       return response.meses
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 15 * 60 * 1000, // 15 minutos - optimizado para datos históricos
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
@@ -448,7 +452,10 @@ export function DashboardMenu() {
       // ✅ Pasar fecha_inicio desde enero 2025 en lugar de meses
       queryParams.append('fecha_inicio', '2025-01-01')
       Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
+        // ✅ Evitar duplicar fecha_inicio ya que se agregó manualmente arriba
+        if (key !== 'fecha_inicio' && value) {
+          queryParams.append(key, value.toString())
+        }
       })
       // Usar timeout extendido para endpoints lentos
       const response = await apiClient.get(
@@ -457,8 +464,9 @@ export function DashboardMenu() {
       ) as { meses: Array<{ mes: string; pagos: number; monto: number }> }
       return response.meses
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 15 * 60 * 1000, // 15 minutos - optimizado para datos históricos
     retry: 1,
+    refetchOnWindowFocus: false, // Reducir peticiones automáticas
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
