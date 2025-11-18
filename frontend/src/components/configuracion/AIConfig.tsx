@@ -345,7 +345,11 @@ export function AIConfig() {
       await cargarDocumentos()
     } catch (error: any) {
       console.error('Error procesando documento:', error)
-      let mensajeError = error?.response?.data?.detail || error?.message || 'Error procesando documento'
+      // Intentar obtener el mensaje del backend de múltiples fuentes
+      let mensajeError = error?.response?.data?.detail || 
+                        error?.response?.data?.message || 
+                        error?.message || 
+                        'Error procesando documento'
 
       // Simplificar mensajes largos de diagnóstico
       if (mensajeError.includes('El archivo físico no existe')) {
@@ -357,7 +361,7 @@ export function AIConfig() {
       }
 
       toast.error(`Error al procesar documento: ${mensajeError}`, {
-        duration: 5000,
+        duration: 8000, // Aumentar duración para mensajes importantes
       })
     } finally {
       setProcesandoDocumento(null)
