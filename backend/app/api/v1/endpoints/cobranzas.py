@@ -35,6 +35,80 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _recalcular_y_guardar_ml_impago(
+    prestamo: Prestamo,
+    cuotas_dict: Dict[int, List],
+    ml_service,
+    modelo_activo,
+    fecha_actual: date,
+    db: Session,
+    cliente_data: Dict,
+    ml_calculated_ref: list,  # Lista con un elemento para modificar por referencia
+    ml_errors_ref: list,  # Lista con un elemento para modificar por referencia
+    ml_processed_ref: list,  # Lista con un elemento para modificar por referencia
+):
+    """
+    Recalcular predicción ML Impago y guardarla en la base de datos.
+    Modifica cliente_data con el resultado y actualiza contadores.
+    """
+    try:
+        cuotas = cuotas_dict.get(prestamo.id, [])
+        if not cuotas:
+            logger.debug(f"🔍 [ML] No hay cuotas para préstamo {prestamo.id}, no se puede calcular ML Impago")
+            cliente_data["ml_impago"] = None
+            return
+
+        logger.debug(f"🔍 [ML] Calculando y guardando predicción para préstamo {prestamo.id}, cuotas: {len(cuotas)}")
+        features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
+        prediccion = ml_service.predict_impago(features)
+
+        # Verificar si la predicción fue exitosa
+        if prediccion.get("prediccion") == "Error" or prediccion.get("prediccion") == "Desconocido":
+            logger.warning(f"⚠️ [ML] Predicción ML falló para préstamo {prestamo.id}: {prediccion.get('recomendacion', 'Error desconocido')}")
+            cliente_data["ml_impago"] = None
+            ml_errors_ref[0] += 1
+            ml_processed_ref[0] += 1
+        else:
+            # Guardar predicción en la base de datos
+            probabilidad = round(prediccion.get("probabilidad_impago", 0.0), 3)
+            nivel_riesgo = prediccion.get("nivel_riesgo", "Desconocido")
+            
+            try:
+                prestamo.ml_impago_nivel_riesgo_calculado = nivel_riesgo
+                prestamo.ml_impago_probabilidad_calculada = Decimal(str(probabilidad))
+                prestamo.ml_impago_calculado_en = datetime.now()
+                if modelo_activo:
+                    prestamo.ml_impago_modelo_id = modelo_activo.id
+                
+                db.commit()
+                logger.debug(f"✅ [ML] Predicción guardada para préstamo {prestamo.id}: {nivel_riesgo} ({probabilidad*100:.1f}%)")
+            except Exception as save_error:
+                logger.warning(f"⚠️ [ML] Error guardando predicción en BD para préstamo {prestamo.id}: {save_error}")
+                db.rollback()
+                # Continuar aunque falle el guardado
+            
+            # Retornar resultado en cliente_data
+            cliente_data["ml_impago"] = {
+                "probabilidad_impago": probabilidad,
+                "nivel_riesgo": nivel_riesgo,
+                "prediccion": prediccion.get("prediccion", "Desconocido"),
+                "es_manual": False,
+            }
+            ml_calculated_ref[0] += 1
+            ml_processed_ref[0] += 1
+            
+            # Debug: Log primera predicción para verificar que funciona
+            if ml_calculated_ref[0] == 1:
+                logger.info(f"🔍 [ML] Primera predicción exitosa y guardada - Préstamo {prestamo.id}: {nivel_riesgo}")
+                
+    except Exception as e:
+        logger.warning(f"⚠️ [ML] Error calculando predicción ML para préstamo {prestamo.id}: {e}")
+        logger.debug(f"   [ML] Detalles del error: {e}", exc_info=True)
+        cliente_data["ml_impago"] = None
+        ml_errors_ref[0] += 1
+        ml_processed_ref[0] += 1
+
+
 @router.get("/diagnostico-ml")
 def diagnostico_ml_impago(
     db: Session = Depends(get_db),
@@ -685,6 +759,7 @@ def obtener_clientes_atrasados(
         ml_processed = 0
         ml_manual = 0
         ml_calculated = 0
+        ml_from_cache = 0  # Predicciones leídas de BD (guardadas previamente)
         ml_errors = 0
         
         for row in resultados:
@@ -699,11 +774,11 @@ def obtener_clientes_atrasados(
             }
 
             # Agregar predicción ML Impago si está disponible
-            # Priorizar valores manuales sobre calculados
+            # Prioridad: 1) Manuales, 2) Calculados guardados recientes, 3) Calcular nuevo
             try:
                 prestamo = prestamos_dict.get(row.prestamo_id)
                 if prestamo and prestamo.estado == "APROBADO":
-                    # Verificar si hay valores manuales
+                    # 1. Verificar si hay valores manuales (máxima prioridad)
                     if prestamo.ml_impago_nivel_riesgo_manual and prestamo.ml_impago_probabilidad_manual is not None:
                         # Usar valores manuales
                         cliente_data["ml_impago"] = {
@@ -714,49 +789,48 @@ def obtener_clientes_atrasados(
                         }
                         ml_manual += 1
                         ml_processed += 1
-                    elif ml_service and modelo_cargado:
-                        # Calcular con ML si no hay valores manuales
-                        cuotas = cuotas_dict.get(prestamo.id, [])
-                        if cuotas:
-                            logger.debug(f"🔍 [ML] Calculando predicción para préstamo {row.prestamo_id}, cuotas: {len(cuotas)}")
-                            try:
-                                features = ml_service.extract_payment_features(cuotas, prestamo, fecha_actual)
-                                prediccion = ml_service.predict_impago(features)
-                                
-                                # Debug: Log primera predicción para verificar que funciona
-                                if ml_calculated == 0:
-                                    logger.info(f"🔍 [ML] Primera predicción exitosa - Préstamo {row.prestamo_id}: {prediccion.get('nivel_riesgo', 'N/A')}")
-
-                                # Verificar si la predicción fue exitosa
-                                if prediccion.get("prediccion") == "Error" or prediccion.get("prediccion") == "Desconocido":
-                                    logger.warning(f"⚠️ [ML] Predicción ML falló para préstamo {row.prestamo_id}: {prediccion.get('recomendacion', 'Error desconocido')}")
-                                    cliente_data["ml_impago"] = None
-                                    ml_errors += 1
-                                    ml_processed += 1
-                                else:
-                                    cliente_data["ml_impago"] = {
-                                        "probabilidad_impago": round(prediccion.get("probabilidad_impago", 0.0), 3),
-                                        "nivel_riesgo": prediccion.get("nivel_riesgo", "Desconocido"),
-                                        "prediccion": prediccion.get("prediccion", "Desconocido"),
-                                        "es_manual": False,
-                                    }
-                                    ml_calculated += 1
-                                    ml_processed += 1
-                            except Exception as e:
-                                logger.warning(f"⚠️ [ML] Error calculando predicción ML para préstamo {row.prestamo_id}: {e}")
-                                logger.debug(f"   [ML] Detalles del error: {e}", exc_info=True)
-                                cliente_data["ml_impago"] = None
-                                ml_errors += 1
+                    # 2. Verificar si hay valores calculados guardados y son recientes (< 7 días)
+                    elif prestamo.ml_impago_nivel_riesgo_calculado and prestamo.ml_impago_probabilidad_calculada is not None:
+                        from datetime import timedelta
+                        # Verificar si la predicción guardada es reciente (menos de 7 días)
+                        if prestamo.ml_impago_calculado_en:
+                            dias_desde_calculo = (fecha_actual - prestamo.ml_impago_calculado_en.date()).days if hasattr(prestamo.ml_impago_calculado_en, 'date') else 999
+                            # Si es reciente (< 7 días) y el modelo activo no cambió, usar valor guardado
+                            if dias_desde_calculo < 7 and (modelo_activo is None or prestamo.ml_impago_modelo_id == modelo_activo.id):
+                                cliente_data["ml_impago"] = {
+                                    "probabilidad_impago": float(prestamo.ml_impago_probabilidad_calculada),
+                                    "nivel_riesgo": prestamo.ml_impago_nivel_riesgo_calculado,
+                                    "prediccion": "Calculado (guardado)",
+                                    "es_manual": False,
+                                }
+                                ml_from_cache += 1
                                 ml_processed += 1
+                            else:
+                                # Predicción antigua o modelo cambió, recalcular
+                                _recalcular_y_guardar_ml_impago(prestamo, cuotas_dict, ml_service, modelo_activo, fecha_actual, db, cliente_data, [ml_calculated], [ml_errors], [ml_processed])
                         else:
-                            logger.debug(f"🔍 [ML] No hay cuotas para préstamo {row.prestamo_id}, no se puede calcular ML Impago")
-                            cliente_data["ml_impago"] = None
+                            # Hay valores pero sin fecha, recalcular para actualizar
+                            _recalcular_y_guardar_ml_impago(prestamo, cuotas_dict, ml_service, modelo_activo, fecha_actual, db, cliente_data, [ml_calculated], [ml_errors], [ml_processed])
+                    # 3. Calcular nuevo si no hay valores guardados
+                    elif ml_service and modelo_cargado:
+                        _recalcular_y_guardar_ml_impago(prestamo, cuotas_dict, ml_service, modelo_activo, fecha_actual, db, cliente_data, [ml_calculated], [ml_errors], [ml_processed])
                     else:
-                        if not ml_service:
-                            logger.debug(f"🔍 [ML] ml_service es None para préstamo {row.prestamo_id}")
-                        elif not modelo_cargado:
-                            logger.debug(f"🔍 [ML] modelo_cargado es False para préstamo {row.prestamo_id}")
-                        cliente_data["ml_impago"] = None
+                        # No hay servicio ML disponible, intentar usar valores guardados aunque sean antiguos
+                        if prestamo.ml_impago_nivel_riesgo_calculado and prestamo.ml_impago_probabilidad_calculada is not None:
+                            cliente_data["ml_impago"] = {
+                                "probabilidad_impago": float(prestamo.ml_impago_probabilidad_calculada),
+                                "nivel_riesgo": prestamo.ml_impago_nivel_riesgo_calculado,
+                                "prediccion": "Calculado (guardado - sin ML disponible)",
+                                "es_manual": False,
+                            }
+                            ml_from_cache += 1
+                            ml_processed += 1
+                        else:
+                            if not ml_service:
+                                logger.debug(f"🔍 [ML] ml_service es None para préstamo {row.prestamo_id}")
+                            elif not modelo_cargado:
+                                logger.debug(f"🔍 [ML] modelo_cargado es False para préstamo {row.prestamo_id}")
+                            cliente_data["ml_impago"] = None
                 else:
                     logger.debug(f"🔍 [ML] Préstamo {row.prestamo_id} no está APROBADO o no existe en prestamos_dict")
                     cliente_data["ml_impago"] = None
@@ -773,7 +847,7 @@ def obtener_clientes_atrasados(
         logger.info(
             f"✅ [clientes_atrasados] Procesamiento completado: "
             f"{len(clientes_atrasados)} clientes, "
-            f"ML procesados: {ml_processed} (manuales: {ml_manual}, calculados: {ml_calculated}, errores: {ml_errors}), "
+            f"ML procesados: {ml_processed} (manuales: {ml_manual}, desde_cache: {ml_from_cache}, calculados: {ml_calculated}, errores: {ml_errors}), "
             f"tiempo_total={total_time_ms}ms, tiempo_ml={ml_time_ms}ms"
         )
         
@@ -783,6 +857,7 @@ def obtener_clientes_atrasados(
             "modelo_cargado": modelo_cargado,
             "ml_procesados": ml_processed,
             "ml_manuales": ml_manual,
+            "ml_desde_cache": ml_from_cache,
             "ml_calculados": ml_calculated,
             "ml_errores": ml_errors,
             "razon_fallo": razon_fallo_ml,

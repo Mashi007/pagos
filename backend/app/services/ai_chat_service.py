@@ -72,6 +72,15 @@ class AIChatService:
         Versión async para obtener contexto completo.
         Incluye llamada async a documentos semánticos.
         """
+        from app.api.v1.endpoints.configuracion import (
+            _obtener_resumen_bd,
+            _obtener_info_esquema,
+            _obtener_contexto_documentos_semantico,
+            _extraer_cedula_de_pregunta,
+            _obtener_info_cliente_por_cedula,
+            _obtener_datos_adicionales,
+        )
+
         pregunta_lower = pregunta.lower().strip()
 
         # Obtener contexto base
@@ -109,6 +118,12 @@ class AIChatService:
         """
         Construye el system prompt usando configuración personalizada o default.
         """
+        from app.api.v1.endpoints.configuracion import (
+            _obtener_variables_personalizadas,
+            _construir_system_prompt_personalizado,
+            _construir_system_prompt_default,
+        )
+
         prompt_personalizado = self.config_dict.get("system_prompt_personalizado", "")
         usar_prompt_personalizado = prompt_personalizado and prompt_personalizado.strip()
 

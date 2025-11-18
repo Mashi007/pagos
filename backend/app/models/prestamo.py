@@ -86,6 +86,14 @@ class Prestamo(Base):
     ml_impago_nivel_riesgo_manual = Column(String(20), nullable=True)  # Alto, Medio, Bajo (valores manuales)
     ml_impago_probabilidad_manual = Column(Numeric(5, 3), nullable=True)  # Probabilidad manual (0.0 a 1.0)
 
+    # ============================================
+    # ML IMPAGO - VALORES CALCULADOS (persistentes)
+    # ============================================
+    ml_impago_nivel_riesgo_calculado = Column(String(20), nullable=True)  # Alto, Medio, Bajo (valores calculados por ML)
+    ml_impago_probabilidad_calculada = Column(Numeric(5, 3), nullable=True)  # Probabilidad calculada (0.0 a 1.0)
+    ml_impago_calculado_en = Column(TIMESTAMP, nullable=True)  # Fecha de última predicción calculada
+    ml_impago_modelo_id = Column(Integer, ForeignKey("modelos_impago_cuotas.id"), nullable=True)  # ID del modelo ML usado
+
     # Auditoría
     fecha_actualizacion = Column(TIMESTAMP, nullable=False, default=func.now(), onupdate=func.now())
 
