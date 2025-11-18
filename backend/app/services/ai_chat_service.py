@@ -82,6 +82,7 @@ class AIChatService:
             _extraer_cedula_de_pregunta,
             _obtener_info_cliente_por_cedula,
             _obtener_datos_adicionales,
+            _ejecutar_consulta_dinamica,
         )
 
         pregunta_lower = pregunta.lower().strip()
@@ -108,6 +109,9 @@ class AIChatService:
 
         # Datos adicionales (cálculos, ML, etc.)
         datos_adicionales = _obtener_datos_adicionales(pregunta, pregunta_lower, self.db)
+        
+        # ✅ NUEVO: Ejecutar consultas dinámicas basadas en la pregunta
+        consultas_dinamicas = _ejecutar_consulta_dinamica(pregunta, pregunta_lower, self.db)
 
         return {
             "resumen_bd": resumen_bd,
@@ -115,6 +119,7 @@ class AIChatService:
             "contexto_documentos": contexto_documentos,
             "info_cliente_buscado": info_cliente_buscado,
             "datos_adicionales": datos_adicionales,
+            "consultas_dinamicas": consultas_dinamicas,
         }
 
     def construir_system_prompt(self, contexto: Dict[str, str]) -> str:
@@ -149,6 +154,7 @@ class AIChatService:
                 contexto["datos_adicionales"],
                 contexto["info_esquema"],
                 contexto["contexto_documentos"],
+                contexto.get("consultas_dinamicas", ""),
             )
 
     async def llamar_openai_api(self, system_prompt: str, pregunta: str) -> Dict[str, Any]:

@@ -6495,7 +6495,7 @@ def _obtener_info_cliente_por_cedula(busqueda_cedula: str, db: Session) -> str:
 
 
 def _construir_system_prompt_default(
-    resumen_bd: str, info_cliente_buscado: str, datos_adicionales: str, info_esquema: str, contexto_documentos: str
+    resumen_bd: str, info_cliente_buscado: str, datos_adicionales: str, info_esquema: str, contexto_documentos: str, consultas_dinamicas: str = ""
 ) -> str:
     """
     Construye el prompt del sistema por defecto.
@@ -6537,6 +6537,10 @@ Tienes acceso a informacion de la base de datos del sistema y a la fecha/hora ac
 {datos_adicionales}
 {info_esquema}
 
+=== CONSULTAS DINÁMICAS EJECUTADAS ===
+{consultas_dinamicas}
+NOTA: Las consultas dinámicas arriba contienen información específica obtenida de la base de datos en tiempo real basada en la pregunta del usuario. SIEMPRE usa esta información si está disponible, ya que es más precisa y actualizada que el resumen general.
+
 === INVENTARIO COMPLETO DE CAMPOS ===
 El sistema tiene acceso completo a TODOS los campos de TODAS las tablas.
 El inventario detallado esta disponible mas abajo en "INVENTARIO COMPLETO DE CAMPOS DE BASE DE DATOS".
@@ -6568,18 +6572,20 @@ CAPACIDADES PRINCIPALES:
 6. **Analisis de Machine Learning**: Prediccion de morosidad, segmentacion de clientes, deteccion de anomalias, clustering de prestamos
 
 REGLAS FUNDAMENTALES:
-1. **USA SIEMPRE LOS DATOS DEL RESUMEN**: El resumen de base de datos arriba contiene TODA la información disponible. SIEMPRE consulta el resumen ANTES de decir que no tienes información.
-2. **NUNCA digas "no tengo disponible"**: Si la información está en el resumen, DEBES usarla. Por ejemplo:
-   - Si preguntan "cuantos prestamos hay aprobados" → Busca en el resumen la línea que dice "Préstamos: X totales, Y aprobados..."
+1. **PRIORIDAD: CONSULTAS DINÁMICAS**: Si hay una sección "CONSULTAS DINÁMICAS EJECUTADAS" arriba, USA ESOS DATOS PRIMERO. Son consultas específicas ejecutadas en tiempo real basadas en la pregunta del usuario y son más precisas que el resumen general.
+2. **USA SIEMPRE LOS DATOS DISPONIBLES**: Después de revisar las consultas dinámicas, consulta el resumen de base de datos. SIEMPRE consulta ambos ANTES de decir que no tienes información.
+3. **NUNCA digas "no tengo disponible"**: Si la información está en las consultas dinámicas o en el resumen, DEBES usarla. Por ejemplo:
+   - Si preguntan "cuantos prestamos hay aprobados" → Busca primero en "CONSULTAS DINÁMICAS", luego en el resumen la línea que dice "Préstamos: X totales, Y aprobados..."
+   - Si preguntan "cuantos prestamos aprobó el analista Juan en enero" → Busca en "CONSULTAS DINÁMICAS" la sección de préstamos del analista
    - Si preguntan "cuantos clientes hay" → Busca en el resumen la línea que dice "Clientes: X totales..."
-   - Si preguntan "total de pagos" → Busca en el resumen la línea que dice "Pagos: X totales..." o "Monto total de pagos: X"
-3. **NUNCA inventes informacion**: Si un dato NO está en el resumen, entonces sí puedes decir que no está disponible
-4. **Muestra tus calculos**: Cuando calcules KPIs, indica la formula y los valores utilizados del resumen
-5. **Compara con contexto**: Para tendencias, muestra periodo actual vs periodo anterior usando datos del resumen
-6. **Respuestas accionables**: Incluye el "que significa esto?" cuando sea relevante
-7. **SOLO responde preguntas sobre la base de datos del sistema relacionadas con cobranzas y prestamos**
-8. **CRÍTICO**: Cuando el usuario pregunta sobre cantidades, totales, estadísticas, etc., SIEMPRE busca primero en el resumen. El resumen contiene datos reales y actualizados de la base de datos.
-9. Si la pregunta NO es sobre la BD (ej: preguntas generales de conocimiento), responde con el mensaje de restriccion mencionado arriba
+   - Si preguntan "total de pagos" → Busca primero en "CONSULTAS DINÁMICAS", luego en el resumen
+4. **NUNCA inventes informacion**: Si un dato NO está en las consultas dinámicas ni en el resumen, entonces sí puedes decir que no está disponible
+5. **Muestra tus calculos**: Cuando calcules KPIs, indica la formula y los valores utilizados
+6. **Compara con contexto**: Para tendencias, muestra periodo actual vs periodo anterior usando datos disponibles
+7. **Respuestas accionables**: Incluye el "que significa esto?" cuando sea relevante
+8. **SOLO responde preguntas sobre la base de datos del sistema relacionadas con cobranzas y prestamos**
+9. **CRÍTICO**: Cuando el usuario pregunta sobre cantidades, totales, estadísticas, períodos específicos, analistas, concesionarios, etc., SIEMPRE busca primero en "CONSULTAS DINÁMICAS EJECUTADAS" y luego en el resumen. Las consultas dinámicas contienen información específica y actualizada.
+10. Si la pregunta NO es sobre la BD (ej: preguntas generales de conocimiento), responde con el mensaje de restriccion mencionado arriba
 
 PROCESO DE ANALISIS:
 1. Identifica que metrica o analisis solicita el usuario
@@ -6973,6 +6979,235 @@ def _obtener_datos_adicionales(pregunta: str, pregunta_lower: str, db: Session) 
         logger.error(f"Error calculando datos adicionales: {e}")
 
     return datos_adicionales
+
+
+def _ejecutar_consulta_dinamica(pregunta: str, pregunta_lower: str, db: Session) -> str:
+    """
+    Ejecuta consultas dinámicas a la base de datos basadas en la pregunta del usuario.
+    Usa SQLAlchemy ORM para evitar SQL injection.
+    
+    Retorna string con los resultados de la consulta o string vacío si no se puede ejecutar.
+    """
+    from datetime import datetime, timedelta
+    import re
+    
+    resultado = ""
+    fecha_actual = datetime.now()
+    
+    try:
+        # ============================================
+        # CONSULTAS POR ANALISTA
+        # ============================================
+        if any(palabra in pregunta_lower for palabra in ["analista", "asesor", "ejecutivo"]):
+            # Extraer nombre del analista si se menciona
+            analista_match = re.search(r'(?:analista|asesor|ejecutivo)\s+([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+)', pregunta_lower)
+            nombre_analista = analista_match.group(1).strip() if analista_match else None
+            
+            if nombre_analista:
+                # Buscar préstamos por analista
+                prestamos_analista = db.query(Prestamo).filter(
+                    Prestamo.analista.ilike(f"%{nombre_analista}%")
+                ).all()
+                
+                if prestamos_analista:
+                    total = len(prestamos_analista)
+                    aprobados = len([p for p in prestamos_analista if p.estado == "APROBADO"])
+                    monto_total = sum(float(p.total_financiamiento or 0) for p in prestamos_analista)
+                    
+                    resultado += f"\n=== PRÉSTAMOS DEL ANALISTA '{nombre_analista}' ===\n"
+                    resultado += f"Total préstamos: {total}\n"
+                    resultado += f"Préstamos aprobados: {aprobados}\n"
+                    resultado += f"Monto total financiado: {monto_total:,.2f}\n"
+        
+        # ============================================
+        # CONSULTAS POR FECHA/PERÍODO
+        # ============================================
+        # Detectar fechas y períodos en la pregunta
+        meses_nombres = {
+            "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+            "julio": 7, "agosto": 8, "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12
+        }
+        
+        mes_encontrado = None
+        año_encontrado = fecha_actual.year
+        
+        # Buscar mes en la pregunta
+        for mes_nombre, mes_num in meses_nombres.items():
+            if mes_nombre in pregunta_lower:
+                mes_encontrado = mes_num
+                break
+        
+        # Buscar año en la pregunta
+        año_match = re.search(r'\b(20\d{2})\b', pregunta)
+        if año_match:
+            año_encontrado = int(año_match.group(1))
+        
+        # Buscar palabras como "hoy", "esta semana", "este mes", etc.
+        if "hoy" in pregunta_lower:
+            fecha_inicio = fecha_actual.date()
+            fecha_fin = fecha_actual.date()
+        elif "esta semana" in pregunta_lower or "semana actual" in pregunta_lower:
+            fecha_inicio = fecha_actual.date() - timedelta(days=fecha_actual.weekday())
+            fecha_fin = fecha_actual.date()
+        elif "este mes" in pregunta_lower or "mes actual" in pregunta_lower:
+            fecha_inicio = fecha_actual.date().replace(day=1)
+            fecha_fin = fecha_actual.date()
+        elif mes_encontrado:
+            fecha_inicio = date(año_encontrado, mes_encontrado, 1)
+            # Último día del mes
+            if mes_encontrado == 12:
+                fecha_fin = date(año_encontrado, 12, 31)
+            else:
+                fecha_fin = date(año_encontrado, mes_encontrado + 1, 1) - timedelta(days=1)
+        else:
+            fecha_inicio = None
+            fecha_fin = None
+        
+        # ============================================
+        # CONSULTAS DE PRÉSTAMOS POR PERÍODO
+        # ============================================
+        if fecha_inicio and fecha_fin and any(palabra in pregunta_lower for palabra in ["prestamo", "credito", "financiamiento"]):
+            if "aprobado" in pregunta_lower or "aprobados" in pregunta_lower:
+                prestamos = db.query(Prestamo).filter(
+                    Prestamo.estado == "APROBADO",
+                    Prestamo.fecha_aprobacion >= datetime.combine(fecha_inicio, datetime.min.time()),
+                    Prestamo.fecha_aprobacion <= datetime.combine(fecha_fin, datetime.max.time())
+                ).all()
+                
+                if prestamos:
+                    total = len(prestamos)
+                    monto_total = sum(float(p.total_financiamiento or 0) for p in prestamos)
+                    resultado += f"\n=== PRÉSTAMOS APROBADOS ({fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}) ===\n"
+                    resultado += f"Total: {total}\n"
+                    resultado += f"Monto total: {monto_total:,.2f}\n"
+        
+        # ============================================
+        # CONSULTAS DE PAGOS POR PERÍODO
+        # ============================================
+        if fecha_inicio and fecha_fin and any(palabra in pregunta_lower for palabra in ["pago", "pagos", "pagado", "pagados"]):
+            pagos = db.query(Pago).filter(
+                Pago.activo.is_(True),
+                Pago.fecha_pago >= fecha_inicio,
+                Pago.fecha_pago <= fecha_fin
+            ).all()
+            
+            if pagos:
+                total = len(pagos)
+                monto_total = sum(float(p.monto_pagado or 0) for p in pagos)
+                resultado += f"\n=== PAGOS REALIZADOS ({fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}) ===\n"
+                resultado += f"Total pagos: {total}\n"
+                resultado += f"Monto total pagado: {monto_total:,.2f}\n"
+        
+        # ============================================
+        # CONSULTAS DE CUOTAS POR PERÍODO
+        # ============================================
+        if fecha_inicio and fecha_fin and any(palabra in pregunta_lower for palabra in ["cuota", "cuotas", "vencimiento"]):
+            cuotas = db.query(Cuota).filter(
+                Cuota.fecha_vencimiento >= fecha_inicio,
+                Cuota.fecha_vencimiento <= fecha_fin
+            ).all()
+            
+            if cuotas:
+                total = len(cuotas)
+                pagadas = len([c for c in cuotas if c.estado == "PAGADA"])
+                pendientes = len([c for c in cuotas if c.estado == "PENDIENTE"])
+                mora = len([c for c in cuotas if c.estado == "MORA"])
+                monto_total = sum(float(c.monto_cuota or 0) for c in cuotas)
+                
+                resultado += f"\n=== CUOTAS CON VENCIMIENTO ({fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}) ===\n"
+                resultado += f"Total cuotas: {total}\n"
+                resultado += f"Pagadas: {pagadas}\n"
+                resultado += f"Pendientes: {pendientes}\n"
+                resultado += f"En mora: {mora}\n"
+                resultado += f"Monto total: {monto_total:,.2f}\n"
+        
+        # ============================================
+        # CONSULTAS POR CONCESIONARIO
+        # ============================================
+        if "concesionario" in pregunta_lower:
+            concesionario_match = re.search(r'concesionario\s+([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+)', pregunta_lower)
+            nombre_concesionario = concesionario_match.group(1).strip() if concesionario_match else None
+            
+            if nombre_concesionario:
+                prestamos = db.query(Prestamo).filter(
+                    Prestamo.concesionario.ilike(f"%{nombre_concesionario}%")
+                ).all()
+                
+                if prestamos:
+                    total = len(prestamos)
+                    aprobados = len([p for p in prestamos if p.estado == "APROBADO"])
+                    monto_total = sum(float(p.total_financiamiento or 0) for p in prestamos)
+                    
+                    resultado += f"\n=== PRÉSTAMOS DEL CONCESIONARIO '{nombre_concesionario}' ===\n"
+                    resultado += f"Total: {total}\n"
+                    resultado += f"Aprobados: {aprobados}\n"
+                    resultado += f"Monto total: {monto_total:,.2f}\n"
+        
+        # ============================================
+        # CONSULTAS POR ESTADO DE PRÉSTAMO
+        # ============================================
+        if any(palabra in pregunta_lower for palabra in ["pendiente", "pendientes"]) and "prestamo" in pregunta_lower:
+            prestamos_pendientes = db.query(Prestamo).filter(Prestamo.estado == "PENDIENTE").all()
+            if prestamos_pendientes:
+                total = len(prestamos_pendientes)
+                monto_total = sum(float(p.total_financiamiento or 0) for p in prestamos_pendientes)
+                resultado += f"\n=== PRÉSTAMOS PENDIENTES ===\n"
+                resultado += f"Total: {total}\n"
+                resultado += f"Monto total: {monto_total:,.2f}\n"
+        
+        # ============================================
+        # CONSULTAS POR CLIENTE (si no se detectó cédula antes)
+        # ============================================
+        if "cliente" in pregunta_lower and not resultado:
+            # Buscar nombre de cliente en la pregunta
+            cliente_match = re.search(r'cliente\s+([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+)', pregunta_lower)
+            nombre_cliente = cliente_match.group(1).strip() if cliente_match else None
+            
+            if nombre_cliente:
+                clientes = db.query(Cliente).filter(
+                    Cliente.nombres.ilike(f"%{nombre_cliente}%")
+                ).limit(10).all()
+                
+                if clientes:
+                    resultado += f"\n=== CLIENTES ENCONTRADOS (búsqueda: '{nombre_cliente}') ===\n"
+                    for cliente in clientes[:5]:  # Mostrar máximo 5
+                        prestamos_cliente = db.query(Prestamo).filter(Prestamo.cliente_id == cliente.id).count()
+                        resultado += f"- {cliente.nombres} {cliente.apellidos or ''} (Cédula: {cliente.cedula}): {prestamos_cliente} préstamos\n"
+        
+        # ============================================
+        # CONSULTAS DE ESTADÍSTICAS GENERALES POR PERÍODO
+        # ============================================
+        if fecha_inicio and fecha_fin and any(palabra in pregunta_lower for palabra in ["estadistica", "estadisticas", "resumen", "resumen"]):
+            # Préstamos
+            prestamos_periodo = db.query(Prestamo).filter(
+                Prestamo.fecha_registro >= datetime.combine(fecha_inicio, datetime.min.time()),
+                Prestamo.fecha_registro <= datetime.combine(fecha_fin, datetime.max.time())
+            ).count()
+            
+            # Pagos
+            pagos_periodo = db.query(Pago).filter(
+                Pago.activo.is_(True),
+                Pago.fecha_pago >= fecha_inicio,
+                Pago.fecha_pago <= fecha_fin
+            ).count()
+            
+            monto_pagos_periodo = db.query(func.sum(Pago.monto_pagado)).filter(
+                Pago.activo.is_(True),
+                Pago.fecha_pago >= fecha_inicio,
+                Pago.fecha_pago <= fecha_fin
+            ).scalar() or 0
+            
+            resultado += f"\n=== RESUMEN DEL PERÍODO ({fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}) ===\n"
+            resultado += f"Préstamos registrados: {prestamos_periodo}\n"
+            resultado += f"Pagos realizados: {pagos_periodo}\n"
+            resultado += f"Monto total pagado: {float(monto_pagos_periodo):,.2f}\n"
+        
+    except Exception as e:
+        logger.error(f"Error ejecutando consulta dinámica: {e}", exc_info=True)
+        # No retornar error, solo loggear para no interrumpir el flujo
+        return ""
+    
+    return resultado
 
 
 def _obtener_variables_personalizadas(db: Session) -> Dict[str, str]:
