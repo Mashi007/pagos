@@ -36,7 +36,7 @@ class Ticket(Base):
     # Estado y prioridad
     estado = Column(String(20), nullable=False, default="abierto", index=True)  # abierto, en_proceso, resuelto, cerrado
     prioridad = Column(String(20), nullable=False, default="media", index=True)  # baja, media, urgente
-    tipo = Column(String(20), nullable=False, default="consulta", index=True)  # consulta, incidencia, solicitud, reclamo
+    tipo = Column(String(20), nullable=False, default="consulta", index=True)  # consulta, incidencia, solicitud, reclamo, contacto
 
     # Asignación
     asignado_a = Column(String(200), nullable=True)  # Nombre del usuario asignado

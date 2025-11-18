@@ -59,6 +59,7 @@ const TIPOS_TICKET = [
   { id: 'incidencia', label: 'Incidencia' },
   { id: 'solicitud', label: 'Solicitud' },
   { id: 'reclamo', label: 'Reclamo' },
+  { id: 'contacto', label: 'Contacto' },
 ]
 
 // La interfaz Ticket ahora viene del servicio, pero la adaptamos para compatibilidad

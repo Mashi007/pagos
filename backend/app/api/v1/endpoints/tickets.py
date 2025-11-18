@@ -185,7 +185,7 @@ async def listar_tickets(
             if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
                 logger.warning(f"⚠️ Error al contar tickets, intentando crear tabla: {count_error}")
                 if _crear_tabla_si_no_existe(db):
-                    db.refresh(Ticket)
+                    # Recrear la query después de crear la tabla
                     query = db.query(Ticket).options(joinedload(Ticket.cliente))
                     if cliente_id:
                         query = query.filter(Ticket.cliente_id == cliente_id)

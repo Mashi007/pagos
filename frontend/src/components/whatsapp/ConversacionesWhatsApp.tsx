@@ -806,6 +806,7 @@ export function ConversacionesWhatsApp({
                     <SelectItem value="incidencia">Incidencia</SelectItem>
                     <SelectItem value="solicitud">Solicitud</SelectItem>
                     <SelectItem value="reclamo">Reclamo</SelectItem>
+                    <SelectItem value="contacto">Contacto</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
