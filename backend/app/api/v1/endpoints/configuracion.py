@@ -2756,14 +2756,26 @@ def _extraer_texto_docx(ruta_archivo: str) -> str:
 
 def _limpiar_y_normalizar_texto(texto: str) -> str:
     """
-    Limpia y normaliza el texto extraído.
-    Retorna texto normalizado.
+    Limpia y normaliza el texto extraído para entrenamiento.
+    Retorna texto normalizado y listo para usar en embeddings/entrenamiento.
     """
     import re
 
+    if not texto:
+        return ""
+    
+    # Limpiar espacios y normalizar
     texto = texto.strip()
-    # Eliminar espacios múltiples
-    texto = re.sub(r"\s+", " ", texto)
+    
+    # Eliminar espacios múltiples (más de 2 espacios seguidos)
+    texto = re.sub(r" {3,}", " ", texto)
+    
+    # Normalizar saltos de línea (múltiples saltos de línea a máximo 2)
+    texto = re.sub(r"\n{3,}", "\n\n", texto)
+    
+    # Eliminar caracteres de control no visibles (excepto saltos de línea y tabs)
+    texto = re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]", "", texto)
+    
     return texto
 
 
@@ -2924,22 +2936,45 @@ def _crear_registro_documento_ai(
 
 def _procesar_documento_creado(db: Session, documento: DocumentoAI, ruta_archivo: Path, tipo_archivo_db: str) -> None:
     """
-    Procesa el documento creado extrayendo su texto.
+    Procesa el documento creado extrayendo su texto y guardándolo en BD.
+    CRÍTICO: El contenido se guarda en BD para que esté disponible para entrenamiento
+    incluso si el archivo físico desaparece (sistemas efímeros como Render).
+    
     No lanza excepciones, solo registra errores.
     """
     try:
+        # Verificar que el archivo existe antes de procesar
+        if not ruta_archivo.exists():
+            logger.warning(f"⚠️ Archivo no encontrado para procesar: {ruta_archivo}")
+            logger.warning(f"   Documento {documento.titulo} (ID: {documento.id}) no se puede procesar ahora")
+            return
+        
         texto_extraido = _extraer_texto_documento(str(ruta_archivo), tipo_archivo_db)
-        if texto_extraido:
-            documento.contenido_texto = texto_extraido
+        if texto_extraido and texto_extraido.strip():
+            # Guardar contenido en BD - esto es crítico para entrenamiento
+            # El contenido debe estar en BD, no depender del archivo físico
+            documento.contenido_texto = texto_extraido.strip()
             documento.contenido_procesado = True
             db.commit()
             db.refresh(documento)
-            logger.info(f"✅ Documento procesado automáticamente: {len(texto_extraido)} caracteres")
+            
+            caracteres = len(texto_extraido)
+            logger.info(f"✅ Documento procesado automáticamente: {documento.titulo}")
+            logger.info(f"   Caracteres extraídos: {caracteres}")
+            logger.info(f"   Contenido guardado en BD (disponible para entrenamiento)")
+            
+            # Validar que el contenido se guardó correctamente
+            if not documento.contenido_texto:
+                logger.error(f"❌ ERROR CRÍTICO: Contenido no se guardó en BD para {documento.titulo}")
+            else:
+                logger.debug(f"✅ Verificado: Contenido en BD tiene {len(documento.contenido_texto)} caracteres")
         else:
             logger.warning(f"⚠️ No se pudo extraer texto del documento: {documento.titulo}")
+            logger.warning(f"   Tipo: {tipo_archivo_db}, Ruta: {ruta_archivo}")
     except Exception as proc_error:
         logger.error(f"❌ Error procesando documento automáticamente: {proc_error}", exc_info=True)
         # No fallar la creación si el procesamiento falla
+        # Pero el documento quedará sin procesar y el usuario puede intentarlo después
 
 
 def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
@@ -2976,9 +3011,16 @@ def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
 
         # Limpiar y normalizar texto
         texto = _limpiar_y_normalizar_texto(texto)
-
-        logger.info(f"✅ Texto extraído: {len(texto)} caracteres de {tipo_archivo}")
-        return texto
+        
+        # Validar que el texto extraído tiene contenido útil
+        if texto and len(texto.strip()) < 10:
+            logger.warning(f"⚠️ Texto extraído muy corto ({len(texto)} caracteres) - puede no ser útil para entrenamiento")
+        
+        caracteres = len(texto) if texto else 0
+        logger.info(f"✅ Texto extraído: {caracteres} caracteres de {tipo_archivo}")
+        
+        # Retornar texto limpio (sin espacios al inicio/final)
+        return texto.strip() if texto else ""
 
     except Exception as e:
         logger.error(f"❌ Error extrayendo texto de {ruta_archivo}: {e}", exc_info=True)
@@ -3121,15 +3163,27 @@ async def crear_documento_ai(
 
         # Procesar documento automáticamente (extraer texto) - CRÍTICO hacerlo inmediatamente
         # mientras el archivo todavía existe en el sistema de archivos efímero
+        # Esto es esencial para entrenamiento: el contenido debe estar en BD, no en archivos
         try:
             _procesar_documento_creado(db, nuevo_documento, ruta_archivo_absoluta, tipo_archivo_db)
             if nuevo_documento.contenido_procesado:
-                logger.info(f"✅ Documento procesado automáticamente al subirlo: {nuevo_documento.titulo}")
+                logger.info(f"✅ Documento procesado automáticamente al subirlo: {nuevo_documento.titulo} ({len(nuevo_documento.contenido_texto or '')} caracteres)")
+                
+                # Opcional: Generar embeddings automáticamente si el documento tiene contenido suficiente
+                # Esto mejora el proceso para entrenamiento
+                if nuevo_documento.contenido_texto and len(nuevo_documento.contenido_texto.strip()) > 100:
+                    try:
+                        # Intentar generar embeddings en background (no bloquear la respuesta)
+                        # Solo registrar que se puede hacer después
+                        logger.info(f"💡 Documento listo para generar embeddings: {nuevo_documento.titulo}")
+                    except Exception as embed_error:
+                        logger.warning(f"⚠️ No se pudieron generar embeddings automáticamente: {embed_error}")
             else:
                 logger.warning(f"⚠️ Documento subido pero no procesado automáticamente: {nuevo_documento.titulo}")
         except Exception as proc_error:
             logger.error(f"❌ Error procesando documento automáticamente al subirlo: {proc_error}", exc_info=True)
             # No fallar la creación si el procesamiento falla - el usuario puede procesarlo después
+            # Pero registrar el error para debugging
 
         logger.info(f"✅ Documento AI creado: {titulo} ({nombre_archivo_original})")
 
@@ -3583,39 +3637,68 @@ def _procesar_y_guardar_documento(
     documento: DocumentoAI, ruta_archivo, db: Session
 ) -> Dict:
     """
-    Procesa el documento y guarda el resultado.
+    Procesa el documento y guarda el resultado en BD.
+    CRÍTICO: El contenido se guarda en BD para entrenamiento, no depende del archivo físico.
+    
     Retorna dict con resultado o lanza HTTPException si falla.
     """
+    from pathlib import Path
+    
+    # Verificar que el archivo existe
+    ruta_path = Path(ruta_archivo) if not isinstance(ruta_archivo, Path) else ruta_archivo
+    
+    if not ruta_path.exists():
+        raise HTTPException(
+            status_code=400,
+            detail=f"El archivo físico no existe: {ruta_path}. El contenido debe estar en BD para entrenamiento."
+        )
+    
     # Extraer texto del documento
     texto_extraido = _extraer_texto_documento(str(ruta_archivo), documento.tipo_archivo)
 
     if texto_extraido and texto_extraido.strip():
-        documento.contenido_texto = texto_extraido
+        # Guardar contenido en BD - crítico para entrenamiento
+        texto_limpio = texto_extraido.strip()
+        documento.contenido_texto = texto_limpio
         documento.contenido_procesado = True
         db.commit()
         db.refresh(documento)
+        
+        # Validar que se guardó correctamente
+        if not documento.contenido_texto:
+            logger.error(f"❌ ERROR CRÍTICO: Contenido no se guardó en BD para {documento.titulo}")
+            raise HTTPException(
+                status_code=500,
+                detail="Error: El contenido no se guardó correctamente en la base de datos"
+            )
 
-        logger.info(f"✅ Documento procesado: {documento.titulo} ({len(texto_extraido)} caracteres)")
+        caracteres = len(texto_limpio)
+        logger.info(f"✅ Documento procesado: {documento.titulo} ({caracteres} caracteres)")
+        logger.info(f"   Contenido guardado en BD (disponible para entrenamiento)")
 
         return {
             "mensaje": "Documento procesado exitosamente",
             "documento": documento.to_dict(),
-            "caracteres_extraidos": len(texto_extraido),
+            "caracteres_extraidos": caracteres,
+            "contenido_en_bd": True,  # Indicar que el contenido está en BD
         }
     else:
         # Proporcionar mensaje más específico según el tipo de archivo
         tipo = documento.tipo_archivo.lower()
-        mensaje_error = "No se pudo extraer texto del documento."
+        mensaje_error = f"No se pudo extraer texto del documento '{documento.titulo}'."
 
         if tipo == "pdf":
-            mensaje_error += " El PDF puede estar escaneado (imagen) sin OCR, estar protegido con contraseña, o las librerías PyPDF2/pdfplumber no están instaladas."
+            mensaje_error += " El PDF puede estar escaneado (imagen) sin OCR, estar protegido con contraseña, o las librerías necesarias no están instaladas."
         elif tipo == "docx":
             mensaje_error += " El archivo DOCX puede estar corrupto o la librería python-docx no está instalada."
         elif tipo == "txt":
             mensaje_error += " El archivo de texto puede estar vacío o usar una codificación no soportada."
         else:
-            mensaje_error += " Verifica que el archivo sea válido y que las librerías necesarias estén instaladas."
+            mensaje_error += f" Verifica que el archivo {tipo} sea válido y que las librerías necesarias estén instaladas."
 
+        logger.warning(
+            f"⚠️ No se pudo extraer texto del documento {documento.titulo} (ID: {documento.id}, tipo: {tipo})"
+        )
         raise HTTPException(status_code=400, detail=mensaje_error)
 
 
@@ -3653,12 +3736,19 @@ def procesar_documento_ai(
 
         # Si el archivo no se encuentra, proporcionar mensaje más útil
         if not archivo_encontrado or not ruta_archivo or not ruta_archivo.exists():
-            # Construir mensaje de error detallado
+            # Mensaje corto para el frontend (el detallado va en los logs)
+            mensaje_error_corto = (
+                f"El archivo físico no existe para el documento '{documento.titulo}'. "
+                f"En sistemas de archivos efímeros (como Render), los archivos pueden desaparecer. "
+                f"💡 Solución: Elimina este documento y súbelo nuevamente."
+            )
+            
+            # Construir mensaje de error detallado para logs
             rutas_info = '\n'.join(rutas_intentadas[:15])  # Mostrar hasta 15 rutas intentadas
             if len(rutas_intentadas) > 15:
                 rutas_info += f"\n... y {len(rutas_intentadas) - 15} rutas más"
             
-            mensaje_error = (
+            mensaje_error_detallado = (
                 f"El archivo físico no existe para el documento '{documento.titulo}' (ID: {documento_id}).\n\n"
                 f"Información del documento:\n"
                 f"- Nombre archivo: {documento.nombre_archivo}\n"
@@ -3679,7 +3769,7 @@ def procesar_documento_ai(
             )
             logger.debug(f"Rutas intentadas detalladas: {rutas_intentadas}")
 
-            raise HTTPException(status_code=400, detail=mensaje_error)
+            raise HTTPException(status_code=400, detail=mensaje_error_corto)
 
         # Procesar y guardar documento
         return _procesar_y_guardar_documento(documento, ruta_archivo, db)
