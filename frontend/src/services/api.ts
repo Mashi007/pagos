@@ -480,7 +480,10 @@ class ApiClient {
                           url.includes('/notificaciones-previas') ||
                           url.includes('/admin') ||
                           url.includes('/evolucion') ||
-                          url.includes('/tendencia')
+                          url.includes('/tendencia') ||
+                          url.includes('/ml-impago/modelos') ||
+                          url.includes('/ml-riesgo/modelos') ||
+                          url.includes('/ai/training/')
 
     const defaultTimeout = isSlowEndpoint ? SLOW_ENDPOINT_TIMEOUT_MS : DEFAULT_TIMEOUT_MS
     // Priorizar timeout explícito si se proporciona, sino usar el calculado

@@ -67,8 +67,20 @@ export function MLImpagoCuotasTab() {
       setModeloActivo(activoData)
     } catch (error: any) {
       console.error('Error cargando modelos:', error)
-      const mensajeError = error?.response?.data?.detail || error?.message || 'Error al cargar modelos'
-      toast.error(mensajeError)
+      
+      // Manejar timeout específicamente
+      let mensajeError = 'Error al cargar modelos'
+      if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        mensajeError = 'La petición está tardando más de lo esperado. El servidor puede estar procesando. Por favor, intenta nuevamente en unos momentos.'
+      } else if (error?.response?.data?.detail) {
+        mensajeError = error.response.data.detail
+      } else if (error?.message) {
+        mensajeError = error.message
+      }
+      
+      toast.error(mensajeError, {
+        duration: 8000, // Mostrar por más tiempo para mensajes de timeout
+      })
     } finally {
       setCargando(false)
     }

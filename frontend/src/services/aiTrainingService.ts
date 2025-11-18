@@ -487,12 +487,28 @@ class AITrainingService {
    * Listar modelos de impago disponibles
    */
   async listarModelosImpago(): Promise<ModeloImpagoCuotas[] | { modelos: ModeloImpagoCuotas[]; error?: string }> {
-    const response = await apiClient.get<{ modelos: ModeloImpagoCuotas[]; modelo_activo: ModeloImpagoCuotas | null; total: number; error?: string }>(`${this.baseUrl}/ml-impago/modelos`)
-    // Si hay un error en la respuesta, retornar el objeto completo para que el frontend pueda manejarlo
-    if (response.error) {
-      return { modelos: response.modelos || [], error: response.error }
+    try {
+      const response = await apiClient.get<{ modelos: ModeloImpagoCuotas[]; modelo_activo: ModeloImpagoCuotas | null; total: number; error?: string }>(
+        `${this.baseUrl}/ml-impago/modelos`,
+        { timeout: 60000 } // 60 segundos para listar modelos
+      )
+      // Si hay un error en la respuesta, retornar el objeto completo para que el frontend pueda manejarlo
+      if (response.error) {
+        return { modelos: response.modelos || [], error: response.error }
+      }
+      return response.modelos || []
+    } catch (error: any) {
+      // Manejar timeout específicamente
+      if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        console.warn('⚠️ [aiTrainingService] Timeout al listar modelos. El servidor puede estar procesando.')
+        // Retornar lista vacía con mensaje de error en lugar de lanzar excepción
+        return { 
+          modelos: [], 
+          error: 'La petición está tardando más de lo esperado. Por favor, intenta nuevamente en unos momentos.' 
+        }
+      }
+      throw error
     }
-    return response.modelos || []
   }
 
   /**
@@ -500,9 +516,16 @@ class AITrainingService {
    */
   async getModeloImpagoActivo(): Promise<ModeloImpagoCuotas | null> {
     try {
-      const response = await apiClient.get<{ modelos: ModeloImpagoCuotas[]; modelo_activo: ModeloImpagoCuotas | null }>(`${this.baseUrl}/ml-impago/modelos`)
+      const response = await apiClient.get<{ modelos: ModeloImpagoCuotas[]; modelo_activo: ModeloImpagoCuotas | null }>(
+        `${this.baseUrl}/ml-impago/modelos`,
+        { timeout: 60000 } // 60 segundos para obtener modelo activo
+      )
       return response.modelo_activo || null
-    } catch {
+    } catch (error: any) {
+      // Si es timeout, loggear pero no lanzar error (retornar null)
+      if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
+        console.warn('⚠️ [aiTrainingService] Timeout al obtener modelo activo.')
+      }
       return null
     }
   }
