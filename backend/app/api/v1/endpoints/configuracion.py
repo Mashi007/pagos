@@ -5969,6 +5969,10 @@ def _obtener_resumen_bd(db: Session) -> str:
 
         # Préstamos
         total_prestamos = _ejecutar_consulta_segura(lambda: db.query(Prestamo).count(), "consulta de total préstamos")
+        prestamos_aprobados = _ejecutar_consulta_segura(
+            lambda: db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count(),
+            "consulta de préstamos aprobados",
+        )
         prestamos_activos = _ejecutar_consulta_segura(
             lambda: db.query(Prestamo).filter(Prestamo.estado.in_(["APROBADO", "ACTIVO"])).count(),
             "consulta de préstamos activos",
@@ -5976,9 +5980,9 @@ def _obtener_resumen_bd(db: Session) -> str:
         prestamos_pendientes = _ejecutar_consulta_segura(
             lambda: db.query(Prestamo).filter(Prestamo.estado == "PENDIENTE").count(), "consulta de préstamos pendientes"
         )
-        if total_prestamos is not None and prestamos_activos is not None and prestamos_pendientes is not None:
+        if total_prestamos is not None and prestamos_aprobados is not None and prestamos_activos is not None and prestamos_pendientes is not None:
             resumen.append(
-                f"Préstamos: {total_prestamos} totales, {prestamos_activos} activos/aprobados, {prestamos_pendientes} pendientes"
+                f"Préstamos: {total_prestamos} totales, {prestamos_aprobados} aprobados, {prestamos_activos} activos/aprobados, {prestamos_pendientes} pendientes"
             )
         else:
             resumen.append("Préstamos: No disponible")
@@ -6564,14 +6568,18 @@ CAPACIDADES PRINCIPALES:
 6. **Analisis de Machine Learning**: Prediccion de morosidad, segmentacion de clientes, deteccion de anomalias, clustering de prestamos
 
 REGLAS FUNDAMENTALES:
-1. **SOLO usa datos reales**: Accede a los indices de las bases de datos y consulta los campos especificos necesarios
-2. **NUNCA inventes informacion**: Si un dato no existe en la base de datos, indica claramente que no esta disponible
-3. **Muestra tus calculos**: Cuando calcules KPIs, indica la formula y los valores utilizados
-4. **Compara con contexto**: Para tendencias, muestra periodo actual vs periodo anterior
-5. **Respuestas accionables**: Incluye el "que significa esto?" cuando sea relevante
-6. **SOLO responde preguntas sobre la base de datos del sistema relacionadas con cobranzas y prestamos**
-7. **IMPORTANTE**: Preguntas como "cuantos prestamos hay", "cuantos clientes hay", "total de pagos", etc. SON válidas y DEBES responderlas usando los datos del resumen.
-8. Si la pregunta NO es sobre la BD (ej: preguntas generales de conocimiento), responde con el mensaje de restriccion mencionado arriba
+1. **USA SIEMPRE LOS DATOS DEL RESUMEN**: El resumen de base de datos arriba contiene TODA la información disponible. SIEMPRE consulta el resumen ANTES de decir que no tienes información.
+2. **NUNCA digas "no tengo disponible"**: Si la información está en el resumen, DEBES usarla. Por ejemplo:
+   - Si preguntan "cuantos prestamos hay aprobados" → Busca en el resumen la línea que dice "Préstamos: X totales, Y aprobados..."
+   - Si preguntan "cuantos clientes hay" → Busca en el resumen la línea que dice "Clientes: X totales..."
+   - Si preguntan "total de pagos" → Busca en el resumen la línea que dice "Pagos: X totales..." o "Monto total de pagos: X"
+3. **NUNCA inventes informacion**: Si un dato NO está en el resumen, entonces sí puedes decir que no está disponible
+4. **Muestra tus calculos**: Cuando calcules KPIs, indica la formula y los valores utilizados del resumen
+5. **Compara con contexto**: Para tendencias, muestra periodo actual vs periodo anterior usando datos del resumen
+6. **Respuestas accionables**: Incluye el "que significa esto?" cuando sea relevante
+7. **SOLO responde preguntas sobre la base de datos del sistema relacionadas con cobranzas y prestamos**
+8. **CRÍTICO**: Cuando el usuario pregunta sobre cantidades, totales, estadísticas, etc., SIEMPRE busca primero en el resumen. El resumen contiene datos reales y actualizados de la base de datos.
+9. Si la pregunta NO es sobre la BD (ej: preguntas generales de conocimiento), responde con el mensaje de restriccion mencionado arriba
 
 PROCESO DE ANALISIS:
 1. Identifica que metrica o analisis solicita el usuario
@@ -6586,11 +6594,20 @@ NOTA: Si hay documentos de contexto arriba, usalos como informacion adicional pa
 
 RESTRICCIONES IMPORTANTES:
 - PROHIBIDO INVENTAR DATOS: Solo usa la informacion proporcionada en el resumen. NO inventes, NO uses tu conocimiento de entrenamiento, NO asumas datos.
+- PROHIBIDO DECIR "NO TENGO DISPONIBLE" SIN REVISAR EL RESUMEN: SIEMPRE revisa el resumen completo antes de decir que no tienes información. El resumen contiene estadísticas actualizadas de clientes, préstamos, pagos, cuotas, etc.
 - NO hagas suposiciones sobre datos faltantes
 - NO uses promedios historicos como datos reales sin aclararlo
 - FECHA ACTUAL: La fecha y hora actual estan incluidas en el resumen. DEBES usar EXACTAMENTE esa informacion.
-- DATOS DE BD: Solo usa los numeros y estadisticas del resumen. Si no esta en el resumen, di que no tienes esa informacion especifica.
-- NO INVENTES: Si no tienes la informacion exacta, di "No tengo esa informacion especifica en el resumen proporcionado" en lugar de inventar.
+- DATOS DE BD: El resumen contiene información como:
+  * Total de clientes y clientes activos
+  * Total de préstamos, préstamos aprobados, préstamos activos, préstamos pendientes
+  * Total de pagos y pagos activos
+  * Total de cuotas, cuotas pagadas, cuotas pendientes, cuotas en mora
+  * Montos totales de préstamos y pagos
+  * Información mensual de cuotas
+  * Y más estadísticas...
+- SIEMPRE BUSCA EN EL RESUMEN: Antes de responder cualquier pregunta sobre cantidades, totales o estadísticas, busca en el resumen. Los datos están ahí.
+- NO INVENTES: Si después de revisar TODO el resumen no encuentras la información, entonces sí puedes decir "No tengo esa informacion especifica en el resumen proporcionado".
 - ANALISIS PROFESIONAL: Como especialista, proporciona analisis y contexto cuando sea relevante, pero siempre basado en los datos del resumen.
 
 OBJETIVO:
