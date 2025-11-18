@@ -17,10 +17,8 @@ import {
   Clock,
   X,
   Upload,
-  Bot,
-  UserCircle,
-  ToggleLeft,
-  ToggleRight,
+  Zap,
+  Settings,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -750,9 +748,9 @@ export function Comunicaciones({
                 <div className="flex items-center justify-between mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-center gap-2">
                     {modoAutomatico ? (
-                      <Bot className="h-4 w-4 text-blue-600" />
+                      <Zap className="h-4 w-4 text-blue-600" />
                     ) : (
-                      <UserCircle className="h-4 w-4 text-gray-600" />
+                      <User className="h-4 w-4 text-gray-600" />
                     )}
                     <span className="text-sm font-medium text-gray-700">
                       Modo: <span className={modoAutomatico ? 'text-blue-600 font-bold' : 'text-gray-600 font-bold'}>
@@ -766,17 +764,10 @@ export function Comunicaciones({
                     onClick={() => setModoAutomatico(!modoAutomatico)}
                     className="flex items-center gap-2"
                   >
-                    {modoAutomatico ? (
-                      <>
-                        <ToggleRight className="h-4 w-4 text-blue-600" />
-                        <span className="text-xs">Cambiar a Manual</span>
-                      </>
-                    ) : (
-                      <>
-                        <ToggleLeft className="h-4 w-4 text-gray-600" />
-                        <span className="text-xs">Cambiar a Automático</span>
-                      </>
-                    )}
+                    <Settings className="h-4 w-4" />
+                    <span className="text-xs">
+                      {modoAutomatico ? 'Cambiar a Manual' : 'Cambiar a Automático'}
+                    </span>
                   </Button>
                 </div>
               )}
@@ -794,7 +785,7 @@ export function Comunicaciones({
               {conversacionActual.tipo === 'whatsapp' && modoAutomatico ? (
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-start gap-2">
-                    <Bot className="h-5 w-5 text-blue-600 mt-0.5" />
+                    <Zap className="h-5 w-5 text-blue-600 mt-0.5" />
                     <div className="flex-1">
                       <p className="text-sm font-medium text-blue-900">Bot Automático Activo</p>
                       <p className="text-xs text-blue-700 mt-1">
