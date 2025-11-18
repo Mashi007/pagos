@@ -6202,7 +6202,8 @@ def _obtener_palabras_clave_bd() -> list:
         "datos del cliente", "información del cliente",
         # Base de datos y datos
         "base de datos", "datos", "estadística", "estadísticas", "resumen",
-        "total", "cantidad", "cuántos", "cuántas", "monto", "montos",
+        "total", "cantidad", "cuántos", "cuántas", "cuantos", "cuantas",  # Con y sin tilde
+        "monto", "montos",
         "activo", "activos", "concesionario", "concesionarios",
         "analista", "analistas", "usuario", "usuarios", "sistema",
         "registro", "registros",
@@ -6234,7 +6235,9 @@ def _obtener_palabras_clave_bd() -> list:
         "actual", "hoy", "ayer", "semana", "mes", "año",
         # Términos de consulta comunes
         "cuántos hay", "cuántas hay", "cuántos son", "cuántas son",
-        "cuál es", "cuáles son", "qué hay", "qué son",
+        "cuantos hay", "cuantas hay", "cuantos son", "cuantas son",  # Con y sin tilde
+        "cuál es", "cuáles son", "cual es", "cuales son",  # Con y sin tilde
+        "qué hay", "qué son", "que hay", "que son",  # Con y sin tilde
     ]
 
 
@@ -6505,7 +6508,20 @@ ROL Y CONTEXTO:
 - Eres profesional, claro y preciso en tus respuestas
 - Proporcionas respuestas accionables con contexto e interpretacion
 
-RESTRICCION IMPORTANTE: Solo puedes responder preguntas relacionadas con la base de datos del sistema. Si recibes una pregunta que NO este relacionada con clientes, prestamos, pagos, cuotas, cobranzas, moras, estadisticas del sistema, o la fecha/hora actual, debes responder:
+RESTRICCION IMPORTANTE: Solo puedes responder preguntas relacionadas con la base de datos del sistema. 
+
+PREGUNTAS QUE SÍ DEBES RESPONDER (ejemplos):
+- "cuantos prestamos hay" → SÍ, es sobre la base de datos
+- "cuantos clientes hay" → SÍ, es sobre la base de datos
+- "cuantos pagos se hicieron hoy" → SÍ, es sobre la base de datos
+- "cual es el total de prestamos" → SÍ, es sobre la base de datos
+- Cualquier pregunta que incluya: clientes, prestamos, pagos, cuotas, cobranzas, moras, estadisticas, datos, analisis, fechas, montos, totales, cantidades, etc.
+
+PREGUNTAS QUE NO DEBES RESPONDER:
+- Preguntas generales de conocimiento (historia, ciencia, etc.)
+- Preguntas que no estén relacionadas con el sistema de prestamos y cobranzas
+
+Si recibes una pregunta que NO este relacionada con clientes, prestamos, pagos, cuotas, cobranzas, moras, estadisticas del sistema, o la fecha/hora actual, debes responder:
 
 "Lo siento, el Chat AI solo responde preguntas sobre la base de datos del sistema (clientes, prestamos, pagos, cuotas, cobranzas, moras, estadisticas, etc.). Para preguntas generales, por favor usa el Chat de Prueba en la configuracion de AI."
 
@@ -6554,7 +6570,8 @@ REGLAS FUNDAMENTALES:
 4. **Compara con contexto**: Para tendencias, muestra periodo actual vs periodo anterior
 5. **Respuestas accionables**: Incluye el "que significa esto?" cuando sea relevante
 6. **SOLO responde preguntas sobre la base de datos del sistema relacionadas con cobranzas y prestamos**
-7. Si la pregunta NO es sobre la BD, responde con el mensaje de restriccion mencionado arriba
+7. **IMPORTANTE**: Preguntas como "cuantos prestamos hay", "cuantos clientes hay", "total de pagos", etc. SON válidas y DEBES responderlas usando los datos del resumen.
+8. Si la pregunta NO es sobre la BD (ej: preguntas generales de conocimiento), responde con el mensaje de restriccion mencionado arriba
 
 PROCESO DE ANALISIS:
 1. Identifica que metrica o analisis solicita el usuario
