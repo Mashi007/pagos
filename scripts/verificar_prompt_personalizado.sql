@@ -3,6 +3,9 @@
 -- ============================================================================
 -- Este script verifica si hay un prompt personalizado configurado
 -- y si está siendo usado por el sistema
+-- 
+-- NOTA: La tabla ai_prompt_variables es OPCIONAL
+-- Si no existe, el script funcionará igual (solo omitirá esa sección)
 -- ============================================================================
 
 -- 1. VERIFICAR SI EXISTE PROMPT PERSONALIZADO
@@ -113,6 +116,28 @@ SELECT
 
 -- 5. VER VARIABLES PERSONALIZADAS (si existen)
 -- ============================================================================
+-- NOTA: Esta sección solo se ejecuta si la tabla ai_prompt_variables existe
+-- Si la tabla no existe, comenta esta sección o ignora el error
+
+-- Verificar si la tabla existe antes de consultar
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'ai_prompt_variables'
+    ) THEN
+        -- La tabla existe, se puede consultar
+        RAISE NOTICE 'Tabla ai_prompt_variables existe';
+    ELSE
+        RAISE NOTICE 'Tabla ai_prompt_variables NO existe - omitiendo sección de variables';
+    END IF;
+END $$;
+
+-- Si la tabla existe, ejecutar estas consultas:
+-- (Descomenta si la tabla existe)
+
+/*
 SELECT 
     '=== VARIABLES PERSONALIZADAS ===' AS seccion,
     id,
@@ -137,6 +162,19 @@ SELECT
     SUM(CASE WHEN activo = TRUE THEN 1 ELSE 0 END) AS variables_activas,
     SUM(CASE WHEN activo = FALSE THEN 1 ELSE 0 END) AS variables_inactivas
 FROM ai_prompt_variables;
+*/
+
+-- Alternativa: Consulta condicional (solo funciona si la tabla existe)
+SELECT 
+    '=== VARIABLES PERSONALIZADAS ===' AS tipo,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'ai_prompt_variables'
+        ) THEN '✅ Tabla existe (ver detalles descomentando sección anterior)'
+        ELSE 'ℹ️ Tabla ai_prompt_variables NO existe (opcional, no afecta el prompt)'
+    END AS estado;
 
 -- ============================================================================
 -- NOTAS:
