@@ -38,6 +38,12 @@ Esta carpeta contiene 5 scripts PowerShell esenciales para el sistema RapiCredit
 - **Testing**: Prueba endpoint POST de clientes (módulo crítico)
 - **Uso**: Después de crear analista, para testing completo
 
+### **6. `diagnostico_alembic.ps1`** 🔍
+- **Propósito**: Diagnóstico de problemas con Alembic (migraciones de BD)
+- **Función**: Verifica variables de entorno, importaciones, conexión BD y configuración Alembic
+- **Uso**: Cuando hay problemas con migraciones o configuración de Alembic
+- **Ejecuta**: `backend/scripts/diagnostico_alembic.py`
+
 ---
 
 ## 🚀 **FLUJO DE USO RECOMENDADO**
