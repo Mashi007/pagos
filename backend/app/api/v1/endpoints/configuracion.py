@@ -3720,12 +3720,17 @@ def procesar_documento_ai(
             raise HTTPException(status_code=404, detail="Documento no encontrado")
 
         # Si el documento ya está procesado y tiene contenido, retornar éxito
+        # Esto es importante para sistemas efímeros donde el archivo puede desaparecer
+        # pero el contenido ya está en BD
         if documento.contenido_procesado and documento.contenido_texto:
-            logger.info(f"✅ Documento {documento_id} ya está procesado ({len(documento.contenido_texto)} caracteres)")
+            caracteres = len(documento.contenido_texto)
+            logger.info(f"✅ Documento {documento_id} ya está procesado ({caracteres} caracteres)")
+            logger.info(f"   Contenido disponible en BD - no requiere archivo físico")
             return {
                 "mensaje": "Documento ya estaba procesado",
                 "documento": documento.to_dict(),
-                "caracteres_extraidos": len(documento.contenido_texto),
+                "caracteres_extraidos": caracteres,
+                "contenido_en_bd": True,  # Indicar que el contenido está en BD
             }
 
         # Obtener directorios base y buscar archivo
@@ -3734,8 +3739,27 @@ def procesar_documento_ai(
             documento, documento_id, directorios_base
         )
 
-        # Si el archivo no se encuentra, proporcionar mensaje más útil
+        # Si el archivo no se encuentra, verificar si hay contenido parcial en BD
         if not archivo_encontrado or not ruta_archivo or not ruta_archivo.exists():
+            # Si el documento tiene contenido parcial en BD, informar pero no fallar
+            if documento.contenido_texto and len(documento.contenido_texto.strip()) > 0:
+                logger.warning(
+                    f"⚠️ Archivo físico no existe pero documento tiene contenido en BD: "
+                    f"{documento.titulo} ({len(documento.contenido_texto)} caracteres)"
+                )
+                # Marcar como procesado si tiene contenido suficiente
+                if len(documento.contenido_texto.strip()) > 10:
+                    documento.contenido_procesado = True
+                    db.commit()
+                    db.refresh(documento)
+                    logger.info(f"✅ Documento marcado como procesado (contenido ya estaba en BD)")
+                    return {
+                        "mensaje": "Documento procesado exitosamente (contenido recuperado de BD)",
+                        "documento": documento.to_dict(),
+                        "caracteres_extraidos": len(documento.contenido_texto),
+                        "contenido_en_bd": True,
+                    }
+            
             # Mensaje corto para el frontend (el detallado va en los logs)
             mensaje_error_corto = (
                 f"El archivo físico no existe para el documento '{documento.titulo}'. "
