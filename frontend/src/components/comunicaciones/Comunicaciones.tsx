@@ -16,7 +16,6 @@ import {
   Plus,
   FileText,
   Clock,
-  UserPlus,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -580,7 +579,7 @@ export function Comunicaciones({
                                   </>
                                 ) : (
                                   <>
-                                    <UserPlus className="h-4 w-4 mr-2" />
+                                    <Plus className="h-4 w-4 mr-2" />
                                     Crear Cliente
                                   </>
                                 )}
@@ -715,7 +714,7 @@ export function Comunicaciones({
                                 disabled={creandoClienteAuto}
                                 className="flex-1"
                               >
-                                <UserPlus className="h-4 w-4 mr-2" />
+                                <Plus className="h-4 w-4 mr-2" />
                                 Crear Cliente
                               </Button>
                             )}

@@ -2,7 +2,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmbudoClientes } from './EmbudoClientes'
 import { EmbudoConcesionarios } from './EmbudoConcesionarios'
-import { Store } from 'lucide-react'
+import { Target } from 'lucide-react'
 
 export function Ventas() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -16,7 +16,7 @@ export function Ventas() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 mb-4">
-        <Store className="h-8 w-8 text-blue-600" />
+        <Target className="h-8 w-8 text-blue-600" />
         <h1 className="text-3xl font-bold text-gray-900">Ventas</h1>
       </div>
 
