@@ -330,8 +330,18 @@ export function AIConfig() {
         mensaje: string
         documento: DocumentoAI
         caracteres_extraidos: number
+        contenido_en_bd?: boolean
       }>(`/api/v1/configuracion/ai/documentos/${id}/procesar`)
-      toast.success(`Documento procesado exitosamente (${respuesta.caracteres_extraidos || 0} caracteres extraídos)`)
+      
+      // Mensaje mejorado según el resultado
+      if (respuesta.mensaje?.includes('ya estaba procesado') || respuesta.contenido_en_bd) {
+        toast.success(`✅ ${respuesta.mensaje || 'Documento procesado'} (${respuesta.caracteres_extraidos || 0} caracteres)`, {
+          description: 'El contenido ya estaba disponible en la base de datos'
+        })
+      } else {
+        toast.success(`Documento procesado exitosamente (${respuesta.caracteres_extraidos || 0} caracteres extraídos)`)
+      }
+      
       await cargarDocumentos()
     } catch (error: any) {
       console.error('Error procesando documento:', error)

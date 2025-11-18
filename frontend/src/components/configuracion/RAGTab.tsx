@@ -198,8 +198,22 @@ export function RAGTab() {
   const handleProcesarDocumento = async (id: number) => {
     setProcesandoDocumento(id)
     try {
-      await apiClient.post(`/api/v1/configuracion/ai/documentos/${id}/procesar`)
-      toast.success('Documento procesado exitosamente')
+      const respuesta = await apiClient.post<{
+        mensaje: string
+        documento: DocumentoAI
+        caracteres_extraidos: number
+        contenido_en_bd?: boolean
+      }>(`/api/v1/configuracion/ai/documentos/${id}/procesar`)
+      
+      // Mensaje mejorado según el resultado
+      if (respuesta.mensaje?.includes('ya estaba procesado') || respuesta.contenido_en_bd) {
+        toast.success(`✅ ${respuesta.mensaje || 'Documento procesado'} (${respuesta.caracteres_extraidos || 0} caracteres)`, {
+          description: 'El contenido ya estaba disponible en la base de datos'
+        })
+      } else {
+        toast.success(`Documento procesado exitosamente (${respuesta.caracteres_extraidos || 0} caracteres extraídos)`)
+      }
+      
       await cargarDocumentos()
       await cargarEstado()
     } catch (error: any) {
