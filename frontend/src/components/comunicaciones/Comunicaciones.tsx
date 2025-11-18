@@ -15,12 +15,7 @@ import {
   XCircle,
   Plus,
   FileText,
-  MessageCircle,
   Clock,
-  Send,
-  Inbox,
-  SendHorizonal,
-  Tag,
   UserPlus,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -343,7 +338,7 @@ export function Comunicaciones({
                   <p className="text-sm text-green-700 font-medium">WhatsApp</p>
                   <p className="text-3xl font-bold text-green-900">{estadisticas.whatsapp}</p>
                 </div>
-                <MessageCircle className="h-10 w-10 text-green-600" />
+                <MessageSquare className="h-10 w-10 text-green-600" />
               </div>
             </CardContent>
           </Card>
@@ -365,7 +360,7 @@ export function Comunicaciones({
       <Tabs value={tabActivo} onValueChange={(v) => setTabActivo(v as 'todas' | 'por-responder')}>
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="todas" className="flex items-center gap-2">
-            <Inbox className="h-4 w-4" />
+            <Mail className="h-4 w-4" />
             Todas las Comunicaciones
           </TabsTrigger>
           <TabsTrigger value="por-responder" className="flex items-center gap-2">
@@ -499,7 +494,7 @@ export function Comunicaciones({
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2 flex-wrap">
                           {comunicacion.tipo === 'whatsapp' ? (
-                            <MessageCircle className="h-5 w-5 text-green-600" />
+                            <MessageSquare className="h-5 w-5 text-green-600" />
                           ) : (
                             <Mail className="h-5 w-5 text-purple-600" />
                           )}
@@ -670,12 +665,12 @@ export function Comunicaciones({
                       >
                         {/* Mismo contenido que en el tab "todas" */}
                         <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {comunicacion.tipo === 'whatsapp' ? (
-                              <MessageCircle className="h-5 w-5 text-green-600" />
-                            ) : (
-                              <Mail className="h-5 w-5 text-purple-600" />
-                            )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {comunicacion.tipo === 'whatsapp' ? (
+                            <MessageSquare className="h-5 w-5 text-green-600" />
+                          ) : (
+                            <Mail className="h-5 w-5 text-purple-600" />
+                          )}
                             <Badge variant="destructive" className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
                               Requiere Respuesta

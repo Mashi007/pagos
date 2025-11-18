@@ -30,6 +30,7 @@ export interface TicketCreate {
   descripcion: string
   cliente_id?: number
   conversacion_whatsapp_id?: number
+  comunicacion_email_id?: number
   estado?: string
   prioridad?: string
   tipo?: string

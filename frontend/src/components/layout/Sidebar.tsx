@@ -27,7 +27,7 @@ import {
   Menu,
   Briefcase,
   Target,
-  ShoppingCart,
+  Store,
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -118,7 +118,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     },
     {
       title: 'Ventas',
-      icon: ShoppingCart,
+      icon: Store,
       isSubmenu: true,
       children: [
         { title: 'Venta Servicios', href: '/ventas?tab=venta-servicios', icon: Target },

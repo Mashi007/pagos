@@ -13,8 +13,7 @@ import {
   User,
   AlertCircle,
   Calendar,
-  MessageSquare,
-  MessageCircle
+  MessageSquare
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -460,7 +459,7 @@ export function ClientesList() {
                               className="ml-2 text-green-600 hover:text-green-800"
                               title="Ver comunicaciones de Email"
                             >
-                              <MessageCircle className="w-4 h-4" />
+                              <MessageSquare className="w-4 h-4" />
                             </a>
                           )}
                         </div>
