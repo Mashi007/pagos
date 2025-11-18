@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   MessageSquare,
@@ -9,23 +9,24 @@ import {
   Loader2,
   RefreshCw,
   Search,
-  Filter,
   AlertCircle,
   CheckCircle,
   XCircle,
   Plus,
   FileText,
   Clock,
+  Send,
+  X,
+  Upload,
+  ArrowUpCircle,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   comunicacionesService,
   ComunicacionUnificada,
@@ -33,7 +34,8 @@ import {
 } from '@/services/comunicacionesService'
 import { CrearClienteForm } from '@/components/clientes/CrearClienteForm'
 import { clienteService } from '@/services/clienteService'
-import { ticketsService, TicketCreate } from '@/services/ticketsService'
+import { ticketsService, TicketCreate, Ticket, TicketUpdate } from '@/services/ticketsService'
+import { userService } from '@/services/userService'
 import { formatDate } from '@/utils'
 import { toast } from 'sonner'
 import { useSimpleAuth } from '@/store/simpleAuthStore'
@@ -44,6 +46,20 @@ interface ComunicacionesProps {
   mostrarEstadisticas?: boolean
 }
 
+// Interfaz para conversaciones agrupadas (separadas por tipo)
+interface ConversacionAgrupada {
+  id: string // Identificador único: cliente_id_tipo o contacto_tipo
+  nombre: string
+  contacto: string
+  tipo: 'whatsapp' | 'email' // NO mixto - separadas
+  cliente_id: number | null
+  esNuevo: boolean // No está en base de datos
+  leido: boolean // Si está leído (procesado = true)
+  noLeidos: number
+  ultimaComunicacion: ComunicacionUnificada
+  comunicaciones: ComunicacionUnificada[] // Solo se cargan cuando se selecciona
+}
+
 export function Comunicaciones({
   clienteId,
   mostrarFiltros = true,
@@ -51,24 +67,23 @@ export function Comunicaciones({
 }: ComunicacionesProps) {
   const { user } = useSimpleAuth()
   const queryClient = useQueryClient()
-  const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(20)
-  const [tipoFiltro, setTipoFiltro] = useState<'all' | 'whatsapp' | 'email'>('all')
-  const [requiereRespuesta, setRequiereRespuesta] = useState<boolean | undefined>(undefined)
-  const [direccionFiltro, setDireccionFiltro] = useState<'INBOUND' | 'OUTBOUND' | undefined>(undefined)
   const [busqueda, setBusqueda] = useState('')
-  const [tabActivo, setTabActivo] = useState<'todas' | 'por-responder'>('todas')
-
+  
+  // Estado para selección
+  const [conversacionSeleccionada, setConversacionSeleccionada] = useState<string | null>(null)
+  const [comunicacionSeleccionada, setComunicacionSeleccionada] = useState<ComunicacionUnificada | null>(null)
+  
+  // Estado para carga de mensajes (solo cuando se selecciona)
+  const [mensajesCargados, setMensajesCargados] = useState<Map<string, ComunicacionUnificada[]>>(new Map())
+  const [cargandoMensajes, setCargandoMensajes] = useState<string | null>(null)
+  
   // Estado para envío de mensajes
-  const [contactoDestino, setContactoDestino] = useState('')
-  const [tipoContacto, setTipoContacto] = useState<'whatsapp' | 'email'>('whatsapp')
   const [mensajeTexto, setMensajeTexto] = useState('')
   const [asuntoEmail, setAsuntoEmail] = useState('')
   const [enviando, setEnviando] = useState(false)
+  
+  // Estado para creación de cliente y ticket
   const [mostrarCrearCliente, setMostrarCrearCliente] = useState(false)
-  const [mostrarCrearTicket, setMostrarCrearTicket] = useState(false)
-  const [comunicacionParaTicket, setComunicacionParaTicket] = useState<ComunicacionUnificada | null>(null)
-  const [creandoTicket, setCreandoTicket] = useState(false)
   const [creandoClienteAuto, setCreandoClienteAuto] = useState(false)
   const [ticketForm, setTicketForm] = useState({
     titulo: '',
@@ -76,89 +91,377 @@ export function Comunicaciones({
     tipo: 'consulta',
     prioridad: 'media',
     estado: 'abierto',
+    fecha_limite: '',
+    responsable_id: user?.id || undefined,
+    archivos: [] as File[],
   })
-  const [clienteInfo, setClienteInfo] = useState<{
-    encontrado: boolean
-    cliente: {
-      id: number
-      cedula: string
-      nombres: string
-      telefono: string
-      email: string
-    } | null
-  } | null>(null)
+  const [creandoTicket, setCreandoTicket] = useState(false)
+  const [ticketsCliente, setTicketsCliente] = useState<Ticket[]>([])
+  const [ticketEditando, setTicketEditando] = useState<Ticket | null>(null)
+  
+  // Estado para usuarios (para asignación y escalación)
+  const [usuarios, setUsuarios] = useState<Array<{ id: number; nombre: string; apellido: string; email: string; is_admin: boolean }>>([])
 
-  // Si hay clienteId, filtrar por cliente
-  useEffect(() => {
-    if (clienteId) {
-      // Obtener información del cliente
-      clienteService.getCliente(String(clienteId))
-        .then((cliente) => {
-          setClienteInfo({
-            encontrado: true,
-            cliente: {
-              id: cliente.id,
-              cedula: cliente.cedula || '',
-              nombres: cliente.nombres || '',
-              telefono: cliente.telefono || '',
-              email: cliente.email || '',
-            },
-          })
-          if (cliente.telefono) {
-            setContactoDestino(cliente.telefono)
-            setTipoContacto('whatsapp')
-          } else if (cliente.email) {
-            setContactoDestino(cliente.email)
-            setTipoContacto('email')
-          }
-        })
-        .catch((error) => {
-          console.error('Error obteniendo cliente:', error)
-        })
-    }
-  }, [clienteId])
-
-  // Query para obtener comunicaciones
+  // Query para obtener todas las comunicaciones (sin paginación para agrupar)
   const {
     data: comunicacionesData,
     isLoading,
     error,
     refetch,
   } = useQuery({
-    queryKey: ['comunicaciones', page, perPage, tipoFiltro, clienteId, requiereRespuesta, direccionFiltro, tabActivo],
-    queryFn: () => {
-      if (tabActivo === 'por-responder') {
-        return comunicacionesService.obtenerComunicacionesPorResponder(page, perPage)
-      }
-      return comunicacionesService.listarComunicaciones(
-        page,
-        perPage,
-        tipoFiltro === 'all' ? undefined : tipoFiltro,
-        clienteId,
-        requiereRespuesta,
-        direccionFiltro
-      )
-    },
+    queryKey: ['comunicaciones', clienteId],
+    queryFn: () => comunicacionesService.listarComunicaciones(1, 1000, undefined, clienteId),
   })
 
-  const comunicaciones = comunicacionesData?.comunicaciones || []
-  const paginacion = comunicacionesData?.paginacion
+  const todasComunicaciones = comunicacionesData?.comunicaciones || []
 
-  // Filtrar comunicaciones por búsqueda local
-  const comunicacionesFiltradas = busqueda
-    ? comunicaciones.filter(
-        (comm) =>
-          comm.body?.toLowerCase().includes(busqueda.toLowerCase()) ||
-          comm.from_contact.toLowerCase().includes(busqueda.toLowerCase()) ||
-          comm.to_contact.toLowerCase().includes(busqueda.toLowerCase()) ||
-          comm.subject?.toLowerCase().includes(busqueda.toLowerCase())
-      )
-    : comunicaciones
+  // Cargar usuarios al montar
+  useEffect(() => {
+    const cargarUsuarios = async () => {
+      try {
+        const response = await userService.listarUsuarios(1, 100, true)
+        setUsuarios(response.items || [])
+      } catch (error) {
+        console.error('Error cargando usuarios:', error)
+      }
+    }
+    cargarUsuarios()
+  }, [])
+
+  // Agrupar comunicaciones por cliente/contacto Y TIPO (separadas)
+  // PRIMERO por leído/no leído, LUEGO por fecha/hora
+  const conversacionesAgrupadas = useMemo(() => {
+    const grupos = new Map<string, ConversacionAgrupada>()
+
+    todasComunicaciones.forEach((comm) => {
+      // Identificador: cliente_id_tipo o contacto_tipo (SEPARADAS por tipo)
+      const idBase = comm.cliente_id ? `cliente_${comm.cliente_id}` : `contacto_${comm.from_contact}`
+      const id = `${idBase}_${comm.tipo}` // Separar WhatsApp y Email
+      
+      if (!grupos.has(id)) {
+        // Determinar nombre del cliente o contacto
+        let nombre = comm.from_contact
+        let esNuevo = !comm.cliente_id
+        
+        // Si tiene cliente_id, intentar obtener nombre del cliente
+        if (comm.cliente_id) {
+          nombre = `Cliente #${comm.cliente_id}`
+        }
+
+        // Determinar si está leído (procesado = true)
+        const leido = comm.procesado
+
+        grupos.set(id, {
+          id,
+          nombre,
+          contacto: comm.from_contact,
+          tipo: comm.tipo,
+          cliente_id: comm.cliente_id,
+          esNuevo,
+          leido,
+          noLeidos: 0,
+          ultimaComunicacion: comm,
+          comunicaciones: [], // Se cargarán cuando se seleccione
+        })
+      }
+
+      const grupo = grupos.get(id)!
+      
+      // Actualizar última comunicación (más reciente)
+      if (new Date(comm.timestamp) > new Date(grupo.ultimaComunicacion.timestamp)) {
+        grupo.ultimaComunicacion = comm
+        grupo.leido = comm.procesado // Actualizar estado de leído
+      }
+      
+      // Contar no leídos (requiere_respuesta y no procesado)
+      if (comm.requiere_respuesta && !comm.procesado) {
+        grupo.noLeidos++
+      }
+    })
+
+    // Convertir a array y ordenar: PRIMERO por leído/no leído, LUEGO por fecha/hora
+    const conversacionesArray = Array.from(grupos.values())
+    
+    // Separar en dos grupos: no leídos y leídos
+    const noLeidos = conversacionesArray.filter(c => !c.leido || c.noLeidos > 0)
+    const leidos = conversacionesArray.filter(c => c.leido && c.noLeidos === 0)
+    
+    // Ordenar cada grupo por fecha/hora (más reciente primero)
+    noLeidos.sort((a, b) => {
+      const fechaA = new Date(a.ultimaComunicacion.timestamp).getTime()
+      const fechaB = new Date(b.ultimaComunicacion.timestamp).getTime()
+      return fechaB - fechaA
+    })
+    
+    leidos.sort((a, b) => {
+      const fechaA = new Date(a.ultimaComunicacion.timestamp).getTime()
+      const fechaB = new Date(b.ultimaComunicacion.timestamp).getTime()
+      return fechaB - fechaA
+    })
+    
+    // Combinar: primero no leídos, luego leídos
+    return [...noLeidos, ...leidos]
+  }, [todasComunicaciones])
+
+  // Filtrar conversaciones por búsqueda
+  const conversacionesFiltradas = useMemo(() => {
+    if (!busqueda) return conversacionesAgrupadas
+    
+    const busquedaLower = busqueda.toLowerCase()
+    return conversacionesAgrupadas.filter(
+      (conv) =>
+        conv.nombre.toLowerCase().includes(busquedaLower) ||
+        conv.contacto.toLowerCase().includes(busquedaLower) ||
+        conv.ultimaComunicacion.body?.toLowerCase().includes(busquedaLower) ||
+        conv.ultimaComunicacion.subject?.toLowerCase().includes(busquedaLower)
+    )
+  }, [conversacionesAgrupadas, busqueda])
+
+  // Obtener conversación seleccionada
+  const conversacionActual = useMemo(() => {
+    if (!conversacionSeleccionada) return null
+    return conversacionesAgrupadas.find((c) => c.id === conversacionSeleccionada) || null
+  }, [conversacionSeleccionada, conversacionesAgrupadas])
+
+  // Cargar mensajes cuando se selecciona una conversación
+  useEffect(() => {
+    if (!conversacionActual) return
+    
+    // Si ya están cargados, no volver a cargar
+    if (mensajesCargados.has(conversacionActual.id)) return
+    
+    // Cargar mensajes de esta conversación específica
+    setCargandoMensajes(conversacionActual.id)
+    
+    const cargarMensajes = async () => {
+      try {
+        // Filtrar comunicaciones de esta conversación específica
+        const mensajes = todasComunicaciones.filter(
+          (comm) => {
+            const idBase = comm.cliente_id ? `cliente_${comm.cliente_id}` : `contacto_${comm.from_contact}`
+            const id = `${idBase}_${comm.tipo}`
+            return id === conversacionActual.id
+          }
+        )
+        
+        // Ordenar por fecha/hora
+        mensajes.sort((a, b) => {
+          return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        })
+        
+        setMensajesCargados(prev => new Map(prev).set(conversacionActual.id, mensajes))
+      } catch (error) {
+        console.error('Error cargando mensajes:', error)
+        toast.error('Error cargando mensajes')
+      } finally {
+        setCargandoMensajes(null)
+      }
+    }
+    
+    cargarMensajes()
+  }, [conversacionActual, todasComunicaciones, mensajesCargados])
+
+  // Obtener mensajes de la conversación actual
+  const mensajesOrdenados = useMemo(() => {
+    if (!conversacionActual) return []
+    return mensajesCargados.get(conversacionActual.id) || []
+  }, [conversacionActual, mensajesCargados])
+
+  // Cargar tickets del cliente cuando se selecciona una conversación
+  useEffect(() => {
+    if (conversacionActual?.cliente_id) {
+      ticketsService
+        .getTickets({ cliente_id: conversacionActual.cliente_id })
+        .then((response) => {
+          setTicketsCliente(response.tickets || [])
+        })
+        .catch((error) => {
+          console.error('Error cargando tickets:', error)
+          setTicketsCliente([])
+        })
+    } else {
+      setTicketsCliente([])
+    }
+  }, [conversacionActual])
+
+  // Seleccionar conversación
+  const handleSeleccionarConversacion = (conversacion: ConversacionAgrupada) => {
+    setConversacionSeleccionada(conversacion.id)
+    setComunicacionSeleccionada(conversacion.ultimaComunicacion)
+    setTicketEditando(null)
+  }
+
+  // Crear cliente automáticamente
+  const handleCrearCliente = async (conversacion: ConversacionAgrupada) => {
+    setCreandoClienteAuto(true)
+    try {
+      const request: CrearClienteAutomaticoRequest = {
+        nombres: conversacion.nombre,
+      }
+      
+      if (conversacion.tipo === 'whatsapp') {
+        request.telefono = conversacion.contacto
+      } else if (conversacion.tipo === 'email') {
+        request.email = conversacion.contacto
+      }
+
+      const resultado = await comunicacionesService.crearClienteAutomatico(request)
+      
+      if (resultado.success && resultado.cliente) {
+        toast.success('Cliente creado exitosamente')
+        queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
+        setTimeout(() => refetch(), 500)
+      }
+    } catch (error: any) {
+      console.error('Error creando cliente:', error)
+      toast.error(error?.response?.data?.detail || 'Error creando cliente')
+    } finally {
+      setCreandoClienteAuto(false)
+    }
+  }
+
+  // Crear ticket desde conversación
+  const handleCrearTicket = async () => {
+    if (!conversacionActual || !comunicacionSeleccionada) return
+
+    if (!ticketForm.titulo.trim() || !ticketForm.descripcion.trim()) {
+      toast.error('Por favor completa el título y descripción del ticket')
+      return
+    }
+
+    // Si es nuevo, primero crear cliente
+    if (conversacionActual.esNuevo) {
+      await handleCrearCliente(conversacionActual)
+      // Esperar a que se actualice la conversación
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      await refetch()
+      toast.info('Cliente creado. Por favor, crea el ticket nuevamente.')
+      return
+    }
+
+    setCreandoTicket(true)
+    try {
+      // Subir archivos si hay
+      let archivosJson = null
+      if (ticketForm.archivos.length > 0) {
+        // TODO: Implementar subida de archivos
+        // Por ahora, solo guardamos los nombres
+        archivosJson = JSON.stringify(ticketForm.archivos.map(f => f.name))
+      }
+
+      const ticketData: TicketCreate = {
+        titulo: ticketForm.titulo,
+        descripcion: ticketForm.descripcion,
+        tipo: ticketForm.tipo,
+        prioridad: ticketForm.prioridad,
+        estado: ticketForm.estado,
+        cliente_id: conversacionActual.cliente_id || undefined,
+        conversacion_whatsapp_id: comunicacionSeleccionada.tipo === 'whatsapp' ? comunicacionSeleccionada.id : undefined,
+        comunicacion_email_id: comunicacionSeleccionada.tipo === 'email' ? comunicacionSeleccionada.id : undefined,
+        asignado_a: ticketForm.responsable_id ? usuarios.find(u => u.id === ticketForm.responsable_id)?.email : undefined,
+        asignado_a_id: ticketForm.responsable_id,
+        fecha_limite: ticketForm.fecha_limite || undefined,
+        archivos: archivosJson || undefined,
+      }
+
+      const ticket = await ticketsService.createTicket(ticketData)
+      toast.success(`Ticket #${ticket.id} creado exitosamente`)
+      
+      // Limpiar formulario
+      setTicketForm({
+        titulo: '',
+        descripcion: '',
+        tipo: 'consulta',
+        prioridad: 'media',
+        estado: 'abierto',
+        fecha_limite: '',
+        responsable_id: user?.id || undefined,
+        archivos: [],
+      })
+      
+      // Refrescar tickets
+      if (conversacionActual.cliente_id) {
+        const response = await ticketsService.getTickets({ cliente_id: conversacionActual.cliente_id })
+        setTicketsCliente(response.tickets || [])
+      }
+      
+      // Refrescar comunicaciones
+      queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
+    } catch (error: any) {
+      console.error('Error creando ticket:', error)
+      toast.error(error?.response?.data?.detail || 'Error creando ticket')
+    } finally {
+      setCreandoTicket(false)
+    }
+  }
+
+  // Actualizar ticket (solo campos permitidos)
+  const handleActualizarTicket = async (ticket: Ticket) => {
+    if (!ticketEditando) return
+    
+    setCreandoTicket(true)
+    try {
+      const updateData: TicketUpdate = {
+        estado: ticketEditando.estado,
+        prioridad: ticketEditando.prioridad,
+        asignado_a_id: ticketEditando.asignado_a_id,
+        escalado_a_id: ticketEditando.escalado_a_id,
+        escalado: ticketEditando.escalado,
+        fecha_limite: ticketEditando.fecha_limite,
+      }
+
+      await ticketsService.updateTicket(ticket.id, updateData)
+      toast.success(`Ticket #${ticket.id} actualizado exitosamente`)
+      
+      setTicketEditando(null)
+      
+      // Refrescar tickets
+      if (conversacionActual?.cliente_id) {
+        const response = await ticketsService.getTickets({ cliente_id: conversacionActual.cliente_id })
+        setTicketsCliente(response.tickets || [])
+      }
+    } catch (error: any) {
+      console.error('Error actualizando ticket:', error)
+      toast.error(error?.response?.data?.detail || 'Error actualizando ticket')
+    } finally {
+      setCreandoTicket(false)
+    }
+  }
+
+  // Enviar mensaje
+  const handleEnviarMensaje = async () => {
+    if (!conversacionActual || !mensajeTexto.trim()) return
+
+    setEnviando(true)
+    try {
+      // Aquí implementarías la lógica de envío según el tipo
+      toast.success('Mensaje enviado (funcionalidad en desarrollo)')
+      setMensajeTexto('')
+      setAsuntoEmail('')
+      setTimeout(() => refetch(), 1000)
+    } catch (error: any) {
+      console.error('Error enviando mensaje:', error)
+      toast.error('Error enviando mensaje')
+    } finally {
+      setEnviando(false)
+    }
+  }
 
   const formatearFecha = (fecha: string) => {
     try {
       const date = new Date(fecha)
-      return date.toLocaleString('es-ES', {
+      const ahora = new Date()
+      const diffMs = ahora.getTime() - date.getTime()
+      const diffMins = Math.floor(diffMs / 60000)
+      const diffHours = Math.floor(diffMs / 3600000)
+      const diffDays = Math.floor(diffMs / 86400000)
+
+      if (diffMins < 1) return 'Ahora'
+      if (diffMins < 60) return `Hace ${diffMins} min`
+      if (diffHours < 24) return `Hace ${diffHours} h`
+      if (diffDays < 7) return `Hace ${diffDays} días`
+      
+      return date.toLocaleDateString('es-ES', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
@@ -170,685 +473,550 @@ export function Comunicaciones({
     }
   }
 
-  // Buscar o crear cliente automáticamente
-  const buscarOcrearCliente = async (contacto: string, tipo: 'whatsapp' | 'email'): Promise<boolean> => {
-    if (!contacto || contacto.trim().length < 3) {
-      setClienteInfo(null)
-      return false
-    }
-
-    try {
-      // Intentar crear cliente automáticamente
-      setCreandoClienteAuto(true)
-      const request: CrearClienteAutomaticoRequest = {
-        nombres: `Cliente desde ${tipo === 'whatsapp' ? 'WhatsApp' : 'Email'}`,
-      }
-      
-      if (tipo === 'whatsapp') {
-        request.telefono = contacto
-      } else {
-        request.email = contacto
-      }
-
-      const resultado = await comunicacionesService.crearClienteAutomatico(request)
-      
-      if (resultado.success && resultado.cliente) {
-        setClienteInfo({
-          encontrado: true,
-          cliente: resultado.cliente,
-        })
-        toast.success('Cliente creado automáticamente')
-        return true
-      }
-      
-      return false
-    } catch (error: any) {
-      console.error('Error creando cliente automático:', error)
-      // Si falla, intentar buscar cliente existente
-      try {
-        if (tipo === 'whatsapp') {
-          const resultado = await clienteService.buscarClientePorTelefono(contacto)
-          if (resultado) {
-            setClienteInfo({
-              encontrado: true,
-              cliente: {
-                id: resultado.id,
-                cedula: resultado.cedula || '',
-                nombres: resultado.nombres || '',
-                telefono: resultado.telefono || '',
-                email: resultado.email || '',
-              },
-            })
-            return true
-          }
-        }
-      } catch (searchError) {
-        console.error('Error buscando cliente:', searchError)
-      }
-      
-      setClienteInfo({
-        encontrado: false,
-        cliente: null,
-      })
-      return false
-    } finally {
-      setCreandoClienteAuto(false)
-    }
-  }
-
-  // Abrir modal para crear ticket desde comunicación
-  const handleAbrirCrearTicket = (comunicacion: ComunicacionUnificada) => {
-    setComunicacionParaTicket(comunicacion)
-    const tipoTexto = comunicacion.tipo === 'whatsapp' ? 'WhatsApp' : 'Email'
-    setTicketForm({
-      titulo: `Ticket desde ${tipoTexto} - ${comunicacion.from_contact}`,
-      descripcion: `Comunicación de ${tipoTexto}:\n\n${comunicacion.subject ? `Asunto: ${comunicacion.subject}\n\n` : ''}${comunicacion.body || '[Sin contenido]'}\n\nFecha: ${formatearFecha(comunicacion.timestamp)}`,
-      tipo: 'consulta',
-      prioridad: 'media',
-      estado: 'abierto',
-    })
-    setMostrarCrearTicket(true)
-  }
-
-  // Crear ticket
-  const handleCrearTicket = async () => {
-    if (!comunicacionParaTicket) return
-
-    if (!ticketForm.titulo.trim() || !ticketForm.descripcion.trim()) {
-      toast.error('Por favor completa el título y descripción del ticket')
-      return
-    }
-
-    setCreandoTicket(true)
-    try {
-      const ticketData: TicketCreate = {
-        titulo: ticketForm.titulo,
-        descripcion: ticketForm.descripcion,
-        tipo: ticketForm.tipo,
-        prioridad: ticketForm.prioridad,
-        estado: ticketForm.estado,
-        cliente_id: comunicacionParaTicket.cliente_id || undefined,
-        conversacion_whatsapp_id: comunicacionParaTicket.tipo === 'whatsapp' ? comunicacionParaTicket.id : undefined,
-        comunicacion_email_id: comunicacionParaTicket.tipo === 'email' ? comunicacionParaTicket.id : undefined,
-        asignado_a: user ? `${user.nombre} ${user.apellido}` : undefined,
-        asignado_a_id: user?.id,
-      }
-
-      const ticket = await ticketsService.createTicket(ticketData)
-      toast.success(`Ticket #${ticket.id} creado exitosamente`)
-      setMostrarCrearTicket(false)
-      setComunicacionParaTicket(null)
-      setTicketForm({
-        titulo: '',
-        descripcion: '',
-        tipo: 'consulta',
-        prioridad: 'media',
-        estado: 'abierto',
-      })
-      // Refrescar comunicaciones
-      queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
-    } catch (error: any) {
-      console.error('Error creando ticket:', error)
-      toast.error(error?.response?.data?.detail || 'Error creando ticket')
-    } finally {
-      setCreandoTicket(false)
-    }
-  }
-
-  // Estadísticas rápidas
-  const estadisticas = {
-    total: comunicaciones.length,
-    porResponder: comunicaciones.filter(c => c.requiere_respuesta).length,
-    whatsapp: comunicaciones.filter(c => c.tipo === 'whatsapp').length,
-    email: comunicaciones.filter(c => c.tipo === 'email').length,
-  }
-
   return (
-    <div className="space-y-6">
-      {/* Header con estadísticas */}
-      {mostrarEstadisticas && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-blue-700 font-medium">Total Comunicaciones</p>
-                  <p className="text-3xl font-bold text-blue-900">{estadisticas.total}</p>
-                </div>
-                <MessageSquare className="h-10 w-10 text-blue-600" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-orange-700 font-medium">Por Responder</p>
-                  <p className="text-3xl font-bold text-orange-900">{estadisticas.porResponder}</p>
-                </div>
-                <Clock className="h-10 w-10 text-orange-600" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-green-700 font-medium">WhatsApp</p>
-                  <p className="text-3xl font-bold text-green-900">{estadisticas.whatsapp}</p>
-                </div>
-                <MessageSquare className="h-10 w-10 text-green-600" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-purple-700 font-medium">Email</p>
-                  <p className="text-3xl font-bold text-purple-900">{estadisticas.email}</p>
-                </div>
-                <Mail className="h-10 w-10 text-purple-600" />
-              </div>
-            </CardContent>
-          </Card>
+    <div className="flex h-[calc(100vh-200px)] gap-4">
+      {/* COLUMNA IZQUIERDA: Lista de conversaciones */}
+      <div className="w-80 flex-shrink-0 border-r border-gray-200 flex flex-col">
+        {/* Header con búsqueda */}
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-lg font-semibold">Comunicaciones</h2>
+            <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading}>
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Buscar conversaciones..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="pl-8"
+            />
+          </div>
         </div>
-      )}
 
-      {/* Tabs para Todas / Por Responder */}
-      <Tabs value={tabActivo} onValueChange={(v) => setTabActivo(v as 'todas' | 'por-responder')}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="todas" className="flex items-center gap-2">
-            <Mail className="h-4 w-4" />
-            Todas las Comunicaciones
-          </TabsTrigger>
-          <TabsTrigger value="por-responder" className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Por Responder ({estadisticas.porResponder})
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="todas" className="space-y-4">
-          {/* Filtros */}
-          {mostrarFiltros && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Filter className="h-5 w-5" />
-                  Filtros
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div>
-                    <label className="text-sm text-gray-600 mb-1 block">Búsqueda</label>
-                    <div className="relative">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
-                      <Input
-                        placeholder="Buscar en comunicaciones..."
-                        value={busqueda}
-                        onChange={(e) => setBusqueda(e.target.value)}
-                        className="pl-8"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-600 mb-1 block">Tipo</label>
-                    <Select value={tipoFiltro} onValueChange={(v) => setTipoFiltro(v as any)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                        <SelectItem value="email">Email</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-600 mb-1 block">Dirección</label>
-                    <Select
-                      value={direccionFiltro || 'all'}
-                      onValueChange={(v) => setDireccionFiltro(v === 'all' ? undefined : v as any)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas</SelectItem>
-                        <SelectItem value="INBOUND">Recibidas</SelectItem>
-                        <SelectItem value="OUTBOUND">Enviadas</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-end">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setTipoFiltro('all')
-                        setDireccionFiltro(undefined)
-                        setBusqueda('')
-                        setRequiereRespuesta(undefined)
-                      }}
-                      className="w-full"
-                    >
-                      Limpiar
-                    </Button>
-                  </div>
+        {/* Lista de conversaciones */}
+        <div className="flex-1 overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+            </div>
+          ) : error ? (
+            <div className="text-center py-12 px-4">
+              <AlertCircle className="h-8 w-8 mx-auto mb-2 text-red-500" />
+              <p className="text-sm text-red-600">Error cargando comunicaciones</p>
+            </div>
+          ) : conversacionesFiltradas.length === 0 ? (
+            <div className="text-center py-12 px-4">
+              <MessageSquare className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+              <p className="text-sm text-gray-500">No hay conversaciones</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {/* Separador visual para no leídos */}
+              {conversacionesFiltradas.some(c => !c.leido || c.noLeidos > 0) && (
+                <div className="px-3 py-2 bg-blue-50 border-b border-blue-200">
+                  <p className="text-xs font-semibold text-blue-700">NO LEÍDOS</p>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Lista de comunicaciones */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5" />
-                    Comunicaciones
-                  </CardTitle>
-                  <CardDescription>
-                    {paginacion ? `${paginacion.total} comunicaciones encontradas` : 'Cargando...'}
-                  </CardDescription>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
-                  <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                  Actualizar
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                </div>
-              ) : error ? (
-                <div className="text-center py-12">
-                  <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
-                  <p className="text-red-600">Error cargando comunicaciones</p>
-                  <Button variant="outline" onClick={() => refetch()} className="mt-4">
-                    Reintentar
-                  </Button>
-                </div>
-              ) : comunicacionesFiltradas.length === 0 ? (
-                <div className="text-center py-12">
-                  <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                  <p className="text-gray-500">No hay comunicaciones disponibles</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {comunicacionesFiltradas.map((comunicacion) => (
+              )}
+              
+              {conversacionesFiltradas.map((conversacion, index) => {
+                // Mostrar separador de leídos cuando cambia de no leído a leído
+                const mostrarSeparadorLeidos = 
+                  index > 0 && 
+                  (conversacion.leido && conversacion.noLeidos === 0) &&
+                  (!conversacionesFiltradas[index - 1].leido || conversacionesFiltradas[index - 1].noLeidos > 0)
+                
+                return (
+                  <div key={conversacion.id}>
+                    {mostrarSeparadorLeidos && (
+                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+                        <p className="text-xs font-semibold text-gray-600">LEÍDOS</p>
+                      </div>
+                    )}
                     <div
-                      key={`${comunicacion.tipo}-${comunicacion.id}`}
-                      className={`border rounded-lg p-4 transition-all hover:shadow-md ${
-                        comunicacion.direccion === 'INBOUND'
-                          ? comunicacion.requiere_respuesta
-                            ? 'bg-orange-50 border-orange-300 border-2'
-                            : 'bg-blue-50 border-blue-200'
-                          : 'bg-green-50 border-green-200'
-                      }`}
+                      onClick={() => handleSeleccionarConversacion(conversacion)}
+                      className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
+                        conversacionSeleccionada === conversacion.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''
+                      } ${conversacion.noLeidos > 0 ? 'font-semibold' : ''}`}
                     >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {comunicacion.tipo === 'whatsapp' ? (
-                            <MessageSquare className="h-5 w-5 text-green-600" />
-                          ) : (
-                            <Mail className="h-5 w-5 text-purple-600" />
-                          )}
-                          <Badge variant={comunicacion.direccion === 'INBOUND' ? 'default' : 'secondary'}>
-                            {comunicacion.direccion === 'INBOUND' ? 'Recibida' : 'Enviada'}
-                          </Badge>
-                          <Badge variant="outline" className="bg-white">
-                            {comunicacion.tipo === 'whatsapp' ? 'WhatsApp' : 'Email'}
-                          </Badge>
-                          {comunicacion.requiere_respuesta && (
-                            <Badge variant="destructive" className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              Requiere Respuesta
-                            </Badge>
-                          )}
-                          {comunicacion.respuesta_enviada && (
-                            <Badge variant="outline" className="bg-green-100">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Respondido
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {formatearFecha(comunicacion.timestamp)}
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        {comunicacion.subject && (
-                          <div className="font-semibold text-gray-900">{comunicacion.subject}</div>
-                        )}
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          {comunicacion.tipo === 'whatsapp' ? (
-                            <Phone className="h-3 w-3" />
-                          ) : (
-                            <Mail className="h-3 w-3" />
-                          )}
-                          <span>
-                            {comunicacion.direccion === 'INBOUND'
-                              ? `De: ${comunicacion.from_contact}`
-                              : `Para: ${comunicacion.to_contact}`}
-                          </span>
-                        </div>
-
-                        {comunicacion.cliente_id && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <User className="h-3 w-3" />
-                            <span>Cliente ID: {comunicacion.cliente_id}</span>
-                          </div>
-                        )}
-
-                        <div className="mt-3 p-3 bg-white rounded border">
-                          <p className="text-sm whitespace-pre-wrap">{comunicacion.body || '[Sin contenido]'}</p>
-                        </div>
-
-                        {/* Botones de acción */}
-                        {comunicacion.direccion === 'INBOUND' && (
-                          <div className="mt-3 pt-3 border-t flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleAbrirCrearTicket(comunicacion)}
-                              className="flex-1"
-                            >
-                              <FileText className="h-4 w-4 mr-2" />
-                              Crear Ticket
-                            </Button>
-                            {!comunicacion.cliente_id && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={async () => {
-                                  const contacto = comunicacion.from_contact
-                                  await buscarOcrearCliente(contacto, comunicacion.tipo)
-                                }}
-                                disabled={creandoClienteAuto}
-                                className="flex-1"
-                              >
-                                {creandoClienteAuto ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Creando...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Crear Cliente
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Paginación */}
-                  {paginacion && paginacion.pages > 1 && (
-                    <div className="flex items-center justify-between pt-4 border-t">
-                      <div className="text-sm text-gray-600">
-                        Página {paginacion.page} de {paginacion.pages} ({paginacion.total} total)
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPage((p) => Math.max(1, p - 1))}
-                          disabled={page === 1}
-                        >
-                          Anterior
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPage((p) => Math.min(paginacion.pages, p + 1))}
-                          disabled={page === paginacion.pages}
-                        >
-                          Siguiente
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="por-responder" className="space-y-4">
-          {/* Similar estructura pero solo comunicaciones por responder */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-orange-600" />
-                    Comunicaciones por Responder
-                  </CardTitle>
-                  <CardDescription>
-                    {paginacion ? `${paginacion.total} comunicaciones pendientes` : 'Cargando...'}
-                  </CardDescription>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
-                  <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                  Actualizar
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                </div>
-              ) : comunicacionesFiltradas.length === 0 ? (
-                <div className="text-center py-12">
-                  <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
-                  <p className="text-gray-500">¡No hay comunicaciones pendientes!</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {comunicacionesFiltradas
-                    .filter((c) => c.requiere_respuesta)
-                    .map((comunicacion) => (
-                      <div
-                        key={`${comunicacion.tipo}-${comunicacion.id}`}
-                        className="border-2 border-orange-300 rounded-lg p-4 bg-orange-50 hover:shadow-md transition-all"
-                      >
-                        {/* Mismo contenido que en el tab "todas" */}
-                        <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {comunicacion.tipo === 'whatsapp' ? (
-                            <MessageSquare className="h-5 w-5 text-green-600" />
-                          ) : (
-                            <Mail className="h-5 w-5 text-purple-600" />
-                          )}
-                            <Badge variant="destructive" className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              Requiere Respuesta
-                            </Badge>
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {formatearFecha(comunicacion.timestamp)}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          {comunicacion.subject && (
-                            <div className="font-semibold text-gray-900">{comunicacion.subject}</div>
-                          )}
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            {comunicacion.tipo === 'whatsapp' ? (
-                              <Phone className="h-3 w-3" />
+                      <div className="flex items-start justify-between mb-1">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div className="flex-shrink-0">
+                            {conversacion.tipo === 'whatsapp' ? (
+                              <MessageSquare className="h-4 w-4 text-green-600" />
                             ) : (
-                              <Mail className="h-3 w-3" />
+                              <Mail className="h-4 w-4 text-purple-600" />
                             )}
-                            <span>De: {comunicacion.from_contact}</span>
                           </div>
-                          <div className="mt-3 p-3 bg-white rounded border">
-                            <p className="text-sm whitespace-pre-wrap">{comunicacion.body || '[Sin contenido]'}</p>
-                          </div>
-                          <div className="mt-3 pt-3 border-t flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleAbrirCrearTicket(comunicacion)}
-                              className="flex-1"
-                            >
-                              <FileText className="h-4 w-4 mr-2" />
-                              Crear Ticket
-                            </Button>
-                            {!comunicacion.cliente_id && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={async () => {
-                                  await buscarOcrearCliente(comunicacion.from_contact, comunicacion.tipo)
-                                }}
-                                disabled={creandoClienteAuto}
-                                className="flex-1"
-                              >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Crear Cliente
-                              </Button>
-                            )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm truncate">{conversacion.nombre}</span>
+                              {conversacion.esNuevo && (
+                                <Badge variant="destructive" className="text-xs px-1.5 py-0">
+                                  NUEVO
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </div>
+                        {conversacion.noLeidos > 0 && (
+                          <Badge variant="default" className="ml-2 flex-shrink-0">
+                            {conversacion.noLeidos}
+                          </Badge>
+                        )}
                       </div>
-                    ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                      <div className="text-xs text-gray-500 truncate mt-1">
+                        {conversacion.ultimaComunicacion.body?.substring(0, 50) || '[Sin contenido]'}
+                        {conversacion.ultimaComunicacion.body && conversacion.ultimaComunicacion.body.length > 50 && '...'}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {formatearFecha(conversacion.ultimaComunicacion.timestamp)}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
 
-      {/* Modal para crear ticket */}
-      <Dialog open={mostrarCrearTicket} onOpenChange={setMostrarCrearTicket}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Crear Ticket desde Comunicación</DialogTitle>
-            <p className="text-sm text-gray-600 mt-2">
-              Crear un ticket de atención vinculado a esta comunicación
-            </p>
-          </DialogHeader>
-          <div className="space-y-4 mt-4">
-            <div>
-              <label className="text-sm font-medium mb-2 block">Título *</label>
-              <Input
-                value={ticketForm.titulo}
-                onChange={(e) => setTicketForm({ ...ticketForm, titulo: e.target.value })}
-                placeholder="Ej: Consulta sobre estado de préstamo"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-2 block">Descripción *</label>
-              <Textarea
-                value={ticketForm.descripcion}
-                onChange={(e) => setTicketForm({ ...ticketForm, descripcion: e.target.value })}
-                placeholder="Describe el problema o consulta..."
-                rows={6}
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">Tipo</label>
-                <Select
-                  value={ticketForm.tipo}
-                  onValueChange={(value) => setTicketForm({ ...ticketForm, tipo: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="consulta">Consulta</SelectItem>
-                    <SelectItem value="incidencia">Incidencia</SelectItem>
-                    <SelectItem value="solicitud">Solicitud</SelectItem>
-                    <SelectItem value="reclamo">Reclamo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Prioridad</label>
-                <Select
-                  value={ticketForm.prioridad}
-                  onValueChange={(value) => setTicketForm({ ...ticketForm, prioridad: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="baja">Baja</SelectItem>
-                    <SelectItem value="media">Media</SelectItem>
-                    <SelectItem value="urgente">Urgente</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Estado</label>
-                <Select
-                  value={ticketForm.estado}
-                  onValueChange={(value) => setTicketForm({ ...ticketForm, estado: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="abierto">Abierto</SelectItem>
-                    <SelectItem value="en_proceso">En Proceso</SelectItem>
-                    <SelectItem value="resuelto">Resuelto</SelectItem>
-                    <SelectItem value="cerrado">Cerrado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            {comunicacionParaTicket && (
-              <div className="p-3 bg-blue-50 rounded border border-blue-200">
-                <p className="text-xs text-blue-700 mb-1">
-                  <strong>Comunicación vinculada:</strong> {comunicacionParaTicket.from_contact} ({comunicacionParaTicket.tipo})
-                </p>
-                {comunicacionParaTicket.cliente_id && (
-                  <p className="text-xs text-blue-700">
-                    <strong>Cliente ID:</strong> {comunicacionParaTicket.cliente_id}
-                  </p>
-                )}
-              </div>
-            )}
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setMostrarCrearTicket(false)
-                  setComunicacionParaTicket(null)
-                }}
-                disabled={creandoTicket}
-              >
-                Cancelar
-              </Button>
-              <Button onClick={handleCrearTicket} disabled={creandoTicket || !ticketForm.titulo.trim() || !ticketForm.descripcion.trim()}>
-                {creandoTicket ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creando...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Crear Ticket
-                  </>
-                )}
-              </Button>
+      {/* COLUMNA CENTRO: Vista de conversación */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {!conversacionActual ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <MessageSquare className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+              <p className="text-gray-500">Selecciona una conversación para ver los mensajes</p>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        ) : (
+          <>
+            {/* Header de conversación */}
+            <div className="p-4 border-b border-gray-200 bg-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div>
+                    {conversacionActual.tipo === 'whatsapp' ? (
+                      <MessageSquare className="h-6 w-6 text-green-600" />
+                    ) : (
+                      <Mail className="h-6 w-6 text-purple-600" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold">{conversacionActual.nombre}</h3>
+                      {conversacionActual.esNuevo && (
+                        <Badge variant="destructive" className="text-xs">
+                          NUEVO
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500">{conversacionActual.contacto}</p>
+                  </div>
+                </div>
+                {conversacionActual.esNuevo && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleCrearCliente(conversacionActual)}
+                    disabled={creandoClienteAuto}
+                  >
+                    {creandoClienteAuto ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creando...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Crear Cliente
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Mensajes */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+              {cargandoMensajes === conversacionActual.id ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                </div>
+              ) : mensajesOrdenados.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-500">No hay mensajes en esta conversación</p>
+                </div>
+              ) : (
+                mensajesOrdenados.map((mensaje) => (
+                  <div
+                    key={`${mensaje.tipo}-${mensaje.id}`}
+                    className={`flex ${mensaje.direccion === 'INBOUND' ? 'justify-start' : 'justify-end'}`}
+                  >
+                    <div
+                      className={`max-w-[70%] rounded-lg p-3 ${
+                        mensaje.direccion === 'INBOUND'
+                          ? 'bg-white border border-gray-200'
+                          : 'bg-blue-600 text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        {mensaje.tipo === 'whatsapp' ? (
+                          <MessageSquare className={`h-3 w-3 ${mensaje.direccion === 'OUTBOUND' ? 'text-white' : 'text-green-600'}`} />
+                        ) : (
+                          <Mail className={`h-3 w-3 ${mensaje.direccion === 'OUTBOUND' ? 'text-white' : 'text-purple-600'}`} />
+                        )}
+                        <span className={`text-xs ${mensaje.direccion === 'OUTBOUND' ? 'text-blue-100' : 'text-gray-500'}`}>
+                          {formatearFecha(mensaje.timestamp)}
+                        </span>
+                      </div>
+                      {mensaje.subject && (
+                        <div className={`font-semibold mb-1 ${mensaje.direccion === 'OUTBOUND' ? 'text-white' : 'text-gray-900'}`}>
+                          {mensaje.subject}
+                        </div>
+                      )}
+                      <div className={`text-sm whitespace-pre-wrap ${mensaje.direccion === 'OUTBOUND' ? 'text-white' : 'text-gray-700'}`}>
+                        {mensaje.body || '[Sin contenido]'}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Input para enviar mensaje */}
+            <div className="p-4 border-t border-gray-200 bg-white">
+              {conversacionActual.tipo === 'email' && (
+                <Input
+                  placeholder="Asunto..."
+                  value={asuntoEmail}
+                  onChange={(e) => setAsuntoEmail(e.target.value)}
+                  className="mb-2"
+                />
+              )}
+              <div className="flex gap-2">
+                <Textarea
+                  placeholder={conversacionActual.tipo === 'whatsapp' ? 'Escribe un mensaje...' : 'Escribe tu respuesta...'}
+                  value={mensajeTexto}
+                  onChange={(e) => setMensajeTexto(e.target.value)}
+                  className="flex-1 min-h-[80px]"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      handleEnviarMensaje()
+                    }
+                  }}
+                />
+                <Button onClick={handleEnviarMensaje} disabled={!mensajeTexto.trim() || enviando}>
+                  {enviando ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* COLUMNA DERECHA: Panel de Tickets */}
+      <div className="w-96 flex-shrink-0 border-l border-gray-200 flex flex-col bg-white">
+        {!conversacionActual ? (
+          <div className="flex items-center justify-center h-full p-4">
+            <div className="text-center">
+              <FileText className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+              <p className="text-sm text-gray-500">Selecciona una conversación para ver los tickets</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="font-semibold flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Tickets
+              </h3>
+              {conversacionActual.esNuevo && (
+                <p className="text-xs text-orange-600 mt-1">Crea un cliente para gestionar tickets</p>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Formulario para crear ticket */}
+              {!ticketEditando && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm">Crear Nuevo Ticket</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Input
+                      placeholder="Título del ticket"
+                      value={ticketForm.titulo}
+                      onChange={(e) => setTicketForm({ ...ticketForm, titulo: e.target.value })}
+                      className="text-sm"
+                    />
+                    <Textarea
+                      placeholder="Descripción..."
+                      value={ticketForm.descripcion}
+                      onChange={(e) => setTicketForm({ ...ticketForm, descripcion: e.target.value })}
+                      className="text-sm min-h-[80px]"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select
+                        value={ticketForm.tipo}
+                        onValueChange={(value) => setTicketForm({ ...ticketForm, tipo: value })}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="consulta">Consulta</SelectItem>
+                          <SelectItem value="incidencia">Incidencia</SelectItem>
+                          <SelectItem value="solicitud">Solicitud</SelectItem>
+                          <SelectItem value="reclamo">Reclamo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={ticketForm.prioridad}
+                        onValueChange={(value) => setTicketForm({ ...ticketForm, prioridad: value })}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="baja">Baja</SelectItem>
+                          <SelectItem value="media">Media</SelectItem>
+                          <SelectItem value="urgente">Urgente</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    {/* Fecha límite (agenda) */}
+                    <div>
+                      <label className="text-xs text-gray-600 mb-1 block">Fecha límite (Agenda)</label>
+                      <Input
+                        type="datetime-local"
+                        value={ticketForm.fecha_limite}
+                        onChange={(e) => setTicketForm({ ...ticketForm, fecha_limite: e.target.value })}
+                        className="text-sm"
+                      />
+                    </div>
+                    
+                    {/* Responsable */}
+                    <div>
+                      <label className="text-xs text-gray-600 mb-1 block">Responsable</label>
+                      <Select
+                        value={ticketForm.responsable_id?.toString() || ''}
+                        onValueChange={(value) => setTicketForm({ ...ticketForm, responsable_id: parseInt(value) })}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue placeholder="Seleccionar responsable" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {usuarios.map((u) => (
+                            <SelectItem key={u.id} value={u.id.toString()}>
+                              {u.nombre} {u.apellido} {u.is_admin ? '(Admin)' : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    {/* Archivos */}
+                    <div>
+                      <label className="text-xs text-gray-600 mb-1 block">Archivos adjuntos</label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="file"
+                          multiple
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files || [])
+                            setTicketForm({ ...ticketForm, archivos: files })
+                          }}
+                          className="text-xs"
+                        />
+                      </div>
+                      {ticketForm.archivos.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {ticketForm.archivos.map((file, idx) => (
+                            <div key={idx} className="text-xs text-gray-600 flex items-center gap-2">
+                              <FileText className="h-3 w-3" />
+                              {file.name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <Button
+                      onClick={handleCrearTicket}
+                      disabled={!ticketForm.titulo.trim() || !ticketForm.descripcion.trim() || creandoTicket || conversacionActual.esNuevo}
+                      className="w-full text-sm"
+                      size="sm"
+                    >
+                      {creandoTicket ? (
+                        <>
+                          <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                          Creando...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-3 w-3 mr-2" />
+                          Crear Ticket
+                        </>
+                      )}
+                    </Button>
+                    {conversacionActual.esNuevo && (
+                      <p className="text-xs text-orange-600 text-center">
+                        Crea el cliente primero para generar tickets
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Formulario para actualizar ticket (solo campos permitidos) */}
+              {ticketEditando && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm">Actualizar Ticket #{ticketEditando.id}</CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setTicketEditando(null)}
+                        className="h-6 w-6 p-0"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Título y descripción no se pueden editar después de guardar
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div>
+                      <label className="text-xs text-gray-600 mb-1 block">Título (no editable)</label>
+                      <Input value={ticketEditando.titulo} disabled className="text-sm bg-gray-50" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-600 mb-1 block">Descripción (no editable)</label>
+                      <Textarea value={ticketEditando.descripcion} disabled className="text-sm bg-gray-50 min-h-[60px]" />
+                    </div>
+                    
+                    <Select
+                      value={ticketEditando.estado}
+                      onValueChange={(value) => setTicketEditando({ ...ticketEditando, estado: value })}
+                    >
+                      <SelectTrigger className="text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="abierto">Abierto</SelectItem>
+                        <SelectItem value="en_proceso">En Proceso</SelectItem>
+                        <SelectItem value="resuelto">Resuelto</SelectItem>
+                        <SelectItem value="cerrado">Cerrado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    <Select
+                      value={ticketEditando.prioridad}
+                      onValueChange={(value) => setTicketEditando({ ...ticketEditando, prioridad: value })}
+                    >
+                      <SelectTrigger className="text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="baja">Baja</SelectItem>
+                        <SelectItem value="media">Media</SelectItem>
+                        <SelectItem value="urgente">Urgente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    {/* Escalar a admin */}
+                    <div>
+                      <label className="text-xs text-gray-600 mb-1 block">Escalar a Admin</label>
+                      <Select
+                        value={ticketEditando.escalado_a_id?.toString() || ''}
+                        onValueChange={(value) => {
+                          const adminId = parseInt(value)
+                          setTicketEditando({
+                            ...ticketEditando,
+                            escalado_a_id: adminId,
+                            escalado: true,
+                          })
+                        }}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue placeholder="Seleccionar admin" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {usuarios.filter(u => u.is_admin).map((u) => (
+                            <SelectItem key={u.id} value={u.id.toString()}>
+                              {u.nombre} {u.apellido}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <Button
+                      onClick={() => handleActualizarTicket(ticketEditando)}
+                      disabled={creandoTicket}
+                      className="w-full text-sm"
+                      size="sm"
+                    >
+                      {creandoTicket ? (
+                        <>
+                          <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                          Actualizando...
+                        </>
+                      ) : (
+                        'Actualizar Ticket'
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Lista de tickets existentes */}
+              {ticketsCliente.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-gray-700">Tickets del Cliente</h4>
+                  {ticketsCliente.map((ticket) => (
+                    <Card
+                      key={ticket.id}
+                      className="p-3 cursor-pointer hover:bg-gray-50"
+                      onClick={() => setTicketEditando(ticket)}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">{ticket.titulo}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            #{ticket.id} • {ticket.estado}
+                          </div>
+                        </div>
+                        <Badge variant={ticket.prioridad === 'urgente' ? 'destructive' : 'outline'} className="text-xs">
+                          {ticket.prioridad}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-gray-600 line-clamp-2">{ticket.descripcion}</p>
+                      {ticket.fecha_limite && (
+                        <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(ticket.fecha_limite).toLocaleDateString('es-ES')}
+                        </div>
+                      )}
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
-

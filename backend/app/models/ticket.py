@@ -41,6 +41,16 @@ class Ticket(Base):
     # Asignación
     asignado_a = Column(String(200), nullable=True)  # Nombre del usuario asignado
     asignado_a_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # ID del usuario asignado
+    
+    # Escalación
+    escalado_a_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # ID del usuario al que se escaló (admin)
+    escalado = Column(Boolean, default=False, nullable=False)  # Si fue escalado a un superior
+
+    # Fecha límite (para agenda)
+    fecha_limite = Column(DateTime, nullable=True, index=True)  # Fecha límite para resolución
+
+    # Archivos adjuntos (JSON con rutas de archivos)
+    archivos = Column(Text, nullable=True)  # JSON array con rutas de archivos adjuntos
 
     # Usuario que creó el ticket
     creado_por_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
@@ -58,6 +68,7 @@ class Ticket(Base):
         "ComunicacionEmail", foreign_keys=[comunicacion_email_id], back_populates="tickets"
     )
     asignado_a_usuario = relationship("User", foreign_keys=[asignado_a_id])
+    escalado_a_usuario = relationship("User", foreign_keys=[escalado_a_id])
     creado_por = relationship("User", foreign_keys=[creado_por_id])
 
     def __repr__(self):
@@ -90,6 +101,10 @@ class Ticket(Base):
             "tipo": self.tipo,
             "asignado_a": self.asignado_a,
             "asignado_a_id": self.asignado_a_id,
+            "escalado_a_id": self.escalado_a_id,
+            "escalado": self.escalado,
+            "fecha_limite": self.fecha_limite.isoformat() if self.fecha_limite else None,
+            "archivos": self.archivos,
             "creado_por_id": self.creado_por_id,
             "fechaCreacion": self.creado_en.isoformat() if self.creado_en else None,
             "fechaActualizacion": self.actualizado_en.isoformat() if self.actualizado_en else None,

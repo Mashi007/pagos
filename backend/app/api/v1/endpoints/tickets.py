@@ -92,16 +92,20 @@ class TicketCreate(BaseModel):
     tipo: str = "consulta"
     asignado_a: Optional[str] = None
     asignado_a_id: Optional[int] = None
+    fecha_limite: Optional[str] = None  # ISO format datetime
+    archivos: Optional[str] = None  # JSON array con rutas de archivos
 
 
 class TicketUpdate(BaseModel):
-    titulo: Optional[str] = None
-    descripcion: Optional[str] = None
+    # Nota: Una vez guardado, solo se pueden actualizar estos campos (no se puede editar titulo/descripcion)
     estado: Optional[str] = None
     prioridad: Optional[str] = None
-    tipo: Optional[str] = None
     asignado_a: Optional[str] = None
     asignado_a_id: Optional[int] = None
+    escalado_a_id: Optional[int] = None  # Escalar a admin
+    escalado: Optional[bool] = None
+    fecha_limite: Optional[str] = None  # ISO format datetime
+    archivos: Optional[str] = None  # JSON array con rutas de archivos
 
 
 class TicketResponse(BaseModel):
@@ -299,6 +303,15 @@ async def crear_ticket(
             if not comunicacion_email:
                 raise HTTPException(status_code=404, detail="Comunicación de Email no encontrada")
 
+        # Parsear fecha_limite si se proporciona
+        from datetime import datetime
+        fecha_limite = None
+        if ticket_data.fecha_limite:
+            try:
+                fecha_limite = datetime.fromisoformat(ticket_data.fecha_limite.replace('Z', '+00:00'))
+            except Exception as e:
+                logger.warning(f"Error parseando fecha_limite: {e}")
+
         # Crear el ticket
         nuevo_ticket = Ticket(
             titulo=ticket_data.titulo,
@@ -311,6 +324,8 @@ async def crear_ticket(
             tipo=ticket_data.tipo,
             asignado_a=ticket_data.asignado_a or (f"{current_user.nombre} {current_user.apellido}" if current_user else None),
             asignado_a_id=ticket_data.asignado_a_id or current_user.id if current_user else None,
+            fecha_limite=fecha_limite,
+            archivos=ticket_data.archivos,
             creado_por_id=current_user.id if current_user else None,
         )
 
@@ -405,22 +420,41 @@ async def actualizar_ticket(
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket no encontrado")
 
-        # Actualizar campos
-        if ticket_data.titulo is not None:
-            ticket.titulo = ticket_data.titulo
-        if ticket_data.descripcion is not None:
-            ticket.descripcion = ticket_data.descripcion
+        # IMPORTANTE: Una vez guardado, NO se puede editar titulo/descripcion
+        # Solo se pueden actualizar: estado, prioridad, asignación, escalación, fecha_limite, archivos
+        
+        # Actualizar campos permitidos
         if ticket_data.estado is not None:
             ticket.estado = ticket_data.estado
         if ticket_data.prioridad is not None:
             ticket.prioridad = ticket_data.prioridad
-        if ticket_data.tipo is not None:
-            ticket.tipo = ticket_data.tipo
         if ticket_data.asignado_a is not None:
             ticket.asignado_a = ticket_data.asignado_a
         if ticket_data.asignado_a_id is not None:
             ticket.asignado_a_id = ticket_data.asignado_a_id
+        
+        # Escalación
+        if ticket_data.escalado_a_id is not None:
+            ticket.escalado_a_id = ticket_data.escalado_a_id
+            ticket.escalado = True
+        if ticket_data.escalado is not None:
+            ticket.escalado = ticket_data.escalado
+        
+        # Fecha límite
+        if ticket_data.fecha_limite is not None:
+            from datetime import datetime
+            try:
+                ticket.fecha_limite = datetime.fromisoformat(ticket_data.fecha_limite.replace('Z', '+00:00'))
+            except Exception as e:
+                logger.warning(f"Error parseando fecha_limite en actualización: {e}")
+        
+        # Archivos
+        if ticket_data.archivos is not None:
+            ticket.archivos = ticket_data.archivos
 
+        # Registrar actualización en auditoría (actualizado_en se actualiza automáticamente)
+        # TODO: Agregar registro específico en tabla de auditoría si existe
+        
         db.commit()
         db.refresh(ticket)
 

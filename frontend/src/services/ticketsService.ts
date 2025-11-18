@@ -15,11 +15,16 @@ export interface Ticket {
     email?: string
   }
   conversacion_whatsapp_id?: number
+  comunicacion_email_id?: number
   estado: string
   prioridad: string
   tipo: string
   asignado_a?: string
   asignado_a_id?: number
+  escalado_a_id?: number
+  escalado?: boolean
+  fecha_limite?: string
+  archivos?: string // JSON array con rutas de archivos
   creado_por_id?: number
   fechaCreacion?: string
   fechaActualizacion?: string
@@ -36,16 +41,21 @@ export interface TicketCreate {
   tipo?: string
   asignado_a?: string
   asignado_a_id?: number
+  fecha_limite?: string // ISO format datetime
+  archivos?: string // JSON array con rutas de archivos
 }
 
 export interface TicketUpdate {
-  titulo?: string
-  descripcion?: string
+  // Nota: Una vez guardado, NO se puede editar titulo/descripcion
+  // Solo se pueden actualizar estos campos
   estado?: string
   prioridad?: string
-  tipo?: string
   asignado_a?: string
   asignado_a_id?: number
+  escalado_a_id?: number // Escalar a admin
+  escalado?: boolean
+  fecha_limite?: string // ISO format datetime
+  archivos?: string // JSON array con rutas de archivos
 }
 
 export interface TicketsResponse {
