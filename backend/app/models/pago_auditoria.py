@@ -3,7 +3,8 @@ Modelo de Auditoría de Pagos
 Registra todos los cambios realizados en los pagos
 """
 
-from sqlalchemy import Column, DateTime, Integer, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 
 from app.db.session import Base
 
@@ -17,7 +18,10 @@ class PagoAuditoria(Base):
     __tablename__ = "pagos_auditoria"
 
     id = Column(Integer, primary_key=True, index=True)
-    pago_id = Column(Integer, nullable=False, index=True)
+    pago_id = Column(Integer, ForeignKey("pagos.id"), nullable=False, index=True)  # ✅ FK agregado
+
+    # Relación
+    pago = relationship("Pago", foreign_keys=[pago_id])
 
     # Información del cambio
     usuario = Column(String(100), nullable=False)  # Email del usuario

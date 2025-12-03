@@ -1,4 +1,5 @@
-from sqlalchemy import TIMESTAMP, Column, Integer, String, Text
+from sqlalchemy import TIMESTAMP, Column, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.db.session import Base
@@ -15,8 +16,11 @@ class PrestamoAuditoria(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # Referencia al préstamo
-    prestamo_id = Column(Integer, nullable=False, index=True)
+    prestamo_id = Column(Integer, ForeignKey("prestamos.id"), nullable=False, index=True)  # ✅ FK agregado
     cedula = Column(String(20), nullable=False, index=True)  # Para búsqueda rápida
+
+    # Relación
+    prestamo = relationship("Prestamo", foreign_keys=[prestamo_id])
 
     # Usuario que realiza el cambio
     usuario = Column(String(100), nullable=False)  # Email del usuario

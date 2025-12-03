@@ -29,6 +29,11 @@ class Prestamo(Base):
 
     # Relación con Cliente
     cliente = relationship("Cliente", backref="prestamos")
+    
+    # ✅ Relaciones normalizadas con catálogos
+    concesionario_rel = relationship("Concesionario", foreign_keys=[concesionario_id])
+    analista_rel = relationship("Analista", foreign_keys=[analista_id])
+    modelo_vehiculo_rel = relationship("ModeloVehiculo", foreign_keys=[modelo_vehiculo_id])
 
     # ============================================
     # DATOS DEL PRÉSTAMO
@@ -51,9 +56,15 @@ class Prestamo(Base):
     # ============================================
     # INFORMACIÓN ADICIONAL
     # ============================================
-    concesionario = Column(String(100), nullable=True)  # Concesionario
-    analista = Column(String(100), nullable=True)  # Analista
-    modelo_vehiculo = Column(String(100), nullable=True)  # Modelo del vehículo
+    # Campos legacy (mantener para compatibilidad durante migración)
+    concesionario = Column(String(100), nullable=True)  # Concesionario (legacy - usar concesionario_id)
+    analista = Column(String(100), nullable=True)  # Analista (legacy - usar analista_id)
+    modelo_vehiculo = Column(String(100), nullable=True)  # Modelo del vehículo (legacy - usar modelo_vehiculo_id)
+    
+    # ✅ Nuevas relaciones normalizadas
+    concesionario_id = Column(Integer, ForeignKey("concesionarios.id"), nullable=True, index=True)
+    analista_id = Column(Integer, ForeignKey("analistas.id"), nullable=True, index=True)
+    modelo_vehiculo_id = Column(Integer, ForeignKey("modelos_vehiculos.id"), nullable=True, index=True)
 
     # ============================================
     # ESTADO Y APROBACIÓN

@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, Numeric, String
+from sqlalchemy import Column, ForeignKey, Integer, Numeric, String
+from sqlalchemy.orm import relationship
 
 from app.db.session import Base
 
@@ -12,8 +13,11 @@ class PrestamoEvaluacion(Base):
     __tablename__ = "prestamos_evaluacion"
 
     id = Column(Integer, primary_key=True, index=True)
-    prestamo_id = Column(Integer, nullable=False, index=True)
+    prestamo_id = Column(Integer, ForeignKey("prestamos.id"), nullable=False, index=True)  # ✅ FK agregado
     cedula = Column(String(20), nullable=False, index=True)  # Cédula del cliente para consultas directas
+
+    # Relación
+    prestamo = relationship("Prestamo", foreign_keys=[prestamo_id])
 
     # ============================================
     # CRITERIO 1: CAPACIDAD DE PAGO (33 puntos)

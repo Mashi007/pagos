@@ -1,4 +1,5 @@
-from sqlalchemy import Boolean, Column, DateTime, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.db.session import Base
@@ -24,9 +25,10 @@ class Pago(Base):
 
     # DATOS DEL CLIENTE
     cedula = Column(String(CEDULA_LENGTH), nullable=False, index=True)  # Unificado con clientes y prestamos
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)  # ✅ FK agregado
 
     # DATOS DEL PAGO
-    prestamo_id = Column(Integer, nullable=True, index=True)  # ID del crédito
+    prestamo_id = Column(Integer, ForeignKey("prestamos.id"), nullable=True, index=True)  # ✅ FK agregado
     numero_cuota = Column(Integer, nullable=True)  # Número de cuota asociada (opcional)
     fecha_pago = Column(DateTime, nullable=False)  # Fecha de pago (manual)
     fecha_registro = Column(
@@ -60,7 +62,9 @@ class Pago(Base):
         String(2), default="NO", nullable=False
     )  # SI/NO - Se actualiza cuando el número de documento coincide en conciliación
 
-    # cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True)
+    # Relaciones
+    cliente = relationship("Cliente", foreign_keys=[cliente_id])
+    prestamo = relationship("Prestamo", foreign_keys=[prestamo_id])
 
     def __repr__(self):
         return f"<Pago(id={self.id}, cedula={self.cedula}, monto={self.monto_pagado}, conciliado={self.conciliado})>"
