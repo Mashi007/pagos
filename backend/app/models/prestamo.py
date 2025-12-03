@@ -62,9 +62,9 @@ class Prestamo(Base):
     modelo_vehiculo_id = Column(Integer, ForeignKey("modelos_vehiculos.id"), nullable=True, index=True)
 
     # ✅ Relaciones normalizadas con catálogos (definidas después de las columnas)
-    concesionario_rel = relationship("Concesionario", foreign_keys=[concesionario_id])
-    analista_rel = relationship("Analista", foreign_keys=[analista_id])
-    modelo_vehiculo_rel = relationship("ModeloVehiculo", foreign_keys=[modelo_vehiculo_id])
+    concesionario_rel = relationship("Concesionario")
+    analista_rel = relationship("Analista")
+    modelo_vehiculo_rel = relationship("ModeloVehiculo")
 
     # ============================================
     # ESTADO Y APROBACIÓN
