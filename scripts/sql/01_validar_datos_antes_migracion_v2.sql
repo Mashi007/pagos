@@ -1,7 +1,7 @@
 -- =====================================================
--- SCRIPT DE VALIDACIÓN DE DATOS ANTES DE MIGRACIÓN
+-- SCRIPT DE VALIDACIÓN DE DATOS ANTES DE MIGRACIÓN (VERSIÓN SEGURA)
 -- Ejecutar en DBeaver ANTES de aplicar las migraciones
--- ⚠️ NOTA: Este script maneja tablas opcionales (pagos_auditoria, prestamos_auditoria)
+-- Esta versión maneja correctamente tablas opcionales
 -- =====================================================
 
 -- 1. VALIDAR pagos.prestamo_id - Verificar pagos con prestamo_id inválido
@@ -186,8 +186,8 @@ SELECT
     COUNT(*) as cantidad
 FROM prestamos_evaluacion pe
 LEFT JOIN prestamos pr ON pe.prestamo_id = pr.id
-WHERE pr.id IS NULL
+WHERE pr.id IS NULL;
 
 -- Nota: Las auditorías se validan en los bloques DO $$ anteriores
--- Si las tablas no existen, no se incluyen en este resumen
+-- Si las tablas de auditoría no existen, no es un problema
 

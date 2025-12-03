@@ -48,15 +48,20 @@ pg_dump -h [HOST] -U [USER] -d [DATABASE] -F c -f backup_antes_migracion_2025012
 
 **Solo si el PASO 1 encontró datos inválidos:**
 
-1. Ejecutar el script: `scripts/sql/02_corregir_datos_invalidos.sql`
-2. **Revisar cada corrección** antes de ejecutar
-3. Algunas correcciones requieren decisión manual:
-   - **Pagos con cédulas inválidas:** Decidir si crear clientes temporales o establecer a NULL
-   - **Prestamos con concesionarios/analistas/modelos inválidos:** El script crea registros automáticamente
+1. **Ejecutar el script específico:** `scripts/sql/03_corregir_datos_especificos.sql`
+   - Este script está basado en los resultados reales de la validación
+   - Crea automáticamente los registros faltantes en catálogos
+   - Maneja los casos específicos encontrados
+
+2. **O usar el script genérico:** `scripts/sql/02_corregir_datos_invalidos.sql`
+   - Script más genérico que maneja todos los casos posibles
+
+3. **Revisar cada corrección** antes de ejecutar
+4. **El script usa TRANSACCIONES** - Revisar al final y hacer COMMIT o ROLLBACK
 
 **⚠️ IMPORTANTE:** 
 - Revisar cada sección del script antes de ejecutar
-- Comentar las secciones que NO quieres ejecutar
+- El script `03_corregir_datos_especificos.sql` está optimizado para los problemas encontrados
 - Hacer backup antes de ejecutar correcciones
 
 ---
