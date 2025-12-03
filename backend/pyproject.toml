@@ -44,3 +44,10 @@ module = [
 ]
 # Ignorar errores de asignación a Column ya que SQLAlchemy maneja esto dinámicamente
 ignore_errors = true
+
+[tool.basedpyright]
+typeCheckingMode = "off"
+reportMissingImports = false
+reportMissingModuleSource = false
+pythonVersion = "3.13"
+pythonPlatform = "All"
