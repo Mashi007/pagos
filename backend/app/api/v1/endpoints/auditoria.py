@@ -1,7 +1,10 @@
 import io
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import List, Optional
+
+import pytz
+from openpyxl import Workbook  # type: ignore[import-untyped]
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import asc, desc, func, text
@@ -203,10 +206,6 @@ def _obtener_fechas_periodos() -> dict:
     Obtiene fechas de inicio para hoy, semana y mes en UTC.
     Retorna diccionario con fechas.
     """
-    from datetime import datetime, timedelta
-
-    import pytz
-
     # Usar zona horaria de Venezuela (America/Caracas) para cálculos
     tz_caracas = pytz.timezone("America/Caracas")
     now_caracas = datetime.now(tz_caracas)
@@ -770,8 +769,6 @@ def exportar_auditoria(
 
 def _crear_excel_auditoria(registros):
     # Crear archivo Excel en memoria
-    from openpyxl import Workbook
-
     wb = Workbook()
     ws = wb.active
     ws.title = "Auditoría"
@@ -805,8 +802,6 @@ def _crear_excel_auditoria(registros):
 
 def _crear_excel_auditoria_unificado(registros):
     # Crear archivo Excel en memoria a partir de lista de dicts unificada
-    from openpyxl import Workbook
-
     wb = Workbook()
     ws = wb.active
     ws.title = "Auditoría"

@@ -3,6 +3,8 @@ import logging
 from datetime import datetime
 
 import pandas as pd
+from openpyxl import Workbook  # type: ignore[import-untyped]
+from openpyxl.worksheet.datavalidation import DataValidation  # type: ignore[import-untyped]
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy import and_
@@ -28,9 +30,6 @@ async def generar_template_conciliacion(
         logger.info(f"Generando template de conciliación - Usuario: {current_user.email}")
 
         # Crear workbook
-        from openpyxl import Workbook
-        from openpyxl.worksheet.datavalidation import DataValidation
-
         wb = Workbook()
 
         # HOJA 1: INSTRUCCIONES

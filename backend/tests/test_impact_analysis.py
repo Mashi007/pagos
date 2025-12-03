@@ -2,6 +2,7 @@
 Tests de Análisis de Impacto en Performance
 """
 
+import time
 import pytest
 import psutil
 from fastapi.testclient import TestClient
@@ -27,7 +28,7 @@ class PerformanceImpactAnalyzer:
 
     def start_measurement(self):
         """Iniciar medición de métricas del sistema"""
-        import psutil
+        self._start_time = time.time()
         self.start_metrics = {
             "cpu_percent": psutil.cpu_percent(),
             "memory_percent": psutil.virtual_memory().percent,
@@ -36,8 +37,6 @@ class PerformanceImpactAnalyzer:
 
     def end_measurement(self):
         """Finalizar medición de métricas del sistema"""
-        import psutil
-        import time
         self.end_metrics = {
             "cpu_percent": psutil.cpu_percent(),
             "memory_percent": psutil.virtual_memory().percent,
@@ -180,9 +179,13 @@ class TestEndpointPerformanceImpact:
 
         # Simular request de login
         login_data = {"email": "test@example.com", "password": "testpassword"}
+        response = test_client.post("/api/v1/auth/login", json=login_data)
 
         performance_analyzer.end_measurement()
         impact_analysis = performance_analyzer.get_impact_analysis()
+
+        # Verificaciones de funcionalidad
+        assert response.status_code in [200, 401]  # Puede ser exitoso o fallido según credenciales
 
         # Verificaciones de impacto
         assert impact_analysis["test_duration_seconds"] < 3.0  # Timeout razonable

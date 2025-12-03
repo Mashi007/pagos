@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[imp
 from fastapi.responses import StreamingResponse  # type: ignore[import-untyped]
 
 # Imports para Excel
+from openpyxl import Workbook  # type: ignore[import-untyped]
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side  # type: ignore[import-untyped]
 from pydantic import BaseModel  # type: ignore[import-untyped]
 from reportlab.lib import colors  # type: ignore[import-untyped]
 from reportlab.lib.pagesizes import A4  # type: ignore[import-untyped]
@@ -1093,8 +1095,6 @@ def _obtener_distribucion_por_mora(db: Session) -> list:
 
 def _obtener_estilos_excel():
     """Obtiene estilos reutilizables para Excel"""
-    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-
     return {
         "header_fill": PatternFill(start_color="366092", end_color="366092", fill_type="solid"),
         "header_font": Font(bold=True, color="FFFFFF", size=14),
@@ -1111,8 +1111,6 @@ def _obtener_estilos_excel():
 
 def _crear_hoja_resumen_excel(ws, reporte, cantidad_prestamos_activos, cantidad_prestamos_mora, estilos):
     """Crea la hoja de resumen ejecutivo en Excel"""
-    from openpyxl.styles import Alignment, Font
-
     ws.title = "Resumen Ejecutivo"
 
     ws.merge_cells("A1:B1")
@@ -1153,8 +1151,6 @@ def _crear_hoja_resumen_excel(ws, reporte, cantidad_prestamos_activos, cantidad_
 
 def _crear_hoja_distribucion_monto_excel(ws, distribucion_por_monto, estilos):
     """Crea la hoja de distribución por monto en Excel"""
-    from openpyxl.styles import Alignment, Font
-
     ws.title = "Distribución por Monto"
 
     headers = ["Rango de Monto", "Cantidad Préstamos", "Monto Total"]
@@ -1186,8 +1182,6 @@ def _crear_hoja_distribucion_monto_excel(ws, distribucion_por_monto, estilos):
 
 def _crear_hoja_distribucion_mora_excel(ws, distribucion_por_mora, estilos):
     """Crea la hoja de distribución por mora en Excel"""
-    from openpyxl.styles import Alignment, Font
-
     ws.title = "Distribución por Mora"
 
     headers_mora = ["Rango de Días", "Cantidad Préstamos", "Monto Total Mora"]
@@ -1221,8 +1215,6 @@ def _crear_hoja_distribucion_mora_excel(ws, distribucion_por_mora, estilos):
 
 def _crear_hoja_prestamos_detallados_excel(ws, db: Session, estilos):
     """Crea la hoja de préstamos detallados en Excel"""
-    from openpyxl.styles import Alignment, Font
-
     ws.title = "Préstamos Detallados"
 
     prestamos_detalle = (
@@ -1289,8 +1281,6 @@ def _crear_hoja_prestamos_detallados_excel(ws, db: Session, estilos):
 
 def _generar_excel_completo(reporte, db: Session, cantidad_prestamos_activos, cantidad_prestamos_mora):
     """Genera el archivo Excel completo con todas las hojas"""
-    from openpyxl import Workbook
-
     wb = Workbook()
     estilos = _obtener_estilos_excel()
 
