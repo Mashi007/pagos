@@ -61,6 +61,11 @@ htmlcov/
 ~$*.xltx
 ~$*.xltm
 
+# Excel data files (no subir a GitHub)
+scripts/data/*.xlsx
+scripts/data/*.xls
+scripts/data/*.xlsm
+
    # Datos sensibles
    pagos/
 

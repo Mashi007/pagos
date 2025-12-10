@@ -1,0 +1,80 @@
+═══════════════════════════════════════════════════════════════
+  COMANDOS RÁPIDOS - Verificar Excel
+═══════════════════════════════════════════════════════════════
+
+PASO 1: Abrir PowerShell
+─────────────────────────
+Presiona: Windows + X
+Selecciona: "Windows PowerShell" o "Terminal"
+
+PASO 2: Ir a la carpeta del proyecto
+─────────────────────────────────────
+Copia y pega este comando:
+
+cd C:\Users\PORTATIL\Documents\BIBLIOTECA\GitHub\pagos
+
+PASO 3: Verificar que existe la carpeta data
+─────────────────────────────────────────────
+Copia y pega este comando:
+
+dir scripts\data
+
+(Deberías ver la carpeta "data")
+
+PASO 4: Copiar tu Excel a la carpeta
+──────────────────────────────────────
+Copia y pega este comando (REEMPLAZA la ruta de tu Excel):
+
+Copy-Item "RUTA_DE_TU_EXCEL\datos_excel.xlsx" -Destination "scripts\data\datos_excel.xlsx"
+
+EJEMPLO si tu Excel está en el Escritorio:
+Copy-Item "C:\Users\PORTATIL\Desktop\datos_excel.xlsx" -Destination "scripts\data\datos_excel.xlsx"
+
+EJEMPLO si tu Excel está en Descargas:
+Copy-Item "C:\Users\PORTATIL\Downloads\datos_excel.xlsx" -Destination "scripts\data\datos_excel.xlsx"
+
+PASO 5: Verificar que el Excel se copió
+────────────────────────────────────────
+Copia y pega este comando:
+
+dir scripts\data\datos_excel.xlsx
+
+(Deberías ver el archivo)
+
+PASO 6: Instalar dependencias
+──────────────────────────────
+Copia y pega este comando:
+
+pip install pandas openpyxl sqlalchemy psycopg2-binary
+
+(Espera a que termine)
+
+PASO 7: Ejecutar el script
+───────────────────────────
+Copia y pega este comando:
+
+python scripts\python\verificar_excel_bd.py
+
+(Espera a que termine - puede tardar varios minutos si tienes 3690 registros)
+
+PASO 8: Ver el reporte
+───────────────────────
+Copia y pega este comando para abrir el reporte:
+
+notepad scripts\data\reporte_verificacion_excel.md
+
+O abre manualmente:
+C:\Users\PORTATIL\Documents\BIBLIOTECA\GitHub\pagos\scripts\data\reporte_verificacion_excel.md
+
+═══════════════════════════════════════════════════════════════
+  RESUMEN (Copia y pega en orden)
+═══════════════════════════════════════════════════════════════
+
+cd C:\Users\PORTATIL\Documents\BIBLIOTECA\GitHub\pagos
+Copy-Item "RUTA_DE_TU_EXCEL\datos_excel.xlsx" -Destination "scripts\data\datos_excel.xlsx"
+pip install pandas openpyxl sqlalchemy psycopg2-binary
+python scripts\python\verificar_excel_bd.py
+notepad scripts\data\reporte_verificacion_excel.md
+
+═══════════════════════════════════════════════════════════════
+
