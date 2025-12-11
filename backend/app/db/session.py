@@ -17,32 +17,88 @@ logger = logging.getLogger(__name__)
 
 # Configuración de la base de datos
 # ✅ CORRECCIÓN: Manejar encoding de DATABASE_URL correctamente
+# Intentar cargar desde .env usando python-dotenv si está disponible
+try:
+    from dotenv import load_dotenv
+    # Cargar .env con encoding correcto
+    from pathlib import Path
+    env_file = Path(__file__).parent.parent.parent / '.env'
+    if env_file.exists():
+        # Leer con diferentes codificaciones
+        for enc in ['utf-8', 'latin-1', 'windows-1252', 'cp1252']:
+            try:
+                content = env_file.read_text(encoding=enc)
+                # Guardar temporalmente en variable de entorno si no existe
+                if 'DATABASE_URL' not in os.environ:
+                    for line in content.split('\n'):
+                        if line.strip().startswith('DATABASE_URL='):
+                            key, value = line.split('=', 1)
+                            os.environ[key.strip()] = value.strip()
+                            break
+                break
+            except Exception:
+                continue
+    load_dotenv(override=False)  # No sobrescribir si ya está en os.environ
+except ImportError:
+    # Si python-dotenv no está disponible, usar os.getenv directamente
+    pass
+
 database_url_raw = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/pagos_db")
+
+# Manejar encoding de la URL de base de datos
 if database_url_raw:
-    # Si la URL tiene caracteres especiales, codificarlos correctamente
     try:
-        # Intentar decodificar si es bytes
+        # Si es bytes, decodificar
         if isinstance(database_url_raw, bytes):
             try:
                 database_url_raw = database_url_raw.decode("utf-8")
             except UnicodeDecodeError:
-                database_url_raw = database_url_raw.decode("latin-1", errors="ignore")
-
-        # Parsear y reconstruir la URL con encoding correcto para la contraseña
+                # Intentar con latin-1 como fallback
+                try:
+                    database_url_raw = database_url_raw.decode("latin-1")
+                except Exception:
+                    database_url_raw = database_url_raw.decode("latin-1", errors="ignore")
+        
+        # Asegurar que es string
+        database_url_raw = str(database_url_raw)
+        
+        # Si la URL tiene caracteres especiales, parsear y codificar correctamente
         from urllib.parse import quote_plus, urlparse, urlunparse
-
+        
         if "@" in database_url_raw and "://" in database_url_raw:
-            parsed = urlparse(database_url_raw)
-            if parsed.password:
-                # Reconstruir la URL con la contraseña codificada
-                netloc = f"{parsed.username}:{quote_plus(parsed.password, safe='')}@{parsed.hostname}"
-                if parsed.port:
-                    netloc += f":{parsed.port}"
-                parsed = parsed._replace(netloc=netloc)
-                database_url_raw = urlunparse(parsed)
-    except Exception:
-        # Si falla, usar la URL original
-        pass
+            try:
+                # Intentar parsear la URL
+                parsed = urlparse(database_url_raw)
+                
+                # Codificar username y password si existen
+                username = parsed.username or ""
+                password = parsed.password or ""
+                
+                if username or password:
+                    # Codificar username y password para URL (manejar caracteres especiales)
+                    username_encoded = quote_plus(username, safe='') if username else ''
+                    password_encoded = quote_plus(password, safe='') if password else ''
+                    
+                    # Reconstruir netloc con credenciales codificadas
+                    if username_encoded and password_encoded:
+                        netloc = f"{username_encoded}:{password_encoded}@{parsed.hostname}"
+                    elif username_encoded:
+                        netloc = f"{username_encoded}@{parsed.hostname}"
+                    else:
+                        netloc = parsed.hostname or ""
+                    
+                    if parsed.port:
+                        netloc += f":{parsed.port}"
+                    
+                    # Reconstruir la URL completa
+                    parsed = parsed._replace(netloc=netloc)
+                    database_url_raw = urlunparse(parsed)
+                    
+                    logger.debug(f"✅ DATABASE_URL procesada correctamente (username y password codificados)")
+            except Exception as parse_error:
+                logger.warning(f"⚠️ Error al parsear DATABASE_URL: {parse_error}. Usando URL original.")
+    except Exception as e:
+        logger.warning(f"⚠️ Error al procesar DATABASE_URL: {e}. Usando URL original.")
 
 DATABASE_URL = database_url_raw
 

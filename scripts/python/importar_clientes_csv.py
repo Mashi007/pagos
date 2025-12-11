@@ -15,8 +15,13 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Optional
 
-# Agregar el directorio raíz al path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Agregar el directorio backend al path
+# El script está en: scripts/python/importar_clientes_csv.py
+# Necesitamos: backend/app/
+script_dir = Path(__file__).parent  # scripts/python/
+project_root = script_dir.parent.parent  # raíz del proyecto
+backend_dir = project_root / 'backend'  # backend/
+sys.path.insert(0, str(backend_dir))
 
 from app.db.session import SessionLocal
 from app.models.cliente import Cliente
@@ -141,21 +146,34 @@ def leer_csv(archivo_csv: str) -> List[Dict]:
     """Lee el archivo CSV y retorna lista de diccionarios"""
     clientes = []
     
-    try:
-        with open(archivo_csv, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for fila in reader:
-                clientes.append(fila)
-        
-        logger.info(f"✅ Leídos {len(clientes)} registros del CSV")
-        return clientes
+    # Intentar diferentes codificaciones
+    codificaciones = ['utf-8', 'utf-8-sig', 'latin-1', 'iso-8859-1', 'windows-1252', 'cp1252']
     
-    except FileNotFoundError:
-        logger.error(f"❌ Archivo no encontrado: {archivo_csv}")
-        raise
-    except Exception as e:
-        logger.error(f"❌ Error al leer CSV: {e}")
-        raise
+    for encoding in codificaciones:
+        try:
+            with open(archivo_csv, 'r', encoding=encoding) as f:
+                reader = csv.DictReader(f)
+                for fila in reader:
+                    clientes.append(fila)
+            
+            logger.info(f"✅ Leídos {len(clientes)} registros del CSV (codificación: {encoding})")
+            return clientes
+        
+        except UnicodeDecodeError:
+            continue
+        except FileNotFoundError:
+            logger.error(f"❌ Archivo no encontrado: {archivo_csv}")
+            raise
+        except Exception as e:
+            # Si es otro error y ya intentamos todas las codificaciones, lanzar
+            if encoding == codificaciones[-1]:
+                logger.error(f"❌ Error al leer CSV: {e}")
+                raise
+            continue
+    
+    # Si llegamos aquí, ninguna codificación funcionó
+    logger.error(f"❌ No se pudo leer el CSV con ninguna codificación. Intentadas: {', '.join(codificaciones)}")
+    raise ValueError("No se pudo determinar la codificación del archivo CSV")
 
 
 def hacer_backup(db):
@@ -225,34 +243,77 @@ def importar_clientes(db, clientes: List[Dict]):
     
     for idx, cliente_data in enumerate(clientes, 1):
         try:
-            # Normalizar datos
+            # Normalizar datos según especificaciones
             cedula = normalizar_cedula(cliente_data.get('cedula', ''))
-            nombres = cliente_data.get('nombres', '').strip()
+            nombres = normalizar_nombres(cliente_data.get('nombres', ''))
+            telefono = normalizar_telefono(cliente_data.get('telefono', ''))
+            email = normalizar_email(cliente_data.get('email', ''))
             
-            # Validar campos obligatorios
-            if not cedula or not nombres:
-                errores.append({
-                    'fila': idx + 1,
-                    'error': 'Cédula o nombres vacíos',
-                    'datos': cliente_data
-                })
-                continue
+            # Validar campos obligatorios (después de normalización)
+            if not cedula or cedula == 'Z999999999':
+                # Si la cédula es el default, verificar si había valor original
+                if not cliente_data.get('cedula', '').strip():
+                    cedula = 'Z999999999'  # Aceptar default
+                else:
+                    # Cédula tenía valor pero no cumplió formato
+                    errores.append({
+                        'fila': idx + 1,
+                        'error': f'Cédula con formato inválido: {cliente_data.get("cedula", "")}',
+                        'datos': cliente_data
+                    })
+                    continue
+            
+            if not nombres or nombres == 'Nombre Apellido':
+                nombres = 'Nombre Apellido'  # Aceptar default
+            
+            # Convertir fechas de DD/MM/YYYY a YYYY-MM-DD
+            from datetime import datetime, date
+            
+            fecha_nacimiento_str = convertir_fecha(cliente_data.get('fecha_nacimiento', ''))
+            if fecha_nacimiento_str:
+                fecha_nacimiento = datetime.strptime(fecha_nacimiento_str, '%Y-%m-%d').date()
+            else:
+                fecha_nacimiento = date(2020, 1, 1)
+            
+            fecha_registro_str = convertir_fecha(cliente_data.get('fecha_registro', ''))
+            if fecha_registro_str:
+                fecha_registro = datetime.strptime(fecha_registro_str, '%Y-%m-%d')
+            else:
+                fecha_registro = datetime(2025, 10, 1)
+            
+            fecha_actualizacion_str = convertir_fecha(cliente_data.get('fecha_actualizacion', ''))
+            if fecha_actualizacion_str:
+                fecha_actualizacion = datetime.strptime(fecha_actualizacion_str, '%Y-%m-%d')
+            else:
+                fecha_actualizacion = datetime(2025, 12, 10)
+            
+            # Aplicar valores por defecto
+            direccion = cliente_data.get('direccion', '').strip() or 'Venezuela'
+            ocupacion = cliente_data.get('ocupacion', '').strip() or 'Sin ocupacion'
+            estado = normalizar_estado(cliente_data.get('estado', ''))
+            
+            # Normalizar activo
+            activo_str = str(cliente_data.get('activo', 'true')).lower().strip()
+            activo = activo_str in ['true', '1', 'yes', 'activo'] if activo_str else True
+            
+            usuario_registro = cliente_data.get('usuario_registro', '').strip() or 'SISTEMA'
+            notas = cliente_data.get('notas', '').strip() or 'nn'
             
             # Crear nuevo cliente
             nuevo_cliente = Cliente(
                 cedula=cedula,
                 nombres=nombres,
-                telefono=cliente_data.get('telefono', '+589999999999').strip(),
-                email=normalizar_email(cliente_data.get('email', 'buscaremail@noemail.com')),
-                direccion=cliente_data.get('direccion', 'Actualizar dirección').strip(),
-                fecha_nacimiento=cliente_data.get('fecha_nacimiento') or '2000-01-01',
-                ocupacion=cliente_data.get('ocupacion', 'Actualizar ocupación').strip(),
-                estado=normalizar_estado(cliente_data.get('estado')),
-                activo=cliente_data.get('activo', 'true').lower() in ['true', '1', 'yes'],
-                fecha_registro=cliente_data.get('fecha_registro') or None,
-                fecha_actualizacion=None,  # Se actualiza automáticamente
-                usuario_registro=cliente_data.get('usuario_registro', 'SISTEMA'),
-                notas=cliente_data.get('notas', 'No hay observaciones')
+                telefono=telefono,
+                email=email,
+                direccion=direccion,
+                fecha_nacimiento=fecha_nacimiento,
+                ocupacion=ocupacion,
+                estado=estado,
+                activo=activo,
+                fecha_registro=fecha_registro,
+                fecha_actualizacion=fecha_actualizacion,
+                usuario_registro=usuario_registro,
+                notas=notas
             )
             
             db.add(nuevo_cliente)
@@ -343,10 +404,12 @@ def comparar_bases(db):
 def main():
     """Función principal"""
     if len(sys.argv) < 2:
-        print("Uso: py scripts/python/importar_clientes_csv.py ruta/al/archivo.csv")
+        print("Uso: py scripts/python/importar_clientes_csv.py ruta/al/archivo.csv [--yes]")
+        print("     --yes: Ejecutar sin confirmación")
         sys.exit(1)
     
     archivo_csv = sys.argv[1]
+    auto_confirm = '--yes' in sys.argv or '-y' in sys.argv
     
     logger.info("")
     logger.info("=" * 60)
@@ -354,21 +417,38 @@ def main():
     logger.info("=" * 60)
     logger.info(f"\nArchivo: {archivo_csv}\n")
     
-    db = SessionLocal()
-    
     try:
-        # Leer CSV
+        # Leer CSV primero (antes de conectar a BD)
         clientes = leer_csv(archivo_csv)
         
         if not clientes:
             logger.error("❌ El archivo CSV está vacío")
             return
         
-        # Confirmar
-        respuesta = input(f"¿Importar {len(clientes)} clientes? Esto reemplazará todos los datos actuales. (s/n): ")
-        if respuesta.lower() != 's':
-            logger.info("❌ Importación cancelada")
-            return
+        # Confirmar (si no está en modo auto)
+        if not auto_confirm:
+            respuesta = input(f"¿Importar {len(clientes)} clientes? Esto reemplazará todos los datos actuales. (s/n): ")
+            if respuesta.lower() != 's':
+                logger.info("❌ Importación cancelada")
+                return
+        else:
+            logger.info(f"📥 Importando {len(clientes)} clientes (modo automático, sin confirmación)...")
+        
+        # Conectar a BD después de confirmar
+        logger.info("🔌 Conectando a base de datos...")
+        try:
+            db = SessionLocal()
+            # Probar conexión
+            db.execute(text("SELECT 1"))
+            logger.info("✅ Conexión exitosa")
+        except Exception as db_error:
+            logger.error(f"❌ Error al conectar con la base de datos: {db_error}")
+            logger.error("💡 Verifica que:")
+            logger.error("   1. La variable DATABASE_URL esté configurada en backend/.env")
+            logger.error("   2. La base de datos esté accesible")
+            logger.error("   3. Las credenciales sean correctas")
+            logger.error("   4. Si la contraseña tiene caracteres especiales, debe estar codificada en URL")
+            raise
         
         # Hacer backup
         hacer_backup(db)
