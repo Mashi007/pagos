@@ -8,8 +8,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from app.utils.validators import sanitize_html
 
 # Constantes de validación
-MIN_CEDULA_LENGTH = 8
-MAX_CEDULA_LENGTH = 20
+MIN_CEDULA_LENGTH = 6
+MAX_CEDULA_LENGTH = 13
 MIN_NAME_LENGTH = 2
 MAX_NAME_LENGTH = 100
 MIN_PHONE_LENGTH = 13
@@ -96,11 +96,11 @@ class ClienteBase(BaseModel):
         description="Ocupación del cliente (máximo 2 palabras)",
     )
 
-    # Estado - OBLIGATORIO
-    estado: str = Field(
-        ...,
+    # Estado - OPCIONAL con default ACTIVO
+    estado: Optional[str] = Field(
+        default="ACTIVO",
         pattern="^(ACTIVO|INACTIVO|FINALIZADO)$",
-        description="Activo/Inactivo/Finalizado",
+        description="Activo/Inactivo/Finalizado (default: ACTIVO)",
     )
 
     # Notas - OBLIGATORIO con default 'No hay observacion'
@@ -163,13 +163,42 @@ class ClienteBase(BaseModel):
             raise ValueError("Ocupación requerida")
         return cls.validate_ocupacion(v)
 
+    @field_validator("cedula", mode="before")
+    @classmethod
+    def normalize_cedula(cls, v: str) -> str:
+        """Normalizar cédula: eliminar guiones y espacios, validar longitud"""
+        if not v:
+            raise ValueError("Cédula requerida")
+        
+        # Eliminar guiones y espacios
+        cedula_limpia = re.sub(r'[-\s]', '', v.strip())
+        
+        # Validar longitud (6-13 caracteres)
+        if len(cedula_limpia) < MIN_CEDULA_LENGTH or len(cedula_limpia) > MAX_CEDULA_LENGTH:
+            raise ValueError(
+                f"Cédula debe tener entre {MIN_CEDULA_LENGTH} y {MAX_CEDULA_LENGTH} caracteres "
+                f"(sin guiones). Recibido: {len(cedula_limpia)} caracteres"
+            )
+        
+        return cedula_limpia
+    
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        """Normalizar email a minúsculas"""
+        if not v:
+            raise ValueError("Email requerido")
+        
+        # Convertir a minúsculas y eliminar espacios
+        return v.strip().lower()
+    
     @field_validator("estado", mode="before")
     @classmethod
     def normalize_estado(cls, v):
-        """Normalizar estado a mayúsculas"""
-        if v:
-            return v.upper()
-        return v
+        """Normalizar estado a mayúsculas, default ACTIVO si es None"""
+        if not v:
+            return "ACTIVO"  # Default ACTIVO si no se proporciona
+        return v.upper()
 
 
 class ClienteCreate(BaseModel):
@@ -205,7 +234,7 @@ class ClienteCreate(BaseModel):
         max_length=MAX_NAME_LENGTH,
         description="Ocupación",
     )
-    estado: str = Field(..., pattern="^(ACTIVO|INACTIVO|FINALIZADO)$", description="Estado del cliente")
+    estado: Optional[str] = Field(default="ACTIVO", pattern="^(ACTIVO|INACTIVO|FINALIZADO)$", description="Estado del cliente (default: ACTIVO)")
     activo: Optional[bool] = Field(True, description="Cliente activo")
     notas: Optional[str] = Field("No hay observacion", description="Notas adicionales (default 'No hay observacion')")
 
@@ -220,7 +249,7 @@ class ClienteCreateWithConfirmation(BaseModel):
 
 class ClienteUpdate(BaseModel):
 
-    cedula: Optional[str] = Field(None, min_length=8, max_length=20)
+    cedula: Optional[str] = Field(None, min_length=MIN_CEDULA_LENGTH, max_length=MAX_CEDULA_LENGTH)
     nombres: Optional[str] = Field(None, min_length=2, max_length=100)  # 2-7 palabras validado
     telefono: Optional[str] = Field(None, min_length=MIN_PHONE_LENGTH, max_length=MAX_PHONE_LENGTH)
     email: Optional[EmailStr] = None
@@ -280,6 +309,22 @@ class ClienteUpdate(BaseModel):
             return ClienteBase.validate_ocupacion(v)
         return v
 
+    @field_validator("cedula", mode="before")
+    @classmethod
+    def normalize_cedula_on_update(cls, v: Optional[str]) -> Optional[str]:
+        """Normalizar cédula en actualización: eliminar guiones y espacios"""
+        if v:
+            return ClienteBase.normalize_cedula(v)
+        return v
+    
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email_on_update(cls, v: Optional[str]) -> Optional[str]:
+        """Normalizar email en actualización: convertir a minúsculas"""
+        if v:
+            return ClienteBase.normalize_email(v)
+        return v
+    
     @field_validator("telefono", mode="before")
     @classmethod
     def validate_telefono_on_update(cls, v: Optional[str]) -> Optional[str]:

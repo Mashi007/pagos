@@ -173,6 +173,41 @@ class ClienteService {
       return null
     }
   }
+
+  // Obtener clientes con valores por defecto
+  async getClientesValoresPorDefecto(
+    page: number = 1,
+    perPage: number = 20
+  ): Promise<PaginatedResponse<Cliente>> {
+    const url = buildUrl(`${this.baseUrl}/valores-por-defecto`, { page, per_page: perPage })
+    const response = await apiClient.get<any>(url)
+    return {
+      data: response.items || [],
+      total: response.total || 0,
+      page: response.page || page,
+      per_page: response.per_page || perPage,
+      total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
+    }
+  }
+
+  // Exportar clientes con valores por defecto
+  async exportarValoresPorDefecto(formato: 'csv' | 'excel' = 'csv'): Promise<Blob> {
+    const response = await apiClient.get<Blob>(
+      `${this.baseUrl}/valores-por-defecto/exportar?formato=${formato}`,
+      { responseType: 'blob' }
+    )
+    return response
+  }
+
+  // Actualizar múltiples clientes en lote
+  async actualizarClientesLote(actualizaciones: Array<{ id: number; [key: string]: any }>): Promise<{
+    actualizados: number
+    errores: Array<{ id: number | null; error: string }>
+    total_procesados: number
+  }> {
+    const response = await apiClient.post<any>(`${this.baseUrl}/actualizar-lote`, actualizaciones)
+    return response
+  }
 }
 
 // Instancia singleton del servicio

@@ -221,6 +221,18 @@ export function ClientesList() {
 
         <div className="flex gap-2">
           <Button
+            variant="outline"
+            size="lg"
+            onClick={() => {
+              // TODO: Abrir modal de valores por defecto
+              window.location.href = '/clientes/valores-por-defecto'
+            }}
+            className="px-6 py-6 text-base font-semibold"
+          >
+            <AlertCircle className="w-5 h-5 mr-2" />
+            Valores por Defecto
+          </Button>
+          <Button
             size="lg"
             onClick={() => setShowCrearCliente(true)}
             className="px-8 py-6 text-base font-semibold min-w-[200px]"
