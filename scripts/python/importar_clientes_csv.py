@@ -28,27 +28,113 @@ logger = logging.getLogger(__name__)
 
 
 def normalizar_cedula(cedula: str) -> str:
-    """Normaliza cédula: elimina guiones y espacios"""
+    """Normaliza cédula: Formato V/J/E + 7-10 números, sin guiones ni símbolos"""
     if not cedula:
-        return ''
-    return cedula.strip().replace('-', '').replace(' ', '')
+        return 'Z999999999'
+    
+    # Eliminar guiones, espacios y símbolos
+    cedula_limpia = cedula.strip().replace('-', '').replace(' ', '').replace('.', '').replace('_', '')
+    
+    # Validar formato: debe comenzar con V, J o E, seguido de 7-10 números
+    import re
+    if re.match(r'^[VJE][0-9]{7,10}$', cedula_limpia):
+        return cedula_limpia
+    
+    # Si no cumple formato, usar default
+    return 'Z999999999'
 
 
 def normalizar_email(email: str) -> str:
-    """Normaliza email: convierte a minúsculas"""
+    """Normaliza email: convierte a minúsculas, valida formato internacional"""
     if not email:
-        return 'buscaremail@noemail.com'
-    return email.strip().lower()
+        return 'no-email@rapicredit.com'
+    
+    email_limpio = email.strip().lower()
+    
+    # Validar formato internacional: usuario@dominio.extension
+    import re
+    if re.match(r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$', email_limpio):
+        return email_limpio
+    
+    # Si no cumple formato, usar default
+    return 'no-email@rapicredit.com'
 
 
 def normalizar_estado(estado: Optional[str]) -> str:
     """Normaliza estado: default ACTIVO si es inválido"""
-    if not estado:
+    if not estado or not estado.strip():
         return 'ACTIVO'
     estado_limpio = estado.strip().upper()
     if estado_limpio in ['ACTIVO', 'INACTIVO', 'FINALIZADO']:
         return estado_limpio
     return 'ACTIVO'
+
+
+def normalizar_nombres(nombres: str) -> str:
+    """Normaliza nombres: convierte a mayúsculas"""
+    if not nombres or not nombres.strip():
+        return 'Nombre Apellido'
+    return nombres.strip().upper()
+
+
+def normalizar_telefono(telefono: str) -> str:
+    """Normaliza teléfono: Formato +53 + quitar 0 inicial + exactamente 10 números"""
+    if not telefono:
+        return '+539999999999'
+    
+    # Limpiar espacios, guiones y paréntesis
+    telefono_limpio = telefono.strip().replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+    
+    import re
+    
+    # Si ya está en formato +53XXXXXXXXXX (12 caracteres: +53 + 10 números)
+    if re.match(r'^\+53[0-9]{10}$', telefono_limpio):
+        return telefono_limpio
+    
+    # Si está en formato +530XXXXXXXXX (13 caracteres: +53 + 0 + 9 números), quitar el 0
+    if re.match(r'^\+530[0-9]{9}$', telefono_limpio):
+        return '+53' + telefono_limpio[3:]
+    
+    # Si está en formato 0XXXXXXXXXX (11 caracteres: 0 + 10 números), agregar +53 y quitar 0
+    if re.match(r'^0[0-9]{10}$', telefono_limpio):
+        return '+53' + telefono_limpio[1:]
+    
+    # Si está en formato XXXXXXXXXX (10 números), agregar +53
+    if re.match(r'^[0-9]{10}$', telefono_limpio):
+        return '+53' + telefono_limpio
+    
+    # Si no cumple formato, usar default
+    return '+539999999999'
+
+
+def convertir_fecha(fecha_str: Optional[str], formato_entrada: str = 'DD/MM/YYYY') -> Optional[str]:
+    """Convierte fecha de DD/MM/YYYY a YYYY-MM-DD"""
+    if not fecha_str or not fecha_str.strip():
+        return None
+    
+    fecha_str = fecha_str.strip()
+    
+    # Si ya está en formato YYYY-MM-DD, retornar
+    import re
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', fecha_str):
+        return fecha_str
+    
+    # Intentar convertir desde DD/MM/YYYY
+    try:
+        from datetime import datetime
+        if '/' in fecha_str:
+            # Formato DD/MM/YYYY
+            fecha = datetime.strptime(fecha_str, '%d/%m/%Y')
+            return fecha.strftime('%Y-%m-%d')
+        elif '-' in fecha_str and len(fecha_str.split('-')[0]) == 2:
+            # Formato DD-MM-YYYY
+            fecha = datetime.strptime(fecha_str, '%d-%m-%Y')
+            return fecha.strftime('%Y-%m-%d')
+    except ValueError:
+        pass
+    
+    # Si no se puede convertir, retornar None (se usará default)
+    return None
 
 
 def leer_csv(archivo_csv: str) -> List[Dict]:
