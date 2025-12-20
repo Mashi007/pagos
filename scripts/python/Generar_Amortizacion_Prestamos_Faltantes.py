@@ -59,7 +59,9 @@ def identificar_prestamos_sin_amortizacion(db):
             p.numero_cuotas,
             p.total_financiamiento,
             p.cuota_periodo,
-            p.fecha_base_calculo
+            p.fecha_base_calculo,
+            p.modalidad_pago,
+            COALESCE(p.tasa_interes, 0.00) as tasa_interes
         FROM prestamos p
         WHERE p.estado = 'APROBADO'
           AND p.fecha_base_calculo IS NOT NULL
@@ -80,9 +82,11 @@ def identificar_prestamos_sin_amortizacion(db):
             'id': row[0],
             'cedula': row[1],
             'numero_cuotas': row[2],
-            'total_financiamiento': row[3],
-            'cuota_periodo': row[4],
-            'fecha_base_calculo': row[5]
+            'total_financiamiento': Decimal(str(row[3])),
+            'cuota_periodo': Decimal(str(row[4])),
+            'fecha_base_calculo': row[5],
+            'modalidad_pago': row[6],
+            'tasa_interes': Decimal(str(row[7]))
         }
         for row in result
     ]
@@ -108,6 +112,13 @@ def generar_amortizacion_prestamo(prestamo_info: dict, db) -> tuple[bool, int, s
         (exito: bool, num_cuotas: int, mensaje: str)
     """
     try:
+        # Validar que el diccionario tenga todas las claves necesarias
+        claves_requeridas = ['id', 'fecha_base_calculo', 'numero_cuotas', 'total_financiamiento', 
+                            'cuota_periodo', 'modalidad_pago', 'tasa_interes']
+        claves_faltantes = [k for k in claves_requeridas if k not in prestamo_info]
+        if claves_faltantes:
+            return False, 0, f"Faltan claves en datos: {', '.join(claves_faltantes)}. Claves disponibles: {list(prestamo_info.keys())}"
+        
         prestamo_id = prestamo_info['id']
         
         # Verificar si ya tiene cuotas
