@@ -17,9 +17,10 @@ Características:
 import os
 import sys
 import argparse
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 import time
+from dateutil.relativedelta import relativedelta
 
 # Manejar encoding para Windows
 if sys.platform == "win32":
@@ -36,9 +37,6 @@ from sqlalchemy.orm import Session
 
 # Importar desde app
 from app.db.session import SessionLocal
-from app.models.prestamo import Prestamo
-from app.models.amortizacion import Cuota
-from app.services.prestamo_amortizacion_service import generar_tabla_amortizacion
 
 logger = None
 try:
@@ -91,55 +89,140 @@ def identificar_prestamos_sin_amortizacion(db):
     return prestamos_info
 
 
-def generar_amortizacion_prestamo(prestamo_id: int, db) -> tuple[bool, int, str]:
+def _calcular_intervalo_dias(modalidad_pago: str) -> int:
+    """Calcula días entre cuotas según modalidad"""
+    intervalos = {
+        "MENSUAL": 30,
+        "QUINCENAL": 15,
+        "SEMANAL": 7,
+    }
+    return intervalos.get(modalidad_pago, 30)
+
+
+def generar_amortizacion_prestamo(prestamo_info: dict, db) -> tuple[bool, int, str]:
     """
-    Genera tabla de amortización para un préstamo específico
+    Genera tabla de amortización para un préstamo específico usando SQL directo
+    para evitar problemas con el modelo ORM desincronizado
 
     Returns:
         (exito: bool, num_cuotas: int, mensaje: str)
     """
     try:
-        # Obtener préstamo
-        prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
-
-        if not prestamo:
-            return False, 0, f"Préstamo {prestamo_id} no encontrado"
-
-        if prestamo.estado != 'APROBADO':
-            return False, 0, f"Préstamo {prestamo_id} no está aprobado (estado: {prestamo.estado})"
-
-        if not prestamo.fecha_base_calculo:
-            return False, 0, f"Préstamo {prestamo_id} no tiene fecha_base_calculo"
-
-        if prestamo.numero_cuotas <= 0:
-            return False, 0, f"Préstamo {prestamo_id} tiene número de cuotas inválido: {prestamo.numero_cuotas}"
-
-        if prestamo.total_financiamiento <= 0:
-            return False, 0, f"Préstamo {prestamo_id} tiene monto inválido: {prestamo.total_financiamiento}"
-
-        if prestamo.modalidad_pago not in ['MENSUAL', 'QUINCENAL', 'SEMANAL']:
-            return False, 0, f"Préstamo {prestamo_id} tiene modalidad inválida: {prestamo.modalidad_pago}"
-
+        prestamo_id = prestamo_info['id']
+        
         # Verificar si ya tiene cuotas
-        cuotas_existentes = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).count()
-
+        query_verificar = text("SELECT COUNT(*) FROM cuotas WHERE prestamo_id = :prestamo_id")
+        result = db.execute(query_verificar, {"prestamo_id": prestamo_id})
+        cuotas_existentes = result.scalar()
+        
         if cuotas_existentes > 0:
             return False, 0, f"Préstamo {prestamo_id} ya tiene {cuotas_existentes} cuotas generadas"
 
-        # Convertir fecha_base_calculo a date si es necesario
-        fecha_base = prestamo.fecha_base_calculo
+        # Eliminar cuotas existentes si las hay (por seguridad)
+        db.execute(text("DELETE FROM cuotas WHERE prestamo_id = :prestamo_id"), 
+                   {"prestamo_id": prestamo_id})
+
+        # Preparar datos
+        fecha_base = prestamo_info['fecha_base_calculo']
         if isinstance(fecha_base, str):
             fecha_base = datetime.fromisoformat(fecha_base).date()
         elif isinstance(fecha_base, datetime):
             fecha_base = fecha_base.date()
 
-        # Generar tabla de amortización
-        cuotas_generadas = generar_tabla_amortizacion(prestamo, fecha_base, db)
-        num_cuotas = len(cuotas_generadas)
+        numero_cuotas = prestamo_info['numero_cuotas']
+        total_financiamiento = prestamo_info['total_financiamiento']
+        cuota_periodo = prestamo_info['cuota_periodo']
+        modalidad_pago = prestamo_info['modalidad_pago']
+        tasa_interes = prestamo_info['tasa_interes']
+
+        # Validaciones
+        if total_financiamiento <= Decimal("0.00"):
+            return False, 0, f"Monto inválido: {total_financiamiento}"
+        if numero_cuotas <= 0:
+            return False, 0, f"Número de cuotas inválido: {numero_cuotas}"
+
+        # Calcular intervalo entre cuotas
+        intervalo_dias = _calcular_intervalo_dias(modalidad_pago)
+
+        # Tasa de interés mensual
+        if tasa_interes == Decimal("0.00"):
+            tasa_mensual = Decimal("0.00")
+        else:
+            tasa_mensual = tasa_interes / Decimal(100) / Decimal(12)
+
+        # Generar cuotas
+        saldo_capital = total_financiamiento
+        cuotas_insertadas = []
+
+        for numero_cuota in range(1, numero_cuotas + 1):
+            # Calcular fecha de vencimiento
+            if modalidad_pago == "MENSUAL":
+                fecha_vencimiento = fecha_base + relativedelta(months=numero_cuota)
+            else:
+                fecha_vencimiento = fecha_base + timedelta(days=intervalo_dias * numero_cuota)
+
+            # Método Francés (cuota fija)
+            monto_cuota = cuota_periodo
+
+            # Calcular interés y capital
+            if tasa_mensual == Decimal("0.00"):
+                monto_interes = Decimal("0.00")
+                monto_capital = monto_cuota
+            else:
+                monto_interes = saldo_capital * tasa_mensual
+                monto_capital = monto_cuota - monto_interes
+
+            # Actualizar saldo
+            saldo_capital_inicial = saldo_capital
+            saldo_capital = saldo_capital - monto_capital
+            saldo_capital_final = saldo_capital
+
+            # Insertar cuota usando SQL directo
+            insert_query = text("""
+                INSERT INTO cuotas (
+                    prestamo_id, numero_cuota, fecha_vencimiento,
+                    monto_cuota, monto_capital, monto_interes,
+                    saldo_capital_inicial, saldo_capital_final,
+                    capital_pagado, interes_pagado, mora_pagada,
+                    total_pagado, capital_pendiente, interes_pendiente,
+                    estado
+                ) VALUES (
+                    :prestamo_id, :numero_cuota, :fecha_vencimiento,
+                    :monto_cuota, :monto_capital, :monto_interes,
+                    :saldo_capital_inicial, :saldo_capital_final,
+                    :capital_pagado, :interes_pagado, :mora_pagada,
+                    :total_pagado, :capital_pendiente, :interes_pendiente,
+                    :estado
+                )
+            """)
+            
+            db.execute(insert_query, {
+                "prestamo_id": prestamo_id,
+                "numero_cuota": numero_cuota,
+                "fecha_vencimiento": fecha_vencimiento,
+                "monto_cuota": float(monto_cuota),
+                "monto_capital": float(monto_capital),
+                "monto_interes": float(monto_interes),
+                "saldo_capital_inicial": float(saldo_capital_inicial),
+                "saldo_capital_final": float(saldo_capital_final),
+                "capital_pagado": 0.00,
+                "interes_pagado": 0.00,
+                "mora_pagada": 0.00,
+                "total_pagado": 0.00,
+                "capital_pendiente": float(monto_capital),
+                "interes_pendiente": float(monto_interes),
+                "estado": "PENDIENTE"
+            })
+            cuotas_insertadas.append(numero_cuota)
+
+        # Commit de todas las cuotas
+        db.commit()
+        num_cuotas = len(cuotas_insertadas)
 
         return True, num_cuotas, f"✓ {num_cuotas} cuotas generadas"
 
     except Exception as e:
+        db.rollback()
         return False, 0, f"Error: {str(e)}"
 
 
@@ -237,7 +320,7 @@ def main():
                 print(f"[PROGRESO] {idx}/{len(prestamos_info)} ({porcentaje:.1f}%) - "
                       f"Procesando préstamo ID {prestamo_id}...")
 
-            exito, num_cuotas, mensaje = generar_amortizacion_prestamo(prestamo_id, db)
+            exito, num_cuotas, mensaje = generar_amortizacion_prestamo(info, db)
 
             if exito:
                 exitosos += 1
