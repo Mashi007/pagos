@@ -16,6 +16,7 @@ Características:
 
 import os
 import sys
+import argparse
 from datetime import date, datetime
 from decimal import Decimal
 import time
@@ -144,6 +145,17 @@ def generar_amortizacion_prestamo(prestamo_id: int, db) -> tuple[bool, int, str]
 
 def main():
     """Función principal"""
+    # Parsear argumentos de línea de comandos
+    parser = argparse.ArgumentParser(
+        description='Generar tablas de amortización para préstamos aprobados sin cuotas'
+    )
+    parser.add_argument(
+        '-y', '--yes',
+        action='store_true',
+        help='Ejecutar sin pedir confirmación'
+    )
+    args = parser.parse_args()
+    
     print("=" * 80)
     print("GENERAR AMORTIZACIÓN PARA PRÉSTAMOS FALTANTES")
     print("=" * 80)
@@ -188,12 +200,21 @@ def main():
         if len(prestamos_info) > 5:
             print(f"     ... y {len(prestamos_info) - 5} préstamos más")
 
-        # Confirmar antes de generar
+        # Confirmar antes de generar (a menos que se use --yes)
         print(f"\n[INFO] Total de préstamos a procesar: {len(prestamos_info)}")
-        respuesta = input(f"\n¿Generar amortización para estos {len(prestamos_info)} préstamos? (s/n): ")
-        if respuesta.lower() != 's':
-            print("\n[CANCELADO] Operación cancelada")
-            return
+        
+        if not args.yes:
+            try:
+                respuesta = input(f"\n¿Generar amortización para estos {len(prestamos_info)} préstamos? (s/n): ")
+                if respuesta.lower() != 's':
+                    print("\n[CANCELADO] Operación cancelada")
+                    return
+            except (EOFError, KeyboardInterrupt):
+                print("\n[ERROR] No se puede leer entrada interactiva. Usa --yes para ejecutar automáticamente.")
+                print("         Ejemplo: python scripts/python/Generar_Amortizacion_Prestamos_Faltantes.py --yes")
+                return
+        else:
+            print(f"\n[INFO] Modo automático activado (--yes). Iniciando generación...")
 
         # Generar amortización para cada préstamo
         print("\n" + "=" * 80)
