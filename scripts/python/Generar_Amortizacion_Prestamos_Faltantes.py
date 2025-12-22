@@ -135,8 +135,22 @@ def generar_amortizacion_prestamo(prestamo_info: dict, db) -> tuple[bool, int, s
 
         # Preparar datos
         fecha_base = prestamo_info['fecha_base_calculo']
-        if isinstance(fecha_base, str):
-            fecha_base = datetime.fromisoformat(fecha_base).date()
+        # Manejar timestamps en milisegundos (problema común en la BD)
+        if isinstance(fecha_base, (int, float)) and fecha_base > 1000000000000:
+            # Es un timestamp en milisegundos
+            fecha_base = datetime.fromtimestamp(fecha_base / 1000).date()
+        elif isinstance(fecha_base, str):
+            # Intentar parsear como ISO o timestamp
+            try:
+                fecha_base = datetime.fromisoformat(fecha_base).date()
+            except ValueError:
+                # Intentar como timestamp en milisegundos
+                try:
+                    timestamp_ms = int(fecha_base)
+                    if timestamp_ms > 1000000000000:
+                        fecha_base = datetime.fromtimestamp(timestamp_ms / 1000).date()
+                except (ValueError, TypeError):
+                    raise ValueError(f"No se pudo convertir fecha_base_calculo: {fecha_base}")
         elif isinstance(fecha_base, datetime):
             fecha_base = fecha_base.date()
 
