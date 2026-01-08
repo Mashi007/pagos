@@ -182,12 +182,12 @@ resultado = db.execute(
             c.nombres AS nombre_cliente,
             p.numero_cuotas AS cuotas_planificadas,
             COUNT(cu.id) AS cuotas_generadas,
-            MIN(cu.fecha_registro) AS primera_cuota_registrada,
-            MAX(cu.fecha_registro) AS ultima_cuota_registrada,
-            COUNT(DISTINCT DATE(cu.fecha_registro)) AS dias_distintos_generacion,
+            MIN(cu.fecha_vencimiento) AS primera_cuota_vencimiento,
+            MAX(cu.fecha_vencimiento) AS ultima_cuota_vencimiento,
+            COUNT(DISTINCT DATE(cu.fecha_vencimiento)) AS fechas_vencimiento_distintas,
             CASE 
-                WHEN COUNT(DISTINCT DATE(cu.fecha_registro)) > 1 THEN 'GENERADAS EN MULTIPLES DIAS'
-                ELSE 'GENERADAS EN UN SOLO DIA'
+                WHEN COUNT(DISTINCT DATE(cu.fecha_vencimiento)) > 1 THEN 'MULTIPLES FECHAS VENCIMIENTO'
+                ELSE 'FECHA VENCIMIENTO UNICA'
             END AS patron_generacion
         FROM prestamos p
         LEFT JOIN clientes c ON p.cedula = c.cedula

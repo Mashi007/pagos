@@ -190,21 +190,26 @@ resultado = db.execute(
             p.cedula,
             c.nombres AS nombre_cliente,
             p.numero_cuotas AS cuotas_planificadas,
-            COUNT(cu.id) AS cuotas_generadas,
+            COALESCE(cuotas_count.cuotas_generadas, 0) AS cuotas_generadas,
             CASE 
-                WHEN COUNT(cu.id) = p.numero_cuotas THEN 'OK'
-                WHEN COUNT(cu.id) < p.numero_cuotas THEN 'FALTAN CUOTAS'
-                WHEN COUNT(cu.id) > p.numero_cuotas THEN 'CUOTAS DE MAS'
+                WHEN COALESCE(cuotas_count.cuotas_generadas, 0) = p.numero_cuotas THEN 'OK'
+                WHEN COALESCE(cuotas_count.cuotas_generadas, 0) < p.numero_cuotas THEN 'FALTAN CUOTAS'
+                WHEN COALESCE(cuotas_count.cuotas_generadas, 0) > p.numero_cuotas THEN 'CUOTAS DE MAS'
                 ELSE 'SIN CUOTAS'
             END AS estado_cuotas
         FROM prestamos p
         LEFT JOIN clientes c ON p.cedula = c.cedula
-        LEFT JOIN cuotas cu ON p.id = cu.prestamo_id
+        LEFT JOIN (
+            SELECT 
+                prestamo_id,
+                COUNT(*) AS cuotas_generadas
+            FROM cuotas
+            GROUP BY prestamo_id
+        ) cuotas_count ON p.id = cuotas_count.prestamo_id
         WHERE p.estado = 'APROBADO'
-        GROUP BY p.id, p.cedula, c.nombres, p.numero_cuotas
-        HAVING COUNT(cu.id) != p.numero_cuotas 
-            OR COUNT(cu.id) = 0
-        ORDER BY ABS(COUNT(cu.id) - p.numero_cuotas) DESC, p.id
+        GROUP BY p.id, p.cedula, c.nombres, p.numero_cuotas, cuotas_count.cuotas_generadas
+        HAVING COALESCE(cuotas_count.cuotas_generadas, 0) != p.numero_cuotas
+        ORDER BY ABS(COALESCE(cuotas_count.cuotas_generadas, 0) - p.numero_cuotas) DESC, p.id
         LIMIT 20
     """)
 )
