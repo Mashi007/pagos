@@ -145,24 +145,39 @@ print("=" * 70)
 
 for tabla in tablas:
     try:
-        resultado = db.execute(
-            text(f"""
-                SELECT 
-                    COUNT(*) AS total_registros,
-                    MIN(fecha_registro) AS registro_mas_antiguo,
-                    MAX(fecha_registro) AS registro_mas_reciente
-                FROM {tabla}
-            """)
-        )
-        stats = resultado.fetchone()
-        if stats:
-            total, min_fecha, max_fecha = stats
+        # Para cuotas, usar fecha_vencimiento en lugar de fecha_registro
+        if tabla == 'cuotas':
+            fecha_col = 'fecha_vencimiento'
+            fecha_label = 'Fecha vencimiento'
+        else:
+            fecha_col = 'fecha_registro'
+            fecha_label = 'Registro'
+        
+        try:
+            resultado = db.execute(
+                text(f"""
+                    SELECT 
+                        COUNT(*) AS total_registros,
+                        MIN({fecha_col}) AS fecha_mas_antigua,
+                        MAX({fecha_col}) AS fecha_mas_reciente
+                    FROM {tabla}
+                """)
+            )
+            stats = resultado.fetchone()
+            if stats:
+                total, min_fecha, max_fecha = stats
+                print(f"\n{tabla}:")
+                print(f"  Total registros: {total}")
+                if min_fecha:
+                    print(f"  {fecha_label} mas antigua: {min_fecha}")
+                if max_fecha:
+                    print(f"  {fecha_label} mas reciente: {max_fecha}")
+        except Exception as e:
+            # Si la columna no existe, solo mostrar el conteo
+            resultado = db.execute(text(f"SELECT COUNT(*) FROM {tabla}"))
+            total = resultado.scalar()
             print(f"\n{tabla}:")
             print(f"  Total registros: {total}")
-            if min_fecha:
-                print(f"  Registro mas antiguo: {min_fecha}")
-            if max_fecha:
-                print(f"  Registro mas reciente: {max_fecha}")
     except Exception as e:
         print(f"\n[ADVERTENCIA] No se pudieron obtener estadisticas de {tabla}: {str(e)}")
 
