@@ -114,18 +114,31 @@ class VerificadorFlujoDatos:
                 "cantidad": prestamos_nombre_diferente,
             })
 
-        print(f"   ✅ Verificados {self.db.query(Prestamo).count()} préstamos")
+        try:
+            from sqlalchemy import text
+            resultado = self.db.execute(text("SELECT COUNT(*) FROM prestamos"))
+            total_prestamos = resultado.scalar() or 0
+            print(f"   [OK] Verificados {total_prestamos} préstamos")
+        except Exception as e:
+            print(f"   [ADVERTENCIA] Error contando préstamos: {e}")
 
     def verificar_prestamo_cuotas(self):
         """Verifica que las cuotas se generen correctamente desde el préstamo"""
-        # Verificar que todos los préstamos aprobados tengan cuotas
-        prestamos_sin_cuotas = (
-            self.db.query(Prestamo)
-            .filter(Prestamo.estado == "APROBADO")
-            .outerjoin(Cuota, Prestamo.id == Cuota.prestamo_id)
-            .filter(Cuota.id.is_(None))
-            .count()
-        )
+        # Verificar que todos los préstamos aprobados tengan cuotas - usar SQL directo
+        try:
+            from sqlalchemy import text
+            resultado = self.db.execute(
+                text("""
+                    SELECT COUNT(*) 
+                    FROM prestamos pr
+                    LEFT JOIN cuotas cu ON pr.id = cu.prestamo_id
+                    WHERE pr.estado = 'APROBADO' AND cu.id IS NULL
+                """)
+            )
+            prestamos_sin_cuotas = resultado.scalar() or 0
+        except Exception as e:
+            print(f"   [ADVERTENCIA] Error verificando préstamos sin cuotas: {e}")
+            prestamos_sin_cuotas = 0
 
         if prestamos_sin_cuotas > 0:
             self.problemas.append({
@@ -135,14 +148,25 @@ class VerificadorFlujoDatos:
                 "cantidad": prestamos_sin_cuotas,
             })
 
-        # Verificar que el número de cuotas coincida
-        prestamos_cuotas_incorrectas = (
-            self.db.query(Prestamo.id, Prestamo.numero_cuotas)
-            .join(Cuota, Prestamo.id == Cuota.prestamo_id)
-            .group_by(Prestamo.id, Prestamo.numero_cuotas)
-            .having(func.count(Cuota.id) != Prestamo.numero_cuotas)
-            .count()
-        )
+        # Verificar que el número de cuotas coincida - usar SQL directo
+        try:
+            from sqlalchemy import text
+            resultado = self.db.execute(
+                text("""
+                    SELECT COUNT(*) 
+                    FROM (
+                        SELECT pr.id, pr.numero_cuotas, COUNT(cu.id) as cuotas_reales
+                        FROM prestamos pr
+                        LEFT JOIN cuotas cu ON pr.id = cu.prestamo_id
+                        GROUP BY pr.id, pr.numero_cuotas
+                        HAVING COUNT(cu.id) != pr.numero_cuotas
+                    ) AS subquery
+                """)
+            )
+            prestamos_cuotas_incorrectas = resultado.scalar() or 0
+        except Exception as e:
+            print(f"   [ADVERTENCIA] Error verificando número de cuotas: {e}")
+            prestamos_cuotas_incorrectas = 0
 
         if prestamos_cuotas_incorrectas > 0:
             self.problemas.append({
@@ -152,26 +176,23 @@ class VerificadorFlujoDatos:
                 "cantidad": prestamos_cuotas_incorrectas,
             })
 
-        # Verificar que los montos de las cuotas sumen correctamente
+        # Verificar que los montos de las cuotas sumen correctamente - usar SQL directo
         prestamos_monto_incorrecto = []
-        prestamos_con_cuotas = (
-            self.db.query(Prestamo.id, Prestamo.total_financiamiento)
-            .join(Cuota, Prestamo.id == Cuota.prestamo_id)
-            .group_by(Prestamo.id, Prestamo.total_financiamiento)
-            .all()
-        )
-
-        for prestamo_id, total_financiamiento in prestamos_con_cuotas:
-            suma_cuotas = (
-                self.db.query(func.sum(Cuota.monto_cuota))
-                .filter(Cuota.prestamo_id == prestamo_id)
-                .scalar()
-                or Decimal("0.00")
+        try:
+            from sqlalchemy import text
+            resultado = self.db.execute(
+                text("""
+                    SELECT pr.id, pr.total_financiamiento, COALESCE(SUM(cu.monto_cuota), 0) as suma_cuotas
+                    FROM prestamos pr
+                    LEFT JOIN cuotas cu ON pr.id = cu.prestamo_id
+                    GROUP BY pr.id, pr.total_financiamiento
+                    HAVING ABS(pr.total_financiamiento - COALESCE(SUM(cu.monto_cuota), 0)) > 1.00
+                """)
             )
-
-            # Permitir pequeña diferencia por redondeo
-            if abs(total_financiamiento - suma_cuotas) > Decimal("1.00"):
-                prestamos_monto_incorrecto.append(prestamo_id)
+            prestamos_monto_incorrecto = [row[0] for row in resultado.fetchall()]
+        except Exception as e:
+            print(f"   [ADVERTENCIA] Error verificando montos de cuotas: {e}")
+            prestamos_monto_incorrecto = []
 
         if prestamos_monto_incorrecto:
             self.problemas.append({

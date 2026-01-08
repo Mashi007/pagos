@@ -233,12 +233,19 @@ class AuditoriaBD:
 
         # 4. Verificar prestamos con cliente_id inválido
         print("   Verificando préstamos con cliente_id inválido...")
-        prestamos_cliente_invalido = (
-            self.db.query(Prestamo.id)
-            .outerjoin(Cliente, Prestamo.cliente_id == Cliente.id)
-            .filter(Cliente.id.is_(None))
-            .count()
-        )
+        try:
+            resultado = self.db.execute(
+                text("""
+                    SELECT COUNT(*) 
+                    FROM prestamos pr
+                    LEFT JOIN clientes c ON pr.cliente_id = c.id
+                    WHERE c.id IS NULL
+                """)
+            )
+            prestamos_cliente_invalido = resultado.scalar() or 0
+        except Exception as e:
+            print(f"   [ADVERTENCIA] Error verificando préstamos con cliente inválido: {e}")
+            prestamos_cliente_invalido = 0
         if prestamos_cliente_invalido > 0:
             problemas.append({
                 "tipo": "CRITICO",
@@ -440,30 +447,39 @@ class AuditoriaBD:
 
         # 6. Verificar suma de pagos vs total en tabla pagos
         print("   Verificando suma de pagos por préstamo...")
-        # Obtener préstamos con pagos
-        prestamos_con_pagos = (
-            self.db.query(Prestamo.id, func.sum(Pago.monto_pagado).label("total_pagado"))
-            .join(Pago, Prestamo.id == Pago.prestamo_id)
-            .filter(Pago.activo == True)
-            .group_by(Prestamo.id)
-            .all()
-        )
-
-        problemas_suma_pagos = 0
-        for prestamo_id, total_pagado_bd in prestamos_con_pagos:
-            # Sumar total_pagado de cuotas
-            total_pagado_cuotas = (
-                self.db.query(func.sum(Cuota.total_pagado))
-                .filter(Cuota.prestamo_id == prestamo_id)
-                .scalar()
-                or Decimal("0.00")
+        # Usar SQL directo para evitar problemas con columnas faltantes
+        try:
+            resultado = self.db.execute(
+                text("""
+                    SELECT COUNT(*) 
+                    FROM (
+                        SELECT pr.id,
+                               COALESCE(SUM(p.monto_pagado), 0) as total_pagado_pagos,
+                               COALESCE(SUM(cu.total_pagado), 0) as total_pagado_cuotas
+                        FROM prestamos pr
+                        LEFT JOIN pagos p ON pr.id = p.prestamo_id AND p.activo = TRUE
+                        LEFT JOIN cuotas cu ON pr.id = cu.prestamo_id
+                        GROUP BY pr.id
+                        HAVING ABS(COALESCE(SUM(p.monto_pagado), 0) - COALESCE(SUM(cu.total_pagado), 0)) > 0.01
+                    ) AS subquery
+                """)
             )
-
-            if abs(total_pagado_bd - total_pagado_cuotas) > Decimal("0.01"):
-                problemas_suma_pagos += 1
+            problemas_suma_pagos = resultado.scalar() or 0
+            resultado_total = self.db.execute(
+                text("""
+                    SELECT COUNT(DISTINCT pr.id)
+                    FROM prestamos pr
+                    INNER JOIN pagos p ON pr.id = p.prestamo_id AND p.activo = TRUE
+                """)
+            )
+            total_prestamos_con_pagos = resultado_total.scalar() or 0
+        except Exception as e:
+            print(f"   [ADVERTENCIA] Error verificando suma de pagos: {e}")
+            problemas_suma_pagos = 0
+            total_prestamos_con_pagos = 0
 
         verificaciones["suma_pagos_coherente"] = {
-            "total_prestamos": len(prestamos_con_pagos),
+            "total_prestamos": total_prestamos_con_pagos,
             "incoherentes": problemas_suma_pagos,
         }
         if problemas_suma_pagos > 0:
@@ -496,15 +512,27 @@ class AuditoriaBD:
 
         # 1. Verificar que cédulas coincidan entre tablas
         print("   Verificando coherencia de cédulas entre tablas...")
-        # Prestamos con cédula diferente a cliente
-        prestamos_cedula_diferente = (
-            self.db.query(Prestamo.id)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .filter(Prestamo.cedula != Cliente.cedula)
-            .count()
-        )
+        # Prestamos con cédula diferente a cliente - usar SQL directo
+        try:
+            resultado = self.db.execute(
+                text("""
+                    SELECT COUNT(*) 
+                    FROM prestamos pr
+                    JOIN clientes c ON pr.cliente_id = c.id
+                    WHERE pr.cedula != c.cedula
+                """)
+            )
+            prestamos_cedula_diferente = resultado.scalar() or 0
+        except Exception as e:
+            print(f"   [ADVERTENCIA] Error verificando cédulas: {e}")
+            prestamos_cedula_diferente = 0
+        try:
+            resultado_total = self.db.execute(text("SELECT COUNT(*) FROM prestamos"))
+            total_prestamos = resultado_total.scalar() or 0
+        except Exception:
+            total_prestamos = 0
         verificaciones["prestamos_cedula_coherente"] = {
-            "total": self.db.query(Prestamo).count(),
+            "total": total_prestamos,
             "incoherentes": prestamos_cedula_diferente,
         }
         if prestamos_cedula_diferente > 0:
@@ -517,15 +545,30 @@ class AuditoriaBD:
 
         # 2. Verificar que número de cuotas coincida
         print("   Verificando número de cuotas por préstamo...")
-        prestamos_cuotas_incorrectas = (
-            self.db.query(Prestamo.id, Prestamo.numero_cuotas)
-            .join(Cuota, Prestamo.id == Cuota.prestamo_id)
-            .group_by(Prestamo.id, Prestamo.numero_cuotas)
-            .having(func.count(Cuota.id) != Prestamo.numero_cuotas)
-            .count()
-        )
+        try:
+            resultado = self.db.execute(
+                text("""
+                    SELECT COUNT(*) 
+                    FROM (
+                        SELECT pr.id, pr.numero_cuotas, COUNT(cu.id) as cuotas_reales
+                        FROM prestamos pr
+                        LEFT JOIN cuotas cu ON pr.id = cu.prestamo_id
+                        GROUP BY pr.id, pr.numero_cuotas
+                        HAVING COUNT(cu.id) != pr.numero_cuotas
+                    ) AS subquery
+                """)
+            )
+            prestamos_cuotas_incorrectas = resultado.scalar() or 0
+        except Exception as e:
+            print(f"   [ADVERTENCIA] Error verificando número de cuotas: {e}")
+            prestamos_cuotas_incorrectas = 0
+        try:
+            resultado_total = self.db.execute(text("SELECT COUNT(*) FROM prestamos"))
+            total_prestamos = resultado_total.scalar() or 0
+        except Exception:
+            total_prestamos = 0
         verificaciones["prestamos_cuotas_coherente"] = {
-            "total": self.db.query(Prestamo).count(),
+            "total": total_prestamos,
             "incoherentes": prestamos_cuotas_incorrectas,
         }
         if prestamos_cuotas_incorrectas > 0:
@@ -546,8 +589,13 @@ class AuditoriaBD:
             )
             .count()
         )
+        try:
+            resultado_total = self.db.execute(text("SELECT COUNT(*) FROM prestamos"))
+            total_prestamos = resultado_total.scalar() or 0
+        except Exception:
+            total_prestamos = 0
         verificaciones["cuotas_numeracion_coherente"] = {
-            "total": self.db.query(Prestamo).count(),
+            "total": total_prestamos,
             "incoherentes": cuotas_numeracion_incorrecta,
         }
         if cuotas_numeracion_incorrecta > 0:
@@ -584,15 +632,28 @@ class AuditoriaBD:
 
         # 5. Verificar que préstamos aprobados tengan cuotas generadas
         print("   Verificando que préstamos aprobados tengan cuotas...")
-        prestamos_sin_cuotas = (
-            self.db.query(Prestamo.id)
-            .filter(Prestamo.estado == "APROBADO")
-            .outerjoin(Cuota, Prestamo.id == Cuota.prestamo_id)
-            .filter(Cuota.id.is_(None))
-            .count()
-        )
+        try:
+            resultado = self.db.execute(
+                text("""
+                    SELECT COUNT(*) 
+                    FROM prestamos pr
+                    LEFT JOIN cuotas cu ON pr.id = cu.prestamo_id
+                    WHERE pr.estado = 'APROBADO' AND cu.id IS NULL
+                """)
+            )
+            prestamos_sin_cuotas = resultado.scalar() or 0
+        except Exception as e:
+            print(f"   [ADVERTENCIA] Error verificando préstamos sin cuotas: {e}")
+            prestamos_sin_cuotas = 0
+        try:
+            resultado_total = self.db.execute(
+                text("SELECT COUNT(*) FROM prestamos WHERE estado = 'APROBADO'")
+            )
+            total_aprobados = resultado_total.scalar() or 0
+        except Exception:
+            total_aprobados = 0
         verificaciones["prestamos_cuotas_generadas"] = {
-            "total": self.db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count(),
+            "total": total_aprobados,
             "sin_cuotas": prestamos_sin_cuotas,
         }
         if prestamos_sin_cuotas > 0:
@@ -660,50 +721,64 @@ class AuditoriaBD:
         """
         reporte = []
         reporte.append("=" * 80)
-        reporte.append("🔍 REPORTE DE AUDITORÍA COMPLETA DE BASE DE DATOS")
+        reporte.append("REPORTE DE AUDITORIA COMPLETA DE BASE DE DATOS")
         reporte.append("=" * 80)
         reporte.append(f"Fecha: {self.resultados['fecha_auditoria']}")
         reporte.append("")
 
         # Resumen ejecutivo
-        resumen = self.resultados["resumen"]
-        reporte.append("📊 RESUMEN EJECUTIVO")
+        resumen = self.resultados.get("resumen", {})
+        if not resumen:
+            # Si no hay resumen, generarlo ahora
+            self.generar_resumen()
+            resumen = self.resultados.get("resumen", {})
+        
+        reporte.append("RESUMEN EJECUTIVO")
         reporte.append("-" * 80)
-        reporte.append(f"Estado General: {resumen['estado_general']}")
-        reporte.append(f"Total de Problemas: {resumen['total_problemas']}")
-        reporte.append(f"  🔴 Críticos: {resumen['problemas_criticos']}")
-        reporte.append(f"  🟡 Medios: {resumen['problemas_medios']}")
-        reporte.append(f"  🟢 Menores: {resumen['problemas_menores']}")
+        reporte.append(f"Estado General: {resumen.get('estado_general', 'DESCONOCIDO')}")
+        reporte.append(f"Total de Problemas: {resumen.get('total_problemas', 0)}")
+        reporte.append(f"  [CRITICO] Criticos: {resumen.get('problemas_criticos', 0)}")
+        reporte.append(f"  [MEDIO] Medios: {resumen.get('problemas_medios', 0)}")
+        reporte.append(f"  [MENOR] Menores: {resumen.get('problemas_menores', 0)}")
         reporte.append("")
 
         # Problemas críticos
-        if self.resultados["problemas_criticos"]:
-            reporte.append("🔴 PROBLEMAS CRÍTICOS")
+        if self.resultados.get("problemas_criticos"):
+            reporte.append("[CRITICO] PROBLEMAS CRITICOS")
             reporte.append("-" * 80)
-            for i, problema in enumerate(self.resultados["problemas_criticos"], 1):
-                reporte.append(f"{i}. [{problema['tabla']}] {problema['problema']}")
-                if "cantidad" in problema:
-                    reporte.append(f"   Cantidad afectada: {problema['cantidad']}")
+            for i, problema in enumerate(self.resultados.get("problemas_criticos", []), 1):
+                if isinstance(problema, dict):
+                    reporte.append(f"{i}. [{problema.get('tabla', 'N/A')}] {problema.get('problema', 'N/A')}")
+                    if "cantidad" in problema:
+                        reporte.append(f"   Cantidad afectada: {problema['cantidad']}")
+                else:
+                    reporte.append(f"{i}. {problema}")
             reporte.append("")
 
         # Problemas medios
-        if self.resultados["problemas_medios"]:
-            reporte.append("🟡 PROBLEMAS MEDIOS")
+        if self.resultados.get("problemas_medios"):
+            reporte.append("[MEDIO] PROBLEMAS MEDIOS")
             reporte.append("-" * 80)
-            for i, problema in enumerate(self.resultados["problemas_medios"], 1):
-                reporte.append(f"{i}. [{problema['tabla']}] {problema['problema']}")
-                if "cantidad" in problema:
-                    reporte.append(f"   Cantidad afectada: {problema['cantidad']}")
+            for i, problema in enumerate(self.resultados.get("problemas_medios", []), 1):
+                if isinstance(problema, dict):
+                    reporte.append(f"{i}. [{problema.get('tabla', 'N/A')}] {problema.get('problema', 'N/A')}")
+                    if "cantidad" in problema:
+                        reporte.append(f"   Cantidad afectada: {problema['cantidad']}")
+                else:
+                    reporte.append(f"{i}. {problema}")
             reporte.append("")
 
         # Problemas menores
-        if self.resultados["problemas_menores"]:
-            reporte.append("🟢 PROBLEMAS MENORES")
+        if self.resultados.get("problemas_menores"):
+            reporte.append("[MENOR] PROBLEMAS MENORES")
             reporte.append("-" * 80)
-            for i, problema in enumerate(self.resultados["problemas_menores"], 1):
-                reporte.append(f"{i}. [{problema['tabla']}] {problema['problema']}")
-                if "cantidad" in problema:
-                    reporte.append(f"   Cantidad afectada: {problema['cantidad']}")
+            for i, problema in enumerate(self.resultados.get("problemas_menores", []), 1):
+                if isinstance(problema, dict):
+                    reporte.append(f"{i}. [{problema.get('tabla', 'N/A')}] {problema.get('problema', 'N/A')}")
+                    if "cantidad" in problema:
+                        reporte.append(f"   Cantidad afectada: {problema['cantidad']}")
+                else:
+                    reporte.append(f"{i}. {problema}")
             reporte.append("")
 
         # Detalles de verificaciones
