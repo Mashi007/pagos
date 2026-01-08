@@ -1,5 +1,5 @@
 """
-🎯 SCRIPT MAESTRO - EJECUTAR AUDITORÍA COMPLETA
+SCRIPT MAESTRO - EJECUTAR AUDITORIA COMPLETA
 Ejecuta todas las auditorías y genera reportes consolidados
 
 Uso:
@@ -10,8 +10,14 @@ Fecha: 2025-01-27
 """
 
 import sys
+import io
 from datetime import datetime
 from pathlib import Path
+
+# Configurar encoding UTF-8 para Windows
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Agregar el directorio raíz del proyecto al path
 project_root = Path(__file__).parent.parent.parent
@@ -25,7 +31,7 @@ from verificar_flujo_datos import VerificadorFlujoDatos
 def main():
     """Ejecuta todas las auditorías"""
     print("=" * 80)
-    print("🎯 AUDITORÍA COMPLETA DEL SISTEMA")
+    print("AUDITORIA COMPLETA DEL SISTEMA")
     print("=" * 80)
     print(f"Inicio: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
@@ -42,7 +48,7 @@ def main():
 
     # 1. Ejecutar auditoría completa de BD
     print("\n" + "=" * 80)
-    print("📊 EJECUTANDO AUDITORÍA COMPLETA DE BASE DE DATOS")
+    print("EJECUTANDO AUDITORIA COMPLETA DE BASE DE DATOS")
     print("=" * 80)
     auditoria = None
     try:
@@ -60,10 +66,10 @@ def main():
             "archivo_reporte": str(archivo_reporte),
         }
 
-        print(f"\n✅ Auditoría de BD completada. Reporte: {archivo_reporte}")
+        print(f"\n[OK] Auditoria de BD completada. Reporte: {archivo_reporte}")
 
     except Exception as e:
-        print(f"\n❌ Error en auditoría de BD: {e}")
+        print(f"\n[ERROR] Error en auditoria de BD: {e}")
         resultados_consolidados["auditoria_bd"] = {
             "estado": "ERROR",
             "error": str(e),
@@ -74,7 +80,7 @@ def main():
 
     # 2. Ejecutar verificación de flujo de datos
     print("\n" + "=" * 80)
-    print("🔄 EJECUTANDO VERIFICACIÓN DE FLUJO DE DATOS")
+    print("EJECUTANDO VERIFICACION DE FLUJO DE DATOS")
     print("=" * 80)
     verificador = None
     try:
@@ -93,10 +99,10 @@ def main():
             "archivo_reporte": str(archivo_reporte_flujo),
         }
 
-        print(f"\n✅ Verificación de flujo completada. Reporte: {archivo_reporte_flujo}")
+        print(f"\n[OK] Verificacion de flujo completada. Reporte: {archivo_reporte_flujo}")
 
     except Exception as e:
-        print(f"\n❌ Error en verificación de flujo: {e}")
+        print(f"\n[ERROR] Error en verificacion de flujo: {e}")
         resultados_consolidados["flujo_datos"] = {
             "estado": "ERROR",
             "error": str(e),
@@ -107,13 +113,13 @@ def main():
 
     # 3. Generar reporte consolidado
     print("\n" + "=" * 80)
-    print("📋 GENERANDO REPORTE CONSOLIDADO")
+    print("GENERANDO REPORTE CONSOLIDADO")
     print("=" * 80)
 
     archivo_consolidado = directorio_reportes / f"REPORTE_CONSOLIDADO_{fecha_str}.txt"
-    with open(archivo_consolidado, "w", encoding="utf-8") as f:
+    with open(archivo_consolidado, "w", encoding="utf-8", errors='replace') as f:
         f.write("=" * 80 + "\n")
-        f.write("📊 REPORTE CONSOLIDADO DE AUDITORÍA\n")
+        f.write("REPORTE CONSOLIDADO DE AUDITORIA\n")
         f.write("=" * 80 + "\n")
         f.write(f"Fecha: {resultados_consolidados['fecha']}\n")
         f.write("\n")
@@ -125,13 +131,13 @@ def main():
             f.write(f"Estado: {resultados_consolidados['auditoria_bd']['estado']}\n")
             if resultados_consolidados["auditoria_bd"]["estado"] == "COMPLETADO":
                 f.write(
-                    f"  🔴 Críticos: {resultados_consolidados['auditoria_bd']['problemas_criticos']}\n"
+                    f"  [CRITICO] Criticos: {resultados_consolidados['auditoria_bd']['problemas_criticos']}\n"
                 )
                 f.write(
-                    f"  🟡 Medios: {resultados_consolidados['auditoria_bd']['problemas_medios']}\n"
+                    f"  [MEDIO] Medios: {resultados_consolidados['auditoria_bd']['problemas_medios']}\n"
                 )
                 f.write(
-                    f"  🟢 Menores: {resultados_consolidados['auditoria_bd']['problemas_menores']}\n"
+                    f"  [MENOR] Menores: {resultados_consolidados['auditoria_bd']['problemas_menores']}\n"
                 )
                 f.write(f"  Archivo: {resultados_consolidados['auditoria_bd']['archivo_reporte']}\n")
             else:
@@ -154,11 +160,11 @@ def main():
 
         f.write("=" * 80 + "\n")
 
-    print(f"\n✅ Reporte consolidado generado: {archivo_consolidado}")
+    print(f"\n[OK] Reporte consolidado generado: {archivo_consolidado}")
 
     # Resumen final
     print("\n" + "=" * 80)
-    print("📊 RESUMEN FINAL")
+    print("RESUMEN FINAL")
     print("=" * 80)
 
     if resultados_consolidados["auditoria_bd"]:
