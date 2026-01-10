@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -105,9 +104,9 @@ export const AdvertenciaFormatoCientifico: React.FC<AdvertenciaFormatoCientifico
               <AlertTriangle className="h-5 w-5 text-yellow-600" />
               Revisión y Corrección de Datos con Formato Científico
             </DialogTitle>
-            <DialogDescription>
+            <div className="text-sm text-gray-600 mb-4">
               Puedes revisar y corregir los datos afectados usando las herramientas de edición disponibles.
-            </DialogDescription>
+            </div>
           </DialogHeader>
 
           <div className="space-y-4">

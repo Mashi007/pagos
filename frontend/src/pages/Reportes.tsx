@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatCurrency, formatDate } from '@/utils'
 import { reporteService } from '@/services/reporteService'
+import { TablaAmortizacionCompleta } from '@/components/reportes/TablaAmortizacionCompleta'
 import { toast } from 'sonner'
 
 // Mock data para reportes
@@ -330,6 +331,9 @@ export function Reportes() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Tabla de Amortización Completa */}
+      <TablaAmortizacionCompleta />
 
       {/* Generate Report Section */}
       <Card>
