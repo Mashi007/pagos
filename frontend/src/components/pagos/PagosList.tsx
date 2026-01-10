@@ -25,6 +25,7 @@ import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { CargaMasivaMenu } from './CargaMasivaMenu'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
+import { AdvertenciaFormatoCientifico } from '@/components/common/AdvertenciaFormatoCientifico'
 import { toast } from 'sonner'
 
 export function PagosList() {
@@ -136,6 +137,9 @@ export function PagosList() {
           </Button>
         </div>
       </div>
+
+      {/* Advertencia sobre formato científico */}
+      <AdvertenciaFormatoCientifico />
 
       {/* KPIs de Pagos */}
       <PagosKPIsNuevo />
@@ -289,17 +293,39 @@ export function PagosList() {
                               )}
                             </td>
                             <td className="px-4 py-3">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                title="Editar Pago"
-                                onClick={() => {
-                                  setPagoEditando(pago)
-                                  setShowRegistrarPago(true)
-                                }}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  title="Editar Pago"
+                                  onClick={() => {
+                                    setPagoEditando(pago)
+                                    setShowRegistrarPago(true)
+                                  }}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  title="Eliminar Pago"
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  onClick={async () => {
+                                    if (window.confirm(`¿Estás seguro de eliminar el pago ID ${pago.id}?`)) {
+                                      try {
+                                        await pagoService.deletePago(pago.id)
+                                        toast.success('Pago eliminado exitosamente')
+                                        queryClient.invalidateQueries({ queryKey: ['pagos'] })
+                                      } catch (error) {
+                                        toast.error('Error al eliminar el pago')
+                                        console.error(error)
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}

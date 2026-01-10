@@ -778,6 +778,54 @@ def actualizar_pago(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
+@router.delete("/{pago_id}")
+def eliminar_pago(
+    pago_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Eliminar un pago (soft delete - marca como inactivo)
+    Solo administradores pueden eliminar pagos
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar pagos")
+    
+    try:
+        pago = db.query(Pago).filter(Pago.id == pago_id).first()
+        if not pago:
+            raise HTTPException(status_code=404, detail="Pago no encontrado")
+        
+        # Registrar en auditoría antes de eliminar
+        registrar_auditoria_pago(
+            pago_id=pago_id,
+            usuario=current_user.email,
+            accion="DELETE",
+            campo_modificado="activo",
+            valor_anterior="True",
+            valor_nuevo="False",
+            db=db,
+        )
+        
+        # Soft delete - marcar como inactivo
+        pago.activo = False  # type: ignore[assignment]
+        pago.fecha_actualizacion = datetime.now()  # type: ignore[assignment]
+        
+        db.commit()
+        db.refresh(pago)
+        
+        logger.info(f"✅ Pago ID {pago_id} eliminado (soft delete) por usuario {current_user.email}")
+        
+        return {"message": "Pago eliminado exitosamente", "pago_id": pago_id}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en eliminar_pago: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
 # ============================================
 # NUEVO: Listado de últimos pagos por cédula
 # ============================================

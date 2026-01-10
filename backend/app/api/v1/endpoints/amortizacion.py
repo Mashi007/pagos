@@ -11,6 +11,7 @@ from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.schemas.amortizacion import (
     CuotaResponse,
+    CuotaUpdate,
     EstadoCuentaResponse,
     ProyeccionPagoRequest,
     ProyeccionPagoResponse,
@@ -117,6 +118,107 @@ def obtener_cuota(
     cuota.porcentaje_pagado = cuota.porcentaje_pagado
 
     return cuota
+
+
+@router.put("/cuota/{cuota_id}", response_model=CuotaResponse)
+def actualizar_cuota(
+    cuota_id: int,
+    cuota_data: CuotaUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Actualizar una cuota existente
+    Solo administradores pueden actualizar cuotas
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden actualizar cuotas")
+    
+    try:
+        cuota = db.query(Cuota).filter(Cuota.id == cuota_id).first()
+        if not cuota:
+            raise HTTPException(status_code=404, detail="Cuota no encontrada")
+        
+        # Aplicar cambios
+        update_data = cuota_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            if hasattr(cuota, field) and value is not None:
+                setattr(cuota, field, value)
+        
+        # Recalcular total_pagado si se actualizaron campos de pago
+        if any(field in update_data for field in ['capital_pagado', 'interes_pagado', 'mora_pagada']):
+            cuota.total_pagado = (
+                (cuota.capital_pagado or Decimal('0')) +
+                (cuota.interes_pagado or Decimal('0')) +
+                (cuota.mora_pagada or Decimal('0'))
+            )
+        
+        # Recalcular capital_pendiente
+        cuota.capital_pendiente = cuota.monto_capital - (cuota.capital_pagado or Decimal('0'))
+        
+        # Actualizar estado si es necesario
+        if cuota.total_pagado >= cuota.monto_cuota:
+            cuota.estado = "PAGADO"
+        elif cuota.total_pagado > Decimal('0'):
+            cuota.estado = "PARCIAL"
+        else:
+            cuota.estado = "PENDIENTE"
+        
+        db.commit()
+        db.refresh(cuota)
+        
+        # Agregar propiedades calculadas
+        cuota.esta_vencida = cuota.esta_vencida
+        cuota.monto_pendiente_total = cuota.monto_pendiente_total
+        cuota.porcentaje_pagado = cuota.porcentaje_pagado
+        
+        return cuota
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error actualizando cuota: {str(e)}")
+
+
+@router.delete("/cuota/{cuota_id}")
+def eliminar_cuota(
+    cuota_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Eliminar una cuota
+    Solo administradores pueden eliminar cuotas
+    ADVERTENCIA: Esto puede afectar la integridad de los datos del préstamo
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar cuotas")
+    
+    try:
+        cuota = db.query(Cuota).filter(Cuota.id == cuota_id).first()
+        if not cuota:
+            raise HTTPException(status_code=404, detail="Cuota no encontrada")
+        
+        prestamo_id = cuota.prestamo_id
+        
+        # Verificar si la cuota tiene pagos aplicados
+        if cuota.total_pagado > Decimal('0'):
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se puede eliminar una cuota con pagos aplicados (${cuota.total_pagado:.2f})"
+            )
+        
+        db.delete(cuota)
+        db.commit()
+        
+        return {"message": "Cuota eliminada exitosamente", "cuota_id": cuota_id, "prestamo_id": prestamo_id}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error eliminando cuota: {str(e)}")
 
 
 @router.post("/prestamo/{prestamo_id}/recalcular-mora", response_model=RecalcularMoraResponse)

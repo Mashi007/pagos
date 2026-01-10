@@ -96,8 +96,21 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
       newErrors.monto_pagado = 'Monto muy alto. Por favor verifique el valor'
     }
 
-    // ✅ CRITERIO 3: Validación de número de documento
-    if (!formData.numero_documento || formData.numero_documento.trim() === '') {
+    // ✅ CRITERIO 3: Validación y normalización de número de documento
+    // Normalizar formato científico si existe (ej: 7.40087E+14 -> 740087000000000)
+    let numeroDocumentoNormalizado = formData.numero_documento.trim()
+    if (numeroDocumentoNormalizado && (/[eE]/.test(numeroDocumentoNormalizado))) {
+      try {
+        const numeroFloat = parseFloat(numeroDocumentoNormalizado)
+        numeroDocumentoNormalizado = Math.floor(numeroFloat).toString()
+        // Mostrar advertencia al usuario
+        console.warn(`⚠️ Número de documento normalizado de formato científico: ${formData.numero_documento} -> ${numeroDocumentoNormalizado}`)
+      } catch (e) {
+        console.error('Error normalizando número de documento:', e)
+      }
+    }
+    
+    if (!numeroDocumentoNormalizado || numeroDocumentoNormalizado === '') {
       newErrors.numero_documento = 'Número de documento requerido'
     }
 
@@ -120,13 +133,19 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
 
     setIsSubmitting(true)
     try {
+      // Aplicar normalización al número de documento antes de enviar
+      const datosEnvio = {
+        ...formData,
+        numero_documento: numeroDocumentoNormalizado
+      }
+      
       if (isEditing && pagoId) {
-        console.log('🔄 Iniciando actualización de pago...', { pagoId, formData })
-        const result = await pagoService.updatePago(pagoId, formData)
+        console.log('🔄 Iniciando actualización de pago...', { pagoId, datosEnvio })
+        const result = await pagoService.updatePago(pagoId, datosEnvio)
         console.log('✅ Pago actualizado exitosamente:', result)
       } else {
-        console.log('🔄 Iniciando registro de pago...', formData)
-        const result = await pagoService.createPago(formData)
+        console.log('🔄 Iniciando registro de pago...', datosEnvio)
+        const result = await pagoService.createPago(datosEnvio)
         console.log('✅ Pago registrado exitosamente:', result)
       }
       onSuccess()
