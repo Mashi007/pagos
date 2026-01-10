@@ -88,14 +88,29 @@ export function TablaAmortizacionCompleta() {
     enabled: !!prestamos && prestamos.length > 0,
   })
 
-  // Obtener pagos por cédula
-  const { data: pagosData, isLoading: loadingPagos } = useQuery({
+  // Obtener pagos por cédula (manejar errores para que no fallen los reportes)
+  const { data: pagosData, isLoading: loadingPagos, error: errorPagos } = useQuery({
     queryKey: ['pagos-cedula', cedulaSeleccionada],
-    queryFn: () => pagoService.getAllPagos(1, 1000, { cedula: cedulaSeleccionada! }),
+    queryFn: async () => {
+      try {
+        return await pagoService.getAllPagos(1, 1000, { cedula: cedulaSeleccionada! })
+      } catch (error) {
+        console.error('Error obteniendo pagos:', error)
+        // Retornar estructura vacía para que no falle el reporte
+        return { pagos: [], total: 0, page: 1, pageSize: 1000 }
+      }
+    },
     enabled: !!cedulaSeleccionada,
+    retry: 1, // Solo reintentar una vez
   })
 
   const pagos = pagosData?.pagos || []
+  
+  // Filtrar pagos activos y manejar valores nulos/vacíos en numero_documento
+  const pagosFiltrados = pagos.filter(p => p.activo !== false).map(p => ({
+    ...p,
+    numero_documento: p.numero_documento || '', // Asegurar que nunca sea null/undefined
+  }))
 
   // Mutaciones para editar
   const mutationActualizarCuota = useMutation({
@@ -124,7 +139,12 @@ export function TablaAmortizacionCompleta() {
   })
 
   const mutationActualizarPago = useMutation({
-    mutationFn: ({ pagoId, data }: { pagoId: number; data: Partial<Pago> }) =>
+    mutationFn: ({ pagoId, data }: { pagoId: number; data: Partial<{
+      monto_pagado: number
+      numero_documento: string
+      fecha_pago: string
+      institucion_bancaria: string | null
+    }> }) =>
       pagoService.updatePago(pagoId, data),
     onSuccess: () => {
       toast.success('Pago actualizado exitosamente')
@@ -357,7 +377,7 @@ export function TablaAmortizacionCompleta() {
                   )}
 
                   {/* Tabla de Pagos */}
-                  {pagos && pagos.length > 0 && (
+                  {pagosFiltrados && pagosFiltrados.length > 0 && (
                     <Card>
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -383,13 +403,22 @@ export function TablaAmortizacionCompleta() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {pagos.map((pago) => (
+                              {pagosFiltrados.map((pago) => (
                                 <TableRow key={pago.id}>
                                   <TableCell>{pago.id}</TableCell>
                                   <TableCell>{pago.prestamo_id || 'N/A'}</TableCell>
                                   <TableCell>{formatDate(pago.fecha_pago)}</TableCell>
                                   <TableCell className="font-semibold">{formatCurrency(pago.monto_pagado)}</TableCell>
-                                  <TableCell className="font-mono text-sm">{pago.numero_documento}</TableCell>
+                                  <TableCell className="font-mono text-sm">
+                                    {pago.numero_documento || (
+                                      <span className="text-gray-400 italic">Sin documento</span>
+                                    )}
+                                    {pago.numero_documento && /[eE]/.test(pago.numero_documento) && (
+                                      <Badge variant="outline" className="ml-2 text-xs text-yellow-600">
+                                        Formato científico
+                                      </Badge>
+                                    )}
+                                  </TableCell>
                                   <TableCell>{pago.institucion_bancaria || 'N/A'}</TableCell>
                                   <TableCell>{getEstadoBadge(pago.estado)}</TableCell>
                                   <TableCell>
@@ -564,22 +593,60 @@ export function TablaAmortizacionCompleta() {
                 e.preventDefault()
                 const formData = new FormData(e.currentTarget)
                 
-                // Normalizar número de documento si es científico
-                let numeroDocumento = (formData.get('numero_documento') as string) || pagoEditando.numero_documento
+                // Normalizar número de documento si es científico o está vacío
+                let numeroDocumento = (formData.get('numero_documento') as string)?.trim() || ''
+                
+                // Si está vacío, usar el valor actual o cadena vacía
+                if (!numeroDocumento) {
+                  numeroDocumento = pagoEditando.numero_documento || ''
+                }
+                
+                // Normalizar formato científico si existe
                 if (numeroDocumento && (/[eE]/.test(numeroDocumento))) {
                   try {
                     const numeroFloat = parseFloat(numeroDocumento)
-                    numeroDocumento = Math.floor(numeroFloat).toString()
-                    toast.info(`Número de documento normalizado: ${numeroDocumento}`)
+                    if (!isNaN(numeroFloat)) {
+                      numeroDocumento = Math.floor(numeroFloat).toString()
+                      toast.info(`Número de documento normalizado: ${numeroDocumento}`)
+                    }
                   } catch (e) {
                     console.error('Error normalizando número:', e)
+                    toast.warning('Error al normalizar número científico. Se guardará tal como está.')
                   }
                 }
                 
-                const data: Partial<Pago> = {
+                // Permitir guardar incluso si está vacío (no requerido)
+                if (!numeroDocumento) {
+                  numeroDocumento = '' // Permitir vacío
+                }
+                
+                // Convertir fecha_pago a string si es Date
+                let fechaPagoStr: string
+                const fechaPagoForm = formData.get('fecha_pago') as string
+                if (fechaPagoForm) {
+                  fechaPagoStr = fechaPagoForm
+                } else {
+                  // Si no hay fecha del formulario, usar la fecha actual del pago
+                  const fechaPagoActual = pagoEditando.fecha_pago
+                  if (fechaPagoActual instanceof Date) {
+                    fechaPagoStr = fechaPagoActual.toISOString().split('T')[0]
+                  } else if (typeof fechaPagoActual === 'string') {
+                    // Si ya es string, extraer solo la fecha (sin hora)
+                    fechaPagoStr = fechaPagoActual.split('T')[0]
+                  } else {
+                    fechaPagoStr = new Date().toISOString().split('T')[0]
+                  }
+                }
+                
+                const data: Partial<{
+                  monto_pagado: number
+                  numero_documento: string
+                  fecha_pago: string
+                  institucion_bancaria: string | null
+                }> = {
                   monto_pagado: parseFloat(formData.get('monto_pagado') as string) || pagoEditando.monto_pagado,
                   numero_documento: numeroDocumento,
-                  fecha_pago: (formData.get('fecha_pago') as string) || pagoEditando.fecha_pago.toString(),
+                  fecha_pago: fechaPagoStr,
                   institucion_bancaria: (formData.get('institucion_bancaria') as string) || pagoEditando.institucion_bancaria || null,
                 }
                 mutationActualizarPago.mutate({ pagoId: pagoEditando.id, data })
@@ -617,11 +684,20 @@ export function TablaAmortizacionCompleta() {
                   <Input
                     id="numero_documento"
                     name="numero_documento"
-                    defaultValue={pagoEditando.numero_documento}
-                    required
+                    defaultValue={pagoEditando.numero_documento || ''}
+                    placeholder="Ingrese número de documento"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Los números científicos se normalizarán automáticamente
+                    {pagoEditando.numero_documento && /[eE]/.test(pagoEditando.numero_documento) ? (
+                      <span className="text-yellow-600">
+                        ⚠️ Formato científico detectado. Se normalizará automáticamente al guardar.
+                      </span>
+                    ) : (
+                      'Los números científicos se normalizarán automáticamente'
+                    )}
+                    {!pagoEditando.numero_documento && (
+                      <span className="text-gray-500"> Campo opcional. Puede dejarse vacío.</span>
+                    )}
                   </p>
                 </div>
                 <div>

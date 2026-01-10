@@ -32,6 +32,41 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _normalizar_numero_documento(numero_documento: str | None) -> str:
+    """
+    Normaliza el número de documento, convirtiendo formato científico a string completo.
+    
+    Ejemplos:
+    - '7.40087E+14' -> '740087000000000'
+    - '1.23e+5' -> '123000'
+    - '123456' -> '123456'
+    - None o '' -> ''
+    """
+    if not numero_documento:
+        return ''
+    
+    numero_str = str(numero_documento).strip()
+    
+    # Si está vacío después del trim, retornar vacío
+    if not numero_str:
+        return ''
+    
+    # Detectar formato científico (ej: 7.40087E+14, 1.23e+5)
+    if 'e' in numero_str.lower() and ('+' in numero_str or '-' in numero_str):
+        try:
+            # Convertir de formato científico a float y luego a int (sin decimales)
+            numero_float = float(numero_str)
+            numero_int = int(numero_float)
+            return str(numero_int)
+        except (ValueError, OverflowError):
+            # Si falla la conversión, retornar el valor original
+            logger.warning(f"⚠️ No se pudo normalizar número científico: {numero_str}")
+            return numero_str
+    
+    # Si no es formato científico, retornar tal cual
+    return numero_str
+
+
 def _aplicar_filtros_pagos(
     query,
     cedula: Optional[str],
@@ -751,9 +786,33 @@ def actualizar_pago(
 
         # Registrar cambios para auditoría
         update_data = pago_data.model_dump(exclude_unset=True)
+        
+        # Normalizar numero_documento si se está actualizando
+        if 'numero_documento' in update_data:
+            numero_doc_original = update_data['numero_documento']
+            numero_doc_normalizado = _normalizar_numero_documento(numero_doc_original)
+            
+            # Si está vacío, permitir guardar como cadena vacía (no NULL)
+            if not numero_doc_normalizado:
+                numero_doc_normalizado = ''
+            
+            update_data['numero_documento'] = numero_doc_normalizado
+            
+            # Log si se normalizó
+            if numero_doc_original != numero_doc_normalizado:
+                logger.info(
+                    f"✅ [actualizar_pago] Número de documento normalizado: "
+                    f"'{numero_doc_original}' -> '{numero_doc_normalizado}'"
+                )
+        
         for field, value in update_data.items():
             if hasattr(pago, field):
                 old_value = getattr(pago, field)
+                
+                # Si numero_documento está vacío, asegurar que sea cadena vacía, no None
+                if field == 'numero_documento' and (value is None or value == ''):
+                    value = ''
+                
                 setattr(pago, field, value)
                 registrar_auditoria_pago(
                     pago_id=pago_id,
