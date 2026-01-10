@@ -636,20 +636,25 @@ def buscar_prestamos_por_cedula(
     current_user: User = Depends(get_current_user),
 ):
     """Buscar préstamos por cédula del cliente"""
-    # Evitar seleccionar columnas nuevas que aún no existen en algunas BD
-    prestamos = (
-        db.query(
-            Prestamo.id,
-            Prestamo.producto,
-            Prestamo.total_financiamiento,
-            Prestamo.estado,
-            Prestamo.fecha_registro,
-        )
-        .filter(Prestamo.cedula == cedula)
-        .all()
-    )
-    # Serializar de forma segura
-    return [PrestamoResponse.model_validate(serializar_prestamo(p)) for p in prestamos]
+    try:
+        # Obtener préstamos completos (no solo columnas específicas)
+        prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
+        
+        # Serializar de forma segura
+        prestamos_serializados = []
+        for prestamo in prestamos:
+            try:
+                prestamo_data = serializar_prestamo(prestamo)
+                prestamos_serializados.append(PrestamoResponse.model_validate(prestamo_data))
+            except Exception as e:
+                logger.error(f"Error serializando préstamo {prestamo.id}: {e}", exc_info=True)
+                # Continuar con el siguiente préstamo en lugar de fallar completamente
+                continue
+        
+        return prestamos_serializados
+    except Exception as e:
+        logger.error(f"Error en buscar_prestamos_por_cedula: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error de conexión a la base de datos: {type(e).__name__}")
 
 
 @router.get("/cedula/{cedula}/resumen", response_model=dict)
