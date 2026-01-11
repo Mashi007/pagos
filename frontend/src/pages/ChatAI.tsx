@@ -119,6 +119,21 @@ export function ChatAI() {
       console.error('Error enviando pregunta:', error)
       const errorDetail = error?.response?.data?.detail || error?.message || 'No se pudo generar la respuesta'
       const statusCode = error?.response?.status
+      const isTimeout = error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')
+
+      // ✅ Manejo especial para timeouts
+      if (isTimeout) {
+        const mensajeError: Mensaje = {
+          id: (Date.now() + 1).toString(),
+          tipo: 'ai',
+          contenido: `⏱️ La consulta está tardando más de lo esperado. Esto puede deberse a:\n• Consultas complejas a la base de datos\n• Procesamiento de información extensa\n• Carga alta en el servidor\n\n💡 Intenta reformular tu pregunta de forma más específica o intenta nuevamente en unos momentos.`,
+          timestamp: new Date(),
+          error: true
+        }
+        setMensajes(prev => [...prev, mensajeError])
+        toast.warning('La consulta está tardando más de lo esperado. Intenta nuevamente.')
+        return
+      }
 
       // Si es un error 400 (pregunta rechazada o validación), mostrar mensaje apropiado
       if (statusCode === 400) {

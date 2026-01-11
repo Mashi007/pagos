@@ -525,9 +525,10 @@ class ApiClient {
       const isSlowEndpoint = url.includes('/ml-riesgo/entrenar') ||
                             url.includes('/ml-impago/entrenar') ||
                             url.includes('/fine-tuning/iniciar') ||
-                            url.includes('/rag/generar-embeddings')
+                            url.includes('/rag/generar-embeddings') ||
+                            url.includes('/configuracion/ai/chat') // ✅ Chat AI puede tardar más por consultas BD y OpenAI
 
-      const defaultTimeout = isSlowEndpoint ? 300000 : DEFAULT_TIMEOUT_MS // 5 minutos para ML, 30s por defecto
+      const defaultTimeout = isSlowEndpoint ? 300000 : DEFAULT_TIMEOUT_MS // 5 minutos para ML y Chat AI, 30s por defecto
       // Priorizar timeout explícito si se proporciona, sino usar el calculado
       const timeout = config?.timeout ?? defaultTimeout
       const finalConfig = { ...config, timeout }

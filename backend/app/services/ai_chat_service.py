@@ -131,28 +131,51 @@ class AIChatService:
         # ✅ Obtener contexto base con cache
         # Cache TTL configurable desde BD (default: 5 minutos = 300 segundos)
         cache_ttl = int(self.config_dict.get("cache_resumen_bd_ttl", "300"))
+        
+        # ✅ Logging de tiempo para diagnóstico
+        resumen_start = time.time()
         resumen_bd = self._obtener_resumen_bd_con_cache(cache_ttl)
+        resumen_time = time.time() - resumen_start
+        logger.debug(f"⏱️ Resumen BD obtenido en {resumen_time:.2f}s")
+        
+        esquema_start = time.time()
         info_esquema = _obtener_info_esquema(pregunta_lower, self.db)
+        esquema_time = time.time() - esquema_start
+        logger.debug(f"⏱️ Info esquema obtenida en {esquema_time:.2f}s")
 
         # Obtener contexto de documentos (async)
+        documentos_start = time.time()
         contexto_documentos = ""
         if self.openai_api_key:
             try:
                 contexto_documentos, _ = await _obtener_contexto_documentos_semantico(pregunta, self.openai_api_key, self.db)
+                documentos_time = time.time() - documentos_start
+                logger.debug(f"⏱️ Contexto de documentos obtenido en {documentos_time:.2f}s")
             except Exception as e:
-                logger.warning(f"Error obteniendo contexto de documentos: {e}")
+                documentos_time = time.time() - documentos_start
+                logger.warning(f"⚠️ Error obteniendo contexto de documentos después de {documentos_time:.2f}s: {e}")
 
         # Búsqueda por cédula si aplica
+        cedula_start = time.time()
         busqueda_cedula = _extraer_cedula_de_pregunta(pregunta)
         info_cliente_buscado = ""
         if busqueda_cedula:
             info_cliente_buscado = _obtener_info_cliente_por_cedula(busqueda_cedula, self.db)
+        cedula_time = time.time() - cedula_start
+        if busqueda_cedula:
+            logger.debug(f"⏱️ Info cliente por cédula obtenida en {cedula_time:.2f}s")
 
         # Datos adicionales (cálculos, ML, etc.)
+        datos_start = time.time()
         datos_adicionales = _obtener_datos_adicionales(pregunta, pregunta_lower, self.db)
+        datos_time = time.time() - datos_start
+        logger.debug(f"⏱️ Datos adicionales obtenidos en {datos_time:.2f}s")
 
         # ✅ NUEVO: Ejecutar consultas dinámicas basadas en la pregunta
+        consultas_start = time.time()
         consultas_dinamicas = _ejecutar_consulta_dinamica(pregunta, pregunta_lower, self.db)
+        consultas_time = time.time() - consultas_start
+        logger.debug(f"⏱️ Consultas dinámicas ejecutadas en {consultas_time:.2f}s")
 
         return {
             "resumen_bd": resumen_bd,
@@ -275,17 +298,33 @@ class AIChatService:
         """
         Procesa una pregunta completa: valida, obtiene contexto, construye prompt y llama a OpenAI.
         """
-        # Validar pregunta
+        process_start = time.time()
+        
+        # Validar pregunta (ya validada antes, pero por seguridad)
         pregunta = self.validar_pregunta(pregunta)
 
-        # Obtener contexto completo
+        # ✅ Obtener contexto completo con logging de tiempo
+        context_start = time.time()
         contexto = await self.obtener_contexto_completo_async(pregunta)
+        context_time = time.time() - context_start
+        logger.info(f"⏱️ Contexto obtenido en {context_time:.2f}s")
 
         # Construir system prompt
+        prompt_start = time.time()
         system_prompt = self.construir_system_prompt(contexto)
+        prompt_time = time.time() - prompt_start
+        logger.debug(f"⏱️ System prompt construido en {prompt_time:.2f}s")
 
         if contexto["contexto_documentos"]:
             logger.info(f"Contexto de documentos incluido en system_prompt: {len(contexto['contexto_documentos'])} caracteres")
 
         # Llamar a OpenAI API
-        return await self.llamar_openai_api(system_prompt, pregunta)
+        openai_start = time.time()
+        resultado = await self.llamar_openai_api(system_prompt, pregunta)
+        openai_time = time.time() - openai_start
+        logger.info(f"⏱️ OpenAI API respondió en {openai_time:.2f}s")
+        
+        total_time = time.time() - process_start
+        logger.info(f"⏱️ Procesamiento total: {total_time:.2f}s (Contexto: {context_time:.2f}s, OpenAI: {openai_time:.2f}s)")
+        
+        return resultado

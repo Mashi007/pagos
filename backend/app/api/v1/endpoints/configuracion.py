@@ -7514,15 +7514,27 @@ async def chat_ai(
     try:
         from app.services.ai_chat_service import AIChatService
 
+        # ✅ Logging: Iniciar proceso
+        logger.info(f"📥 Chat AI iniciado - Usuario: {current_user.email}, Pregunta: {request_body.pregunta[:100]}...")
+
         # Inicializar servicio
+        init_start = time.time()
         service = AIChatService(db)
         service.inicializar_configuracion()
+        init_time = time.time() - init_start
+        logger.debug(f"⏱️ Inicialización completada en {init_time:.2f}s")
 
         # Validar y procesar pregunta
+        validation_start = time.time()
         pregunta = service.validar_pregunta(request_body.pregunta)
+        validation_time = time.time() - validation_start
+        logger.debug(f"⏱️ Validación completada en {validation_time:.2f}s")
 
         # Procesar pregunta completa usando el servicio
+        process_start = time.time()
         resultado = await service.procesar_pregunta(pregunta)
+        process_time = time.time() - process_start
+        logger.debug(f"⏱️ Procesamiento completado en {process_time:.2f}s")
 
         # ✅ Métricas: Calcular tiempo total y agregar métricas al resultado
         elapsed_time = time.time() - start_time
@@ -7591,8 +7603,26 @@ async def chat_ai(
             error=str(e),
         )
 
+        # ✅ Logging detallado del error
+        error_type = type(e).__name__
+        error_msg = str(e)
+        
         logger.error(
-            f"❌ Error en Chat AI - Usuario: {current_user.email}, " f"Tiempo: {elapsed_time:.2f}s, " f"Error: {str(e)}",
+            f"❌ Error en Chat AI - Usuario: {current_user.email}, "
+            f"Tiempo: {elapsed_time:.2f}s, "
+            f"Tipo: {error_type}, "
+            f"Error: {error_msg[:500]}",  # Limitar longitud del mensaje
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        
+        # ✅ Mensaje de error más descriptivo según el tipo
+        if elapsed_time > 30:
+            detail_msg = f"La consulta está tardando demasiado tiempo ({elapsed_time:.1f}s). Esto puede deberse a consultas complejas a la base de datos o carga alta en el servidor. Intenta reformular tu pregunta de forma más específica."
+        elif "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+            detail_msg = f"Timeout al procesar la consulta. La pregunta puede ser muy compleja o el servidor está sobrecargado. Intenta nuevamente en unos momentos."
+        elif "database" in error_msg.lower() or "connection" in error_msg.lower():
+            detail_msg = f"Error de conexión a la base de datos. Por favor, intenta nuevamente."
+        else:
+            detail_msg = f"Error al procesar la consulta: {error_msg[:200]}"
+        
+        raise HTTPException(status_code=500, detail=detail_msg)
