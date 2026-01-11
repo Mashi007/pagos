@@ -6223,18 +6223,44 @@ def _obtener_configuracion_ai_con_reintento(db: Session) -> list:
             or "current transaction is aborted" in error_str.lower()
         )
 
+        # ✅ Logging detallado del error
+        logger.error(
+            f"❌ Error obteniendo configuración AI - Tipo: {error_type}, "
+            f"Error: {error_str[:500]}, "
+            f"Es transacción abortada: {is_transaction_aborted}",
+            exc_info=True,
+        )
+
         if is_transaction_aborted:
             try:
                 db.rollback()
-                logger.debug("Rollback realizado antes de consultar configuracion AI (transaccion abortada)")
-                return db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "AI").all()
+                logger.debug("✅ Rollback realizado antes de consultar configuracion AI (transaccion abortada)")
+                # Reintentar la consulta después del rollback
+                resultado = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "AI").all()
+                logger.info("✅ Configuración AI obtenida exitosamente después de rollback")
+                return resultado
             except Exception as retry_error:
-                logger.error(f"Error al reintentar consulta de configuracion AI: {retry_error}")
+                retry_error_str = str(retry_error)
+                retry_error_type = type(retry_error).__name__
+                logger.error(
+                    f"❌ Error al reintentar consulta de configuracion AI - Tipo: {retry_error_type}, "
+                    f"Error: {retry_error_str[:500]}",
+                    exc_info=True,
+                )
                 raise HTTPException(
-                    status_code=500, detail="Error de conexion a la base de datos. Por favor, intenta nuevamente."
+                    status_code=500,
+                    detail=f"Error de conexión a la base de datos después de reintento: {retry_error_type}. Por favor, intenta nuevamente.",
                 )
         else:
-            raise
+            # Para otros errores, re-lanzar con más contexto
+            logger.error(
+                f"❌ Error no relacionado con transacción abortada - Tipo: {error_type}, Error: {error_str[:500]}",
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error obteniendo configuración AI: {error_type}. Por favor, intenta nuevamente.",
+            )
 
 
 def _obtener_api_key_desencriptada(config_dict: Dict[str, str]) -> str:
@@ -7620,9 +7646,12 @@ async def chat_ai(
             detail_msg = f"La consulta está tardando demasiado tiempo ({elapsed_time:.1f}s). Esto puede deberse a consultas complejas a la base de datos o carga alta en el servidor. Intenta reformular tu pregunta de forma más específica."
         elif "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
             detail_msg = f"Timeout al procesar la consulta. La pregunta puede ser muy compleja o el servidor está sobrecargado. Intenta nuevamente en unos momentos."
-        elif "database" in error_msg.lower() or "connection" in error_msg.lower():
-            detail_msg = f"Error de conexión a la base de datos. Por favor, intenta nuevamente."
+        elif "database" in error_msg.lower() or "connection" in error_msg.lower() or "internalerror" in error_msg.lower():
+            detail_msg = f"Error de conexión a la base de datos ({error_type}). Por favor, intenta nuevamente. Si el problema persiste, contacta al administrador."
+        elif "HTTPException" in error_type or "HTTP" in error_type:
+            # Si es un HTTPException, usar su mensaje directamente
+            detail_msg = error_msg if error_msg else "Error al procesar la consulta"
         else:
-            detail_msg = f"Error al procesar la consulta: {error_msg[:200]}"
+            detail_msg = f"Error al procesar la consulta ({error_type}): {error_msg[:200]}"
 
         raise HTTPException(status_code=500, detail=detail_msg)

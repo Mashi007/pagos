@@ -33,12 +33,34 @@ class AIChatService:
             _validar_configuracion_ai,
         )
 
-        configs = _obtener_configuracion_ai_con_reintento(self.db)
-        if not configs:
-            raise HTTPException(status_code=400, detail="No hay configuracion de AI")
+        try:
+            configs = _obtener_configuracion_ai_con_reintento(self.db)
+            if not configs:
+                raise HTTPException(status_code=400, detail="No hay configuracion de AI")
 
-        self.config_dict = {config.clave: config.valor for config in configs}
-        _validar_configuracion_ai(self.config_dict)
+            self.config_dict = {config.clave: config.valor for config in configs}
+            _validar_configuracion_ai(self.config_dict)
+        except HTTPException:
+            # Re-lanzar HTTPException sin modificar
+            raise
+        except Exception as e:
+            error_type = type(e).__name__
+            error_msg = str(e)
+            logger.error(
+                f"❌ Error inicializando configuración AI - Tipo: {error_type}, Error: {error_msg[:500]}",
+                exc_info=True,
+            )
+            # Si es un error de BD, lanzar HTTPException con mensaje descriptivo
+            if "database" in error_msg.lower() or "connection" in error_msg.lower() or "InternalError" in error_type:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error de conexión a la base de datos al obtener configuración AI ({error_type}). Por favor, intenta nuevamente.",
+                )
+            # Para otros errores, re-lanzar como HTTPException
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error inicializando configuración AI: {error_type}. Por favor, intenta nuevamente.",
+            )
 
         # Extraer parámetros de configuración
         # Desencriptar API Key si está encriptada
