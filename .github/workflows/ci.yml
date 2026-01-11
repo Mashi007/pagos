@@ -68,6 +68,16 @@ jobs:
         pip install pip-audit
         pip-audit --format=json --output=audit.json || true
         pip-audit --format=text
+        # ✅ MEJORA: Verificar vulnerabilidades críticas y fallar el build si existen
+        if [ -f audit.json ]; then
+          CRITICAL_VULNS=$(python -c "import json; data=json.load(open('audit.json')); crit=[v for v in data.get('vulnerabilities', []) if v.get('severity', '').upper() in ['CRITICAL', 'HIGH']]; print(len(crit))" 2>/dev/null || echo "0")
+          if [ "$CRITICAL_VULNS" -gt 0 ]; then
+            echo "❌ Se encontraron $CRITICAL_VULNS vulnerabilidades críticas/altas. El build fallará."
+            exit 1
+          else
+            echo "✅ No se encontraron vulnerabilidades críticas/altas."
+          fi
+        fi
 
     - name: Run tests
       working-directory: ./backend
@@ -111,7 +121,19 @@ jobs:
 
     - name: Security audit
       working-directory: ./frontend
-      run: npm audit --audit-level=moderate || true
+      run: |
+        # ✅ MEJORA: Verificar vulnerabilidades críticas y fallar el build si existen
+        npm audit --audit-level=moderate --json > audit.json || true
+        if [ -f audit.json ]; then
+          CRITICAL_VULNS=$(node -e "const data=require('./audit.json'); const vulns=data.vulnerabilities||{}; const crit=Object.values(vulns).filter(v=>['critical','high'].includes(v.severity?.toLowerCase())).length; console.log(crit)" 2>/dev/null || echo "0")
+          if [ "$CRITICAL_VULNS" -gt 0 ]; then
+            echo "❌ Se encontraron $CRITICAL_VULNS vulnerabilidades críticas/altas. El build fallará."
+            npm audit --audit-level=moderate
+            exit 1
+          else
+            echo "✅ No se encontraron vulnerabilidades críticas/altas."
+          fi
+        fi
 
     - name: Build
       working-directory: ./frontend

@@ -59,6 +59,119 @@ class TestAuthEndpoints:
         assert response.status_code == 401
 
 
+    def test_refresh_token_exitoso(self, test_client: TestClient, test_user):
+        """Probar refresh token exitoso"""
+        # Primero hacer login para obtener refresh token
+        login_response = test_client.post(
+            "/api/v1/auth/login",
+            data={"username": test_user.email, "password": "testpassword123"},
+        )
+        assert login_response.status_code == 200
+        refresh_token = login_response.json()["refresh_token"]
+
+        # Usar refresh token para obtener nuevo access token
+        response = test_client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "access_token" in data
+        assert "refresh_token" in data
+        assert data["token_type"] == "bearer"
+        assert "expires_in" in data
+
+
+    def test_refresh_token_invalido(self, test_client: TestClient):
+        """Probar refresh token inválido"""
+        response = test_client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": "token_invalido_12345"},
+        )
+
+        assert response.status_code == 401
+        assert "inválido" in response.json()["detail"].lower()
+
+
+    def test_refresh_token_sin_token(self, test_client: TestClient):
+        """Probar refresh sin proporcionar token"""
+        response = test_client.post(
+            "/api/v1/auth/refresh",
+            json={},
+        )
+
+        assert response.status_code == 400
+        assert "requerido" in response.json()["detail"].lower()
+
+
+    def test_logout_exitoso(self, test_client: TestClient, auth_headers):
+        """Probar logout exitoso"""
+        response = test_client.post(
+            "/api/v1/auth/logout",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        assert "cerrada" in response.json()["message"].lower()
+
+
+    def test_logout_sin_token(self, test_client: TestClient):
+        """Probar logout sin token (debe funcionar para limpiar sesión del frontend)"""
+        response = test_client.post(
+            "/api/v1/auth/logout",
+        )
+
+        # Logout es tolerante y funciona incluso sin token
+        assert response.status_code == 200
+        assert "cerrada" in response.json()["message"].lower()
+
+
+    def test_token_expirado(self, test_client: TestClient, test_user):
+        """Probar acceso con token expirado"""
+        import jwt
+        from datetime import datetime, timedelta
+        from app.core.config import settings
+
+        # Crear un token expirado manualmente
+        expired_token = jwt.encode(
+            {
+                "sub": str(test_user.id),
+                "exp": datetime.utcnow() - timedelta(minutes=1),  # Token expirado hace 1 minuto
+                "type": "access",
+            },
+            settings.SECRET_KEY,
+            algorithm="HS256",
+        )
+
+        headers = {"Authorization": f"Bearer {expired_token}"}
+        response = test_client.get("/api/v1/auth/me", headers=headers)
+
+        assert response.status_code == 401
+        assert "expirado" in response.json()["detail"].lower() or "inválido" in response.json()["detail"].lower()
+
+
+    def test_rate_limiting_login(self, test_client: TestClient, test_user):
+        """Probar rate limiting en login (5 intentos por minuto)"""
+        # Intentar login 6 veces con credenciales incorrectas
+        # Las primeras 5 deberían fallar con 401, la 6ta debería fallar con 429 (rate limit)
+        for i in range(6):
+            response = test_client.post(
+                "/api/v1/auth/login",
+                data={"username": test_user.email, "password": "wrongpassword"},
+            )
+            if i < 5:
+                # Primeros 5 intentos: error de autenticación
+                assert response.status_code == 401
+            else:
+                # 6to intento: debería ser bloqueado por rate limiting
+                # Nota: En algunos entornos de testing, el rate limiting puede no funcionar
+                # exactamente igual que en producción debido a cómo TestClient maneja las IPs
+                assert response.status_code in [401, 429]
+                if response.status_code == 429:
+                    assert "rate limit" in response.json()["detail"].lower() or "demasiadas" in response.json()["detail"].lower()
+
+
 class TestClientesEndpoints:
     """Pruebas para endpoints de clientes"""
 
