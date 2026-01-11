@@ -662,9 +662,14 @@ def buscar_prestamos_por_cedula(
     except (ProgrammingError, OperationalError) as db_error:
         error_str = str(db_error).lower()
         logger.error(f"Error de base de datos en buscar_prestamos_por_cedula: {db_error}", exc_info=True)
-        
+
         # Detectar errores de esquema (columnas o tablas que no existen)
-        if "does not exist" in error_str or "no such column" in error_str or "no such table" in error_str or "relation" in error_str:
+        if (
+            "does not exist" in error_str
+            or "no such column" in error_str
+            or "no such table" in error_str
+            or "relation" in error_str
+        ):
             detail_msg = (
                 f"Error de esquema de base de datos. "
                 f"Es posible que falten migraciones. "
@@ -672,18 +677,12 @@ def buscar_prestamos_por_cedula(
                 f"Error: {str(db_error)}"
             )
             raise HTTPException(status_code=500, detail=detail_msg)
-        
+
         # Otros errores de base de datos
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error de conexión a la base de datos: {str(db_error)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error de conexión a la base de datos: {str(db_error)}")
     except Exception as e:
         logger.error(f"Error inesperado en buscar_prestamos_por_cedula: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error interno del servidor: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
 
 @router.get("/cedula/{cedula}/resumen", response_model=dict)
