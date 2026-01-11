@@ -13,7 +13,7 @@ from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
 from fastapi import APIRouter, Depends, HTTPException, Path, Query  # type: ignore[import-untyped]
 from sqlalchemy import and_, case, func, or_  # type: ignore[import-untyped]
 from sqlalchemy.exc import OperationalError, ProgrammingError  # type: ignore[import-untyped]
-from sqlalchemy.orm import Session, load_only, defer  # type: ignore[import-untyped]
+from sqlalchemy.orm import Session, defer, load_only  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
