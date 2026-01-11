@@ -236,7 +236,7 @@ def obtener_configuracion_por_categoria(
 def actualizar_configuracion(
     request: Request,
     clave: str,
-    config_data: ConfiguracionUpdate = Body(...),
+    config_data: ConfiguracionUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -7474,7 +7474,7 @@ def _obtener_variables_personalizadas(db: Session) -> Dict[str, str]:
 @limiter.limit("20/minute")  # ✅ Rate limiting: 20 requests por minuto por usuario
 async def chat_ai(
     request: Request,  # ✅ Necesario para rate limiting
-    request_body: ChatAIRequest = Body(...),
+    request_body: ChatAIRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
