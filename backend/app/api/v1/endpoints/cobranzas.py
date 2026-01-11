@@ -498,9 +498,12 @@ def diagnostico_cobranzas(
 @router.get("/clientes-atrasados")
 @cache_result(ttl=300, key_prefix="cobranzas")  # Cache por 5 minutos
 def obtener_clientes_atrasados(
-    dias_retraso: Optional[int] = Query(None, description="Días de retraso para filtrar"),
+    dias_retraso: Optional[int] = Query(None, description="Días de retraso específicos para filtrar (exacto)"),
+    dias_retraso_min: Optional[int] = Query(None, description="Días mínimos de retraso para filtrar"),
+    dias_retraso_max: Optional[int] = Query(None, description="Días máximos de retraso para filtrar"),
     incluir_admin: bool = Query(False, description="Incluir datos del administrador para diagnóstico"),
     diagnostico_ml: bool = Query(False, description="Incluir diagnóstico ML en la respuesta"),
+    incluir_ml: bool = Query(True, description="Incluir predicción ML Impago (puede ser lento con muchos registros)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -512,7 +515,10 @@ def obtener_clientes_atrasados(
     Args:
         dias_retraso: Filtrar por días específicos de retraso (1, 3, 5, etc.)
                      Si es None, devuelve todos los clientes atrasados
+        dias_retraso_min: Filtrar por días mínimos de retraso (>=)
+        dias_retraso_max: Filtrar por días máximos de retraso (<=)
         incluir_admin: Si es True, incluye datos del administrador
+        incluir_ml: Si es False, omite el cálculo de ML Impago (más rápido)
     """
     start_time = time.time()
 
@@ -554,10 +560,23 @@ def obtener_clientes_atrasados(
             Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Pago incompleto (incluye total_pagado = 0)
         ]
 
-        # Si se especifica días de retraso, agregar filtro adicional
-        if dias_retraso:
+        # ✅ Aplicar filtros de días de retraso
+        # Si se especifica días de retraso exacto, usar ese
+        if dias_retraso is not None:
             fecha_limite = hoy - timedelta(days=dias_retraso)
+            # Para días exactos: fecha_vencimiento debe estar entre fecha_limite y fecha_limite+1 día
             cuotas_filtros.append(Cuota.fecha_vencimiento <= fecha_limite)
+            cuotas_filtros.append(Cuota.fecha_vencimiento > fecha_limite - timedelta(days=1))
+        else:
+            # Si se especifica rango de días, aplicar filtros
+            # dias_retraso_min: días >= min significa fecha_vencimiento <= hoy - min
+            if dias_retraso_min is not None:
+                fecha_max = hoy - timedelta(days=dias_retraso_min)
+                cuotas_filtros.append(Cuota.fecha_vencimiento <= fecha_max)
+            # dias_retraso_max: días <= max significa fecha_vencimiento >= hoy - max
+            if dias_retraso_max is not None:
+                fecha_min = hoy - timedelta(days=dias_retraso_max)
+                cuotas_filtros.append(Cuota.fecha_vencimiento >= fecha_min)
 
         # Ejecutar la query primero para detectar errores temprano
         # Esto evita que la transacción se aborte cuando se use en el JOIN
@@ -641,17 +660,28 @@ def obtener_clientes_atrasados(
 
         logger.info(
             f"📋 [clientes_atrasados] Encontrados {len(resultados)} clientes atrasados "
-            f"(filtro días_retraso={dias_retraso}, query_time={query_time_ms}ms)"
+            f"(filtro días_retraso={dias_retraso}, min={dias_retraso_min}, max={dias_retraso_max}, query_time={query_time_ms}ms)"
         )
+
+        # ✅ Optimización: Si hay muchos resultados y no se requiere ML, omitir procesamiento ML
+        # Esto puede ahorrar mucho tiempo cuando hay miles de registros
+        if len(resultados) > 1000 and not incluir_ml:
+            logger.info(f"⚡ [clientes_atrasados] Omitiendo ML Impago por tener {len(resultados)} registros y incluir_ml=False")
+            ml_service = None
+            modelo_cargado = False
+            razon_fallo_ml = "Omitido por rendimiento (muchos registros)"
+        else:
+            # Cargar modelo ML Impago una sola vez si está disponible
+            ml_service = None
+            modelo_cargado = False
+            razon_fallo_ml = None
 
         # Convertir a diccionarios y agregar predicción ML Impago
         clientes_atrasados = []
 
-        # Cargar modelo ML Impago una sola vez si está disponible
-        ml_service = None
-        modelo_cargado = False
-        razon_fallo_ml = None
-        try:
+        # Cargar modelo ML Impago solo si se requiere
+        if incluir_ml and ml_service is None:
+            try:
             from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
 
             modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
@@ -697,6 +727,35 @@ def obtener_clientes_atrasados(
         except Exception as e:
             razon_fallo_ml = f"Error cargando modelo ML Impago: {e}"
             logger.error(f"❌ [ML] {razon_fallo_ml}", exc_info=True)
+
+        # ✅ Optimización: Solo procesar ML si se requiere y hay resultados
+        if not incluir_ml or not resultados:
+            # Si no se requiere ML, simplemente convertir resultados a diccionarios
+            for row in resultados:
+                cliente_data = {
+                    "cedula": row.cedula,
+                    "nombres": row.nombres,
+                    "analista": row.analista,
+                    "prestamo_id": row.prestamo_id,
+                    "cuotas_vencidas": row.cuotas_vencidas,
+                    "total_adeudado": (float(row.total_adeudado) if row.total_adeudado else 0.0),
+                    "fecha_primera_vencida": (row.fecha_primera_vencida.isoformat() if row.fecha_primera_vencida else None),
+                    "ml_impago": None,
+                }
+                clientes_atrasados.append(cliente_data)
+            
+            total_time_ms = int((time.time() - start_time) * 1000)
+            logger.info(
+                f"✅ [clientes_atrasados] Procesados {len(clientes_atrasados)} clientes "
+                f"(sin ML, total_time={total_time_ms}ms)"
+            )
+            
+            return {
+                "clientes_atrasados": clientes_atrasados,
+                "total": len(clientes_atrasados),
+                "ml_disponible": False,
+                "ml_procesado": False,
+            }
 
         # Optimización: Cargar todos los préstamos de una vez
         # SOLUCIÓN DEFINITIVA: Usar load_only() desde el inicio para evitar cargar columnas que no existen
@@ -989,15 +1048,25 @@ def obtener_clientes_atrasados(
         else:
             diagnostico_ml_dict["razon"] = "ML funcionando correctamente"
 
-        # Retornar lista directamente para compatibilidad con frontend
-        # Si se solicita diagnóstico con ?diagnostico_ml=true, agregarlo a la respuesta
-        # Nota: diagnostico_ml es el parámetro de la función, diagnostico_ml_dict es el diccionario
+        # ✅ Retornar formato consistente: siempre objeto con clientes_atrasados
+        # Esto permite agregar metadatos sin romper compatibilidad
+        response = {
+            "clientes_atrasados": clientes_atrasados,
+            "total": len(clientes_atrasados),
+            "ml_disponible": ml_service is not None and modelo_cargado if incluir_ml else False,
+            "ml_procesado": ml_processed > 0 if incluir_ml else False,
+        }
+        
+        # Agregar diagnóstico ML si se solicita
         if diagnostico_ml:
-            return {
-                "clientes_atrasados": clientes_atrasados,
-                "_diagnostico_ml": diagnostico_ml_dict,
-            }
-        return clientes_atrasados
+            response["_diagnostico_ml"] = diagnostico_ml_dict
+        
+        # ✅ Para compatibilidad: si no se requiere ML y no hay diagnóstico, retornar lista directa
+        # Esto mantiene compatibilidad con código existente que espera un array
+        if not incluir_ml and not diagnostico_ml:
+            return clientes_atrasados
+        
+        return response
 
     except Exception as e:
         logger.error(f"Error obteniendo clientes atrasados: {e}", exc_info=True)

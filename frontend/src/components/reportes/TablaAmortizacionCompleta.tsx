@@ -74,18 +74,25 @@ export function TablaAmortizacionCompleta() {
   })
 
   // Obtener préstamos por cédula usando hook
-  const { data: prestamos, isLoading: loadingPrestamos } = usePrestamosByCedula(cedulaSeleccionada || '')
+  const { data: prestamos, isLoading: loadingPrestamos, error: errorPrestamos } = usePrestamosByCedula(cedulaSeleccionada || '')
 
   // Obtener cuotas de todos los préstamos (optimizado - una sola query)
-  const { data: todasLasCuotas, isLoading: loadingCuotas } = useQuery({
+  const { data: todasLasCuotas, isLoading: loadingCuotas, error: errorCuotas } = useQuery({
     queryKey: ['cuotas-prestamos', prestamos?.map(p => p.id)],
     queryFn: async () => {
       if (!prestamos || prestamos.length === 0) return []
-      // Usar endpoint optimizado para múltiples préstamos
-      const prestamoIds = prestamos.map(p => p.id)
-      return await cuotaService.getCuotasMultiplesPrestamos(prestamoIds)
+      try {
+        // Usar endpoint optimizado para múltiples préstamos
+        const prestamoIds = prestamos.map(p => p.id)
+        return await cuotaService.getCuotasMultiplesPrestamos(prestamoIds)
+      } catch (error) {
+        console.error('Error obteniendo cuotas:', error)
+        toast.error('Error al cargar cuotas. Algunos datos pueden estar incompletos.')
+        return []
+      }
     },
     enabled: !!prestamos && prestamos.length > 0,
+    retry: 1, // Solo reintentar una vez
   })
 
   // Obtener pagos por cédula (manejar errores para que no fallen los reportes)
@@ -264,6 +271,16 @@ export function TablaAmortizacionCompleta() {
                   <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
                   <span className="ml-2">Cargando información...</span>
                 </div>
+              ) : errorPrestamos ? (
+                <Card className="mb-6">
+                  <CardContent className="py-8 text-center">
+                    <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                    <p className="text-red-600 mb-2">Error al cargar los préstamos</p>
+                    <p className="text-sm text-gray-600">
+                      {errorPrestamos instanceof Error ? errorPrestamos.message : 'Error desconocido'}
+                    </p>
+                  </CardContent>
+                </Card>
               ) : (
                 <>
                   {clienteInfo && (
@@ -298,7 +315,7 @@ export function TablaAmortizacionCompleta() {
                   )}
 
                   {/* Resumen de Préstamos */}
-                  {prestamos && prestamos.length > 0 && (
+                  {prestamos && prestamos.length > 0 ? (
                     <Card className="mb-6 bg-green-50">
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -327,10 +344,35 @@ export function TablaAmortizacionCompleta() {
                         </div>
                       </CardContent>
                     </Card>
-                  )}
+                  ) : prestamos && prestamos.length === 0 ? (
+                    <Card className="mb-6">
+                      <CardContent className="py-8 text-center">
+                        <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">No se encontraron préstamos para esta cédula</p>
+                      </CardContent>
+                    </Card>
+                  ) : null}
 
                   {/* Tabla de Cuotas */}
-                  {todasLasCuotas && todasLasCuotas.length > 0 && (
+                  {prestamos && prestamos.length > 0 && (
+                    loadingCuotas ? (
+                    <Card className="mb-6">
+                      <CardContent className="py-8 text-center">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+                        <p className="text-gray-600">Cargando tabla de amortización...</p>
+                      </CardContent>
+                    </Card>
+                  ) : errorCuotas ? (
+                    <Card className="mb-6">
+                      <CardContent className="py-8 text-center">
+                        <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                        <p className="text-red-600 mb-2">Error al cargar las cuotas</p>
+                        <p className="text-sm text-gray-600">
+                          {errorCuotas instanceof Error ? errorCuotas.message : 'Error desconocido'}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : todasLasCuotas && todasLasCuotas.length > 0 ? (
                     <Card className="mb-6">
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -399,6 +441,14 @@ export function TablaAmortizacionCompleta() {
                         </div>
                       </CardContent>
                     </Card>
+                  ) : (
+                    <Card className="mb-6">
+                      <CardContent className="py-8 text-center">
+                        <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">No se encontraron cuotas para los préstamos de este cliente</p>
+                      </CardContent>
+                    </Card>
+                  )
                   )}
 
                   {/* Tabla de Pagos */}

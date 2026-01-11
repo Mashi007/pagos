@@ -45,34 +45,29 @@ class CobranzasService {
     diasRetraso?: number,
     diasRetrasoMin?: number,
     diasRetrasoMax?: number,
-    incluirAdmin: boolean = false
+    incluirAdmin: boolean = false,
+    incluirML: boolean = true // ✅ Permitir omitir ML para mejor rendimiento
   ): Promise<ClienteAtrasado[]> {
     const params = new URLSearchParams()
     if (diasRetraso) {
       params.append('dias_retraso', diasRetraso.toString())
     } else {
-      // Si hay rango, usar el endpoint de informes que soporta rangos
-      if (diasRetrasoMin !== undefined || diasRetrasoMax !== undefined) {
-        if (diasRetrasoMin !== undefined) params.append('dias_retraso_min', diasRetrasoMin.toString())
-        if (diasRetrasoMax !== undefined) params.append('dias_retraso_max', diasRetrasoMax.toString())
-        const url = `${this.baseUrl}/informes/clientes-atrasados?${params.toString()}&formato=json`
-        try {
-          const result = await apiClient.get<any>(url, { timeout: 60000 })
-          // El endpoint de informes devuelve { clientes: [...] }
-          return result.clientes || []
-        } catch (error: any) {
-          console.error('❌ [Cobranzas] Error cargando clientes atrasados:', error)
-          throw error
-        }
-      }
+      // ✅ Usar el endpoint principal que ahora soporta rangos
+      if (diasRetrasoMin !== undefined) params.append('dias_retraso_min', diasRetrasoMin.toString())
+      if (diasRetrasoMax !== undefined) params.append('dias_retraso_max', diasRetrasoMax.toString())
     }
     if (incluirAdmin) params.append('incluir_admin', 'true')
+    // ✅ Agregar parámetro para omitir ML si hay muchos registros (mejor rendimiento)
+    if (!incluirML) params.append('incluir_ml', 'false')
+    
     const url = `${this.baseUrl}/clientes-atrasados${params.toString() ? `?${params.toString()}` : ''}`
 
     try {
-      const result = await apiClient.get<ClienteAtrasado[]>(url, { timeout: 60000 })
-      console.log(`✅ [Cobranzas] Clientes atrasados cargados: ${result.length}`)
-      return result
+      const result = await apiClient.get<ClienteAtrasado[] | { clientes_atrasados: ClienteAtrasado[] }>(url, { timeout: 90000 })
+      // ✅ Manejar ambos formatos de respuesta (array directo o objeto con clientes_atrasados)
+      const clientes = Array.isArray(result) ? result : (result.clientes_atrasados || [])
+      console.log(`✅ [Cobranzas] Clientes atrasados cargados: ${clientes.length}`)
+      return clientes
     } catch (error: any) {
       console.error('❌ [Cobranzas] Error cargando clientes atrasados:', error)
       throw error

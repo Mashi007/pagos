@@ -87,7 +87,7 @@ def _aplicar_filtros_pagos(
         query = query.filter(Pago.fecha_pago >= datetime.combine(fecha_desde, datetime.min.time()))
         logger.info(f"🔍 [listar_pagos] Filtro fecha_desde: {fecha_desde}")
     if fecha_hasta:
-        query = query.filter(Pago.fecha_pago <= datetime.combine(fecha_hasta, time.max))
+        query = query.filter(Pago.fecha_pago <= datetime.combine(fecha_hasta, datetime.max.time()))
         logger.info(f"🔍 [listar_pagos] Filtro fecha_hasta: {fecha_hasta}")
     if analista:
         query = query.join(Prestamo, Pago.prestamo_id == Prestamo.id).filter(Prestamo.usuario_proponente == analista)
@@ -531,7 +531,7 @@ def _serializar_pagos_con_cache(pagos: list, db: Session, hoy: date) -> list:
 @router.get("/", response_model=dict)
 def listar_pagos(
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1, le=1000),  # Aumentado a 1000 para reportes
     cedula: Optional[str] = None,
     estado: Optional[str] = None,
     fecha_desde: Optional[date] = None,
@@ -544,7 +544,10 @@ def listar_pagos(
     Listar pagos con filtros y paginación
     """
     try:
-        logger.info(f"📋 [listar_pagos] Iniciando consulta - página {page}, por página {per_page}")
+        # Normalizar cédula si se proporciona
+        cedula_norm = cedula.strip().upper() if cedula else None
+        
+        logger.info(f"📋 [listar_pagos] Iniciando consulta - página {page}, por página {per_page}, cédula: {cedula_norm}")
 
         try:
             # Verificar que la tabla existe antes de consultarla
@@ -603,10 +606,17 @@ def listar_pagos(
                     detail=f"Error de conexión a la base de datos: {str(db_error)}",
                 )
 
-        total = _contar_total_pagos_validos(db, cedula)
+        # Aplicar filtros a la query base
+        query_base = db.query(Pago).filter(Pago.activo.is_(True))
+        query_base = _aplicar_filtros_pagos(query_base, cedula_norm, estado, fecha_desde, fecha_hasta, analista, db)
+        
+        # Contar total con filtros aplicados
+        total = query_base.count()
         logger.debug(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")
 
-        pagos = _obtener_pagos_paginados(db, page, per_page)
+        # Obtener pagos paginados con filtros aplicados
+        offset = (page - 1) * per_page
+        pagos = query_base.order_by(Pago.fecha_pago.desc()).offset(offset).limit(per_page).all()
         logger.info(f"📄 [listar_pagos] Pagos obtenidos de BD: {len(pagos)}")
 
         hoy = date.today()

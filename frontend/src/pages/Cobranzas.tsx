@@ -100,7 +100,9 @@ export function Cobranzas() {
     queryFn: () => cobranzasService.getClientesAtrasados(
       filtroDiasRetraso,
       rangoDiasMin,
-      rangoDiasMax
+      rangoDiasMax,
+      false, // incluirAdmin
+      true   // incluirML - mantener true para mostrar predicciones ML
     ),
     retry: 2,
     retryDelay: 2000, // ✅ Aumentar delay entre retries para dar más tiempo al servidor
