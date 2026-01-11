@@ -31,11 +31,14 @@ annotated-types==0.7.0
 # ============================================
 # SECURITY
 # ============================================
-python-jose[cryptography]>=3.4.0
-PyJWT==2.8.0
+# ✅ MEJORA 2025-01-27: python-jose removido - NO se usa en el código
+# El código usa PyJWT directamente con algoritmo HS256 (HMAC-SHA256), que NO requiere ECDSA
+# Esto elimina completamente la dependencia de ecdsa y su vulnerabilidad CVE-2024-23342
+# python-jose[cryptography]>=3.4.0  # REMOVIDO - no se usa, eliminaba vulnerabilidad ecdsa
+PyJWT==2.8.0  # Usado directamente en app/core/security.py con algoritmo HS256 (no requiere ECDSA)
 passlib[bcrypt]==1.7.4
 bcrypt==4.1.1
-cryptography>=41.0.0  # Para encriptación de API Keys con Fernet
+cryptography>=41.0.0  # Para encriptación de API Keys con Fernet (no requiere ecdsa para operaciones básicas)
 
 # ============================================
 # DATE AND TIME

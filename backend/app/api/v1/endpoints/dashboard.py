@@ -2215,8 +2215,8 @@ def _obtener_cuotas_programadas_por_mes(
     analista: Optional[str],
     concesionario: Optional[str],
     modelo: Optional[str],
-    fecha_inicio: Optional[date],
-    fecha_fin: Optional[date],
+    fecha_inicio_query: date,
+    fecha_fin_query: date,
 ) -> dict:
     """
     Obtiene cuotas programadas por mes (cuotas que vencen en ese mes).
@@ -2235,6 +2235,22 @@ def _obtener_cuotas_programadas_por_mes(
     cuotas_por_mes = {}
 
     try:
+        # ✅ CORRECCIÓN: No filtrar por año hardcodeado, usar fecha_inicio_query si está disponible
+        filtros_cuotas = [Prestamo.estado == "APROBADO"]
+        
+        # Si hay fecha_inicio, filtrar desde esa fecha, sino desde 2024
+        if fecha_inicio:
+            filtros_cuotas.append(Cuota.fecha_vencimiento >= fecha_inicio)
+        else:
+            # Usar año dinámico basado en fecha actual (últimos 12 meses por defecto)
+            from datetime import date
+            hoy = date.today()
+            fecha_minima = date(hoy.year - 1, hoy.month, 1)  # Últimos 12 meses
+            filtros_cuotas.append(Cuota.fecha_vencimiento >= fecha_minima)
+        
+        if fecha_fin:
+            filtros_cuotas.append(Cuota.fecha_vencimiento <= fecha_fin)
+        
         query_cuotas = (
             db.query(
                 func.extract("year", Cuota.fecha_vencimiento).label("año"),
@@ -2242,7 +2258,7 @@ def _obtener_cuotas_programadas_por_mes(
                 func.sum(Cuota.monto_cuota).label("total_cuotas_programadas"),
             )
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(Prestamo.estado == "APROBADO", func.extract("year", Cuota.fecha_vencimiento) >= 2024)
+            .filter(*filtros_cuotas)
             .group_by(func.extract("year", Cuota.fecha_vencimiento), func.extract("month", Cuota.fecha_vencimiento))
             .order_by("año", "mes")
         )
@@ -2279,8 +2295,8 @@ def _obtener_morosidad_por_mes(
     analista: Optional[str],
     concesionario: Optional[str],
     modelo: Optional[str],
-    fecha_inicio: Optional[date],
-    fecha_fin: Optional[date],
+    fecha_inicio_query: date,
+    fecha_fin_query: date,
 ) -> dict:
     """
     Obtiene morosidad mensual: cuotas que vencen en cada mes y NO fueron pagadas (o fueron pagadas parcialmente).
@@ -2303,9 +2319,13 @@ def _obtener_morosidad_por_mes(
         # Construir filtros para WHERE clause
         where_conditions = [
             "p.estado = 'APROBADO'",
-            "EXTRACT(YEAR FROM c.fecha_vencimiento) >= 2024"
+            "c.fecha_vencimiento >= :fecha_inicio_morosidad",
+            "c.fecha_vencimiento <= :fecha_fin_morosidad"
         ]
-        bind_params = {}
+        bind_params = {
+            "fecha_inicio_morosidad": fecha_inicio_query,
+            "fecha_fin_morosidad": fecha_fin_query
+        }
 
         # Aplicar filtros de analista, concesionario, modelo
         if analista:
@@ -2437,20 +2457,38 @@ def _obtener_pagos_por_mes(
             join_needed = True
 
         where_clause = " AND ".join(where_conditions)
-        join_clause = "INNER JOIN prestamos pr ON p.prestamo_id = pr.id WHERE pr.estado = 'APROBADO' AND" if join_needed else "WHERE"
-
-        query_pagos_sql = text(
-            f"""
-            SELECT
-                EXTRACT(YEAR FROM p.fecha_pago)::integer as año,
-                EXTRACT(MONTH FROM p.fecha_pago)::integer as mes,
-                COALESCE(SUM(p.monto_pagado), 0) as total_pagado
-            FROM pagos p
-            {join_clause} {where_clause}
-            GROUP BY EXTRACT(YEAR FROM p.fecha_pago), EXTRACT(MONTH FROM p.fecha_pago)
-            ORDER BY año, mes
-            """
-        )
+        
+        # ✅ CORRECCIÓN: Construir JOIN correctamente
+        # Si necesitamos filtros de préstamo, hacer LEFT JOIN para incluir pagos sin prestamo_id
+        if join_needed:
+            query_pagos_sql = text(
+                f"""
+                SELECT
+                    EXTRACT(YEAR FROM p.fecha_pago)::integer as año,
+                    EXTRACT(MONTH FROM p.fecha_pago)::integer as mes,
+                    COALESCE(SUM(p.monto_pagado), 0) as total_pagado
+                FROM pagos p
+                LEFT JOIN prestamos pr ON p.prestamo_id = pr.id
+                WHERE (pr.estado = 'APROBADO' OR p.prestamo_id IS NULL)
+                  AND {where_clause}
+                GROUP BY EXTRACT(YEAR FROM p.fecha_pago), EXTRACT(MONTH FROM p.fecha_pago)
+                ORDER BY año, mes
+                """
+            )
+        else:
+            # Sin filtros de préstamo, solo usar tabla pagos directamente
+            query_pagos_sql = text(
+                f"""
+                SELECT
+                    EXTRACT(YEAR FROM p.fecha_pago)::integer as año,
+                    EXTRACT(MONTH FROM p.fecha_pago)::integer as mes,
+                    COALESCE(SUM(p.monto_pagado), 0) as total_pagado
+                FROM pagos p
+                WHERE {where_clause}
+                GROUP BY EXTRACT(YEAR FROM p.fecha_pago), EXTRACT(MONTH FROM p.fecha_pago)
+                ORDER BY año, mes
+                """
+            )
 
         resultados_pagos = db.execute(query_pagos_sql.bindparams(**bind_params))
 
@@ -5356,7 +5394,10 @@ def obtener_financiamiento_tendencia_mensual(
 
         # ✅ OPTIMIZACIÓN: Usar ORM en lugar de SQL directo para aprovechar índices
         # Query para calcular suma de monto_cuota programado por mes (cuotas que vencen en cada mes)
-        cuotas_por_mes = _obtener_cuotas_programadas_por_mes(db, analista, concesionario, modelo, fecha_inicio, fecha_fin)
+        # ✅ CORRECCIÓN: Pasar fecha_inicio_query y fecha_fin_query para filtrar correctamente
+        cuotas_por_mes = _obtener_cuotas_programadas_por_mes(
+            db, analista, concesionario, modelo, fecha_inicio_query, fecha_fin_query
+        )
 
         # ✅ Query para calcular suma de monto_pagado de tabla pagos por mes (fecha real de pago)
         pagos_por_mes = _obtener_pagos_por_mes(
@@ -5364,7 +5405,10 @@ def obtener_financiamiento_tendencia_mensual(
         )
 
         # ✅ CORRECCIÓN: Calcular morosidad mensual real (cuotas que vencen en ese mes y NO fueron pagadas)
-        morosidad_por_mes = _obtener_morosidad_por_mes(db, analista, concesionario, modelo, fecha_inicio, fecha_fin)
+        # ✅ CORRECCIÓN: Pasar fecha_inicio_query y fecha_fin_query para filtrar correctamente
+        morosidad_por_mes = _obtener_morosidad_por_mes(
+            db, analista, concesionario, modelo, fecha_inicio_query, fecha_fin_query
+        )
 
         # ✅ CÁLCULO CORREGIDO: Morosidad mensual (NO acumulativa)
         # Generar datos mensuales (incluyendo meses sin datos) y calcular acumulados
