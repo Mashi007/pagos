@@ -3094,9 +3094,8 @@ async def crear_documento_ai(
         raise HTTPException(status_code=403, detail="Solo administradores pueden crear documentos AI")
 
     try:
-        from pathlib import Path
-
         import uuid
+        from pathlib import Path
 
         # Validar archivo
         tipo_archivo_db, extension = _validar_archivo_documento_ai(archivo)
@@ -3368,8 +3367,8 @@ def _buscar_archivo_por_nombre_uuid(
     Útil cuando el archivo se guardó con UUID pero la ruta absoluta cambió.
     Retorna (ruta_archivo, archivo_encontrado) o (None, False)
     """
-    from pathlib import Path
     import re
+    from pathlib import Path
 
     upload_dir = base_dir / "documentos_ai"
     if not upload_dir.exists():
@@ -4714,7 +4713,6 @@ def _calcular_tasa_morosidad_mes(db: Session, año: int, mes: int) -> dict:
         #     ultimo_dia = date(año + 1, 1, 1)
         # else:
         #     ultimo_dia = date(año, mes + 1, 1)
-
         # Total de cuotas del mes
         total_cuotas = (
             db.query(func.count(Cuota.id))
@@ -5307,11 +5305,12 @@ def _ejecutar_consulta_cruzada(db: Session, tabla1: str, tabla2: str, campos: li
     """Ejecuta una consulta cruzada entre dos tablas con JOIN"""
     try:
         from sqlalchemy import text
+
         from app.utils.sql_helpers import (
-            sanitize_column_name,
-            sanitize_table_name,
             build_safe_where_clause,
             execute_safe_query,
+            sanitize_column_name,
+            sanitize_table_name,
         )
 
         # ✅ SEGURIDAD: Validar y sanitizar nombres de tablas y columnas
@@ -5467,7 +5466,6 @@ def _analisis_ml_segmentacion_clientes(db: Session) -> dict:
 
         # hoy calculado pero no usado en esta función
         # hoy = date.today()
-
         # Segmentar clientes por comportamiento de pago
         query = text(
             """
@@ -5739,7 +5737,6 @@ def _analizar_pagos_segun_vencimiento(db: Session, año: int, mes: int) -> dict:
         #     fecha_fin_mes = date(año + 1, 1, 1) - timedelta(days=1)
         # else:
         #     fecha_fin_mes = date(año, mes + 1, 1) - timedelta(days=1)
-
         # Consulta: Cuotas con fecha_vencimiento en el mes y si fueron pagadas
         query = text(
             """
@@ -6978,9 +6975,8 @@ def _obtener_datos_adicionales(pregunta: str, pregunta_lower: str, db: Session) 
 
     datos_adicionales = ""
     try:
-        from datetime import datetime
-
         import re
+        from datetime import datetime
 
         fecha_actual = datetime.now()
 
@@ -7150,8 +7146,8 @@ def _ejecutar_consulta_dinamica(pregunta: str, pregunta_lower: str, db: Session)
 
     Retorna string con los resultados de la consulta o string vacío si no se puede ejecutar.
     """
-    from datetime import datetime, timedelta
     import re
+    from datetime import datetime, timedelta
 
     resultado = ""
     fecha_actual = datetime.now()

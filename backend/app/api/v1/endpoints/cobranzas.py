@@ -11,9 +11,9 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[import-untyped]
 from fastapi.responses import StreamingResponse  # type: ignore[import-untyped]
-from pydantic import BaseModel, Field, field_validator  # type: ignore[import-untyped]
 from openpyxl import Workbook  # type: ignore[import-untyped]
 from openpyxl.styles import Alignment, Font, PatternFill  # type: ignore[import-untyped]
+from pydantic import BaseModel, Field, field_validator  # type: ignore[import-untyped]
 from reportlab.lib import colors  # type: ignore[import-untyped]
 from reportlab.lib.pagesizes import A4  # type: ignore[import-untyped]
 from reportlab.lib.styles import getSampleStyleSheet  # type: ignore[import-untyped]
@@ -175,8 +175,8 @@ def diagnostico_ml_impago(
                 diagnostico["errores"].append("Modelo no se cargó en memoria después de load_model_from_path")
 
                 # Verificar si el archivo existe con búsqueda exhaustiva
-                from pathlib import Path
                 import pickle
+                from pathlib import Path
 
                 ruta_original = Path(modelo_activo.ruta_archivo)
                 search_paths = []

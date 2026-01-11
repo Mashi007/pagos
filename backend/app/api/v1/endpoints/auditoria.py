@@ -4,9 +4,8 @@ from datetime import date, datetime, timedelta
 from typing import List, Optional
 
 import pytz
-from openpyxl import Workbook  # type: ignore[import-untyped]
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from openpyxl import Workbook  # type: ignore[import-untyped]
 from sqlalchemy import asc, desc, func, text
 from sqlalchemy.orm import Session, joinedload
 

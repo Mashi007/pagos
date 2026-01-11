@@ -170,8 +170,8 @@ def _handle_database_error(e: Exception, operation: str) -> HTTPException:
 
 def _obtener_openai_api_key(db: Session) -> str:
     """Obtener API key de OpenAI desde configuración (desencriptada)"""
-    from app.models.configuracion_sistema import ConfiguracionSistema
     from app.core.encryption import decrypt_api_key
+    from app.models.configuracion_sistema import ConfiguracionSistema
 
     config = (
         db.query(ConfiguracionSistema)

@@ -80,8 +80,8 @@ logger = logging.getLogger(__name__)
 try:
     import sentry_sdk
     from sentry_sdk.integrations.fastapi import FastApiIntegration
-    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
     from sentry_sdk.integrations.logging import LoggingIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
     if settings.SENTRY_DSN:
         sentry_sdk.init(
@@ -115,10 +115,10 @@ from app.api.v1.endpoints import (  # noqa: E402; aprobaciones deshabilitado - v
     carga_masiva,
     clientes,
     cobranzas,
+    comunicaciones,
     concesionarios,
     conciliacion_bancaria,
     configuracion,
-    comunicaciones,
     conversaciones_whatsapp,
     dashboard,
     health,
