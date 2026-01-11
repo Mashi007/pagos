@@ -37,14 +37,30 @@ class CuotaCreate(CuotaBase):
 
 class CuotaUpdate(BaseModel):
     # Schema para actualizar una cuota
+    fecha_vencimiento: Optional[date] = None
     fecha_pago: Optional[date] = None
+    monto_cuota: Optional[Decimal] = Field(None, gt=0)
+    monto_capital: Optional[Decimal] = Field(None, ge=0)
+    monto_interes: Optional[Decimal] = Field(None, ge=0)
     capital_pagado: Optional[Decimal] = Field(None, ge=0)
     interes_pagado: Optional[Decimal] = Field(None, ge=0)
-    mora_pagada: Optional[Decimal] = Field(None, ge=0)
+    capital_pendiente: Optional[Decimal] = Field(None, ge=0)
+    interes_pendiente: Optional[Decimal] = Field(None, ge=0)
+    total_pagado: Optional[Decimal] = Field(None, ge=0)
     estado: Optional[str] = None
     observaciones: Optional[str] = None
 
-    @field_validator("capital_pagado", "interes_pagado", "mora_pagada", mode="before")
+    @field_validator(
+        "monto_cuota",
+        "monto_capital",
+        "monto_interes",
+        "capital_pagado",
+        "interes_pagado",
+        "capital_pendiente",
+        "interes_pendiente",
+        "total_pagado",
+        mode="before",
+    )
     @classmethod
     def validate_decimal_places(cls, v):
         if v is not None and not isinstance(v, Decimal):

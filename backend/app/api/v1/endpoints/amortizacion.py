@@ -170,31 +170,93 @@ def actualizar_cuota(
 
         # Aplicar cambios
         update_data = cuota_data.model_dump(exclude_unset=True)
+        
+        # Validar que haya al menos un campo para actualizar
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No se proporcionaron campos para actualizar")
+        
+        # Log para debugging (solo en desarrollo)
+        import os
+        if os.getenv("ENVIRONMENT") == "development" or os.getenv("DEBUG") == "true":
+            print(f"📝 [actualizar_cuota] Actualizando cuota {cuota_id} con campos: {list(update_data.keys())}")
+        
         for field, value in update_data.items():
-            if hasattr(cuota, field) and value is not None:
-                setattr(cuota, field, value)
+            if hasattr(cuota, field):
+                # Permitir establecer None para campos opcionales (como fecha_pago, observaciones)
+                if value is not None or field in ["fecha_pago", "observaciones"]:
+                    try:
+                        setattr(cuota, field, value)
+                    except Exception as e:
+                        print(f"⚠️ Error estableciendo campo {field}: {e}")
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Error al actualizar campo {field}: {str(e)}"
+                        )
 
         # Recalcular total_pagado si se actualizaron campos de pago
-        if any(field in update_data for field in ["capital_pagado", "interes_pagado", "mora_pagada"]):
+        if any(field in update_data for field in ["capital_pagado", "interes_pagado"]):
             cuota.total_pagado = (
                 (cuota.capital_pagado or Decimal("0"))
                 + (cuota.interes_pagado or Decimal("0"))
-                + (cuota.mora_pagada or Decimal("0"))
             )
+        # Si se actualiza total_pagado directamente pero no capital_pagado/interes_pagado,
+        # mantener el total_pagado como está (el usuario lo estableció manualmente)
 
-        # Recalcular capital_pendiente
-        cuota.capital_pendiente = cuota.monto_capital - (cuota.capital_pagado or Decimal("0"))
+        # Recalcular campos pendientes si se actualizaron montos base o pagados
+        if any(field in update_data for field in ["monto_capital", "capital_pagado"]):
+            cuota.capital_pendiente = cuota.monto_capital - (cuota.capital_pagado or Decimal("0"))
+        
+        if any(field in update_data for field in ["monto_interes", "interes_pagado"]):
+            cuota.interes_pendiente = cuota.monto_interes - (cuota.interes_pagado or Decimal("0"))
+        
+        # Si se actualizan directamente los pendientes, recalcular campos pagados
+        if "capital_pendiente" in update_data:
+            # Si se actualiza directamente, recalcular capital_pagado
+            if "capital_pagado" not in update_data:
+                cuota.capital_pagado = cuota.monto_capital - (cuota.capital_pendiente or Decimal("0"))
+                # Recalcular total_pagado si cambió capital_pagado
+                cuota.total_pagado = (
+                    (cuota.capital_pagado or Decimal("0"))
+                    + (cuota.interes_pagado or Decimal("0"))
+                )
+        
+        if "interes_pendiente" in update_data:
+            # Si se actualiza directamente, recalcular interes_pagado
+            if "interes_pagado" not in update_data:
+                cuota.interes_pagado = cuota.monto_interes - (cuota.interes_pendiente or Decimal("0"))
+                # Recalcular total_pagado si cambió interes_pagado
+                cuota.total_pagado = (
+                    (cuota.capital_pagado or Decimal("0"))
+                    + (cuota.interes_pagado or Decimal("0"))
+                )
 
-        # Actualizar estado si es necesario
-        if cuota.total_pagado >= cuota.monto_cuota:
-            cuota.estado = "PAGADO"
-        elif cuota.total_pagado > Decimal("0"):
-            cuota.estado = "PARCIAL"
-        else:
-            cuota.estado = "PENDIENTE"
+        # Actualizar estado si es necesario (solo si no se actualizó manualmente)
+        if "estado" not in update_data:
+            if cuota.total_pagado >= cuota.monto_cuota:
+                cuota.estado = "PAGADO"
+            elif cuota.total_pagado > Decimal("0"):
+                cuota.estado = "PARCIAL"
+            else:
+                cuota.estado = "PENDIENTE"
 
-        db.commit()
-        db.refresh(cuota)
+        # Asegurar que todos los cambios se persistan en la base de datos
+        try:
+            db.add(cuota)  # Marcar como modificado explícitamente
+            db.flush()  # Enviar cambios a la BD sin commit (para validar)
+            db.commit()  # Confirmar cambios en la BD
+            db.refresh(cuota)  # Refrescar para obtener valores actualizados de la BD
+            
+            # Log para debugging
+            import os
+            if os.getenv("ENVIRONMENT") == "development" or os.getenv("DEBUG") == "true":
+                print(f"✅ [actualizar_cuota] Cuota {cuota_id} actualizada exitosamente en BD")
+        except Exception as commit_error:
+            db.rollback()
+            print(f"❌ Error en commit de cuota {cuota_id}: {commit_error}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error al guardar cambios en la base de datos: {str(commit_error)}"
+            )
 
         # Las propiedades calculadas (esta_vencida, monto_pendiente_total, porcentaje_pagado)
         # se calculan automáticamente por el modelo cuando se accede a ellas
@@ -205,7 +267,11 @@ def actualizar_cuota(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error actualizando cuota: {str(e)}")
+        import traceback
+        error_detail = f"Error actualizando cuota: {str(e)}"
+        print(f"❌ Error en actualizar_cuota: {error_detail}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @router.delete("/cuota/{cuota_id}")

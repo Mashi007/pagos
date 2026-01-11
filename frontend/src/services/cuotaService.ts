@@ -28,10 +28,16 @@ export interface Cuota {
 }
 
 export interface CuotaUpdate {
+  fecha_vencimiento?: string | Date | null
   fecha_pago?: string | Date | null
+  monto_cuota?: number
+  monto_capital?: number
+  monto_interes?: number
   capital_pagado?: number
   interes_pagado?: number
-  mora_pagada?: number
+  capital_pendiente?: number
+  interes_pendiente?: number
+  total_pagado?: number
   estado?: string
   observaciones?: string | null
 }
