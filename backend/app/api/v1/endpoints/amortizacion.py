@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_active_user, get_db
@@ -98,6 +98,44 @@ def obtener_cuotas_prestamo(
         cuota.monto_pendiente_total = cuota.monto_pendiente_total
         cuota.porcentaje_pagado = cuota.porcentaje_pagado
 
+    return cuotas
+
+
+@router.post("/cuotas/multiples", response_model=List[CuotaResponse])
+def obtener_cuotas_multiples_prestamos(
+    prestamo_ids: List[int] = Body(..., description="Lista de IDs de préstamos"),
+    estado: Optional[str] = Query(None, description="Filtrar por estado: PENDIENTE, PAGADA, VENCIDA, PARCIAL"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Obtiene cuotas de múltiples préstamos en una sola query.
+    Optimiza el problema N+1 queries en frontend.
+    """
+    if not prestamo_ids:
+        return []
+    
+    # Validar que no haya más de 100 préstamos (límite razonable)
+    if len(prestamo_ids) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se pueden consultar más de 100 préstamos a la vez"
+        )
+    
+    # Obtener todas las cuotas en una sola query
+    query = db.query(Cuota).filter(Cuota.prestamo_id.in_(prestamo_ids))
+    
+    if estado:
+        query = query.filter(Cuota.estado == estado)
+    
+    cuotas = query.order_by(Cuota.prestamo_id, Cuota.numero_cuota).all()
+    
+    # Agregar propiedades calculadas
+    for cuota in cuotas:
+        cuota.esta_vencida = cuota.esta_vencida
+        cuota.monto_pendiente_total = cuota.monto_pendiente_total
+        cuota.porcentaje_pagado = cuota.porcentaje_pagado
+    
     return cuotas
 
 

@@ -877,6 +877,16 @@ def actualizar_prestamo(
         db.commit()
         db.refresh(prestamo)
 
+        # ✅ Invalidar caché de cobranzas si se actualizó analista o usuario_proponente
+        # Estos cambios afectan los datos de cobranzas
+        if prestamo_data.analista is not None or prestamo_data.usuario_proponente is not None:
+            try:
+                from app.core.cache import invalidate_cache
+                invalidate_cache("cobranzas:")
+                logger.debug(f"Cache invalidado para cobranzas después de actualizar analista/usuario_proponente del préstamo {prestamo_id}")
+            except Exception as cache_error:
+                logger.warning(f"Error invalidando cache: {cache_error}")
+
         # 7. Registrar en auditoría
         crear_registro_auditoria(
             prestamo_id=prestamo.id,

@@ -1,0 +1,177 @@
+{
+  "fecha_auditoria": "2026-01-10T20:47:33.768891",
+  "endpoint": "https://rapicredit.onrender.com/api/v1/clientes",
+  "verificaciones": {
+    "conexion_bd": {
+      "estado": "exitoso",
+      "mensaje": "Conexión establecida correctamente"
+    },
+    "estructura_tabla": {
+      "estado": "exitoso",
+      "columnas": {
+        "id": {
+          "tipo": "integer",
+          "nullable": false,
+          "default": "nextval('clientes_id_seq'::regclass)"
+        },
+        "cedula": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": "'Z999999999'::character varying"
+        },
+        "nombres": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": null
+        },
+        "telefono": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": "'+589999999999'::character varying"
+        },
+        "email": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": "'buscaremail@noemail.com'::character varying"
+        },
+        "direccion": {
+          "tipo": "text",
+          "nullable": false,
+          "default": "'Actualizar dirección'::text"
+        },
+        "fecha_nacimiento": {
+          "tipo": "date",
+          "nullable": false,
+          "default": "'2000-01-01'::date"
+        },
+        "ocupacion": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": "'Actualizar ocupación'::character varying"
+        },
+        "estado": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": "'ACTIVO'::character varying"
+        },
+        "activo": {
+          "tipo": "boolean",
+          "nullable": false,
+          "default": "true"
+        },
+        "fecha_registro": {
+          "tipo": "timestamp without time zone",
+          "nullable": false,
+          "default": "'2025-10-31 00:00:00'::timestamp without time zone"
+        },
+        "fecha_actualizacion": {
+          "tipo": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "usuario_registro": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": "'itmaster@rapicreditca.com'::character varying"
+        },
+        "notas": {
+          "tipo": "text",
+          "nullable": false,
+          "default": "'No existe observaciones'::text"
+        }
+      },
+      "total_columnas": 14
+    },
+    "datos_bd": {
+      "estado": "exitoso",
+      "total": 4419,
+      "activos": 4234,
+      "inactivos": 7,
+      "finalizados": 178,
+      "sin_cedula": 0,
+      "sin_nombres": 0,
+      "muestra": []
+    },
+    "endpoint_backend": {
+      "estado": "exitoso",
+      "pruebas": [
+        {
+          "test": "query_basica",
+          "tiempo_ms": 676.4705181121826,
+          "registros": 20,
+          "exitoso": true
+        },
+        {
+          "test": "query_con_filtro",
+          "tiempo_ms": 168.55144500732422,
+          "registros": 20,
+          "exitoso": true
+        }
+      ]
+    },
+    "rendimiento": {
+      "estado": "exitoso",
+      "pruebas": [
+        {
+          "operacion": "count_total",
+          "tiempo_ms": 517.8208351135254,
+          "aceptable": true
+        },
+        {
+          "operacion": "query_paginada_20",
+          "tiempo_ms": 167.20104217529297,
+          "aceptable": true
+        },
+        {
+          "operacion": "query_con_filtro",
+          "tiempo_ms": 164.08705711364746,
+          "aceptable": true
+        },
+        {
+          "operacion": "serializacion_10",
+          "tiempo_ms": 0.7412433624267578,
+          "aceptable": true
+        }
+      ],
+      "operaciones_aceptables": 4,
+      "total_operaciones": 4
+    },
+    "indices": {
+      "estado": "advertencia",
+      "indices": {
+        "clientes_pkey": "CREATE UNIQUE INDEX clientes_pkey ON public.clientes USING btree (id)",
+        "idx_clientes_activo": "CREATE INDEX idx_clientes_activo ON public.clientes USING btree (activo)",
+        "idx_clientes_cedula": "CREATE INDEX idx_clientes_cedula ON public.clientes USING btree (cedula)",
+        "idx_clientes_estado": "CREATE INDEX idx_clientes_estado ON public.clientes USING btree (estado)",
+        "idx_clientes_estado_activo": "CREATE INDEX idx_clientes_estado_activo ON public.clientes USING btree (estado) WHERE ((estado)::text = 'ACTIVO'::text)",
+        "idx_clientes_nombres": "CREATE INDEX idx_clientes_nombres ON public.clientes USING btree (nombres)",
+        "ix_clientes_email": "CREATE INDEX ix_clientes_email ON public.clientes USING btree (email)",
+        "ix_clientes_id": "CREATE INDEX ix_clientes_id ON public.clientes USING btree (id)"
+      },
+      "total": 8,
+      "faltantes": [
+        "ix_clientes_cedula",
+        "ix_clientes_estado",
+        "ix_clientes_telefono"
+      ]
+    },
+    "validaciones": {
+      "estado": "advertencia",
+      "problemas": [
+        "7 cédulas duplicadas"
+      ]
+    }
+  },
+  "resumen": {
+    "exitosas": 5,
+    "parciales": 0,
+    "errores": 0,
+    "advertencias": 2,
+    "total": 7
+  },
+  "advertencias": [
+    "Índices faltantes: ix_clientes_cedula, ix_clientes_estado, ix_clientes_telefono",
+    "7 cédulas duplicadas"
+  ],
+  "errores": []
+}

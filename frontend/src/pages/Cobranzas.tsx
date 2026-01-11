@@ -24,7 +24,7 @@ import {
   Edit
 } from 'lucide-react'
 import { cobranzasService } from '@/services/cobranzasService'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ClienteAtrasado, CobranzasPorAnalista } from '@/services/cobranzasService'
 import { InformesCobranzas } from '@/components/cobranzas/InformesCobranzas'
 import { toast } from 'sonner'
@@ -35,6 +35,25 @@ export function Cobranzas() {
   const [filtroDiasRetraso, setFiltroDiasRetraso] = useState<number | undefined>(undefined)
   const [rangoDiasMin, setRangoDiasMin] = useState<number | undefined>(undefined)
   const [rangoDiasMax, setRangoDiasMax] = useState<number | undefined>(undefined)
+  const [errorRangoDias, setErrorRangoDias] = useState<string | null>(null)
+  
+  // ✅ Función de validación de rango de días
+  const validarRangoDias = (min: number | undefined, max: number | undefined): boolean => {
+    if (min !== undefined && max !== undefined && min > max) {
+      setErrorRangoDias('Los días mínimos no pueden ser mayores que los días máximos')
+      return false
+    }
+    if (min !== undefined && min < 0) {
+      setErrorRangoDias('Los días mínimos deben ser un número positivo')
+      return false
+    }
+    if (max !== undefined && max < 0) {
+      setErrorRangoDias('Los días máximos deben ser un número positivo')
+      return false
+    }
+    setErrorRangoDias(null)
+    return true
+  }
   const [filtroCuotasMinimas, setFiltroCuotasMinimas] = useState<number | undefined>(undefined)
   const [soloCuotasImpagas, setSoloCuotasImpagas] = useState(true)
   const [procesandoNotificaciones, setProcesandoNotificaciones] = useState(false)
@@ -51,6 +70,9 @@ export function Cobranzas() {
   const [editandoMLImpago, setEditandoMLImpago] = useState<number | null>(null)
   const [mlImpagoTemporal, setMLImpagoTemporal] = useState<{ nivelRiesgo: string; probabilidad: number } | null>(null)
   const [guardandoMLImpago, setGuardandoMLImpago] = useState<number | null>(null)
+  
+  // ✅ QueryClient para invalidación inteligente de caché
+  const queryClient = useQueryClient()
 
   // Query para resumen
   const {
@@ -297,8 +319,12 @@ export function Cobranzas() {
       toast.success('Riesgo ML Impago actualizado correctamente')
       setEditandoMLImpago(null)
       setMLImpagoTemporal(null)
+      // ✅ Invalidar caché de cobranzas para refrescar datos actualizados
+      queryClient.invalidateQueries({ queryKey: ['cobranzas-resumen'] })
+      queryClient.invalidateQueries({ queryKey: ['cobranzas-clientes'] })
       // Refrescar los datos
       refetchClientes()
+      refetchResumen()
       // Si estamos en la sección "Por Analista", también refrescar
       setClientesPorAnalista({})
     } catch (error: any) {
@@ -315,8 +341,12 @@ export function Cobranzas() {
     try {
       await cobranzasService.eliminarMLImpagoManual(prestamoId)
       toast.success('Valores manuales eliminados. Se usarán valores calculados por ML.')
+      // ✅ Invalidar caché de cobranzas para refrescar datos actualizados
+      queryClient.invalidateQueries({ queryKey: ['cobranzas-resumen'] })
+      queryClient.invalidateQueries({ queryKey: ['cobranzas-clientes'] })
       // Refrescar los datos
       refetchClientes()
+      refetchResumen()
       setClientesPorAnalista({})
     } catch (error: any) {
       console.error('Error eliminando ML Impago manual:', error)
@@ -378,6 +408,16 @@ export function Cobranzas() {
       const enviadas = stats.enviadas || 0
       const fallidas = stats.fallidas || 0
       const errores = stats.errores || 0
+
+      // ✅ Invalidar caché de cobranzas después de procesar notificaciones
+      // Los datos pueden haber cambiado después de enviar notificaciones
+      queryClient.invalidateQueries({ queryKey: ['cobranzas-resumen'] })
+      queryClient.invalidateQueries({ queryKey: ['cobranzas-clientes'] })
+      queryClient.invalidateQueries({ queryKey: ['cobranzas-por-analista'] })
+      // Refrescar datos
+      refetchResumen()
+      refetchClientes()
+      refetchAnalistas()
 
       if (enviadas > 0 || fallidas > 0) {
         toast.success(
@@ -719,6 +759,18 @@ export function Cobranzas() {
                   Exportar Excel
                 </Button>
               </div>
+
+              {/* Mensaje de error de validación */}
+              {errorRangoDias && (
+                <Card className="border-red-200 bg-red-50 mb-4">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-2 text-red-800">
+                      <AlertTriangle className="h-5 w-5" />
+                      <p className="text-sm">{errorRangoDias}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Filtros */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -1140,12 +1192,22 @@ export function Cobranzas() {
                     value={rangoDiasMin ?? ''}
                     onChange={(e) => {
                       const value = e.target.value ? parseInt(e.target.value) : undefined
-                      setRangoDiasMin(value)
-                      if (value !== undefined) {
-                        setFiltroDiasRetraso(undefined) // Limpiar filtro simple
+                      if (value !== undefined && validarRangoDias(value, rangoDiasMax)) {
+                        setRangoDiasMin(value)
+                        if (value !== undefined) {
+                          setFiltroDiasRetraso(undefined) // Limpiar filtro simple
+                        }
+                      } else if (value === undefined) {
+                        setRangoDiasMin(undefined)
+                        setErrorRangoDias(null)
+                        setFiltroDiasRetraso(undefined)
                       }
                     }}
+                    className={errorRangoDias ? 'border-red-500' : ''}
                   />
+                  {errorRangoDias && (
+                    <p className="text-xs text-red-500 mt-1">{errorRangoDias}</p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-2 block">
@@ -1158,11 +1220,18 @@ export function Cobranzas() {
                     value={rangoDiasMax ?? ''}
                     onChange={(e) => {
                       const value = e.target.value ? parseInt(e.target.value) : undefined
-                      setRangoDiasMax(value)
-                      if (value !== undefined) {
-                        setFiltroDiasRetraso(undefined) // Limpiar filtro simple
+                      if (value !== undefined && validarRangoDias(rangoDiasMin, value)) {
+                        setRangoDiasMax(value)
+                        if (value !== undefined) {
+                          setFiltroDiasRetraso(undefined) // Limpiar filtro simple
+                        }
+                      } else if (value === undefined) {
+                        setRangoDiasMax(undefined)
+                        setErrorRangoDias(null)
+                        setFiltroDiasRetraso(undefined)
                       }
                     }}
+                    className={errorRangoDias ? 'border-red-500' : ''}
                   />
                 </div>
                 <div className="flex items-end">

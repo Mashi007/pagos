@@ -1,10 +1,10 @@
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from io import BytesIO
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[import-untyped]
+from fastapi import APIRouter, Depends, HTTPException, Query, Request  # type: ignore[import-untyped]
 from fastapi.responses import StreamingResponse  # type: ignore[import-untyped]
 
 # Imports para Excel
@@ -24,15 +24,19 @@ from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.core.constants import EstadoPrestamo
+from app.core.rate_limiter import RATE_LIMITS, get_rate_limiter
+from app.core.cache import cache_result
 from app.models.amortizacion import Cuota
 from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
 from app.models.pago import Pago  # Tabla oficial de pagos
 from app.models.prestamo import Prestamo
 from app.models.user import User
+from app.utils.error_handling import handle_report_error, validate_date_range
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+limiter = get_rate_limiter()
 
 
 @router.get("/health")
@@ -138,6 +142,7 @@ class ReporteProductos(BaseModel):
 
 
 @router.get("/cartera", response_model=ReporteCartera)
+@cache_result(ttl=300, key_prefix="reportes")  # Cache por 5 minutos
 def reporte_cartera(
     fecha_corte: Optional[date] = Query(None, description="Fecha de corte"),
     db: Session = Depends(get_db),
@@ -300,12 +305,14 @@ def reporte_cartera(
         logger.info("[reportes.cartera] Reporte generado correctamente")
         return resultado
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error generando reporte de cartera: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise handle_report_error(e, "generar reporte de cartera")
 
 
 @router.get("/pagos", response_model=ReportePagos)
+@cache_result(ttl=300, key_prefix="reportes")  # Cache por 5 minutos
 def reporte_pagos(
     fecha_inicio: date = Query(..., description="Fecha de inicio"),
     fecha_fin: date = Query(..., description="Fecha de fin"),
@@ -314,6 +321,9 @@ def reporte_pagos(
 ):
     """Genera reporte de pagos en un rango de fechas."""
     try:
+        # Validar rango de fechas
+        validate_date_range(fecha_inicio, fecha_fin, max_days=365)
+        
         logger.info(f"[reportes.pagos] Generando reporte pagos desde {fecha_inicio} hasta {fecha_fin}")
         # Total de pagos: usar tabla pagos (tipos nativos)
         fecha_inicio_dt = datetime.combine(fecha_inicio, datetime.min.time())
@@ -414,18 +424,20 @@ def reporte_pagos(
             fecha_fin=fecha_fin,
             total_pagos=total_pagos,
             cantidad_pagos=cantidad_pagos,
-            pagos_por_metodo=[{"metodo": item[0], "cantidad": item[1], "monto": item[2]} for item in pagos_por_metodo],
-            pagos_por_dia=[{"fecha": item[0], "cantidad": item[1], "monto": item[2]} for item in pagos_por_dia],
+            pagos_por_metodo=pagos_por_metodo,
+            pagos_por_dia=pagos_por_dia,
         )
         logger.info("[reportes.pagos] Reporte generado correctamente")
         return resultado
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error generando reporte de pagos: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise handle_report_error(e, "generar reporte de pagos")
 
 
 @router.get("/morosidad", response_model=ReporteMorosidad)
+@cache_result(ttl=300, key_prefix="reportes")  # Cache por 5 minutos
 def reporte_morosidad(
     fecha_corte: Optional[date] = Query(None, description="Fecha de corte"),
     db: Session = Depends(get_db),
@@ -548,7 +560,7 @@ def reporte_morosidad(
             for row in analistas_query.fetchall()
         ]
 
-        # 4. Detalle de Préstamos en Mora
+        # 4. Detalle de Préstamos en Mora (con límite de paginación)
         detalle_query = db.execute(
             text(
                 """
@@ -572,6 +584,7 @@ def reporte_morosidad(
                   AND cl.estado != 'INACTIVO'
                 GROUP BY p.id, p.cedula, p.nombres, p.total_financiamiento, p.analista, p.producto_financiero, p.concesionario
                 ORDER BY monto_total_mora DESC
+                LIMIT 1000
             """
             )
         )
@@ -604,12 +617,14 @@ def reporte_morosidad(
         logger.info("[reportes.morosidad] Reporte generado correctamente")
         return resultado
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error generando reporte de morosidad: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise handle_report_error(e, "generar reporte de morosidad")
 
 
 @router.get("/financiero", response_model=ReporteFinanciero)
+@cache_result(ttl=300, key_prefix="reportes")  # Cache por 5 minutos
 def reporte_financiero(
     fecha_corte: Optional[date] = Query(None, description="Fecha de corte"),
     db: Session = Depends(get_db),
@@ -749,12 +764,14 @@ def reporte_financiero(
         logger.info("[reportes.financiero] Reporte generado correctamente")
         return resultado
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error generando reporte financiero: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise handle_report_error(e, "generar reporte financiero")
 
 
 @router.get("/asesores", response_model=ReporteAsesores)
+@cache_result(ttl=300, key_prefix="reportes")  # Cache por 5 minutos
 def reporte_asesores(
     fecha_corte: Optional[date] = Query(None, description="Fecha de corte"),
     db: Session = Depends(get_db),
@@ -888,12 +905,14 @@ def reporte_asesores(
         logger.info("[reportes.asesores] Reporte generado correctamente")
         return resultado
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error generando reporte de asesores: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise handle_report_error(e, "generar reporte de asesores")
 
 
 @router.get("/productos", response_model=ReporteProductos)
+@cache_result(ttl=300, key_prefix="reportes")  # Cache por 5 minutos
 def reporte_productos(
     fecha_corte: Optional[date] = Query(None, description="Fecha de corte"),
     db: Session = Depends(get_db),
@@ -1014,9 +1033,10 @@ def reporte_productos(
         logger.info("[reportes.productos] Reporte generado correctamente")
         return resultado
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error generando reporte de productos: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise handle_report_error(e, "generar reporte de productos")
 
 
 def _obtener_distribucion_por_monto(db: Session) -> list:
@@ -1349,7 +1369,9 @@ def _registrar_auditoria_exportacion(db: Session, current_user: User, formato: s
 
 
 @router.get("/exportar/cartera")
+@limiter.limit(RATE_LIMITS["strict"])  # Rate limiting estricto: 10/minuto
 def exportar_reporte_cartera(
+    request: Request,
     formato: str = Query("excel", description="Formato: excel o pdf"),
     fecha_corte: Optional[date] = Query(None),
     db: Session = Depends(get_db),
@@ -1402,11 +1424,11 @@ def exportar_reporte_cartera(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error exportando reporte: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise handle_report_error(e, "exportar reporte de cartera")
 
 
 @router.get("/dashboard/resumen")
+@cache_result(ttl=300, key_prefix="reportes")  # Cache por 5 minutos
 def resumen_dashboard(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1577,13 +1599,14 @@ def resumen_dashboard(
         logger.info(f"[reportes.resumen] Resumen generado: {resultado}")
         return resultado
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"❌ [reportes.resumen] Error obteniendo resumen: {e}", exc_info=True)
         try:
             db.rollback()
         except Exception:
             pass
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise handle_report_error(e, "obtener resumen del dashboard")
 
 
 # ============================================

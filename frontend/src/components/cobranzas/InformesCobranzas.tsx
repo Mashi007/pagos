@@ -18,10 +18,68 @@ import {
 import { cobranzasService } from '@/services/cobranzasService'
 import { toast } from 'sonner'
 
+// ✅ Funciones de validación
+const validarRangoDias = (min: string, max: string): { valido: boolean; error?: string } => {
+  if (!min && !max) return { valido: true }
+  
+  const minNum = min ? parseInt(min) : undefined
+  const maxNum = max ? parseInt(max) : undefined
+  
+  if (minNum !== undefined && (isNaN(minNum) || minNum < 0)) {
+    return { valido: false, error: 'Los días mínimos deben ser un número positivo' }
+  }
+  
+  if (maxNum !== undefined && (isNaN(maxNum) || maxNum < 0)) {
+    return { valido: false, error: 'Los días máximos deben ser un número positivo' }
+  }
+  
+  if (minNum !== undefined && maxNum !== undefined && minNum > maxNum) {
+    return { valido: false, error: 'Los días mínimos no pueden ser mayores que los días máximos' }
+  }
+  
+  return { valido: true }
+}
+
+const validarRangoFechas = (inicio: string, fin: string): { valido: boolean; error?: string } => {
+  if (!inicio && !fin) return { valido: true }
+  
+  if (inicio && fin) {
+    const fechaInicio = new Date(inicio)
+    const fechaFin = new Date(fin)
+    
+    if (isNaN(fechaInicio.getTime())) {
+      return { valido: false, error: 'Fecha de inicio inválida' }
+    }
+    
+    if (isNaN(fechaFin.getTime())) {
+      return { valido: false, error: 'Fecha de fin inválida' }
+    }
+    
+    if (fechaInicio > fechaFin) {
+      return { valido: false, error: 'La fecha de inicio no puede ser posterior a la fecha de fin' }
+    }
+    
+    // Validar que las fechas no sean futuras
+    const hoy = new Date()
+    hoy.setHours(23, 59, 59, 999) // Fin del día de hoy
+    
+    if (fechaInicio > hoy) {
+      return { valido: false, error: 'La fecha de inicio no puede ser futura' }
+    }
+    
+    if (fechaFin > hoy) {
+      return { valido: false, error: 'La fecha de fin no puede ser futura' }
+    }
+  }
+  
+  return { valido: true }
+}
+
 export function InformesCobranzas() {
   const [informeSeleccionado, setInformeSeleccionado] = useState<string | null>(null)
   const [datosInforme, setDatosInforme] = useState<any>(null)
   const [cargandoInforme, setCargandoInforme] = useState(false)
+  const [erroresValidacion, setErroresValidacion] = useState<Record<string, string>>({})
   const [filtros, setFiltros] = useState({
     dias_retraso_min: '',
     dias_retraso_max: '',
@@ -74,8 +132,37 @@ export function InformesCobranzas() {
     },
   ]
 
+  // Función para validar filtros antes de ejecutar
+  const validarFiltros = (informeId: string): boolean => {
+    const errores: Record<string, string> = {}
+    
+    if (informeId === 'clientes-atrasados') {
+      const validacionDias = validarRangoDias(filtros.dias_retraso_min, filtros.dias_retraso_max)
+      if (!validacionDias.valido) {
+        errores.dias_retraso = validacionDias.error || 'Error en rango de días'
+      }
+    }
+    
+    if (informeId === 'montos-periodo') {
+      const validacionFechas = validarRangoFechas(filtros.fecha_inicio, filtros.fecha_fin)
+      if (!validacionFechas.valido) {
+        errores.fechas = validacionFechas.error || 'Error en rango de fechas'
+      }
+    }
+    
+    setErroresValidacion(errores)
+    return Object.keys(errores).length === 0
+  }
+
   // Función para descargar informe
   const descargarInforme = async (informeId: string, formato: 'pdf' | 'excel') => {
+    // ✅ Validar filtros antes de proceder
+    if (!validarFiltros(informeId)) {
+      const primerError = Object.values(erroresValidacion)[0]
+      toast.error(primerError || 'Por favor, corrige los errores en los filtros')
+      return
+    }
+    
     try {
       toast.loading(`Generando informe en formato ${formato.toUpperCase()}...`)
 
@@ -120,6 +207,13 @@ export function InformesCobranzas() {
 
   // Función para ver informe en línea
   const verInforme = async (informeId: string) => {
+    // ✅ Validar filtros antes de proceder
+    if (!validarFiltros(informeId)) {
+      const primerError = Object.values(erroresValidacion)[0]
+      toast.error(primerError || 'Por favor, corrige los errores en los filtros')
+      return
+    }
+    
     try {
       setInformeSeleccionado(informeId)
       setCargandoInforme(true)
@@ -205,18 +299,57 @@ export function InformesCobranzas() {
                   {/* Filtros si aplica */}
                   {informe.tieneFiltros && informe.id === 'clientes-atrasados' && (
                     <div className="space-y-2 border-t pt-4">
-                      <Input
-                        type="number"
-                        placeholder="Días retraso mínimo"
-                        value={filtros.dias_retraso_min}
-                        onChange={(e) => setFiltros({ ...filtros, dias_retraso_min: e.target.value })}
-                      />
-                      <Input
-                        type="number"
-                        placeholder="Días retraso máximo"
-                        value={filtros.dias_retraso_max}
-                        onChange={(e) => setFiltros({ ...filtros, dias_retraso_max: e.target.value })}
-                      />
+                      <div>
+                        <Input
+                          type="number"
+                          placeholder="Días retraso mínimo"
+                          min="0"
+                          value={filtros.dias_retraso_min}
+                          onChange={(e) => {
+                            const nuevoValor = e.target.value
+                            setFiltros({ ...filtros, dias_retraso_min: nuevoValor })
+                            // ✅ Validar en tiempo real
+                            const validacion = validarRangoDias(nuevoValor, filtros.dias_retraso_max)
+                            if (!validacion.valido) {
+                              setErroresValidacion(prev => ({ ...prev, dias_retraso: validacion.error || '' }))
+                            } else {
+                              setErroresValidacion(prev => {
+                                const nuevos = { ...prev }
+                                delete nuevos.dias_retraso
+                                return nuevos
+                              })
+                            }
+                          }}
+                          className={erroresValidacion.dias_retraso ? 'border-red-500' : ''}
+                        />
+                        {erroresValidacion.dias_retraso && (
+                          <p className="text-xs text-red-500 mt-1">{erroresValidacion.dias_retraso}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Input
+                          type="number"
+                          placeholder="Días retraso máximo"
+                          min="0"
+                          value={filtros.dias_retraso_max}
+                          onChange={(e) => {
+                            const nuevoValor = e.target.value
+                            setFiltros({ ...filtros, dias_retraso_max: nuevoValor })
+                            // ✅ Validar en tiempo real
+                            const validacion = validarRangoDias(filtros.dias_retraso_min, nuevoValor)
+                            if (!validacion.valido) {
+                              setErroresValidacion(prev => ({ ...prev, dias_retraso: validacion.error || '' }))
+                            } else {
+                              setErroresValidacion(prev => {
+                                const nuevos = { ...prev }
+                                delete nuevos.dias_retraso
+                                return nuevos
+                              })
+                            }
+                          }}
+                          className={erroresValidacion.dias_retraso ? 'border-red-500' : ''}
+                        />
+                      </div>
                       <Input
                         type="text"
                         placeholder="Analista (email)"
@@ -228,18 +361,57 @@ export function InformesCobranzas() {
 
                   {informe.tieneFiltros && informe.id === 'montos-periodo' && (
                     <div className="space-y-2 border-t pt-4">
-                      <Input
-                        type="date"
-                        placeholder="Fecha inicio"
-                        value={filtros.fecha_inicio}
-                        onChange={(e) => setFiltros({ ...filtros, fecha_inicio: e.target.value })}
-                      />
-                      <Input
-                        type="date"
-                        placeholder="Fecha fin"
-                        value={filtros.fecha_fin}
-                        onChange={(e) => setFiltros({ ...filtros, fecha_fin: e.target.value })}
-                      />
+                      <div>
+                        <Input
+                          type="date"
+                          placeholder="Fecha inicio"
+                          max={new Date().toISOString().split('T')[0]} // ✅ No permitir fechas futuras
+                          value={filtros.fecha_inicio}
+                          onChange={(e) => {
+                            const nuevoValor = e.target.value
+                            setFiltros({ ...filtros, fecha_inicio: nuevoValor })
+                            // ✅ Validar en tiempo real
+                            const validacion = validarRangoFechas(nuevoValor, filtros.fecha_fin)
+                            if (!validacion.valido) {
+                              setErroresValidacion(prev => ({ ...prev, fechas: validacion.error || '' }))
+                            } else {
+                              setErroresValidacion(prev => {
+                                const nuevos = { ...prev }
+                                delete nuevos.fechas
+                                return nuevos
+                              })
+                            }
+                          }}
+                          className={erroresValidacion.fechas ? 'border-red-500' : ''}
+                        />
+                        {erroresValidacion.fechas && (
+                          <p className="text-xs text-red-500 mt-1">{erroresValidacion.fechas}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Input
+                          type="date"
+                          placeholder="Fecha fin"
+                          max={new Date().toISOString().split('T')[0]} // ✅ No permitir fechas futuras
+                          value={filtros.fecha_fin}
+                          onChange={(e) => {
+                            const nuevoValor = e.target.value
+                            setFiltros({ ...filtros, fecha_fin: nuevoValor })
+                            // ✅ Validar en tiempo real
+                            const validacion = validarRangoFechas(filtros.fecha_inicio, nuevoValor)
+                            if (!validacion.valido) {
+                              setErroresValidacion(prev => ({ ...prev, fechas: validacion.error || '' }))
+                            } else {
+                              setErroresValidacion(prev => {
+                                const nuevos = { ...prev }
+                                delete nuevos.fechas
+                                return nuevos
+                              })
+                            }
+                          }}
+                          className={erroresValidacion.fechas ? 'border-red-500' : ''}
+                        />
+                      </div>
                     </div>
                   )}
 

@@ -1,0 +1,210 @@
+{
+  "fecha_auditoria": "2026-01-10T20:50:35.958980",
+  "url_base": "https://rapicredit.onrender.com",
+  "endpoints_verificados": [
+    {
+      "nombre": "Health Check",
+      "endpoint": "/api/v1/health",
+      "url": "https://rapicredit.onrender.com/api/v1/health",
+      "status_code": 200,
+      "tiempo_respuesta_ms": 1150.29,
+      "exitoso": true,
+      "error": null,
+      "datos_presentes": [
+        "status",
+        "database"
+      ],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.48
+    },
+    {
+      "nombre": "Health Ready",
+      "endpoint": "/api/v1/health/ready",
+      "url": "https://rapicredit.onrender.com/api/v1/health/ready",
+      "status_code": 200,
+      "tiempo_respuesta_ms": 239.79,
+      "exitoso": true,
+      "error": null,
+      "datos_presentes": [
+        "status"
+      ],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.02
+    },
+    {
+      "nombre": "KPIs Principales",
+      "endpoint": "/api/v1/dashboard/kpis-principales",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/kpis-principales",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 344.5,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    },
+    {
+      "nombre": "Dashboard Admin",
+      "endpoint": "/api/v1/dashboard/admin",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/admin",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 528.11,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    },
+    {
+      "nombre": "Financiamiento Tendencia Mensual",
+      "endpoint": "/api/v1/dashboard/financiamiento-tendencia-mensual",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/financiamiento-tendencia-mensual",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 338.58,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    },
+    {
+      "nombre": "Préstamos por Concesionario",
+      "endpoint": "/api/v1/dashboard/prestamos-por-concesionario",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/prestamos-por-concesionario",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 340.14,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    },
+    {
+      "nombre": "Préstamos por Modelo",
+      "endpoint": "/api/v1/dashboard/prestamos-por-modelo",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/prestamos-por-modelo",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 346.8,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    },
+    {
+      "nombre": "Financiamiento por Rangos",
+      "endpoint": "/api/v1/dashboard/financiamiento-por-rangos",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/financiamiento-por-rangos",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 352.32,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    },
+    {
+      "nombre": "Composición Morosidad",
+      "endpoint": "/api/v1/dashboard/composicion-morosidad",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/composicion-morosidad",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 355.75,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    },
+    {
+      "nombre": "Cobranzas Mensuales",
+      "endpoint": "/api/v1/dashboard/cobranzas-mensuales",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/cobranzas-mensuales",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 370.19,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    },
+    {
+      "nombre": "Cobranzas Semanales",
+      "endpoint": "/api/v1/dashboard/cobranzas-semanales",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/cobranzas-semanales",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 351.63,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    },
+    {
+      "nombre": "Morosidad por Analista",
+      "endpoint": "/api/v1/dashboard/morosidad-por-analista",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/morosidad-por-analista",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 342.6,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    },
+    {
+      "nombre": "Evolución Morosidad",
+      "endpoint": "/api/v1/dashboard/evolucion-morosidad",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/evolucion-morosidad",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 331.45,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    },
+    {
+      "nombre": "Evolución Pagos",
+      "endpoint": "/api/v1/dashboard/evolucion-pagos",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/evolucion-pagos",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 348.28,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    },
+    {
+      "nombre": "Evolución General Mensual",
+      "endpoint": "/api/v1/dashboard/evolucion-general-mensual",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/evolucion-general-mensual",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 348.56,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    },
+    {
+      "nombre": "Opciones Filtros",
+      "endpoint": "/api/v1/dashboard/opciones-filtros",
+      "url": "https://rapicredit.onrender.com/api/v1/dashboard/opciones-filtros",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 403.23,
+      "exitoso": false,
+      "error": "Acceso denegado",
+      "datos_presentes": [],
+      "datos_faltantes": [],
+      "tamano_respuesta_kb": 0.03
+    }
+  ],
+  "resumen": {
+    "total_endpoints": 16,
+    "exitosos": 2,
+    "fallidos": 14,
+    "con_errores": 0,
+    "tiempo_promedio": 695.04
+  }
+}

@@ -44,6 +44,18 @@ class CuotaService {
     return await apiClient.get(`${this.baseUrl}/prestamo/${prestamoId}/cuotas${params}`)
   }
 
+  /**
+   * Obtiene cuotas de múltiples préstamos en una sola query.
+   * Optimiza el problema N+1 queries.
+   */
+  async getCuotasMultiplesPrestamos(prestamoIds: number[], estado?: string): Promise<Cuota[]> {
+    if (!prestamoIds || prestamoIds.length === 0) {
+      return []
+    }
+    const params = estado ? `?estado=${estado}` : ''
+    return await apiClient.post(`${this.baseUrl}/cuotas/multiples${params}`, prestamoIds)
+  }
+
   async getCuotaById(cuotaId: number): Promise<Cuota> {
     return await apiClient.get(`${this.baseUrl}/cuota/${cuotaId}`)
   }

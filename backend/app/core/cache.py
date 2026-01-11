@@ -605,11 +605,42 @@ def invalidate_cache(pattern: str):
     Args:
         pattern: Patrón para buscar claves a invalidar
     """
-    # Implementación básica - solo para MemoryCache
-    if isinstance(cache_backend, MemoryCache):
-        keys_to_delete = [key for key in cache_backend._cache.keys() if pattern in key]
-        for key in keys_to_delete:
-            cache_backend.delete(key)
-        logger.info(f"Invalidado {len(keys_to_delete)} entradas de cache con patrón: {pattern}")
-    else:
-        logger.warning("Invalidación por patrón no implementada para este backend")
+    try:
+        # Implementación para MemoryCache
+        if isinstance(cache_backend, MemoryCache):
+            keys_to_delete = [key for key in cache_backend._cache.keys() if pattern in key]
+            for key in keys_to_delete:
+                cache_backend.delete(key)
+            logger.debug(f"✅ Invalidado {len(keys_to_delete)} entradas de cache con patrón: {pattern}")
+        # ✅ Implementación para RedisCache
+        elif hasattr(cache_backend, 'client'):
+            # Redis soporta búsqueda por patrón con SCAN o KEYS
+            try:
+                # Usar SCAN para búsqueda eficiente (mejor que KEYS en producción)
+                cursor = 0
+                keys_to_delete = []
+                while True:
+                    cursor, keys = cache_backend.client.scan(cursor, match=f"*{pattern}*", count=100)
+                    keys_to_delete.extend([k.decode() if isinstance(k, bytes) else k for k in keys])
+                    if cursor == 0:
+                        break
+                
+                # Eliminar todas las claves encontradas
+                if keys_to_delete:
+                    cache_backend.client.delete(*keys_to_delete)
+                    logger.debug(f"✅ Invalidado {len(keys_to_delete)} entradas de cache en Redis con patrón: {pattern}")
+                else:
+                    logger.debug(f"ℹ️  No se encontraron claves de cache con patrón: {pattern}")
+            except Exception as redis_error:
+                # Fallback a KEYS si SCAN no está disponible (versiones antiguas de Redis)
+                try:
+                    keys_to_delete = cache_backend.client.keys(f"*{pattern}*")
+                    if keys_to_delete:
+                        cache_backend.client.delete(*keys_to_delete)
+                        logger.debug(f"✅ Invalidado {len(keys_to_delete)} entradas de cache en Redis (usando KEYS) con patrón: {pattern}")
+                except Exception as keys_error:
+                    logger.warning(f"⚠️  Error invalidando cache en Redis: {keys_error}")
+        else:
+            logger.warning(f"⚠️  Invalidación por patrón no implementada para este backend: {type(cache_backend)}")
+    except Exception as e:
+        logger.warning(f"⚠️  Error en invalidate_cache: {e}")

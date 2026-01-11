@@ -93,6 +93,13 @@ const tiposReporte = [
   { value: 'PRODUCTOS', label: 'Productos', icon: PieChart },
 ]
 
+// Validación de cédula venezolana
+const validarCedula = (cedula: string): boolean => {
+  if (!cedula || cedula.trim().length === 0) return false
+  // Formato: V/E/J/P/G seguido de 6-12 dígitos
+  return /^[VEJPG]\d{6,12}$/i.test(cedula.trim())
+}
+
 export function Reportes() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterTipo, setFilterTipo] = useState('Todos')
@@ -186,7 +193,20 @@ export function Reportes() {
       toast.dismiss()
       const errorMessage = getErrorMessage(error)
       const detail = getErrorDetail(error)
-      toast.error(detail || errorMessage || `Error al generar reporte de ${tipo}`)
+      
+      // Mensajes de error más amigables
+      let mensajeError = detail || errorMessage
+      if (errorMessage?.includes('500') || errorMessage?.includes('Error del servidor')) {
+        mensajeError = 'Error del servidor. Por favor, intente nuevamente en unos momentos.'
+      } else if (errorMessage?.includes('404') || errorMessage?.includes('No se encontraron')) {
+        mensajeError = 'No se encontraron datos para los filtros seleccionados.'
+      } else if (errorMessage?.includes('timeout') || errorMessage?.includes('Timeout')) {
+        mensajeError = 'La operación está tomando demasiado tiempo. Por favor, intente con un rango de fechas más corto.'
+      } else if (!mensajeError) {
+        mensajeError = `Error al generar reporte de ${tipo}. Por favor, contacte al soporte si el problema persiste.`
+      }
+      
+      toast.error(mensajeError)
     } finally {
       setGenerandoReporte(null)
     }
@@ -208,11 +228,11 @@ export function Reportes() {
   const reportesProcesando = mockReportes.filter((r) => r.estado === 'PROCESANDO').length
   const totalDescargas = mockReportes.reduce((sum, r) => sum + r.descargas, 0)
 
-  // KPIs desde el backend - asegurar que sean números
-  const kpiCartera = Number(resumenData?.cartera_activa || 0)
-  const kpiPrestamosMora = Number(resumenData?.prestamos_mora || 0)
-  const kpiTotalPrestamos = Number(resumenData?.total_prestamos || 0)
-  const kpiPagosMes = Number(resumenData?.pagos_mes || 0)
+  // KPIs desde el backend - asegurar que sean números (validación robusta)
+  const kpiCartera = Number(resumenData?.cartera_activa ?? 0) || 0
+  const kpiPrestamosMora = Number(resumenData?.prestamos_mora ?? 0) || 0
+  const kpiTotalPrestamos = Number(resumenData?.total_prestamos ?? 0) || 0
+  const kpiPagosMes = Number(resumenData?.pagos_mes ?? 0) || 0
 
   return (
     <motion.div
@@ -268,7 +288,7 @@ export function Reportes() {
             ) : (
               <div className="text-2xl font-bold">{formatCurrency(kpiCartera)}</div>
             )}
-            <p className="text-xs text-muted-foreground">Total en cartera</p>
+            <p className="text-xs text-muted-foreground mt-1">Total en cartera</p>
           </CardContent>
         </Card>
         <Card>

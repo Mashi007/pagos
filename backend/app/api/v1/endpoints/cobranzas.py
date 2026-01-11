@@ -1446,6 +1446,7 @@ def obtener_montos_vencidos_por_mes(
 
 
 @router.get("/resumen")
+@cache_result(ttl=120, key_prefix="cobranzas")  # ✅ Cache por 2 minutos (datos relativamente estables)
 def obtener_resumen_cobranzas(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1741,6 +1742,14 @@ def actualizar_ml_impago(
 
         logger.info(f"ML Impago actualizado manualmente para préstamo {prestamo_id} por {current_user.email}")
 
+        # ✅ Invalidar caché de cobranzas después de actualizar ML Impago
+        try:
+            from app.core.cache import invalidate_cache
+            invalidate_cache("cobranzas:")
+            logger.debug(f"Cache invalidado para cobranzas después de actualizar ML Impago del préstamo {prestamo_id}")
+        except Exception as cache_error:
+            logger.warning(f"Error invalidando cache: {cache_error}")
+
         return {
             "mensaje": "ML Impago actualizado correctamente",
             "prestamo_id": prestamo_id,
@@ -1785,6 +1794,14 @@ def eliminar_ml_impago_manual(
 
         logger.info(f"ML Impago manual eliminado para préstamo {prestamo_id} por {current_user.email}")
 
+        # ✅ Invalidar caché de cobranzas después de eliminar ML Impago manual
+        try:
+            from app.core.cache import invalidate_cache
+            invalidate_cache("cobranzas:")
+            logger.debug(f"Cache invalidado para cobranzas después de eliminar ML Impago manual del préstamo {prestamo_id}")
+        except Exception as cache_error:
+            logger.warning(f"Error invalidando cache: {cache_error}")
+
         return {
             "mensaje": "Valores manuales de ML Impago eliminados. Se usarán valores calculados por ML.",
             "prestamo_id": prestamo_id,
@@ -1819,6 +1836,15 @@ def disparar_notificaciones_atrasos(
     try:
         service = NotificacionAutomaticaService(db)
         stats = service.procesar_notificaciones_automaticas()
+
+        # ✅ Invalidar caché de cobranzas después de procesar notificaciones
+        # Los datos pueden haber cambiado después de enviar notificaciones
+        try:
+            from app.core.cache import invalidate_cache
+            invalidate_cache("cobranzas:")
+            logger.debug("Cache invalidado para cobranzas después de procesar notificaciones de atrasos")
+        except Exception as cache_error:
+            logger.warning(f"Error invalidando cache: {cache_error}")
 
         return {
             "mensaje": "Notificaciones de atrasos procesadas",

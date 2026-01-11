@@ -76,14 +76,14 @@ export function TablaAmortizacionCompleta() {
   // Obtener préstamos por cédula usando hook
   const { data: prestamos, isLoading: loadingPrestamos } = usePrestamosByCedula(cedulaSeleccionada || '')
 
-  // Obtener cuotas de todos los préstamos
+  // Obtener cuotas de todos los préstamos (optimizado - una sola query)
   const { data: todasLasCuotas, isLoading: loadingCuotas } = useQuery({
     queryKey: ['cuotas-prestamos', prestamos?.map(p => p.id)],
     queryFn: async () => {
       if (!prestamos || prestamos.length === 0) return []
-      const cuotasPromises = prestamos.map(p => cuotaService.getCuotasByPrestamo(p.id))
-      const cuotasArrays = await Promise.all(cuotasPromises)
-      return cuotasArrays.flat()
+      // Usar endpoint optimizado para múltiples préstamos
+      const prestamoIds = prestamos.map(p => p.id)
+      return await cuotaService.getCuotasMultiplesPrestamos(prestamoIds)
     },
     enabled: !!prestamos && prestamos.length > 0,
   })
@@ -96,6 +96,7 @@ export function TablaAmortizacionCompleta() {
         return await pagoService.getAllPagos(1, 1000, { cedula: cedulaSeleccionada! })
       } catch (error) {
         console.error('Error obteniendo pagos:', error)
+        toast.error('Error al cargar pagos. Algunos datos pueden estar incompletos.')
         // Retornar estructura vacía para que no falle el reporte
         return { pagos: [], total: 0, page: 1, pageSize: 1000 }
       }
@@ -138,6 +139,14 @@ export function TablaAmortizacionCompleta() {
     },
   })
 
+  // Función para confirmar eliminación
+  const handleEliminarCuota = (cuotaId: number) => {
+    if (!confirm('¿Está seguro de eliminar esta cuota? Esta acción no se puede deshacer.')) {
+      return
+    }
+    mutationEliminarCuota.mutate(cuotaId)
+  }
+
   const mutationActualizarPago = useMutation({
     mutationFn: ({ pagoId, data }: { pagoId: number; data: Partial<{
       monto_pagado: number
@@ -168,12 +177,32 @@ export function TablaAmortizacionCompleta() {
     },
   })
 
-  const handleBuscar = () => {
-    if (cedulaBuscar.trim()) {
-      setCedulaSeleccionada(cedulaBuscar.trim().toUpperCase())
-    } else {
-      toast.error('Por favor ingresa una cédula')
+  // Función para confirmar eliminación de pago
+  const handleEliminarPago = (pagoId: number) => {
+    if (!confirm('¿Está seguro de eliminar este pago? Esta acción no se puede deshacer.')) {
+      return
     }
+    mutationEliminarPago.mutate(pagoId)
+  }
+
+  // Validación de cédula venezolana
+  const validarCedula = (cedula: string): boolean => {
+    if (!cedula || cedula.trim().length === 0) return false
+    // Formato: V/E/J/P/G seguido de 6-12 dígitos
+    return /^[VEJPG]\d{6,12}$/i.test(cedula.trim())
+  }
+
+  const handleBuscar = () => {
+    const cedulaLimpia = cedulaBuscar.trim().toUpperCase()
+    if (!cedulaLimpia) {
+      toast.error('Por favor, ingrese una cédula')
+      return
+    }
+    if (!validarCedula(cedulaLimpia)) {
+      toast.error('Cédula inválida. Debe tener el formato V/E/J/P/G seguido de 6-12 dígitos')
+      return
+    }
+    setCedulaSeleccionada(cedulaLimpia)
   }
 
   const handleEditarCuota = (cuota: Cuota) => {
@@ -356,11 +385,7 @@ export function TablaAmortizacionCompleta() {
                                         size="sm"
                                         variant="outline"
                                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                        onClick={() => {
-                                          if (window.confirm(`¿Estás seguro de eliminar la cuota #${cuota.numero_cuota}?`)) {
-                                            mutationEliminarCuota.mutate(cuota.id)
-                                          }
-                                        }}
+                                        onClick={() => handleEliminarCuota(cuota.id)}
                                         title="Eliminar Cuota"
                                       >
                                         <Trash2 className="w-4 h-4" />
@@ -445,7 +470,7 @@ export function TablaAmortizacionCompleta() {
                                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
                                         onClick={() => {
                                           if (window.confirm(`¿Estás seguro de eliminar el pago ID ${pago.id}?`)) {
-                                            mutationEliminarPago.mutate(pago.id)
+                                            handleEliminarPago(pago.id)
                                           }
                                         }}
                                         title="Eliminar Pago"
