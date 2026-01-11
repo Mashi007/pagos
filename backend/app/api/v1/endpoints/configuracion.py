@@ -1,10 +1,8 @@
-from __future__ import annotations
-
 import logging
 import time
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Annotated, Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
@@ -236,7 +234,7 @@ def obtener_configuracion_por_categoria(
 def actualizar_configuracion(
     request: Request,
     clave: str,
-    config_data: ConfiguracionUpdate,
+    config_data: Annotated[ConfiguracionUpdate, Body()],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -7474,7 +7472,7 @@ def _obtener_variables_personalizadas(db: Session) -> Dict[str, str]:
 @limiter.limit("20/minute")  # ✅ Rate limiting: 20 requests por minuto por usuario
 async def chat_ai(
     request: Request,  # ✅ Necesario para rate limiting
-    request_body: ChatAIRequest,
+    request_body: Annotated[ChatAIRequest, Body()],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
