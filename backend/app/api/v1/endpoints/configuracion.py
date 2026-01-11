@@ -55,6 +55,11 @@ class ConfiguracionResponse(BaseModel):
         from_attributes = True
 
 
+class ChatAIRequest(BaseModel):
+    """Schema para solicitud de chat AI"""
+    pregunta: str = Field(..., description="Pregunta del usuario sobre la base de datos")
+
+
 # ============================================
 # MONITOREO Y OBSERVABILIDAD
 # ============================================
@@ -231,7 +236,7 @@ def obtener_configuracion_por_categoria(
 def actualizar_configuracion(
     request: Request,
     clave: str,
-    config_data: ConfiguracionUpdate,
+    config_data: ConfiguracionUpdate = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -4504,10 +4509,6 @@ class ProbarAIRequest(BaseModel):
     usar_documentos: Optional[bool] = True
 
 
-class ChatAIRequest(BaseModel):
-    pregunta: str = Field(..., description="Pregunta del usuario sobre la base de datos")
-
-
 @router.post("/ai/probar")
 async def probar_configuracion_ai(
     request: Optional[ProbarAIRequest] = Body(None),
@@ -7473,7 +7474,7 @@ def _obtener_variables_personalizadas(db: Session) -> Dict[str, str]:
 @limiter.limit("20/minute")  # ✅ Rate limiting: 20 requests por minuto por usuario
 async def chat_ai(
     request: Request,  # ✅ Necesario para rate limiting
-    request_body: ChatAIRequest,
+    request_body: ChatAIRequest = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
