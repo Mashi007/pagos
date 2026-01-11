@@ -140,6 +140,16 @@ def _conciliar_pago(pago: Pago, db: Session, numero_documento: str) -> bool:
                     f"✅ [conciliacion] Pago ID {pago.id}: {cuotas_actualizadas} cuota(s) actualizada(s) "
                     f"después de conciliación"
                 )
+                
+                # ✅ VERIFICAR SI CLIENTE DEBE CAMBIAR A FINALIZADO
+                try:
+                    from app.services.estado_cliente_service import verificar_y_actualizar_estado_finalizado
+                    
+                    verificar_y_actualizar_estado_finalizado(db, pago.cedula)
+                except Exception as e:
+                    logger.warning(
+                        f"Error verificando estado FINALIZADO del cliente {pago.cedula} después de conciliar pago: {e}"
+                    )
         except Exception as e:
             logger.error(
                 f"⚠️ [conciliacion] Error actualizando cuotas después de conciliar pago ID {pago.id}: {str(e)}", exc_info=True

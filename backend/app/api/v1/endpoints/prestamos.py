@@ -163,6 +163,17 @@ def procesar_cambio_estado(
     estado_anterior = prestamo.estado
     prestamo.estado = nuevo_estado  # type: ignore[assignment]
 
+    # ✅ ACTUALIZAR ESTADO DEL CLIENTE SEGÚN REGLAS DE NEGOCIO
+    if nuevo_estado in ("APROBADO", "RECHAZADO"):
+        try:
+            from app.services.estado_cliente_service import actualizar_estado_cliente_por_prestamo
+
+            actualizar_estado_cliente_por_prestamo(db, prestamo.cedula, nuevo_estado)
+        except Exception as e:
+            logger.warning(
+                f"Error actualizando estado del cliente {prestamo.cedula} por cambio de estado del préstamo: {e}"
+            )
+
     if nuevo_estado == "APROBADO":
         prestamo.usuario_aprobador = current_user.email  # type: ignore[assignment]
         prestamo.fecha_aprobacion = datetime.now()  # type: ignore[assignment]

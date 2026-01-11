@@ -74,6 +74,12 @@ class Cuota(Base):
     observaciones = Column(String(500), nullable=True)
     es_cuota_especial = Column(Boolean, default=False)
 
+    # ============================================
+    # COLUMNAS ADICIONALES (FASE 3 - Sincronización ORM vs BD)
+    # ============================================
+    creado_en = Column(Date, nullable=True)  # Fecha de creación del registro
+    actualizado_en = Column(Date, nullable=True)  # Fecha de última actualización
+
     def __repr__(self):
         return f"<Cuota {self.numero_cuota} - Préstamo {self.prestamo_id} - {self.estado}>"
 

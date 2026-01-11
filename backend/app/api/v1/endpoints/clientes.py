@@ -499,10 +499,11 @@ def crear_cliente(
         # Preparar datos
         cliente_dict = cliente_data.model_dump()
 
-        # Sincronizar estado y activo (crear siempre con ACTIVO=True si no se proporciona)
+        # ✅ REGLA DE NEGOCIO: Por defecto FINALIZADO (no tiene deudas, no se aprobó crédito)
+        # FINALIZADO → ACTIVO: Automático al aprobar préstamo
         if not cliente_dict.get("estado"):
-            cliente_dict["estado"] = "ACTIVO"
-        cliente_dict["activo"] = cliente_dict.get("activo", True)
+            cliente_dict["estado"] = "FINALIZADO"
+        cliente_dict["activo"] = cliente_dict.get("activo", False)  # FINALIZADO = activo=False
 
         # Usuario que registra el cliente
         cliente_dict["usuario_registro"] = current_user.email

@@ -1190,6 +1190,20 @@ def _actualizar_estado_cuota(cuota, fecha_hoy: date, db: Session = None, es_exce
     # ✅ ACTUALIZAR AUTOMÁTICAMENTE columnas de morosidad
     _actualizar_morosidad_cuota(cuota, fecha_hoy)
 
+    # ✅ VERIFICAR SI CLIENTE DEBE CAMBIAR A FINALIZADO (si la cuota se completó)
+    if estado_completado and db:
+        try:
+            from app.models.prestamo import Prestamo
+            from app.services.estado_cliente_service import verificar_y_actualizar_estado_finalizado
+
+            prestamo = db.query(Prestamo).filter(Prestamo.id == cuota.prestamo_id).first()
+            if prestamo:
+                verificar_y_actualizar_estado_finalizado(db, prestamo.cedula)
+        except Exception as e:
+            logger.warning(
+                f"Error verificando estado FINALIZADO del cliente después de completar cuota: {e}"
+            )
+
     return estado_completado
 
 

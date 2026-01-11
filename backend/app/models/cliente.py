@@ -30,8 +30,12 @@ class Cliente(Base):
     ocupacion = Column(String(OCCUPATION_LENGTH), nullable=False)  # Texto libre
 
     # Estado y control - OBLIGATORIOS
-    estado = Column(String(STATE_LENGTH), nullable=False, default="ACTIVO", index=True)  # Activo/Inactivo/Finalizado
-    activo = Column(Boolean, nullable=False, default=True, index=True)
+    # REGLA DE NEGOCIO: Por defecto FINALIZADO (no tiene deudas, no se aprobó crédito)
+    # FINALIZADO → ACTIVO: Automático al aprobar préstamo
+    # ACTIVO → FINALIZADO: Automático cuando todas las cuotas están PAGADAS y total_pagado >= monto_total_financiamiento
+    # ACTIVO → INACTIVO: Automático al rechazar préstamo
+    estado = Column(String(STATE_LENGTH), nullable=False, default="FINALIZADO", index=True)  # FINALIZADO/ACTIVO/INACTIVO
+    activo = Column(Boolean, nullable=False, default=False, index=True)  # Por defecto False (FINALIZADO)
 
     # Auditoría - OBLIGATORIOS
     fecha_registro = Column(

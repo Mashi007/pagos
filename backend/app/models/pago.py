@@ -62,6 +62,44 @@ class Pago(Base):
         String(2), default="NO", nullable=False
     )  # SI/NO - Se actualiza cuando el número de documento coincide en conciliación
 
+    # ============================================
+    # COLUMNAS ADICIONALES (FASE 3 - Sincronización ORM vs BD)
+    # ============================================
+    # Información bancaria y método de pago
+    banco = Column(String(100), nullable=True)  # Nombre del banco
+    metodo_pago = Column(String(50), nullable=True)  # EFECTIVO, TRANSFERENCIA, CHEQUE, TARJETA
+    tipo_pago = Column(String(50), nullable=True)  # Tipo de pago adicional
+    
+    # Códigos y referencias
+    codigo_pago = Column(String(30), nullable=True)  # Código único del pago
+    numero_operacion = Column(String(50), nullable=True)  # Número de operación bancaria
+    referencia_pago = Column(String(100), nullable=True)  # Referencia adicional del pago
+    comprobante = Column(String(200), nullable=True)  # Ruta o referencia al comprobante
+    
+    # Documentación
+    documento = Column(String(50), nullable=True)  # Documento adicional
+    
+    # Montos detallados
+    monto = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=True)  # Monto total (legacy)
+    monto_capital = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=True)  # Monto de capital pagado
+    monto_interes = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=True)  # Monto de interés pagado
+    monto_cuota_programado = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=True)  # Monto de cuota programada
+    monto_mora = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=True)  # Monto de mora pagado
+    monto_total = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=True)  # Monto total del pago
+    descuento = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=True)  # Descuento aplicado
+    
+    # Información de mora y vencimiento
+    dias_mora = Column(Integer, nullable=True)  # Días de mora al momento del pago
+    tasa_mora = Column(Numeric(5, 2), nullable=True)  # Tasa de mora aplicada (%)
+    fecha_vencimiento = Column(DateTime, nullable=True)  # Fecha de vencimiento de la cuota
+    
+    # Fechas y horas adicionales
+    hora_pago = Column(String(10), nullable=True)  # Hora del pago (formato HH:MM)
+    creado_en = Column(DateTime, nullable=True)  # Fecha de creación (legacy)
+    
+    # Observaciones adicionales
+    observaciones = Column(Text, nullable=True)  # Observaciones adicionales del pago
+
     # Relaciones
     cliente = relationship("Cliente", foreign_keys=[cliente_id])
     prestamo = relationship("Prestamo", foreign_keys=[prestamo_id])
