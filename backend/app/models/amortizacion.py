@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     Date,
+    DateTime,
     ForeignKey,
     Integer,
     Numeric,
@@ -27,8 +28,8 @@ class Cuota(Base):
     __tablename__ = "cuotas"
 
     # Claves primarias y foráneas
-    id = Column(Integer, primary_key=True, index=True)
-    prestamo_id = Column(Integer, ForeignKey("prestamos.id"), nullable=False, index=True)
+    id = Column(Integer, primary_key=True, index=True, nullable=False)
+    prestamo_id = Column(Integer, ForeignKey("prestamos.id", nullable=False), nullable=False, index=True)
     numero_cuota = Column(Integer, nullable=False)  # 1, 2, 3, etc.
 
     # Fechas
@@ -41,44 +42,45 @@ class Cuota(Base):
     monto_interes = Column(Numeric(12, 2), nullable=False)
 
     # Saldos
-    saldo_capital_inicial = Column(Numeric(12, 2), nullable=False)  # Saldo al inicio del período
-    saldo_capital_final = Column(Numeric(12, 2), nullable=False)  # Saldo al fin del período
+    saldo_capital_inicial = Column(Numeric(12, 2, nullable=False), nullable=False)  # Saldo al inicio del período
+    saldo_capital_final = Column(Numeric(12, 2, nullable=False), nullable=False)  # Saldo al fin del período
 
     # Montos pagados
-    capital_pagado = Column(Numeric(12, 2), default=Decimal("0.00"))
-    interes_pagado = Column(Numeric(12, 2), default=Decimal("0.00"))
-    mora_pagada = Column(Numeric(12, 2), default=Decimal("0.00"))
-    total_pagado = Column(Numeric(12, 2), default=Decimal("0.00"))
+    capital_pagado = Column(Numeric(12, 2, nullable=True), default=Decimal("0.00"))
+    interes_pagado = Column(Numeric(12, 2, nullable=True), default=Decimal("0.00"))
+    mora_pagada = Column(Numeric(12, 2, nullable=True), default=Decimal("0.00"))
+    total_pagado = Column(Numeric(12, 2, nullable=True), default=Decimal("0.00"))
 
     # Montos pendientes
-    capital_pendiente = Column(Numeric(12, 2), nullable=False)  # Capital que falta pagar de esta cuota
-    interes_pendiente = Column(Numeric(12, 2), nullable=False)  # Interés que falta pagar de esta cuota
+    capital_pendiente = Column(Numeric(12, 2, nullable=False), nullable=False)  # Capital que falta pagar de esta cuota
+    interes_pendiente = Column(Numeric(12, 2, nullable=False), nullable=False)  # Interés que falta pagar de esta cuota
 
     # Mora
-    dias_mora = Column(Integer, default=0)
-    monto_mora = Column(Numeric(12, 2), default=Decimal("0.00"))
-    tasa_mora = Column(Numeric(5, 2), default=Decimal("0.00"))  # Tasa de mora aplicada (%)
+    dias_mora = Column(Integer, default=0, nullable=True)
+    monto_mora = Column(Numeric(12, 2, nullable=True), default=Decimal("0.00"))
+    tasa_mora = Column(Numeric(5, 2, nullable=True), default=Decimal("0.00"))  # Tasa de mora aplicada (%)
 
     # ✅ NUEVAS COLUMNAS: Morosidad Calculada Automáticamente
-    dias_morosidad = Column(Integer, default=0, index=True)  # ✅ Días de atraso (actualización automática)
+    dias_morosidad = Column(Integer, default=0, index=True, nullable=True)  # ✅ Días de atraso (actualización automática)
     monto_morosidad = Column(
-        Numeric(12, 2), default=Decimal("0.00"), index=True
+        Numeric(12, 2, nullable=True), default=Decimal("0.00"), index=True
     )  # ✅ Monto pendiente: monto_cuota - total_pagado (actualización automática)
 
     # Estado
     estado = Column(
-        String(20), nullable=False, default="PENDIENTE", index=True
+        String(20, nullable=False), nullable=False, default="PENDIENTE", index=True
     )  # PENDIENTE, PAGADO, ATRASADO, PARCIAL, ADELANTADO
 
     # Información adicional
-    observaciones = Column(String(500), nullable=True)
-    es_cuota_especial = Column(Boolean, default=False)
+    observaciones = Column(String(500, nullable=True), nullable=True)
+    es_cuota_especial = Column(Boolean, default=False, nullable=True)
 
     # ============================================
     # COLUMNAS ADICIONALES (FASE 3 - Sincronización ORM vs BD)
+    # Tipos de datos ajustados para coincidir exactamente con la BD
     # ============================================
-    creado_en = Column(Date, nullable=True)  # Fecha de creación del registro
-    actualizado_en = Column(Date, nullable=True)  # Fecha de última actualización
+    creado_en = Column(DateTime(timezone=True, nullable=True), nullable=True)  # Fecha de creación del registro (TIMESTAMP WITH TIME ZONE en BD)
+    actualizado_en = Column(DateTime(timezone=True, nullable=True), nullable=True)  # Fecha de última actualización (TIMESTAMP WITH TIME ZONE en BD)
 
     def __repr__(self):
         return f"<Cuota {self.numero_cuota} - Préstamo {self.prestamo_id} - {self.estado}>"

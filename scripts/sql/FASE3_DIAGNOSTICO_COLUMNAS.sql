@@ -18,14 +18,43 @@ SELECT
             'ml_impago_calculado_en',
             'ml_impago_modelo_id',
             'ml_impago_nivel_riesgo_calculado',
-            'ml_impago_probabilidad_calculada'
-        ) THEN '✅ Existe en BD'
-        ELSE '❌ No existe en BD'
+            'ml_impago_probabilidad_calculada',
+            'ml_impago_nivel_riesgo_manual',
+            'ml_impago_probabilidad_manual'
+        ) THEN '✅ Existe en BD y Modelo'
+        ELSE '⚠️ Existe en BD pero no verificado'
     END AS estado_modelo
 FROM information_schema.columns
 WHERE table_name = 'prestamos'
   AND column_name LIKE 'ml_impago%'
 ORDER BY column_name;
+
+-- ============================================================================
+-- PASO 1B: Verificar columnas ML esperadas en modelo (comparación)
+-- ============================================================================
+
+SELECT 
+    'PASO 1B: Columnas ML esperadas en modelo' AS paso,
+    columna_esperada,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_name = 'prestamos' 
+            AND column_name = columna_esperada
+        ) THEN '✅ Existe en BD'
+        ELSE '❌ FALTA en BD'
+    END AS estado
+FROM (
+    VALUES 
+        ('ml_impago_nivel_riesgo_manual'),
+        ('ml_impago_probabilidad_manual'),
+        ('ml_impago_nivel_riesgo_calculado'),
+        ('ml_impago_probabilidad_calculada'),
+        ('ml_impago_calculado_en'),
+        ('ml_impago_modelo_id')
+) AS columnas_esperadas(columna_esperada)
+ORDER BY columna_esperada;
 
 -- ============================================================================
 -- PASO 2: Verificar columnas faltantes en tabla pagos
