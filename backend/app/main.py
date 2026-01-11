@@ -385,7 +385,7 @@ async def lifespan(app: FastAPI):
     scheduler_module.iniciar_scheduler()
 
     logger.info("✅ Aplicación iniciada correctamente y lista para recibir requests")
-    
+
     yield
 
     # Detener scheduler al cerrar
@@ -393,14 +393,14 @@ async def lifespan(app: FastAPI):
     shutdown_timestamp = datetime.now().isoformat()
     uptime_seconds = shutdown_time - startup_time
     uptime_minutes = uptime_seconds / 60
-    
+
     logger.info(f"📴 Iniciando shutdown graceful - Timestamp: {shutdown_timestamp}")
     logger.info(f"⏱️  Tiempo de ejecución: {uptime_seconds:.1f} segundos ({uptime_minutes:.2f} minutos)")
     logger.info(f"📅 Inicio del servidor: {startup_timestamp}")
-    
+
     scheduler_module.detener_scheduler()
     init_db_shutdown()
-    
+
     logger.info("✅ Shutdown completado correctamente")
 
 

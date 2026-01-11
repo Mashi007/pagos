@@ -1481,7 +1481,7 @@ def iniciar_scheduler():
         if not scheduler.running:
             scheduler.start()
             logger.info("✅ Scheduler iniciado correctamente")
-            
+
             # Solo loggear jobs programados una vez cuando se inicia el scheduler
             logger.info("📅 Jobs programados:")
             logger.info("   Diariamente a las 4:00 AM:")
