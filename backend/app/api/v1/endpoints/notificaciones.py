@@ -109,19 +109,21 @@ async def enviar_notificacion(
         # Crear registro de notificación
         nueva_notif = Notificacion(
             cliente_id=notificacion.cliente_id,
-            tipo=notificacion.tipo,
-            canal=notificacion.canal,
+            tipo=notificacion.tipo or notificacion.canal,  # ✅ CORREGIDO: Usar tipo, canal como fallback
+            categoria=notificacion.categoria if hasattr(notificacion, 'categoria') else "GENERAL",  # ✅ NUEVO: Requerido en BD
             mensaje=notificacion.mensaje,
             asunto=notificacion.asunto,
             estado="PENDIENTE",
+            prioridad=notificacion.prioridad if hasattr(notificacion, 'prioridad') else "MEDIA",  # ✅ NUEVO: Requerido en BD
         )
 
         db.add(nueva_notif)
         db.commit()
         db.refresh(nueva_notif)
 
-        # Enviar según canal
-        if notificacion.canal == "EMAIL":
+        # Enviar según canal/tipo
+        canal_actual = notificacion.canal or notificacion.tipo  # ✅ CORREGIDO: Usar tipo si canal no está disponible
+        if canal_actual == "EMAIL":
             email_service = EmailService(db=db)
             notif_id = nueva_notif.id
             email_cliente = str(cliente.email)
@@ -172,7 +174,7 @@ async def enviar_notificacion(
                     db_local.close()
 
             background_tasks.add_task(enviar_email_sync)
-        elif notificacion.canal == "WHATSAPP":
+        elif canal_actual == "WHATSAPP":
             whatsapp_service = WhatsAppService(db=db)
             notif_id = nueva_notif.id
             telefono_cliente = str(cliente.telefono)
@@ -264,10 +266,11 @@ async def envio_masivo(
         for cliente in clientes:
             nueva_notif = Notificacion(
                 cliente_id=cliente.id,
-                tipo="MASIVA",
-                canal=request.canal,
+                tipo=request.canal or "MASIVA",  # ✅ CORREGIDO: Usar canal como tipo
+                categoria="MASIVA",
                 mensaje=request.template,
                 estado="PENDIENTE",
+                prioridad="MEDIA",  # ✅ NUEVO: Requerido en BD
             )
 
             db.add(nueva_notif)
@@ -669,7 +672,8 @@ def listar_notificaciones(
         if estado:
             query = query.filter(Notificacion.estado == estado)
         if canal:
-            query = query.filter(Notificacion.canal == canal)
+            # ✅ CORREGIDO: Usar tipo en lugar de canal (canal es propiedad calculada)
+            query = query.filter(Notificacion.tipo == canal)
 
         # Contar total
         try:
@@ -678,14 +682,15 @@ def listar_notificaciones(
             logger.error(f"Error contando notificaciones: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Error contando notificaciones: {str(e)}")
 
-        # Aplicar paginación - usar created_at si existe, sino usar id
+        # Aplicar paginación - usar creado_en si existe, sino usar id
         try:
             if created_at_exists:
                 try:
-                    notificaciones = query.order_by(Notificacion.created_at.desc()).offset(skip).limit(limit).all()
+                    # ✅ CORREGIDO: Usar creado_en en lugar de created_at
+                    notificaciones = query.order_by(Notificacion.creado_en.desc()).offset(skip).limit(limit).all()
                 except (AttributeError, ProgrammingError):
-                    # Si created_at no existe en el modelo o BD, usar id
-                    logger.warning("created_at no disponible en modelo/BD, usando id para ordenar")
+                    # Si creado_en no existe en el modelo o BD, usar id
+                    logger.warning("creado_en no disponible en modelo/BD, usando id para ordenar")
                     notificaciones = query.order_by(Notificacion.id.desc()).offset(skip).limit(limit).all()
             else:
                 # Si created_at no existe, ordenar por id descendente
@@ -757,16 +762,17 @@ def obtener_estadisticas_notificaciones(
         pendientes = stats_dict.get("PENDIENTE", 0)
         fallidas = stats_dict.get("FALLIDA", 0)
 
-        # Query separada solo para no_leidas (si la columna existe)
+        # Query separada solo para no_leidas (usando leida_en)
         no_leidas = 0
         try:
-            no_leidas = db.query(func.count(Notificacion.id)).filter(Notificacion.leida.is_(False)).scalar() or 0
+            # ✅ CORREGIDO: Usar leida_en en lugar de leida (leida es propiedad calculada)
+            no_leidas = db.query(func.count(Notificacion.id)).filter(Notificacion.leida_en.is_(None)).scalar() or 0
         except ProgrammingError as pe:
-            # Si la columna 'leida' no existe en la BD, usar aproximación
-            if "column notificaciones.leida does not exist" in str(pe):
-                logger.info("Columna 'leida' aún no existe en BD, usando aproximación temporal")
+            # Si la columna 'leida_en' no existe en la BD, usar aproximación
+            if "column notificaciones.leida_en does not exist" in str(pe):
+                logger.info("Columna 'leida_en' aún no existe en BD, usando aproximación temporal")
             else:
-                logger.warning(f"Error al consultar columna 'leida', usando aproximación: {pe}")
+                logger.warning(f"Error al consultar columna 'leida_en', usando aproximación: {pe}")
             no_leidas = enviadas  # Aproximación: todas las enviadas se consideran no leídas
 
         # ✅ VALIDACIÓN: Asegurar que siempre retornamos una estructura completa

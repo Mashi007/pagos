@@ -1,0 +1,303 @@
+{
+  "fecha_auditoria": "2026-01-10T20:55:59.193873",
+  "endpoint": "https://rapicredit.onrender.com/api/v1/comunicaciones",
+  "verificaciones": {
+    "conexion_bd": {
+      "estado": "exitoso",
+      "mensaje": "Conexión establecida correctamente"
+    },
+    "estructura_conversaciones_whatsapp": {
+      "estado": "exitoso",
+      "columnas": {
+        "id": {
+          "tipo": "integer",
+          "nullable": false,
+          "default": "nextval('conversaciones_whatsapp_id_seq'::regclass)"
+        },
+        "message_id": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "from_number": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": null
+        },
+        "to_number": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": null
+        },
+        "message_type": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": null
+        },
+        "body": {
+          "tipo": "text",
+          "nullable": true,
+          "default": null
+        },
+        "timestamp": {
+          "tipo": "timestamp without time zone",
+          "nullable": false,
+          "default": null
+        },
+        "direccion": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": null
+        },
+        "cliente_id": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        },
+        "ticket_id": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        },
+        "procesado": {
+          "tipo": "boolean",
+          "nullable": false,
+          "default": "false"
+        },
+        "respuesta_enviada": {
+          "tipo": "boolean",
+          "nullable": false,
+          "default": "false"
+        },
+        "respuesta_id": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        },
+        "respuesta_bot": {
+          "tipo": "text",
+          "nullable": true,
+          "default": null
+        },
+        "respuesta_meta_id": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "error": {
+          "tipo": "text",
+          "nullable": true,
+          "default": null
+        },
+        "creado_en": {
+          "tipo": "timestamp without time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        "actualizado_en": {
+          "tipo": "timestamp without time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      },
+      "total_columnas": 18,
+      "indices": [
+        "conversaciones_whatsapp_pkey",
+        "conversaciones_whatsapp_message_id_key",
+        "ix_conversaciones_whatsapp_id",
+        "ix_conversaciones_whatsapp_message_id",
+        "ix_conversaciones_whatsapp_from_number",
+        "ix_conversaciones_whatsapp_timestamp",
+        "ix_conversaciones_whatsapp_cliente_id",
+        "ix_conversaciones_whatsapp_ticket_id",
+        "ix_conversaciones_whatsapp_creado_en"
+      ],
+      "total_indices": 9
+    },
+    "estructura_comunicaciones_email": {
+      "estado": "exitoso",
+      "columnas": {
+        "id": {
+          "tipo": "integer",
+          "nullable": false,
+          "default": "nextval('comunicaciones_email_id_seq'::regclass)"
+        },
+        "message_id": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "from_email": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": null
+        },
+        "to_email": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": null
+        },
+        "subject": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "body": {
+          "tipo": "text",
+          "nullable": true,
+          "default": null
+        },
+        "body_html": {
+          "tipo": "text",
+          "nullable": true,
+          "default": null
+        },
+        "timestamp": {
+          "tipo": "timestamp without time zone",
+          "nullable": false,
+          "default": null
+        },
+        "direccion": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": null
+        },
+        "cliente_id": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        },
+        "ticket_id": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        },
+        "procesado": {
+          "tipo": "boolean",
+          "nullable": false,
+          "default": "false"
+        },
+        "respuesta_enviada": {
+          "tipo": "boolean",
+          "nullable": false,
+          "default": "false"
+        },
+        "respuesta_id": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        },
+        "requiere_respuesta": {
+          "tipo": "boolean",
+          "nullable": false,
+          "default": "false"
+        },
+        "respuesta_automatica": {
+          "tipo": "text",
+          "nullable": true,
+          "default": null
+        },
+        "respuesta_enviada_id": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "error": {
+          "tipo": "text",
+          "nullable": true,
+          "default": null
+        },
+        "adjuntos": {
+          "tipo": "text",
+          "nullable": true,
+          "default": null
+        },
+        "creado_en": {
+          "tipo": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "actualizado_en": {
+          "tipo": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "total_columnas": 21,
+      "indices": [
+        "comunicaciones_email_pkey",
+        "comunicaciones_email_message_id_key",
+        "ix_comunicaciones_email_id",
+        "ix_comunicaciones_email_message_id",
+        "ix_comunicaciones_email_from_email",
+        "ix_comunicaciones_email_to_email",
+        "ix_comunicaciones_email_timestamp",
+        "ix_comunicaciones_email_cliente_id",
+        "ix_comunicaciones_email_ticket_id",
+        "ix_comunicaciones_email_requiere_respuesta",
+        "ix_comunicaciones_email_creado_en"
+      ],
+      "total_indices": 11
+    },
+    "datos_bd": {
+      "estado": "advertencia",
+      "total_whatsapp": 0,
+      "total_email": 0,
+      "total_general": 0
+    },
+    "endpoint_backend": {
+      "estado": "exitoso",
+      "tiempos": {
+        "query_whatsapp": 488.5532855987549,
+        "query_email": 165.32349586486816,
+        "query_filtro": 166.94974899291992,
+        "query_join": 167.00077056884766
+      }
+    },
+    "rendimiento": {
+      "estado": "exitoso",
+      "tiempos": {
+        "count_total": 498.6586570739746,
+        "query_paginada": 166.39351844787598,
+        "query_filtro": 166.72730445861816,
+        "serializacion": 0.0019073486328125
+      }
+    },
+    "indices_conversaciones_whatsapp": {
+      "estado": "exitoso",
+      "indices": [
+        "conversaciones_whatsapp_message_id_key",
+        "conversaciones_whatsapp_pkey",
+        "ix_conversaciones_whatsapp_cliente_id",
+        "ix_conversaciones_whatsapp_creado_en",
+        "ix_conversaciones_whatsapp_from_number",
+        "ix_conversaciones_whatsapp_id",
+        "ix_conversaciones_whatsapp_message_id",
+        "ix_conversaciones_whatsapp_ticket_id",
+        "ix_conversaciones_whatsapp_timestamp"
+      ],
+      "total": 9
+    },
+    "indices_comunicaciones_email": {
+      "estado": "exitoso",
+      "indices": [
+        "comunicaciones_email_message_id_key",
+        "comunicaciones_email_pkey",
+        "ix_comunicaciones_email_cliente_id",
+        "ix_comunicaciones_email_creado_en",
+        "ix_comunicaciones_email_from_email",
+        "ix_comunicaciones_email_id",
+        "ix_comunicaciones_email_message_id",
+        "ix_comunicaciones_email_requiere_respuesta",
+        "ix_comunicaciones_email_ticket_id",
+        "ix_comunicaciones_email_timestamp",
+        "ix_comunicaciones_email_to_email"
+      ],
+      "total": 11
+    },
+    "validaciones": {
+      "estado": "exitoso",
+      "problemas": []
+    }
+  }
+}

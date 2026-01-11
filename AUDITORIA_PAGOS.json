@@ -1,0 +1,363 @@
+{
+  "fecha_auditoria": "2026-01-10T20:55:40.899250",
+  "endpoint": "https://rapicredit.onrender.com/pagos",
+  "endpoint_api": "https://rapicredit.onrender.com/api/v1/pagos",
+  "verificaciones": {
+    "conexion_bd": {
+      "estado": "exitoso",
+      "mensaje": "Conexión establecida correctamente"
+    },
+    "estructura_tabla": {
+      "estado": "exitoso",
+      "columnas": {
+        "id": {
+          "tipo": "integer",
+          "nullable": false,
+          "default": "nextval('pagos_id_seq'::regclass)"
+        },
+        "prestamo_id": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        },
+        "numero_cuota": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        },
+        "codigo_pago": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "monto_cuota_programado": {
+          "tipo": "numeric",
+          "nullable": true,
+          "default": null
+        },
+        "monto_pagado": {
+          "tipo": "numeric",
+          "nullable": false,
+          "default": null
+        },
+        "monto_capital": {
+          "tipo": "numeric",
+          "nullable": true,
+          "default": null
+        },
+        "monto_interes": {
+          "tipo": "numeric",
+          "nullable": true,
+          "default": null
+        },
+        "monto_mora": {
+          "tipo": "numeric",
+          "nullable": true,
+          "default": null
+        },
+        "descuento": {
+          "tipo": "numeric",
+          "nullable": true,
+          "default": null
+        },
+        "monto_total": {
+          "tipo": "numeric",
+          "nullable": true,
+          "default": null
+        },
+        "fecha_pago": {
+          "tipo": "timestamp without time zone",
+          "nullable": false,
+          "default": null
+        },
+        "fecha_vencimiento": {
+          "tipo": "date",
+          "nullable": true,
+          "default": null
+        },
+        "hora_pago": {
+          "tipo": "time without time zone",
+          "nullable": true,
+          "default": "CURRENT_TIME"
+        },
+        "dias_mora": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        },
+        "tasa_mora": {
+          "tipo": "numeric",
+          "nullable": true,
+          "default": null
+        },
+        "metodo_pago": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "numero_operacion": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "comprobante": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "banco": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "estado": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": "'PAGADO'::character varying"
+        },
+        "tipo_pago": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "observaciones": {
+          "tipo": "text",
+          "nullable": true,
+          "default": null
+        },
+        "usuario_registro": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "creado_en": {
+          "tipo": "timestamp without time zone",
+          "nullable": true,
+          "default": "now()"
+        },
+        "cedula": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "fecha_registro": {
+          "tipo": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "institucion_bancaria": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "referencia_pago": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": "''::character varying"
+        },
+        "numero_documento": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "documento_nombre": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "documento_tipo": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "documento_tamaño": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        },
+        "documento_ruta": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "conciliado": {
+          "tipo": "boolean",
+          "nullable": true,
+          "default": "false"
+        },
+        "fecha_conciliacion": {
+          "tipo": "timestamp without time zone",
+          "nullable": true,
+          "default": null
+        },
+        "activo": {
+          "tipo": "boolean",
+          "nullable": true,
+          "default": "true"
+        },
+        "notas": {
+          "tipo": "text",
+          "nullable": true,
+          "default": null
+        },
+        "fecha_actualizacion": {
+          "tipo": "timestamp without time zone",
+          "nullable": true,
+          "default": null
+        },
+        "verificado_concordancia": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": "'NO'::character varying"
+        },
+        "monto": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        },
+        "documento": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "cliente_id": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        }
+      },
+      "total_columnas": 43,
+      "columnas_criticas_faltantes": [],
+      "columnas_opcionales_faltantes": []
+    },
+    "datos_bd": {
+      "estado": "exitoso",
+      "total": 19088,
+      "por_estado": {
+        "PAGADO": 127,
+        "PARCIAL": 18961
+      },
+      "conciliados": 19088,
+      "no_conciliados": 0,
+      "activos": 19087,
+      "inactivos": 1,
+      "sin_monto": 0,
+      "sin_cedula": 0,
+      "sin_numero_documento": 0,
+      "con_cliente": 0,
+      "sin_cliente": 19088,
+      "con_prestamo": 19087,
+      "sin_prestamo": 1,
+      "muestra": [
+        {
+          "id": 55915,
+          "cedula": "V24661982",
+          "monto_pagado": 96.0,
+          "fecha_pago": "2024-05-28T00:00:00",
+          "estado": "PARCIAL",
+          "conciliado": true
+        },
+        {
+          "id": 68033,
+          "cedula": "V19231989",
+          "monto_pagado": 160.0,
+          "fecha_pago": "2024-09-15T00:00:00",
+          "estado": "PARCIAL",
+          "conciliado": true
+        },
+        {
+          "id": 55446,
+          "cedula": "V19226493",
+          "monto_pagado": 80.0,
+          "fecha_pago": "2024-11-15T00:00:00",
+          "estado": "PARCIAL",
+          "conciliado": true
+        }
+      ]
+    },
+    "endpoint_backend": {
+      "estado": "parcial",
+      "pruebas": [
+        {
+          "test": "query_basica",
+          "tiempo_ms": 353.49130630493164,
+          "registros": 20,
+          "exitoso": true
+        },
+        {
+          "test": "query_con_filtro_estado",
+          "tiempo_ms": 164.34097290039062,
+          "registros": 20,
+          "exitoso": true
+        },
+        {
+          "test": "query_con_relaciones",
+          "error": "(psycopg2.errors.UndefinedColumn) column prestamos_1.valor_activo does not exist\nLINE 1: ...dula, prestamos_1.nombres AS prestamos_1_nombres, prestamos_...\n                                                             ^\n\n[SQL: SELECT pagos.id AS pagos_id, pagos.cedula AS pagos_cedula, pagos.cliente_id AS pagos_cliente_id, pagos.prestamo_id AS pagos_prestamo_id, pagos.numero_cuota AS pagos_numero_cuota, pagos.fecha_pago AS pagos_fecha_pago, pagos.fecha_registro AS pagos_fecha_registro, pagos.monto_pagado AS pagos_monto_pagado, pagos.numero_documento AS pagos_numero_documento, pagos.institucion_bancaria AS pagos_institucion_bancaria, pagos.documento_nombre AS pagos_documento_nombre, pagos.documento_tipo AS pagos_documento_tipo, pagos.\"documento_tamaño\" AS \"pagos_documento_tamaño\", pagos.documento_ruta AS pagos_documento_ruta, pagos.conciliado AS pagos_conciliado, pagos.fecha_conciliacion AS pagos_fecha_conciliacion, pagos.estado AS pagos_estado, pagos.activo AS pagos_activo, pagos.notas AS pagos_notas, pagos.usuario_registro AS pagos_usuario_registro, pagos.fecha_actualizacion AS pagos_fecha_actualizacion, pagos.verificado_concordancia AS pagos_verificado_concordancia, clientes_1.id AS clientes_1_id, clientes_1.cedula AS clientes_1_cedula, clientes_1.nombres AS clientes_1_nombres, clientes_1.telefono AS clientes_1_telefono, clientes_1.email AS clientes_1_email, clientes_1.direccion AS clientes_1_direccion, clientes_1.fecha_nacimiento AS clientes_1_fecha_nacimiento, clientes_1.ocupacion AS clientes_1_ocupacion, clientes_1.estado AS clientes_1_estado, clientes_1.activo AS clientes_1_activo, clientes_1.fecha_registro AS clientes_1_fecha_registro, clientes_1.fecha_actualizacion AS clientes_1_fecha_actualizacion, clientes_1.usuario_registro AS clientes_1_usuario_registro, clientes_1.notas AS clientes_1_notas, prestamos_1.id AS prestamos_1_id, prestamos_1.cliente_id AS prestamos_1_cliente_id, prestamos_1.cedula AS prestamos_1_cedula, prestamos_1.nombres AS prestamos_1_nombres, prestamos_1.valor_activo AS prestamos_1_valor_activo, prestamos_1.total_financiamiento AS prestamos_1_total_financiamiento, prestamos_1.fecha_requerimiento AS prestamos_1_fecha_requerimiento, prestamos_1.modalidad_pago AS prestamos_1_modalidad_pago, prestamos_1.numero_cuotas AS prestamos_1_numero_cuotas, prestamos_1.cuota_periodo AS prestamos_1_cuota_periodo, prestamos_1.tasa_interes AS prestamos_1_tasa_interes, prestamos_1.fecha_base_calculo AS prestamos_1_fecha_base_calculo, prestamos_1.producto AS prestamos_1_producto, prestamos_1.producto_financiero AS prestamos_1_producto_financiero, prestamos_1.concesionario AS prestamos_1_concesionario, prestamos_1.analista AS prestamos_1_analista, prestamos_1.modelo_vehiculo AS prestamos_1_modelo_vehiculo, prestamos_1.concesionario_id AS prestamos_1_concesionario_id, prestamos_1.analista_id AS prestamos_1_analista_id, prestamos_1.modelo_vehiculo_id AS prestamos_1_modelo_vehiculo_id, prestamos_1.estado AS prestamos_1_estado, prestamos_1.usuario_proponente AS prestamos_1_usuario_proponente, prestamos_1.usuario_aprobador AS prestamos_1_usuario_aprobador, prestamos_1.usuario_autoriza AS prestamos_1_usuario_autoriza, prestamos_1.observaciones AS prestamos_1_observaciones, prestamos_1.fecha_registro AS prestamos_1_fecha_registro, prestamos_1.fecha_aprobacion AS prestamos_1_fecha_aprobacion, prestamos_1.informacion_desplegable AS prestamos_1_informacion_desplegable, prestamos_1.ml_impago_nivel_riesgo_manual AS prestamos_1_ml_impago_nivel_riesgo_manual, prestamos_1.ml_impago_probabilidad_manual AS prestamos_1_ml_impago_probabilidad_manual, prestamos_1.ml_impago_nivel_riesgo_calculado AS prestamos_1_ml_impago_nivel_riesgo_calculado, prestamos_1.ml_impago_probabilidad_calculada AS prestamos_1_ml_impago_probabilidad_calculada, prestamos_1.ml_impago_calculado_en AS prestamos_1_ml_impago_calculado_en, prestamos_1.ml_impago_modelo_id AS prestamos_1_ml_impago_modelo_id, prestamos_1.fecha_actualizacion AS prestamos_1_fecha_actualizacion \nFROM pagos LEFT OUTER JOIN clientes AS clientes_1 ON clientes_1.id = pagos.cliente_id LEFT OUTER JOIN prestamos AS prestamos_1 ON prestamos_1.id = pagos.prestamo_id \n LIMIT %(param_1)s]\n[parameters: {'param_1': 20}]\n(Background on this error at: https://sqlalche.me/e/20/f405)",
+          "exitoso": false
+        }
+      ]
+    },
+    "rendimiento": {
+      "estado": "error",
+      "mensaje": "(psycopg2.errors.UndefinedColumn) column prestamos_1.valor_activo does not exist\nLINE 1: ...dula, prestamos_1.nombres AS prestamos_1_nombres, prestamos_...\n                                                             ^\n\n[SQL: SELECT pagos.id AS pagos_id, pagos.cedula AS pagos_cedula, pagos.cliente_id AS pagos_cliente_id, pagos.prestamo_id AS pagos_prestamo_id, pagos.numero_cuota AS pagos_numero_cuota, pagos.fecha_pago AS pagos_fecha_pago, pagos.fecha_registro AS pagos_fecha_registro, pagos.monto_pagado AS pagos_monto_pagado, pagos.numero_documento AS pagos_numero_documento, pagos.institucion_bancaria AS pagos_institucion_bancaria, pagos.documento_nombre AS pagos_documento_nombre, pagos.documento_tipo AS pagos_documento_tipo, pagos.\"documento_tamaño\" AS \"pagos_documento_tamaño\", pagos.documento_ruta AS pagos_documento_ruta, pagos.conciliado AS pagos_conciliado, pagos.fecha_conciliacion AS pagos_fecha_conciliacion, pagos.estado AS pagos_estado, pagos.activo AS pagos_activo, pagos.notas AS pagos_notas, pagos.usuario_registro AS pagos_usuario_registro, pagos.fecha_actualizacion AS pagos_fecha_actualizacion, pagos.verificado_concordancia AS pagos_verificado_concordancia, clientes_1.id AS clientes_1_id, clientes_1.cedula AS clientes_1_cedula, clientes_1.nombres AS clientes_1_nombres, clientes_1.telefono AS clientes_1_telefono, clientes_1.email AS clientes_1_email, clientes_1.direccion AS clientes_1_direccion, clientes_1.fecha_nacimiento AS clientes_1_fecha_nacimiento, clientes_1.ocupacion AS clientes_1_ocupacion, clientes_1.estado AS clientes_1_estado, clientes_1.activo AS clientes_1_activo, clientes_1.fecha_registro AS clientes_1_fecha_registro, clientes_1.fecha_actualizacion AS clientes_1_fecha_actualizacion, clientes_1.usuario_registro AS clientes_1_usuario_registro, clientes_1.notas AS clientes_1_notas, prestamos_1.id AS prestamos_1_id, prestamos_1.cliente_id AS prestamos_1_cliente_id, prestamos_1.cedula AS prestamos_1_cedula, prestamos_1.nombres AS prestamos_1_nombres, prestamos_1.valor_activo AS prestamos_1_valor_activo, prestamos_1.total_financiamiento AS prestamos_1_total_financiamiento, prestamos_1.fecha_requerimiento AS prestamos_1_fecha_requerimiento, prestamos_1.modalidad_pago AS prestamos_1_modalidad_pago, prestamos_1.numero_cuotas AS prestamos_1_numero_cuotas, prestamos_1.cuota_periodo AS prestamos_1_cuota_periodo, prestamos_1.tasa_interes AS prestamos_1_tasa_interes, prestamos_1.fecha_base_calculo AS prestamos_1_fecha_base_calculo, prestamos_1.producto AS prestamos_1_producto, prestamos_1.producto_financiero AS prestamos_1_producto_financiero, prestamos_1.concesionario AS prestamos_1_concesionario, prestamos_1.analista AS prestamos_1_analista, prestamos_1.modelo_vehiculo AS prestamos_1_modelo_vehiculo, prestamos_1.concesionario_id AS prestamos_1_concesionario_id, prestamos_1.analista_id AS prestamos_1_analista_id, prestamos_1.modelo_vehiculo_id AS prestamos_1_modelo_vehiculo_id, prestamos_1.estado AS prestamos_1_estado, prestamos_1.usuario_proponente AS prestamos_1_usuario_proponente, prestamos_1.usuario_aprobador AS prestamos_1_usuario_aprobador, prestamos_1.usuario_autoriza AS prestamos_1_usuario_autoriza, prestamos_1.observaciones AS prestamos_1_observaciones, prestamos_1.fecha_registro AS prestamos_1_fecha_registro, prestamos_1.fecha_aprobacion AS prestamos_1_fecha_aprobacion, prestamos_1.informacion_desplegable AS prestamos_1_informacion_desplegable, prestamos_1.ml_impago_nivel_riesgo_manual AS prestamos_1_ml_impago_nivel_riesgo_manual, prestamos_1.ml_impago_probabilidad_manual AS prestamos_1_ml_impago_probabilidad_manual, prestamos_1.ml_impago_nivel_riesgo_calculado AS prestamos_1_ml_impago_nivel_riesgo_calculado, prestamos_1.ml_impago_probabilidad_calculada AS prestamos_1_ml_impago_probabilidad_calculada, prestamos_1.ml_impago_calculado_en AS prestamos_1_ml_impago_calculado_en, prestamos_1.ml_impago_modelo_id AS prestamos_1_ml_impago_modelo_id, prestamos_1.fecha_actualizacion AS prestamos_1_fecha_actualizacion \nFROM pagos LEFT OUTER JOIN clientes AS clientes_1 ON clientes_1.id = pagos.cliente_id LEFT OUTER JOIN prestamos AS prestamos_1 ON prestamos_1.id = pagos.prestamo_id \n LIMIT %(param_1)s]\n[parameters: {'param_1': 10}]\n(Background on this error at: https://sqlalche.me/e/20/f405)"
+    },
+    "indices": {
+      "estado": "advertencia",
+      "indices": {
+        "idx_pagos_activo": "CREATE INDEX idx_pagos_activo ON public.pagos USING btree (activo) WHERE (activo = true)",
+        "idx_pagos_cedula_activo_fecha": "CREATE INDEX idx_pagos_cedula_activo_fecha ON public.pagos USING btree (cedula, activo, fecha_pago) WHERE ((cedula IS NOT NULL) AND (activo = true) AND (fecha_pago IS NOT NULL) AND (monto_pagado IS NOT NULL) AND (monto_pagado > (0)::numeric))",
+        "idx_pagos_fecha_pago_activo": "CREATE INDEX idx_pagos_fecha_pago_activo ON public.pagos USING btree (fecha_pago, activo, monto_pagado) WHERE ((activo = true) AND (monto_pagado > (0)::numeric))",
+        "idx_pagos_fecha_pago_activo_monto": "CREATE INDEX idx_pagos_fecha_pago_activo_monto ON public.pagos USING btree (fecha_pago, activo, monto_pagado) WHERE ((fecha_pago IS NOT NULL) AND (activo = true) AND (monto_pagado IS NOT NULL) AND (monto_pagado > (0)::numeric))",
+        "idx_pagos_fecha_pago_simple": "CREATE INDEX idx_pagos_fecha_pago_simple ON public.pagos USING btree (fecha_pago) WHERE ((fecha_pago IS NOT NULL) AND (activo = true))",
+        "idx_pagos_monto_pagado": "CREATE INDEX idx_pagos_monto_pagado ON public.pagos USING btree (monto_pagado) WHERE ((monto_pagado IS NOT NULL) AND (monto_pagado > (0)::numeric) AND (activo = true))",
+        "idx_pagos_prestamo_fecha": "CREATE INDEX idx_pagos_prestamo_fecha ON public.pagos USING btree (prestamo_id, fecha_pago, activo) WHERE (activo = true)",
+        "idx_pagos_prestamo_id_activo_fecha": "CREATE INDEX idx_pagos_prestamo_id_activo_fecha ON public.pagos USING btree (prestamo_id, activo, fecha_pago) WHERE ((prestamo_id IS NOT NULL) AND (activo = true) AND (fecha_pago IS NOT NULL) AND (monto_pagado IS NOT NULL) AND (monto_pagado > (0)::numeric))",
+        "idx_pagos_prestamo_id_fk": "CREATE INDEX idx_pagos_prestamo_id_fk ON public.pagos USING btree (prestamo_id) WHERE (prestamo_id IS NOT NULL)",
+        "ix_pagos_cedula": "CREATE INDEX ix_pagos_cedula ON public.pagos USING btree (cedula)",
+        "ix_pagos_cliente_id": "CREATE INDEX ix_pagos_cliente_id ON public.pagos USING btree (cliente_id)",
+        "ix_pagos_codigo_pago": "CREATE UNIQUE INDEX ix_pagos_codigo_pago ON public.pagos USING btree (codigo_pago)",
+        "ix_pagos_estado": "CREATE INDEX ix_pagos_estado ON public.pagos USING btree (estado)",
+        "ix_pagos_fecha_actualizacion": "CREATE INDEX ix_pagos_fecha_actualizacion ON public.pagos USING btree (fecha_actualizacion)",
+        "ix_pagos_id": "CREATE INDEX ix_pagos_id ON public.pagos USING btree (id)",
+        "ix_pagos_numero_doc": "CREATE INDEX ix_pagos_numero_doc ON public.pagos USING btree (numero_documento)",
+        "ix_pagos_numero_documento": "CREATE INDEX ix_pagos_numero_documento ON public.pagos USING btree (numero_documento)",
+        "ix_pagos_prestamo_id": "CREATE INDEX ix_pagos_prestamo_id ON public.pagos USING btree (prestamo_id)",
+        "pagos_pkey": "CREATE UNIQUE INDEX pagos_pkey ON public.pagos USING btree (id)"
+      },
+      "total": 19,
+      "faltantes": [
+        "ix_pagos_fecha_registro"
+      ]
+    },
+    "validaciones": {
+      "estado": "exitoso",
+      "problemas": []
+    },
+    "conectividad_produccion": {
+      "endpoint_pagos": {
+        "url": "https://rapicredit.onrender.com/pagos",
+        "status_code": 200,
+        "tiempo_respuesta_ms": 634.92,
+        "accesible": true
+      },
+      "endpoint_api_pagos": {
+        "url": "https://rapicredit.onrender.com/api/v1/pagos",
+        "status_code": 404,
+        "tiempo_respuesta_ms": 268.81,
+        "accesible": false
+      },
+      "estado": "parcial"
+    }
+  },
+  "resumen": {
+    "exitosas": 4,
+    "parciales": 2,
+    "errores": 1,
+    "advertencias": 1,
+    "total": 8
+  },
+  "advertencias": [
+    "Índices faltantes: ix_pagos_fecha_registro"
+  ],
+  "errores": []
+}

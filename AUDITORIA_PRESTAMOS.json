@@ -1,0 +1,334 @@
+{
+  "fecha_auditoria": "2026-01-10T20:55:52.081299",
+  "url": "https://rapicredit.onrender.com/prestamos",
+  "endpoint": "https://rapicredit.onrender.com/api/v1/prestamos",
+  "verificaciones": {
+    "conectividad": {
+      "url": "https://rapicredit.onrender.com/prestamos",
+      "status_code": 200,
+      "tiempo_respuesta_ms": 644.75,
+      "accesible": true,
+      "url_final": "https://rapicredit.onrender.com/prestamos",
+      "redirecciones": 0,
+      "titulo": "RAPICREDIT - Sistema de Préstamos y Cobranza"
+    },
+    "conexion_bd": {
+      "estado": "exitoso",
+      "mensaje": "Conexión establecida correctamente"
+    },
+    "estructura_tabla": {
+      "estado": "exitoso",
+      "columnas": {
+        "id": {
+          "tipo": "integer",
+          "nullable": false,
+          "default": "nextval('prestamos_id_seq'::regclass)"
+        },
+        "cliente_id": {
+          "tipo": "integer",
+          "nullable": false,
+          "default": null
+        },
+        "cedula": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": null
+        },
+        "nombres": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": null
+        },
+        "total_financiamiento": {
+          "tipo": "numeric",
+          "nullable": false,
+          "default": null
+        },
+        "fecha_requerimiento": {
+          "tipo": "date",
+          "nullable": false,
+          "default": null
+        },
+        "modalidad_pago": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": null
+        },
+        "numero_cuotas": {
+          "tipo": "integer",
+          "nullable": false,
+          "default": null
+        },
+        "cuota_periodo": {
+          "tipo": "numeric",
+          "nullable": false,
+          "default": null
+        },
+        "tasa_interes": {
+          "tipo": "numeric",
+          "nullable": false,
+          "default": "0.00"
+        },
+        "fecha_base_calculo": {
+          "tipo": "date",
+          "nullable": true,
+          "default": null
+        },
+        "producto": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": null
+        },
+        "producto_financiero": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": null
+        },
+        "estado": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": "'DRAFT'::character varying"
+        },
+        "usuario_proponente": {
+          "tipo": "character varying",
+          "nullable": false,
+          "default": "'itmaster@rapicreditca.com'::character varying"
+        },
+        "usuario_aprobador": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "observaciones": {
+          "tipo": "text",
+          "nullable": true,
+          "default": "'No observaciones'::text"
+        },
+        "informacion_desplegable": {
+          "tipo": "boolean",
+          "nullable": false,
+          "default": "false"
+        },
+        "fecha_registro": {
+          "tipo": "timestamp without time zone",
+          "nullable": false,
+          "default": "'2025-10-31 00:00:00'::timestamp without time zone"
+        },
+        "fecha_aprobacion": {
+          "tipo": "timestamp without time zone",
+          "nullable": true,
+          "default": null
+        },
+        "fecha_actualizacion": {
+          "tipo": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "concesionario": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "analista": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "modelo_vehiculo": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "usuario_autoriza": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": "'operaciones@rapicreditca.com'::character varying"
+        },
+        "ml_impago_nivel_riesgo_manual": {
+          "tipo": "character varying",
+          "nullable": true,
+          "default": null
+        },
+        "ml_impago_probabilidad_manual": {
+          "tipo": "numeric",
+          "nullable": true,
+          "default": null
+        },
+        "concesionario_id": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        },
+        "analista_id": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        },
+        "modelo_vehiculo_id": {
+          "tipo": "integer",
+          "nullable": true,
+          "default": null
+        }
+      },
+      "total_columnas": 30,
+      "columnas_criticas_faltantes": [],
+      "columnas_opcionales_faltantes": [
+        "valor_activo"
+      ]
+    },
+    "datos_bd": {
+      "estado": "exitoso",
+      "total": 4419,
+      "por_estado": {
+        "APROBADO": 4419
+      },
+      "por_modalidad": {
+        "SEMANAL": 12,
+        "MENSUAL": 4276,
+        "QUINCENAL": 131
+      },
+      "total_financiamiento": 6438396.0,
+      "promedio_financiamiento": 1456.980312287848,
+      "sin_cliente_id": 0,
+      "sin_cedula": 0,
+      "sin_total_financiamiento": 0,
+      "con_cliente": 4419,
+      "sin_cliente": 0,
+      "muestra": [
+        {
+          "id": 4419,
+          "cedula": "V27784529",
+          "nombres": "CHRISTIAN MANUEL MIJARES FLORES",
+          "estado": "APROBADO",
+          "total_financiamiento": 1704.0,
+          "modalidad_pago": "MENSUAL",
+          "numero_cuotas": 12
+        },
+        {
+          "id": 4418,
+          "cedula": "V21105143",
+          "nombres": "JAIRO ALEXANDER DIAZ GUALDRON",
+          "estado": "APROBADO",
+          "total_financiamiento": 3360.0,
+          "modalidad_pago": "MENSUAL",
+          "numero_cuotas": 12
+        },
+        {
+          "id": 4417,
+          "cedula": "V26151129",
+          "nombres": "HENDERSSON JOSE UTRERA MENDOZA",
+          "estado": "APROBADO",
+          "total_financiamiento": 1704.0,
+          "modalidad_pago": "MENSUAL",
+          "numero_cuotas": 12
+        }
+      ]
+    },
+    "endpoint_backend": {
+      "estado": "parcial",
+      "pruebas": [
+        {
+          "test": "query_basica",
+          "tiempo_ms": 685.6298446655273,
+          "registros": 20,
+          "exitoso": true
+        },
+        {
+          "test": "query_con_filtro_estado",
+          "tiempo_ms": 163.97547721862793,
+          "registros": 20,
+          "exitoso": true
+        },
+        {
+          "test": "query_con_join_cliente",
+          "error": "(psycopg2.errors.UndefinedColumn) column c.nombre does not exist\nLINE 2: ...      SELECT p.id, p.cedula, p.nombres, p.estado, c.nombre a...\n                                                             ^\nHINT:  Perhaps you meant to reference the column \"c.nombres\".\n\n[SQL: \n                            SELECT p.id, p.cedula, p.nombres, p.estado, c.nombre as cliente_nombre\n                            FROM prestamos p\n                            LEFT JOIN clientes c ON p.cliente_id = c.id\n                            LIMIT 20\n                        ]\n(Background on this error at: https://sqlalche.me/e/20/f405)",
+          "exitoso": false
+        }
+      ]
+    },
+    "rendimiento": {
+      "estado": "exitoso",
+      "pruebas": [
+        {
+          "operacion": "count_total",
+          "tiempo_ms": 488.2924556732178,
+          "aceptable": true
+        },
+        {
+          "operacion": "query_paginada_20",
+          "tiempo_ms": 270.22385597229004,
+          "aceptable": true
+        },
+        {
+          "operacion": "query_con_filtro",
+          "tiempo_ms": 163.07306289672852,
+          "aceptable": true
+        },
+        {
+          "operacion": "query_con_agregacion",
+          "tiempo_ms": 162.72449493408203,
+          "aceptable": true
+        }
+      ],
+      "operaciones_aceptables": 4,
+      "total_operaciones": 4
+    },
+    "indices": {
+      "estado": "advertencia",
+      "indices": {
+        "idx_prestamos_analista": "CREATE INDEX idx_prestamos_analista ON public.prestamos USING btree (analista)",
+        "idx_prestamos_aprobacion_estado_analista": "CREATE INDEX idx_prestamos_aprobacion_estado_analista ON public.prestamos USING btree (fecha_aprobacion, estado, analista, concesionario) WHERE (((estado)::text = 'APROBADO'::text) AND (fecha_aprobacion IS NOT NULL))",
+        "idx_prestamos_cedula_estado": "CREATE INDEX idx_prestamos_cedula_estado ON public.prestamos USING btree (cedula, estado) WHERE ((estado)::text = ANY ((ARRAY['APROBADO'::character varying, 'FINALIZADO'::character varying])::text[]))",
+        "idx_prestamos_cliente_id_fk": "CREATE INDEX idx_prestamos_cliente_id_fk ON public.prestamos USING btree (cliente_id) WHERE (cliente_id IS NOT NULL)",
+        "idx_prestamos_concesionario": "CREATE INDEX idx_prestamos_concesionario ON public.prestamos USING btree (concesionario)",
+        "idx_prestamos_concesionario_estado": "CREATE INDEX idx_prestamos_concesionario_estado ON public.prestamos USING btree (concesionario, estado) WHERE ((estado)::text = 'APROBADO'::text)",
+        "idx_prestamos_estado_analista_concesionario": "CREATE INDEX idx_prestamos_estado_analista_concesionario ON public.prestamos USING btree (estado, analista, concesionario) WHERE ((estado)::text = ANY ((ARRAY['APROBADO'::character varying, 'ACTIVO'::character varying])::text[]))",
+        "idx_prestamos_estado_cedula": "CREATE INDEX idx_prestamos_estado_cedula ON public.prestamos USING btree (estado, cedula) WHERE (((estado)::text = ANY ((ARRAY['APROBADO'::character varying, 'ACTIVO'::character varying])::text[])) AND (cedula IS NOT NULL))",
+        "idx_prestamos_estado_producto_financiero": "CREATE INDEX idx_prestamos_estado_producto_financiero ON public.prestamos USING btree (estado, producto_financiero) WHERE ((estado)::text = ANY ((ARRAY['APROBADO'::character varying, 'ACTIVO'::character varying])::text[]))",
+        "idx_prestamos_estado_producto_modelo": "CREATE INDEX idx_prestamos_estado_producto_modelo ON public.prestamos USING btree (estado, producto, modelo_vehiculo) WHERE ((estado)::text = ANY ((ARRAY['APROBADO'::character varying, 'ACTIVO'::character varying])::text[]))",
+        "idx_prestamos_fecha_aprobacion_ym": "CREATE INDEX idx_prestamos_fecha_aprobacion_ym ON public.prestamos USING btree (EXTRACT(year FROM fecha_aprobacion), EXTRACT(month FROM fecha_aprobacion), estado) WHERE (((estado)::text = 'APROBADO'::text) AND (fecha_aprobacion IS NOT NULL))",
+        "idx_prestamos_fecha_registro_estado": "CREATE INDEX idx_prestamos_fecha_registro_estado ON public.prestamos USING btree (fecha_registro, estado) WHERE ((fecha_registro IS NOT NULL) AND ((estado)::text = ANY ((ARRAY['APROBADO'::character varying, 'ACTIVO'::character varying])::text[])))",
+        "idx_prestamos_modelo_estado": "CREATE INDEX idx_prestamos_modelo_estado ON public.prestamos USING btree (modelo_vehiculo, estado) WHERE (((estado)::text = 'APROBADO'::text) AND (modelo_vehiculo IS NOT NULL))",
+        "idx_prestamos_modelo_vehiculo": "CREATE INDEX idx_prestamos_modelo_vehiculo ON public.prestamos USING btree (modelo_vehiculo)",
+        "idx_prestamos_producto": "CREATE INDEX idx_prestamos_producto ON public.prestamos USING btree (producto) WHERE (((estado)::text = 'APROBADO'::text) AND (producto IS NOT NULL))",
+        "idx_prestamos_producto_financiero": "CREATE INDEX idx_prestamos_producto_financiero ON public.prestamos USING btree (producto_financiero) WHERE (((estado)::text = 'APROBADO'::text) AND (producto_financiero IS NOT NULL))",
+        "idx_prestamos_usuario_proponente": "CREATE INDEX idx_prestamos_usuario_proponente ON public.prestamos USING btree (usuario_proponente) WHERE (((estado)::text = ANY ((ARRAY['APROBADO'::character varying, 'ACTIVO'::character varying])::text[])) AND (usuario_proponente IS NOT NULL))",
+        "ix_prestamos_analista_id": "CREATE INDEX ix_prestamos_analista_id ON public.prestamos USING btree (analista_id)",
+        "ix_prestamos_cedula": "CREATE INDEX ix_prestamos_cedula ON public.prestamos USING btree (cedula)",
+        "ix_prestamos_cliente_id": "CREATE INDEX ix_prestamos_cliente_id ON public.prestamos USING btree (cliente_id)",
+        "ix_prestamos_concesionario_id": "CREATE INDEX ix_prestamos_concesionario_id ON public.prestamos USING btree (concesionario_id)",
+        "ix_prestamos_estado": "CREATE INDEX ix_prestamos_estado ON public.prestamos USING btree (estado)",
+        "ix_prestamos_modelo_vehiculo_id": "CREATE INDEX ix_prestamos_modelo_vehiculo_id ON public.prestamos USING btree (modelo_vehiculo_id)",
+        "prestamos_pkey": "CREATE UNIQUE INDEX prestamos_pkey ON public.prestamos USING btree (id)"
+      },
+      "total": 24,
+      "faltantes": [
+        "ix_prestamos_id",
+        "ix_prestamos_fecha_registro"
+      ]
+    },
+    "validaciones": {
+      "estado": "exitoso",
+      "problemas": []
+    },
+    "endpoint_api": {
+      "url": "https://rapicredit.onrender.com/api/v1/prestamos",
+      "status_code": 403,
+      "tiempo_respuesta_ms": 359.74,
+      "requiere_auth": true,
+      "existe": true
+    }
+  },
+  "resumen": {
+    "exitosas": 5,
+    "parciales": 1,
+    "errores": 0,
+    "advertencias": 1,
+    "total": 9
+  },
+  "advertencias": [
+    "Columnas opcionales faltantes: valor_activo",
+    "Índices faltantes: ix_prestamos_id, ix_prestamos_fecha_registro"
+  ],
+  "errores": []
+}

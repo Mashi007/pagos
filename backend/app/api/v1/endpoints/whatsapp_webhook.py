@@ -274,7 +274,7 @@ async def _procesar_estados(statuses: list, db: Session) -> int:
                 notificaciones_whatsapp = (
                     db.query(Notificacion)
                     .filter(
-                        Notificacion.canal == "WHATSAPP",
+                        Notificacion.tipo == "WHATSAPP",  # ✅ CORREGIDO: Usar tipo en lugar de canal
                         Notificacion.respuesta_servicio.isnot(None),
                     )
                     .order_by(Notificacion.id.desc())
