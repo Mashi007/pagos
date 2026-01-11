@@ -318,16 +318,18 @@ app.use(express.static(distPath, staticOptions));
 
 // Health check endpoint - IMPORTANTE para Render
 // Render usa esto para verificar que el servicio está vivo
+// OPTIMIZADO: Respuesta ultra rápida sin procesamiento adicional
 app.get('/health', (req, res) => {
+  // Responder inmediatamente sin procesamiento adicional
   res.status(200).json({
     status: 'healthy',
-    timestamp: new Date().toISOString(),
     service: 'rapicredit-frontend',
     version: '1.0.1'
   });
 });
 
 // También responder a HEAD requests (usado por Render)
+// OPTIMIZADO: Respuesta inmediata sin body
 app.head('/health', (req, res) => {
   res.status(200).end();
 });
@@ -431,6 +433,7 @@ try {
 
   server = app.listen(PORT, '0.0.0.0', () => {
     // Logs de inicio consolidados (sin duplicación)
+    const startTime = new Date().toISOString();
     console.log('🚀 ==========================================');
     console.log('🚀 Servidor SPA rapicredit-frontend iniciado');
     console.log('🚀 ==========================================');
@@ -439,7 +442,11 @@ try {
     console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔗 API URL: ${API_URL || 'No configurado'}`);
     console.log(`✅ Health check disponible en: http://0.0.0.0:${PORT}/health`);
+    console.log(`⏰ Hora de inicio: ${startTime}`);
     console.log('✅ Servidor listo para recibir requests');
+    
+    // Guardar tiempo de inicio para diagnóstico
+    process.env.SERVER_START_TIME = startTime;
   });
 
   // Manejar errores del servidor
@@ -463,29 +470,36 @@ try {
   });
 
   // Manejar cierre graceful del servidor
-  process.on('SIGTERM', () => {
-    console.log('📴 SIGTERM recibido, cerrando servidor gracefully...');
+  // OPTIMIZADO: Timeout para evitar que el servidor se cuelgue esperando conexiones
+  const gracefulShutdown = (signal) => {
+    const shutdownTime = new Date().toISOString();
+    const startTime = process.env.SERVER_START_TIME || 'desconocido';
+    const uptime = process.uptime();
+    
+    console.log(`📴 ${signal} recibido, cerrando servidor gracefully...`);
+    console.log(`⏰ Hora de cierre: ${shutdownTime}`);
+    console.log(`⏱️  Tiempo de ejecución: ${Math.round(uptime)} segundos (${Math.round(uptime / 60)} minutos)`);
+    console.log(`📅 Inicio del servidor: ${startTime}`);
+    
     if (server) {
+      // Cerrar el servidor con timeout de 10 segundos
       server.close(() => {
         console.log('✅ Servidor cerrado correctamente');
         process.exit(0);
       });
-    } else {
-      process.exit(0);
-    }
-  });
 
-  process.on('SIGINT', () => {
-    console.log('📴 SIGINT recibido, cerrando servidor gracefully...');
-    if (server) {
-      server.close(() => {
-        console.log('✅ Servidor cerrado correctamente');
-        process.exit(0);
-      });
+      // Forzar cierre después de 10 segundos si aún hay conexiones activas
+      setTimeout(() => {
+        console.warn('⚠️  Timeout alcanzado, forzando cierre del servidor...');
+        process.exit(1);
+      }, 10000);
     } else {
       process.exit(0);
     }
-  });
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 } catch (error) {
   console.error('❌ ERROR CRÍTICO al crear servidor:', error);
   console.error('   Tipo:', error.constructor.name);

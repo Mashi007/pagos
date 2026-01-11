@@ -9,6 +9,7 @@ import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -371,6 +372,11 @@ async def lifespan(app: FastAPI):
         yield
         return
 
+    # Registrar tiempo de inicio para diagnóstico
+    startup_time = time.time()
+    startup_timestamp = datetime.now().isoformat()
+    logger.info(f"🚀 Iniciando aplicación - Timestamp: {startup_timestamp}")
+
     init_db_startup()
 
     # Iniciar scheduler para tareas automáticas
@@ -378,11 +384,24 @@ async def lifespan(app: FastAPI):
 
     scheduler_module.iniciar_scheduler()
 
+    logger.info("✅ Aplicación iniciada correctamente y lista para recibir requests")
+    
     yield
 
     # Detener scheduler al cerrar
+    shutdown_time = time.time()
+    shutdown_timestamp = datetime.now().isoformat()
+    uptime_seconds = shutdown_time - startup_time
+    uptime_minutes = uptime_seconds / 60
+    
+    logger.info(f"📴 Iniciando shutdown graceful - Timestamp: {shutdown_timestamp}")
+    logger.info(f"⏱️  Tiempo de ejecución: {uptime_seconds:.1f} segundos ({uptime_minutes:.2f} minutos)")
+    logger.info(f"📅 Inicio del servidor: {startup_timestamp}")
+    
     scheduler_module.detener_scheduler()
     init_db_shutdown()
+    
+    logger.info("✅ Shutdown completado correctamente")
 
 
 app = FastAPI(

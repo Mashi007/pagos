@@ -1481,23 +1481,24 @@ def iniciar_scheduler():
         if not scheduler.running:
             scheduler.start()
             logger.info("✅ Scheduler iniciado correctamente")
+            
+            # Solo loggear jobs programados una vez cuando se inicia el scheduler
+            logger.info("📅 Jobs programados:")
+            logger.info("   Diariamente a las 4:00 AM:")
+            logger.info("   - Notificaciones Previas (5, 3, 1 días antes)")
+            logger.info("   - Día de Pago (Día 0)")
+            logger.info("   - Notificaciones Retrasadas (1, 3, 5 días atrasado)")
+            logger.info("   - Notificaciones Prejudiciales (2+ cuotas atrasadas)")
+            logger.info("   Semanalmente (Domingos a las 3:00 AM):")
+            logger.info("   - Reentrenamiento Automático ML Impago")
+            logger.info(
+                "📧 Todos los jobs calcularán notificaciones y enviarán correos automáticamente usando plantillas y configuración de email"
+            )
         else:
-            logger.info("✅ Scheduler ya estaba corriendo")
+            logger.debug("✅ Scheduler ya estaba corriendo, omitiendo logs de jobs")
 
         # Marcar como inicializado
         _scheduler_inicializado = True
-
-        logger.info("📅 Jobs programados:")
-        logger.info("   Diariamente a las 4:00 AM:")
-        logger.info("   - Notificaciones Previas (5, 3, 1 días antes)")
-        logger.info("   - Día de Pago (Día 0)")
-        logger.info("   - Notificaciones Retrasadas (1, 3, 5 días atrasado)")
-        logger.info("   - Notificaciones Prejudiciales (2+ cuotas atrasadas)")
-        logger.info("   Semanalmente (Domingos a las 3:00 AM):")
-        logger.info("   - Reentrenamiento Automático ML Impago")
-        logger.info(
-            "📧 Todos los jobs calcularán notificaciones y enviarán correos automáticamente usando plantillas y configuración de email"
-        )
 
     except Exception as e:
         logger.error(f"❌ Error iniciando scheduler: {e}", exc_info=True)
