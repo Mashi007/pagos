@@ -10,7 +10,7 @@ param(
 $Info = "Cyan"
 $Success = "Green"
 $Warning = "Yellow"
-$Error = "Red"
+$ErrorColor = "Red"
 
 Write-Host "`nORGANIZADOR DE DOCUMENTOS MARKDOWN`n" -ForegroundColor $Info
 

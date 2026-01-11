@@ -9,7 +9,7 @@ param(
 $Info = "Cyan"
 $Success = "Green"
 $Warning = "Yellow"
-$Error = "Red"
+$ErrorColor = "Red"
 
 Write-Host "`nVERIFICACION DE ORGANIZACION DE DOCUMENTOS`n" -ForegroundColor $Info
 
