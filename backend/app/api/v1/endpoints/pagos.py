@@ -546,7 +546,7 @@ def listar_pagos(
     try:
         # Normalizar cédula si se proporciona
         cedula_norm = cedula.strip().upper() if cedula else None
-        
+
         logger.info(f"📋 [listar_pagos] Iniciando consulta - página {page}, por página {per_page}, cédula: {cedula_norm}")
 
         try:
@@ -609,7 +609,7 @@ def listar_pagos(
         # Aplicar filtros a la query base
         query_base = db.query(Pago).filter(Pago.activo.is_(True))
         query_base = _aplicar_filtros_pagos(query_base, cedula_norm, estado, fecha_desde, fecha_hasta, analista, db)
-        
+
         # Contar total con filtros aplicados
         total = query_base.count()
         logger.debug(f"📊 [listar_pagos] Total pagos encontrados (sin paginación): {total}")

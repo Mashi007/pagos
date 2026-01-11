@@ -7606,7 +7606,7 @@ async def chat_ai(
         # ✅ Logging detallado del error
         error_type = type(e).__name__
         error_msg = str(e)
-        
+
         logger.error(
             f"❌ Error en Chat AI - Usuario: {current_user.email}, "
             f"Tiempo: {elapsed_time:.2f}s, "
@@ -7614,7 +7614,7 @@ async def chat_ai(
             f"Error: {error_msg[:500]}",  # Limitar longitud del mensaje
             exc_info=True,
         )
-        
+
         # ✅ Mensaje de error más descriptivo según el tipo
         if elapsed_time > 30:
             detail_msg = f"La consulta está tardando demasiado tiempo ({elapsed_time:.1f}s). Esto puede deberse a consultas complejas a la base de datos o carga alta en el servidor. Intenta reformular tu pregunta de forma más específica."
@@ -7624,5 +7624,5 @@ async def chat_ai(
             detail_msg = f"Error de conexión a la base de datos. Por favor, intenta nuevamente."
         else:
             detail_msg = f"Error al procesar la consulta: {error_msg[:200]}"
-        
+
         raise HTTPException(status_code=500, detail=detail_msg)

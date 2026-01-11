@@ -131,13 +131,13 @@ class AIChatService:
         # ✅ Obtener contexto base con cache
         # Cache TTL configurable desde BD (default: 5 minutos = 300 segundos)
         cache_ttl = int(self.config_dict.get("cache_resumen_bd_ttl", "300"))
-        
+
         # ✅ Logging de tiempo para diagnóstico
         resumen_start = time.time()
         resumen_bd = self._obtener_resumen_bd_con_cache(cache_ttl)
         resumen_time = time.time() - resumen_start
         logger.debug(f"⏱️ Resumen BD obtenido en {resumen_time:.2f}s")
-        
+
         esquema_start = time.time()
         info_esquema = _obtener_info_esquema(pregunta_lower, self.db)
         esquema_time = time.time() - esquema_start
@@ -299,7 +299,7 @@ class AIChatService:
         Procesa una pregunta completa: valida, obtiene contexto, construye prompt y llama a OpenAI.
         """
         process_start = time.time()
-        
+
         # Validar pregunta (ya validada antes, pero por seguridad)
         pregunta = self.validar_pregunta(pregunta)
 
@@ -323,8 +323,8 @@ class AIChatService:
         resultado = await self.llamar_openai_api(system_prompt, pregunta)
         openai_time = time.time() - openai_start
         logger.info(f"⏱️ OpenAI API respondió en {openai_time:.2f}s")
-        
+
         total_time = time.time() - process_start
         logger.info(f"⏱️ Procesamiento total: {total_time:.2f}s (Contexto: {context_time:.2f}s, OpenAI: {openai_time:.2f}s)")
-        
+
         return resultado

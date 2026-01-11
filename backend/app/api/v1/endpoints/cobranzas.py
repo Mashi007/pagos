@@ -666,7 +666,9 @@ def obtener_clientes_atrasados(
         # ✅ Optimización: Si hay muchos resultados y no se requiere ML, omitir procesamiento ML
         # Esto puede ahorrar mucho tiempo cuando hay miles de registros
         if len(resultados) > 1000 and not incluir_ml:
-            logger.info(f"⚡ [clientes_atrasados] Omitiendo ML Impago por tener {len(resultados)} registros y incluir_ml=False")
+            logger.info(
+                f"⚡ [clientes_atrasados] Omitiendo ML Impago por tener {len(resultados)} registros y incluir_ml=False"
+            )
             ml_service = None
             modelo_cargado = False
             razon_fallo_ml = "Omitido por rendimiento (muchos registros)"
@@ -743,13 +745,13 @@ def obtener_clientes_atrasados(
                     "ml_impago": None,
                 }
                 clientes_atrasados.append(cliente_data)
-            
+
             total_time_ms = int((time.time() - start_time) * 1000)
             logger.info(
                 f"✅ [clientes_atrasados] Procesados {len(clientes_atrasados)} clientes "
                 f"(sin ML, total_time={total_time_ms}ms)"
             )
-            
+
             return {
                 "clientes_atrasados": clientes_atrasados,
                 "total": len(clientes_atrasados),
@@ -1056,16 +1058,16 @@ def obtener_clientes_atrasados(
             "ml_disponible": ml_service is not None and modelo_cargado if incluir_ml else False,
             "ml_procesado": ml_processed > 0 if incluir_ml else False,
         }
-        
+
         # Agregar diagnóstico ML si se solicita
         if diagnostico_ml:
             response["_diagnostico_ml"] = diagnostico_ml_dict
-        
+
         # ✅ Para compatibilidad: si no se requiere ML y no hay diagnóstico, retornar lista directa
         # Esto mantiene compatibilidad con código existente que espera un array
         if not incluir_ml and not diagnostico_ml:
             return clientes_atrasados
-        
+
         return response
 
     except Exception as e:
