@@ -26,9 +26,9 @@ export function ReporteDiferenciasAbonos() {
   const queryClient = useQueryClient()
 
   // Obtener diferencias de abonos
-  const { data: diferencias, isLoading, error } = useQuery<DiferenciaAbono[]>({
+  const { data: diferencias, isLoading, error } = useQuery({
     queryKey: ['diferencias-abonos'],
-    queryFn: async () => {
+    queryFn: async (): Promise<DiferenciaAbono[]> => {
       const response = await apiClient.get<DiferenciaAbono[]>('/api/v1/reportes/diferencias-abonos')
       return response
     },

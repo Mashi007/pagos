@@ -146,7 +146,7 @@ export function PrestamosList() {
   const handleMarcarRevision = async (prestamoId: number, requiereRevision: boolean) => {
     try {
       await prestamoService.marcarRevision(prestamoId, requiereRevision)
-      queryClient.invalidateQueries({ queryKey: prestamoKeys.list(filters, page) })
+      queryClient.invalidateQueries({ queryKey: prestamoKeys.list(filters) })
       toast.success(
         requiereRevision
           ? 'Préstamo marcado para revisión. Aparecerá en el reporte de diferencias.'
