@@ -81,7 +81,15 @@ export function Cobranzas() {
       rangoDiasMax
     ),
     retry: 2,
-    retryDelay: 1000,
+    retryDelay: 2000, // ✅ Aumentar delay entre retries para dar más tiempo al servidor
+    // ✅ No mostrar error si es un timeout que se resolvió en retry
+    onError: (error: any) => {
+      // Solo mostrar error si NO es un timeout que se resolvió (ECONNABORTED)
+      // React Query manejará el retry automáticamente
+      if (error?.code !== 'ECONNABORTED' && !error?.message?.includes('timeout')) {
+        console.error('❌ [Cobranzas] Error cargando clientes atrasados:', error)
+      }
+    },
   })
 
   // Query para por analista

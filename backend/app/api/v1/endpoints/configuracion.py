@@ -5324,12 +5324,40 @@ def _ejecutar_consulta_cruzada(db: Session, tabla1: str, tabla2: str, campos: li
     """Ejecuta una consulta cruzada entre dos tablas con JOIN"""
     try:
         from sqlalchemy import text
+        from app.utils.sql_helpers import (
+            sanitize_column_name,
+            sanitize_table_name,
+            build_safe_where_clause,
+            execute_safe_query,
+        )
 
-        # Construir query básico
+        # ✅ SEGURIDAD: Validar y sanitizar nombres de tablas y columnas
+        # Lista de tablas permitidas (ajustar según tu esquema)
+        ALLOWED_TABLES = [
+            "prestamos", "clientes", "cuotas", "pagos", "usuarios",
+            "concesionarios", "analistas", "modelos_vehiculos"
+        ]
+        
+        # Validar tablas
+        tabla1_safe = sanitize_table_name(tabla1)
+        tabla2_safe = sanitize_table_name(tabla2)
+        
+        # Validar que las tablas estén en la lista permitida
+        if tabla1_safe.lower() not in [t.lower() for t in ALLOWED_TABLES]:
+            raise ValueError(f"Tabla no permitida: {tabla1}")
+        if tabla2_safe.lower() not in [t.lower() for t in ALLOWED_TABLES]:
+            raise ValueError(f"Tabla no permitida: {tabla2}")
+
+        # Sanitizar nombres de columnas
+        campos_safe = [sanitize_column_name(campo) for campo in campos]
+        campos_str = ", ".join([f"t1.{campo}" if "." not in campo else campo for campo in campos_safe])
+
+        # Construir query básico de forma segura
+        # Usar nombres de tabla validados directamente (no interpolación de usuario)
         query_sql = f"""
-            SELECT {', '.join(campos)}
-            FROM {tabla1} t1
-            INNER JOIN {tabla2} t2 ON t1.id = t2.{tabla1[:-1]}_id
+            SELECT {campos_str}
+            FROM {tabla1_safe} t1
+            INNER JOIN {tabla2_safe} t2 ON t1.id = t2.{tabla1_safe[:-1]}_id
         """
 
         # Agregar condiciones si existen
@@ -5337,17 +5365,23 @@ def _ejecutar_consulta_cruzada(db: Session, tabla1: str, tabla2: str, campos: li
             where_clauses = []
             params = {}
             for campo, valor in condiciones.items():
-                where_clauses.append(f"{campo} = :{campo}")
-                params[campo] = valor
+                # Sanitizar nombre de campo
+                campo_safe = sanitize_column_name(campo)
+                where_clauses.append(f"{campo_safe} = :{campo_safe}")
+                params[campo_safe] = valor
+            
             if where_clauses:
-                query_sql += " WHERE " + " AND ".join(where_clauses)
-                resultado = db.execute(text(query_sql).bindparams(**params))
+                where_clause, final_params = build_safe_where_clause(where_clauses, params)
+                resultado = execute_safe_query(db, query_sql, where_clause=where_clause, params=final_params)
             else:
                 resultado = db.execute(text(query_sql))
         else:
             resultado = db.execute(text(query_sql))
 
         return [dict(row._mapping) for row in resultado.fetchall()]
+    except ValueError as e:
+        logger.error(f"Error de validación en consulta cruzada: {e}")
+        return []
     except Exception as e:
         logger.error(f"Error ejecutando consulta cruzada: {e}")
         return []

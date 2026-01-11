@@ -198,6 +198,97 @@ def sanitize_string(text: Optional[str]) -> Optional[str]:
     return text.strip()
 
 
+def sanitize_sql_input(text: Optional[str], max_length: int = 100) -> Optional[str]:
+    """
+    Sanitiza un string para usar en queries SQL, removiendo caracteres peligrosos.
+    
+    Args:
+        text: Texto a sanitizar
+        max_length: Longitud máxima permitida
+    
+    Returns:
+        Texto sanitizado o None si está vacío
+    
+    Raises:
+        ValueError: Si contiene caracteres SQL peligrosos
+    """
+    if not text:
+        return None
+    
+    # Remover espacios y limitar longitud
+    text = text.strip()[:max_length]
+    
+    # Lista de caracteres/palabras SQL peligrosas
+    dangerous_patterns = [
+        "'", '"', ";", "--", "/*", "*/", "xp_", "sp_", 
+        "exec", "execute", "drop", "delete", "insert", 
+        "update", "alter", "create", "truncate", "union"
+    ]
+    
+    text_lower = text.lower()
+    for pattern in dangerous_patterns:
+        if pattern in text_lower:
+            raise ValueError(f"Texto contiene caracteres/palabras SQL peligrosas: {pattern}")
+    
+    return text
+
+
+def validate_numeric_range(value: Optional[int], min_val: int, max_val: int, param_name: str) -> int:
+    """
+    Valida que un valor numérico esté en un rango permitido.
+    
+    Args:
+        value: Valor a validar
+        min_val: Valor mínimo permitido
+        max_val: Valor máximo permitido
+        param_name: Nombre del parámetro para mensajes de error
+    
+    Returns:
+        Valor validado
+    
+    Raises:
+        ValueError: Si el valor está fuera del rango
+    """
+    if value is None:
+        raise ValueError(f"{param_name} es requerido")
+    
+    if not isinstance(value, int):
+        raise ValueError(f"{param_name} debe ser un número entero")
+    
+    if value < min_val or value > max_val:
+        raise ValueError(f"{param_name} debe estar entre {min_val} y {max_val}")
+    
+    return value
+
+
+def validate_date_range_safe(start_date: Optional[date], end_date: Optional[date], max_days: int = 1825) -> tuple[date, date]:
+    """
+    Valida un rango de fechas de forma segura.
+    
+    Args:
+        start_date: Fecha de inicio
+        end_date: Fecha de fin
+        max_days: Número máximo de días permitidos en el rango (default: 5 años)
+    
+    Returns:
+        Tupla (start_date, end_date) validadas
+    
+    Raises:
+        ValueError: Si el rango es inválido
+    """
+    if not start_date or not end_date:
+        raise ValueError("Ambas fechas son requeridas")
+    
+    if start_date > end_date:
+        raise ValueError("fecha_inicio no puede ser mayor que fecha_fin")
+    
+    days_diff = (end_date - start_date).days
+    if days_diff > max_days:
+        raise ValueError(f"El rango de fechas no puede ser mayor a {max_days} días ({max_days // 365} años)")
+    
+    return start_date, end_date
+
+
 def sanitize_html(text: Optional[str]) -> Optional[str]:
     # Sanitiza HTML para prevenir XSS
     # Args:

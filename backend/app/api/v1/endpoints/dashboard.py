@@ -1849,34 +1849,35 @@ def _calcular_evolucion_mensual(db: Session, hoy: date) -> list:
                 pass
             cuotas_pagadas_por_mes = {}
 
-        # Calcular cartera acumulada por mes
-        fecha_ultima = meses_rango[-1]["fin_dt"]
-        cartera_por_mes_query = db.execute(
-            text(
+        # Calcular cuotas a cobrar por mes (monto total de cuotas que vencen en cada mes)
+        fecha_primera_cuotas = meses_rango[0]["inicio"]
+        fecha_ultima_cuotas = meses_rango[-1]["fin"]
+        try:
+            cuotas_a_cobrar_query = db.execute(
+                text(
+                    """
+                    SELECT
+                        EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
+                        EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
+                        COALESCE(SUM(c.monto_cuota), 0) as monto_total
+                    FROM cuotas c
+                    INNER JOIN prestamos p ON c.prestamo_id = p.id
+                    WHERE p.estado = 'APROBADO'
+                      AND c.fecha_vencimiento >= :fecha_inicio
+                      AND c.fecha_vencimiento <= :fecha_fin
+                    GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
+                    ORDER BY año, mes
                 """
-                SELECT
-                    EXTRACT(YEAR FROM fecha_registro)::integer as año,
-                    EXTRACT(MONTH FROM fecha_registro)::integer as mes,
-                    SUM(total_financiamiento) as monto_mes
-                FROM prestamos
-                WHERE estado = 'APROBADO'
-                  AND fecha_registro <= :fecha_fin
-            GROUP BY EXTRACT(YEAR FROM fecha_registro), EXTRACT(MONTH FROM fecha_registro)
-                ORDER BY año, mes
-            """
-            ).bindparams(fecha_fin=fecha_ultima)
-        )
-        cartera_por_mes_raw = {(int(row[0]), int(row[1])): Decimal(str(row[2] or 0)) for row in cartera_por_mes_query}
-
-        # Calcular cartera acumulada por mes (suma acumulativa)
-        cartera_acumulada = {}
-        cartera_acum = Decimal("0")
-        for mes_info in sorted(meses_rango, key=lambda x: (x["fecha"].year, x["fecha"].month)):
-            año_mes = int(mes_info["fecha"].year)
-            num_mes = int(mes_info["fecha"].month)
-            mes_key: tuple[int, int] = (año_mes, num_mes)
-            cartera_acum += cartera_por_mes_raw.get(mes_key, Decimal("0"))
-            cartera_acumulada[mes_key] = cartera_acum
+                ).bindparams(fecha_inicio=fecha_primera_cuotas, fecha_fin=fecha_ultima_cuotas)
+            )
+            cuotas_a_cobrar_por_mes = {(int(row[0]), int(row[1])): Decimal(str(row[2] or 0)) for row in cuotas_a_cobrar_query}
+        except Exception as e:
+            logger.error(f"Error consultando cuotas a cobrar en dashboard_administrador: {e}", exc_info=True)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            cuotas_a_cobrar_por_mes = {}
 
         # Construir evolución mensual con datos pre-calculados
         for mes_info in meses_rango:
@@ -1884,7 +1885,8 @@ def _calcular_evolucion_mensual(db: Session, hoy: date) -> list:
             num_mes = int(mes_info["fecha"].month)
             mes_key_evol: tuple[int, int] = (año_mes, num_mes)
 
-            cartera_mes = float(cartera_acumulada.get(mes_key_evol, Decimal("0")))
+            # Cuotas a cobrar del mes (monto total de cuotas que vencen en ese mes)
+            cartera_mes = float(cuotas_a_cobrar_por_mes.get(mes_key_evol, Decimal("0")))
             cobrado_mes = pagos_por_mes.get(mes_key_evol, Decimal("0"))
             cuotas_vencidas_mes = cuotas_vencidas_por_mes.get(mes_key_evol, 0)
             cuotas_pagadas_mes = cuotas_pagadas_por_mes.get(mes_key_evol, 0)
@@ -1955,6 +1957,9 @@ def _calcular_metricas_morosidad(
         total_financiamiento_operaciones = 0.0
 
     # Cartera Cobrada
+    # ✅ SEGURIDAD: Construir WHERE clause de forma segura usando solo parámetros nombrados
+    from app.utils.sql_helpers import build_safe_where_clause, execute_safe_query
+    
     where_conditions = ["monto_pagado IS NOT NULL", "monto_pagado > 0", "activo = TRUE"]
     params = {}
 
@@ -1965,11 +1970,14 @@ def _calcular_metricas_morosidad(
         where_conditions.append("fecha_pago <= :fecha_fin")
         params["fecha_fin"] = datetime.combine(fecha_fin, datetime.max.time())
 
-    where_clause = " AND ".join(where_conditions)
+    where_clause, final_params = build_safe_where_clause(where_conditions, params)
 
     try:
-        cartera_cobrada_query = db.execute(
-            text(f"SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE {where_clause}").bindparams(**params)
+        cartera_cobrada_query = execute_safe_query(
+            db,
+            "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos",
+            where_clause=where_clause,
+            params=final_params
         )
         cartera_cobrada_total = float(cartera_cobrada_query.scalar() or Decimal("0"))
     except Exception as e:
@@ -4873,29 +4881,30 @@ def obtener_evolucion_general_mensual(
         fecha_ultima = max(ultimos_dias.values())
         fecha_primera = min(primeros_dias.values())
 
-        # 1. TOTAL FINANCIAMIENTO por mes (nuevos préstamos aprobados)
-        start_financiamiento = time.time()
-        query_financiamiento = (
+        # 1. CUOTAS A COBRAR por mes (monto total de cuotas que vencen en cada mes)
+        start_cuotas_cobrar = time.time()
+        query_cuotas_cobrar = (
             db.query(
-                func.extract("year", Prestamo.fecha_registro).label("año"),
-                func.extract("month", Prestamo.fecha_registro).label("mes"),
-                func.sum(Prestamo.total_financiamiento).label("total"),
+                func.extract("year", Cuota.fecha_vencimiento).label("año"),
+                func.extract("month", Cuota.fecha_vencimiento).label("mes"),
+                func.sum(Cuota.monto_cuota).label("total"),
             )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado == "APROBADO",
-                Prestamo.fecha_registro >= fecha_primera,
-                Prestamo.fecha_registro <= fecha_ultima,
+                Cuota.fecha_vencimiento >= fecha_primera,
+                Cuota.fecha_vencimiento <= fecha_ultima,
             )
-            .group_by(func.extract("year", Prestamo.fecha_registro), func.extract("month", Prestamo.fecha_registro))
+            .group_by(func.extract("year", Cuota.fecha_vencimiento), func.extract("month", Cuota.fecha_vencimiento))
         )
-        query_financiamiento = FiltrosDashboard.aplicar_filtros_prestamo(
-            query_financiamiento, analista, concesionario, modelo, None, None
+        query_cuotas_cobrar = FiltrosDashboard.aplicar_filtros_cuota(
+            query_cuotas_cobrar, analista, concesionario, modelo, None, None
         )
-        financiamiento_por_mes = {
-            (int(row.año), int(row.mes)): float(row.total or Decimal("0")) for row in query_financiamiento.all()
+        cuotas_a_cobrar_por_mes = {
+            (int(row.año), int(row.mes)): float(row.total or Decimal("0")) for row in query_cuotas_cobrar.all()
         }
-        tiempo_financiamiento = int((time.time() - start_financiamiento) * 1000)
-        logger.info(f"📊 [evolucion-general] Financiamiento por mes: {tiempo_financiamiento}ms")
+        tiempo_cuotas_cobrar = int((time.time() - start_cuotas_cobrar) * 1000)
+        logger.info(f"📊 [evolucion-general] Cuotas a cobrar por mes: {tiempo_cuotas_cobrar}ms")
 
         # 2. TOTAL PAGOS por mes (usar Pago.monto_pagado, no Pago.monto)
         # ✅ ACTUALIZADO: Usar LEFT JOIN para incluir pagos sin prestamo_id (articulación por cedula)
@@ -5108,7 +5117,7 @@ def obtener_evolucion_general_mensual(
                 total_activos = float(query_activos.scalar() or Decimal("0"))
 
             # Obtener datos pre-calculados
-            total_financiamiento = financiamiento_por_mes.get(mes_key, 0.0)
+            cuotas_a_cobrar = cuotas_a_cobrar_por_mes.get(mes_key, 0.0)
             total_pagos = pagos_por_mes.get(mes_key, 0.0)
 
             evolucion.append(
@@ -5116,7 +5125,7 @@ def obtener_evolucion_general_mensual(
                     "mes": nombre_mes,
                     "morosidad": round(morosidad, 2),
                     "total_activos": round(total_activos, 2),
-                    "total_financiamiento": round(total_financiamiento, 2),
+                    "total_financiamiento": round(cuotas_a_cobrar, 2),  # Cambiado: ahora muestra cuotas a cobrar
                     "total_pagos": round(total_pagos, 2),
                 }
             )
@@ -5124,7 +5133,7 @@ def obtener_evolucion_general_mensual(
         tiempo_evolucion = int((time.time() - start_evolucion) * 1000)
         total_time = int((time.time() - start_time) * 1000)
         logger.info(
-            f"⏱️ [evolucion-general] Tiempo total: {total_time}ms (financiamiento: {tiempo_financiamiento}ms, pagos: {tiempo_pagos}ms, evolucion: {tiempo_evolucion}ms)"
+            f"⏱️ [evolucion-general] Tiempo total: {total_time}ms (cuotas a cobrar: {tiempo_cuotas_cobrar}ms, pagos: {tiempo_pagos}ms, evolucion: {tiempo_evolucion}ms)"
         )
 
         return {"evolucion": evolucion}

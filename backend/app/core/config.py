@@ -279,20 +279,33 @@ class Settings(BaseSettings):
         admin_email_from_env = os.getenv("ADMIN_EMAIL")
         admin_password_from_env = os.getenv("ADMIN_PASSWORD")
 
-        # En desarrollo, usar valores por defecto si no están configurados
+        # En desarrollo, generar credenciales seguras si no están configuradas
         if self.ENVIRONMENT != "production":
+            import secrets
+            import string
+            
             if not self.ADMIN_EMAIL:
+                # Usar email por defecto solo si no hay variable de entorno
+                # En desarrollo, es aceptable pero se advierte
                 self.ADMIN_EMAIL = "itmaster@rapicreditca.com"
                 logger.warning(
                     "⚠️ ADMIN_EMAIL no configurado. Usando valor por defecto para desarrollo. "
                     "Para producción, configure ADMIN_EMAIL como variable de entorno."
                 )
             if not self.ADMIN_PASSWORD:
-                self.ADMIN_PASSWORD = "R@pi_2025**"
+                # ✅ MEJORA: Generar contraseña aleatoria segura en desarrollo en lugar de hardcodear
+                # Generar contraseña de 16 caracteres con mayúsculas, minúsculas, números y símbolos
+                alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+                generated_password = ''.join(secrets.choice(alphabet) for _ in range(16))
+                self.ADMIN_PASSWORD = generated_password
                 logger.warning(
-                    "⚠️ ADMIN_PASSWORD no configurado. Usando valor por defecto para desarrollo. "
+                    f"⚠️ ADMIN_PASSWORD no configurado. Generada contraseña aleatoria para desarrollo: {generated_password[:4]}**** "
+                    "⚠️ IMPORTANTE: Guarda esta contraseña o configura ADMIN_PASSWORD como variable de entorno. "
                     "Para producción, configure ADMIN_PASSWORD como variable de entorno."
                 )
+                # Log completo solo en modo DEBUG para no exponer la contraseña en logs normales
+                if self.DEBUG:
+                    logger.debug(f"🔐 Contraseña de desarrollo generada: {generated_password}")
         else:
             # En producción, usar valores por defecto si no están configurados (con advertencia crítica)
             # PRIORIDAD: 1) Variable de entorno (si no está vacía), 2) Valor actual de self, 3) Valor por defecto

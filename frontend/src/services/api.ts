@@ -483,12 +483,18 @@ class ApiClient {
                           url.includes('/tendencia') ||
                           url.includes('/ml-impago/modelos') ||
                           url.includes('/ml-riesgo/modelos') ||
-                          url.includes('/ai/training/')
+                          url.includes('/ai/training/') ||
+                          url.includes('/cobranzas/') // ✅ Agregar endpoints de cobranzas como lentos
 
     const defaultTimeout = isSlowEndpoint ? SLOW_ENDPOINT_TIMEOUT_MS : DEFAULT_TIMEOUT_MS
     // Priorizar timeout explícito si se proporciona, sino usar el calculado
     const timeout = config?.timeout ?? defaultTimeout
-    const finalConfig = { ...config, timeout }
+    // ✅ Asegurar que el timeout se aplique correctamente
+    // Axios respeta el timeout en la configuración del request sobre el del cliente
+    const finalConfig = { 
+      ...config, 
+      timeout,
+    }
 
     const response: AxiosResponse<T> = await this.client.get(url, finalConfig)
     return response.data
