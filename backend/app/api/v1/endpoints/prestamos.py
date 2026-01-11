@@ -13,7 +13,7 @@ from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
 from fastapi import APIRouter, Depends, HTTPException, Path, Query  # type: ignore[import-untyped]
 from sqlalchemy import and_, case, func, or_  # type: ignore[import-untyped]
 from sqlalchemy.exc import OperationalError, ProgrammingError  # type: ignore[import-untyped]
-from sqlalchemy.orm import Session  # type: ignore[import-untyped]
+from sqlalchemy.orm import Session, load_only, defer  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
 from app.models.cliente import Cliente
@@ -258,7 +258,14 @@ def serializar_prestamo(prestamo: Prestamo) -> dict:
         "observaciones": getattr(prestamo, "observaciones", None),
         "fecha_registro": prestamo.fecha_registro,
         "fecha_aprobacion": getattr(prestamo, "fecha_aprobacion", None),
-        "fecha_actualizacion": prestamo.fecha_actualizacion,
+        "fecha_actualizacion": getattr(prestamo, "fecha_actualizacion", None),
+        # Campos ML opcionales - usar getattr para evitar errores si no existen
+        "ml_impago_nivel_riesgo_manual": getattr(prestamo, "ml_impago_nivel_riesgo_manual", None),
+        "ml_impago_probabilidad_manual": float(getattr(prestamo, "ml_impago_probabilidad_manual", 0)) if getattr(prestamo, "ml_impago_probabilidad_manual", None) is not None else None,
+        "ml_impago_nivel_riesgo_calculado": getattr(prestamo, "ml_impago_nivel_riesgo_calculado", None),
+        "ml_impago_probabilidad_calculada": float(getattr(prestamo, "ml_impago_probabilidad_calculada", 0)) if getattr(prestamo, "ml_impago_probabilidad_calculada", None) is not None else None,
+        "ml_impago_calculado_en": getattr(prestamo, "ml_impago_calculado_en", None),
+        "ml_impago_modelo_id": getattr(prestamo, "ml_impago_modelo_id", None),
     }
 
 
@@ -642,8 +649,44 @@ def buscar_prestamos_por_cedula(
         cedula_norm = cedula.strip().upper()
         logger.info(f"Buscando préstamos por cédula: {cedula_norm} - Usuario: {current_user.email}")
 
-        # Obtener préstamos completos (no solo columnas específicas)
-        prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula_norm).all()
+        # Obtener préstamos - usar load_only para cargar SOLO columnas esenciales
+        # Esto evita que SQLAlchemy intente seleccionar columnas ML que pueden no existir en BD
+        prestamos = (
+            db.query(Prestamo)
+            .options(
+                load_only(
+                    Prestamo.id,
+                    Prestamo.cliente_id,
+                    Prestamo.cedula,
+                    Prestamo.nombres,
+                    Prestamo.valor_activo,
+                    Prestamo.total_financiamiento,
+                    Prestamo.fecha_requerimiento,
+                    Prestamo.modalidad_pago,
+                    Prestamo.numero_cuotas,
+                    Prestamo.cuota_periodo,
+                    Prestamo.tasa_interes,
+                    Prestamo.fecha_base_calculo,
+                    Prestamo.producto,
+                    Prestamo.producto_financiero,
+                    Prestamo.concesionario,
+                    Prestamo.analista,
+                    Prestamo.modelo_vehiculo,
+                    Prestamo.estado,
+                    Prestamo.usuario_proponente,
+                    Prestamo.usuario_aprobador,
+                    Prestamo.usuario_autoriza,
+                    Prestamo.observaciones,
+                    Prestamo.fecha_registro,
+                    Prestamo.fecha_aprobacion,
+                    Prestamo.fecha_actualizacion,
+                    # NO incluir columnas ML calculadas que pueden no existir
+                    # Solo incluir manuales si es necesario (opcional)
+                )
+            )
+            .filter(Prestamo.cedula == cedula_norm)
+            .all()
+        )
 
         # Serializar de forma segura
         prestamos_serializados = []

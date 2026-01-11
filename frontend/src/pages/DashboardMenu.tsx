@@ -1386,13 +1386,13 @@ export function DashboardMenu() {
             </motion.div>
           )}
 
-          {/* Morosidad por Analista */}
+          {/* Morosidad por Analista - Ancho Completo */}
           {datosMorosidadAnalista && datosMorosidadAnalista.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.9 }}
-              className="h-full"
+              className="h-full lg:col-span-2"
             >
               <Card className="shadow-lg border-2 border-gray-200 h-full flex flex-col">
                 <CardHeader className="bg-gradient-to-r from-orange-50 to-amber-50 border-b-2 border-orange-200">
@@ -1403,17 +1403,24 @@ export function DashboardMenu() {
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
                   <ResponsiveContainer width="100%" height={400}>
-                    <BarChart data={datosMorosidadAnalista} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
+                    <BarChart 
+                      data={datosMorosidadAnalista} 
+                      margin={{ top: 5, right: 10, left: 20, bottom: 80 }}
+                      barCategoryGap="5%"
+                    >
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis
                         dataKey="analista"
                         angle={-45}
                         textAnchor="end"
-                        height={80}
-                        tick={{ fontSize: 12 }}
+                        height={100}
+                        tick={{ fontSize: 11 }}
+                        interval={0}
+                        width={undefined}
                       />
                       <YAxis
                         label={{ value: 'Morosidad Total', angle: -90, position: 'insideLeft' }}
+                        width={80}
                       />
                       <Tooltip
                         formatter={(value: number) => [`${formatCurrency(value)}`, 'Morosidad Total']}
@@ -1425,6 +1432,7 @@ export function DashboardMenu() {
                         fill="#f97316"
                         name="Morosidad Total"
                         radius={[4, 4, 0, 0]}
+                        maxBarSize={120}
                       />
                     </BarChart>
                   </ResponsiveContainer>
