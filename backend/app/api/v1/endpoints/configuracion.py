@@ -6,13 +6,15 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.config import settings
 from app.core.rate_limiter import get_rate_limiter
+from app.utils.validators import sanitize_sql_input
 from app.models.ai_prompt_variable import AIPromptVariable
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
@@ -124,8 +126,13 @@ def habilitar_monitoreo_basico(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/sistema/completa")
-def obtener_configuracion_completa(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Obtener toda la configuración del sistema"""
+def obtener_configuracion_completa(
+    skip: int = Query(0, ge=0, description="Número de registros a omitir"),
+    limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros a retornar"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Obtener configuración del sistema con paginación"""
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403,
@@ -133,11 +140,9 @@ def obtener_configuracion_completa(db: Session = Depends(get_db), current_user: 
         )
 
     try:
-        # OPTIMIZACIÓN: Agregar límite para evitar cargar demasiadas configuraciones
-        # Si hay más de 1000 configuraciones, solo cargar las primeras 1000
-        MAX_CONFIGURACIONES = 1000
-        configuraciones = db.query(ConfiguracionSistema).limit(MAX_CONFIGURACIONES).all()
+        # ✅ Paginación implementada
         total = db.query(ConfiguracionSistema).count()
+        configuraciones = db.query(ConfiguracionSistema).offset(skip).limit(limit).all()
 
         return {
             "configuraciones": [
@@ -150,8 +155,10 @@ def obtener_configuracion_completa(db: Session = Depends(get_db), current_user: 
                 for config in configuraciones
             ],
             "total": total,
+            "skip": skip,
+            "limit": limit,
             "retornadas": len(configuraciones),
-            "advertencia": "Límite de 1000 configuraciones aplicado" if total > MAX_CONFIGURACIONES else None,
+            "has_more": skip + limit < total,
         }
 
     except Exception as e:
@@ -220,7 +227,9 @@ def obtener_configuracion_por_categoria(
 
 
 @router.put("/sistema/{clave}")
+@limiter.limit("20/minute")  # ✅ Rate limiting: máximo 20 actualizaciones por minuto
 def actualizar_configuracion(
+    request: Request,
     clave: str,
     config_data: ConfiguracionUpdate,
     db: Session = Depends(get_db),
@@ -520,7 +529,9 @@ def _guardar_logo_en_bd(db: Session, logo_filename: str, logo_base64: str, conte
 
 
 @router.post("/upload-logo")
+@limiter.limit("10/minute")  # ✅ Rate limiting: máximo 10 uploads por minuto
 async def upload_logo(
+    request: Request,
     logo: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -883,7 +894,9 @@ def _procesar_configuraciones_email(configs: list) -> Dict[str, Any]:
 def obtener_configuracion_email(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Obtener configuración de email"""
     try:
-        logger.info(f"📧 Obteniendo configuración de email - Usuario: {getattr(current_user, 'email', 'N/A')}")
+        # ✅ Logging mejorado: solo información esencial en producción
+        if settings.ENVIRONMENT != "production" or logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"📧 Obteniendo configuración de email - Usuario: {getattr(current_user, 'email', 'N/A')}")
 
         if not getattr(current_user, "is_admin", False):
             logger.warning(
@@ -1054,7 +1067,9 @@ def _validar_configuracion_gmail_smtp(config_data: Dict[str, Any]) -> Tuple[bool
 
 
 @router.put("/email/configuracion")
+@limiter.limit("5/minute")  # ✅ Rate limiting: máximo 5 actualizaciones por minuto
 def actualizar_configuracion_email(
+    request: Request,
     config_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1672,7 +1687,9 @@ def probar_configuracion_email(
 
 
 @router.put("/general")
+@limiter.limit("10/minute")  # ✅ Rate limiting: máximo 10 actualizaciones por minuto
 def actualizar_configuracion_general(
+    request: Request,
     update_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1821,7 +1838,9 @@ def obtener_configuracion_whatsapp(db: Session = Depends(get_db), current_user: 
 
 
 @router.put("/whatsapp/configuracion")
+@limiter.limit("5/minute")  # ✅ Rate limiting: máximo 5 actualizaciones por minuto
 def actualizar_configuracion_whatsapp(
+    request: Request,
     config_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -2535,7 +2554,9 @@ def obtener_configuracion_ai(db: Session = Depends(get_db), current_user: User =
 
 
 @router.put("/ai/configuracion")
+@limiter.limit("5/minute")  # ✅ Rate limiting: máximo 5 actualizaciones por minuto
 def actualizar_configuracion_ai(
+    request: Request,
     config_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

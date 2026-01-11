@@ -12,10 +12,10 @@ jobs:
 
     steps:
       - name: 📥 Checkout código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: 🔍 Revisar dependencias backend
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v4.7.4
         with:
           fail-on-severity: moderate
           allow-licenses: MIT, Apache-2.0, BSD-3-Clause, ISC, Python-2.0
@@ -23,7 +23,7 @@ jobs:
           comment-summary-in-pr: always
 
       - name: 🔍 Revisar dependencias frontend
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v4.7.4
         with:
           fail-on-severity: moderate
           allow-licenses: MIT, Apache-2.0, BSD-3-Clause, ISC

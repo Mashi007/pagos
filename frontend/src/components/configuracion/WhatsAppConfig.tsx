@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
+import { validarTelefono, validarConfiguracionWhatsApp } from '@/utils/validators'
 import { whatsappConfigService, notificacionService, type Notificacion, type WhatsAppConfig } from '@/services/notificacionService'
 
 export function WhatsAppConfig() {
@@ -70,29 +71,15 @@ export function WhatsAppConfig() {
   }
 
   const validarConfiguracion = (): string | null => {
-    // Validar campos requeridos (usando trim para ignorar espacios)
-    const apiUrl = config.api_url?.trim() || ''
-    const accessToken = config.access_token?.trim() || ''
-    const phoneNumberId = config.phone_number_id?.trim() || ''
+    // ✅ Usar validación centralizada
+    const validacion = validarConfiguracionWhatsApp({
+      api_url: config.api_url,
+      access_token: config.access_token,
+      phone_number_id: config.phone_number_id
+    })
 
-    if (!apiUrl || !accessToken || !phoneNumberId) {
-      const camposFaltantes: string[] = []
-      if (!apiUrl) camposFaltantes.push('API URL')
-      if (!accessToken) camposFaltantes.push('Access Token')
-      if (!phoneNumberId) camposFaltantes.push('Phone Number ID')
-      return `Por favor completa todos los campos requeridos. Faltan: ${camposFaltantes.join(', ')}`
-    }
-
-    // Validar formato de API URL
-    try {
-      new URL(apiUrl)
-    } catch {
-      return 'La URL de la API no es válida'
-    }
-
-    // Validar que Phone Number ID sea solo números (sin espacios ni caracteres especiales)
-    if (!/^\d+$/.test(phoneNumberId)) {
-      return 'El Phone Number ID debe contener solo números (sin espacios ni caracteres especiales)'
+    if (!validacion.valido) {
+      return validacion.errores.join('. ')
     }
 
     return null
@@ -140,9 +127,7 @@ export function WhatsAppConfig() {
       setResultadoPrueba(null)
 
       if (telefonoPruebaDestino && telefonoPruebaDestino.trim()) {
-        const telefonoRegex = /^\+?[1-9]\d{9,14}$/
-        const telefonoLimpio = telefonoPruebaDestino.replace(/[\s\-\(\)]/g, '')
-        if (!telefonoRegex.test(telefonoLimpio)) {
+        if (!validarTelefono(telefonoPruebaDestino)) {
           toast.error('Por favor ingresa un número de teléfono válido con código de país (ej: +584121234567)')
           setProbando(false)
           return

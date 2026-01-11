@@ -36,6 +36,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatDate } from '@/utils'
+import { validarNombreEmpresa, validarMoneda, validarZonaHoraria, validarIdioma } from '@/utils/validators'
 import { ValidadoresConfig } from '@/components/configuracion/ValidadoresConfig'
 import { ConcesionariosConfig } from '@/components/configuracion/ConcesionariosConfig'
 import { AnalistasConfig } from '@/components/configuracion/AnalistasConfig'
@@ -124,6 +125,7 @@ export function Configuracion() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [seccionActiva, setSeccionActiva] = useState('general')
+  const [estadoCarga, setEstadoCarga] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 
   // Leer el parámetro tab de la URL
   useEffect(() => {
@@ -139,6 +141,7 @@ export function Configuracion() {
   const [mostrarPassword, setMostrarPassword] = useState(false)
   const [cambiosPendientes, setCambiosPendientes] = useState(false)
   const [submenuAbierto, setSubmenuAbierto] = useState(false)
+  const [erroresValidacion, setErroresValidacion] = useState<Record<string, string>>({})
 
   // Cargar configuración general al montar el componente
   useEffect(() => {
@@ -148,6 +151,7 @@ export function Configuracion() {
   const cargarConfiguracionGeneral = async () => {
     try {
       setLoading(true)
+      setEstadoCarga('loading')
       setError(null)
       console.log('🔄 Cargando configuración general...')
 
@@ -168,12 +172,16 @@ export function Configuracion() {
           moneda: config.moneda
         }
       }))
+      setEstadoCarga('success')
     } catch (err) {
       console.error('❌ Error cargando configuración general:', err)
       setError('Error al cargar configuración general')
+      setEstadoCarga('error')
       // Usar datos mock como fallback
     } finally {
       setLoading(false)
+      // Resetear estado después de 2 segundos
+      setTimeout(() => setEstadoCarga('idle'), 2000)
     }
   }
 
@@ -335,6 +343,42 @@ export function Configuracion() {
   const handleCambio = (seccion: string, campo: string, valor: string | number | boolean | null) => {
     console.log(`🔄 Cambio en ${seccion}.${campo}:`, valor)
 
+    // ✅ Validación en tiempo real
+    const claveError = `${seccion}.${campo}`
+    let error: string | null = null
+
+    if (seccion === 'general') {
+      if (campo === 'nombreEmpresa' && typeof valor === 'string') {
+        const validacion = validarNombreEmpresa(valor)
+        if (!validacion.valido) {
+          error = validacion.error || null
+        }
+      } else if (campo === 'moneda' && typeof valor === 'string') {
+        if (!validarMoneda(valor)) {
+          error = 'Moneda no válida'
+        }
+      } else if (campo === 'zonaHoraria' && typeof valor === 'string') {
+        if (!validarZonaHoraria(valor)) {
+          error = 'Zona horaria no válida'
+        }
+      } else if (campo === 'idioma' && typeof valor === 'string') {
+        if (!validarIdioma(valor)) {
+          error = 'Idioma no válido'
+        }
+      }
+    }
+
+    // Actualizar errores
+    setErroresValidacion(prev => {
+      if (error) {
+        return { ...prev, [claveError]: error }
+      } else {
+        const nuevosErrores = { ...prev }
+        delete nuevosErrores[claveError]
+        return nuevosErrores
+      }
+    })
+
     setConfiguracion(prev => ({
       ...prev,
       [seccion]: {
@@ -446,7 +490,11 @@ export function Configuracion() {
             value={configuracion.general.nombreEmpresa}
             onChange={(e) => handleCambio('general', 'nombreEmpresa', e.target.value)}
             placeholder="Nombre de la empresa"
+            className={erroresValidacion['general.nombreEmpresa'] ? 'border-red-500' : ''}
           />
+          {erroresValidacion['general.nombreEmpresa'] && (
+            <p className="text-xs text-red-600 mt-1">{erroresValidacion['general.nombreEmpresa']}</p>
+          )}
         </div>
         <div>
           <label className="text-sm font-medium">Versión del Sistema</label>
@@ -1391,7 +1439,13 @@ export function Configuracion() {
             </div>
           </CardHeader>
           <CardContent>
-            {renderContenidoSeccion()}
+            {loading && estadoCarga === 'loading' && (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
+                <span className="text-gray-600">Cargando configuración...</span>
+              </div>
+            )}
+            {!loading && renderContenidoSeccion()}
           </CardContent>
         </Card>
       </div>

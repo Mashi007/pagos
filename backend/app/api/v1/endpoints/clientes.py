@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, nullslast
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -84,13 +84,29 @@ def _aplicar_filtros_fecha(query, fecha_desde: Optional[str], fecha_hasta: Optio
 def _serializar_clientes(clientes):
     """Serializa una lista de clientes de forma segura"""
     clientes_dict = []
+    total_clientes = len(clientes)
+    errores_serializacion = 0
+    
+    logger.info(f"📋 [serializar_clientes] Iniciando serialización de {total_clientes} clientes")
+    
     for cliente in clientes:
         try:
             cliente_data = ClienteResponse.model_validate(cliente).model_dump()
             clientes_dict.append(cliente_data)
         except Exception as e:
-            logger.error(f"Error serializando cliente {cliente.id}: {e}")
+            errores_serializacion += 1
+            logger.error(f"❌ Error serializando cliente {getattr(cliente, 'id', 'N/A')}: {e}", exc_info=True)
+            # ✅ DEBUG: Log detallado del cliente que falló
+            logger.error(f"   Cliente ID: {getattr(cliente, 'id', 'N/A')}")
+            logger.error(f"   Cliente tipo: {type(cliente)}")
+            logger.error(f"   Cliente atributos: {dir(cliente)[:20]}")
             continue
+    
+    logger.info(f"✅ [serializar_clientes] Serialización completada: {len(clientes_dict)}/{total_clientes} exitosos, {errores_serializacion} errores")
+    
+    if errores_serializacion > 0 and len(clientes_dict) == 0:
+        logger.warning(f"⚠️ [serializar_clientes] TODOS los clientes fallaron al serializarse. Esto puede indicar un problema con el schema ClienteResponse")
+    
     return clientes_dict
 
 
@@ -127,7 +143,8 @@ def listar_clientes(
         query = _aplicar_filtros_fecha(query, fecha_desde, fecha_hasta)
 
         # Ordenamiento por fecha de registro descendente (más recientes primero)
-        query = query.order_by(Cliente.fecha_registro.desc())
+        # ✅ CORRECCIÓN: Usar nullslast para manejar registros sin fecha_registro
+        query = query.order_by(nullslast(Cliente.fecha_registro.desc()), Cliente.id.desc())
 
         # ✅ OPTIMIZACIÓN: Solo contar si realmente se necesita (primera página o cuando hay pocos resultados)
         # Para páginas grandes (per_page > 500), usar estimación rápida
@@ -155,12 +172,24 @@ def listar_clientes(
         clientes = query.offset(offset).limit(per_page).all()
         query_time = int((time.time() - start_query) * 1000)
         logger.info(f"📊 [clientes] Query completada en {query_time}ms: {len(clientes)} registros")
+        
+        # ✅ DEBUG: Log detallado de la query
+        if len(clientes) == 0:
+            logger.warning(f"⚠️ [clientes] Query retornó 0 registros pero total={total}. Verificando query...")
+            logger.info(f"   Offset: {offset}, Limit: {per_page}, Page: {page}")
+            # Verificar si hay registros sin paginación
+            total_sin_paginar = query.limit(100).all()
+            logger.info(f"   Registros sin paginación (limit 100): {len(total_sin_paginar)}")
+            if len(total_sin_paginar) > 0:
+                logger.info(f"   Primer cliente ID: {total_sin_paginar[0].id}")
+        else:
+            logger.info(f"✅ [clientes] Primer cliente ID: {clientes[0].id}, Último cliente ID: {clientes[-1].id}")
 
         # Serializacion segura
         start_serialize = time.time()
         clientes_dict = _serializar_clientes(clientes)
         serialize_time = int((time.time() - start_serialize) * 1000)
-        logger.info(f"📊 [clientes] Serialización completada en {serialize_time}ms")
+        logger.info(f"📊 [clientes] Serialización completada en {serialize_time}ms: {len(clientes_dict)} clientes serializados")
 
         # Calcular paginas
         if total is not None:
