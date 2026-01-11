@@ -90,8 +90,8 @@ class AIChatService:
         Returns:
             Resumen de BD como string
         """
-        from app.core.cache import cache_backend
         from app.api.v1.endpoints.configuracion import _obtener_resumen_bd
+        from app.core.cache import cache_backend
 
         cache_key = "ai_chat:resumen_bd"
 

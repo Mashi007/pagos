@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, or_, nullslast
+from sqlalchemy import func, nullslast, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db

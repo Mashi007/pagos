@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
 from app.core.rate_limiter import get_rate_limiter
-from app.utils.validators import sanitize_sql_input
 from app.models.ai_prompt_variable import AIPromptVariable
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
@@ -23,6 +22,7 @@ from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.services.rag_service import RAGService
+from app.utils.validators import sanitize_sql_input
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
