@@ -485,7 +485,8 @@ try:
                     print(f"   - {adv}")
             
             # Guardar resultados
-            output_file = Path(__file__).parent.parent.parent / "AUDITORIA_COMUNICACIONES.json"
+            output_file = Path(__file__).parent.parent.parent / "Documentos" / "Auditorias" / "AUDITORIA_COMUNICACIONES.json"
+            output_file.parent.mkdir(parents=True, exist_ok=True)
             with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(self.resultados, f, indent=2, ensure_ascii=False)
             

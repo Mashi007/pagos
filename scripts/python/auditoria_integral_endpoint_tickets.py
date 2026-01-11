@@ -680,7 +680,8 @@ try:
                     print(f"   - {err}")
             
             # Guardar reporte JSON
-            reporte_path = Path(__file__).parent.parent.parent / "AUDITORIA_TICKETS.json"
+            reporte_path = Path(__file__).parent.parent.parent / "Documentos" / "Auditorias" / "AUDITORIA_TICKETS.json"
+            reporte_path.parent.mkdir(parents=True, exist_ok=True)
             with open(reporte_path, 'w', encoding='utf-8') as f:
                 json.dump({
                     **self.resultados,
