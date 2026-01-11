@@ -1745,6 +1745,7 @@ def actualizar_ml_impago(
         # ✅ Invalidar caché de cobranzas después de actualizar ML Impago
         try:
             from app.core.cache import invalidate_cache
+
             invalidate_cache("cobranzas:")
             logger.debug(f"Cache invalidado para cobranzas después de actualizar ML Impago del préstamo {prestamo_id}")
         except Exception as cache_error:
@@ -1797,6 +1798,7 @@ def eliminar_ml_impago_manual(
         # ✅ Invalidar caché de cobranzas después de eliminar ML Impago manual
         try:
             from app.core.cache import invalidate_cache
+
             invalidate_cache("cobranzas:")
             logger.debug(f"Cache invalidado para cobranzas después de eliminar ML Impago manual del préstamo {prestamo_id}")
         except Exception as cache_error:
@@ -1841,6 +1843,7 @@ def disparar_notificaciones_atrasos(
         # Los datos pueden haber cambiado después de enviar notificaciones
         try:
             from app.core.cache import invalidate_cache
+
             invalidate_cache("cobranzas:")
             logger.debug("Cache invalidado para cobranzas después de procesar notificaciones de atrasos")
         except Exception as cache_error:
