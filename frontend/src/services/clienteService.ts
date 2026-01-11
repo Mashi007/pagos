@@ -19,14 +19,37 @@ class ClienteService {
 
     const response = await apiClient.get<any>(url)
 
+    // ✅ DEBUG: Log para diagnosticar problemas
+    console.log('🔍 [ClienteService] Respuesta del backend:', {
+      url,
+      hasClientes: !!response.clientes,
+      clientesLength: response.clientes?.length || 0,
+      total: response.total,
+      page: response.page,
+      per_page: response.per_page,
+      total_pages: response.total_pages,
+      responseKeys: Object.keys(response || {})
+    })
+
     // Adaptar respuesta del backend al formato esperado
-    return {
+    const adaptedResponse = {
       data: response.clientes || [],
       total: response.total || 0,
       page: response.page || page,
-      per_page: response.limit || perPage,
+      per_page: response.per_page || response.limit || perPage,
       total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
     }
+
+    // ✅ DEBUG: Log de respuesta adaptada
+    console.log('✅ [ClienteService] Respuesta adaptada:', {
+      dataLength: adaptedResponse.data.length,
+      total: adaptedResponse.total,
+      page: adaptedResponse.page,
+      per_page: adaptedResponse.per_page,
+      total_pages: adaptedResponse.total_pages
+    })
+
+    return adaptedResponse
   }
 
   // Obtener cliente por ID

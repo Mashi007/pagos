@@ -4,6 +4,7 @@ Configuración central de la aplicación y registro de endpoints
 """
 
 import logging
+import os
 import sys
 import time
 import uuid
@@ -364,6 +365,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestión del ciclo de vida"""
+    # ✅ TESTING: Saltar lifespan en modo test para evitar problemas con TestClient
+    if os.getenv("SKIP_LIFESPAN") == "true" or settings.ENVIRONMENT == "test":
+        logger.info("⚠️ Modo test detectado - saltando lifespan (DB y scheduler)")
+        yield
+        return
+    
     init_db_startup()
 
     # Iniciar scheduler para tareas automáticas

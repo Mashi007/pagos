@@ -131,12 +131,30 @@ export function ClientesList() {
   const {
     data: clientesData,
     isLoading,
-    error
+    error,
+    isError
   } = useClientes(
     { ...filters, search: debouncedSearch },
     currentPage,
     perPage
   )
+
+  // ✅ DEBUG: Log para diagnosticar problemas
+  console.log('🔍 [ClientesList] Estado de la query:', {
+    isLoading,
+    isError,
+    error: error ? {
+      message: error instanceof Error ? error.message : String(error),
+      ...(error as any)?.response?.data
+    } : null,
+    clientesData,
+    hasData: !!clientesData,
+    dataLength: clientesData?.data?.length || 0,
+    total: clientesData?.total,
+    page: clientesData?.page,
+    per_page: clientesData?.per_page,
+    total_pages: clientesData?.total_pages
+  })
 
   // Estadísticas de clientes
   const {
@@ -166,8 +184,22 @@ export function ClientesList() {
     }
   ]
 
-  const clientes = clientesData?.data || mockClientes
+  // ✅ CORRECCIÓN: Usar datos reales si existen, sino usar mock solo si no hay datos
+  const clientes = clientesData?.data && clientesData.data.length > 0 
+    ? clientesData.data 
+    : (clientesData?.data && clientesData.data.length === 0)
+      ? [] // Array vacío si la respuesta fue exitosa pero no hay datos
+      : mockClientes // Solo usar mock si no hay respuesta del servidor
+  
   const totalPages = clientesData?.total_pages || 1
+
+  // ✅ DEBUG: Log de datos finales
+  console.log('✅ [ClientesList] Datos finales para renderizar:', {
+    clientesLength: clientes.length,
+    usingMock: clientes === mockClientes,
+    totalPages,
+    total: clientesData?.total
+  })
 
   const handleSearch = (value: string) => {
     setSearchTerm(value)
@@ -198,12 +230,25 @@ export function ClientesList() {
     )
   }
 
-  if (error) {
+  if (error || isError) {
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : (error as any)?.response?.data?.detail 
+        || (error as any)?.message 
+        || 'Error desconocido'
+    
+    console.error('❌ [ClientesList] Error cargando clientes:', {
+      error,
+      errorMessage,
+      isError,
+      errorDetails: error
+    })
+
     return (
       <AlertWithIcon
         variant="destructive"
         title="Error al cargar clientes"
-        description="No se pudieron cargar los clientes. Por favor, intenta nuevamente."
+        description={`No se pudieron cargar los clientes: ${errorMessage}. Por favor, intenta nuevamente.`}
       />
     )
   }
@@ -448,7 +493,25 @@ export function ClientesList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {clientes.map((cliente) => (
+                {clientes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                      {isLoading ? (
+                        <div className="flex items-center justify-center">
+                          <LoadingSpinner size="sm" />
+                          <span className="ml-2">Cargando clientes...</span>
+                        </div>
+                      ) : clientesData?.total === 0 ? (
+                        'No hay clientes que coincidan con los filtros seleccionados'
+                      ) : clientesData?.total && clientesData.total > 0 ? (
+                        `Se encontraron ${clientesData.total} clientes pero no se pudieron cargar. Verifica la consola para más detalles.`
+                      ) : (
+                        'No se pudieron cargar los clientes. Verifica la consola para más detalles.'
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  clientes.map((cliente) => (
                   <TableRow key={cliente.id}>
                     <TableCell>
                       <div>
@@ -554,7 +617,8 @@ export function ClientesList() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

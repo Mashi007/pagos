@@ -464,8 +464,12 @@ def listar_auditoria(
         )
 
         if not tabla_auditoria_existe and not tabla_prestamos_auditoria_existe and not tabla_pagos_auditoria_existe:
-            # ✅ Cambiar a debug para reducir verbosidad - es un comportamiento esperado
-            logger.debug("Ninguna tabla de auditoría existe en BD. Retornando lista vacía (comportamiento esperado).")
+            # ⚠️ Log de advertencia cuando no existen tablas (puede indicar migraciones pendientes)
+            logger.warning(
+                "Ninguna tabla de auditoría existe en BD. "
+                "Esto puede indicar que las migraciones de Alembic no se han ejecutado. "
+                "Ejecuta: alembic upgrade head"
+            )
             return {
                 "items": [],
                 "total": 0,
@@ -502,7 +506,7 @@ def listar_auditoria(
                     pass
                 registros_general = []
         else:
-            logger.info("Tabla auditoria no existe, omitiendo consulta")
+            logger.debug("Tabla auditoria no existe, omitiendo consulta")
 
         # Optimizar queries de préstamos y pagos con límite y orden
         # ✅ IMPORTANTE: Hacer rollback explícito antes de continuar si hubo error anterior
@@ -532,7 +536,7 @@ def listar_auditoria(
                 logger.info(f"Registros de prestamos_auditoria cargados: {len(registros_prestamos)}")
             else:
                 registros_prestamos = []
-                logger.info("Tabla prestamos_auditoria no existe, omitiendo")
+                logger.debug("Tabla prestamos_auditoria no existe, omitiendo")
         except Exception as e:
             logger.warning(f"Error consultando tabla prestamo_auditoria: {e}, usando lista vacía")
             try:
@@ -567,7 +571,7 @@ def listar_auditoria(
                 logger.info(f"Registros de pagos_auditoria cargados: {len(registros_pagos)}")
             else:
                 registros_pagos = []
-                logger.info("Tabla pagos_auditoria no existe, omitiendo")
+                logger.debug("Tabla pagos_auditoria no existe, omitiendo")
         except Exception as e:
             logger.warning(f"Error consultando tabla pago_auditoria: {e}, usando lista vacía")
             try:

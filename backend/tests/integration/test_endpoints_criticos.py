@@ -92,6 +92,170 @@ class TestDashboardEndpoints:
         data = response.json()
         assert isinstance(data, dict)
 
+    def test_financiamiento_tendencia_mensual_sin_fechas(self, test_client: TestClient, admin_headers):
+        """Probar financiamiento tendencia mensual sin fechas (usa meses por defecto)"""
+        response = test_client.get(
+            "/api/v1/dashboard/financiamiento-tendencia-mensual",
+            headers=admin_headers,
+            params={"meses": 6}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "meses" in data or "datos" in data
+
+    def test_financiamiento_tendencia_mensual_con_fecha_inicio(self, test_client: TestClient, admin_headers):
+        """Probar financiamiento tendencia mensual con fecha_inicio (debe considerar meses también)"""
+        # Fecha inicio hace 3 meses
+        fecha_inicio = date.today() - timedelta(days=90)
+        response = test_client.get(
+            "/api/v1/dashboard/financiamiento-tendencia-mensual",
+            headers=admin_headers,
+            params={
+                "fecha_inicio": fecha_inicio.isoformat(),
+                "meses": 6  # Debe usar la fecha más antigua entre fecha_inicio y 6 meses atrás
+            }
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+
+    def test_financiamiento_tendencia_mensual_fecha_inicio_muy_reciente(self, test_client: TestClient, admin_headers):
+        """Probar que si fecha_inicio es muy reciente, se usa la calculada desde N meses atrás"""
+        # Fecha inicio muy reciente (hace 1 mes)
+        fecha_inicio = date.today() - timedelta(days=30)
+        response = test_client.get(
+            "/api/v1/dashboard/financiamiento-tendencia-mensual",
+            headers=admin_headers,
+            params={
+                "fecha_inicio": fecha_inicio.isoformat(),
+                "meses": 12  # Debe usar la fecha calculada desde 12 meses atrás (más antigua)
+            }
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+
+    def test_evolucion_morosidad_sin_fechas(self, test_client: TestClient, admin_headers):
+        """Probar evolución morosidad sin fechas (usa meses por defecto)"""
+        response = test_client.get(
+            "/api/v1/dashboard/evolucion-morosidad",
+            headers=admin_headers,
+            params={"meses": 6}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "meses" in data
+
+    def test_evolucion_morosidad_con_fecha_inicio(self, test_client: TestClient, admin_headers):
+        """Probar evolución morosidad con fecha_inicio (debe considerar meses también)"""
+        # Fecha inicio hace 3 meses
+        fecha_inicio = date.today() - timedelta(days=90)
+        response = test_client.get(
+            "/api/v1/dashboard/evolucion-morosidad",
+            headers=admin_headers,
+            params={
+                "fecha_inicio": fecha_inicio.isoformat(),
+                "meses": 6  # Debe usar la fecha más antigua entre fecha_inicio y 6 meses atrás
+            }
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "meses" in data
+
+    def test_evolucion_morosidad_fecha_inicio_muy_reciente(self, test_client: TestClient, admin_headers):
+        """Probar que si fecha_inicio es muy reciente, se usa la calculada desde N meses atrás"""
+        # Fecha inicio muy reciente (hace 1 mes)
+        fecha_inicio = date.today() - timedelta(days=30)
+        response = test_client.get(
+            "/api/v1/dashboard/evolucion-morosidad",
+            headers=admin_headers,
+            params={
+                "fecha_inicio": fecha_inicio.isoformat(),
+                "meses": 12  # Debe usar la fecha calculada desde 12 meses atrás (más antigua)
+            }
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "meses" in data
+
+    def test_evolucion_pagos_sin_fechas(self, test_client: TestClient, admin_headers):
+        """Probar evolución pagos sin fechas (usa meses por defecto)"""
+        response = test_client.get(
+            "/api/v1/dashboard/evolucion-pagos",
+            headers=admin_headers,
+            params={"meses": 6}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "meses" in data
+
+    def test_evolucion_pagos_con_fecha_inicio(self, test_client: TestClient, admin_headers):
+        """Probar evolución pagos con fecha_inicio (debe considerar meses también)"""
+        # Fecha inicio hace 3 meses
+        fecha_inicio = date.today() - timedelta(days=90)
+        response = test_client.get(
+            "/api/v1/dashboard/evolucion-pagos",
+            headers=admin_headers,
+            params={
+                "fecha_inicio": fecha_inicio.isoformat(),
+                "meses": 6  # Debe usar la fecha más antigua entre fecha_inicio y 6 meses atrás
+            }
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "meses" in data
+
+    def test_evolucion_pagos_fecha_inicio_muy_reciente(self, test_client: TestClient, admin_headers):
+        """Probar que si fecha_inicio es muy reciente, se usa la calculada desde N meses atrás"""
+        # Fecha inicio muy reciente (hace 1 mes)
+        fecha_inicio = date.today() - timedelta(days=30)
+        response = test_client.get(
+            "/api/v1/dashboard/evolucion-pagos",
+            headers=admin_headers,
+            params={
+                "fecha_inicio": fecha_inicio.isoformat(),
+                "meses": 12  # Debe usar la fecha calculada desde 12 meses atrás (más antigua)
+            }
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "meses" in data
+
+    def test_evolucion_pagos_con_fecha_inicio_y_fin(self, test_client: TestClient, admin_headers):
+        """Probar evolución pagos con fecha_inicio y fecha_fin"""
+        fecha_inicio = date.today() - timedelta(days=180)
+        fecha_fin = date.today()
+        response = test_client.get(
+            "/api/v1/dashboard/evolucion-pagos",
+            headers=admin_headers,
+            params={
+                "fecha_inicio": fecha_inicio.isoformat(),
+                "fecha_fin": fecha_fin.isoformat(),
+                "meses": 6
+            }
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "meses" in data
+
 
 @pytest.mark.integration
 class TestPrestamosEndpoints:

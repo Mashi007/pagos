@@ -16,6 +16,11 @@ from app.db.session import get_db, Base
 from app.models.user import User
 from app.core.security import get_password_hash
 
+# Configurar entorno de testing ANTES de importar la app
+# Esto hace que el lifespan se salte automáticamente
+os.environ["ENVIRONMENT"] = "test"
+os.environ["SKIP_LIFESPAN"] = "true"  # Flag para saltar lifespan en main.py
+
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 

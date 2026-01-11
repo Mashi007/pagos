@@ -36,8 +36,11 @@ annotated-types==0.7.0
 # Esto elimina completamente la dependencia de ecdsa y su vulnerabilidad CVE-2024-23342
 # python-jose[cryptography]>=3.4.0  # REMOVIDO - no se usa, eliminaba vulnerabilidad ecdsa
 PyJWT==2.8.0  # Usado directamente en app/core/security.py con algoritmo HS256 (no requiere ECDSA)
+# ✅ COMPATIBILIDAD: passlib 1.7.4 requiere bcrypt < 5.0.0
+# bcrypt 5.0.0 removió __about__ que passlib necesita
+# Usar bcrypt 4.1.1 para compatibilidad con passlib 1.7.4
 passlib[bcrypt]==1.7.4
-bcrypt==4.1.1
+bcrypt==4.1.1  # Versión compatible con passlib 1.7.4 (NO usar 5.0.0)
 cryptography>=41.0.0  # Para encriptación de API Keys con Fernet (no requiere ecdsa para operaciones básicas)
 
 # ============================================

@@ -20,8 +20,10 @@ alembic==1.13.1
 # AUTHENTICATION & SECURITY
 # ============================================
 python-jose[cryptography]==3.3.0
+# ✅ COMPATIBILIDAD: passlib 1.7.4 requiere bcrypt < 5.0.0
+# bcrypt 5.0.0 removió __about__ que passlib necesita
 passlib[bcrypt]==1.7.4
-bcrypt==4.0.1
+bcrypt==4.1.1  # Versión compatible con passlib 1.7.4 (NO usar 5.0.0)
 python-multipart==0.0.6
 
 # ============================================
