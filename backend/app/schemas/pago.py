@@ -107,7 +107,7 @@ class PagoResponse(PagoBase):
     activo: bool
     fecha_actualizacion: datetime | None = None
     verificado_concordancia: str | None = None  # SI/NO - Verificación de concordancia con módulo de pagos
-    
+
     # FASE 2: Campos adicionales sincronizados con ORM
     numero_cuota: int | None = Field(None, description="Número de cuota asociada")
     banco: str | None = Field(None, description="Nombre del banco")

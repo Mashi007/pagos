@@ -71,7 +71,7 @@ class CuotaResponse(CuotaBase):
     esta_vencida: bool = False
     monto_pendiente_total: Decimal = Decimal("0.00")
     porcentaje_pagado: Decimal = Decimal("0.00")
-    
+
     # FASE 2: Campos adicionales sincronizados con ORM
     dias_morosidad: Optional[int] = Field(None, description="Días de atraso (actualización automática)")
     monto_morosidad: Optional[Decimal] = Field(None, description="Monto pendiente (actualización automática)")
