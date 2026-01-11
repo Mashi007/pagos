@@ -5355,16 +5355,26 @@ def obtener_financiamiento_tendencia_mensual(
 
         hoy = date.today()
 
-        # ✅ OPTIMIZACIÓN: Cachear primera fecha para evitar 3 queries MIN() en cada request
+        # ✅ OPTIMIZACIÓN: Calcular fecha_inicio_query considerando fecha_inicio y parámetro meses
         if fecha_inicio:
+            # Si se proporciona fecha_inicio, usarla pero asegurar que no sea muy antigua
             fecha_inicio_query = fecha_inicio
+            # También calcular desde N meses atrás y usar la más reciente para asegurar que se muestren suficientes meses
+            if meses > 0:
+                fecha_inicio_calculada = hoy
+                for _ in range(meses - 1):
+                    if fecha_inicio_calculada.month == 1:
+                        fecha_inicio_calculada = date(fecha_inicio_calculada.year - 1, 12, 1)
+                    else:
+                        fecha_inicio_calculada = date(fecha_inicio_calculada.year, fecha_inicio_calculada.month - 1, 1)
+                # Usar la fecha más antigua entre la proporcionada y la calculada desde N meses atrás
+                # Esto asegura que siempre se muestren al menos N meses
+                fecha_inicio_query = min(fecha_inicio_query, fecha_inicio_calculada)
         else:
             # Si no hay fecha_inicio, calcular desde N meses atrás
             fecha_inicio_query = _obtener_fecha_inicio_query(db, None, cache_backend)
             # Calcular fecha inicio como N meses antes de hoy
             if meses > 0:
-                from calendar import monthrange
-
                 fecha_inicio_calculada = hoy
                 for _ in range(meses - 1):
                     if fecha_inicio_calculada.month == 1:
@@ -5862,11 +5872,21 @@ def obtener_evolucion_morosidad(
     hoy = date.today()
     nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
-    # ✅ Calcular fecha inicio: usar fecha_inicio si está presente, sino calcular desde hace N meses
+    # ✅ CORRECCIÓN: Calcular fecha inicio considerando fecha_inicio y parámetro meses
     if fecha_inicio:
         fecha_inicio_query = fecha_inicio
         # Asegurar que sea el primer día del mes
         fecha_inicio_query = date(fecha_inicio_query.year, fecha_inicio_query.month, 1)
+        # También calcular desde N meses atrás y usar la más antigua para asegurar que se muestren suficientes meses
+        if meses > 0:
+            año_inicio_calc = hoy.year
+            mes_inicio_calc = hoy.month - meses + 1
+            if mes_inicio_calc <= 0:
+                año_inicio_calc -= 1
+                mes_inicio_calc += 12
+            fecha_inicio_calculada = date(año_inicio_calc, mes_inicio_calc, 1)
+            # Usar la fecha más antigua entre la proporcionada y la calculada desde N meses atrás
+            fecha_inicio_query = min(fecha_inicio_query, fecha_inicio_calculada)
     else:
         # Calcular fecha inicio (hace N meses) - FUERA del try para que esté disponible en el fallback
         año_inicio = hoy.year
@@ -6027,11 +6047,21 @@ def obtener_evolucion_pagos(
         hoy = date.today()
         nombres_meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
-        # ✅ Calcular fecha inicio: usar fecha_inicio si está presente, sino calcular desde hace N meses
+        # ✅ CORRECCIÓN: Calcular fecha inicio considerando fecha_inicio y parámetro meses
         if fecha_inicio:
             fecha_inicio_query = fecha_inicio
             # Asegurar que sea el primer día del mes
             fecha_inicio_query = date(fecha_inicio_query.year, fecha_inicio_query.month, 1)
+            # También calcular desde N meses atrás y usar la más antigua para asegurar que se muestren suficientes meses
+            if meses > 0:
+                año_inicio_calc = hoy.year
+                mes_inicio_calc = hoy.month - meses + 1
+                if mes_inicio_calc <= 0:
+                    año_inicio_calc -= 1
+                    mes_inicio_calc += 12
+                fecha_inicio_calculada = date(año_inicio_calc, mes_inicio_calc, 1)
+                # Usar la fecha más antigua entre la proporcionada y la calculada desde N meses atrás
+                fecha_inicio_query = min(fecha_inicio_query, fecha_inicio_calculada)
         else:
             # Calcular fecha inicio (hace N meses)
             año_inicio = hoy.year

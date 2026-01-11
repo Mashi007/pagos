@@ -155,34 +155,38 @@ export function DashboardMenu() {
       const params = construirFiltrosObject(periodo) // ✅ Pasar período para calcular fechas
       const queryParams = new URLSearchParams()
 
-      // ✅ Si no hay fecha_inicio en filtros, usar septiembre 2024 como fecha de inicio
-      if (!params.fecha_inicio) {
-        queryParams.append('fecha_inicio', '2024-09-01') // Desde septiembre 2024
-      } else {
-        // Si hay fecha_inicio en filtros, usarla (pero asegurar que no sea anterior a sept 2024)
-        const fechaInicioFiltro = new Date(params.fecha_inicio)
+      // ✅ CORRECCIÓN: Para este gráfico específico, NO pasar fecha_inicio del período
+      // En su lugar, usar el parámetro 'meses' para mostrar los últimos 12 meses
+      // Esto asegura que siempre se muestren múltiples meses independientemente del período seleccionado
+      // Solo pasar fecha_inicio si viene de filtros explícitos del usuario (no del período)
+      const fechaInicioExplicita = filtros.fecha_inicio && filtros.fecha_inicio !== ''
+      
+      if (fechaInicioExplicita) {
+        // Si el usuario especificó fecha_inicio explícitamente en filtros, usarla
+        const fechaInicioFiltro = new Date(filtros.fecha_inicio)
         const fechaMinima = new Date('2024-09-01')
         if (fechaInicioFiltro < fechaMinima) {
           queryParams.append('fecha_inicio', '2024-09-01')
         } else {
-          queryParams.append('fecha_inicio', params.fecha_inicio)
+          queryParams.append('fecha_inicio', filtros.fecha_inicio)
         }
+      } else {
+        // Si no hay fecha_inicio explícita, usar septiembre 2024 como fecha de inicio mínima
+        queryParams.append('fecha_inicio', '2024-09-01') // Desde septiembre 2024
       }
 
+      // ✅ Pasar solo filtros de analista, concesionario y modelo (NO fecha_inicio ni fecha_fin del período)
       Object.entries(params).forEach(([key, value]) => {
-        // No agregar fecha_inicio dos veces (ya se agregó arriba)
-        // ✅ IMPORTANTE: No pasar fecha_fin para permitir que el backend calcule hasta el último día del mes
-        // Esto asegura que se muestren todos los meses del rango, no solo hasta la fecha actual
+        // No pasar fecha_inicio ni fecha_fin del período (ya se manejan arriba o se ignoran)
+        // Solo pasar filtros de analista, concesionario y modelo
         if (key !== 'fecha_inicio' && key !== 'fecha_fin' && value) {
           queryParams.append(key, value.toString())
         }
       })
       
-      // ✅ Agregar parámetro meses para mostrar últimos 12 meses por defecto
-      // Esto asegura que se muestren múltiples meses incluso si fecha_fin limita el rango
-      if (!queryParams.has('meses')) {
-        queryParams.append('meses', '12')
-      }
+      // ✅ SIEMPRE agregar parámetro meses=12 para mostrar últimos 12 meses
+      // Esto asegura que se muestren múltiples meses independientemente del período
+      queryParams.append('meses', '12')
 
       const response = await apiClient.get(
         `/api/v1/dashboard/financiamiento-tendencia-mensual?${queryParams.toString()}`
@@ -434,14 +438,25 @@ export function DashboardMenu() {
     queryFn: async () => {
       const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
-      // ✅ Pasar fecha_inicio desde enero 2025 en lugar de meses
-      queryParams.append('fecha_inicio', '2025-01-01')
+      
+      // ✅ CORRECCIÓN: NO pasar fecha_inicio del período para este gráfico
+      // En su lugar, usar el parámetro 'meses' para mostrar los últimos 12 meses
+      // Solo pasar fecha_inicio si viene de filtros explícitos del usuario
+      const fechaInicioExplicita = filtros.fecha_inicio && filtros.fecha_inicio !== ''
+      if (fechaInicioExplicita) {
+        queryParams.append('fecha_inicio', filtros.fecha_inicio)
+      }
+      
       Object.entries(params).forEach(([key, value]) => {
-        // ✅ Evitar duplicar fecha_inicio ya que se agregó manualmente arriba
-        if (key !== 'fecha_inicio' && value) {
+        // No pasar fecha_inicio ni fecha_fin del período
+        if (key !== 'fecha_inicio' && key !== 'fecha_fin' && value) {
           queryParams.append(key, value.toString())
         }
       })
+      
+      // ✅ SIEMPRE agregar parámetro meses=12 para mostrar últimos 12 meses
+      queryParams.append('meses', '12')
+      
       const response = await apiClient.get(
         `/api/v1/dashboard/evolucion-morosidad?${queryParams.toString()}`
       ) as { meses: Array<{ mes: string; morosidad: number }> }
@@ -457,14 +472,25 @@ export function DashboardMenu() {
     queryFn: async () => {
       const params = construirFiltrosObject(periodo) // ✅ Pasar período
       const queryParams = new URLSearchParams()
-      // ✅ Pasar fecha_inicio desde enero 2025 en lugar de meses
-      queryParams.append('fecha_inicio', '2025-01-01')
+      
+      // ✅ CORRECCIÓN: NO pasar fecha_inicio del período para este gráfico
+      // En su lugar, usar el parámetro 'meses' para mostrar los últimos 12 meses
+      // Solo pasar fecha_inicio si viene de filtros explícitos del usuario
+      const fechaInicioExplicita = filtros.fecha_inicio && filtros.fecha_inicio !== ''
+      if (fechaInicioExplicita) {
+        queryParams.append('fecha_inicio', filtros.fecha_inicio)
+      }
+      
       Object.entries(params).forEach(([key, value]) => {
-        // ✅ Evitar duplicar fecha_inicio ya que se agregó manualmente arriba
-        if (key !== 'fecha_inicio' && value) {
+        // No pasar fecha_inicio ni fecha_fin del período
+        if (key !== 'fecha_inicio' && key !== 'fecha_fin' && value) {
           queryParams.append(key, value.toString())
         }
       })
+      
+      // ✅ SIEMPRE agregar parámetro meses=12 para mostrar últimos 12 meses
+      queryParams.append('meses', '12')
+      
       // Usar timeout extendido para endpoints lentos
       const response = await apiClient.get(
         `/api/v1/dashboard/evolucion-pagos?${queryParams.toString()}`,
