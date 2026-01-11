@@ -84,7 +84,30 @@ class PrestamoService {
   async getPrestamosByCedula(cedula: string): Promise<Prestamo[]> {
     // El endpoint devuelve directamente una lista, no envuelta en ApiResponse
     const response = await apiClient.get<Prestamo[]>(`${this.baseUrl}/cedula/${cedula}`)
-    return response || []
+    
+    // ✅ DEBUG: Log para diagnosticar problemas
+    console.log('🔍 [PrestamoService] Respuesta de préstamos por cédula:', {
+      cedula,
+      responseType: Array.isArray(response) ? 'array' : typeof response,
+      responseLength: Array.isArray(response) ? response.length : 'N/A',
+      response: response,
+      responseKeys: response && typeof response === 'object' ? Object.keys(response) : []
+    })
+    
+    // Asegurar que siempre devolvemos un array
+    if (Array.isArray(response)) {
+      return response
+    }
+    
+    // Si la respuesta es un objeto con una propiedad 'prestamos' o 'data', extraer el array
+    if (response && typeof response === 'object') {
+      const prestamosArray = (response as any).prestamos || (response as any).data
+      if (Array.isArray(prestamosArray)) {
+        return prestamosArray
+      }
+    }
+    
+    return []
   }
 
   // Obtener resumen de préstamos por cédula (saldo, mora, etc.)

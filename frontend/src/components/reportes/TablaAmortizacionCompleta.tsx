@@ -74,24 +74,55 @@ export function TablaAmortizacionCompleta() {
   })
 
   // Obtener préstamos por cédula usando hook
-  const { data: prestamos, isLoading: loadingPrestamos, error: errorPrestamos } = usePrestamosByCedula(cedulaSeleccionada || '')
+  const { data: prestamosData, isLoading: loadingPrestamos, error: errorPrestamos } = usePrestamosByCedula(cedulaSeleccionada || '')
+  
+  // Debug: Log para ver qué está pasando con los préstamos
+  console.log('🔍 [TablaAmortizacion] Estado préstamos:', {
+    cedulaSeleccionada,
+    loadingPrestamos,
+    errorPrestamos,
+    prestamosData,
+    prestamosLength: prestamosData?.length || 0,
+    prestamoIds: prestamosData?.map(p => p.id) || []
+  })
+  
+  // Asegurar que prestamos siempre sea un array
+  const prestamos = prestamosData || []
 
   // Obtener cuotas de todos los préstamos (optimizado - una sola query)
+  const prestamoIds = prestamosData?.map(p => p.id) || []
+  const shouldFetchCuotas = !!cedulaSeleccionada && !!prestamosData && Array.isArray(prestamosData) && prestamosData.length > 0 && !loadingPrestamos
+  
+  console.log('🔍 [TablaAmortizacion] Condición para cargar cuotas:', {
+    cedulaSeleccionada: !!cedulaSeleccionada,
+    prestamosData: !!prestamosData,
+    isArray: Array.isArray(prestamosData),
+    prestamosLength: prestamosData?.length || 0,
+    loadingPrestamos,
+    shouldFetchCuotas,
+    prestamoIds
+  })
+  
   const { data: todasLasCuotas, isLoading: loadingCuotas, error: errorCuotas } = useQuery({
-    queryKey: ['cuotas-prestamos', prestamos?.map(p => p.id)],
+    queryKey: ['cuotas-prestamos', prestamoIds],
     queryFn: async () => {
-      if (!prestamos || prestamos.length === 0) return []
+      if (!prestamosData || prestamosData.length === 0) {
+        console.log('⚠️ [TablaAmortizacion] No hay préstamos para cargar cuotas')
+        return []
+      }
       try {
         // Usar endpoint optimizado para múltiples préstamos
-        const prestamoIds = prestamos.map(p => p.id)
-        return await cuotaService.getCuotasMultiplesPrestamos(prestamoIds)
+        console.log('📡 [TablaAmortizacion] Cargando cuotas para préstamos:', prestamoIds)
+        const cuotas = await cuotaService.getCuotasMultiplesPrestamos(prestamoIds)
+        console.log('✅ [TablaAmortizacion] Cuotas cargadas:', cuotas.length)
+        return cuotas
       } catch (error) {
-        console.error('Error obteniendo cuotas:', error)
+        console.error('❌ [TablaAmortizacion] Error obteniendo cuotas:', error)
         toast.error('Error al cargar cuotas. Algunos datos pueden estar incompletos.')
         return []
       }
     },
-    enabled: !!prestamos && prestamos.length > 0,
+    enabled: shouldFetchCuotas,
     retry: 1, // Solo reintentar una vez
   })
 
@@ -344,11 +375,17 @@ export function TablaAmortizacionCompleta() {
                         </div>
                       </CardContent>
                     </Card>
-                  ) : prestamos && prestamos.length === 0 ? (
+                  ) : prestamos && prestamos.length === 0 && !loadingPrestamos ? (
                     <Card className="mb-6">
                       <CardContent className="py-8 text-center">
                         <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-600">No se encontraron préstamos para esta cédula</p>
+                        <p className="text-gray-600 mb-2">No se encontraron préstamos para esta cédula</p>
+                        {pagos.length > 0 && (
+                          <p className="text-sm text-yellow-600 mt-2">
+                            Nota: Se encontraron {pagos.length} pago(s) registrado(s) para esta cédula, 
+                            pero no hay préstamos asociados. Verifica que los préstamos estén correctamente vinculados a esta cédula.
+                          </p>
+                        )}
                       </CardContent>
                     </Card>
                   ) : null}
