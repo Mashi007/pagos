@@ -103,6 +103,19 @@ class Cuota(Base):
             return self.fecha_vencimiento < date.today() and self.estado != "PAGADA"  # type: ignore[return-value]
         return False
 
+    @property
+    def monto_pendiente_total(self) -> Decimal:
+        """Calcula el monto total pendiente de pago"""
+        return self.total_pendiente
+
+    @property
+    def porcentaje_pagado(self) -> Decimal:
+        """Calcula el porcentaje pagado de la cuota"""
+        if self.monto_cuota and self.monto_cuota > 0:
+            porcentaje = (self.total_pagado / self.monto_cuota) * Decimal("100.00")  # type: ignore[operator]
+            return min(porcentaje, Decimal("100.00"))  # Máximo 100%
+        return Decimal("0.00")
+
     def calcular_mora(self, tasa_mora_diaria: Decimal) -> Decimal:
         """
         Calcula la mora acumulada hasta la fecha actual

@@ -92,12 +92,9 @@ def obtener_cuotas_prestamo(
 
     cuotas = AmortizacionService.obtener_cuotas_prestamo(db, prestamo_id, estado)
 
-    # Agregar propiedades calculadas
-    for cuota in cuotas:
-        cuota.esta_vencida = cuota.esta_vencida
-        cuota.monto_pendiente_total = cuota.monto_pendiente_total
-        cuota.porcentaje_pagado = cuota.porcentaje_pagado
-
+    # Las propiedades calculadas (esta_vencida, monto_pendiente_total, porcentaje_pagado)
+    # se calculan automáticamente por el modelo cuando se accede a ellas
+    # El schema CuotaResponse las incluirá automáticamente usando from_attributes=True
     return cuotas
 
 
@@ -129,12 +126,9 @@ def obtener_cuotas_multiples_prestamos(
 
     cuotas = query.order_by(Cuota.prestamo_id, Cuota.numero_cuota).all()
 
-    # Agregar propiedades calculadas
-    for cuota in cuotas:
-        cuota.esta_vencida = cuota.esta_vencida
-        cuota.monto_pendiente_total = cuota.monto_pendiente_total
-        cuota.porcentaje_pagado = cuota.porcentaje_pagado
-
+    # Las propiedades calculadas (esta_vencida, monto_pendiente_total, porcentaje_pagado)
+    # se calculan automáticamente por el modelo cuando se accede a ellas
+    # El schema CuotaResponse las incluirá automáticamente usando from_attributes=True
     return cuotas
 
 
@@ -149,11 +143,9 @@ def obtener_cuota(
     if not cuota:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cuota no encontrada")
 
-    # Agregar propiedades calculadas
-    cuota.esta_vencida = cuota.esta_vencida
-    cuota.monto_pendiente_total = cuota.monto_pendiente_total
-    cuota.porcentaje_pagado = cuota.porcentaje_pagado
-
+    # Las propiedades calculadas (esta_vencida, monto_pendiente_total, porcentaje_pagado)
+    # se calculan automáticamente por el modelo cuando se accede a ellas
+    # El schema CuotaResponse las incluirá automáticamente usando from_attributes=True
     return cuota
 
 
@@ -204,11 +196,9 @@ def actualizar_cuota(
         db.commit()
         db.refresh(cuota)
 
-        # Agregar propiedades calculadas
-        cuota.esta_vencida = cuota.esta_vencida
-        cuota.monto_pendiente_total = cuota.monto_pendiente_total
-        cuota.porcentaje_pagado = cuota.porcentaje_pagado
-
+        # Las propiedades calculadas (esta_vencida, monto_pendiente_total, porcentaje_pagado)
+        # se calculan automáticamente por el modelo cuando se accede a ellas
+        # El schema CuotaResponse las incluirá automáticamente usando from_attributes=True
         return cuota
 
     except HTTPException:
