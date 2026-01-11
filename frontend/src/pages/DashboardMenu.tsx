@@ -873,6 +873,60 @@ export function DashboardMenu() {
               </motion.div>
             )}
 
+            {/* Gráfico de Cobranzas Planificadas vs Reales - Ancho Completo */}
+            {datosCobranzas && datosCobranzas.meses && datosCobranzas.meses.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.32 }}
+              >
+                <Card className="shadow-lg border-2 border-gray-200">
+                  <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                      <Target className="h-6 w-6 text-blue-600" />
+                      <span>Cobranzas Mensuales: Planificadas vs Reales</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    <ResponsiveContainer width="100%" height={400}>
+                      <BarChart data={datosCobranzas.meses} margin={{ top: 10, right: 30, left: 20, bottom: 80 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis 
+                          dataKey="nombre_mes" 
+                          tick={{ fontSize: 12 }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={100}
+                        />
+                        <YAxis 
+                          tick={{ fontSize: 12 }}
+                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
+                          label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft' }}
+                        />
+                        <Tooltip
+                          formatter={(value: number, name: string) => {
+                            const labels: Record<string, string> = {
+                              'cobranzas_planificadas': 'Planificadas',
+                              'pagos_reales': 'Reales',
+                              'meta_mensual': 'Meta Mensual'
+                            }
+                            return [formatCurrency(value), labels[name] || name]
+                          }}
+                          labelFormatter={(label) => `Mes: ${label}`}
+                        />
+                        <Legend />
+                        <Bar dataKey="cobranzas_planificadas" fill="#3b82f6" name="Cobranzas Planificadas" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="pagos_reales" fill="#10b981" name="Pagos Reales" radius={[4, 4, 0, 0]} />
+                        {datosCobranzas.meses.some(m => m.meta_mensual > 0) && (
+                          <Bar dataKey="meta_mensual" fill="#f59e0b" name="Meta Mensual" radius={[4, 4, 0, 0]} />
+                        )}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
             {/* Gráfico de Áreas - Indicadores Financieros - Ancho Completo */}
             {datosTendencia && datosTendencia.length > 0 && (
               <motion.div
@@ -1321,36 +1375,6 @@ export function DashboardMenu() {
           )}
         </div>
 
-        {/* GRÁFICO DE COBRANZAS MENSUALES - FILA COMPLETA */}
-        {datosCobranzas && datosCobranzas.meses && datosCobranzas.meses.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-          >
-            <Card className="shadow-lg border-2 border-gray-200">
-              <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
-                <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                  <BarChart3 className="h-6 w-6 text-emerald-600" />
-                  <span>Cobranzas Mensuales</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={datosCobranzas.meses}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="nombre_mes" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="cobranzas_planificadas" fill="#3b82f6" name="Planificadas" />
-                    <Bar dataKey="pagos_reales" fill="#10b981" name="Reales" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
 
 
         {/* GRÁFICOS DE MOROSIDAD */}

@@ -14,6 +14,11 @@ Scripts para análisis y diagnóstico del sistema:
 - `analisis_integridad_datos.py` - Análisis completo de integridad de datos (Clientes, Préstamos, Pagos, Cuotas)
 - `analisis_estructura_coherencia.py` - Análisis de estructura de columnas, relaciones entre tablas y coherencia con endpoints
 
+### 📁 solucion/
+Scripts para resolver problemas identificados en los análisis:
+- `solucionar_clientes_prestamos.py` - Resolver cédulas en préstamos sin cliente activo
+- `solucionar_clientes_pagos.py` - Resolver cédulas en pagos sin cliente activo
+
 ### 📁 development/
 Scripts para desarrollo y testing.
 
@@ -158,6 +163,44 @@ chmod +x scripts/ejecutar_analisis_estructura.sh
 ```bash
 python scripts/analisis_estructura_coherencia.py
 ```
+
+### Para Solucionar Problemas Identificados
+
+**Scripts de solución:** `solucionar_clientes_prestamos.py` y `solucionar_clientes_pagos.py`
+
+Estos scripts resuelven problemas de coherencia de datos identificados en los análisis:
+
+1. **solucionar_clientes_prestamos.py:**
+   - Resuelve cédulas en préstamos sin cliente activo
+   - Opciones: Activar clientes inactivos, crear clientes faltantes, marcar préstamos como históricos
+   - Modo DRY RUN disponible para ver cambios sin aplicarlos
+
+2. **solucionar_clientes_pagos.py:**
+   - Resuelve cédulas en pagos sin cliente activo
+   - Opciones: Activar clientes inactivos, crear clientes faltantes
+   - Modo DRY RUN disponible para ver cambios sin aplicarlos
+
+**Ejecución:**
+
+**Windows (PowerShell):**
+```powershell
+# Para préstamos
+python scripts/solucionar_clientes_prestamos.py
+
+# Para pagos
+python scripts/solucionar_clientes_pagos.py
+```
+
+**Linux/Mac (Bash):**
+```bash
+# Para préstamos
+python scripts/solucionar_clientes_prestamos.py
+
+# Para pagos
+python scripts/solucionar_clientes_pagos.py
+```
+
+**Nota:** Ambos scripts tienen modo interactivo que permite elegir la opción de solución. Se recomienda usar primero el modo DRY RUN (opción 4 para préstamos, opción 3 para pagos) para revisar los cambios antes de aplicarlos.
 
 ### Para Corrección de Errores de Sintaxis
 ```bash

@@ -11,9 +11,11 @@ import sys
 from pathlib import Path
 from collections import defaultdict
 
-# Agregar el directorio raíz al path para importar módulos
+# Agregar el directorio raíz y backend al path para importar módulos
 root_dir = Path(__file__).parent.parent
+backend_dir = root_dir / "backend"
 sys.path.insert(0, str(root_dir))
+sys.path.insert(0, str(backend_dir))
 
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker
@@ -36,6 +38,15 @@ def print_subsection(title: str):
     """Imprime un separador de subsección"""
     print(f"\n--- {title} ---")
 
+def safe_print(text: str):
+    """Imprime texto de forma segura manejando encoding"""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        # Fallback: reemplazar caracteres problemáticos
+        safe_text = text.encode('ascii', 'replace').decode('ascii')
+        print(safe_text)
+
 def analizar_estructura_tablas(db):
     """Analiza la estructura de columnas de todas las tablas"""
     print_section("1. ESTRUCTURA DE COLUMNAS DE TABLAS")
@@ -47,7 +58,7 @@ def analizar_estructura_tablas(db):
     
     for tabla_nombre in tablas_principales:
         if tabla_nombre not in inspector.get_table_names():
-            print(f"⚠️  Tabla '{tabla_nombre}' no existe en la base de datos")
+            print(f"ADVERTENCIA: Tabla '{tabla_nombre}' no existe en la base de datos")
             continue
             
         print_subsection(f"Tabla: {tabla_nombre}")
@@ -65,9 +76,9 @@ def analizar_estructura_tablas(db):
             'primary_keys': primary_keys
         }
         
-        print(f"📊 Total de columnas: {len(columnas)}")
-        print(f"🔗 Foreign Keys: {len(foreign_keys)}")
-        print(f"📑 Índices: {len(indexes)}")
+        print(f"Total de columnas: {len(columnas)}")
+        print(f"Foreign Keys: {len(foreign_keys)}")
+        print(f"Indices: {len(indexes)}")
         
         # Mostrar columnas principales
         print("\nColumnas principales:")
@@ -88,11 +99,14 @@ def analizar_estructura_tablas(db):
         
         # Mostrar índices importantes
         if indexes:
-            print("\nÍndices:")
+            print("\nIndices:")
             for idx in indexes[:5]:  # Mostrar primeros 5
-                unique = "UNIQUE" if idx['unique'] else ""
-                cols = ", ".join(idx['column_names'])
-                print(f"   - {idx['name']}: {cols} {unique}")
+                unique = "UNIQUE" if idx.get('unique', False) else ""
+                # Filtrar valores None de column_names
+                col_names = idx.get('column_names', [])
+                cols = ", ".join(str(c) for c in col_names if c is not None)
+                idx_name = idx.get('name', 'sin_nombre')
+                print(f"   - {idx_name}: {cols} {unique}")
     
     return estructuras
 
@@ -143,9 +157,9 @@ def analizar_modelos_orm():
             'relaciones': relaciones_orm
         }
         
-        print(f"📊 Tabla: {tabla_nombre}")
-        print(f"📋 Columnas en modelo: {len(columnas_orm)}")
-        print(f"🔗 Relaciones: {len(relaciones_orm)}")
+        print(f"Tabla: {tabla_nombre}")
+        print(f"Columnas en modelo: {len(columnas_orm)}")
+        print(f"Relaciones: {len(relaciones_orm)}")
         
         if relaciones_orm:
             print("\nRelaciones ORM:")
@@ -173,7 +187,7 @@ def comparar_estructuras_bd_orm(db, estructuras_bd, estructuras_orm):
             continue
             
         if modelo_nombre not in estructuras_orm:
-            problemas.append(f"❌ Modelo {modelo_nombre} no encontrado en código")
+            problemas.append(f"ERROR: Modelo {modelo_nombre} no encontrado en codigo")
             continue
         
         print_subsection(f"Comparación: {tabla_nombre} vs {modelo_nombre}")
@@ -184,24 +198,24 @@ def comparar_estructuras_bd_orm(db, estructuras_bd, estructuras_orm):
         # Columnas en BD pero no en modelo ORM
         columnas_faltantes_orm = set(columnas_bd.keys()) - set(columnas_orm.keys())
         if columnas_faltantes_orm:
-            print(f"⚠️  Columnas en BD pero NO en modelo ORM ({len(columnas_faltantes_orm)}):")
+            print(f"ADVERTENCIA: Columnas en BD pero NO en modelo ORM ({len(columnas_faltantes_orm)}):")
             for col in sorted(columnas_faltantes_orm):
                 print(f"   - {col}")
-            problemas.append(f"⚠️  {tabla_nombre}: {len(columnas_faltantes_orm)} columnas en BD sin modelo ORM")
+            problemas.append(f"ADVERTENCIA {tabla_nombre}: {len(columnas_faltantes_orm)} columnas en BD sin modelo ORM")
         
         # Columnas en modelo ORM pero no en BD
         columnas_faltantes_bd = set(columnas_orm.keys()) - set(columnas_bd.keys())
         if columnas_faltantes_bd:
-            print(f"❌ Columnas en modelo ORM pero NO en BD ({len(columnas_faltantes_bd)}):")
+            print(f"ERROR: Columnas en modelo ORM pero NO en BD ({len(columnas_faltantes_bd)}):")
             for col in sorted(columnas_faltantes_bd):
                 print(f"   - {col}")
-            problemas.append(f"❌ {tabla_nombre}: {len(columnas_faltantes_bd)} columnas en modelo sin BD")
+            problemas.append(f"ERROR {tabla_nombre}: {len(columnas_faltantes_bd)} columnas en modelo sin BD")
         
         # Verificar tipos de datos
-        print(f"\n✅ Columnas coincidentes: {len(set(columnas_bd.keys()) & set(columnas_orm.keys()))}")
+        print(f"\nOK: Columnas coincidentes: {len(set(columnas_bd.keys()) & set(columnas_orm.keys()))}")
         
         if not columnas_faltantes_orm and not columnas_faltantes_bd:
-            print("✅ La estructura coincide perfectamente")
+            print("OK: La estructura coincide perfectamente")
     
     return problemas
 
@@ -253,12 +267,12 @@ def analizar_relaciones_tablas(db):
             if col in fk_map:
                 fk_real = fk_map[col]
                 if fk_real['tabla_ref'] == tabla_ref and fk_real['columna_ref'] == col_ref:
-                    print(f"✅ {col} -> {tabla_ref}.{col_ref} (correcto)")
+                    print(f"OK: {col} -> {tabla_ref}.{col_ref} (correcto)")
                 else:
-                    print(f"⚠️  {col} -> {fk_real['tabla_ref']}.{fk_real['columna_ref']} (esperado: {tabla_ref}.{col_ref})")
+                    print(f"ADVERTENCIA: {col} -> {fk_real['tabla_ref']}.{fk_real['columna_ref']} (esperado: {tabla_ref}.{col_ref})")
                     problemas_relaciones.append(f"{tabla_nombre}.{col}: FK incorrecta")
             else:
-                print(f"❌ {col} -> {tabla_ref}.{col_ref} (FALTA Foreign Key)")
+                print(f"ERROR: {col} -> {tabla_ref}.{col_ref} (FALTA Foreign Key)")
                 problemas_relaciones.append(f"{tabla_nombre}.{col}: Falta FK")
     
     return problemas_relaciones
@@ -293,7 +307,7 @@ def analizar_coherencia_endpoints(db):
         
         archivo_path = Path(root_dir) / info['archivo']
         if not archivo_path.exists():
-            print(f"⚠️  Archivo no encontrado: {info['archivo']}")
+            print(f"ADVERTENCIA: Archivo no encontrado: {info['archivo']}")
             continue
         
         # Leer archivo y buscar uso de columnas
@@ -301,7 +315,7 @@ def analizar_coherencia_endpoints(db):
             with open(archivo_path, 'r', encoding='utf-8') as f:
                 contenido = f.read()
             
-            print(f"📄 Archivo: {info['archivo']}")
+            print(f"Archivo: {info['archivo']}")
             
             # Verificar que se usen las columnas críticas
             columnas_encontradas = []
@@ -326,16 +340,16 @@ def analizar_coherencia_endpoints(db):
                     columnas_faltantes.append(columna)
             
             if columnas_encontradas:
-                print(f"✅ Columnas usadas: {', '.join(columnas_encontradas)}")
+                print(f"OK: Columnas usadas: {', '.join(columnas_encontradas)}")
             
             if columnas_faltantes:
-                print(f"⚠️  Columnas críticas no encontradas en código: {', '.join(columnas_faltantes)}")
+                print(f"ADVERTENCIA: Columnas criticas no encontradas en codigo: {', '.join(columnas_faltantes)}")
                 problemas_endpoints.append(f"{modulo_nombre}: Columnas no usadas: {', '.join(columnas_faltantes)}")
             else:
-                print("✅ Todas las columnas críticas están siendo usadas")
+                print("OK: Todas las columnas criticas estan siendo usadas")
                 
         except Exception as e:
-            print(f"❌ Error al leer archivo: {e}")
+            print(f"ERROR: Error al leer archivo: {e}")
             problemas_endpoints.append(f"{modulo_nombre}: Error al analizar archivo")
     
     return problemas_endpoints
@@ -359,12 +373,12 @@ def analizar_coherencia_cedulas(db):
     """)).fetchall()
     
     if cedulas_prestamos_sin_cliente:
-        print(f"❌ Se encontraron {len(cedulas_prestamos_sin_cliente)} cédulas en préstamos sin cliente activo:")
+        print(f"ERROR: Se encontraron {len(cedulas_prestamos_sin_cliente)} cedulas en prestamos sin cliente activo:")
         for cedula, cantidad in cedulas_prestamos_sin_cliente:
             print(f"   - Cédula {cedula}: {cantidad} préstamos")
         problemas_cedulas.append(f"{len(cedulas_prestamos_sin_cliente)} cédulas en préstamos sin cliente")
     else:
-        print("✅ Todas las cédulas de préstamos tienen cliente activo")
+        print("OK: Todas las cedulas de prestamos tienen cliente activo")
     
     # Verificar que las cédulas en pagos existan en clientes
     print_subsection("Cédulas en pagos vs clientes")
@@ -384,7 +398,7 @@ def analizar_coherencia_cedulas(db):
             print(f"   - Cédula {cedula}: {cantidad} pagos")
         problemas_cedulas.append(f"{len(cedulas_pagos_sin_cliente)} cédulas en pagos sin cliente")
     else:
-        print("✅ Todas las cédulas de pagos tienen cliente activo")
+        print("OK: Todas las cedulas de pagos tienen cliente activo")
     
     # Verificar coherencia entre cliente_id y cedula en préstamos
     print_subsection("Coherencia cliente_id vs cedula en préstamos")
@@ -405,7 +419,7 @@ def analizar_coherencia_cedulas(db):
                 print(f"   - Préstamo ID {prestamo_id}: cedula_prestamo={cedula_prestamo}, cedula_cliente={cedula_cliente}")
         problemas_cedulas.append(f"{len(prestamos_incoherentes)} préstamos con inconsistencia cliente_id/cedula")
     else:
-        print("✅ Todos los préstamos tienen coherencia entre cliente_id y cedula")
+        print("OK: Todos los prestamos tienen coherencia entre cliente_id y cedula")
     
     # Verificar coherencia entre cliente_id y cedula en pagos
     print_subsection("Coherencia cliente_id vs cedula en pagos")
@@ -426,7 +440,7 @@ def analizar_coherencia_cedulas(db):
             else:
                 print(f"   - Pago ID {pago_id}: cedula_pago={cedula_pago}, cedula_cliente={cedula_cliente}")
     else:
-        print("✅ Todos los pagos tienen coherencia entre cliente_id y cedula")
+        print("OK: Todos los pagos tienen coherencia entre cliente_id y cedula")
     
     return problemas_cedulas
 
@@ -453,7 +467,7 @@ def analizar_procesos_negocio(db):
             print(f"   - Préstamo ID {prestamo_id} (Cédula: {cedula}, Cuotas esperadas: {num_cuotas}, Aprobado: {fecha_aprob})")
         problemas_procesos.append(f"{len(prestamos_aprobados_sin_cuotas)} préstamos aprobados sin cuotas")
     else:
-        print("✅ Todos los préstamos aprobados tienen cuotas generadas")
+        print("OK: Todos los prestamos aprobados tienen cuotas generadas")
     
     # Proceso 2: Cuotas deben tener préstamo válido
     print_subsection("Proceso: Cuota → Préstamo válido")
@@ -471,7 +485,7 @@ def analizar_procesos_negocio(db):
             print(f"   - Cuota ID {cuota_id} (Préstamo ID: {prestamo_id}, Cuota #: {numero})")
         problemas_procesos.append(f"{len(cuotas_sin_prestamo_valido)} cuotas con préstamo inválido")
     else:
-        print("✅ Todas las cuotas tienen préstamo válido y aprobado")
+        print("OK: Todas las cuotas tienen prestamo valido y aprobado")
     
     # Proceso 3: Pagos deben estar relacionados con préstamos aprobados
     print_subsection("Proceso: Pago → Préstamo aprobado")
@@ -491,23 +505,116 @@ def analizar_procesos_negocio(db):
             print(f"   - Cédula {cedula}: {cantidad} pagos, Total: ${total:,.2f}")
         problemas_procesos.append(f"{len(pagos_sin_prestamo_aprobado)} cédulas con pagos sin préstamos aprobados")
     else:
-        print("✅ Todos los pagos están relacionados con préstamos aprobados")
+        print("OK: Todos los pagos estan relacionados con prestamos aprobados")
     
     return problemas_procesos
 
 def main():
     """Función principal"""
-    print("\n" + "="*80)
-    print("  ANÁLISIS DE ESTRUCTURA Y COHERENCIA")
-    print("  Sistema de Préstamos y Pagos")
-    print("="*80)
-    print(f"\nFecha de análisis: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Base de datos: {settings.DATABASE_URL.split('@')[-1] if '@' in settings.DATABASE_URL else 'N/A'}")
+    import os
+    import sys
     
-    # Crear conexión a la base de datos
-    engine = create_engine(settings.DATABASE_URL)
-    SessionLocal = sessionmaker(bind=engine)
-    db = SessionLocal()
+    # Configurar encoding UTF-8 para Windows
+    if sys.platform == 'win32':
+        os.environ['PYTHONIOENCODING'] = 'utf-8'
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8')
+        if hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(encoding='utf-8')
+    
+    print("\n" + "="*80)
+    print("  ANALISIS DE ESTRUCTURA Y COHERENCIA")
+    print("  Sistema de Prestamos y Pagos")
+    print("="*80)
+    print(f"\nFecha de analisis: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    try:
+        db_url = settings.DATABASE_URL
+        db_info = db_url.split('@')[-1] if '@' in db_url else 'N/A'
+        print(f"Base de datos: {db_info}")
+    except Exception:
+        print("Base de datos: N/A (error al obtener URL)")
+    
+    # Crear conexión a la base de datos usando el mismo método que backend/app/db/session.py
+    try:
+        import os
+        from urllib.parse import urlparse, urlunparse, quote_plus
+        
+        # Intentar cargar desde .env si existe
+        try:
+            from dotenv import load_dotenv
+            env_file = root_dir / ".env"
+            if not env_file.exists():
+                env_file = backend_dir / ".env"
+            if env_file.exists():
+                load_dotenv(env_file, override=False)
+        except ImportError:
+            pass
+        
+        # Obtener URL desde variable de entorno o settings
+        db_url_raw = os.getenv("DATABASE_URL", str(settings.DATABASE_URL))
+        
+        # Manejar encoding de la URL (mismo método que session.py)
+        try:
+            # Intentar parsear la URL
+            parsed = urlparse(db_url_raw)
+            
+            # Codificar username y password si existen
+            username = quote_plus(parsed.username) if parsed.username else None
+            password = quote_plus(parsed.password) if parsed.password else None
+            
+            # Reconstruir netloc
+            if username and password:
+                netloc = f"{username}:{password}@{parsed.hostname}"
+            elif username:
+                netloc = f"{username}@{parsed.hostname}"
+            else:
+                netloc = parsed.hostname
+            
+            if parsed.port:
+                netloc = f"{netloc}:{parsed.port}"
+            
+            # Reconstruir URL completa
+            db_url = urlunparse((
+                parsed.scheme,
+                netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment
+            ))
+        except Exception as parse_error:
+            # Si falla el parseo, usar la URL original
+            print(f"ADVERTENCIA: No se pudo parsear URL: {parse_error}")
+            db_url = db_url_raw
+        
+        # Crear engine
+        engine = create_engine(
+            db_url, 
+            pool_pre_ping=True, 
+            connect_args={
+                "connect_timeout": 10,
+                "client_encoding": "utf8"
+            }
+        )
+        SessionLocal = sessionmaker(bind=engine)
+        db = SessionLocal()
+    except UnicodeDecodeError as e:
+        print(f"\nERROR: Problema de encoding en URL de conexion")
+        print("La URL contiene caracteres especiales que no se pueden decodificar")
+        print("Sugerencia: Configura DATABASE_URL como variable de entorno y codifica la contraseña usando urllib.parse.quote_plus()")
+        print("Ejemplo: from urllib.parse import quote_plus; password_encoded = quote_plus('tu_password')")
+        return
+    except Exception as e:
+        error_msg = str(e)
+        if "UnicodeDecodeError" in error_msg or "codec" in error_msg.lower():
+            print(f"\nERROR: Problema de encoding al conectar a la base de datos")
+            print("La URL de conexion contiene caracteres especiales que no se pueden decodificar")
+            print("Sugerencia: Configura DATABASE_URL como variable de entorno y codifica la contraseña usando urllib.parse.quote_plus()")
+        else:
+            print(f"\nERROR: No se pudo conectar a la base de datos: {error_msg}")
+            print("Verifica que la base de datos este disponible y que DATABASE_URL este configurado correctamente.")
+        return
     
     try:
         # Ejecutar análisis
@@ -524,31 +631,38 @@ def main():
         
         todos_problemas = problemas_bd_orm + problemas_relaciones + problemas_endpoints + problemas_cedulas + problemas_procesos
         
-        print("📊 Estadísticas:")
+        print("ESTADISTICAS:")
         print(f"   - Problemas BD vs ORM: {len(problemas_bd_orm)}")
         print(f"   - Problemas de relaciones: {len(problemas_relaciones)}")
         print(f"   - Problemas en endpoints: {len(problemas_endpoints)}")
-        print(f"   - Problemas de cédulas: {len(problemas_cedulas)}")
+        print(f"   - Problemas de cedulas: {len(problemas_cedulas)}")
         print(f"   - Problemas de procesos: {len(problemas_procesos)}")
         print(f"   - TOTAL DE PROBLEMAS: {len(todos_problemas)}")
         
         if todos_problemas:
-            print("\n⚠️  Problemas encontrados:")
+            print("\nADVERTENCIA: Problemas encontrados:")
             for i, problema in enumerate(todos_problemas, 1):
                 print(f"   {i}. {problema}")
         else:
-            print("\n✅ No se encontraron problemas de coherencia")
+            print("\nOK: No se encontraron problemas de coherencia")
         
         print("\n" + "="*80)
         print("  Análisis completado")
         print("="*80 + "\n")
         
     except Exception as e:
-        print(f"\n❌ Error durante el análisis: {str(e)}")
+        print(f"\nERROR: Error durante el analisis: {str(e)}")
         import traceback
-        traceback.print_exc()
+        try:
+            traceback.print_exc()
+        except UnicodeEncodeError:
+            # Fallback para Windows sin UTF-8
+            print("Error detallado no disponible debido a problemas de encoding")
     finally:
-        db.close()
+        try:
+            db.close()
+        except:
+            pass
 
 if __name__ == "__main__":
     main()
