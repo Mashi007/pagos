@@ -3508,7 +3508,7 @@ def obtener_cobranzas_mensuales(
 
     try:
         hoy = date.today()
-        
+
         # Calcular fecha inicio (hace 10 días)
         fecha_inicio_query = hoy - timedelta(days=9)  # 9 días atrás + hoy = 10 días totales
 
@@ -3526,11 +3526,9 @@ def obtener_cobranzas_mensuales(
             cobranzas_planificadas = _calcular_total_a_cobrar_fecha(
                 db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin
             )
-            
+
             # Calcular pagos reales para este día
-            pagos_reales = _calcular_pagos_fecha(
-                db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin
-            )
+            pagos_reales = _calcular_pagos_fecha(db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin)
 
             # Formatear fecha para mostrar
             nombre_dia = fecha_dia.strftime("%d/%m")
@@ -3551,9 +3549,7 @@ def obtener_cobranzas_mensuales(
         meta_actual = dias_data[-1]["cobranzas_planificadas"] if dias_data else 0.0
 
         total_time = int((time.time() - start_time) * 1000)
-        logger.info(
-            f"⏱️ [cobranzas-mensuales] Tiempo total: {total_time}ms, devolviendo {len(dias_data)} días de datos"
-        )
+        logger.info(f"⏱️ [cobranzas-mensuales] Tiempo total: {total_time}ms, devolviendo {len(dias_data)} días de datos")
         logger.info(f"📊 [cobranzas-mensuales] Meta actual del día=${meta_actual:,.2f}")
 
         return {
