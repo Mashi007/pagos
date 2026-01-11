@@ -5,8 +5,9 @@
 # ============================================
 # CORE FRAMEWORK
 # ============================================
-# ✅ ACTUALIZADO 2025-01-27: fastapi 0.121.2 incluye starlette>=0.49.1 (corrige CVE-2025-54121, CVE-2025-62727)
-fastapi==0.121.2
+# ✅ ACTUALIZADO 2025-01-27: fastapi 0.128.0 incluye starlette>=0.49.1 (corrige CVE-2025-54121, CVE-2025-62727)
+# FastAPI 0.128.0 requiere starlette<0.51.0,>=0.40.0 - starlette 0.50.0 instalado automáticamente
+fastapi>=0.128.0
 uvicorn[standard]==0.38.0
 python-multipart>=0.0.18
 python-dotenv==1.2.1
@@ -48,6 +49,8 @@ pytz==2024.1
 # ✅ ACTUALIZADO 2025-01-27: httpx 0.28.1 compatible con aiohttp>=3.13.3 (corrige 8 CVEs)
 httpx==0.28.1
 requests==2.32.5
+# ✅ ACTUALIZADO 2025-01-27: urllib3>=2.6.3 corrige 5 CVEs (CVE-2025-50182, CVE-2025-50181, CVE-2025-66418, CVE-2025-66471, CVE-2026-21441)
+urllib3>=2.6.3
 
 # ============================================
 # FILE PROCESSING
