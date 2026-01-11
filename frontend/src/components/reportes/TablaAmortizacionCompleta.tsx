@@ -458,304 +458,163 @@ export function TablaAmortizacionCompleta() {
                     </p>
                   </CardContent>
                 </Card>
-              ) : (
+              ) : prestamos && prestamos.length === 0 && !loadingPrestamos ? (
+                <Card className="mb-6">
+                  <CardContent className="py-8 text-center">
+                    <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 mb-2">No se encontraron préstamos para esta cédula</p>
+                  </CardContent>
+                </Card>
+              ) : prestamos && prestamos.length > 0 ? (
                 <>
-                  {clienteInfo && (
-                    <Card className="mb-6 bg-blue-50">
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <User className="w-5 h-5" />
-                          Información del Cliente
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div>
-                            <Label className="text-sm text-gray-600">Nombre Completo</Label>
-                            <p className="font-semibold">{clienteInfo.nombres || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <Label className="text-sm text-gray-600">Cédula</Label>
-                            <p className="font-semibold">{clienteInfo.cedula}</p>
-                          </div>
-                          <div>
-                            <Label className="text-sm text-gray-600">Teléfono</Label>
-                            <p className="font-semibold">{clienteInfo.telefono || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <Label className="text-sm text-gray-600">Email</Label>
-                            <p className="font-semibold">{clienteInfo.email || 'N/A'}</p>
-                          </div>
-                        </div>
+                  {/* Tablas de Amortización agrupadas por préstamo */}
+                  {loadingCuotas ? (
+                    <Card className="mb-6">
+                      <CardContent className="py-8 text-center">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+                        <p className="text-gray-600">Cargando tabla de amortización...</p>
                       </CardContent>
                     </Card>
-                  )}
+                  ) : errorCuotas ? (
+                    <Card className="mb-6">
+                      <CardContent className="py-8 text-center">
+                        <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                        <p className="text-red-600 mb-2">Error al cargar las cuotas</p>
+                        <p className="text-sm text-gray-600">
+                          {errorCuotas instanceof Error ? errorCuotas.message : 'Error desconocido'}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : todasLasCuotas && todasLasCuotas.length > 0 ? (
+                    // Agrupar cuotas por préstamo y mostrar cada préstamo en su propia tabla
+                    prestamos.map((prestamo: any) => {
+                      const cuotasDelPrestamo = todasLasCuotas.filter((c: Cuota) => c.prestamo_id === prestamo.id)
+                      
+                      if (cuotasDelPrestamo.length === 0) {
+                        return null
+                      }
 
-                  {/* Resumen de Préstamos */}
-                  {prestamos && prestamos.length > 0 ? (
-                    <Card className="mb-6 bg-green-50">
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <DollarSign className="w-5 h-5" />
-                          Resumen de Préstamos
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div>
-                            <Label className="text-sm text-gray-600">Total de Préstamos</Label>
-                            <p className="text-2xl font-bold">{prestamos.length}</p>
-                          </div>
-                          <div>
-                            <Label className="text-sm text-gray-600">Total Financiamiento</Label>
-                            <p className="text-2xl font-bold text-green-600">{formatCurrency(totalFinanciamiento)}</p>
-                          </div>
-                          <div>
-                            <Label className="text-sm text-gray-600">Total Cuotas</Label>
-                            <p className="text-2xl font-bold">{todasLasCuotas?.length || 0}</p>
-                          </div>
-                          <div>
-                            <Label className="text-sm text-gray-600">Total Pagos</Label>
-                            <p className="text-2xl font-bold">{pagos.length}</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ) : prestamos && prestamos.length === 0 && !loadingPrestamos ? (
+                      return (
+                        <Card key={prestamo.id} className="mb-6 border-l-4 border-l-blue-500 shadow-md">
+                          <CardHeader className="bg-gradient-to-r from-blue-50 to-transparent border-b">
+                            <CardTitle className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <CreditCard className="w-5 h-5 text-blue-600" />
+                                <div>
+                                  <span className="text-lg font-bold">Préstamo #{prestamo.id}</span>
+                                  {clienteInfo?.nombres && (
+                                    <p className="text-sm text-gray-600 font-normal mt-1">{clienteInfo.nombres}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm text-gray-600">Total Financiamiento</p>
+                                <p className="text-xl font-bold text-blue-600">{formatCurrency(prestamo.total_financiamiento)}</p>
+                              </div>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-6">
+                            <div className="overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Cuota #</TableHead>
+                                    <TableHead>Fecha Vencimiento</TableHead>
+                                    <TableHead>Monto Cuota</TableHead>
+                                    <TableHead>Capital</TableHead>
+                                    <TableHead>Interés</TableHead>
+                                    <TableHead>Total Pagado</TableHead>
+                                    <TableHead>Capital Pendiente</TableHead>
+                                    <TableHead>Estado</TableHead>
+                                    <TableHead>Días Mora</TableHead>
+                                    <TableHead>Mora</TableHead>
+                                    <TableHead className="text-right">Acciones</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {cuotasDelPrestamo.map((cuota) => (
+                                    <TableRow key={cuota.id}>
+                                      <TableCell className="font-semibold">{cuota.numero_cuota}</TableCell>
+                                      <TableCell>{formatDate(cuota.fecha_vencimiento)}</TableCell>
+                                      <TableCell>{formatCurrency(cuota.monto_cuota)}</TableCell>
+                                      <TableCell>{formatCurrency(cuota.monto_capital)}</TableCell>
+                                      <TableCell>{formatCurrency(cuota.monto_interes)}</TableCell>
+                                      <TableCell className="font-semibold">{formatCurrency(cuota.total_pagado)}</TableCell>
+                                      <TableCell>{formatCurrency(cuota.capital_pendiente)}</TableCell>
+                                      <TableCell>{getEstadoBadge(cuota.estado)}</TableCell>
+                                      <TableCell>{cuota.dias_mora || 0}</TableCell>
+                                      <TableCell>{formatCurrency(cuota.monto_mora || 0)}</TableCell>
+                                      <TableCell className="text-right">
+                                        <div className="flex gap-2 justify-end">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleEditarCuota(cuota)}
+                                            title="Editar Cuota"
+                                          >
+                                            <Edit className="w-4 h-4" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                            onClick={() => handleEliminarCuota(cuota.id)}
+                                            title="Eliminar Cuota"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </Button>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })
+                  ) : (
                     <Card className="mb-6">
                       <CardContent className="py-8 text-center">
                         <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-600 mb-2">No se encontraron préstamos para esta cédula</p>
-                        {pagos.length > 0 && (
+                        <p className="text-gray-600 mb-2">No se encontraron cuotas para los préstamos de este cliente</p>
+                        <p className="text-sm text-gray-500 mb-4">
+                          Los préstamos pueden no tener tabla de amortización generada.
+                        </p>
+                        {prestamos && prestamos.length > 0 && prestamos.some((p: any) => 
+                          p.estado === 'APROBADO'
+                        ) && (
+                          <Button
+                            onClick={handleGenerarCuotasParaTodos}
+                            disabled={mutationGenerarAmortizacion.isPending || mutationActualizarPrestamo.isPending}
+                            className="mt-2"
+                          >
+                            {mutationGenerarAmortizacion.isPending || mutationActualizarPrestamo.isPending ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Generando...
+                              </>
+                            ) : (
+                              <>
+                                <FileText className="w-4 h-4 mr-2" />
+                                Generar Tabla de Amortización
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        {prestamos && prestamos.length > 0 && !prestamos.some((p: any) => 
+                          p.estado === 'APROBADO'
+                        ) && (
                           <p className="text-sm text-yellow-600 mt-2">
-                            Nota: Se encontraron {pagos.length} pago(s) registrado(s) para esta cédula, 
-                            pero no hay préstamos asociados. Verifica que los préstamos estén correctamente vinculados a esta cédula.
+                            Los préstamos necesitan estar aprobados para generar cuotas.
                           </p>
                         )}
                       </CardContent>
                     </Card>
-                  ) : null}
-
-                  {/* Tabla de Cuotas - Siempre se muestra cuando hay préstamos */}
-                  {prestamos && prestamos.length > 0 && (
-                    <Card className="mb-6">
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <CreditCard className="w-5 h-5" />
-                          Tabla de Amortización - Cuotas
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        {loadingCuotas ? (
-                          <div className="py-8 text-center">
-                            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
-                            <p className="text-gray-600">Cargando tabla de amortización...</p>
-                          </div>
-                        ) : errorCuotas ? (
-                          <div className="py-8 text-center">
-                            <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-                            <p className="text-red-600 mb-2">Error al cargar las cuotas</p>
-                            <p className="text-sm text-gray-600">
-                              {errorCuotas instanceof Error ? errorCuotas.message : 'Error desconocido'}
-                            </p>
-                          </div>
-                        ) : todasLasCuotas && todasLasCuotas.length > 0 ? (
-                          <div className="overflow-x-auto">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Préstamo ID</TableHead>
-                                  <TableHead>Cuota #</TableHead>
-                                  <TableHead>Fecha Vencimiento</TableHead>
-                                  <TableHead>Monto Cuota</TableHead>
-                                  <TableHead>Capital</TableHead>
-                                  <TableHead>Interés</TableHead>
-                                  <TableHead>Total Pagado</TableHead>
-                                  <TableHead>Capital Pendiente</TableHead>
-                                  <TableHead>Estado</TableHead>
-                                  <TableHead>Días Mora</TableHead>
-                                  <TableHead>Mora</TableHead>
-                                  <TableHead className="text-right">Acciones</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {todasLasCuotas.map((cuota) => (
-                                  <TableRow key={cuota.id}>
-                                    <TableCell>{cuota.prestamo_id}</TableCell>
-                                    <TableCell className="font-semibold">{cuota.numero_cuota}</TableCell>
-                                    <TableCell>{formatDate(cuota.fecha_vencimiento)}</TableCell>
-                                    <TableCell>{formatCurrency(cuota.monto_cuota)}</TableCell>
-                                    <TableCell>{formatCurrency(cuota.monto_capital)}</TableCell>
-                                    <TableCell>{formatCurrency(cuota.monto_interes)}</TableCell>
-                                    <TableCell className="font-semibold">{formatCurrency(cuota.total_pagado)}</TableCell>
-                                    <TableCell>{formatCurrency(cuota.capital_pendiente)}</TableCell>
-                                    <TableCell>{getEstadoBadge(cuota.estado)}</TableCell>
-                                    <TableCell>{cuota.dias_mora || 0}</TableCell>
-                                    <TableCell>{formatCurrency(cuota.monto_mora || 0)}</TableCell>
-                                    <TableCell className="text-right">
-                                      <div className="flex gap-2 justify-end">
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => handleEditarCuota(cuota)}
-                                          title="Editar Cuota"
-                                        >
-                                          <Edit className="w-4 h-4" />
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                          onClick={() => handleEliminarCuota(cuota.id)}
-                                          title="Eliminar Cuota"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </Button>
-                                      </div>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        ) : (
-                          <div className="py-8 text-center">
-                            <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                            <p className="text-gray-600 mb-2">No se encontraron cuotas para los préstamos de este cliente</p>
-                            <p className="text-sm text-gray-500 mb-4">
-                              Los préstamos pueden no tener tabla de amortización generada.
-                            </p>
-                            {prestamos && prestamos.length > 0 && prestamos.some((p: any) => 
-                              p.estado === 'APROBADO'
-                            ) && (
-                              <Button
-                                onClick={handleGenerarCuotasParaTodos}
-                                disabled={mutationGenerarAmortizacion.isPending || mutationActualizarPrestamo.isPending}
-                                className="mt-2"
-                              >
-                                {mutationGenerarAmortizacion.isPending || mutationActualizarPrestamo.isPending ? (
-                                  <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Generando...
-                                  </>
-                                ) : (
-                                  <>
-                                    <FileText className="w-4 h-4 mr-2" />
-                                    Generar Tabla de Amortización
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                            {prestamos && prestamos.length > 0 && !prestamos.some((p: any) => 
-                              p.estado === 'APROBADO'
-                            ) && (
-                              <p className="text-sm text-yellow-600 mt-2">
-                                Los préstamos necesitan estar aprobados para generar cuotas.
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Tabla de Pagos */}
-                  {pagosFiltrados && pagosFiltrados.length > 0 && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <DollarSign className="w-5 h-5" />
-                          Pagos Realizados
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>ID</TableHead>
-                                <TableHead>Préstamo ID</TableHead>
-                                <TableHead>Fecha Pago</TableHead>
-                                <TableHead>Monto Pagado</TableHead>
-                                <TableHead>Número de Documento</TableHead>
-                                <TableHead>Institución</TableHead>
-                                <TableHead>Estado</TableHead>
-                                <TableHead>Conciliado</TableHead>
-                                <TableHead>Fecha Registro</TableHead>
-                                <TableHead className="text-right">Acciones</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {pagosFiltrados.map((pago) => (
-                                <TableRow key={pago.id}>
-                                  <TableCell>{pago.id}</TableCell>
-                                  <TableCell>{pago.prestamo_id || 'N/A'}</TableCell>
-                                  <TableCell>{formatDate(pago.fecha_pago)}</TableCell>
-                                  <TableCell className="font-semibold">{formatCurrency(pago.monto_pagado)}</TableCell>
-                                  <TableCell className="font-mono text-sm">
-                                    {pago.numero_documento || (
-                                      <span className="text-gray-400 italic">Sin documento</span>
-                                    )}
-                                    {pago.numero_documento && /[eE]/.test(pago.numero_documento) && (
-                                      <Badge variant="outline" className="ml-2 text-xs text-yellow-600">
-                                        Formato científico
-                                      </Badge>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>{pago.institucion_bancaria || 'N/A'}</TableCell>
-                                  <TableCell>{getEstadoBadge(pago.estado)}</TableCell>
-                                  <TableCell>
-                                    {(pago.verificado_concordancia === 'SI' || pago.conciliado) ? (
-                                      <Badge className="bg-green-500 text-white">SI</Badge>
-                                    ) : (
-                                      <Badge className="bg-gray-500 text-white">NO</Badge>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>{pago.fecha_registro ? formatDate(pago.fecha_registro) : 'N/A'}</TableCell>
-                                  <TableCell className="text-right">
-                                    <div className="flex gap-2 justify-end">
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => handleEditarPago(pago)}
-                                        title="Editar Pago"
-                                      >
-                                        <Edit className="w-4 h-4" />
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                        onClick={() => {
-                                          if (window.confirm(`¿Estás seguro de eliminar el pago ID ${pago.id}?`)) {
-                                            handleEliminarPago(pago.id)
-                                          }
-                                        }}
-                                        title="Eliminar Pago"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {(!todasLasCuotas || todasLasCuotas.length === 0) && (!pagos || pagos.length === 0) && (
-                    <Card>
-                      <CardContent className="py-8 text-center">
-                        <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-600">No se encontraron cuotas ni pagos para esta cédula</p>
-                      </CardContent>
-                    </Card>
                   )}
                 </>
-              )}
+              ) : null}
             </>
           )}
         </CardContent>
