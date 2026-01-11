@@ -71,9 +71,6 @@ Write-Host ""
 Write-Host "Ejecutando migración..." -ForegroundColor Cyan
 Write-Host ""
 
-# Construir cadena de conexión (usando contraseña en texto plano solo para la conexión)
-$connectionString = "host=$DatabaseHost port=$DatabasePort dbname=$DatabaseName user=$DatabaseUser password=$plainPassword"
-
 try {
     # Intentar usar psql si está disponible
     $psqlPath = Get-Command psql -ErrorAction SilentlyContinue
