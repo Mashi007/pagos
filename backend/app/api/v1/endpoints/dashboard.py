@@ -5327,7 +5327,9 @@ def obtener_cuentas_cobrar_tendencias(
 @router.get("/financiamiento-tendencia-mensual")
 @cache_result(ttl=900, key_prefix="dashboard")  # Cache por 15 minutos (datos históricos - optimizado)
 def obtener_financiamiento_tendencia_mensual(
-    meses: int = Query(12, description="Número de meses a mostrar (últimos N meses). Se ignora si se proporciona fecha_inicio y fecha_fin"),
+    meses: int = Query(
+        12, description="Número de meses a mostrar (últimos N meses). Se ignora si se proporciona fecha_inicio y fecha_fin"
+    ),
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
@@ -5362,6 +5364,7 @@ def obtener_financiamiento_tendencia_mensual(
             # Calcular fecha inicio como N meses antes de hoy
             if meses > 0:
                 from calendar import monthrange
+
                 fecha_inicio_calculada = hoy
                 for _ in range(meses - 1):
                     if fecha_inicio_calculada.month == 1:
@@ -5385,7 +5388,9 @@ def obtener_financiamiento_tendencia_mensual(
             else:
                 fecha_fin_query = date(hoy.year, hoy.month + 1, 1) - timedelta(days=1)
 
-        logger.info(f"📊 [financiamiento-tendencia] Rango de fechas: {fecha_inicio_query} a {fecha_fin_query} (meses solicitados: {meses})")
+        logger.info(
+            f"📊 [financiamiento-tendencia] Rango de fechas: {fecha_inicio_query} a {fecha_fin_query} (meses solicitados: {meses})"
+        )
 
         # ✅ OPTIMIZACIÓN: Una sola query para obtener todos los nuevos financiamientos por mes con GROUP BY
         nuevos_por_mes = _obtener_nuevos_financiamientos_por_mes(
