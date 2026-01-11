@@ -72,6 +72,38 @@ if not use_json_logging:
 
 logger = logging.getLogger(__name__)
 
+# ============================================
+# SENTRY MONITORING (Opcional)
+# ============================================
+# ✅ MEJORA 2025-01-27: Integración de Sentry para monitoreo de errores
+# Solo se inicializa si SENTRY_DSN está configurado
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+
+    if settings.SENTRY_DSN:
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            environment=settings.ENVIRONMENT,
+            traces_sample_rate=0.1 if settings.ENVIRONMENT == "production" else 1.0,
+            profiles_sample_rate=0.1 if settings.ENVIRONMENT == "production" else 1.0,
+            integrations=[
+                FastApiIntegration(transaction_style="endpoint"),
+                SqlalchemyIntegration(),
+                LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
+            ],
+            release=f"pagos-api@{settings.APP_VERSION}",
+        )
+        logger.info("✅ Sentry inicializado para monitoreo de errores")
+    else:
+        logger.debug("Sentry no configurado (SENTRY_DSN no está configurado)")
+except ImportError:
+    logger.debug("Sentry no disponible (sentry-sdk no instalado)")
+except Exception as e:
+    logger.warning(f"⚠️ Error al inicializar Sentry: {e}")
+
 # Routers
 # Imports después de logging por diseño - ver comentario arriba
 from app.api.v1.endpoints import (  # noqa: E402; aprobaciones deshabilitado - ver __init__.py

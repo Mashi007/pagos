@@ -225,7 +225,7 @@ class WhatsAppBotService:
                 return None
 
             config_dict = {config.clave: config.valor for config in configs}
-            
+
             # Verificar que AI esté activo
             activo = config_dict.get("activo", "false").lower() in ("true", "1", "yes", "on")
             if not activo:
@@ -244,7 +244,9 @@ class WhatsAppBotService:
             ai_service.inicializar_configuracion()
 
             # Construir pregunta con contexto del cliente
-            pregunta_con_contexto = f"Cliente: {cliente.nombres} {cliente.apellidos or ''}, Cédula: {cliente.cedula}. Pregunta: {pregunta}"
+            pregunta_con_contexto = (
+                f"Cliente: {cliente.nombres} {cliente.apellidos or ''}, Cédula: {cliente.cedula}. Pregunta: {pregunta}"
+            )
 
             # Procesar pregunta con AI
             resultado = await ai_service.procesar_pregunta(pregunta_con_contexto)

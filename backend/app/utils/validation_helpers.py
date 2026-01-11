@@ -1,6 +1,7 @@
 """
 Helpers centralizados para validación consistente en todos los endpoints
 """
+
 from datetime import date
 from typing import Optional
 
@@ -22,16 +23,16 @@ def validate_query_string(
 ) -> Optional[str]:
     """
     Valida y sanitiza un parámetro de query string.
-    
+
     Args:
         value: Valor a validar
         param_name: Nombre del parámetro para mensajes de error
         max_length: Longitud máxima permitida
         required: Si es requerido
-    
+
     Returns:
         Valor sanitizado
-    
+
     Raises:
         HTTPException: Si la validación falla
     """
@@ -39,7 +40,7 @@ def validate_query_string(
         if required:
             raise HTTPException(status_code=400, detail=f"{param_name} es requerido")
         return None
-    
+
     try:
         return sanitize_sql_input(value, max_length=max_length)
     except ValueError as e:
@@ -55,17 +56,17 @@ def validate_query_int(
 ) -> int:
     """
     Valida un parámetro entero de query.
-    
+
     Args:
         value: Valor a validar
         param_name: Nombre del parámetro
         min_val: Valor mínimo
         max_val: Valor máximo
         default: Valor por defecto si es None
-    
+
     Returns:
         Valor validado
-    
+
     Raises:
         HTTPException: Si la validación falla
     """
@@ -73,7 +74,7 @@ def validate_query_int(
         if default is not None:
             return default
         raise HTTPException(status_code=400, detail=f"{param_name} es requerido")
-    
+
     try:
         return validate_numeric_range(value, min_val, max_val, param_name)
     except ValueError as e:
@@ -88,26 +89,24 @@ def validate_query_dates(
 ) -> tuple[Optional[date], Optional[date]]:
     """
     Valida un rango de fechas de query.
-    
+
     Args:
         fecha_inicio: Fecha de inicio
         fecha_fin: Fecha de fin
         max_days: Máximo de días permitidos
         required: Si ambas fechas son requeridas
-    
+
     Returns:
         Tupla (fecha_inicio, fecha_fin) validadas
-    
+
     Raises:
         HTTPException: Si la validación falla
     """
     if fecha_inicio is None or fecha_fin is None:
         if required:
-            raise HTTPException(
-                status_code=400, detail="fecha_inicio y fecha_fin son requeridas"
-            )
+            raise HTTPException(status_code=400, detail="fecha_inicio y fecha_fin son requeridas")
         return fecha_inicio, fecha_fin
-    
+
     try:
         return validate_date_range_safe(fecha_inicio, fecha_fin, max_days=max_days)
     except ValueError as e:
@@ -124,7 +123,7 @@ def QueryString(
 ):
     """
     Helper para crear Query parameters de tipo string con validación.
-    
+
     Usage:
         analista: Optional[str] = QueryString(
             default=None,
@@ -150,7 +149,7 @@ def QueryInt(
 ):
     """
     Helper para crear Query parameters de tipo int con validación.
-    
+
     Usage:
         semanas: int = QueryInt(
             default=12,

@@ -428,7 +428,7 @@ Por favor, mejora ambos textos siguiendo las instrucciones del sistema. Responde
         if modelo_base == "gpt-4o":
             logger.info(f"ℹ️ Modelo 'gpt-4o' convertido a 'gpt-4o-2024-08-06' (versión requerida para fine-tuning)")
             modelo_base = "gpt-4o-2024-08-06"
-        
+
         try:
             payload = {
                 "training_file": archivo_id,
@@ -455,7 +455,7 @@ Por favor, mejora ambos textos siguiendo las instrucciones del sistema. Responde
                 if response.status_code != 200:
                     error_msg = response.text
                     logger.error(f"Error iniciando fine-tuning: {error_msg}")
-                    
+
                     # Intentar parsear el error para dar un mensaje más claro
                     try:
                         error_data = response.json()
@@ -464,7 +464,7 @@ Por favor, mejora ambos textos siguiendo las instrucciones del sistema. Responde
                             if isinstance(error_info, dict):
                                 error_code = error_info.get("code", "")
                                 error_message = error_info.get("message", error_msg)
-                                
+
                                 if error_code == "model_not_available":
                                     raise Exception(
                                         f"El modelo '{modelo_base}' no está disponible para fine-tuning. "
@@ -476,7 +476,7 @@ Por favor, mejora ambos textos siguiendo las instrucciones del sistema. Responde
                     except (ValueError, KeyError):
                         # Si no se puede parsear el JSON, usar el mensaje original
                         pass
-                    
+
                     raise Exception(f"Error iniciando fine-tuning: {error_msg}")
 
                 job_data = response.json()

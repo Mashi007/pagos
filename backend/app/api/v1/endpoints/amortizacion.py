@@ -133,47 +133,47 @@ def actualizar_cuota(
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden actualizar cuotas")
-    
+
     try:
         cuota = db.query(Cuota).filter(Cuota.id == cuota_id).first()
         if not cuota:
             raise HTTPException(status_code=404, detail="Cuota no encontrada")
-        
+
         # Aplicar cambios
         update_data = cuota_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             if hasattr(cuota, field) and value is not None:
                 setattr(cuota, field, value)
-        
+
         # Recalcular total_pagado si se actualizaron campos de pago
-        if any(field in update_data for field in ['capital_pagado', 'interes_pagado', 'mora_pagada']):
+        if any(field in update_data for field in ["capital_pagado", "interes_pagado", "mora_pagada"]):
             cuota.total_pagado = (
-                (cuota.capital_pagado or Decimal('0')) +
-                (cuota.interes_pagado or Decimal('0')) +
-                (cuota.mora_pagada or Decimal('0'))
+                (cuota.capital_pagado or Decimal("0"))
+                + (cuota.interes_pagado or Decimal("0"))
+                + (cuota.mora_pagada or Decimal("0"))
             )
-        
+
         # Recalcular capital_pendiente
-        cuota.capital_pendiente = cuota.monto_capital - (cuota.capital_pagado or Decimal('0'))
-        
+        cuota.capital_pendiente = cuota.monto_capital - (cuota.capital_pagado or Decimal("0"))
+
         # Actualizar estado si es necesario
         if cuota.total_pagado >= cuota.monto_cuota:
             cuota.estado = "PAGADO"
-        elif cuota.total_pagado > Decimal('0'):
+        elif cuota.total_pagado > Decimal("0"):
             cuota.estado = "PARCIAL"
         else:
             cuota.estado = "PENDIENTE"
-        
+
         db.commit()
         db.refresh(cuota)
-        
+
         # Agregar propiedades calculadas
         cuota.esta_vencida = cuota.esta_vencida
         cuota.monto_pendiente_total = cuota.monto_pendiente_total
         cuota.porcentaje_pagado = cuota.porcentaje_pagado
-        
+
         return cuota
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -194,26 +194,25 @@ def eliminar_cuota(
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar cuotas")
-    
+
     try:
         cuota = db.query(Cuota).filter(Cuota.id == cuota_id).first()
         if not cuota:
             raise HTTPException(status_code=404, detail="Cuota no encontrada")
-        
+
         prestamo_id = cuota.prestamo_id
-        
+
         # Verificar si la cuota tiene pagos aplicados
-        if cuota.total_pagado > Decimal('0'):
+        if cuota.total_pagado > Decimal("0"):
             raise HTTPException(
-                status_code=400,
-                detail=f"No se puede eliminar una cuota con pagos aplicados (${cuota.total_pagado:.2f})"
+                status_code=400, detail=f"No se puede eliminar una cuota con pagos aplicados (${cuota.total_pagado:.2f})"
             )
-        
+
         db.delete(cuota)
         db.commit()
-        
+
         return {"message": "Cuota eliminada exitosamente", "cuota_id": cuota_id, "prestamo_id": prestamo_id}
-    
+
     except HTTPException:
         raise
     except Exception as e:

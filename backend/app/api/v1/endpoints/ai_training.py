@@ -14,6 +14,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session, joinedload, load_only
 
 from app.api.deps import get_current_user, get_db
+from app.models.cliente import Cliente
 from app.models.conversacion_ai import ConversacionAI
 from app.models.documento_ai import DocumentoAI
 from app.models.documento_embedding import DocumentoEmbedding
@@ -797,11 +798,11 @@ async def activar_modelo_fine_tuned(
         job = db.query(FineTuningJob).filter(FineTuningJob.modelo_entrenado == request.modelo_id).first()
         if not job:
             raise HTTPException(status_code=404, detail=f"Modelo fine-tuned no encontrado: {request.modelo_id}")
-        
+
         if job.status != "succeeded":
             raise HTTPException(
-                status_code=400, 
-                detail=f"El modelo no está listo para usar. Estado actual: {job.status}. Solo se pueden activar modelos con estado 'succeeded'."
+                status_code=400,
+                detail=f"El modelo no está listo para usar. Estado actual: {job.status}. Solo se pueden activar modelos con estado 'succeeded'.",
             )
 
         # Guardar modelo activo en configuración
@@ -864,7 +865,7 @@ async def activar_modelo_fine_tuned(
             logger.info(f"✅ Configuración de modelo creada con fine-tuned: {request.modelo_id}")
 
         db.commit()
-        
+
         logger.info(f"✅ Modelo fine-tuned activado exitosamente: {request.modelo_id}")
         logger.info(f"   Modelo base original: {job.modelo_base}")
         logger.info(f"   El modelo se usará en todas las llamadas al Chat AI")
@@ -1197,15 +1198,20 @@ def _obtener_prestamos_aprobados(db: Session) -> list:
                 db.rollback()
             except Exception:
                 pass
-        
-        if "valor_activo" in error_msg or "does not exist" in error_msg or "aborted" in error_msg or "InFailedSqlTransaction" in str(e):
+
+        if (
+            "valor_activo" in error_msg
+            or "does not exist" in error_msg
+            or "aborted" in error_msg
+            or "InFailedSqlTransaction" in str(e)
+        ):
             logger.warning("⚠️ Error en query inicial, haciendo rollback y usando query directo")
             # Asegurar rollback antes de continuar
             try:
                 db.rollback()
             except Exception:
                 pass
-            
+
             from sqlalchemy import select
 
             stmt = select(
@@ -1342,8 +1348,7 @@ def _calcular_target_riesgo(prestamo_id: int, db: Session) -> int:
     try:
         cuotas = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id).all()
         cuotas_vencidas = [
-            c for c in cuotas
-            if c.fecha_vencimiento and c.fecha_vencimiento < date.today() and c.estado != "PAGADA"
+            c for c in cuotas if c.fecha_vencimiento and c.fecha_vencimiento < date.today() and c.estado != "PAGADA"
         ]
     except Exception as e:
         logger.warning(f"Error obteniendo cuotas del préstamo {prestamo_id}: {e}")
@@ -1460,9 +1465,7 @@ async def entrenar_modelo_riesgo(
                 continue
 
             if not hasattr(cliente, "fecha_nacimiento"):
-                logger.warning(
-                    f"Cliente {cliente.id} no tiene atributo fecha_nacimiento, omitiendo préstamo {prestamo.id}..."
-                )
+                logger.warning(f"Cliente {cliente.id} no tiene atributo fecha_nacimiento, omitiendo préstamo {prestamo.id}...")
                 continue
 
             # Calcular features
@@ -1878,11 +1881,7 @@ def _obtener_prestamos_aprobados_impago(db: Session) -> list:
     """
     from app.models.prestamo import Prestamo
 
-    prestamos_query = (
-        db.query(Prestamo)
-        .filter(Prestamo.estado == "APROBADO")
-        .filter(Prestamo.fecha_aprobacion.isnot(None))
-    )
+    prestamos_query = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").filter(Prestamo.fecha_aprobacion.isnot(None))
 
     try:
         return prestamos_query.all()
@@ -1895,15 +1894,20 @@ def _obtener_prestamos_aprobados_impago(db: Session) -> list:
                 db.rollback()
             except Exception:
                 pass
-        
-        if "valor_activo" in error_msg or "does not exist" in error_msg or "aborted" in error_msg or "InFailedSqlTransaction" in str(e):
+
+        if (
+            "valor_activo" in error_msg
+            or "does not exist" in error_msg
+            or "aborted" in error_msg
+            or "InFailedSqlTransaction" in str(e)
+        ):
             logger.warning("⚠️ [ML-IMPAGO] Error en query inicial, haciendo rollback y usando query directo")
             # Asegurar rollback antes de continuar
             try:
                 db.rollback()
             except Exception:
                 pass
-            
+
             from sqlalchemy import select
 
             stmt = (
@@ -1947,9 +1951,7 @@ def _obtener_cuotas_prestamo(prestamo_id: int, db: Session) -> list:
         return []
 
 
-def _extraer_features_prestamo_impago(
-    cuotas: list, prestamo, fecha_actual, ml_service
-) -> Optional[Dict]:
+def _extraer_features_prestamo_impago(cuotas: list, prestamo, fecha_actual, ml_service) -> Optional[Dict]:
     """
     Extrae features de un préstamo para entrenamiento de impago.
     Retorna dict con features o None si hay error.
@@ -1976,18 +1978,14 @@ def _calcular_target_impago(cuotas: list, fecha_actual) -> Optional[int]:
             return None  # No hay cuotas vencidas aún, no podemos determinar target
 
         # Target: 0 = Pagó (todas las cuotas vencidas están pagadas), 1 = No pagó (hay cuotas vencidas sin pagar)
-        cuotas_vencidas_sin_pagar = sum(
-            1 for c in cuotas_vencidas if c.estado and c.estado not in ["PAGADO", "PARCIAL"]
-        )
+        cuotas_vencidas_sin_pagar = sum(1 for c in cuotas_vencidas if c.estado and c.estado not in ["PAGADO", "PARCIAL"])
         return 1 if cuotas_vencidas_sin_pagar > 0 else 0
     except Exception as e:
         logger.warning(f"Error determinando target: {e}, omitiendo...", exc_info=True)
         return None
 
 
-def _procesar_prestamos_para_entrenamiento(
-    prestamos: list, ml_service, fecha_actual, db: Session
-) -> list:
+def _procesar_prestamos_para_entrenamiento(prestamos: list, ml_service, fecha_actual, db: Session) -> list:
     """
     Procesa préstamos para generar datos de entrenamiento.
     Retorna lista de training_data.
@@ -2148,6 +2146,7 @@ async def entrenar_modelo_impago(
         # Verificar y limpiar transacción antes de obtener préstamos
         try:
             from sqlalchemy import text
+
             db.execute(text("SELECT 1"))
         except Exception as test_error:
             error_str = str(test_error)
@@ -2157,7 +2156,7 @@ async def entrenar_modelo_impago(
                     db.rollback()
                 except Exception:
                     pass
-        
+
         # Obtener préstamos
         logger.info("🔍 Buscando préstamos aprobados para entrenamiento...")
         prestamos = _obtener_prestamos_aprobados_impago(db)
@@ -2266,7 +2265,9 @@ async def entrenar_modelo_impago(
         elif "cuota" in error_msg.lower() or "fecha_vencimiento" in error_msg.lower() or "Cuota" in error_msg:
             detail_msg = "Error accediendo a datos de cuotas. Verifica la integridad de los datos."
         elif "aborted" in error_msg.lower() or "InFailedSqlTransaction" in error_msg:
-            detail_msg = "Error de transacción SQL abortada. Esto puede ocurrir si una consulta anterior falló. Intenta nuevamente."
+            detail_msg = (
+                "Error de transacción SQL abortada. Esto puede ocurrir si una consulta anterior falló. Intenta nuevamente."
+            )
         elif "does not exist" in error_msg.lower() or "no such table" in error_msg.lower():
             detail_msg = "La tabla de modelos de impago no está creada. Ejecuta las migraciones: alembic upgrade head"
         elif "AttributeError" in error_type or "'NoneType' object has no attribute" in error_msg:
@@ -2295,55 +2296,54 @@ async def corregir_modelos_activos_impago(
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden corregir modelos ML")
-    
+
     try:
         # Contar modelos activos
         modelos_activos = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).all()
         total_activos = len(modelos_activos)
-        
+
         if total_activos == 0:
             return {
                 "mensaje": "No hay modelos activos",
                 "modelos_corregidos": 0,
             }
-        
+
         if total_activos == 1:
             return {
                 "mensaje": "Ya hay solo un modelo activo. No se requiere corrección.",
                 "modelo_activo": modelos_activos[0].to_dict(),
                 "modelos_corregidos": 0,
             }
-        
+
         # Hay múltiples activos, corregir
         logger.warning(f"⚠️ Detectados {total_activos} modelos activos. Corrigiendo...")
-        
+
         # Encontrar el más reciente (por activado_en, o si es NULL, por entrenado_en)
-        modelo_mas_reciente = max(
-            modelos_activos,
-            key=lambda m: m.activado_en if m.activado_en else m.entrenado_en
-        )
-        
+        modelo_mas_reciente = max(modelos_activos, key=lambda m: m.activado_en if m.activado_en else m.entrenado_en)
+
         # Desactivar todos
-        db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).update({"activo": False}, synchronize_session=False)
+        db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).update(
+            {"activo": False}, synchronize_session=False
+        )
         db.flush()
-        
+
         # Activar solo el más reciente
         modelo_mas_reciente.activo = True
         if not modelo_mas_reciente.activado_en:
             modelo_mas_reciente.activado_en = datetime.now()
-        
+
         db.commit()
         db.refresh(modelo_mas_reciente)
-        
+
         logger.info(f"✅ Corregido: Solo el modelo {modelo_mas_reciente.id} ({modelo_mas_reciente.nombre}) está activo ahora")
-        
+
         return {
             "mensaje": f"Corregido: {total_activos - 1} modelo(s) desactivado(s). Solo queda activo el más reciente.",
             "modelo_activo": modelo_mas_reciente.to_dict(),
             "modelos_desactivados": total_activos - 1,
             "modelos_corregidos": total_activos - 1,
         }
-    
+
     except Exception as e:
         db.rollback()
         logger.error(f"Error corrigiendo modelos activos: {e}", exc_info=True)
@@ -2370,9 +2370,13 @@ async def activar_modelo_impago(
 
         # Desactivar todos los modelos (CORREGIDO: usar sintaxis correcta de SQLAlchemy)
         # Usar synchronize_session=False para evitar problemas con la sesión
-        modelos_desactivados = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).update({"activo": False}, synchronize_session=False)
+        modelos_desactivados = (
+            db.query(ModeloImpagoCuotas)
+            .filter(ModeloImpagoCuotas.activo.is_(True))
+            .update({"activo": False}, synchronize_session=False)
+        )
         db.flush()  # Asegurar que el update se ejecute antes de activar el nuevo
-        
+
         if modelos_desactivados > 0:
             logger.info(f"✅ Desactivados {modelos_desactivados} modelo(s) anterior(es)")
 
@@ -2385,7 +2389,7 @@ async def activar_modelo_impago(
         # Intentar cargar modelo en servicio ML antes de activar (pero no fallar si no existe)
         ml_service = MLImpagoCuotasService()
         modelo_cargado = ml_service.load_model_from_path(modelo.ruta_archivo)
-        
+
         if not modelo_cargado:
             logger.warning(
                 f"⚠️ [ML-IMPAGO] No se pudo cargar el archivo del modelo desde {modelo.ruta_archivo}. "
@@ -2399,15 +2403,14 @@ async def activar_modelo_impago(
         modelo.activado_en = datetime.now()
         db.commit()
         db.refresh(modelo)
-        
+
         # Verificar que solo este modelo esté activo (doble verificación)
         modelos_activos = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).count()
         if modelos_activos > 1:
             logger.error(f"❌ ERROR: Hay {modelos_activos} modelos activos después de activar. Esto no debería ocurrir.")
             # Corregir: desactivar todos excepto el que acabamos de activar
             db.query(ModeloImpagoCuotas).filter(
-                ModeloImpagoCuotas.activo.is_(True),
-                ModeloImpagoCuotas.id != modelo.id
+                ModeloImpagoCuotas.activo.is_(True), ModeloImpagoCuotas.id != modelo.id
             ).update({"activo": False}, synchronize_session=False)
             db.commit()
             logger.warning(f"⚠️ Corregido: Desactivados modelos adicionales. Solo queda activo el modelo {modelo.id}")
@@ -2454,7 +2457,7 @@ async def calcular_detalle_impago_por_cedula(
 
         # Usar el préstamo más reciente
         prestamo = prestamos[0]
-        
+
         # Llamar directamente a la función de cálculo
         return await calcular_detalle_impago(prestamo.id, db, current_user)
 
@@ -2526,9 +2529,7 @@ async def calcular_detalle_impago(
         cuotas_parciales = sum(1 for c in cuotas_ordenadas if c.estado and c.estado == "PARCIAL")
         cuotas_pendientes = sum(1 for c in cuotas_ordenadas if c.estado and c.estado == "PENDIENTE")
         cuotas_vencidas = [c for c in cuotas_ordenadas if c.fecha_vencimiento and c.fecha_vencimiento < fecha_actual]
-        cuotas_vencidas_sin_pagar = sum(
-            1 for c in cuotas_vencidas if c.estado and c.estado not in ["PAGADO", "PARCIAL"]
-        )
+        cuotas_vencidas_sin_pagar = sum(1 for c in cuotas_vencidas if c.estado and c.estado not in ["PAGADO", "PARCIAL"])
 
         # Calcular montos
         monto_total_prestamo = float(prestamo.total_financiamiento or 0)
@@ -2572,7 +2573,9 @@ async def calcular_detalle_impago(
                 "monto_total_prestamo": round(monto_total_prestamo, 2),
                 "monto_total_pagado": round(monto_total_pagado, 2),
                 "monto_total_pendiente": round(monto_total_pendiente, 2),
-                "porcentaje_pagado": round((monto_total_pagado / monto_total_prestamo * 100) if monto_total_prestamo > 0 else 0, 2),
+                "porcentaje_pagado": round(
+                    (monto_total_pagado / monto_total_prestamo * 100) if monto_total_prestamo > 0 else 0, 2
+                ),
             },
             "features_extraidas": features,
             "prediccion": {
@@ -2690,38 +2693,38 @@ async def eliminar_modelo_impago(
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar modelos ML")
-    
+
     try:
         # Buscar el modelo
         modelo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.id == modelo_id).first()
-        
+
         if not modelo:
             raise HTTPException(status_code=404, detail="Modelo no encontrado")
-        
+
         # Verificar que el modelo NO esté activo
         if modelo.activo:
             raise HTTPException(
-                status_code=400,
-                detail="No se puede eliminar un modelo activo. Primero desactívalo o activa otro modelo."
+                status_code=400, detail="No se puede eliminar un modelo activo. Primero desactívalo o activa otro modelo."
             )
-        
+
         # Guardar información del modelo antes de eliminarlo
         nombre_modelo = modelo.nombre
         ruta_archivo = modelo.ruta_archivo
-        
+
         # Eliminar el modelo de la base de datos
         db.delete(modelo)
         db.commit()
-        
+
         logger.info(f"✅ Modelo eliminado: {nombre_modelo} (ID: {modelo_id}) por {current_user.email}")
-        
+
         # Opcionalmente eliminar el archivo .pkl
         archivo_eliminado = False
         if eliminar_archivo and ruta_archivo:
             try:
                 from pathlib import Path
+
                 ruta = Path(ruta_archivo)
-                
+
                 # Buscar el archivo en diferentes ubicaciones
                 archivos_a_eliminar = []
                 if ruta.is_absolute():
@@ -2736,18 +2739,20 @@ async def eliminar_modelo_impago(
                     ]
                     try:
                         project_root = Path(__file__).parent.parent.parent.parent
-                        posibles_rutas.extend([
-                            project_root / "ml_models" / ruta_archivo,
-                            project_root / "ml_models" / Path(ruta_archivo).name,
-                        ])
+                        posibles_rutas.extend(
+                            [
+                                project_root / "ml_models" / ruta_archivo,
+                                project_root / "ml_models" / Path(ruta_archivo).name,
+                            ]
+                        )
                     except Exception:
                         pass
-                    
+
                     for posible_ruta in posibles_rutas:
                         if posible_ruta.exists() and posible_ruta.is_file():
                             archivos_a_eliminar.append(posible_ruta)
                             break
-                
+
                 # Eliminar archivos encontrados
                 for archivo in archivos_a_eliminar:
                     try:
@@ -2756,7 +2761,7 @@ async def eliminar_modelo_impago(
                         archivo_eliminado = True
                     except Exception as e:
                         logger.warning(f"⚠️ No se pudo eliminar el archivo {archivo}: {e}")
-                
+
                 # También intentar eliminar el scaler si existe
                 if ruta_archivo and "impago_cuotas_model_" in ruta_archivo:
                     timestamp = Path(ruta_archivo).stem.replace("impago_cuotas_model_", "")
@@ -2767,16 +2772,16 @@ async def eliminar_modelo_impago(
                             logger.info(f"✅ Scaler eliminado: {scaler_path.absolute()}")
                         except Exception as e:
                             logger.warning(f"⚠️ No se pudo eliminar el scaler {scaler_path}: {e}")
-                            
+
             except Exception as e:
                 logger.warning(f"⚠️ Error intentando eliminar archivo del modelo: {e}")
-        
+
         return {
             "mensaje": f"Modelo '{nombre_modelo}' eliminado exitosamente",
             "modelo_id": modelo_id,
             "archivo_eliminado": archivo_eliminado if eliminar_archivo else None,
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:

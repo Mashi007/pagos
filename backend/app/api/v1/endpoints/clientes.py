@@ -344,15 +344,15 @@ def crear_cliente(
         if not cliente_dict.get("estado"):
             cliente_dict["estado"] = "ACTIVO"
         cliente_dict["activo"] = cliente_dict.get("activo", True)
-        
+
         # Usuario que registra el cliente
         cliente_dict["usuario_registro"] = current_user.email
-        
+
         # Asegurar normalización (aunque el trigger de BD también lo hará)
         if "email" in cliente_dict and cliente_dict["email"]:
             cliente_dict["email"] = cliente_dict["email"].lower().strip()
         if "cedula" in cliente_dict and cliente_dict["cedula"]:
-            cliente_dict["cedula"] = re.sub(r'[-\s]', '', cliente_dict["cedula"].strip())
+            cliente_dict["cedula"] = re.sub(r"[-\s]", "", cliente_dict["cedula"].strip())
 
         # Crear nuevo cliente
         nuevo_cliente = Cliente(**cliente_dict)
@@ -501,6 +501,7 @@ def eliminar_cliente(
 # ENDPOINTS PARA VALORES POR DEFECTO
 # =====================================================
 
+
 @router.get("/valores-por-defecto", response_model=dict)
 def listar_clientes_valores_por_defecto(
     page: int = Query(1, ge=1, description="Número de página"),
@@ -510,7 +511,7 @@ def listar_clientes_valores_por_defecto(
 ):
     """
     Lista clientes que tienen valores por defecto que necesitan ser corregidos.
-    
+
     Valores por defecto detectados:
     - Email con 'noemail' o '@noemail'
     - Teléfono con '999999999'
@@ -522,27 +523,27 @@ def listar_clientes_valores_por_defecto(
         # Buscar clientes con valores por defecto
         query = db.query(Cliente).filter(
             or_(
-                Cliente.email.ilike('%noemail%'),
-                Cliente.email.ilike('%@noemail%'),
-                Cliente.telefono.ilike('%999999999%'),
-                Cliente.direccion.ilike('%Actualizar%'),
-                Cliente.ocupacion.ilike('%Actualizar%'),
-                Cliente.notas.in_(['NA', 'No hay observacion', 'No existe observaciones']),
+                Cliente.email.ilike("%noemail%"),
+                Cliente.email.ilike("%@noemail%"),
+                Cliente.telefono.ilike("%999999999%"),
+                Cliente.direccion.ilike("%Actualizar%"),
+                Cliente.ocupacion.ilike("%Actualizar%"),
+                Cliente.notas.in_(["NA", "No hay observacion", "No existe observaciones"]),
             )
         )
-        
+
         total = query.count()
-        
+
         # Paginación
         offset = (page - 1) * per_page
         clientes = query.order_by(Cliente.fecha_registro.desc()).offset(offset).limit(per_page).all()
-        
+
         # Serializar clientes
         clientes_dict = _serializar_clientes(clientes)
-        
+
         # Calcular total de páginas
         total_pages = (total + per_page - 1) // per_page
-        
+
         return {
             "items": clientes_dict,
             "total": total,
@@ -550,7 +551,7 @@ def listar_clientes_valores_por_defecto(
             "per_page": per_page,
             "total_pages": total_pages,
         }
-    
+
     except Exception as e:
         logger.error(f"Error en listar_clientes_valores_por_defecto: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
@@ -569,87 +570,99 @@ def exportar_clientes_valores_por_defecto(
         import csv
         import io
         from datetime import datetime
-        
+
         # Buscar todos los clientes con valores por defecto
-        clientes = db.query(Cliente).filter(
-            or_(
-                Cliente.email.ilike('%noemail%'),
-                Cliente.email.ilike('%@noemail%'),
-                Cliente.telefono.ilike('%999999999%'),
-                Cliente.direccion.ilike('%Actualizar%'),
-                Cliente.ocupacion.ilike('%Actualizar%'),
-                Cliente.notas.in_(['NA', 'No hay observacion', 'No existe observaciones']),
+        clientes = (
+            db.query(Cliente)
+            .filter(
+                or_(
+                    Cliente.email.ilike("%noemail%"),
+                    Cliente.email.ilike("%@noemail%"),
+                    Cliente.telefono.ilike("%999999999%"),
+                    Cliente.direccion.ilike("%Actualizar%"),
+                    Cliente.ocupacion.ilike("%Actualizar%"),
+                    Cliente.notas.in_(["NA", "No hay observacion", "No existe observaciones"]),
+                )
             )
-        ).order_by(Cliente.fecha_registro.desc()).all()
-        
+            .order_by(Cliente.fecha_registro.desc())
+            .all()
+        )
+
         if formato == "csv":
             # Generar CSV
             output = io.StringIO()
             writer = csv.writer(output)
-            
+
             # Encabezados
-            writer.writerow([
-                'ID', 'Cédula', 'Nombres', 'Teléfono', 'Email', 
-                'Dirección', 'Ocupación', 'Estado', 'Fecha Registro', 'Notas'
-            ])
-            
+            writer.writerow(
+                ["ID", "Cédula", "Nombres", "Teléfono", "Email", "Dirección", "Ocupación", "Estado", "Fecha Registro", "Notas"]
+            )
+
             # Datos
             for cliente in clientes:
-                writer.writerow([
-                    cliente.id,
-                    cliente.cedula,
-                    cliente.nombres,
-                    cliente.telefono,
-                    cliente.email,
-                    cliente.direccion,
-                    cliente.ocupacion,
-                    cliente.estado,
-                    cliente.fecha_registro.strftime('%Y-%m-%d %H:%M:%S') if cliente.fecha_registro else '',
-                    cliente.notas,
-                ])
-            
+                writer.writerow(
+                    [
+                        cliente.id,
+                        cliente.cedula,
+                        cliente.nombres,
+                        cliente.telefono,
+                        cliente.email,
+                        cliente.direccion,
+                        cliente.ocupacion,
+                        cliente.estado,
+                        cliente.fecha_registro.strftime("%Y-%m-%d %H:%M:%S") if cliente.fecha_registro else "",
+                        cliente.notas,
+                    ]
+                )
+
             from fastapi.responses import Response
+
             return Response(
                 content=output.getvalue(),
                 media_type="text/csv",
                 headers={
                     "Content-Disposition": f"attachment; filename=clientes_valores_por_defecto_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                }
+                },
             )
-        
+
         elif formato == "excel":
             # Generar Excel
             import pandas as pd
-            
+
             data = []
             for cliente in clientes:
-                data.append({
-                    'ID': cliente.id,
-                    'Cédula': cliente.cedula,
-                    'Nombres': cliente.nombres,
-                    'Teléfono': cliente.telefono,
-                    'Email': cliente.email,
-                    'Dirección': cliente.direccion,
-                    'Ocupación': cliente.ocupacion,
-                    'Estado': cliente.estado,
-                    'Fecha Registro': cliente.fecha_registro.strftime('%Y-%m-%d %H:%M:%S') if cliente.fecha_registro else '',
-                    'Notas': cliente.notas,
-                })
-            
+                data.append(
+                    {
+                        "ID": cliente.id,
+                        "Cédula": cliente.cedula,
+                        "Nombres": cliente.nombres,
+                        "Teléfono": cliente.telefono,
+                        "Email": cliente.email,
+                        "Dirección": cliente.direccion,
+                        "Ocupación": cliente.ocupacion,
+                        "Estado": cliente.estado,
+                        "Fecha Registro": (
+                            cliente.fecha_registro.strftime("%Y-%m-%d %H:%M:%S") if cliente.fecha_registro else ""
+                        ),
+                        "Notas": cliente.notas,
+                    }
+                )
+
             df = pd.DataFrame(data)
             output = io.BytesIO()
-            df.to_excel(output, index=False, engine='openpyxl')
+            df.to_excel(output, index=False, engine="openpyxl")
             output.seek(0)
-            
+
             from fastapi.responses import Response
+
             return Response(
                 content=output.getvalue(),
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 headers={
                     "Content-Disposition": f"attachment; filename=clientes_valores_por_defecto_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-                }
+                },
             )
-    
+
     except Exception as e:
         logger.error(f"Error en exportar_clientes_valores_por_defecto: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
@@ -663,7 +676,7 @@ def actualizar_clientes_lote(
 ):
     """
     Actualiza múltiples clientes en lote.
-    
+
     Formato esperado:
     [
         {"id": 1, "email": "nuevo@email.com", "telefono": "+581234567890"},
@@ -673,42 +686,42 @@ def actualizar_clientes_lote(
     try:
         actualizados = 0
         errores = []
-        
+
         for actualizacion in actualizaciones:
             cliente_id = actualizacion.get("id")
             if not cliente_id:
                 errores.append({"id": None, "error": "ID de cliente requerido"})
                 continue
-            
+
             cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
             if not cliente:
                 errores.append({"id": cliente_id, "error": "Cliente no encontrado"})
                 continue
-            
+
             try:
                 # Actualizar campos permitidos
-                campos_permitidos = ['email', 'telefono', 'direccion', 'ocupacion', 'notas', 'estado', 'activo']
+                campos_permitidos = ["email", "telefono", "direccion", "ocupacion", "notas", "estado", "activo"]
                 for campo, valor in actualizacion.items():
                     if campo != "id" and campo in campos_permitidos and valor is not None:
                         setattr(cliente, campo, valor)
-                
+
                 # Normalizar email y cédula (el trigger de BD también lo hará, pero lo hacemos aquí también)
-                if hasattr(cliente, 'email') and cliente.email:
+                if hasattr(cliente, "email") and cliente.email:
                     cliente.email = cliente.email.lower().strip()
-                
+
                 db.commit()
                 actualizados += 1
-            
+
             except Exception as e:
                 db.rollback()
                 errores.append({"id": cliente_id, "error": str(e)})
-        
+
         return {
             "actualizados": actualizados,
             "errores": errores,
             "total_procesados": len(actualizaciones),
         }
-    
+
     except Exception as e:
         logger.error(f"Error en actualizar_clientes_lote: {e}")
         db.rollback()

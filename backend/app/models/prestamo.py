@@ -55,7 +55,7 @@ class Prestamo(Base):
     concesionario = Column(String(100), nullable=True)  # Concesionario (legacy - usar concesionario_id)
     analista = Column(String(100), nullable=True)  # Analista (legacy - usar analista_id)
     modelo_vehiculo = Column(String(100), nullable=True)  # Modelo del vehículo (legacy - usar modelo_vehiculo_id)
-    
+
     # ✅ Nuevas relaciones normalizadas
     concesionario_id = Column(Integer, ForeignKey("concesionarios.id"), nullable=True, index=True)
     analista_id = Column(Integer, ForeignKey("analistas.id"), nullable=True, index=True)

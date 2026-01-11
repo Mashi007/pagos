@@ -297,6 +297,7 @@ async def crear_ticket(
         # Verificar que la comunicación de email existe si se proporciona
         if ticket_data.comunicacion_email_id:
             from app.models.comunicacion_email import ComunicacionEmail
+
             comunicacion_email = (
                 db.query(ComunicacionEmail).filter(ComunicacionEmail.id == ticket_data.comunicacion_email_id).first()
             )
@@ -305,10 +306,11 @@ async def crear_ticket(
 
         # Parsear fecha_limite si se proporciona
         from datetime import datetime
+
         fecha_limite = None
         if ticket_data.fecha_limite:
             try:
-                fecha_limite = datetime.fromisoformat(ticket_data.fecha_limite.replace('Z', '+00:00'))
+                fecha_limite = datetime.fromisoformat(ticket_data.fecha_limite.replace("Z", "+00:00"))
             except Exception as e:
                 logger.warning(f"Error parseando fecha_limite: {e}")
 
@@ -345,10 +347,11 @@ async def crear_ticket(
             if conversacion:
                 conversacion.ticket_id = nuevo_ticket.id
                 db.commit()
-        
+
         # Si hay comunicacion_email_id, actualizar la comunicación para vincular el ticket
         if ticket_data.comunicacion_email_id:
             from app.models.comunicacion_email import ComunicacionEmail
+
             comunicacion_email = (
                 db.query(ComunicacionEmail).filter(ComunicacionEmail.id == ticket_data.comunicacion_email_id).first()
             )
@@ -422,7 +425,7 @@ async def actualizar_ticket(
 
         # IMPORTANTE: Una vez guardado, NO se puede editar titulo/descripcion
         # Solo se pueden actualizar: estado, prioridad, asignación, escalación, fecha_limite, archivos
-        
+
         # Actualizar campos permitidos
         if ticket_data.estado is not None:
             ticket.estado = ticket_data.estado
@@ -432,29 +435,30 @@ async def actualizar_ticket(
             ticket.asignado_a = ticket_data.asignado_a
         if ticket_data.asignado_a_id is not None:
             ticket.asignado_a_id = ticket_data.asignado_a_id
-        
+
         # Escalación
         if ticket_data.escalado_a_id is not None:
             ticket.escalado_a_id = ticket_data.escalado_a_id
             ticket.escalado = True
         if ticket_data.escalado is not None:
             ticket.escalado = ticket_data.escalado
-        
+
         # Fecha límite
         if ticket_data.fecha_limite is not None:
             from datetime import datetime
+
             try:
-                ticket.fecha_limite = datetime.fromisoformat(ticket_data.fecha_limite.replace('Z', '+00:00'))
+                ticket.fecha_limite = datetime.fromisoformat(ticket_data.fecha_limite.replace("Z", "+00:00"))
             except Exception as e:
                 logger.warning(f"Error parseando fecha_limite en actualización: {e}")
-        
+
         # Archivos
         if ticket_data.archivos is not None:
             ticket.archivos = ticket_data.archivos
 
         # Registrar actualización en auditoría (actualizado_en se actualiza automáticamente)
         # TODO: Agregar registro específico en tabla de auditoría si existe
-        
+
         db.commit()
         db.refresh(ticket)
 

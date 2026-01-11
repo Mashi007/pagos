@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 240  # 4 horas
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    
+
     # ENCRYPTION_KEY para encriptar datos sensibles (API Keys, etc.)
     # Si no se proporciona, se genera automáticamente desde SECRET_KEY
     # Para producción, se recomienda generar una clave Fernet y configurarla como variable de entorno
@@ -213,6 +213,17 @@ class Settings(BaseSettings):
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
     # ============================================
+    # MONITORING (SENTRY)
+    # ============================================
+    # ✅ MEJORA 2025-01-27: Sentry DSN para monitoreo de errores en producción
+    # Obtener desde variable de entorno SENTRY_DSN
+    # Si no está configurado, Sentry no se inicializará
+    SENTRY_DSN: Optional[str] = Field(
+        default=None,
+        description="Sentry DSN para monitoreo de errores (opcional)",  # type: ignore[call-overload]
+    )
+
+    # ============================================
     # VALIDACIÓN DE CONFIGURACIÓN
     # ============================================
 
@@ -283,7 +294,7 @@ class Settings(BaseSettings):
         if self.ENVIRONMENT != "production":
             import secrets
             import string
-            
+
             if not self.ADMIN_EMAIL:
                 # Usar email por defecto solo si no hay variable de entorno
                 # En desarrollo, es aceptable pero se advierte
@@ -296,7 +307,7 @@ class Settings(BaseSettings):
                 # ✅ MEJORA: Generar contraseña aleatoria segura en desarrollo en lugar de hardcodear
                 # Generar contraseña de 16 caracteres con mayúsculas, minúsculas, números y símbolos
                 alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
-                generated_password = ''.join(secrets.choice(alphabet) for _ in range(16))
+                generated_password = "".join(secrets.choice(alphabet) for _ in range(16))
                 self.ADMIN_PASSWORD = generated_password
                 logger.warning(
                     f"⚠️ ADMIN_PASSWORD no configurado. Generada contraseña aleatoria para desarrollo: {generated_password[:4]}**** "
@@ -542,6 +553,7 @@ class Settings(BaseSettings):
 try:
     settings = Settings()
 except Exception as e:
+    # Variable 'e' se usa en la condición y puede ser re-lanzada
     if "CORS_ORIGINS" in str(e):
         # Si falla por CORS_ORIGINS, intentar sin la variable de entorno
         cors_env_backup = os.environ.pop("CORS_ORIGINS", None)

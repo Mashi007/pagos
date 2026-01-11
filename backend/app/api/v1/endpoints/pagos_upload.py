@@ -173,6 +173,7 @@ def _procesar_fila_pago(row: pd.Series, index: int, db: Session, current_user: U
     except Exception as e:
         db.rollback()
         return None, f"Fila {index + 2}: {str(e)}"
+        # Variable 'e' se usa en el mensaje de error
 
 
 @router.post("/upload")

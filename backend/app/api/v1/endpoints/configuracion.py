@@ -2545,7 +2545,7 @@ def actualizar_configuracion_ai(
 
     try:
         from app.core.encryption import encrypt_api_key
-        
+
         configuraciones = []
         for clave, valor in config_data.items():
             config = (
@@ -2563,6 +2563,7 @@ def actualizar_configuracion_ai(
                 valor_plano = str(valor).strip()
                 # Verificar si ya está encriptada (para evitar re-encriptar)
                 from app.core.encryption import is_encrypted
+
                 if not is_encrypted(valor_plano):
                     try:
                         valor_guardar = encrypt_api_key(valor_plano)
@@ -2571,10 +2572,10 @@ def actualizar_configuracion_ai(
                         logger.error(f"❌ Error encriptando API Key: {e}", exc_info=True)
                         # 🔴 CRÍTICO: No guardar sin encriptar en producción
                         from app.core.config import settings
+
                         if settings.ENVIRONMENT == "production":
                             raise HTTPException(
-                                status_code=500,
-                                detail="No se pudo encriptar la API Key. Error crítico de seguridad."
+                                status_code=500, detail="No se pudo encriptar la API Key. Error crítico de seguridad."
                             )
                         # En desarrollo, permitir guardar sin encriptar con advertencia
                         logger.warning("⚠️ ADVERTENCIA: API Key guardada sin encriptar (solo desarrollo)")
@@ -2763,19 +2764,19 @@ def _limpiar_y_normalizar_texto(texto: str) -> str:
 
     if not texto:
         return ""
-    
+
     # Limpiar espacios y normalizar
     texto = texto.strip()
-    
+
     # Eliminar espacios múltiples (más de 2 espacios seguidos)
     texto = re.sub(r" {3,}", " ", texto)
-    
+
     # Normalizar saltos de línea (múltiples saltos de línea a máximo 2)
     texto = re.sub(r"\n{3,}", "\n\n", texto)
-    
+
     # Eliminar caracteres de control no visibles (excepto saltos de línea y tabs)
     texto = re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]", "", texto)
-    
+
     return texto
 
 
@@ -2939,7 +2940,7 @@ def _procesar_documento_creado(db: Session, documento: DocumentoAI, ruta_archivo
     Procesa el documento creado extrayendo su texto y guardándolo en BD.
     CRÍTICO: El contenido se guarda en BD para que esté disponible para entrenamiento
     incluso si el archivo físico desaparece (sistemas efímeros como Render).
-    
+
     No lanza excepciones, solo registra errores.
     """
     try:
@@ -2948,7 +2949,7 @@ def _procesar_documento_creado(db: Session, documento: DocumentoAI, ruta_archivo
             logger.warning(f"⚠️ Archivo no encontrado para procesar: {ruta_archivo}")
             logger.warning(f"   Documento {documento.titulo} (ID: {documento.id}) no se puede procesar ahora")
             return
-        
+
         texto_extraido = _extraer_texto_documento(str(ruta_archivo), tipo_archivo_db)
         if texto_extraido and texto_extraido.strip():
             # Guardar contenido en BD - esto es crítico para entrenamiento
@@ -2957,12 +2958,12 @@ def _procesar_documento_creado(db: Session, documento: DocumentoAI, ruta_archivo
             documento.contenido_procesado = True
             db.commit()
             db.refresh(documento)
-            
+
             caracteres = len(texto_extraido)
             logger.info(f"✅ Documento procesado automáticamente: {documento.titulo}")
             logger.info(f"   Caracteres extraídos: {caracteres}")
             logger.info(f"   Contenido guardado en BD (disponible para entrenamiento)")
-            
+
             # Validar que el contenido se guardó correctamente
             if not documento.contenido_texto:
                 logger.error(f"❌ ERROR CRÍTICO: Contenido no se guardó en BD para {documento.titulo}")
@@ -3011,14 +3012,14 @@ def _extraer_texto_documento(ruta_archivo: str, tipo_archivo: str) -> str:
 
         # Limpiar y normalizar texto
         texto = _limpiar_y_normalizar_texto(texto)
-        
+
         # Validar que el texto extraído tiene contenido útil
         if texto and len(texto.strip()) < 10:
             logger.warning(f"⚠️ Texto extraído muy corto ({len(texto)} caracteres) - puede no ser útil para entrenamiento")
-        
+
         caracteres = len(texto) if texto else 0
         logger.info(f"✅ Texto extraído: {caracteres} caracteres de {tipo_archivo}")
-        
+
         # Retornar texto limpio (sin espacios al inicio/final)
         return texto.strip() if texto else ""
 
@@ -3111,25 +3112,25 @@ async def crear_documento_ai(
 
         # Guardar archivo
         tamaño_bytes = await _guardar_archivo_documento(archivo, ruta_archivo_absoluta)
-        
+
         # Verificar que el archivo existe después de guardarlo
         if not ruta_archivo_absoluta.exists():
             logger.error(f"❌ Archivo no existe después de guardarlo: {ruta_archivo_absoluta}")
             raise HTTPException(
-                status_code=500,
-                detail=f"Error: El archivo no se guardó correctamente en {ruta_archivo_absoluta}"
+                status_code=500, detail=f"Error: El archivo no se guardó correctamente en {ruta_archivo_absoluta}"
             )
-        
+
         logger.info(f"✅ Archivo guardado exitosamente: {ruta_archivo_absoluta} ({tamaño_bytes} bytes)")
-        
+
         # Guardar ruta relativa al directorio base para mayor portabilidad
         # Esto ayuda cuando el sistema de archivos es efímero (como en Render)
         from app.core.config import settings
+
         if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
             base_upload_dir = Path(settings.UPLOAD_DIR).resolve()
         else:
             base_upload_dir = Path("uploads").resolve()
-        
+
         # Calcular ruta relativa desde el directorio base
         try:
             ruta_relativa = ruta_archivo_absoluta.relative_to(base_upload_dir)
@@ -3150,11 +3151,11 @@ async def crear_documento_ai(
             ruta_archivo=ruta_para_bd,  # Usar ruta relativa si es posible
             tamaño_bytes=tamaño_bytes,
         )
-        
+
         # Guardar también el nombre único en un campo adicional si existe (para búsqueda rápida)
         # Por ahora usamos el nombre_archivo para almacenar el nombre original
         # y la ruta_archivo para la ruta (que puede ser relativa o absoluta)
-        
+
         # Verificar nuevamente que el archivo existe después de crear el registro
         if not ruta_archivo_absoluta.exists():
             logger.warning(f"⚠️ Archivo desapareció después de crear registro en BD: {ruta_archivo_absoluta}")
@@ -3167,8 +3168,10 @@ async def crear_documento_ai(
         try:
             _procesar_documento_creado(db, nuevo_documento, ruta_archivo_absoluta, tipo_archivo_db)
             if nuevo_documento.contenido_procesado:
-                logger.info(f"✅ Documento procesado automáticamente al subirlo: {nuevo_documento.titulo} ({len(nuevo_documento.contenido_texto or '')} caracteres)")
-                
+                logger.info(
+                    f"✅ Documento procesado automáticamente al subirlo: {nuevo_documento.titulo} ({len(nuevo_documento.contenido_texto or '')} caracteres)"
+                )
+
                 # Opcional: Generar embeddings automáticamente si el documento tiene contenido suficiente
                 # Esto mejora el proceso para entrenamiento
                 if nuevo_documento.contenido_texto and len(nuevo_documento.contenido_texto.strip()) > 100:
@@ -3227,9 +3230,7 @@ def _obtener_info_documento(documento: DocumentoAI) -> tuple:
     """
     from pathlib import Path
 
-    nombre_archivo_original = (
-        documento.nombre_archivo or Path(documento.ruta_archivo).name if documento.ruta_archivo else None
-    )
+    nombre_archivo_original = documento.nombre_archivo or Path(documento.ruta_archivo).name if documento.ruta_archivo else None
     ruta_original = documento.ruta_archivo or ""
     extension = Path(nombre_archivo_original).suffix if nombre_archivo_original else ""
     return nombre_archivo_original, ruta_original, extension
@@ -3278,9 +3279,7 @@ def _buscar_archivo_ruta_absoluta(ruta_original: str) -> tuple:
     return None, False
 
 
-def _buscar_archivo_ruta_relativa(
-    ruta_original: str, base_dir: Path, rutas_intentadas: list
-) -> tuple:
+def _buscar_archivo_ruta_relativa(ruta_original: str, base_dir: Path, rutas_intentadas: list) -> tuple:
     """
     Busca archivo usando ruta relativa desde base_dir.
     Retorna (ruta_archivo, archivo_encontrado) o (None, False)
@@ -3303,9 +3302,7 @@ def _buscar_archivo_ruta_relativa(
     return None, False
 
 
-def _buscar_archivo_nombre_exacto(
-    nombre_archivo_original: str, base_dir: Path, rutas_intentadas: list
-) -> tuple:
+def _buscar_archivo_nombre_exacto(nombre_archivo_original: str, base_dir: Path, rutas_intentadas: list) -> tuple:
     """
     Busca archivo por nombre exacto en documentos_ai.
     Retorna (ruta_archivo, archivo_encontrado) o (None, False)
@@ -3328,9 +3325,7 @@ def _buscar_archivo_nombre_exacto(
     return None, False
 
 
-def _buscar_archivo_por_id(
-    documento_id: int, extension: str, base_dir: Path, rutas_intentadas: list
-) -> tuple:
+def _buscar_archivo_por_id(documento_id: int, extension: str, base_dir: Path, rutas_intentadas: list) -> tuple:
     """
     Busca archivo por ID del documento en el nombre.
     Retorna (ruta_archivo, archivo_encontrado) o (None, False)
@@ -3343,7 +3338,7 @@ def _buscar_archivo_por_id(
         return None, False
 
     rutas_intentadas.append(f"Búsqueda por ID en: {upload_dir}")
-    
+
     # Buscar archivos que contengan el ID del documento
     for archivo_en_dir in upload_dir.iterdir():
         if archivo_en_dir.is_file():
@@ -3353,7 +3348,7 @@ def _buscar_archivo_por_id(
                 if not extension or archivo_en_dir.suffix == extension:
                     logger.info(f"✅ Archivo encontrado por ID en nombre: {archivo_en_dir.resolve()}")
                     return archivo_en_dir.resolve(), True
-    
+
     # También buscar por cualquier archivo con la extensión correcta si solo hay uno
     # (útil cuando el archivo se guardó con UUID pero no tiene el ID en el nombre)
     if extension:
@@ -3381,8 +3376,8 @@ def _buscar_archivo_por_nombre_uuid(
         return None, False
 
     # Si el nombre original parece ser un UUID (36 caracteres con guiones)
-    uuid_pattern = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
-    
+    uuid_pattern = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
+
     # Buscar archivos que coincidan con el patrón UUID + extensión
     for archivo_en_dir in upload_dir.iterdir():
         if archivo_en_dir.is_file():
@@ -3390,7 +3385,7 @@ def _buscar_archivo_por_nombre_uuid(
             # Verificar si el nombre del archivo contiene un UUID y la extensión correcta
             if extension and nombre_archivo.endswith(extension):
                 # Extraer la parte antes de la extensión
-                nombre_sin_ext = nombre_archivo[:-len(extension)]
+                nombre_sin_ext = nombre_archivo[: -len(extension)]
                 if uuid_pattern.match(nombre_sin_ext):
                     # Si el nombre original también tiene UUID, comparar
                     if nombre_archivo_original and uuid_pattern.search(nombre_archivo_original):
@@ -3468,9 +3463,7 @@ def _buscar_archivo_recursivo(
             if root.count(os.sep) - base_dir.as_posix().count(os.sep) > 2:
                 continue  # Limitar profundidad
             for file in files:
-                if file == nombre_archivo_original or (
-                    extension and file.endswith(extension) and str(documento_id) in file
-                ):
+                if file == nombre_archivo_original or (extension and file.endswith(extension) and str(documento_id) in file):
                     ruta_archivo = Path(root) / file
                     if ruta_archivo.exists():
                         logger.info(f"✅ Archivo encontrado en búsqueda recursiva: {ruta_archivo}")
@@ -3479,9 +3472,7 @@ def _buscar_archivo_recursivo(
     return None, False
 
 
-def _buscar_archivo_documento(
-    documento: DocumentoAI, documento_id: int, directorios_base: list
-) -> tuple:
+def _buscar_archivo_documento(documento: DocumentoAI, documento_id: int, directorios_base: list) -> tuple:
     """
     Busca archivo usando múltiples estrategias.
     Retorna (ruta_archivo, archivo_encontrado, rutas_intentadas)
@@ -3493,7 +3484,7 @@ def _buscar_archivo_documento(
         f"🔍 Buscando archivo para documento ID {documento_id}: "
         f"nombre={nombre_archivo_original}, ruta_original={ruta_original}"
     )
-    
+
     # Log detallado de la información del documento
     logger.debug(
         f"   Documento en BD: titulo={documento.titulo}, "
@@ -3508,13 +3499,13 @@ def _buscar_archivo_documento(
         ruta_original_path = Path(ruta_original)
         logger.debug(f"   Intentando ruta absoluta: {ruta_original_path}")
         logger.debug(f"   Es absoluta: {ruta_original_path.is_absolute()}, Existe: {ruta_original_path.exists()}")
-        
+
         ruta_archivo, archivo_encontrado = _buscar_archivo_ruta_absoluta(ruta_original)
         if archivo_encontrado:
             logger.info(f"✅ Archivo encontrado en ruta absoluta guardada en BD")
             return ruta_archivo, True, rutas_intentadas
         rutas_intentadas.append(f"Ruta absoluta (BD): {ruta_original_path} (no existe)")
-    
+
     # Estrategia 1.5: Intentar resolver la ruta relativa desde la ruta guardada
     if ruta_original and not Path(ruta_original).is_absolute():
         for base_dir in directorios_base:
@@ -3523,11 +3514,12 @@ def _buscar_archivo_documento(
                 logger.info(f"✅ Archivo encontrado en ruta relativa desde BD: {ruta_intento.resolve()}")
                 return ruta_intento.resolve(), True, rutas_intentadas
             rutas_intentadas.append(f"Ruta relativa desde BD: {ruta_intento} (no existe)")
-    
+
     # Estrategia 1.6: Extraer nombre de archivo UUID de la ruta guardada y buscarlo
     if ruta_original:
         import re
-        uuid_pattern = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
+
+        uuid_pattern = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
         # Extraer el nombre del archivo de la ruta (puede ser absoluta o relativa)
         nombre_archivo_de_ruta = Path(ruta_original).name
         if uuid_pattern.search(nombre_archivo_de_ruta):
@@ -3549,9 +3541,7 @@ def _buscar_archivo_documento(
 
         # Estrategia 2: Ruta relativa
         if not archivo_encontrado:
-            ruta_archivo, archivo_encontrado = _buscar_archivo_ruta_relativa(
-                ruta_original, base_dir, rutas_intentadas
-            )
+            ruta_archivo, archivo_encontrado = _buscar_archivo_ruta_relativa(ruta_original, base_dir, rutas_intentadas)
 
         # Estrategia 3: Nombre exacto
         if not archivo_encontrado:
@@ -3561,9 +3551,7 @@ def _buscar_archivo_documento(
 
         # Estrategia 4: Por ID
         if not archivo_encontrado:
-            ruta_archivo, archivo_encontrado = _buscar_archivo_por_id(
-                documento_id, extension, base_dir, rutas_intentadas
-            )
+            ruta_archivo, archivo_encontrado = _buscar_archivo_por_id(documento_id, extension, base_dir, rutas_intentadas)
 
         # Estrategia 4.5: Por nombre UUID (nuevo - para archivos guardados con UUID)
         if not archivo_encontrado:
@@ -3597,10 +3585,10 @@ def _validar_archivo_encontrado(
 
     if not archivo_encontrado or not ruta_archivo or not ruta_archivo.exists():
         # Construir mensaje de error más detallado
-        rutas_info = '\n'.join(rutas_intentadas[:10])  # Mostrar hasta 10 rutas intentadas
+        rutas_info = "\n".join(rutas_intentadas[:10])  # Mostrar hasta 10 rutas intentadas
         if len(rutas_intentadas) > 10:
             rutas_info += f"\n... y {len(rutas_intentadas) - 10} rutas más"
-        
+
         mensaje_error = (
             f"El archivo físico no existe para el documento '{documento.titulo}' (ID: {documento_id}).\n\n"
             f"Información del documento:\n"
@@ -3633,26 +3621,24 @@ def _validar_archivo_encontrado(
         )
 
 
-def _procesar_y_guardar_documento(
-    documento: DocumentoAI, ruta_archivo, db: Session
-) -> Dict:
+def _procesar_y_guardar_documento(documento: DocumentoAI, ruta_archivo, db: Session) -> Dict:
     """
     Procesa el documento y guarda el resultado en BD.
     CRÍTICO: El contenido se guarda en BD para entrenamiento, no depende del archivo físico.
-    
+
     Retorna dict con resultado o lanza HTTPException si falla.
     """
     from pathlib import Path
-    
+
     # Verificar que el archivo existe
     ruta_path = Path(ruta_archivo) if not isinstance(ruta_archivo, Path) else ruta_archivo
-    
+
     if not ruta_path.exists():
         raise HTTPException(
             status_code=400,
-            detail=f"El archivo físico no existe: {ruta_path}. El contenido debe estar en BD para entrenamiento."
+            detail=f"El archivo físico no existe: {ruta_path}. El contenido debe estar en BD para entrenamiento.",
         )
-    
+
     # Extraer texto del documento
     texto_extraido = _extraer_texto_documento(str(ruta_archivo), documento.tipo_archivo)
 
@@ -3663,14 +3649,11 @@ def _procesar_y_guardar_documento(
         documento.contenido_procesado = True
         db.commit()
         db.refresh(documento)
-        
+
         # Validar que se guardó correctamente
         if not documento.contenido_texto:
             logger.error(f"❌ ERROR CRÍTICO: Contenido no se guardó en BD para {documento.titulo}")
-            raise HTTPException(
-                status_code=500,
-                detail="Error: El contenido no se guardó correctamente en la base de datos"
-            )
+            raise HTTPException(status_code=500, detail="Error: El contenido no se guardó correctamente en la base de datos")
 
         caracteres = len(texto_limpio)
         logger.info(f"✅ Documento procesado: {documento.titulo} ({caracteres} caracteres)")
@@ -3696,9 +3679,7 @@ def _procesar_y_guardar_documento(
         else:
             mensaje_error += f" Verifica que el archivo {tipo} sea válido y que las librerías necesarias estén instaladas."
 
-        logger.warning(
-            f"⚠️ No se pudo extraer texto del documento {documento.titulo} (ID: {documento.id}, tipo: {tipo})"
-        )
+        logger.warning(f"⚠️ No se pudo extraer texto del documento {documento.titulo} (ID: {documento.id}, tipo: {tipo})")
         raise HTTPException(status_code=400, detail=mensaje_error)
 
 
@@ -3759,19 +3740,19 @@ def procesar_documento_ai(
                         "caracteres_extraidos": len(documento.contenido_texto),
                         "contenido_en_bd": True,
                     }
-            
+
             # Mensaje corto para el frontend (el detallado va en los logs)
             mensaje_error_corto = (
                 f"El archivo físico no existe para el documento '{documento.titulo}'. "
                 f"En sistemas de archivos efímeros (como Render), los archivos pueden desaparecer. "
                 f"💡 Solución: Elimina este documento y súbelo nuevamente."
             )
-            
+
             # Construir mensaje de error detallado para logs
-            rutas_info = '\n'.join(rutas_intentadas[:15])  # Mostrar hasta 15 rutas intentadas
+            rutas_info = "\n".join(rutas_intentadas[:15])  # Mostrar hasta 15 rutas intentadas
             if len(rutas_intentadas) > 15:
                 rutas_info += f"\n... y {len(rutas_intentadas) - 15} rutas más"
-            
+
             mensaje_error_detallado = (
                 f"El archivo físico no existe para el documento '{documento.titulo}' (ID: {documento_id}).\n\n"
                 f"Información del documento:\n"
@@ -4389,6 +4370,7 @@ def obtener_metricas_ai(
         ai_activo = str(activo_value).lower() in ("true", "1", "yes", "on")
         modelo_configurado = config_dict.get("modelo") or "gpt-3.5-turbo"
         from app.core.encryption import decrypt_api_key
+
         api_key = decrypt_api_key(config_dict.get("openai_api_key") or "") if config_dict.get("openai_api_key") else ""
         tiene_token = bool(api_key and api_key.strip())
 
@@ -4502,6 +4484,7 @@ async def probar_configuracion_ai(
 
         # Verificar que haya token configurado
         from app.core.encryption import decrypt_api_key
+
         openai_api_key = decrypt_api_key(config_dict.get("openai_api_key", ""))
         if not openai_api_key:
             raise HTTPException(status_code=400, detail="OpenAI API Key no configurado")
@@ -5334,14 +5317,20 @@ def _ejecutar_consulta_cruzada(db: Session, tabla1: str, tabla2: str, campos: li
         # ✅ SEGURIDAD: Validar y sanitizar nombres de tablas y columnas
         # Lista de tablas permitidas (ajustar según tu esquema)
         ALLOWED_TABLES = [
-            "prestamos", "clientes", "cuotas", "pagos", "usuarios",
-            "concesionarios", "analistas", "modelos_vehiculos"
+            "prestamos",
+            "clientes",
+            "cuotas",
+            "pagos",
+            "usuarios",
+            "concesionarios",
+            "analistas",
+            "modelos_vehiculos",
         ]
-        
+
         # Validar tablas
         tabla1_safe = sanitize_table_name(tabla1)
         tabla2_safe = sanitize_table_name(tabla2)
-        
+
         # Validar que las tablas estén en la lista permitida
         if tabla1_safe.lower() not in [t.lower() for t in ALLOWED_TABLES]:
             raise ValueError(f"Tabla no permitida: {tabla1}")
@@ -5369,7 +5358,7 @@ def _ejecutar_consulta_cruzada(db: Session, tabla1: str, tabla2: str, campos: li
                 campo_safe = sanitize_column_name(campo)
                 where_clauses.append(f"{campo_safe} = :{campo_safe}")
                 params[campo_safe] = valor
-            
+
             if where_clauses:
                 where_clause, final_params = build_safe_where_clause(where_clauses, params)
                 resultado = execute_safe_query(db, query_sql, where_clause=where_clause, params=final_params)
@@ -6014,7 +6003,12 @@ def _obtener_resumen_bd(db: Session) -> str:
         prestamos_pendientes = _ejecutar_consulta_segura(
             lambda: db.query(Prestamo).filter(Prestamo.estado == "PENDIENTE").count(), "consulta de préstamos pendientes"
         )
-        if total_prestamos is not None and prestamos_aprobados is not None and prestamos_activos is not None and prestamos_pendientes is not None:
+        if (
+            total_prestamos is not None
+            and prestamos_aprobados is not None
+            and prestamos_activos is not None
+            and prestamos_pendientes is not None
+        ):
             resumen.append(
                 f"Préstamos: {total_prestamos} totales, {prestamos_aprobados} aprobados, {prestamos_activos} activos/aprobados, {prestamos_pendientes} pendientes"
             )
@@ -6154,6 +6148,7 @@ def _obtener_resumen_bd(db: Session) -> str:
 # FUNCIONES HELPER PARA chat_ai - Refactorización para reducir complejidad
 # ============================================================================
 
+
 def _obtener_configuracion_ai_con_reintento(db: Session) -> list:
     """
     Obtiene configuración de AI con manejo de errores de transacción abortada.
@@ -6187,19 +6182,19 @@ def _obtener_configuracion_ai_con_reintento(db: Session) -> list:
 def _obtener_api_key_desencriptada(config_dict: Dict[str, str]) -> str:
     """
     Obtiene y desencripta la API Key de OpenAI desde el diccionario de configuración.
-    
+
     Args:
         config_dict: Diccionario con la configuración de AI
-        
+
     Returns:
         API Key desencriptada (texto plano)
     """
     from app.core.encryption import decrypt_api_key
-    
+
     encrypted_api_key = config_dict.get("openai_api_key", "")
     if not encrypted_api_key:
         return ""
-    
+
     try:
         return decrypt_api_key(encrypted_api_key)
     except Exception as e:
@@ -6226,56 +6221,195 @@ def _obtener_palabras_clave_bd() -> list:
     """Retorna lista de palabras clave que indican preguntas sobre BD"""
     return [
         # Entidades principales
-        "cliente", "clientes", "prestamo", "prestamos", "préstamo", "préstamos",
-        "pago", "pagos", "cuota", "cuotas", "mora", "morosidad",
-        "pendiente", "pagada",
+        "cliente",
+        "clientes",
+        "prestamo",
+        "prestamos",
+        "préstamo",
+        "préstamos",
+        "pago",
+        "pagos",
+        "cuota",
+        "cuotas",
+        "mora",
+        "morosidad",
+        "pendiente",
+        "pagada",
         # Identificación y búsqueda
-        "cedula", "cédula", "cedula:", "cédula:", "documento", "documentos",
-        "dni", "ci", "identificación", "identificacion", "numero", "número",
-        "numero:", "número:",
+        "cedula",
+        "cédula",
+        "cedula:",
+        "cédula:",
+        "documento",
+        "documentos",
+        "dni",
+        "ci",
+        "identificación",
+        "identificacion",
+        "numero",
+        "número",
+        "numero:",
+        "número:",
         # Consultas de búsqueda
-        "quien tiene", "quién tiene", "quien tiene el", "quién tiene el",
-        "como se llama", "cómo se llama", "cual es el nombre", "cuál es el nombre",
-        "buscar por", "buscar cliente", "encontrar cliente",
-        "datos del cliente", "información del cliente",
+        "quien tiene",
+        "quién tiene",
+        "quien tiene el",
+        "quién tiene el",
+        "como se llama",
+        "cómo se llama",
+        "cual es el nombre",
+        "cuál es el nombre",
+        "buscar por",
+        "buscar cliente",
+        "encontrar cliente",
+        "datos del cliente",
+        "información del cliente",
         # Base de datos y datos
-        "base de datos", "datos", "estadística", "estadísticas", "resumen",
-        "total", "cantidad", "cuántos", "cuántas", "cuantos", "cuantas",  # Con y sin tilde
-        "monto", "montos",
-        "activo", "activos", "concesionario", "concesionarios",
-        "analista", "analistas", "usuario", "usuarios", "sistema",
-        "registro", "registros",
+        "base de datos",
+        "datos",
+        "estadística",
+        "estadísticas",
+        "resumen",
+        "total",
+        "cantidad",
+        "cuántos",
+        "cuántas",
+        "cuantos",
+        "cuantas",  # Con y sin tilde
+        "monto",
+        "montos",
+        "activo",
+        "activos",
+        "concesionario",
+        "concesionarios",
+        "analista",
+        "analistas",
+        "usuario",
+        "usuarios",
+        "sistema",
+        "registro",
+        "registros",
         # Fechas y tiempo
-        "fecha actual", "día de hoy", "qué día", "qué fecha", "hora actual",
-        "fecha de vencimiento", "fechas de vencimiento", "vencimiento",
-        "vencidas", "vencido", "pago según", "pago segun", "pagos según",
-        "pagos segun", "pagado según", "pagado segun", "ninguno", "ninguna",
-        "cuántos pagaron", "cuántas pagaron", "cuántos pagaron en", "cuántas pagaron en",
+        "fecha actual",
+        "día de hoy",
+        "qué día",
+        "qué fecha",
+        "hora actual",
+        "fecha de vencimiento",
+        "fechas de vencimiento",
+        "vencimiento",
+        "vencidas",
+        "vencido",
+        "pago según",
+        "pago segun",
+        "pagos según",
+        "pagos segun",
+        "pagado según",
+        "pagado segun",
+        "ninguno",
+        "ninguna",
+        "cuántos pagaron",
+        "cuántas pagaron",
+        "cuántos pagaron en",
+        "cuántas pagaron en",
         # Términos de cálculos y análisis
-        "tasa", "tasas", "porcentaje", "calcular", "cálculo", "comparar",
-        "comparación", "diferencia", "análisis", "tendencia", "evolución",
-        "métrica", "métricas", "variación", "incremento", "disminución",
-        "cobranza", "cobranzas",
+        "tasa",
+        "tasas",
+        "porcentaje",
+        "calcular",
+        "cálculo",
+        "comparar",
+        "comparación",
+        "diferencia",
+        "análisis",
+        "tendencia",
+        "evolución",
+        "métrica",
+        "métricas",
+        "variación",
+        "incremento",
+        "disminución",
+        "cobranza",
+        "cobranzas",
         # Meses
-        "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
-        "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+        "enero",
+        "febrero",
+        "marzo",
+        "abril",
+        "mayo",
+        "junio",
+        "julio",
+        "agosto",
+        "septiembre",
+        "octubre",
+        "noviembre",
+        "diciembre",
         # Términos financieros
-        "financiamiento", "cartera", "vencido", "vencidas",
+        "financiamiento",
+        "cartera",
+        "vencido",
+        "vencidas",
         # Machine Learning
-        "machine learning", "ml", "predicción", "predictivo", "predecir",
-        "segmentación", "segmentar", "clustering", "cluster", "anomalía",
-        "anomalías", "patrones", "patrón", "inteligencia artificial", "ia",
-        "modelo predictivo", "riesgo", "factores de riesgo",
+        "machine learning",
+        "ml",
+        "predicción",
+        "predictivo",
+        "predecir",
+        "segmentación",
+        "segmentar",
+        "clustering",
+        "cluster",
+        "anomalía",
+        "anomalías",
+        "patrones",
+        "patrón",
+        "inteligencia artificial",
+        "ia",
+        "modelo predictivo",
+        "riesgo",
+        "factores de riesgo",
         # Términos adicionales
-        "estado", "estados", "información", "consulta", "mostrar", "listar",
-        "buscar", "encontrar", "filtrar", "ordenar", "agrupar", "sumar",
-        "contar", "promedio", "máximo", "mínimo", "último", "reciente",
-        "actual", "hoy", "ayer", "semana", "mes", "año",
+        "estado",
+        "estados",
+        "información",
+        "consulta",
+        "mostrar",
+        "listar",
+        "buscar",
+        "encontrar",
+        "filtrar",
+        "ordenar",
+        "agrupar",
+        "sumar",
+        "contar",
+        "promedio",
+        "máximo",
+        "mínimo",
+        "último",
+        "reciente",
+        "actual",
+        "hoy",
+        "ayer",
+        "semana",
+        "mes",
+        "año",
         # Términos de consulta comunes
-        "cuántos hay", "cuántas hay", "cuántos son", "cuántas son",
-        "cuantos hay", "cuantas hay", "cuantos son", "cuantas son",  # Con y sin tilde
-        "cuál es", "cuáles son", "cual es", "cuales son",  # Con y sin tilde
-        "qué hay", "qué son", "que hay", "que son",  # Con y sin tilde
+        "cuántos hay",
+        "cuántas hay",
+        "cuántos son",
+        "cuántas son",
+        "cuantos hay",
+        "cuantas hay",
+        "cuantos son",
+        "cuantas son",  # Con y sin tilde
+        "cuál es",
+        "cuáles son",
+        "cual es",
+        "cuales son",  # Con y sin tilde
+        "qué hay",
+        "qué son",
+        "que hay",
+        "que son",  # Con y sin tilde
     ]
 
 
@@ -6335,9 +6469,7 @@ def _obtener_documentos_activos_con_reintento(db: Session, limit: int = 3) -> li
             return []
 
 
-async def _obtener_contexto_documentos_semantico(
-    pregunta: str, openai_api_key: str, db: Session
-) -> Tuple[str, list]:
+async def _obtener_contexto_documentos_semantico(pregunta: str, openai_api_key: str, db: Session) -> Tuple[str, list]:
     """
     Obtiene contexto de documentos usando búsqueda semántica con embeddings.
     Retorna (contexto_texto, lista_documentos).
@@ -6350,9 +6482,7 @@ async def _obtener_contexto_documentos_semantico(
         documentos_con_embeddings = db.query(DocumentoEmbedding.documento_id).distinct().count()
 
         if total_embeddings > 0 and documentos_con_embeddings > 0:
-            logger.info(
-                f"Usando busqueda semantica: {total_embeddings} embeddings en {documentos_con_embeddings} documentos"
-            )
+            logger.info(f"Usando busqueda semantica: {total_embeddings} embeddings en {documentos_con_embeddings} documentos")
 
             try:
                 service = RAGService(openai_api_key)
@@ -6369,9 +6499,7 @@ async def _obtener_contexto_documentos_semantico(
 
                 if documentos_activos_ids:
                     embeddings_db = (
-                        db.query(DocumentoEmbedding)
-                        .filter(DocumentoEmbedding.documento_id.in_(documentos_activos_ids))
-                        .all()
+                        db.query(DocumentoEmbedding).filter(DocumentoEmbedding.documento_id.in_(documentos_activos_ids)).all()
                     )
 
                     if embeddings_db:
@@ -6496,9 +6624,7 @@ def _obtener_info_cliente_por_cedula(busqueda_cedula: str, db: Session) -> str:
 
                 prestamos_ids = [p.id for p in prestamos]
                 cuotas_pendientes = (
-                    db.query(Cuota)
-                    .filter(Cuota.prestamo_id.in_(prestamos_ids), Cuota.estado.in_(["PENDIENTE", "MORA"]))
-                    .all()
+                    db.query(Cuota).filter(Cuota.prestamo_id.in_(prestamos_ids), Cuota.estado.in_(["PENDIENTE", "MORA"])).all()
                 )
                 if cuotas_pendientes:
                     total_pendiente = sum(float(c.monto_cuota - c.total_pagado) for c in cuotas_pendientes)
@@ -6529,7 +6655,12 @@ def _obtener_info_cliente_por_cedula(busqueda_cedula: str, db: Session) -> str:
 
 
 def _construir_system_prompt_default(
-    resumen_bd: str, info_cliente_buscado: str, datos_adicionales: str, info_esquema: str, contexto_documentos: str, consultas_dinamicas: str = ""
+    resumen_bd: str,
+    info_cliente_buscado: str,
+    datos_adicionales: str,
+    info_esquema: str,
+    contexto_documentos: str,
+    consultas_dinamicas: str = "",
 ) -> str:
     """
     Construye el prompt del sistema por defecto.
@@ -6992,10 +7123,7 @@ def _obtener_datos_adicionales(pregunta: str, pregunta_lower: str, db: Session) 
                     any(palabra in pregunta_lower for palabra in ["morosidad", "mora", "prediccion", "riesgo"]),
                     any(palabra in pregunta_lower for palabra in ["segmentacion", "segmentar", "clientes", "grupos"]),
                     any(palabra in pregunta_lower for palabra in ["anomalia", "anomalias", "irregular", "extrano"]),
-                    any(
-                        palabra in pregunta_lower
-                        for palabra in ["clustering", "cluster", "agrupar", "grupos similares"]
-                    ),
+                    any(palabra in pregunta_lower for palabra in ["clustering", "cluster", "agrupar", "grupos similares"]),
                 ]
             ):
                 ml_morosidad = _analisis_ml_morosidad_predictiva(db)
@@ -7019,63 +7147,71 @@ def _ejecutar_consulta_dinamica(pregunta: str, pregunta_lower: str, db: Session)
     """
     Ejecuta consultas dinámicas a la base de datos basadas en la pregunta del usuario.
     Usa SQLAlchemy ORM para evitar SQL injection.
-    
+
     Retorna string con los resultados de la consulta o string vacío si no se puede ejecutar.
     """
     from datetime import datetime, timedelta
     import re
-    
+
     resultado = ""
     fecha_actual = datetime.now()
-    
+
     try:
         # ============================================
         # CONSULTAS POR ANALISTA
         # ============================================
         if any(palabra in pregunta_lower for palabra in ["analista", "asesor", "ejecutivo"]):
             # Extraer nombre del analista si se menciona
-            analista_match = re.search(r'(?:analista|asesor|ejecutivo)\s+([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+)', pregunta_lower)
+            analista_match = re.search(r"(?:analista|asesor|ejecutivo)\s+([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+)", pregunta_lower)
             nombre_analista = analista_match.group(1).strip() if analista_match else None
-            
+
             if nombre_analista:
                 # Buscar préstamos por analista
-                prestamos_analista = db.query(Prestamo).filter(
-                    Prestamo.analista.ilike(f"%{nombre_analista}%")
-                ).all()
-                
+                prestamos_analista = db.query(Prestamo).filter(Prestamo.analista.ilike(f"%{nombre_analista}%")).all()
+
                 if prestamos_analista:
                     total = len(prestamos_analista)
                     aprobados = len([p for p in prestamos_analista if p.estado == "APROBADO"])
                     monto_total = sum(float(p.total_financiamiento or 0) for p in prestamos_analista)
-                    
+
                     resultado += f"\n=== PRÉSTAMOS DEL ANALISTA '{nombre_analista}' ===\n"
                     resultado += f"Total préstamos: {total}\n"
                     resultado += f"Préstamos aprobados: {aprobados}\n"
                     resultado += f"Monto total financiado: {monto_total:,.2f}\n"
-        
+
         # ============================================
         # CONSULTAS POR FECHA/PERÍODO
         # ============================================
         # Detectar fechas y períodos en la pregunta
         meses_nombres = {
-            "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
-            "julio": 7, "agosto": 8, "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12
+            "enero": 1,
+            "febrero": 2,
+            "marzo": 3,
+            "abril": 4,
+            "mayo": 5,
+            "junio": 6,
+            "julio": 7,
+            "agosto": 8,
+            "septiembre": 9,
+            "octubre": 10,
+            "noviembre": 11,
+            "diciembre": 12,
         }
-        
+
         mes_encontrado = None
         año_encontrado = fecha_actual.year
-        
+
         # Buscar mes en la pregunta
         for mes_nombre, mes_num in meses_nombres.items():
             if mes_nombre in pregunta_lower:
                 mes_encontrado = mes_num
                 break
-        
+
         # Buscar año en la pregunta
-        año_match = re.search(r'\b(20\d{2})\b', pregunta)
+        año_match = re.search(r"\b(20\d{2})\b", pregunta)
         if año_match:
             año_encontrado = int(año_match.group(1))
-        
+
         # Buscar palabras como "hoy", "esta semana", "este mes", etc.
         if "hoy" in pregunta_lower:
             fecha_inicio = fecha_actual.date()
@@ -7096,87 +7232,94 @@ def _ejecutar_consulta_dinamica(pregunta: str, pregunta_lower: str, db: Session)
         else:
             fecha_inicio = None
             fecha_fin = None
-        
+
         # ============================================
         # CONSULTAS DE PRÉSTAMOS POR PERÍODO
         # ============================================
-        if fecha_inicio and fecha_fin and any(palabra in pregunta_lower for palabra in ["prestamo", "credito", "financiamiento"]):
+        if (
+            fecha_inicio
+            and fecha_fin
+            and any(palabra in pregunta_lower for palabra in ["prestamo", "credito", "financiamiento"])
+        ):
             if "aprobado" in pregunta_lower or "aprobados" in pregunta_lower:
-                prestamos = db.query(Prestamo).filter(
-                    Prestamo.estado == "APROBADO",
-                    Prestamo.fecha_aprobacion >= datetime.combine(fecha_inicio, datetime.min.time()),
-                    Prestamo.fecha_aprobacion <= datetime.combine(fecha_fin, datetime.max.time())
-                ).all()
-                
+                prestamos = (
+                    db.query(Prestamo)
+                    .filter(
+                        Prestamo.estado == "APROBADO",
+                        Prestamo.fecha_aprobacion >= datetime.combine(fecha_inicio, datetime.min.time()),
+                        Prestamo.fecha_aprobacion <= datetime.combine(fecha_fin, datetime.max.time()),
+                    )
+                    .all()
+                )
+
                 if prestamos:
                     total = len(prestamos)
                     monto_total = sum(float(p.total_financiamiento or 0) for p in prestamos)
                     resultado += f"\n=== PRÉSTAMOS APROBADOS ({fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}) ===\n"
                     resultado += f"Total: {total}\n"
                     resultado += f"Monto total: {monto_total:,.2f}\n"
-        
+
         # ============================================
         # CONSULTAS DE PAGOS POR PERÍODO
         # ============================================
         if fecha_inicio and fecha_fin and any(palabra in pregunta_lower for palabra in ["pago", "pagos", "pagado", "pagados"]):
-            pagos = db.query(Pago).filter(
-                Pago.activo.is_(True),
-                Pago.fecha_pago >= fecha_inicio,
-                Pago.fecha_pago <= fecha_fin
-            ).all()
-            
+            pagos = (
+                db.query(Pago)
+                .filter(Pago.activo.is_(True), Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin)
+                .all()
+            )
+
             if pagos:
                 total = len(pagos)
                 monto_total = sum(float(p.monto_pagado or 0) for p in pagos)
-                resultado += f"\n=== PAGOS REALIZADOS ({fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}) ===\n"
+                resultado += (
+                    f"\n=== PAGOS REALIZADOS ({fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}) ===\n"
+                )
                 resultado += f"Total pagos: {total}\n"
                 resultado += f"Monto total pagado: {monto_total:,.2f}\n"
-        
+
         # ============================================
         # CONSULTAS DE CUOTAS POR PERÍODO
         # ============================================
         if fecha_inicio and fecha_fin and any(palabra in pregunta_lower for palabra in ["cuota", "cuotas", "vencimiento"]):
-            cuotas = db.query(Cuota).filter(
-                Cuota.fecha_vencimiento >= fecha_inicio,
-                Cuota.fecha_vencimiento <= fecha_fin
-            ).all()
-            
+            cuotas = (
+                db.query(Cuota).filter(Cuota.fecha_vencimiento >= fecha_inicio, Cuota.fecha_vencimiento <= fecha_fin).all()
+            )
+
             if cuotas:
                 total = len(cuotas)
                 pagadas = len([c for c in cuotas if c.estado == "PAGADA"])
                 pendientes = len([c for c in cuotas if c.estado == "PENDIENTE"])
                 mora = len([c for c in cuotas if c.estado == "MORA"])
                 monto_total = sum(float(c.monto_cuota or 0) for c in cuotas)
-                
+
                 resultado += f"\n=== CUOTAS CON VENCIMIENTO ({fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}) ===\n"
                 resultado += f"Total cuotas: {total}\n"
                 resultado += f"Pagadas: {pagadas}\n"
                 resultado += f"Pendientes: {pendientes}\n"
                 resultado += f"En mora: {mora}\n"
                 resultado += f"Monto total: {monto_total:,.2f}\n"
-        
+
         # ============================================
         # CONSULTAS POR CONCESIONARIO
         # ============================================
         if "concesionario" in pregunta_lower:
-            concesionario_match = re.search(r'concesionario\s+([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+)', pregunta_lower)
+            concesionario_match = re.search(r"concesionario\s+([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+)", pregunta_lower)
             nombre_concesionario = concesionario_match.group(1).strip() if concesionario_match else None
-            
+
             if nombre_concesionario:
-                prestamos = db.query(Prestamo).filter(
-                    Prestamo.concesionario.ilike(f"%{nombre_concesionario}%")
-                ).all()
-                
+                prestamos = db.query(Prestamo).filter(Prestamo.concesionario.ilike(f"%{nombre_concesionario}%")).all()
+
                 if prestamos:
                     total = len(prestamos)
                     aprobados = len([p for p in prestamos if p.estado == "APROBADO"])
                     monto_total = sum(float(p.total_financiamiento or 0) for p in prestamos)
-                    
+
                     resultado += f"\n=== PRÉSTAMOS DEL CONCESIONARIO '{nombre_concesionario}' ===\n"
                     resultado += f"Total: {total}\n"
                     resultado += f"Aprobados: {aprobados}\n"
                     resultado += f"Monto total: {monto_total:,.2f}\n"
-        
+
         # ============================================
         # CONSULTAS POR ESTADO DE PRÉSTAMO
         # ============================================
@@ -7188,59 +7331,68 @@ def _ejecutar_consulta_dinamica(pregunta: str, pregunta_lower: str, db: Session)
                 resultado += f"\n=== PRÉSTAMOS PENDIENTES ===\n"
                 resultado += f"Total: {total}\n"
                 resultado += f"Monto total: {monto_total:,.2f}\n"
-        
+
         # ============================================
         # CONSULTAS POR CLIENTE (si no se detectó cédula antes)
         # ============================================
         if "cliente" in pregunta_lower and not resultado:
             # Buscar nombre de cliente en la pregunta
-            cliente_match = re.search(r'cliente\s+([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+)', pregunta_lower)
+            cliente_match = re.search(r"cliente\s+([A-Za-zÁÉÍÓÚáéíóúÑñ\s]+)", pregunta_lower)
             nombre_cliente = cliente_match.group(1).strip() if cliente_match else None
-            
+
             if nombre_cliente:
-                clientes = db.query(Cliente).filter(
-                    Cliente.nombres.ilike(f"%{nombre_cliente}%")
-                ).limit(10).all()
-                
+                clientes = db.query(Cliente).filter(Cliente.nombres.ilike(f"%{nombre_cliente}%")).limit(10).all()
+
                 if clientes:
                     resultado += f"\n=== CLIENTES ENCONTRADOS (búsqueda: '{nombre_cliente}') ===\n"
                     for cliente in clientes[:5]:  # Mostrar máximo 5
                         prestamos_cliente = db.query(Prestamo).filter(Prestamo.cliente_id == cliente.id).count()
                         resultado += f"- {cliente.nombres} {cliente.apellidos or ''} (Cédula: {cliente.cedula}): {prestamos_cliente} préstamos\n"
-        
+
         # ============================================
         # CONSULTAS DE ESTADÍSTICAS GENERALES POR PERÍODO
         # ============================================
-        if fecha_inicio and fecha_fin and any(palabra in pregunta_lower for palabra in ["estadistica", "estadisticas", "resumen", "resumen"]):
+        if (
+            fecha_inicio
+            and fecha_fin
+            and any(palabra in pregunta_lower for palabra in ["estadistica", "estadisticas", "resumen", "resumen"])
+        ):
             # Préstamos
-            prestamos_periodo = db.query(Prestamo).filter(
-                Prestamo.fecha_registro >= datetime.combine(fecha_inicio, datetime.min.time()),
-                Prestamo.fecha_registro <= datetime.combine(fecha_fin, datetime.max.time())
-            ).count()
-            
+            prestamos_periodo = (
+                db.query(Prestamo)
+                .filter(
+                    Prestamo.fecha_registro >= datetime.combine(fecha_inicio, datetime.min.time()),
+                    Prestamo.fecha_registro <= datetime.combine(fecha_fin, datetime.max.time()),
+                )
+                .count()
+            )
+
             # Pagos
-            pagos_periodo = db.query(Pago).filter(
-                Pago.activo.is_(True),
-                Pago.fecha_pago >= fecha_inicio,
-                Pago.fecha_pago <= fecha_fin
-            ).count()
-            
-            monto_pagos_periodo = db.query(func.sum(Pago.monto_pagado)).filter(
-                Pago.activo.is_(True),
-                Pago.fecha_pago >= fecha_inicio,
-                Pago.fecha_pago <= fecha_fin
-            ).scalar() or 0
-            
-            resultado += f"\n=== RESUMEN DEL PERÍODO ({fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}) ===\n"
+            pagos_periodo = (
+                db.query(Pago)
+                .filter(Pago.activo.is_(True), Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin)
+                .count()
+            )
+
+            monto_pagos_periodo = (
+                db.query(func.sum(Pago.monto_pagado))
+                .filter(Pago.activo.is_(True), Pago.fecha_pago >= fecha_inicio, Pago.fecha_pago <= fecha_fin)
+                .scalar()
+                or 0
+            )
+
+            resultado += (
+                f"\n=== RESUMEN DEL PERÍODO ({fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}) ===\n"
+            )
             resultado += f"Préstamos registrados: {prestamos_periodo}\n"
             resultado += f"Pagos realizados: {pagos_periodo}\n"
             resultado += f"Monto total pagado: {float(monto_pagos_periodo):,.2f}\n"
-        
+
     except Exception as e:
         logger.error(f"Error ejecutando consulta dinámica: {e}", exc_info=True)
         # No retornar error, solo loggear para no interrumpir el flujo
         return ""
-    
+
     return resultado
 
 
@@ -7276,7 +7428,7 @@ async def chat_ai(
     - Pagos
     - Cuotas
     - Y más...
-    
+
     Refactorizado para usar AIChatService y reducir complejidad ciclomática.
     """
     if not current_user.is_admin:
@@ -7303,4 +7455,3 @@ async def chat_ai(
     except Exception as e:
         logger.error(f"Error en Chat AI: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
-

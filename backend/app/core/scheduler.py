@@ -1108,7 +1108,7 @@ def reentrenar_modelo_ml_impago_job():
     nuevo_f1 = None
     accuracy_actual = None
     f1_actual = None
-    
+
     try:
         from datetime import date, datetime
         from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
@@ -1127,7 +1127,9 @@ def reentrenar_modelo_ml_impago_job():
 
         # Validar que el servicio ML esté disponible
         if not ML_IMPAGO_SERVICE_AVAILABLE or MLImpagoCuotasService is None:
-            logger.warning("⚠️ [Scheduler] ML_IMPAGO_SERVICE_AVAILABLE es False o MLImpagoCuotasService no disponible, omitiendo reentrenamiento")
+            logger.warning(
+                "⚠️ [Scheduler] ML_IMPAGO_SERVICE_AVAILABLE es False o MLImpagoCuotasService no disponible, omitiendo reentrenamiento"
+            )
             return
 
         # Validar que la tabla exista
@@ -1210,9 +1212,7 @@ def reentrenar_modelo_ml_impago_job():
 
             # Comparar métricas: activar nuevo modelo si es mejor o igual
             # Consideramos mejor si accuracy es mayor O si accuracy es igual pero f1 es mayor
-            es_mejor = (nuevo_accuracy > accuracy_actual) or (
-                nuevo_accuracy == accuracy_actual and nuevo_f1 >= f1_actual
-            )
+            es_mejor = (nuevo_accuracy > accuracy_actual) or (nuevo_accuracy == accuracy_actual and nuevo_f1 >= f1_actual)
 
             if es_mejor:
                 logger.info("✅ [Scheduler] Nuevo modelo es mejor o igual. Activando...")
@@ -1438,18 +1438,21 @@ def iniciar_scheduler():
         # Solo agregar si el servicio ML está disponible y las funciones auxiliares existen
         try:
             from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE
-            
+
             # Verificar que las funciones auxiliares se puedan importar
             try:
                 from app.api.v1.endpoints.ai_training import (
                     _obtener_prestamos_aprobados_impago,
                     _procesar_prestamos_para_entrenamiento,
                 )
+
                 funciones_disponibles = True
             except ImportError as import_error:
-                logger.warning(f"⚠️ No se pudieron importar funciones auxiliares de ML: {import_error}. Omitiendo job de reentrenamiento ML")
+                logger.warning(
+                    f"⚠️ No se pudieron importar funciones auxiliares de ML: {import_error}. Omitiendo job de reentrenamiento ML"
+                )
                 funciones_disponibles = False
-            
+
             if ML_IMPAGO_SERVICE_AVAILABLE and funciones_disponibles:
                 if "reentrenar_ml_impago" not in existing_jobs:
                     scheduler.add_job(

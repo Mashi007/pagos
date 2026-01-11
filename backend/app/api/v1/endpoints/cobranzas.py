@@ -64,7 +64,9 @@ def _recalcular_y_guardar_ml_impago(
 
         # Verificar si la predicción fue exitosa
         if prediccion.get("prediccion") == "Error" or prediccion.get("prediccion") == "Desconocido":
-            logger.warning(f"⚠️ [ML] Predicción ML falló para préstamo {prestamo.id}: {prediccion.get('recomendacion', 'Error desconocido')}")
+            logger.warning(
+                f"⚠️ [ML] Predicción ML falló para préstamo {prestamo.id}: {prediccion.get('recomendacion', 'Error desconocido')}"
+            )
             cliente_data["ml_impago"] = None
             ml_errors_ref[0] += 1
             ml_processed_ref[0] += 1
@@ -72,21 +74,23 @@ def _recalcular_y_guardar_ml_impago(
             # Guardar predicción en la base de datos
             probabilidad = round(prediccion.get("probabilidad_impago", 0.0), 3)
             nivel_riesgo = prediccion.get("nivel_riesgo", "Desconocido")
-            
+
             try:
                 prestamo.ml_impago_nivel_riesgo_calculado = nivel_riesgo
                 prestamo.ml_impago_probabilidad_calculada = Decimal(str(probabilidad))
                 prestamo.ml_impago_calculado_en = datetime.now()
                 if modelo_activo:
                     prestamo.ml_impago_modelo_id = modelo_activo.id
-                
+
                 db.commit()
-                logger.debug(f"✅ [ML] Predicción guardada para préstamo {prestamo.id}: {nivel_riesgo} ({probabilidad*100:.1f}%)")
+                logger.debug(
+                    f"✅ [ML] Predicción guardada para préstamo {prestamo.id}: {nivel_riesgo} ({probabilidad*100:.1f}%)"
+                )
             except Exception as save_error:
                 logger.warning(f"⚠️ [ML] Error guardando predicción en BD para préstamo {prestamo.id}: {save_error}")
                 db.rollback()
                 # Continuar aunque falle el guardado
-            
+
             # Retornar resultado en cliente_data
             cliente_data["ml_impago"] = {
                 "probabilidad_impago": probabilidad,
@@ -96,11 +100,11 @@ def _recalcular_y_guardar_ml_impago(
             }
             ml_calculated_ref[0] += 1
             ml_processed_ref[0] += 1
-            
+
             # Debug: Log primera predicción para verificar que funciona
             if ml_calculated_ref[0] == 1:
                 logger.info(f"🔍 [ML] Primera predicción exitosa y guardada - Préstamo {prestamo.id}: {nivel_riesgo}")
-                
+
     except Exception as e:
         logger.warning(f"⚠️ [ML] Error calculando predicción ML para préstamo {prestamo.id}: {e}")
         logger.debug(f"   [ML] Detalles del error: {e}", exc_info=True)
@@ -131,23 +135,25 @@ def diagnostico_ml_impago(
         "archivos_pkl_disponibles": [],
         "errores": [],
     }
-    
+
     try:
         from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
+
         diagnostico["ml_service_available"] = ML_IMPAGO_SERVICE_AVAILABLE
-        
+
         if not ML_IMPAGO_SERVICE_AVAILABLE:
             diagnostico["errores"].append("ML_IMPAGO_SERVICE_AVAILABLE es False - scikit-learn no está disponible")
             return diagnostico
-        
+
         # Verificar modelo en BD
         from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
+
         modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
-        
+
         if not modelo_activo:
             diagnostico["errores"].append("No hay modelo ML Impago activo en la base de datos")
             return diagnostico
-        
+
         diagnostico["modelo_en_bd"] = {
             "id": modelo_activo.id,
             "nombre": modelo_activo.nombre,
@@ -156,40 +162,40 @@ def diagnostico_ml_impago(
             "accuracy": modelo_activo.accuracy,
         }
         diagnostico["ruta_archivo"] = modelo_activo.ruta_archivo
-        
+
         # Intentar cargar el modelo
         try:
             ml_service = MLImpagoCuotasService()
             modelo_cargado = ml_service.load_model_from_path(modelo_activo.ruta_archivo)
-            
+
             if modelo_cargado and "impago_cuotas_model" in ml_service.models:
                 diagnostico["modelo_cargado"] = True
                 diagnostico["tipo_modelo"] = type(ml_service.models["impago_cuotas_model"]).__name__
             else:
                 diagnostico["errores"].append("Modelo no se cargó en memoria después de load_model_from_path")
-                
+
                 # Verificar si el archivo existe con búsqueda exhaustiva
                 from pathlib import Path
                 import pickle
-                
+
                 ruta_original = Path(modelo_activo.ruta_archivo)
                 search_paths = []
-                
+
                 # Construir lista de rutas a buscar
                 if ruta_original.is_absolute():
                     search_paths.append(ruta_original)
                 else:
                     # Ruta original
                     search_paths.append(ruta_original)
-                    
+
                     # ml_models en directorio actual
                     search_paths.append(Path("ml_models") / modelo_activo.ruta_archivo)
-                    
+
                     # Si tiene directorio, extraer solo el nombre del archivo
                     if "/" in modelo_activo.ruta_archivo or "\\" in modelo_activo.ruta_archivo:
                         filename = Path(modelo_activo.ruta_archivo).parts[-1]
                         search_paths.append(Path("ml_models") / filename)
-                    
+
                     # Directorio raíz del proyecto
                     try:
                         project_root = Path(__file__).parent.parent.parent.parent
@@ -199,13 +205,13 @@ def diagnostico_ml_impago(
                             search_paths.append(project_root / "ml_models" / filename)
                     except Exception:
                         pass
-                    
+
                     # Directorio de trabajo actual
                     search_paths.append(Path.cwd() / modelo_activo.ruta_archivo)
                     if "/" in modelo_activo.ruta_archivo or "\\" in modelo_activo.ruta_archivo:
                         filename = Path(modelo_activo.ruta_archivo).parts[-1]
                         search_paths.append(Path.cwd() / filename)
-                
+
                 # Buscar archivo
                 archivo_encontrado = None
                 for search_path in search_paths:
@@ -214,7 +220,7 @@ def diagnostico_ml_impago(
                         diagnostico["archivo_existe"] = True
                         diagnostico["ruta_absoluta_encontrada"] = str(search_path.absolute())
                         diagnostico["tamaño_archivo_kb"] = round(search_path.stat().st_size / 1024, 2)
-                        
+
                         # Intentar cargar el archivo para verificar que es válido
                         try:
                             with open(search_path, "rb") as f:
@@ -225,11 +231,13 @@ def diagnostico_ml_impago(
                             diagnostico["archivo_valido"] = False
                             diagnostico["errores"].append(f"Archivo encontrado pero no es válido (error al cargar): {e}")
                         break
-                
+
                 if not diagnostico["archivo_existe"]:
-                    diagnostico["errores"].append(f"Archivo no encontrado en ninguna de las {len(search_paths)} rutas buscadas")
+                    diagnostico["errores"].append(
+                        f"Archivo no encontrado en ninguna de las {len(search_paths)} rutas buscadas"
+                    )
                     diagnostico["rutas_buscadas"] = [str(p.absolute()) for p in search_paths]
-                    
+
                     # Listar archivos .pkl disponibles en todos los directorios
                     archivos_pkl_encontrados = []
                     directorios_buscar = [
@@ -241,34 +249,38 @@ def diagnostico_ml_impago(
                         directorios_buscar.append(project_root / "ml_models")
                     except Exception:
                         pass
-                    
+
                     for directorio in directorios_buscar:
                         if directorio.exists() and directorio.is_dir():
                             archivos_pkl = list(directorio.glob("*.pkl"))
                             for archivo in archivos_pkl:
-                                archivos_pkl_encontrados.append({
-                                    "nombre": archivo.name,
-                                    "ruta": str(archivo.absolute()),
-                                    "tamaño_kb": round(archivo.stat().st_size / 1024, 2),
-                                })
-                    
+                                archivos_pkl_encontrados.append(
+                                    {
+                                        "nombre": archivo.name,
+                                        "ruta": str(archivo.absolute()),
+                                        "tamaño_kb": round(archivo.stat().st_size / 1024, 2),
+                                    }
+                                )
+
                     if archivos_pkl_encontrados:
                         diagnostico["archivos_pkl_disponibles"] = archivos_pkl_encontrados
                     else:
                         diagnostico["errores"].append("No se encontraron archivos .pkl en ningún directorio ml_models")
-                        
+
         except Exception as e:
             diagnostico["errores"].append(f"Error cargando modelo: {str(e)}")
             import traceback
+
             diagnostico["traceback"] = traceback.format_exc()
-    
+
     except ImportError as e:
         diagnostico["errores"].append(f"Error importando servicios ML: {str(e)}")
     except Exception as e:
         diagnostico["errores"].append(f"Error general: {str(e)}")
         import traceback
+
         diagnostico["traceback"] = traceback.format_exc()
-    
+
     return diagnostico
 
 
@@ -669,7 +681,9 @@ def obtener_clientes_atrasados(
                             # Verificar que el modelo realmente se cargó
                             if "impago_cuotas_model" in ml_service.models:
                                 logger.info(f"✅ [ML] Modelo ML Impago cargado correctamente: {modelo_activo.nombre}")
-                                logger.info(f"   [ML] Modelo en memoria: {type(ml_service.models['impago_cuotas_model']).__name__}")
+                                logger.info(
+                                    f"   [ML] Modelo en memoria: {type(ml_service.models['impago_cuotas_model']).__name__}"
+                                )
                                 modelo_cargado = True
                             else:
                                 razon_fallo_ml = "Modelo no se cargó en memoria después de load_model_from_path"
@@ -692,6 +706,7 @@ def obtener_clientes_atrasados(
         prestamos_dict = {}
         if prestamo_ids:
             from sqlalchemy.orm import load_only
+
             # Cargar SOLO las columnas que necesitamos y que sabemos que existen
             prestamos = (
                 db.query(Prestamo)
@@ -717,16 +732,26 @@ def obtener_clientes_atrasados(
 
         # Optimización: Cargar todas las cuotas de una vez (solo para préstamos que necesitan ML)
         cuotas_dict = {}
-        logger.info(f"🔍 [ML] Estado antes de cargar cuotas: ml_service={ml_service is not None}, modelo_cargado={modelo_cargado}, prestamo_ids={len(prestamo_ids) if prestamo_ids else 0}")
+        logger.info(
+            f"🔍 [ML] Estado antes de cargar cuotas: ml_service={ml_service is not None}, modelo_cargado={modelo_cargado}, prestamo_ids={len(prestamo_ids) if prestamo_ids else 0}"
+        )
         if ml_service and prestamo_ids:
             # Solo cargar cuotas para préstamos que no tienen valores manuales
             prestamos_sin_manual = [
-                p_id for p_id, p in prestamos_dict.items()
-                if p and p.estado == "APROBADO" and not (p.ml_impago_nivel_riesgo_manual and p.ml_impago_probabilidad_manual is not None)
+                p_id
+                for p_id, p in prestamos_dict.items()
+                if p
+                and p.estado == "APROBADO"
+                and not (p.ml_impago_nivel_riesgo_manual and p.ml_impago_probabilidad_manual is not None)
             ]
             if prestamos_sin_manual:
                 try:
-                    cuotas = db.query(Cuota).filter(Cuota.prestamo_id.in_(prestamos_sin_manual)).order_by(Cuota.prestamo_id, Cuota.numero_cuota).all()
+                    cuotas = (
+                        db.query(Cuota)
+                        .filter(Cuota.prestamo_id.in_(prestamos_sin_manual))
+                        .order_by(Cuota.prestamo_id, Cuota.numero_cuota)
+                        .all()
+                    )
                     # Agrupar cuotas por préstamo_id
                     for cuota in cuotas:
                         if cuota.prestamo_id not in cuotas_dict:
@@ -761,7 +786,7 @@ def obtener_clientes_atrasados(
         ml_calculated = 0
         ml_from_cache = 0  # Predicciones leídas de BD (guardadas previamente)
         ml_errors = 0
-        
+
         for row in resultados:
             cliente_data = {
                 "cedula": row.cedula,
@@ -792,11 +817,18 @@ def obtener_clientes_atrasados(
                     # 2. Verificar si hay valores calculados guardados y son recientes (< 7 días)
                     elif prestamo.ml_impago_nivel_riesgo_calculado and prestamo.ml_impago_probabilidad_calculada is not None:
                         from datetime import timedelta
+
                         # Verificar si la predicción guardada es reciente (menos de 7 días)
                         if prestamo.ml_impago_calculado_en:
-                            dias_desde_calculo = (fecha_actual - prestamo.ml_impago_calculado_en.date()).days if hasattr(prestamo.ml_impago_calculado_en, 'date') else 999
+                            dias_desde_calculo = (
+                                (fecha_actual - prestamo.ml_impago_calculado_en.date()).days
+                                if hasattr(prestamo.ml_impago_calculado_en, "date")
+                                else 999
+                            )
                             # Si es reciente (< 7 días) y el modelo activo no cambió, usar valor guardado
-                            if dias_desde_calculo < 7 and (modelo_activo is None or prestamo.ml_impago_modelo_id == modelo_activo.id):
+                            if dias_desde_calculo < 7 and (
+                                modelo_activo is None or prestamo.ml_impago_modelo_id == modelo_activo.id
+                            ):
                                 cliente_data["ml_impago"] = {
                                     "probabilidad_impago": float(prestamo.ml_impago_probabilidad_calculada),
                                     "nivel_riesgo": prestamo.ml_impago_nivel_riesgo_calculado,
@@ -807,13 +839,46 @@ def obtener_clientes_atrasados(
                                 ml_processed += 1
                             else:
                                 # Predicción antigua o modelo cambió, recalcular
-                                _recalcular_y_guardar_ml_impago(prestamo, cuotas_dict, ml_service, modelo_activo, fecha_actual, db, cliente_data, [ml_calculated], [ml_errors], [ml_processed])
+                                _recalcular_y_guardar_ml_impago(
+                                    prestamo,
+                                    cuotas_dict,
+                                    ml_service,
+                                    modelo_activo,
+                                    fecha_actual,
+                                    db,
+                                    cliente_data,
+                                    [ml_calculated],
+                                    [ml_errors],
+                                    [ml_processed],
+                                )
                         else:
                             # Hay valores pero sin fecha, recalcular para actualizar
-                            _recalcular_y_guardar_ml_impago(prestamo, cuotas_dict, ml_service, modelo_activo, fecha_actual, db, cliente_data, [ml_calculated], [ml_errors], [ml_processed])
+                            _recalcular_y_guardar_ml_impago(
+                                prestamo,
+                                cuotas_dict,
+                                ml_service,
+                                modelo_activo,
+                                fecha_actual,
+                                db,
+                                cliente_data,
+                                [ml_calculated],
+                                [ml_errors],
+                                [ml_processed],
+                            )
                     # 3. Calcular nuevo si no hay valores guardados
                     elif ml_service and modelo_cargado:
-                        _recalcular_y_guardar_ml_impago(prestamo, cuotas_dict, ml_service, modelo_activo, fecha_actual, db, cliente_data, [ml_calculated], [ml_errors], [ml_processed])
+                        _recalcular_y_guardar_ml_impago(
+                            prestamo,
+                            cuotas_dict,
+                            ml_service,
+                            modelo_activo,
+                            fecha_actual,
+                            db,
+                            cliente_data,
+                            [ml_calculated],
+                            [ml_errors],
+                            [ml_processed],
+                        )
                     else:
                         # No hay servicio ML disponible, intentar usar valores guardados aunque sean antiguos
                         if prestamo.ml_impago_nivel_riesgo_calculado and prestamo.ml_impago_probabilidad_calculada is not None:
@@ -843,14 +908,14 @@ def obtener_clientes_atrasados(
 
         ml_time_ms = int((time.time() - ml_start_time) * 1000)
         total_time_ms = int((time.time() - start_time) * 1000)
-        
+
         logger.info(
             f"✅ [clientes_atrasados] Procesamiento completado: "
             f"{len(clientes_atrasados)} clientes, "
             f"ML procesados: {ml_processed} (manuales: {ml_manual}, desde_cache: {ml_from_cache}, calculados: {ml_calculated}, errores: {ml_errors}), "
             f"tiempo_total={total_time_ms}ms, tiempo_ml={ml_time_ms}ms"
         )
-        
+
         # Resumen del estado ML para diagnóstico
         diagnostico_ml_dict = {
             "ml_service_disponible": ml_service is not None,
@@ -862,7 +927,7 @@ def obtener_clientes_atrasados(
             "ml_errores": ml_errors,
             "razon_fallo": razon_fallo_ml,
         }
-        
+
         if ml_processed == 0:
             logger.warning(
                 f"⚠️ [ML] RESUMEN: No se procesó ningún ML. "
@@ -872,7 +937,7 @@ def obtener_clientes_atrasados(
                 f"cuotas_dict={len(cuotas_dict)}, "
                 f"razon_fallo={razon_fallo_ml or 'N/A'}"
             )
-            
+
             # Agregar información adicional de diagnóstico
             if ml_service is None:
                 diagnostico_ml_dict["razon"] = razon_fallo_ml or "ml_service es None"
@@ -881,6 +946,7 @@ def obtener_clientes_atrasados(
                 # Intentar obtener más información
                 try:
                     from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
+
                     modelo_activo = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
                     if modelo_activo:
                         diagnostico_ml_dict["modelo_en_bd"] = {
@@ -890,6 +956,7 @@ def obtener_clientes_atrasados(
                         }
                         # Verificar si el archivo existe
                         from pathlib import Path
+
                         ruta_archivo = Path(modelo_activo.ruta_archivo)
                         if "/" in modelo_activo.ruta_archivo or "\\" in modelo_activo.ruta_archivo:
                             filename = Path(modelo_activo.ruta_archivo).parts[-1]
@@ -899,7 +966,7 @@ def obtener_clientes_atrasados(
                             ]
                         else:
                             search_paths = [Path("ml_models") / modelo_activo.ruta_archivo]
-                        
+
                         archivo_encontrado = False
                         for search_path in search_paths:
                             if search_path.exists() and search_path.is_file():
@@ -907,7 +974,7 @@ def obtener_clientes_atrasados(
                                 diagnostico_ml_dict["ruta_archivo_encontrado"] = str(search_path.absolute())
                                 archivo_encontrado = True
                                 break
-                        
+
                         if not archivo_encontrado:
                             diagnostico_ml_dict["archivo_encontrado"] = False
                             diagnostico_ml_dict["rutas_buscadas"] = [str(p) for p in search_paths]
@@ -1043,7 +1110,9 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
 
                                 # Verificar si la predicción fue exitosa
                                 if prediccion.get("prediccion") == "Error" or prediccion.get("prediccion") == "Desconocido":
-                                    logger.warning(f"Predicción ML falló para préstamo {row.prestamo_id}: {prediccion.get('recomendacion', 'Error desconocido')}")
+                                    logger.warning(
+                                        f"Predicción ML falló para préstamo {row.prestamo_id}: {prediccion.get('recomendacion', 'Error desconocido')}"
+                                    )
                                     cliente_data["ml_impago"] = None
                                 else:
                                     cliente_data["ml_impago"] = {
@@ -1053,7 +1122,9 @@ def obtener_clientes_por_cantidad_pagos_atrasados(
                                         "es_manual": False,
                                     }
                             except Exception as e:
-                                logger.warning(f"Error calculando predicción ML para préstamo {row.prestamo_id}: {e}", exc_info=True)
+                                logger.warning(
+                                    f"Error calculando predicción ML para préstamo {row.prestamo_id}: {e}", exc_info=True
+                                )
                                 cliente_data["ml_impago"] = None
                         else:
                             logger.debug(f"No hay cuotas para préstamo {row.prestamo_id}, no se puede calcular ML Impago")
@@ -1263,7 +1334,9 @@ def obtener_clientes_por_analista(
 
                                 # Verificar si la predicción fue exitosa
                                 if prediccion.get("prediccion") == "Error" or prediccion.get("prediccion") == "Desconocido":
-                                    logger.warning(f"Predicción ML falló para préstamo {row.prestamo_id}: {prediccion.get('recomendacion', 'Error desconocido')}")
+                                    logger.warning(
+                                        f"Predicción ML falló para préstamo {row.prestamo_id}: {prediccion.get('recomendacion', 'Error desconocido')}"
+                                    )
                                     cliente_data["ml_impago"] = None
                                 else:
                                     cliente_data["ml_impago"] = {
@@ -1273,7 +1346,9 @@ def obtener_clientes_por_analista(
                                         "es_manual": False,
                                     }
                             except Exception as e:
-                                logger.warning(f"Error calculando predicción ML para préstamo {row.prestamo_id}: {e}", exc_info=True)
+                                logger.warning(
+                                    f"Error calculando predicción ML para préstamo {row.prestamo_id}: {e}", exc_info=True
+                                )
                                 cliente_data["ml_impago"] = None
                         else:
                             logger.debug(f"No hay cuotas para préstamo {row.prestamo_id}, no se puede calcular ML Impago")
@@ -1624,6 +1699,7 @@ def obtener_resumen_cobranzas(
 
 class MLImpagoUpdate(BaseModel):
     """Schema para actualizar valores manuales de ML Impago"""
+
     nivel_riesgo: str = Field(..., description="Nivel de riesgo: Alto, Medio, Bajo")
     probabilidad_impago: float = Field(..., ge=0.0, le=1.0, description="Probabilidad de impago (0.0 a 1.0)")
 

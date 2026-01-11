@@ -133,11 +133,35 @@ async def render_health_check():
 
 @router.get("/health")
 async def detailed_health_check(response: Response):
-    """Health check detallado con análisis de impacto en performance
+    """
+    Health check detallado con análisis de impacto en performance
 
-    - Verifica DB con métricas de respuesta
-    - Incluye métricas del sistema
-    - Análisis de impacto en performance
+    Verifica:
+    - ✅ Base de datos (con métricas de respuesta)
+    - ✅ Métricas del sistema (CPU, memoria, disco)
+    - ✅ Cache (Redis o MemoryCache)
+    - ✅ Análisis de impacto en performance
+
+    **Ejemplo de respuesta:**
+    ```json
+    {
+        "status": "healthy",
+        "database": {
+            "status": "connected",
+            "response_time_ms": 12.5
+        },
+        "cache": {
+            "type": "RedisCache",
+            "status": "connected"
+        },
+        "system": {
+            "cpu_percent": 45.2,
+            "memory_percent": 60.1,
+            "disk_percent": 35.0
+        },
+        "performance_impact": "low"
+    }
+    ```
     """
     start_time = time.time()
 
@@ -147,6 +171,25 @@ async def detailed_health_check(response: Response):
 
         # Verificar DB con cache
         db_check = check_database_cached()
+
+        # ✅ MEJORA 2025-01-27: Verificar estado del cache
+        cache_status_info = {}
+        try:
+            from app.core.cache import MemoryCache
+            cache_type = "MemoryCache" if isinstance(cache_backend, MemoryCache) else "RedisCache"
+            cache_status_info = {
+                "type": cache_type,
+                "status": "available",
+            }
+            # Intentar operación de prueba si es Redis
+            if cache_type == "RedisCache" and hasattr(cache_backend, "client"):
+                try:
+                    cache_backend.client.ping()
+                    cache_status_info["status"] = "connected"
+                except Exception:
+                    cache_status_info["status"] = "disconnected"
+        except Exception as e:
+            cache_status_info = {"type": "unknown", "status": "error", "error": str(e)}
 
         # Calcular tiempo total de respuesta
         response_time_ms = (time.time() - start_time) * 1000
@@ -207,6 +250,7 @@ async def detailed_health_check(response: Response):
             "timestamp": time.time(),
             "response_time_ms": response_time_ms,
             "database": db_check,
+            "cache": cache_status_info,
             "system_metrics": system_metrics,
             "impact_analysis": impact_analysis,
             "environment": settings.ENVIRONMENT,

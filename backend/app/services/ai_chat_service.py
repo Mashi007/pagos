@@ -2,6 +2,7 @@
 Servicio para Chat AI - Encapsula toda la lógica de procesamiento de preguntas AI
 Refactorización para reducir complejidad ciclomática
 """
+
 import logging
 import time
 from typing import Dict, Optional, Any
@@ -41,9 +42,10 @@ class AIChatService:
         # Extraer parámetros de configuración
         # Desencriptar API Key si está encriptada
         from app.core.encryption import decrypt_api_key
+
         encrypted_api_key = self.config_dict.get("openai_api_key", "")
         self.openai_api_key = decrypt_api_key(encrypted_api_key) if encrypted_api_key else ""
-        
+
         # ✅ PRIORIDAD: Si hay un modelo fine-tuned activo, usarlo en lugar del modelo base
         modelo_fine_tuned = self.config_dict.get("modelo_fine_tuned", "")
         if modelo_fine_tuned and modelo_fine_tuned.strip():
@@ -52,7 +54,7 @@ class AIChatService:
         else:
             self.modelo = self.config_dict.get("modelo", "gpt-3.5-turbo")
             logger.debug(f"Usando modelo base: {self.modelo}")
-        
+
         self.temperatura = float(self.config_dict.get("temperatura", "0.7"))
         self.max_tokens = int(self.config_dict.get("max_tokens", "2000"))
 
@@ -95,9 +97,7 @@ class AIChatService:
         contexto_documentos = ""
         if self.openai_api_key:
             try:
-                contexto_documentos, _ = await _obtener_contexto_documentos_semantico(
-                    pregunta, self.openai_api_key, self.db
-                )
+                contexto_documentos, _ = await _obtener_contexto_documentos_semantico(pregunta, self.openai_api_key, self.db)
             except Exception as e:
                 logger.warning(f"Error obteniendo contexto de documentos: {e}")
 
@@ -109,7 +109,7 @@ class AIChatService:
 
         # Datos adicionales (cálculos, ML, etc.)
         datos_adicionales = _obtener_datos_adicionales(pregunta, pregunta_lower, self.db)
-        
+
         # ✅ NUEVO: Ejecutar consultas dinámicas basadas en la pregunta
         consultas_dinamicas = _ejecutar_consulta_dinamica(pregunta, pregunta_lower, self.db)
 
@@ -244,10 +244,7 @@ class AIChatService:
         system_prompt = self.construir_system_prompt(contexto)
 
         if contexto["contexto_documentos"]:
-            logger.info(
-                f"Contexto de documentos incluido en system_prompt: {len(contexto['contexto_documentos'])} caracteres"
-            )
+            logger.info(f"Contexto de documentos incluido en system_prompt: {len(contexto['contexto_documentos'])} caracteres")
 
         # Llamar a OpenAI API
         return await self.llamar_openai_api(system_prompt, pregunta)
-

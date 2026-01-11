@@ -29,21 +29,25 @@ class Ticket(Base):
 
     # Relación con conversación de WhatsApp (opcional)
     conversacion_whatsapp_id = Column(Integer, ForeignKey("conversaciones_whatsapp.id"), nullable=True, index=True)
-    
+
     # Relación con comunicación de Email (opcional)
     comunicacion_email_id = Column(Integer, ForeignKey("comunicaciones_email.id"), nullable=True, index=True)
 
     # Estado y prioridad
     estado = Column(String(20), nullable=False, default="abierto", index=True)  # abierto, en_proceso, resuelto, cerrado
     prioridad = Column(String(20), nullable=False, default="media", index=True)  # baja, media, urgente
-    tipo = Column(String(20), nullable=False, default="consulta", index=True)  # consulta, incidencia, solicitud, reclamo, contacto
+    tipo = Column(
+        String(20), nullable=False, default="consulta", index=True
+    )  # consulta, incidencia, solicitud, reclamo, contacto
 
     # Asignación
     asignado_a = Column(String(200), nullable=True)  # Nombre del usuario asignado
     asignado_a_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # ID del usuario asignado
-    
+
     # Escalación
-    escalado_a_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # ID del usuario al que se escaló (admin)
+    escalado_a_id = Column(
+        Integer, ForeignKey("users.id"), nullable=True, index=True
+    )  # ID del usuario al que se escaló (admin)
     escalado = Column(Boolean, default=False, nullable=False)  # Si fue escalado a un superior
 
     # Fecha límite (para agenda)
@@ -64,9 +68,7 @@ class Ticket(Base):
     conversacion_whatsapp = relationship(
         "ConversacionWhatsApp", foreign_keys=[conversacion_whatsapp_id], back_populates="tickets"
     )
-    comunicacion_email = relationship(
-        "ComunicacionEmail", foreign_keys=[comunicacion_email_id], back_populates="tickets"
-    )
+    comunicacion_email = relationship("ComunicacionEmail", foreign_keys=[comunicacion_email_id], back_populates="tickets")
     asignado_a_usuario = relationship("User", foreign_keys=[asignado_a_id])
     escalado_a_usuario = relationship("User", foreign_keys=[escalado_a_id])
     creado_por = relationship("User", foreign_keys=[creado_por_id])

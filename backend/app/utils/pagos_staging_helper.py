@@ -20,12 +20,12 @@ def sumar_monto_pagado_staging(
     Suma monto_pagado de pagos_staging con filtros de fecha opcionales
     Usa SQL directo porque fecha_pago y monto_pagado son TEXT en BD
     """
-    query_sql = """
+    query_sql = r"""
         SELECT COALESCE(SUM(monto_pagado::numeric), 0)
         FROM pagos_staging
         WHERE monto_pagado IS NOT NULL
           AND monto_pagado != ''
-          AND monto_pagado ~ '^[0-9]+(\\.[0-9]+)?$'
+          AND monto_pagado ~ '^[0-9]+(\.[0-9]+)?$'
     """
 
     params = {}

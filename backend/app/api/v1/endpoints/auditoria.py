@@ -187,8 +187,7 @@ def _calcular_acciones_por_usuario(db: Session) -> dict:
             .all()
         )
         acciones_por_usuario = {
-            (row[0] if row[0] is not None else ""): (row[1] if row[1] is not None else 0)
-            for row in acciones_por_usuario_rows
+            (row[0] if row[0] is not None else ""): (row[1] if row[1] is not None else 0) for row in acciones_por_usuario_rows
         }
     except Exception as e:
         logger.warning(f"Error consultando acciones por usuario de auditoria: {e}")
@@ -282,9 +281,7 @@ def _calcular_acciones_por_periodo(db: Session) -> dict:
     acciones_esta_semana = _contar_acciones_por_fecha(db, fechas["inicio_semana"])
     acciones_este_mes = _contar_acciones_por_fecha(db, fechas["inicio_mes"])
 
-    logger.info(
-        f"📈 Estadísticas por período - Hoy: {acciones_hoy}, Semana: {acciones_esta_semana}, Mes: {acciones_este_mes}"
-    )
+    logger.info(f"📈 Estadísticas por período - Hoy: {acciones_hoy}, Semana: {acciones_esta_semana}, Mes: {acciones_este_mes}")
 
     return {
         "acciones_hoy": acciones_hoy,

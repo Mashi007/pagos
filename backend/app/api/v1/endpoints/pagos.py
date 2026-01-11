@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 def _normalizar_numero_documento(numero_documento: str | None) -> str:
     """
     Normaliza el número de documento, convirtiendo formato científico a string completo.
-    
+
     Ejemplos:
     - '7.40087E+14' -> '740087000000000'
     - '1.23e+5' -> '123000'
@@ -43,16 +43,16 @@ def _normalizar_numero_documento(numero_documento: str | None) -> str:
     - None o '' -> ''
     """
     if not numero_documento:
-        return ''
-    
+        return ""
+
     numero_str = str(numero_documento).strip()
-    
+
     # Si está vacío después del trim, retornar vacío
     if not numero_str:
-        return ''
-    
+        return ""
+
     # Detectar formato científico (ej: 7.40087E+14, 1.23e+5)
-    if 'e' in numero_str.lower() and ('+' in numero_str or '-' in numero_str):
+    if "e" in numero_str.lower() and ("+" in numero_str or "-" in numero_str):
         try:
             # Convertir de formato científico a float y luego a int (sin decimales)
             numero_float = float(numero_str)
@@ -62,7 +62,7 @@ def _normalizar_numero_documento(numero_documento: str | None) -> str:
             # Si falla la conversión, retornar el valor original
             logger.warning(f"⚠️ No se pudo normalizar número científico: {numero_str}")
             return numero_str
-    
+
     # Si no es formato científico, retornar tal cual
     return numero_str
 
@@ -786,33 +786,33 @@ def actualizar_pago(
 
         # Registrar cambios para auditoría
         update_data = pago_data.model_dump(exclude_unset=True)
-        
+
         # Normalizar numero_documento si se está actualizando
-        if 'numero_documento' in update_data:
-            numero_doc_original = update_data['numero_documento']
+        if "numero_documento" in update_data:
+            numero_doc_original = update_data["numero_documento"]
             numero_doc_normalizado = _normalizar_numero_documento(numero_doc_original)
-            
+
             # Si está vacío, permitir guardar como cadena vacía (no NULL)
             if not numero_doc_normalizado:
-                numero_doc_normalizado = ''
-            
-            update_data['numero_documento'] = numero_doc_normalizado
-            
+                numero_doc_normalizado = ""
+
+            update_data["numero_documento"] = numero_doc_normalizado
+
             # Log si se normalizó
             if numero_doc_original != numero_doc_normalizado:
                 logger.info(
                     f"✅ [actualizar_pago] Número de documento normalizado: "
                     f"'{numero_doc_original}' -> '{numero_doc_normalizado}'"
                 )
-        
+
         for field, value in update_data.items():
             if hasattr(pago, field):
                 old_value = getattr(pago, field)
-                
+
                 # Si numero_documento está vacío, asegurar que sea cadena vacía, no None
-                if field == 'numero_documento' and (value is None or value == ''):
-                    value = ''
-                
+                if field == "numero_documento" and (value is None or value == ""):
+                    value = ""
+
                 setattr(pago, field, value)
                 registrar_auditoria_pago(
                     pago_id=pago_id,
@@ -849,12 +849,12 @@ def eliminar_pago(
     """
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar pagos")
-    
+
     try:
         pago = db.query(Pago).filter(Pago.id == pago_id).first()
         if not pago:
             raise HTTPException(status_code=404, detail="Pago no encontrado")
-        
+
         # Registrar en auditoría antes de eliminar
         registrar_auditoria_pago(
             pago_id=pago_id,
@@ -865,18 +865,18 @@ def eliminar_pago(
             valor_nuevo="False",
             db=db,
         )
-        
+
         # Soft delete - marcar como inactivo
         pago.activo = False  # type: ignore[assignment]
         pago.fecha_actualizacion = datetime.now()  # type: ignore[assignment]
-        
+
         db.commit()
         db.refresh(pago)
-        
+
         logger.info(f"✅ Pago ID {pago_id} eliminado (soft delete) por usuario {current_user.email}")
-        
+
         return {"message": "Pago eliminado exitosamente", "pago_id": pago_id}
-    
+
     except HTTPException:
         raise
     except Exception as e:

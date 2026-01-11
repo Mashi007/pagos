@@ -26,7 +26,7 @@ def _get_encryption_key() -> bytes:
     Usa ENCRYPTION_KEY de settings si está disponible, o genera una desde SECRET_KEY.
     """
     # Si hay una ENCRYPTION_KEY configurada, usarla directamente
-    if hasattr(settings, 'ENCRYPTION_KEY') and settings.ENCRYPTION_KEY:
+    if hasattr(settings, "ENCRYPTION_KEY") and settings.ENCRYPTION_KEY:
         encryption_key_str = settings.ENCRYPTION_KEY
         # Si es una cadena, convertirla a bytes
         if isinstance(encryption_key_str, str):
@@ -36,20 +36,18 @@ def _get_encryption_key() -> bytes:
             except Exception:
                 # Si no es base64, generar una clave desde SECRET_KEY
                 pass
-    
+
     # Si no hay ENCRYPTION_KEY, generar una desde SECRET_KEY
     if not settings.SECRET_KEY:
-        raise ValueError(
-            "SECRET_KEY no está configurada. No se puede generar clave de encriptación."
-        )
-    
+        raise ValueError("SECRET_KEY no está configurada. No se puede generar clave de encriptación.")
+
     # Generar clave desde SECRET_KEY usando PBKDF2
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
-        salt=b'rapicredit_encryption_salt',  # Salt fijo para consistencia
+        salt=b"rapicredit_encryption_salt",  # Salt fijo para consistencia
         iterations=100000,
-        backend=default_backend()
+        backend=default_backend(),
     )
     key = base64.urlsafe_b64encode(kdf.derive(settings.SECRET_KEY.encode()))
     return key
@@ -69,23 +67,23 @@ def _get_fernet() -> Fernet:
 def encrypt_value(value: str) -> str:
     """
     Encripta un valor usando Fernet.
-    
+
     Args:
         value: Valor en texto plano a encriptar
-        
+
     Returns:
         Valor encriptado en formato base64 (string)
-        
+
     Raises:
         ValueError: Si el valor está vacío o None
     """
     if not value or not isinstance(value, str):
         raise ValueError("El valor a encriptar debe ser una cadena no vacía")
-    
+
     try:
         fernet = _get_fernet()
-        encrypted = fernet.encrypt(value.encode('utf-8'))
-        return encrypted.decode('utf-8')
+        encrypted = fernet.encrypt(value.encode("utf-8"))
+        return encrypted.decode("utf-8")
     except Exception as e:
         logger.error(f"Error encriptando valor: {e}", exc_info=True)
         raise ValueError(f"Error al encriptar valor: {str(e)}")
@@ -94,29 +92,27 @@ def encrypt_value(value: str) -> str:
 def decrypt_value(encrypted_value: str) -> str:
     """
     Desencripta un valor usando Fernet.
-    
+
     Args:
         encrypted_value: Valor encriptado en formato base64 (string)
-        
+
     Returns:
         Valor desencriptado (texto plano)
-        
+
     Raises:
         ValueError: Si el valor no se puede desencriptar (formato inválido o clave incorrecta)
     """
     if not encrypted_value or not isinstance(encrypted_value, str):
         raise ValueError("El valor encriptado debe ser una cadena no vacía")
-    
+
     try:
         fernet = _get_fernet()
-        decrypted = fernet.decrypt(encrypted_value.encode('utf-8'))
-        return decrypted.decode('utf-8')
+        decrypted = fernet.decrypt(encrypted_value.encode("utf-8"))
+        return decrypted.decode("utf-8")
     except InvalidToken:
         # Si falla la desencriptación, puede ser que el valor no esté encriptado
         # (compatibilidad con valores antiguos)
-        logger.warning(
-            "No se pudo desencriptar el valor. Puede ser un valor antiguo sin encriptar."
-        )
+        logger.warning("No se pudo desencriptar el valor. Puede ser un valor antiguo sin encriptar.")
         # Retornar el valor original (para compatibilidad con datos antiguos)
         return encrypted_value
     except Exception as e:
@@ -128,23 +124,23 @@ def decrypt_value(encrypted_value: str) -> str:
 def is_encrypted(value: str) -> bool:
     """
     Verifica si un valor está encriptado.
-    
+
     Args:
         value: Valor a verificar
-        
+
     Returns:
         True si parece estar encriptado, False en caso contrario
     """
     if not value or not isinstance(value, str):
         return False
-    
+
     # Los valores encriptados con Fernet empiezan con 'gAAAAAB' (base64)
     # y tienen una longitud mínima
     try:
         # Intentar decodificar como base64
-        decoded = base64.urlsafe_b64decode(value.encode('utf-8'))
+        decoded = base64.urlsafe_b64decode(value.encode("utf-8"))
         # Si tiene el formato correcto de Fernet (32 bytes de token + datos)
-        return len(decoded) > 32 and value.startswith('gAAAAAB')
+        return len(decoded) > 32 and value.startswith("gAAAAAB")
     except Exception:
         return False
 
@@ -152,10 +148,10 @@ def is_encrypted(value: str) -> bool:
 def encrypt_api_key(api_key: str) -> str:
     """
     Encripta una API Key de OpenAI.
-    
+
     Args:
         api_key: API Key en texto plano
-        
+
     Returns:
         API Key encriptada
     """
@@ -166,16 +162,15 @@ def decrypt_api_key(encrypted_api_key: str) -> str:
     """
     Desencripta una API Key de OpenAI.
     Si el valor no está encriptado (compatibilidad con datos antiguos), lo retorna tal cual.
-    
+
     Args:
         encrypted_api_key: API Key encriptada o en texto plano
-        
+
     Returns:
         API Key desencriptada o en texto plano
     """
     # Si no parece estar encriptado, retornar tal cual (compatibilidad)
     if not is_encrypted(encrypted_api_key):
         return encrypted_api_key
-    
-    return decrypt_value(encrypted_api_key)
 
+    return decrypt_value(encrypted_api_key)

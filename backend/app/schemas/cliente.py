@@ -169,29 +169,29 @@ class ClienteBase(BaseModel):
         """Normalizar cédula: eliminar guiones y espacios, validar longitud"""
         if not v:
             raise ValueError("Cédula requerida")
-        
+
         # Eliminar guiones y espacios
-        cedula_limpia = re.sub(r'[-\s]', '', v.strip())
-        
+        cedula_limpia = re.sub(r"[-\s]", "", v.strip())
+
         # Validar longitud (6-13 caracteres)
         if len(cedula_limpia) < MIN_CEDULA_LENGTH or len(cedula_limpia) > MAX_CEDULA_LENGTH:
             raise ValueError(
                 f"Cédula debe tener entre {MIN_CEDULA_LENGTH} y {MAX_CEDULA_LENGTH} caracteres "
                 f"(sin guiones). Recibido: {len(cedula_limpia)} caracteres"
             )
-        
+
         return cedula_limpia
-    
+
     @field_validator("email", mode="before")
     @classmethod
     def normalize_email(cls, v: str) -> str:
         """Normalizar email a minúsculas"""
         if not v:
             raise ValueError("Email requerido")
-        
+
         # Convertir a minúsculas y eliminar espacios
         return v.strip().lower()
-    
+
     @field_validator("estado", mode="before")
     @classmethod
     def normalize_estado(cls, v):
@@ -234,7 +234,9 @@ class ClienteCreate(BaseModel):
         max_length=MAX_NAME_LENGTH,
         description="Ocupación",
     )
-    estado: Optional[str] = Field(default="ACTIVO", pattern="^(ACTIVO|INACTIVO|FINALIZADO)$", description="Estado del cliente (default: ACTIVO)")
+    estado: Optional[str] = Field(
+        default="ACTIVO", pattern="^(ACTIVO|INACTIVO|FINALIZADO)$", description="Estado del cliente (default: ACTIVO)"
+    )
     activo: Optional[bool] = Field(True, description="Cliente activo")
     notas: Optional[str] = Field("No hay observacion", description="Notas adicionales (default 'No hay observacion')")
 
@@ -316,7 +318,7 @@ class ClienteUpdate(BaseModel):
         if v:
             return ClienteBase.normalize_cedula(v)
         return v
-    
+
     @field_validator("email", mode="before")
     @classmethod
     def normalize_email_on_update(cls, v: Optional[str]) -> Optional[str]:
@@ -324,7 +326,7 @@ class ClienteUpdate(BaseModel):
         if v:
             return ClienteBase.normalize_email(v)
         return v
-    
+
     @field_validator("telefono", mode="before")
     @classmethod
     def validate_telefono_on_update(cls, v: Optional[str]) -> Optional[str]:

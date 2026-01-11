@@ -639,7 +639,7 @@ def buscar_prestamos_por_cedula(
     try:
         # Obtener préstamos completos (no solo columnas específicas)
         prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
-        
+
         # Serializar de forma segura
         prestamos_serializados = []
         for prestamo in prestamos:
@@ -650,7 +650,7 @@ def buscar_prestamos_por_cedula(
                 logger.error(f"Error serializando préstamo {prestamo.id}: {e}", exc_info=True)
                 # Continuar con el siguiente préstamo en lugar de fallar completamente
                 continue
-        
+
         return prestamos_serializados
     except Exception as e:
         logger.error(f"Error en buscar_prestamos_por_cedula: {e}", exc_info=True)

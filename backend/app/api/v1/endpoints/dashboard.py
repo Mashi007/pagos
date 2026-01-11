@@ -1581,9 +1581,7 @@ def _calcular_metricas_tasa_recuperacion(
     """
     # Tasa de recuperación mensual
     try:
-        tasa_recuperacion = _calcular_tasa_recuperacion(
-            db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo
-        )
+        tasa_recuperacion = _calcular_tasa_recuperacion(db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo)
     except Exception as e:
         logger.warning(f"Error calculando tasa recuperación: {e}")
         try:
@@ -1936,9 +1934,7 @@ def _calcular_metricas_morosidad(
 
     # Total Financiamiento
     try:
-        total_financiamiento_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(
-            Prestamo.estado == "APROBADO"
-        )
+        total_financiamiento_query = db.query(func.sum(Prestamo.total_financiamiento)).filter(Prestamo.estado == "APROBADO")
         total_financiamiento_query = FiltrosDashboard.aplicar_filtros_prestamo(
             total_financiamiento_query,
             analista,
@@ -1959,7 +1955,7 @@ def _calcular_metricas_morosidad(
     # Cartera Cobrada
     # ✅ SEGURIDAD: Construir WHERE clause de forma segura usando solo parámetros nombrados
     from app.utils.sql_helpers import build_safe_where_clause, execute_safe_query
-    
+
     where_conditions = ["monto_pagado IS NOT NULL", "monto_pagado > 0", "activo = TRUE"]
     params = {}
 
@@ -1974,10 +1970,7 @@ def _calcular_metricas_morosidad(
 
     try:
         cartera_cobrada_query = execute_safe_query(
-            db,
-            "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos",
-            where_clause=where_clause,
-            params=final_params
+            db, "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos", where_clause=where_clause, params=final_params
         )
         cartera_cobrada_total = float(cartera_cobrada_query.scalar() or Decimal("0"))
     except Exception as e:
@@ -2063,9 +2056,7 @@ def _verificar_rollback_preventivo(db: Session) -> None:
                 pass
 
 
-def _obtener_fecha_inicio_query(
-    db: Session, fecha_inicio: Optional[date], cache_backend
-) -> date:
+def _obtener_fecha_inicio_query(db: Session, fecha_inicio: Optional[date], cache_backend) -> date:
     """
     Obtiene fecha de inicio para la query, usando caché si está disponible.
     Retorna fecha como date.
@@ -2235,22 +2226,14 @@ def _obtener_cuotas_programadas_por_mes(
     cuotas_por_mes = {}
 
     try:
-        # ✅ CORRECCIÓN: No filtrar por año hardcodeado, usar fecha_inicio_query si está disponible
-        filtros_cuotas = [Prestamo.estado == "APROBADO"]
-        
-        # Si hay fecha_inicio, filtrar desde esa fecha, sino desde 2024
-        if fecha_inicio:
-            filtros_cuotas.append(Cuota.fecha_vencimiento >= fecha_inicio)
-        else:
-            # Usar año dinámico basado en fecha actual (últimos 12 meses por defecto)
-            from datetime import date
-            hoy = date.today()
-            fecha_minima = date(hoy.year - 1, hoy.month, 1)  # Últimos 12 meses
-            filtros_cuotas.append(Cuota.fecha_vencimiento >= fecha_minima)
-        
-        if fecha_fin:
-            filtros_cuotas.append(Cuota.fecha_vencimiento <= fecha_fin)
-        
+        # ✅ CORRECCIÓN: Usar fecha_inicio_query y fecha_fin_query pasados como parámetros
+        # ✅ IMPORTANTE: Usar <= fecha_fin_query para incluir todo el mes completo
+        filtros_cuotas = [
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_vencimiento >= fecha_inicio_query,
+            Cuota.fecha_vencimiento <= fecha_fin_query,
+        ]
+
         query_cuotas = (
             db.query(
                 func.extract("year", Cuota.fecha_vencimiento).label("año"),
@@ -2263,9 +2246,19 @@ def _obtener_cuotas_programadas_por_mes(
             .order_by("año", "mes")
         )
 
-        query_cuotas = FiltrosDashboard.aplicar_filtros_cuota(
-            query_cuotas, analista, concesionario, modelo, fecha_inicio, fecha_fin
-        )
+        # ✅ CORRECCIÓN: Aplicar solo filtros de analista/concesionario/modelo manualmente
+        # NO usar FiltrosDashboard porque aplica filtros de fecha_registro que interfieren
+        if analista:
+            query_cuotas = query_cuotas.filter(
+                or_(
+                    Prestamo.analista == analista,
+                    Prestamo.producto_financiero == analista,
+                )
+            )
+        if concesionario:
+            query_cuotas = query_cuotas.filter(Prestamo.concesionario == concesionario)
+        if modelo:
+            query_cuotas = query_cuotas.filter(or_(Prestamo.producto == modelo, Prestamo.modelo_vehiculo == modelo))
 
         resultados_cuotas = query_cuotas.all()
 
@@ -2320,14 +2313,13 @@ def _obtener_morosidad_por_mes(
         where_conditions = [
             "p.estado = 'APROBADO'",
             "c.fecha_vencimiento >= :fecha_inicio_morosidad",
-            "c.fecha_vencimiento <= :fecha_fin_morosidad"
+            "c.fecha_vencimiento <= :fecha_fin_morosidad",
         ]
-        bind_params = {
-            "fecha_inicio_morosidad": fecha_inicio_query,
-            "fecha_fin_morosidad": fecha_fin_query
-        }
+        bind_params = {"fecha_inicio_morosidad": fecha_inicio_query, "fecha_fin_morosidad": fecha_fin_query}
 
         # Aplicar filtros de analista, concesionario, modelo
+        # ✅ NOTA: fecha_inicio y fecha_fin no están disponibles aquí, solo fecha_inicio_query y fecha_fin_query
+        # Los filtros de fecha de aprobación se aplican vía FiltrosDashboard si es necesario
         if analista:
             where_conditions.append("(p.analista = :analista OR p.producto_financiero = :analista)")
             bind_params["analista"] = analista
@@ -2337,12 +2329,6 @@ def _obtener_morosidad_por_mes(
         if modelo:
             where_conditions.append("(p.producto = :modelo OR p.modelo_vehiculo = :modelo)")
             bind_params["modelo"] = modelo
-        if fecha_inicio:
-            where_conditions.append("p.fecha_aprobacion >= :fecha_inicio")
-            bind_params["fecha_inicio"] = fecha_inicio
-        if fecha_fin:
-            where_conditions.append("p.fecha_aprobacion <= :fecha_fin")
-            bind_params["fecha_fin"] = fecha_fin
 
         where_clause = " AND ".join(where_conditions)
 
@@ -2426,12 +2412,9 @@ def _obtener_pagos_por_mes(
             "p.fecha_pago <= :fecha_fin",
             "p.monto_pagado IS NOT NULL",
             "p.monto_pagado > 0",
-            "p.activo = TRUE"
+            "p.activo = TRUE",
         ]
-        bind_params = {
-            "fecha_inicio": fecha_inicio_dt,
-            "fecha_fin": fecha_fin_dt
-        }
+        bind_params = {"fecha_inicio": fecha_inicio_dt, "fecha_fin": fecha_fin_dt}
 
         # Aplicar filtros de analista, concesionario, modelo
         join_needed = False
@@ -2457,7 +2440,7 @@ def _obtener_pagos_por_mes(
             join_needed = True
 
         where_clause = " AND ".join(where_conditions)
-        
+
         # ✅ CORRECCIÓN: Construir JOIN correctamente
         # Si necesitamos filtros de préstamo, hacer LEFT JOIN para incluir pagos sin prestamo_id
         if join_needed:
@@ -2534,9 +2517,15 @@ def _generar_datos_mensuales(
     current_date = fecha_inicio_query
     total_acumulado = Decimal("0")
 
-    logger.info(f"📊 [financiamiento-tendencia] Generando meses desde {fecha_inicio_query} hasta {hoy}")
+    # ✅ CORRECCIÓN: Calcular fecha_fin como último día del mes actual para incluir todo el mes
+    if hoy.month == 12:
+        fecha_fin_generacion = date(hoy.year + 1, 1, 1) - timedelta(days=1)
+    else:
+        fecha_fin_generacion = date(hoy.year, hoy.month + 1, 1) - timedelta(days=1)
 
-    while current_date <= hoy:
+    logger.info(f"📊 [financiamiento-tendencia] Generando meses desde {fecha_inicio_query} hasta {fecha_fin_generacion}")
+
+    while current_date <= fecha_fin_generacion:
         año_mes = current_date.year
         num_mes = current_date.month
         fecha_mes_inicio = date(año_mes, num_mes, 1)
@@ -2791,9 +2780,7 @@ def dashboard_administrador(
         # cuotas_atrasadas = cuotas_atrasadas_query.scalar() or 0
 
         # 15. CÁLCULO DE PERÍODOS ANTERIORES
-        metricas_periodos = _calcular_metricas_periodos(
-            db, periodo, hoy, analista, concesionario, modelo, cartera_total
-        )
+        metricas_periodos = _calcular_metricas_periodos(db, periodo, hoy, analista, concesionario, modelo, cartera_total)
         cartera_anterior_val = metricas_periodos["cartera_anterior"]
 
         # 16-17. MÉTRICAS DE COBRADO Y TASA DE RECUPERACIÓN
@@ -2841,17 +2828,13 @@ def dashboard_administrador(
         evolucion_mensual = _calcular_evolucion_mensual(db, hoy)
 
         # 22. ANÁLISIS DE MOROSIDAD
-        metricas_morosidad = _calcular_metricas_morosidad(
-            db, analista, concesionario, modelo, fecha_inicio, fecha_fin
-        )
+        metricas_morosidad = _calcular_metricas_morosidad(db, analista, concesionario, modelo, fecha_inicio, fecha_fin)
         ingresos_capital = metricas_morosidad["ingresos_capital"]
         ingresos_interes = metricas_morosidad["ingresos_interes"]
         ingresos_mora = metricas_morosidad["ingresos_mora"]
 
         # 23. META MENSUAL
-        meta_mensual_final = _calcular_meta_mensual(
-            db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo
-        )
+        meta_mensual_final = _calcular_meta_mensual(db, primer_dia_mes, ultimo_dia_mes, analista, concesionario, modelo)
 
         return {
             "cartera_total": float(cartera_total),
@@ -5384,8 +5367,18 @@ def obtener_financiamiento_tendencia_mensual(
         # ✅ OPTIMIZACIÓN: Cachear primera fecha para evitar 3 queries MIN() en cada request
         fecha_inicio_query = _obtener_fecha_inicio_query(db, fecha_inicio, cache_backend)
 
-        # Calcular fecha fin (hoy)
-        fecha_fin_query = hoy
+        # ✅ CORRECCIÓN: Calcular fecha fin como último día del mes actual para incluir todo el mes
+        # Esto asegura que las cuotas que vencen a finales de mes se incluyan en las queries
+        if fecha_fin:
+            fecha_fin_query = fecha_fin
+        else:
+            # Último día del mes actual (para incluir todas las cuotas del mes)
+            if hoy.month == 12:
+                fecha_fin_query = date(hoy.year + 1, 1, 1) - timedelta(days=1)
+            else:
+                fecha_fin_query = date(hoy.year, hoy.month + 1, 1) - timedelta(days=1)
+
+        logger.info(f"📊 [financiamiento-tendencia] Rango de fechas: {fecha_inicio_query} a {fecha_fin_query}")
 
         # ✅ OPTIMIZACIÓN: Una sola query para obtener todos los nuevos financiamientos por mes con GROUP BY
         nuevos_por_mes = _obtener_nuevos_financiamientos_por_mes(
@@ -5443,13 +5436,13 @@ def obtener_financiamiento_tendencia_mensual(
             )
         else:
             # Calcular dominio del eje Y para debugging
-            all_values = (
+            all_values_list = (
                 [d.get("monto_nuevos", 0) or 0 for d in meses_data]
                 + [d.get("monto_cuotas_programadas", 0) or 0 for d in meses_data]
                 + [d.get("monto_pagado", 0) or 0 for d in meses_data]
                 + [d.get("morosidad_mensual", 0) or 0 for d in meses_data]
             )
-            max_value = max(all_values, default=0)
+            max_value = max(all_values_list, default=0)
             y_axis_domain = [0, max_value * 1.1] if max_value > 0 else [0, "auto"]
             log_graph_debug_info("/financiamiento-tendencia-mensual", meses_data, y_axis_domain)
 
