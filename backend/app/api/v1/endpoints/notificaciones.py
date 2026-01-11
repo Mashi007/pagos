@@ -110,11 +110,11 @@ async def enviar_notificacion(
         nueva_notif = Notificacion(
             cliente_id=notificacion.cliente_id,
             tipo=notificacion.tipo or notificacion.canal,  # ✅ CORREGIDO: Usar tipo, canal como fallback
-            categoria=notificacion.categoria if hasattr(notificacion, 'categoria') else "GENERAL",  # ✅ NUEVO: Requerido en BD
+            categoria=notificacion.categoria if hasattr(notificacion, "categoria") else "GENERAL",  # ✅ NUEVO: Requerido en BD
             mensaje=notificacion.mensaje,
             asunto=notificacion.asunto,
             estado="PENDIENTE",
-            prioridad=notificacion.prioridad if hasattr(notificacion, 'prioridad') else "MEDIA",  # ✅ NUEVO: Requerido en BD
+            prioridad=notificacion.prioridad if hasattr(notificacion, "prioridad") else "MEDIA",  # ✅ NUEVO: Requerido en BD
         )
 
         db.add(nueva_notif)
