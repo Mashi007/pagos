@@ -1,12 +1,12 @@
 {
-  "fecha_auditoria": "2026-01-10T20:55:52.081299",
+  "fecha_auditoria": "2026-01-10T20:56:09.179346",
   "url": "https://rapicredit.onrender.com/prestamos",
   "endpoint": "https://rapicredit.onrender.com/api/v1/prestamos",
   "verificaciones": {
     "conectividad": {
       "url": "https://rapicredit.onrender.com/prestamos",
       "status_code": 200,
-      "tiempo_respuesta_ms": 644.75,
+      "tiempo_respuesta_ms": 671.79,
       "accesible": true,
       "url_final": "https://rapicredit.onrender.com/prestamos",
       "redirecciones": 0,
@@ -225,24 +225,25 @@
       ]
     },
     "endpoint_backend": {
-      "estado": "parcial",
+      "estado": "exitoso",
       "pruebas": [
         {
           "test": "query_basica",
-          "tiempo_ms": 685.6298446655273,
+          "tiempo_ms": 663.9020442962646,
           "registros": 20,
           "exitoso": true
         },
         {
           "test": "query_con_filtro_estado",
-          "tiempo_ms": 163.97547721862793,
+          "tiempo_ms": 164.76869583129883,
           "registros": 20,
           "exitoso": true
         },
         {
           "test": "query_con_join_cliente",
-          "error": "(psycopg2.errors.UndefinedColumn) column c.nombre does not exist\nLINE 2: ...      SELECT p.id, p.cedula, p.nombres, p.estado, c.nombre a...\n                                                             ^\nHINT:  Perhaps you meant to reference the column \"c.nombres\".\n\n[SQL: \n                            SELECT p.id, p.cedula, p.nombres, p.estado, c.nombre as cliente_nombre\n                            FROM prestamos p\n                            LEFT JOIN clientes c ON p.cliente_id = c.id\n                            LIMIT 20\n                        ]\n(Background on this error at: https://sqlalche.me/e/20/f405)",
-          "exitoso": false
+          "tiempo_ms": 166.16392135620117,
+          "registros": 20,
+          "exitoso": true
         }
       ]
     },
@@ -251,22 +252,22 @@
       "pruebas": [
         {
           "operacion": "count_total",
-          "tiempo_ms": 488.2924556732178,
+          "tiempo_ms": 494.2131042480469,
           "aceptable": true
         },
         {
           "operacion": "query_paginada_20",
-          "tiempo_ms": 270.22385597229004,
+          "tiempo_ms": 164.9487018585205,
           "aceptable": true
         },
         {
           "operacion": "query_con_filtro",
-          "tiempo_ms": 163.07306289672852,
+          "tiempo_ms": 164.86287117004395,
           "aceptable": true
         },
         {
           "operacion": "query_con_agregacion",
-          "tiempo_ms": 162.72449493408203,
+          "tiempo_ms": 166.80526733398438,
           "aceptable": true
         }
       ],
@@ -314,14 +315,14 @@
     "endpoint_api": {
       "url": "https://rapicredit.onrender.com/api/v1/prestamos",
       "status_code": 403,
-      "tiempo_respuesta_ms": 359.74,
+      "tiempo_respuesta_ms": 359.37,
       "requiere_auth": true,
       "existe": true
     }
   },
   "resumen": {
-    "exitosas": 5,
-    "parciales": 1,
+    "exitosas": 6,
+    "parciales": 0,
     "errores": 0,
     "advertencias": 1,
     "total": 9

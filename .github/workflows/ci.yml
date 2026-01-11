@@ -32,7 +32,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v4
 
     - name: Set up Python
       uses: actions/setup-python@v6
@@ -102,7 +102,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v4
 
     - name: Set up Node.js
       uses: actions/setup-node@v5
@@ -145,7 +145,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v4
 
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@v0.33.1

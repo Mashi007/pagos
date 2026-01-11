@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout código
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: 🐍 Configurar Python
         uses: actions/setup-python@v6
@@ -184,7 +184,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout código
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: 📦 Configurar Node.js
         uses: actions/setup-node@v5

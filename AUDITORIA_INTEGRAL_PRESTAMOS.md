@@ -14,17 +14,17 @@
 
 | Verificación | Estado | Detalles |
 |-------------|--------|----------|
-| Conectividad a URL | ✅ N/A | Status 200, 644.75ms |
+| Conectividad a URL | ✅ N/A | Status 200, 671.79ms |
 | Conexión a Base de Datos | ✅ EXITOSO |  |
 | Estructura de Tabla | ✅ EXITOSO | 30 columnas |
 | Datos en BD | ✅ EXITOSO | 4419 préstamos |
-| Endpoint Backend | ⚠️ PARCIAL |  |
+| Endpoint Backend | ✅ EXITOSO |  |
 | Rendimiento | ✅ EXITOSO |  |
 | Índices | ⚠️ ADVERTENCIA | 24 índices |
 | Validaciones | ✅ EXITOSO |  |
 | Endpoint API | ⚠️ N/A |  |
 
-**Total:** 5/9 verificaciones exitosas, 2 advertencias ⚠️
+**Total:** 6/9 verificaciones exitosas, 2 advertencias ⚠️
 
 ---
 
@@ -34,7 +34,7 @@
 
 - **URL:** https://rapicredit.onrender.com/prestamos
 - **Status Code:** 200
-- **Tiempo de respuesta:** 644.75ms
+- **Tiempo de respuesta:** 671.79ms
 - **Accesible:** Sí
 
 ### Conexión a Base de Datos ✅
@@ -51,7 +51,7 @@
   - APROBADO: 4419
 - **Total financiamiento:** $6,438,396.00
 
-### Endpoint Backend ⚠️
+### Endpoint Backend ✅
 
 
 ### Rendimiento ✅
