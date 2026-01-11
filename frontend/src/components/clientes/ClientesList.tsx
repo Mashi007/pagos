@@ -184,21 +184,25 @@ export function ClientesList() {
     }
   ]
 
-  // ✅ CORRECCIÓN: Usar datos reales si existen, sino usar mock solo si no hay datos
-  const clientes = clientesData?.data && clientesData.data.length > 0 
-    ? clientesData.data 
-    : (clientesData?.data && clientesData.data.length === 0)
-      ? [] // Array vacío si la respuesta fue exitosa pero no hay datos
-      : mockClientes // Solo usar mock si no hay respuesta del servidor
+  // ✅ CORRECCIÓN: Usar datos reales si existen, sino usar mock solo si no hay respuesta del servidor
+  // Si clientesData existe (incluso si data es un array vacío), usar los datos reales
+  const clientes = clientesData?.data !== undefined 
+    ? (Array.isArray(clientesData.data) ? clientesData.data : [])
+    : mockClientes // Solo usar mock si no hay respuesta del servidor (clientesData es undefined)
   
   const totalPages = clientesData?.total_pages || 1
+  const total = clientesData?.total || 0
 
   // ✅ DEBUG: Log de datos finales
   console.log('✅ [ClientesList] Datos finales para renderizar:', {
     clientesLength: clientes.length,
     usingMock: clientes === mockClientes,
     totalPages,
-    total: clientesData?.total
+    total,
+    hasClientesData: !!clientesData,
+    clientesDataType: typeof clientesData?.data,
+    isArray: Array.isArray(clientesData?.data),
+    clientesDataKeys: clientesData ? Object.keys(clientesData) : []
   })
 
   const handleSearch = (value: string) => {

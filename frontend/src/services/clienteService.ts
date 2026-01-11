@@ -32,8 +32,13 @@ class ClienteService {
     })
 
     // Adaptar respuesta del backend al formato esperado
+    // ✅ CORRECCIÓN: Asegurar que data siempre sea un array
+    const clientesArray = Array.isArray(response.clientes) 
+      ? response.clientes 
+      : (response.clientes ? [response.clientes] : [])
+    
     const adaptedResponse = {
-      data: response.clientes || [],
+      data: clientesArray,
       total: response.total || 0,
       page: response.page || page,
       per_page: response.per_page || response.limit || perPage,
@@ -46,7 +51,9 @@ class ClienteService {
       total: adaptedResponse.total,
       page: adaptedResponse.page,
       per_page: adaptedResponse.per_page,
-      total_pages: adaptedResponse.total_pages
+      total_pages: adaptedResponse.total_pages,
+      firstCliente: adaptedResponse.data[0] || null,
+      isArray: Array.isArray(adaptedResponse.data)
     })
 
     return adaptedResponse
