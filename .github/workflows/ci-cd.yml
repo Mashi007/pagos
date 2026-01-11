@@ -27,12 +27,12 @@ jobs:
 
     steps:
       - name: 📥 Checkout código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0 # Para análisis completo de git
 
       - name: 🐍 Configurar Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
@@ -175,7 +175,7 @@ jobs:
       # Guardar TODOS los logs como artifacts descargables
       - name: 📊 Subir logs de calidad de código
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: code-quality-logs-${{ github.run_number }}
           retention-days: 90
@@ -267,10 +267,10 @@ jobs:
 
     steps:
       - name: 📥 Checkout código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🐍 Configurar Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
@@ -306,7 +306,7 @@ jobs:
           pytest tests/integration/ -v --cov=app --cov-report=xml --cov-report=html
 
       - name: 📊 Subir reporte de cobertura
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ${{ env.BACKEND_DIR }}/coverage.xml
           flags: backend
@@ -323,10 +323,10 @@ jobs:
 
     steps:
       - name: 📥 Checkout código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 📦 Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -368,7 +368,7 @@ jobs:
           npm run test:coverage
 
       - name: 📊 Subir reporte de cobertura frontend
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: ${{ env.FRONTEND_DIR }}/coverage/lcov.info
           flags: frontend
@@ -385,10 +385,10 @@ jobs:
 
     steps:
       - name: 📥 Checkout código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🐍 Configurar Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
@@ -399,7 +399,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: 📦 Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -440,7 +440,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🚀 Despliegue a Render
         uses: render-actions/deploy@v1
@@ -498,7 +498,7 @@ jobs:
 
     steps:
       - name: 📥 Checkout código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🚀 Despliegue a Render Staging
         uses: render-actions/deploy@v1

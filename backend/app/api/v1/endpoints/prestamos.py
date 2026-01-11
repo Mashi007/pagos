@@ -12,6 +12,7 @@ from dateutil.parser import parse as date_parse  # type: ignore[import-untyped]
 from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
 from fastapi import APIRouter, Depends, HTTPException, Path, Query  # type: ignore[import-untyped]
 from sqlalchemy import and_, case, func, or_  # type: ignore[import-untyped]
+from sqlalchemy.exc import OperationalError, ProgrammingError  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
@@ -231,7 +232,7 @@ def procesar_cambio_estado(
 
 
 def serializar_prestamo(prestamo: Prestamo) -> dict:
-    """Serializa un préstamo de forma segura, manejando campos que pueden no existir en BD"""
+    """Serializa un préstamo de forma segura, manejando campos que pueden no existir en BD o ser None"""
     return {
         "id": prestamo.id,
         "cliente_id": prestamo.cliente_id,
@@ -244,7 +245,7 @@ def serializar_prestamo(prestamo: Prestamo) -> dict:
         "numero_cuotas": prestamo.numero_cuotas,
         "cuota_periodo": prestamo.cuota_periodo,
         "tasa_interes": prestamo.tasa_interes,
-        "fecha_base_calculo": prestamo.fecha_base_calculo,
+        "fecha_base_calculo": getattr(prestamo, "fecha_base_calculo", None),
         "producto": prestamo.producto,
         "producto_financiero": prestamo.producto_financiero,
         "concesionario": getattr(prestamo, "concesionario", None),
@@ -252,11 +253,11 @@ def serializar_prestamo(prestamo: Prestamo) -> dict:
         "modelo_vehiculo": getattr(prestamo, "modelo_vehiculo", None),
         "estado": prestamo.estado,
         "usuario_proponente": prestamo.usuario_proponente,
-        "usuario_aprobador": prestamo.usuario_aprobador,
+        "usuario_aprobador": getattr(prestamo, "usuario_aprobador", None),
         "usuario_autoriza": getattr(prestamo, "usuario_autoriza", None),
-        "observaciones": prestamo.observaciones,
+        "observaciones": getattr(prestamo, "observaciones", None),
         "fecha_registro": prestamo.fecha_registro,
-        "fecha_aprobacion": prestamo.fecha_aprobacion,
+        "fecha_aprobacion": getattr(prestamo, "fecha_aprobacion", None),
         "fecha_actualizacion": prestamo.fecha_actualizacion,
     }
 
@@ -637,8 +638,12 @@ def buscar_prestamos_por_cedula(
 ):
     """Buscar préstamos por cédula del cliente"""
     try:
+        # Normalizar cédula (mayúsculas/sin espacios) para buscar
+        cedula_norm = cedula.strip().upper()
+        logger.info(f"Buscando préstamos por cédula: {cedula_norm} - Usuario: {current_user.email}")
+
         # Obtener préstamos completos (no solo columnas específicas)
-        prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula).all()
+        prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula_norm).all()
 
         # Serializar de forma segura
         prestamos_serializados = []
@@ -652,9 +657,33 @@ def buscar_prestamos_por_cedula(
                 continue
 
         return prestamos_serializados
+    except HTTPException:
+        raise
+    except (ProgrammingError, OperationalError) as db_error:
+        error_str = str(db_error).lower()
+        logger.error(f"Error de base de datos en buscar_prestamos_por_cedula: {db_error}", exc_info=True)
+        
+        # Detectar errores de esquema (columnas o tablas que no existen)
+        if "does not exist" in error_str or "no such column" in error_str or "no such table" in error_str or "relation" in error_str:
+            detail_msg = (
+                f"Error de esquema de base de datos. "
+                f"Es posible que falten migraciones. "
+                f"Ejecuta: alembic upgrade head. "
+                f"Error: {str(db_error)}"
+            )
+            raise HTTPException(status_code=500, detail=detail_msg)
+        
+        # Otros errores de base de datos
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error de conexión a la base de datos: {str(db_error)}"
+        )
     except Exception as e:
-        logger.error(f"Error en buscar_prestamos_por_cedula: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error de conexión a la base de datos: {type(e).__name__}")
+        logger.error(f"Error inesperado en buscar_prestamos_por_cedula: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno del servidor: {str(e)}"
+        )
 
 
 @router.get("/cedula/{cedula}/resumen", response_model=dict)
