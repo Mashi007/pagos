@@ -24,7 +24,9 @@ class Pago(Base):
     id = Column(Integer, primary_key=True, index=True, nullable=False)
 
     # DATOS DEL CLIENTE
-    cedula = Column(String(CEDULA_LENGTH), nullable=True, index=True)  # Unificado con clientes y prestamos (nullable=True según BD)
+    cedula = Column(
+        String(CEDULA_LENGTH), nullable=True, index=True
+    )  # Unificado con clientes y prestamos (nullable=True según BD)
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)  # ✅ FK agregado
 
     # DATOS DEL PAGO
@@ -70,16 +72,16 @@ class Pago(Base):
     banco = Column(String(50), nullable=True)  # Nombre del banco (VARCHAR 50 en BD)
     metodo_pago = Column(String(20), nullable=True)  # EFECTIVO, TRANSFERENCIA, CHEQUE, TARJETA (VARCHAR 20 en BD)
     tipo_pago = Column(String(20), nullable=True)  # Tipo de pago adicional (VARCHAR 20 en BD)
-    
+
     # Códigos y referencias
     codigo_pago = Column(String(30), nullable=True)  # Código único del pago (VARCHAR 30 en BD)
     numero_operacion = Column(String(50), nullable=True)  # Número de operación bancaria (VARCHAR 50 en BD)
     referencia_pago = Column(String(100), nullable=False)  # Referencia adicional del pago (NOT NULL en BD)
     comprobante = Column(String(50), nullable=True)  # Ruta o referencia al comprobante (VARCHAR 50 en BD)
-    
+
     # Documentación
     documento = Column(String(50), nullable=True)  # Documento adicional (VARCHAR 50 en BD)
-    
+
     # Montos detallados
     monto = Column(Integer, nullable=True)  # Monto total (legacy) - INTEGER en BD, no NUMERIC
     monto_capital = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=True)  # Monto de capital pagado
@@ -88,16 +90,16 @@ class Pago(Base):
     monto_mora = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=True)  # Monto de mora pagado
     monto_total = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=True)  # Monto total del pago
     descuento = Column(Numeric(NUMERIC_PRECISION, NUMERIC_SCALE), nullable=True)  # Descuento aplicado
-    
+
     # Información de mora y vencimiento
     dias_mora = Column(Integer, nullable=True)  # Días de mora al momento del pago
     tasa_mora = Column(Numeric(5, 2), nullable=True)  # Tasa de mora aplicada (%)
     fecha_vencimiento = Column(Date, nullable=True)  # Fecha de vencimiento de la cuota (DATE en BD, no TIMESTAMP)
-    
+
     # Fechas y horas adicionales
     hora_pago = Column(Time, nullable=True)  # Hora del pago (TIME en BD, no VARCHAR)
     creado_en = Column(DateTime, nullable=True)  # Fecha de creación (TIMESTAMP en BD)
-    
+
     # Observaciones adicionales
     observaciones = Column(Text, nullable=True)  # Observaciones adicionales del pago
 

@@ -79,8 +79,12 @@ class Cuota(Base):
     # COLUMNAS ADICIONALES (FASE 3 - Sincronización ORM vs BD)
     # Tipos de datos ajustados para coincidir exactamente con la BD
     # ============================================
-    creado_en = Column(DateTime(timezone=True), nullable=True)  # Fecha de creación del registro (TIMESTAMP WITH TIME ZONE en BD)
-    actualizado_en = Column(DateTime(timezone=True), nullable=True)  # Fecha de última actualización (TIMESTAMP WITH TIME ZONE en BD)
+    creado_en = Column(
+        DateTime(timezone=True), nullable=True
+    )  # Fecha de creación del registro (TIMESTAMP WITH TIME ZONE en BD)
+    actualizado_en = Column(
+        DateTime(timezone=True), nullable=True
+    )  # Fecha de última actualización (TIMESTAMP WITH TIME ZONE en BD)
 
     def __repr__(self):
         return f"<Cuota {self.numero_cuota} - Préstamo {self.prestamo_id} - {self.estado}>"
