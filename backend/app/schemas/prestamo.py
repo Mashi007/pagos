@@ -102,7 +102,7 @@ class PrestamoResponse(PrestamoBase):
     fecha_registro: datetime
     fecha_aprobacion: Optional[datetime] = None
     fecha_actualizacion: datetime
-    
+
     # FASE 2: Campos adicionales sincronizados con ORM
     concesionario_id: Optional[int] = Field(None, description="ID del concesionario (FK)")
     analista_id: Optional[int] = Field(None, description="ID del analista (FK)")
