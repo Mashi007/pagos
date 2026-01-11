@@ -55,6 +55,9 @@ export function TablaAmortizacionCompleta() {
   const [pagoEditando, setPagoEditando] = useState<Pago | null>(null)
   const [mostrarDialogCuota, setMostrarDialogCuota] = useState(false)
   const [mostrarDialogPago, setMostrarDialogPago] = useState(false)
+  const [mostrarDialogFecha, setMostrarDialogFecha] = useState(false)
+  const [prestamoParaGenerar, setPrestamoParaGenerar] = useState<any>(null)
+  const [fechaBaseCalculo, setFechaBaseCalculo] = useState<string>('')
   const queryClient = useQueryClient()
 
   // Buscar cliente por cédula
@@ -247,6 +250,87 @@ export function TablaAmortizacionCompleta() {
     },
   })
 
+  // Mutación para actualizar préstamo
+  const mutationActualizarPrestamo = useMutation({
+    mutationFn: ({ prestamoId, data }: { prestamoId: number; data: Partial<any> }) =>
+      prestamoService.updatePrestamo(prestamoId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['prestamos-cedula', cedulaSeleccionada] })
+    },
+  })
+
+  // Función para abrir diálogo de fecha y generar cuotas
+  const handleAbrirDialogoFecha = (prestamo: any) => {
+    setPrestamoParaGenerar(prestamo)
+    // Si ya tiene fecha_base_calculo, usarla como valor por defecto
+    if (prestamo.fecha_base_calculo) {
+      setFechaBaseCalculo(prestamo.fecha_base_calculo)
+    } else {
+      // Usar fecha de aprobación o fecha actual como sugerencia
+      const fechaSugerida = prestamo.fecha_aprobacion 
+        ? new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0]
+      setFechaBaseCalculo(fechaSugerida)
+    }
+    setMostrarDialogFecha(true)
+  }
+
+  // Función para generar cuotas con fecha ingresada manualmente
+  const handleGenerarCuotasConFecha = async () => {
+    if (!prestamoParaGenerar || !fechaBaseCalculo) {
+      toast.error('Por favor, ingrese una fecha válida')
+      return
+    }
+
+    try {
+      // Paso 1: Actualizar fecha_base_calculo en el préstamo
+      if (!prestamoParaGenerar.fecha_base_calculo) {
+        await mutationActualizarPrestamo.mutateAsync({
+          prestamoId: prestamoParaGenerar.id,
+          data: { fecha_base_calculo: fechaBaseCalculo }
+        })
+        toast.success('Fecha base de cálculo guardada')
+      }
+
+      // Paso 2: Generar las cuotas
+      await mutationGenerarAmortizacion.mutateAsync(prestamoParaGenerar.id)
+      
+      // Paso 3: Aplicar pagos existentes a las cuotas generadas
+      const pagosDelPrestamo = pagos.filter((p: Pago) => 
+        p.prestamo_id === prestamoParaGenerar.id && 
+        (p.conciliado || p.verificado_concordancia === 'SI')
+      )
+
+      if (pagosDelPrestamo.length > 0) {
+        let pagosAplicados = 0
+        for (const pago of pagosDelPrestamo) {
+          try {
+            await pagoService.aplicarPagoACuotas(pago.id)
+            pagosAplicados++
+          } catch (error) {
+            console.error(`Error aplicando pago ${pago.id} a cuotas:`, error)
+          }
+        }
+        if (pagosAplicados > 0) {
+          toast.success(`${pagosAplicados} pago(s) aplicado(s) a las cuotas generadas`)
+        }
+      }
+
+      // Cerrar diálogo y recargar datos
+      setMostrarDialogFecha(false)
+      setPrestamoParaGenerar(null)
+      setFechaBaseCalculo('')
+      
+      queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
+      queryClient.invalidateQueries({ queryKey: ['prestamos-cedula', cedulaSeleccionada] })
+      queryClient.invalidateQueries({ queryKey: ['pagos-cedula', cedulaSeleccionada] })
+      
+      toast.success('Tabla de amortización generada y pagos aplicados exitosamente')
+    } catch (error: any) {
+      toast.error(`Error: ${error?.response?.data?.detail || error?.message || 'Error desconocido'}`)
+    }
+  }
+
   // Función para generar cuotas para todos los préstamos sin cuotas
   const handleGenerarCuotasParaTodos = async () => {
     if (!prestamos || prestamos.length === 0) {
@@ -254,45 +338,26 @@ export function TablaAmortizacionCompleta() {
       return
     }
 
-    // Filtrar préstamos aprobados que tengan fecha_base_calculo pero no tengan cuotas
+    // Filtrar préstamos aprobados sin cuotas
     const prestamosSinCuotas = prestamos.filter((p: any) => {
       const tieneCuotas = todasLasCuotas && todasLasCuotas.length > 0 
         ? todasLasCuotas.some((c: Cuota) => c.prestamo_id === p.id)
         : false
-      return p.estado === 'APROBADO' && p.fecha_base_calculo && !tieneCuotas
+      return p.estado === 'APROBADO' && !tieneCuotas
     })
 
     if (prestamosSinCuotas.length === 0) {
-      toast.info('Todos los préstamos aprobados ya tienen cuotas generadas o no tienen fecha base de cálculo')
+      toast.info('Todos los préstamos aprobados ya tienen cuotas generadas')
       return
     }
 
-    if (!confirm(`¿Generar tabla de amortización para ${prestamosSinCuotas.length} préstamo(s)?`)) {
-      return
-    }
-
-    // Generar cuotas para cada préstamo secuencialmente para evitar sobrecarga
-    let exitosos = 0
-    let fallidos = 0
-
-    for (const prestamo of prestamosSinCuotas) {
-      try {
-        await mutationGenerarAmortizacion.mutateAsync(prestamo.id)
-        exitosos++
-      } catch (error) {
-        fallidos++
-        console.error(`Error generando cuotas para préstamo ${prestamo.id}:`, error)
-      }
-    }
-
-    // Recargar datos
-    queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
-    queryClient.invalidateQueries({ queryKey: ['prestamos-cedula', cedulaSeleccionada] })
-
-    if (exitosos > 0) {
-      toast.success(`Se generaron las cuotas para ${exitosos} préstamo(s) exitosamente${fallidos > 0 ? `. ${fallidos} fallaron.` : ''}`)
+    // Si hay múltiples préstamos, procesar el primero y mostrar diálogo
+    if (prestamosSinCuotas.length === 1) {
+      handleAbrirDialogoFecha(prestamosSinCuotas[0])
     } else {
-      toast.error('No se pudieron generar las cuotas. Verifique los logs para más detalles.')
+      // Para múltiples préstamos, procesar el primero
+      handleAbrirDialogoFecha(prestamosSinCuotas[0])
+      toast.info(`Se procesará el préstamo ${prestamosSinCuotas[0].id}. Los demás se pueden procesar después.`)
     }
   }
 
@@ -561,14 +626,14 @@ export function TablaAmortizacionCompleta() {
                               Los préstamos pueden no tener tabla de amortización generada.
                             </p>
                             {prestamos && prestamos.length > 0 && prestamos.some((p: any) => 
-                              p.estado === 'APROBADO' && p.fecha_base_calculo
+                              p.estado === 'APROBADO'
                             ) && (
                               <Button
                                 onClick={handleGenerarCuotasParaTodos}
-                                disabled={mutationGenerarAmortizacion.isPending}
+                                disabled={mutationGenerarAmortizacion.isPending || mutationActualizarPrestamo.isPending}
                                 className="mt-2"
                               >
-                                {mutationGenerarAmortizacion.isPending ? (
+                                {mutationGenerarAmortizacion.isPending || mutationActualizarPrestamo.isPending ? (
                                   <>
                                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                     Generando...
@@ -582,10 +647,10 @@ export function TablaAmortizacionCompleta() {
                               </Button>
                             )}
                             {prestamos && prestamos.length > 0 && !prestamos.some((p: any) => 
-                              p.estado === 'APROBADO' && p.fecha_base_calculo
+                              p.estado === 'APROBADO'
                             ) && (
                               <p className="text-sm text-yellow-600 mt-2">
-                                Los préstamos necesitan estar aprobados y tener fecha base de cálculo para generar cuotas.
+                                Los préstamos necesitan estar aprobados para generar cuotas.
                               </p>
                             )}
                           </div>
@@ -947,6 +1012,83 @@ export function TablaAmortizacionCompleta() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Ingresar Fecha Base de Cálculo */}
+      <Dialog open={mostrarDialogFecha} onOpenChange={setMostrarDialogFecha}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ingresar Fecha Base de Cálculo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {prestamoParaGenerar && (
+              <div className="bg-blue-50 p-3 rounded-md">
+                <p className="text-sm text-gray-600">
+                  <strong>Préstamo ID:</strong> {prestamoParaGenerar.id}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <strong>Monto:</strong> {formatCurrency(prestamoParaGenerar.total_financiamiento)}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <strong>Cuotas:</strong> {prestamoParaGenerar.numero_cuotas}
+                </p>
+              </div>
+            )}
+            <div>
+              <Label htmlFor="fecha_base_calculo">Fecha Base de Cálculo *</Label>
+              <Input
+                id="fecha_base_calculo"
+                type="date"
+                value={fechaBaseCalculo}
+                onChange={(e) => setFechaBaseCalculo(e.target.value)}
+                required
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Esta fecha será guardada y usada para generar las cuotas del préstamo.
+              </p>
+            </div>
+            {pagos && pagos.length > 0 && prestamoParaGenerar && (
+              <div className="bg-yellow-50 p-3 rounded-md">
+                <p className="text-sm text-yellow-800">
+                  <strong>Nota:</strong> Se encontraron {pagos.filter((p: Pago) => 
+                    p.prestamo_id === prestamoParaGenerar.id && 
+                    (p.conciliado || p.verificado_concordancia === 'SI')
+                  ).length} pago(s) conciliado(s) que se aplicarán automáticamente a las cuotas generadas.
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => {
+                setMostrarDialogFecha(false)
+                setPrestamoParaGenerar(null)
+                setFechaBaseCalculo('')
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleGenerarCuotasConFecha}
+              disabled={!fechaBaseCalculo || mutationGenerarAmortizacion.isPending || mutationActualizarPrestamo.isPending}
+            >
+              {mutationGenerarAmortizacion.isPending || mutationActualizarPrestamo.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Guardar Fecha y Generar Cuotas
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

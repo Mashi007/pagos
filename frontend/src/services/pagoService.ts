@@ -89,6 +89,10 @@ class PagoService {
     return await apiClient.delete(`${this.baseUrl}/${id}`)
   }
 
+  async aplicarPagoACuotas(pagoId: number): Promise<{ success: boolean; cuotas_completadas: number; message: string }> {
+    return await apiClient.post(`${this.baseUrl}/${pagoId}/aplicar-cuotas`)
+  }
+
   async uploadExcel(file: File): Promise<any> {
     const formData = new FormData()
     formData.append('file', file)
