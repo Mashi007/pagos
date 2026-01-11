@@ -159,16 +159,16 @@ export function DashboardMenu() {
       // En su lugar, usar el parámetro 'meses' para mostrar los últimos 12 meses
       // Esto asegura que siempre se muestren múltiples meses independientemente del período seleccionado
       // Solo pasar fecha_inicio si viene de filtros explícitos del usuario (no del período)
-      const fechaInicioExplicita = filtros.fecha_inicio && filtros.fecha_inicio !== ''
+      const fechaInicioFiltro = filtros.fecha_inicio && filtros.fecha_inicio !== '' ? filtros.fecha_inicio : null
       
-      if (fechaInicioExplicita) {
+      if (fechaInicioFiltro) {
         // Si el usuario especificó fecha_inicio explícitamente en filtros, usarla
-        const fechaInicioFiltro = new Date(filtros.fecha_inicio)
+        const fechaInicioDate = new Date(fechaInicioFiltro)
         const fechaMinima = new Date('2024-09-01')
-        if (fechaInicioFiltro < fechaMinima) {
+        if (fechaInicioDate < fechaMinima) {
           queryParams.append('fecha_inicio', '2024-09-01')
         } else {
-          queryParams.append('fecha_inicio', filtros.fecha_inicio)
+          queryParams.append('fecha_inicio', fechaInicioFiltro)
         }
       } else {
         // Si no hay fecha_inicio explícita, usar septiembre 2024 como fecha de inicio mínima
@@ -442,9 +442,9 @@ export function DashboardMenu() {
       // ✅ CORRECCIÓN: NO pasar fecha_inicio del período para este gráfico
       // En su lugar, usar el parámetro 'meses' para mostrar los últimos 12 meses
       // Solo pasar fecha_inicio si viene de filtros explícitos del usuario
-      const fechaInicioExplicita = filtros.fecha_inicio && filtros.fecha_inicio !== ''
-      if (fechaInicioExplicita) {
-        queryParams.append('fecha_inicio', filtros.fecha_inicio)
+      const fechaInicioFiltro = filtros.fecha_inicio && filtros.fecha_inicio !== '' ? filtros.fecha_inicio : null
+      if (fechaInicioFiltro) {
+        queryParams.append('fecha_inicio', fechaInicioFiltro)
       }
       
       Object.entries(params).forEach(([key, value]) => {
@@ -476,9 +476,9 @@ export function DashboardMenu() {
       // ✅ CORRECCIÓN: NO pasar fecha_inicio del período para este gráfico
       // En su lugar, usar el parámetro 'meses' para mostrar los últimos 12 meses
       // Solo pasar fecha_inicio si viene de filtros explícitos del usuario
-      const fechaInicioExplicita = filtros.fecha_inicio && filtros.fecha_inicio !== ''
-      if (fechaInicioExplicita) {
-        queryParams.append('fecha_inicio', filtros.fecha_inicio)
+      const fechaInicioFiltro = filtros.fecha_inicio && filtros.fecha_inicio !== '' ? filtros.fecha_inicio : null
+      if (fechaInicioFiltro) {
+        queryParams.append('fecha_inicio', fechaInicioFiltro)
       }
       
       Object.entries(params).forEach(([key, value]) => {
