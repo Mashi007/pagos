@@ -381,6 +381,7 @@ def _aplicar_filtros_prestamos(
     modelo: Optional[str],
     fecha_inicio: Optional[date],
     fecha_fin: Optional[date],
+    requiere_revision: Optional[bool] = None,
 ):
     """Aplica filtros a la query de préstamos"""
     if search:
@@ -414,6 +415,9 @@ def _aplicar_filtros_prestamos(
     if fecha_fin:
         fecha_fin_completa = datetime.combine(fecha_fin, datetime.max.time())
         query = query.filter(Prestamo.fecha_registro <= fecha_fin_completa)
+
+    if requiere_revision is not None:
+        query = query.filter(Prestamo.requiere_revision.is_(requiere_revision))  # type: ignore[attr-defined]
 
     return query
 
@@ -492,6 +496,7 @@ def listar_prestamos(
     modelo: Optional[str] = Query(None, description="Filtrar por modelo de vehículo"),
     fecha_inicio: Optional[date] = Query(None, description="Fecha de inicio (fecha_registro)"),
     fecha_fin: Optional[date] = Query(None, description="Fecha de fin (fecha_registro)"),
+    requiere_revision: Optional[bool] = Query(None, description="Filtrar por requiere_revision (True/False)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -501,7 +506,7 @@ def listar_prestamos(
 
         query = _obtener_query_base_prestamos(db)
         query = _aplicar_filtros_prestamos(
-            query, search, estado, cedula, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            query, search, estado, cedula, analista, concesionario, modelo, fecha_inicio, fecha_fin, requiere_revision
         )
 
         total = _contar_prestamos_con_manejo_error(query, db)

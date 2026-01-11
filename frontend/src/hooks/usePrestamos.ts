@@ -31,6 +31,7 @@ export interface PrestamoFilters {
   modelo?: string
   fecha_inicio?: string
   fecha_fin?: string
+  requiere_revision?: boolean
 }
 
 // Hook para obtener lista de préstamos

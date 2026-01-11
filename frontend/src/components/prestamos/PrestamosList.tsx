@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,7 +23,13 @@ import { prestamoService } from '@/services/prestamoService'
 import { toast } from 'sonner'
 
 export function PrestamosList() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [page, setPage] = useState(1)
+  
+  // Leer requiere_revision de los parámetros de URL
+  const requiereRevisionParam = searchParams.get('requiere_revision')
+  const requiereRevision = requiereRevisionParam === 'true' ? true : undefined
+  
   const [filters, setFilters] = useState<PrestamoFilters>({
     search: '',
     estado: undefined,
@@ -32,7 +39,18 @@ export function PrestamosList() {
     modelo: undefined,
     fecha_inicio: undefined,
     fecha_fin: undefined,
+    requiere_revision: requiereRevision,
   })
+  
+  // Efecto para actualizar filtros cuando cambien los parámetros de URL
+  useEffect(() => {
+    const requiereRevisionParam = searchParams.get('requiere_revision')
+    const requiereRevision = requiereRevisionParam === 'true' ? true : undefined
+    setFilters(prev => ({
+      ...prev,
+      requiere_revision: requiereRevision,
+    }))
+  }, [searchParams])
   const [showFilters, setShowFilters] = useState(false)
   const [showCrearPrestamo, setShowCrearPrestamo] = useState(false)
   const [showEvaluacion, setShowEvaluacion] = useState(false)
@@ -65,7 +83,10 @@ export function PrestamosList() {
       modelo: undefined,
       fecha_inicio: undefined,
       fecha_fin: undefined,
+      requiere_revision: undefined,
     })
+    // Limpiar también el parámetro de URL
+    setSearchParams({})
     setPage(1)
   }
 

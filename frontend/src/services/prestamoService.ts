@@ -36,6 +36,7 @@ class PrestamoService {
       modelo?: string
       fecha_inicio?: string
       fecha_fin?: string
+      requiere_revision?: boolean
     },
     page: number = 1,
     perPage: number = DEFAULT_PER_PAGE
