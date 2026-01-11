@@ -23,9 +23,9 @@ from sqlalchemy import case, func, text  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
+from app.core.cache import cache_result
 from app.core.constants import EstadoPrestamo
 from app.core.rate_limiter import RATE_LIMITS, get_rate_limiter
-from app.core.cache import cache_result
 from app.models.amortizacion import Cuota
 from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
