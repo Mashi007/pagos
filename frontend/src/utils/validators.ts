@@ -123,6 +123,7 @@ export function validarConfiguracionGmail(config: {
   smtp_user?: string
   smtp_password?: string
   smtp_use_tls?: string
+  from_email?: string
 }): { valido: boolean; errores: string[] } {
   const errores: string[] = []
   const esGmail = config.smtp_host?.toLowerCase().includes('gmail.com') || false

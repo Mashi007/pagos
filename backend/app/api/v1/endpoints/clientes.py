@@ -110,6 +110,123 @@ def _serializar_clientes(clientes):
     return clientes_dict
 
 
+def _identificar_problemas_validacion(cliente) -> dict:
+    """
+    Identifica problemas de validación en un cliente sin intentar serializarlo.
+    Retorna un dict con los problemas encontrados.
+    """
+    problemas = []
+    
+    # Verificar teléfono
+    telefono = getattr(cliente, "telefono", None)
+    if telefono:
+        telefono_str = str(telefono).strip()
+        if not telefono_str.startswith("+58"):
+            problemas.append({
+                "campo": "telefono",
+                "valor_actual": telefono_str,
+                "error": f"Teléfono debe empezar por '+58'. Recibido: '{telefono_str}'",
+                "requisito": "Formato: +58 seguido de 10 dígitos, primero NO puede ser 0"
+            })
+        elif len(telefono_str) != 13:
+            problemas.append({
+                "campo": "telefono",
+                "valor_actual": telefono_str,
+                "error": f"Teléfono debe tener exactamente 13 caracteres. Recibido: {len(telefono_str)}",
+                "requisito": "Formato: +58XXXXXXXXXX (13 caracteres)"
+            })
+        elif len(telefono_str) == 13:
+            # Verificar que después de +58 tenga 10 dígitos
+            digitos = telefono_str[3:]
+            if not re.match(r"^[0-9]{10}$", digitos):
+                problemas.append({
+                    "campo": "telefono",
+                    "valor_actual": telefono_str,
+                    "error": f"Después de '+58' deben ir exactamente 10 dígitos. Recibido: '{digitos}'",
+                    "requisito": "Formato: +58 seguido de 10 dígitos numéricos"
+                })
+            elif digitos[0] == "0":
+                problemas.append({
+                    "campo": "telefono",
+                    "valor_actual": telefono_str,
+                    "error": "El primer dígito después de '+58' NO puede ser 0",
+                    "requisito": "El número debe empezar por 1-9 después de +58"
+                })
+    elif not telefono:
+        problemas.append({
+            "campo": "telefono",
+            "valor_actual": None,
+            "error": "Teléfono requerido",
+            "requisito": "Teléfono es obligatorio"
+        })
+    
+    # Verificar nombres
+    nombres = getattr(cliente, "nombres", None)
+    if nombres:
+        nombres_str = str(nombres).strip()
+        palabras = [p for p in nombres_str.split() if p]
+        if len(palabras) < 2:
+            problemas.append({
+                "campo": "nombres",
+                "valor_actual": nombres_str,
+                "error": f"Mínimo 2 palabras requeridas. Recibido: {len(palabras)}",
+                "requisito": "Nombre + apellido (mínimo 2 palabras)"
+            })
+        elif len(palabras) > 7:
+            problemas.append({
+                "campo": "nombres",
+                "valor_actual": nombres_str,
+                "error": f"Máximo 7 palabras permitidas. Recibido: {len(palabras)}",
+                "requisito": "Máximo 7 palabras"
+            })
+    elif not nombres:
+        problemas.append({
+            "campo": "nombres",
+            "valor_actual": None,
+            "error": "Nombres requeridos",
+            "requisito": "Nombres es obligatorio"
+        })
+    
+    # Verificar email (solo formato básico, no validación estricta)
+    email = getattr(cliente, "email", None)
+    if email:
+        email_str = str(email).strip()
+        if "@" not in email_str:
+            problemas.append({
+                "campo": "email",
+                "valor_actual": email_str,
+                "error": "Email debe contener '@'",
+                "requisito": "Formato válido de email"
+            })
+    
+    # Verificar cédula
+    cedula = getattr(cliente, "cedula", None)
+    if cedula:
+        cedula_str = str(cedula).strip()
+        if len(cedula_str) < 6 or len(cedula_str) > 13:
+            problemas.append({
+                "campo": "cedula",
+                "valor_actual": cedula_str,
+                "error": f"Cédula debe tener entre 6 y 13 caracteres. Recibido: {len(cedula_str)}",
+                "requisito": "Entre 6 y 13 caracteres"
+            })
+    elif not cedula:
+        problemas.append({
+            "campo": "cedula",
+            "valor_actual": None,
+            "error": "Cédula requerida",
+            "requisito": "Cédula es obligatoria"
+        })
+    
+    return {
+        "cliente_id": getattr(cliente, "id", None),
+        "cedula": getattr(cliente, "cedula", None),
+        "nombres": getattr(cliente, "nombres", None),
+        "problemas": problemas,
+        "tiene_problemas": len(problemas) > 0
+    }
+
+
 @router.get("", response_model=dict)
 def listar_clientes(
     page: int = Query(1, ge=1, description="Numero de pagina"),
@@ -529,6 +646,70 @@ def eliminar_cliente(
 # =====================================================
 # ENDPOINTS PARA VALORES POR DEFECTO
 # =====================================================
+
+
+@router.get("/con-problemas-validacion", response_model=dict)
+def listar_clientes_con_problemas_validacion(
+    page: int = Query(1, ge=1, description="Número de página"),
+    per_page: int = Query(20, ge=1, le=100, description="Tamaño de página"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Lista clientes que tienen problemas de validación que deben ser corregidos.
+    Estos son clientes que no pueden ser serializados correctamente debido a validaciones estrictas.
+    """
+    try:
+        import time
+        start_time = time.time()
+        
+        # Obtener todos los clientes (sin paginación inicial para identificar problemas)
+        # Para optimizar, primero obtenemos una muestra y luego contamos
+        todos_clientes = db.query(Cliente).all()
+        
+        # Identificar clientes con problemas
+        clientes_con_problemas_completos = []
+        for cliente in todos_clientes:
+            try:
+                # Intentar validar
+                ClienteResponse.model_validate(cliente)
+                # Si pasa la validación, no tiene problemas
+            except Exception:
+                # Si falla, identificar los problemas específicos
+                problemas_info = _identificar_problemas_validacion(cliente)
+                if problemas_info["tiene_problemas"]:
+                    # Agregar información adicional del cliente
+                    problemas_info["telefono"] = getattr(cliente, "telefono", None)
+                    problemas_info["email"] = getattr(cliente, "email", None)
+                    problemas_info["direccion"] = getattr(cliente, "direccion", None)
+                    problemas_info["ocupacion"] = getattr(cliente, "ocupacion", None)
+                    problemas_info["fecha_registro"] = getattr(cliente, "fecha_registro", None)
+                    problemas_info["estado"] = getattr(cliente, "estado", None)
+                    problemas_info["activo"] = getattr(cliente, "activo", None)
+                    clientes_con_problemas_completos.append(problemas_info)
+        
+        total_con_problemas = len(clientes_con_problemas_completos)
+        
+        # Aplicar paginación
+        offset = (page - 1) * per_page
+        clientes_paginados = clientes_con_problemas_completos[offset:offset + per_page]
+        
+        total_pages = (total_con_problemas + per_page - 1) // per_page if total_con_problemas > 0 else 1
+        
+        tiempo_total = int((time.time() - start_time) * 1000)
+        logger.info(f"📊 [clientes-problemas] Encontrados {total_con_problemas} clientes con problemas en {tiempo_total}ms")
+        
+        return {
+            "clientes": clientes_paginados,
+            "total": total_con_problemas,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+        }
+    
+    except Exception as e:
+        logger.error(f"Error en listar_clientes_con_problemas_validacion: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
 @router.get("/valores-por-defecto", response_model=dict)

@@ -25,6 +25,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { AlertWithIcon } from '@/components/ui/alert'
 import { CrearClienteForm } from './CrearClienteForm'
 import { ClientesKPIs } from './ClientesKPIs'
+import { CorregirClientes } from './CorregirClientes'
 
 import { useDebounce } from '@/hooks/useDebounce'
 import { useClientesStats } from '@/hooks/useClientesStats'
@@ -48,6 +49,7 @@ export function ClientesList() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null)
   const [showEditarCliente, setShowEditarCliente] = useState(false)
   const [showEliminarCliente, setShowEliminarCliente] = useState(false)
+  const [showCorregirClientes, setShowCorregirClientes] = useState(false)
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null)
 
   const showNotification = (type: 'success' | 'error', message: string) => {
@@ -269,6 +271,15 @@ export function ClientesList() {
         </div>
 
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => setShowCorregirClientes(true)}
+            className="px-6 py-6 text-base font-semibold bg-yellow-50 hover:bg-yellow-100 text-yellow-800 border-yellow-300"
+          >
+            <AlertCircle className="w-5 h-5 mr-2" />
+            Corregir
+          </Button>
           <Button
             variant="outline"
             size="lg"
@@ -795,6 +806,11 @@ export function ClientesList() {
       </AnimatePresence>
 
       {/* ✅ NOTIFICACIÓN ÚNICA */}
+      {/* Modal de Corregir Clientes */}
+      {showCorregirClientes && (
+        <CorregirClientes onClose={() => setShowCorregirClientes(false)} />
+      )}
+
       {notification && (
         <motion.div
           initial={{ opacity: 0, y: -50 }}

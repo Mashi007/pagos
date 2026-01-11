@@ -3,12 +3,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator, model_validator
 
 from app.utils.validators import sanitize_html
-
-# ✅ Variable de módulo para almacenar teléfonos originales durante la validación
-_telefonos_originales_cache: dict = {}
 
 # Constantes de validación
 MIN_CEDULA_LENGTH = 6
@@ -356,14 +353,8 @@ class ClienteResponse(ClienteBase):
         description="Email del cliente (validación flexible para lectura de datos históricos)",
     )
 
-    # Sobrescribir campo telefono para permitir datos históricos
-    # (en lectura, aceptamos formatos no estándar para no romper datos existentes)
-    telefono: str = Field(
-        ...,
-        min_length=10,  # Mínimo 10 caracteres (formato nacional corto)
-        max_length=20,  # Máximo 20 caracteres (permite formatos variados)
-        description="Teléfono del cliente (formato flexible para lectura de datos históricos)",
-    )
+    # ✅ MANTENER validación estricta - Los clientes que no cumplan se mostrarán en interfaz de corrección
+    # El campo telefono hereda la validación estricta de ClienteBase (requiere +58)
     
     # ✅ Sobrescribir validador de email para permitir datos históricos
     # (en lectura, aceptamos emails con errores menores como puntos antes de @ o dobles puntos)
@@ -383,77 +374,6 @@ class ClienteResponse(ClienteBase):
         v_str = v_str.replace("..", ".")
         # En respuestas, devolvemos el email (limpiado si es posible) sin validación estricta
         return v_str if v_str else None
-
-    # ✅ CORRECCIÓN CRÍTICA: Usar model_validator con mode="before" para interceptar ANTES de los validadores de campos
-    # Esto permite normalizar el teléfono antes de que se ejecute el validador estricto de ClienteBase
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_telefono_before_validation(cls, data):
-        """
-        Normaliza el teléfono ANTES de que se ejecuten los validadores de campos.
-        Esto permite que el teléfono pase la validación estricta de ClienteBase.
-        """
-        if hasattr(data, "telefono"):
-            # Si es un objeto ORM, necesitamos crear un dict para la validación
-            if not isinstance(data, dict):
-                # Convertir objeto a dict
-                data_dict = {}
-                for key in cls.model_fields.keys():
-                    if hasattr(data, key):
-                        value = getattr(data, key)
-                        # Normalizar teléfono especialmente - convertir +53 a formato válido temporalmente
-                        if key == "telefono" and value:
-                            telefono = str(value).strip()
-                            # Si no empieza con +58, agregar un prefijo temporal para pasar validación
-                            # Luego lo restauramos en el validador de campo
-                            if not telefono.startswith("+58") and len(telefono) >= 10:
-                                # Guardar el teléfono original usando el ID del cliente si está disponible
-                                cliente_id = getattr(data, "id", None)
-                                if cliente_id:
-                                    _telefonos_originales_cache[cliente_id] = telefono
-                                # Usar un formato que pase la validación de ClienteBase
-                                # Tomar los últimos 10 dígitos y agregar +58
-                                digitos = re.sub(r"[^0-9]", "", telefono)[-10:]
-                                if digitos and len(digitos) == 10 and digitos[0] != "0":
-                                    data_dict["telefono"] = f"+58{digitos}"
-                                else:
-                                    # Si no podemos convertir, usar un formato por defecto válido
-                                    data_dict["telefono"] = "+581234567890"  # Temporal
-                            else:
-                                data_dict["telefono"] = telefono
-                        else:
-                            data_dict[key] = value
-                return data_dict
-            elif isinstance(data, dict) and "telefono" in data and data["telefono"]:
-                # Normalizar teléfono en dict
-                telefono = str(data["telefono"]).strip()
-                if not telefono.startswith("+58") and len(telefono) >= 10:
-                    # Guardar el teléfono original usando el ID del cliente si está disponible
-                    cliente_id = data.get("id")
-                    if cliente_id:
-                        _telefonos_originales_cache[cliente_id] = telefono
-                    # Convertir temporalmente a formato válido
-                    digitos = re.sub(r"[^0-9]", "", telefono)[-10:]
-                    if digitos and len(digitos) == 10 and digitos[0] != "0":
-                        data["telefono"] = f"+58{digitos}"
-                    else:
-                        data["telefono"] = "+581234567890"  # Temporal
-                else:
-                    data["telefono"] = telefono
-        return data
-    
-    # ✅ CORRECCIÓN: Usar model_validator con mode="after" para restaurar el teléfono original
-    @model_validator(mode="after")
-    def restore_telefono_original(self):
-        """
-        Restaura el teléfono original después de que pase la validación estricta.
-        """
-        # Restaurar el teléfono original si fue guardado en el cache
-        if hasattr(self, "id") and self.id in _telefonos_originales_cache:
-            telefono_original = _telefonos_originales_cache.pop(self.id)
-            # Usar object.__setattr__ para evitar problemas con campos congelados de Pydantic
-            object.__setattr__(self, "telefono", telefono_original)
-        return self
 
     @staticmethod
     def _limpiar_nombre(nombre: str) -> str:

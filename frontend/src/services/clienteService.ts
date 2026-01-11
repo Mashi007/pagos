@@ -204,6 +204,22 @@ class ClienteService {
     }
   }
 
+  // Obtener clientes con problemas de validación
+  async getClientesConProblemasValidacion(
+    page: number = 1,
+    perPage: number = 20
+  ): Promise<PaginatedResponse<any>> {
+    const url = buildUrl(`${this.baseUrl}/con-problemas-validacion`, { page, per_page: perPage })
+    const response = await apiClient.get<any>(url)
+    return {
+      data: response.clientes || [],
+      total: response.total || 0,
+      page: response.page || page,
+      per_page: response.per_page || perPage,
+      total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
+    }
+  }
+
   // Obtener clientes con valores por defecto
   async getClientesValoresPorDefecto(
     page: number = 1,
