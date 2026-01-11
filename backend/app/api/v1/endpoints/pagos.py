@@ -1200,9 +1200,7 @@ def _actualizar_estado_cuota(cuota, fecha_hoy: date, db: Session = None, es_exce
             if prestamo:
                 verificar_y_actualizar_estado_finalizado(db, prestamo.cedula)
         except Exception as e:
-            logger.warning(
-                f"Error verificando estado FINALIZADO del cliente después de completar cuota: {e}"
-            )
+            logger.warning(f"Error verificando estado FINALIZADO del cliente después de completar cuota: {e}")
 
     return estado_completado
 
