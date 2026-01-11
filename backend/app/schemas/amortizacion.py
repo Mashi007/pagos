@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import List, Optional
 
@@ -53,7 +53,7 @@ class CuotaUpdate(BaseModel):
 
 
 class CuotaResponse(CuotaBase):
-    # Schema para respuesta de cuota
+    # Schema para respuesta de cuota - FASE 2: Sincronizado con modelo ORM
     id: int
     prestamo_id: int
     fecha_pago: Optional[date] = None
@@ -71,6 +71,13 @@ class CuotaResponse(CuotaBase):
     esta_vencida: bool = False
     monto_pendiente_total: Decimal = Decimal("0.00")
     porcentaje_pagado: Decimal = Decimal("0.00")
+    
+    # FASE 2: Campos adicionales sincronizados con ORM
+    dias_morosidad: Optional[int] = Field(None, description="Días de atraso (actualización automática)")
+    monto_morosidad: Optional[Decimal] = Field(None, description="Monto pendiente (actualización automática)")
+    es_cuota_especial: Optional[bool] = Field(None, description="Indica si es una cuota especial")
+    creado_en: Optional[datetime] = Field(None, description="Fecha de creación del registro")
+    actualizado_en: Optional[datetime] = Field(None, description="Fecha de última actualización")
 
     model_config = {"from_attributes": True}
 

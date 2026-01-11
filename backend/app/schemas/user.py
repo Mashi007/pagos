@@ -64,9 +64,14 @@ class UserUpdate(BaseModel):
 
 
 class UserResponse(UserBase):
-    """Schema de respuesta de usuario."""
+    """Schema de respuesta de usuario - FASE 2: Sincronizado con modelo ORM"""
 
     id: int
+    
+    # FASE 2: Campos adicionales sincronizados con ORM
+    created_at: datetime = Field(..., description="Fecha de creación del usuario")
+    updated_at: Optional[datetime] = Field(None, description="Fecha de última actualización")
+    # Nota: hashed_password NO se incluye en Response por seguridad
 
     model_config = ConfigDict(from_attributes=True)
 

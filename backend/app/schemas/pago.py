@@ -90,9 +90,10 @@ class PagoUpdate(BaseModel):
 
 
 class PagoResponse(PagoBase):
-    """Schema para respuesta de un pago"""
+    """Schema para respuesta de un pago - FASE 2: Sincronizado con modelo ORM"""
 
     id: int
+    cliente_id: int | None = Field(None, description="ID del cliente")
     fecha_registro: datetime | None = None
     estado: str
     conciliado: bool
@@ -100,10 +101,35 @@ class PagoResponse(PagoBase):
     documento_nombre: str | None = None
     documento_tipo: str | None = None
     documento_ruta: str | None = None
+    documento_tamaño: int | None = Field(None, description="Tamaño del documento en bytes")
+    documento: str | None = Field(None, description="Documento adicional")
     usuario_registro: str
     activo: bool
     fecha_actualizacion: datetime | None = None
     verificado_concordancia: str | None = None  # SI/NO - Verificación de concordancia con módulo de pagos
+    
+    # FASE 2: Campos adicionales sincronizados con ORM
+    numero_cuota: int | None = Field(None, description="Número de cuota asociada")
+    banco: str | None = Field(None, description="Nombre del banco")
+    metodo_pago: str | None = Field(None, description="Método de pago (EFECTIVO, TRANSFERENCIA, etc.)")
+    tipo_pago: str | None = Field(None, description="Tipo de pago adicional")
+    codigo_pago: str | None = Field(None, description="Código único del pago")
+    numero_operacion: str | None = Field(None, description="Número de operación bancaria")
+    referencia_pago: str = Field(..., description="Referencia adicional del pago")
+    comprobante: str | None = Field(None, description="Ruta o referencia al comprobante")
+    monto: int | None = Field(None, description="Monto total (legacy - INTEGER)")
+    monto_capital: Decimal | None = Field(None, description="Monto de capital pagado")
+    monto_interes: Decimal | None = Field(None, description="Monto de interés pagado")
+    monto_cuota_programado: Decimal | None = Field(None, description="Monto de cuota programada")
+    monto_mora: Decimal | None = Field(None, description="Monto de mora pagado")
+    monto_total: Decimal | None = Field(None, description="Monto total del pago")
+    descuento: Decimal | None = Field(None, description="Descuento aplicado")
+    dias_mora: int | None = Field(None, description="Días de mora al momento del pago")
+    tasa_mora: Decimal | None = Field(None, description="Tasa de mora aplicada (%)")
+    fecha_vencimiento: date | None = Field(None, description="Fecha de vencimiento de la cuota")
+    hora_pago: str | None = Field(None, description="Hora del pago (TIME)")
+    creado_en: datetime | None = Field(None, description="Fecha de creación")
+    observaciones: str | None = Field(None, description="Observaciones adicionales del pago")
 
     @field_serializer("monto_pagado")
     @classmethod

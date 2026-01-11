@@ -75,7 +75,7 @@ class PrestamoUpdate(BaseModel):
 # SCHEMAS DE RESPUESTA
 # ============================================
 class PrestamoResponse(PrestamoBase):
-    """Schema para respuesta de préstamo"""
+    """Schema para respuesta de préstamo - FASE 2: Sincronizado con modelo ORM"""
 
     id: int
     cliente_id: int
@@ -102,6 +102,18 @@ class PrestamoResponse(PrestamoBase):
     fecha_registro: datetime
     fecha_aprobacion: Optional[datetime] = None
     fecha_actualizacion: datetime
+    
+    # FASE 2: Campos adicionales sincronizados con ORM
+    concesionario_id: Optional[int] = Field(None, description="ID del concesionario (FK)")
+    analista_id: Optional[int] = Field(None, description="ID del analista (FK)")
+    modelo_vehiculo_id: Optional[int] = Field(None, description="ID del modelo de vehículo (FK)")
+    informacion_desplegable: bool = Field(False, description="Si ha desplegado información adicional")
+    ml_impago_nivel_riesgo_manual: Optional[str] = Field(None, description="Nivel de riesgo manual (Alto, Medio, Bajo)")
+    ml_impago_probabilidad_manual: Optional[Decimal] = Field(None, description="Probabilidad manual (0.0 a 1.0)")
+    ml_impago_nivel_riesgo_calculado: Optional[str] = Field(None, description="Nivel de riesgo calculado por ML")
+    ml_impago_probabilidad_calculada: Optional[Decimal] = Field(None, description="Probabilidad calculada por ML (0.0 a 1.0)")
+    ml_impago_calculado_en: Optional[datetime] = Field(None, description="Fecha de última predicción calculada")
+    ml_impago_modelo_id: Optional[int] = Field(None, description="ID del modelo ML usado")
 
     @field_serializer("fecha_registro")
     def serialize_fecha_registro(self, value: datetime) -> str:
