@@ -10,7 +10,8 @@ Scripts útiles para el mantenimiento del proyecto:
 - `fix_specific_errors.py` - Corregir errores específicos complejos
 
 ### 📁 analysis/
-Scripts para análisis y diagnóstico del sistema.
+Scripts para análisis y diagnóstico del sistema:
+- `analisis_integridad_datos.py` - Análisis completo de integridad de datos (Clientes, Préstamos, Pagos, Cuotas)
 
 ### 📁 development/
 Scripts para desarrollo y testing.
@@ -46,6 +47,58 @@ Los scripts en `powershell/` están organizados por funcionalidad:
 - **Configuración**: Scripts para configurar el entorno
 
 ## Uso Recomendado
+
+### Para Análisis de Integridad de Datos
+
+**Script principal:** `analisis_integridad_datos.py`
+
+Este script realiza un análisis completo de la integridad de datos en el sistema:
+
+1. **Análisis de Clientes:**
+   - Total de clientes (activos/inactivos)
+   - Cédulas duplicadas
+   - Clientes sin cédula
+   - Emails duplicados
+
+2. **Análisis de Préstamos:**
+   - Préstamos por estado
+   - Préstamos aprobados sin cuotas
+   - Préstamos con número de cuotas inconsistente
+   - Préstamos con cédulas sin cliente
+
+3. **Análisis de Pagos:**
+   - Pagos por estado
+   - Estado de conciliación
+   - Pagos con cédulas sin préstamos
+   - Pagos sin número de documento
+
+4. **Análisis de Cuotas:**
+   - Cuotas por estado
+   - Cuotas sin préstamo asociado
+   - Relación entre cuotas y pagos
+
+5. **Análisis de Relaciones:**
+   - Clientes con/sin préstamos
+   - Préstamos con/sin pagos
+   - Integridad referencial general
+
+**Ejecución:**
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\ejecutar_analisis_integridad.ps1
+```
+
+**Linux/Mac (Bash):**
+```bash
+chmod +x scripts/ejecutar_analisis_integridad.sh
+./scripts/ejecutar_analisis_integridad.sh
+```
+
+**Directamente con Python:**
+```bash
+python scripts/analisis_integridad_datos.py
+```
 
 ### Para Corrección de Errores de Sintaxis
 ```bash

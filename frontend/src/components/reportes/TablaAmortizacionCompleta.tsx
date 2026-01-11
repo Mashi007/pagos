@@ -410,24 +410,25 @@ export function TablaAmortizacionCompleta() {
 
                   {/* Tabla de Cuotas */}
                   {prestamos && prestamos.length > 0 && (
-                    loadingCuotas ? (
-                    <Card className="mb-6">
-                      <CardContent className="py-8 text-center">
-                        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
-                        <p className="text-gray-600">Cargando tabla de amortización...</p>
-                      </CardContent>
-                    </Card>
-                  ) : errorCuotas ? (
-                    <Card className="mb-6">
-                      <CardContent className="py-8 text-center">
-                        <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-                        <p className="text-red-600 mb-2">Error al cargar las cuotas</p>
-                        <p className="text-sm text-gray-600">
-                          {errorCuotas instanceof Error ? errorCuotas.message : 'Error desconocido'}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ) : todasLasCuotas && todasLasCuotas.length > 0 ? (
+                    <>
+                      {loadingCuotas ? (
+                        <Card className="mb-6">
+                          <CardContent className="py-8 text-center">
+                            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+                            <p className="text-gray-600">Cargando tabla de amortización...</p>
+                          </CardContent>
+                        </Card>
+                      ) : errorCuotas ? (
+                        <Card className="mb-6">
+                          <CardContent className="py-8 text-center">
+                            <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                            <p className="text-red-600 mb-2">Error al cargar las cuotas</p>
+                            <p className="text-sm text-gray-600">
+                              {errorCuotas instanceof Error ? errorCuotas.message : 'Error desconocido'}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ) : todasLasCuotas && todasLasCuotas.length > 0 ? (
                     <Card className="mb-6">
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -496,14 +497,19 @@ export function TablaAmortizacionCompleta() {
                         </div>
                       </CardContent>
                     </Card>
-                  ) : (
-                    <Card className="mb-6">
-                      <CardContent className="py-8 text-center">
-                        <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-600">No se encontraron cuotas para los préstamos de este cliente</p>
-                      </CardContent>
-                    </Card>
-                  )
+                      ) : (
+                        <Card className="mb-6">
+                          <CardContent className="py-8 text-center">
+                            <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-600 mb-2">No se encontraron cuotas para los préstamos de este cliente</p>
+                            <p className="text-sm text-gray-500">
+                              Los préstamos pueden no tener tabla de amortización generada. 
+                              Genera la tabla de amortización desde el módulo de préstamos.
+                            </p>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </>
                   )}
 
                   {/* Tabla de Pagos */}
