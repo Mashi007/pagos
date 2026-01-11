@@ -105,6 +105,11 @@ class Prestamo(Base):
     ml_impago_calculado_en = Column(TIMESTAMP, nullable=True)  # Fecha de última predicción calculada
     ml_impago_modelo_id = Column(Integer, ForeignKey("modelos_impago_cuotas.id"), nullable=True)  # ID del modelo ML usado
 
+    # ============================================
+    # REVISIÓN DE DIFERENCIAS DE ABONOS
+    # ============================================
+    requiere_revision = Column(Boolean, nullable=False, default=False, index=True)  # Marca préstamos que requieren revisión manual
+
     # Auditoría
     fecha_actualizacion = Column(TIMESTAMP, nullable=False, default=func.now(), onupdate=func.now())
 

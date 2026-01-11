@@ -26,6 +26,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatCurrency, formatDate } from '@/utils'
 import { reporteService } from '@/services/reporteService'
 import { TablaAmortizacionCompleta } from '@/components/reportes/TablaAmortizacionCompleta'
+import { ReporteDiferenciasAbonos } from '@/components/reportes/ReporteDiferenciasAbonos'
 import { toast } from 'sonner'
 
 // Mock data para reportes
@@ -269,6 +270,9 @@ export function Reportes() {
           </p>
         </div>
       )}
+
+      {/* Reporte de Diferencias de Abonos */}
+      <ReporteDiferenciasAbonos />
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

@@ -80,6 +80,7 @@ export interface ClienteForm {
 
 // Tipos de Préstamo
 export interface Prestamo {
+  requiere_revision?: boolean
   id: number
   cliente_id: number
   cedula: string

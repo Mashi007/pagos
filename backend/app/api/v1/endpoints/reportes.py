@@ -1819,3 +1819,277 @@ def generar_pdf_pendientes_cliente(
     except Exception as e:
         logger.error(f"Error generando PDF pendientes para cliente {cedula}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al generar PDF: {str(e)}")
+
+
+# ============================================
+# ENDPOINTS PARA DIFERENCIAS DE ABONOS
+# ============================================
+
+
+class DiferenciaAbonoResponse(BaseModel):
+    """Schema para respuesta de diferencia de abonos"""
+
+    prestamo_id: int
+    cedula: str
+    nombres: str
+    total_abonos_bd: Decimal
+    total_abonos_imagen: Decimal
+    diferencia: Decimal
+    detalle: str
+
+
+class AjustarAbonoRequest(BaseModel):
+    """Schema para ajustar total_abonos_bd"""
+
+    nuevo_total_abonos: Decimal
+
+
+@router.get("/diferencias-abonos", response_model=List[DiferenciaAbonoResponse])
+def obtener_diferencias_abonos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obtiene la lista de préstamos marcados para revisión (requiere_revision=True)
+    con sus diferencias de abonos comparando BD vs valores de referencia (abono_2026).
+    Solo muestra préstamos con diferencias mayores a $0.01.
+    """
+    try:
+        # Obtener préstamos marcados para revisión
+        prestamos_revision = (
+            db.query(Prestamo)
+            .filter(Prestamo.requiere_revision.is_(True))  # type: ignore[attr-defined]
+            .filter(Prestamo.cedula.isnot(None))
+            .filter(Prestamo.cedula != "")
+            .all()
+        )
+
+        if not prestamos_revision:
+            return []
+
+        # Obtener total_abonos_bd por cédula (suma de cuotas.total_pagado)
+        diferencias = []
+        valores_imagen = {}  # Cache para valores de abono_2026
+
+        for prestamo in prestamos_revision:
+            # Calcular total_abonos_bd desde cuotas
+            total_abonos_bd_query = (
+                db.query(func.coalesce(func.sum(Cuota.total_pagado), Decimal("0.00")))
+                .filter(Cuota.prestamo_id == prestamo.id)
+            )
+            total_abonos_bd = total_abonos_bd_query.scalar() or Decimal("0.00")
+
+            # Obtener total_abonos_imagen desde abono_2026 (si no está en cache)
+            if prestamo.cedula not in valores_imagen:
+                try:
+                    # Consultar tabla abono_2026 directamente con SQL
+                    result = db.execute(
+                        text(
+                            """
+                            SELECT COALESCE(SUM(abonos)::numeric, 0) 
+                            FROM abono_2026 
+                            WHERE cedula = :cedula
+                            """
+                        ),
+                        {"cedula": prestamo.cedula},
+                    )
+                    total_abonos_imagen = Decimal(str(result.scalar() or 0))
+                    valores_imagen[prestamo.cedula] = total_abonos_imagen
+                except Exception as e:
+                    logger.warning(f"No se pudo obtener abono_2026 para {prestamo.cedula}: {e}")
+                    valores_imagen[prestamo.cedula] = Decimal("0.00")
+
+            total_abonos_imagen = valores_imagen[prestamo.cedula]
+            diferencia = abs(total_abonos_bd - total_abonos_imagen)
+
+            # Solo incluir si hay diferencia mayor a $0.01
+            if diferencia > Decimal("0.01"):
+                detalle = (
+                    f"BD tiene {diferencia:.2f} más"
+                    if total_abonos_bd > total_abonos_imagen
+                    else f"Imagen tiene {diferencia:.2f} más"
+                )
+
+                diferencias.append(
+                    DiferenciaAbonoResponse(
+                        prestamo_id=prestamo.id,
+                        cedula=prestamo.cedula,
+                        nombres=prestamo.nombres,
+                        total_abonos_bd=total_abonos_bd,
+                        total_abonos_imagen=total_abonos_imagen,
+                        diferencia=diferencia,
+                        detalle=detalle,
+                    )
+                )
+
+        # Ordenar por diferencia descendente
+        diferencias.sort(key=lambda x: x.diferencia, reverse=True)
+
+        logger.info(f"✅ [obtener_diferencias_abonos] {len(diferencias)} diferencias encontradas")
+        return diferencias
+
+    except Exception as e:
+        logger.error(f"Error obteniendo diferencias de abonos: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error obteniendo diferencias: {str(e)}")
+
+
+@router.put("/diferencias-abonos/{prestamo_id}/ajustar", response_model=dict)
+def ajustar_total_abonos_bd(
+    prestamo_id: int,
+    ajuste: AjustarAbonoRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Ajusta el total_abonos_bd de un préstamo redistribuyendo uniformemente los pagos.
+    
+    Proceso:
+    1. Obtiene todas las cuotas del préstamo ordenadas por fecha_vencimiento
+    2. Elimina los pagos existentes del préstamo (marca como activo=False)
+    3. Resetea total_pagado de todas las cuotas a 0
+    4. Distribuye uniformemente el nuevo_total_abonos entre las cuotas
+    5. Crea nuevos pagos distribuidos uniformemente manteniendo las fechas originales
+    6. Aplica los pagos a las cuotas
+    """
+    try:
+        prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+        if not prestamo:
+            raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+        if not prestamo.requiere_revision:  # type: ignore[attr-defined]
+            raise HTTPException(
+                status_code=400,
+                detail="Este préstamo no está marcado para revisión. Debe marcarlo primero en /prestamos",
+            )
+
+        nuevo_total = ajuste.nuevo_total_abonos
+        if nuevo_total < Decimal("0.00"):
+            raise HTTPException(status_code=400, detail="El nuevo total debe ser mayor o igual a 0")
+
+        # Obtener todas las cuotas del préstamo ordenadas por fecha_vencimiento
+        cuotas = (
+            db.query(Cuota)
+            .filter(Cuota.prestamo_id == prestamo_id)
+            .order_by(Cuota.fecha_vencimiento, Cuota.numero_cuota)
+            .all()
+        )
+
+        if not cuotas:
+            raise HTTPException(status_code=400, detail="El préstamo no tiene cuotas generadas")
+
+        # Guardar fechas de pago originales para mantenerlas
+        fechas_pago_originales = {}
+        for cuota in cuotas:
+            if cuota.fecha_pago:
+                fechas_pago_originales[cuota.numero_cuota] = cuota.fecha_pago
+
+        # 1. Eliminar pagos existentes del préstamo (marcar como inactivos)
+        pagos_eliminados = (
+            db.query(Pago)
+            .filter(Pago.prestamo_id == prestamo_id)
+            .filter(Pago.activo.is_(True))  # type: ignore[attr-defined]
+            .all()
+        )
+
+        for pago in pagos_eliminados:
+            pago.activo = False  # type: ignore[assignment]
+            logger.info(f"🗑️ [ajustar_total_abonos_bd] Pago {pago.id} marcado como inactivo")
+
+        # 2. Resetear total_pagado de todas las cuotas
+        for cuota in cuotas:
+            cuota.capital_pagado = Decimal("0.00")  # type: ignore[assignment]
+            cuota.interes_pagado = Decimal("0.00")  # type: ignore[assignment]
+            cuota.mora_pagada = Decimal("0.00")  # type: ignore[assignment]
+            cuota.total_pagado = Decimal("0.00")  # type: ignore[assignment]
+            cuota.capital_pendiente = cuota.monto_capital  # type: ignore[assignment]
+            cuota.interes_pendiente = cuota.monto_interes  # type: ignore[assignment]
+            cuota.estado = "PENDIENTE"  # type: ignore[assignment]
+            cuota.fecha_pago = None  # type: ignore[assignment]
+            cuota.dias_mora = 0  # type: ignore[assignment]
+            cuota.monto_mora = Decimal("0.00")  # type: ignore[assignment]
+
+        db.commit()
+
+        # 3. Distribuir uniformemente el nuevo_total entre las cuotas
+        monto_por_cuota = nuevo_total / Decimal(len(cuotas))
+        resto = nuevo_total - (monto_por_cuota * Decimal(len(cuotas)))
+
+        # 4. Crear nuevos pagos distribuidos uniformemente
+        pagos_creados = 0
+        for i, cuota in enumerate(cuotas):
+            # Agregar el resto a la primera cuota para evitar decimales perdidos
+            monto_pago = monto_por_cuota + (resto if i == 0 else Decimal("0.00"))
+
+            if monto_pago <= Decimal("0.00"):
+                continue
+
+            # Usar fecha de pago original si existe, sino usar fecha_vencimiento
+            fecha_pago = fechas_pago_originales.get(cuota.numero_cuota, cuota.fecha_vencimiento)
+
+            # Crear nuevo pago
+            nuevo_pago = Pago(
+                cedula=prestamo.cedula,
+                prestamo_id=prestamo_id,
+                monto_pagado=monto_pago,
+                fecha_pago=fecha_pago,
+                metodo_pago="AJUSTE_MANUAL",
+                institucion_bancaria="AJUSTE",
+                numero_documento=f"AJUSTE-{prestamo_id}-{cuota.numero_cuota}",
+                usuario_registro=current_user.email,
+                fecha_registro=datetime.now(),
+                activo=True,
+                conciliado=True,  # Marcar como conciliado para que se aplique a cuotas
+                fecha_conciliacion=datetime.now(),
+                verificado_concordancia="SI",
+            )
+
+            db.add(nuevo_pago)
+            db.flush()  # Para obtener el ID del pago
+
+            # Aplicar pago a la cuota manualmente (sin llamar a la función externa para evitar dependencias circulares)
+            # Actualizar campos de la cuota directamente
+            monto_aplicar = monto_pago
+            capital_aplicar = (monto_aplicar * cuota.monto_capital) / cuota.monto_cuota if cuota.monto_cuota > 0 else Decimal("0.00")
+            interes_aplicar = monto_aplicar - capital_aplicar
+
+            cuota.capital_pagado += capital_aplicar  # type: ignore[assignment]
+            cuota.interes_pagado += interes_aplicar  # type: ignore[assignment]
+            cuota.total_pagado += monto_aplicar  # type: ignore[assignment]
+            cuota.capital_pendiente = max(Decimal("0.00"), cuota.capital_pendiente - capital_aplicar)  # type: ignore[assignment]
+            cuota.interes_pendiente = max(Decimal("0.00"), cuota.interes_pendiente - interes_aplicar)  # type: ignore[assignment]
+            cuota.fecha_pago = fecha_pago  # type: ignore[assignment]
+
+            # Actualizar estado de la cuota
+            if cuota.total_pagado >= cuota.monto_cuota:
+                cuota.estado = "PAGADO"  # type: ignore[assignment]
+            elif cuota.total_pagado > Decimal("0.00"):
+                cuota.estado = "PARCIAL"  # type: ignore[assignment]
+
+            pagos_creados += 1
+
+        # 5. Desmarcar como requiere_revision ya que fue ajustado
+        prestamo.requiere_revision = False  # type: ignore[assignment]
+
+        db.commit()
+
+        logger.info(
+            f"✅ [ajustar_total_abonos_bd] Préstamo {prestamo_id} ajustado: "
+            f"nuevo_total={nuevo_total}, pagos_creados={pagos_creados}, "
+            f"pagos_eliminados={len(pagos_eliminados)}"
+        )
+
+        return {
+            "message": "Total de abonos ajustado exitosamente",
+            "prestamo_id": prestamo_id,
+            "nuevo_total_abonos": float(nuevo_total),
+            "pagos_eliminados": len(pagos_eliminados),
+            "pagos_creados": pagos_creados,
+            "cuotas_afectadas": len(cuotas),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error ajustando total_abonos_bd del préstamo {prestamo_id}: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error ajustando abonos: {str(e)}")

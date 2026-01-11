@@ -18,6 +18,8 @@ import { EvaluacionRiesgoForm } from './EvaluacionRiesgoForm'
 import { PrestamoDetalleModal } from './PrestamoDetalleModal'
 import { FormularioAprobacionCondiciones } from './FormularioAprobacionCondiciones'
 import { formatDate } from '@/utils'
+import { prestamoService } from '@/services/prestamoService'
+import { toast } from 'sonner'
 
 export function PrestamosList() {
   const [page, setPage] = useState(1)
@@ -138,6 +140,20 @@ export function PrestamosList() {
   const handleDelete = async (id: number) => {
     if (window.confirm('¿Está seguro de eliminar este préstamo?')) {
       await deletePrestamo.mutateAsync(id)
+    }
+  }
+
+  const handleMarcarRevision = async (prestamoId: number, requiereRevision: boolean) => {
+    try {
+      await prestamoService.marcarRevision(prestamoId, requiereRevision)
+      queryClient.invalidateQueries({ queryKey: prestamoKeys.list(filters, page) })
+      toast.success(
+        requiereRevision
+          ? 'Préstamo marcado para revisión. Aparecerá en el reporte de diferencias.'
+          : 'Préstamo desmarcado de revisión.'
+      )
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || 'Error al actualizar estado de revisión')
     }
   }
 
@@ -486,6 +502,7 @@ export function PrestamosList() {
                       <TableHead>Cuotas</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead>Fecha</TableHead>
+                      <TableHead className="text-center">REVISAR</TableHead>
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -523,6 +540,15 @@ export function PrestamosList() {
                             <Calendar className="h-4 w-4" />
                             {formatDate(prestamo.fecha_registro)}
                           </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <input
+                            type="checkbox"
+                            checked={prestamo.requiere_revision || false}
+                            onChange={(e) => handleMarcarRevision(prestamo.id, e.target.checked)}
+                            className="h-4 w-4 cursor-pointer"
+                            title="Marcar para revisar diferencias de abonos"
+                          />
                         </TableCell>
                                     <TableCell className="text-right">
                                       <div className="flex justify-end gap-2">

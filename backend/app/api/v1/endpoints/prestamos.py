@@ -1570,3 +1570,42 @@ def aplicar_condiciones_aprobacion(
         logger.error(f"Error aplicando condiciones: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error aplicando condiciones: {str(e)}")
+
+
+@router.patch("/{prestamo_id}/marcar-revision", response_model=dict)
+def marcar_revision_prestamo(
+    prestamo_id: int = Path(..., description="ID del préstamo"),
+    requiere_revision: bool = Query(..., description="True para marcar como requiere revisión, False para desmarcar"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Marca o desmarca un préstamo como que requiere revisión de diferencias de abonos.
+    Los préstamos marcados aparecerán en el reporte de diferencias en /reportes.
+    """
+    try:
+        prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+        if not prestamo:
+            raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+
+        prestamo.requiere_revision = requiere_revision  # type: ignore[assignment]
+        db.commit()
+        db.refresh(prestamo)
+
+        logger.info(
+            f"✅ [marcar_revision_prestamo] Préstamo {prestamo_id} "
+            f"marcado como requiere_revision={requiere_revision} por {current_user.email}"
+        )
+
+        return {
+            "message": "Estado de revisión actualizado exitosamente",
+            "prestamo_id": prestamo_id,
+            "requiere_revision": requiere_revision,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error marcando revisión del préstamo {prestamo_id}: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error actualizando estado de revisión: {str(e)}")

@@ -185,6 +185,14 @@ class PrestamoService {
     const response = await apiClient.get<any>(url)
     return response
   }
+
+  // Marcar/desmarcar préstamo como requiere revisión
+  async marcarRevision(prestamoId: number, requiereRevision: boolean): Promise<any> {
+    const response = await apiClient.patch<any>(
+      `${this.baseUrl}/${prestamoId}/marcar-revision?requiere_revision=${requiereRevision}`
+    )
+    return response
+  }
 }
 
 export const prestamoService = new PrestamoService()
