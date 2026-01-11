@@ -12,6 +12,7 @@ Scripts útiles para el mantenimiento del proyecto:
 ### 📁 analysis/
 Scripts para análisis y diagnóstico del sistema:
 - `analisis_integridad_datos.py` - Análisis completo de integridad de datos (Clientes, Préstamos, Pagos, Cuotas)
+- `analisis_estructura_coherencia.py` - Análisis de estructura de columnas, relaciones entre tablas y coherencia con endpoints
 
 ### 📁 development/
 Scripts para desarrollo y testing.
@@ -98,6 +99,64 @@ chmod +x scripts/ejecutar_analisis_integridad.sh
 **Directamente con Python:**
 ```bash
 python scripts/analisis_integridad_datos.py
+```
+
+### Para Análisis de Estructura y Coherencia
+
+**Script principal:** `analisis_estructura_coherencia.py`
+
+Este script realiza un análisis completo de la estructura y coherencia del sistema:
+
+1. **Estructura de Columnas:**
+   - Columnas de cada tabla en la base de datos
+   - Foreign Keys y relaciones
+   - Índices y constraints
+
+2. **Estructura de Modelos ORM:**
+   - Columnas definidas en los modelos Python
+   - Relaciones ORM definidas
+   - Comparación con estructura de BD
+
+3. **Comparación BD vs ORM:**
+   - Columnas en BD pero no en modelo ORM
+   - Columnas en modelo ORM pero no en BD
+   - Coherencia de tipos de datos
+
+4. **Análisis de Relaciones:**
+   - Verificación de Foreign Keys
+   - Relaciones esperadas vs reales
+   - Integridad referencial
+
+5. **Coherencia Endpoints:**
+   - Uso de columnas críticas en endpoints
+   - Verificación de que endpoints usen correctamente las estructuras
+
+6. **Coherencia de Cédulas:**
+   - Cédulas en préstamos vs clientes
+   - Cédulas en pagos vs clientes
+   - Coherencia entre cliente_id y cedula
+
+7. **Procesos de Negocio:**
+   - Préstamo aprobado → Cuotas generadas
+   - Cuota → Préstamo válido
+   - Pago → Préstamo aprobado
+
+**Ejecución:**
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\ejecutar_analisis_estructura.ps1
+```
+
+**Linux/Mac (Bash):**
+```bash
+chmod +x scripts/ejecutar_analisis_estructura.sh
+./scripts/ejecutar_analisis_estructura.sh
+```
+
+**Directamente con Python:**
+```bash
+python scripts/analisis_estructura_coherencia.py
 ```
 
 ### Para Corrección de Errores de Sintaxis
