@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { AlertCircle, Loader2, ArrowRight } from 'lucide-react'
+import { AlertCircle, Loader2, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -134,7 +134,7 @@ export function DiferenciasAbonosInformativo() {
             className="bg-orange-600 hover:bg-orange-700 text-white"
           >
             Ver Préstamos
-            <ArrowRight className="ml-2 h-4 w-4" />
+            <ChevronRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
       </CardContent>
