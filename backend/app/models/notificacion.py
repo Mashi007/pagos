@@ -46,7 +46,7 @@ class Notificacion(Base):
     # Destinatario
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    
+
     # ✅ NUEVO: Información de destinatario (existe en BD)
     destinatario_email = Column(String(255), nullable=True)
     destinatario_telefono = Column(String(20), nullable=True)
@@ -54,14 +54,18 @@ class Notificacion(Base):
 
     # Contenido
     tipo = Column(String(20), nullable=False, index=True)  # EMAIL, SMS, WHATSAPP (USER-DEFINED enum en BD)
-    categoria = Column(String(50), nullable=False, default="GENERAL", index=True)  # ✅ NUEVO: Existe en BD como USER-DEFINED enum
+    categoria = Column(
+        String(50), nullable=False, default="GENERAL", index=True
+    )  # ✅ NUEVO: Existe en BD como USER-DEFINED enum
     asunto = Column(String(255), nullable=True)
     mensaje = Column(Text, nullable=False)
     extra_data = Column(JSON, nullable=True)  # ✅ NUEVO: Existe en BD
 
     # Estado y control
     estado = Column(String(20), nullable=False, default="PENDIENTE", index=True)  # USER-DEFINED enum en BD
-    prioridad = Column(String(20), nullable=False, default="MEDIA", index=True)  # ✅ NUEVO: Existe en BD como USER-DEFINED enum
+    prioridad = Column(
+        String(20), nullable=False, default="MEDIA", index=True
+    )  # ✅ NUEVO: Existe en BD como USER-DEFINED enum
     programada_para = Column(DateTime(timezone=True), nullable=True, index=True)
     enviada_en = Column(DateTime(timezone=True), nullable=True)
     # ✅ CORREGIDO: leida -> leida_en (timestamp en lugar de boolean)
@@ -129,19 +133,19 @@ class Notificacion(Base):
     @property
     def fecha_creacion(self):
         return self.creado_en  # ✅ CORREGIDO: Usar creado_en
-    
+
     # ✅ NUEVO: Propiedad de compatibilidad para leida (boolean basado en leida_en)
     @property
     def leida(self) -> bool:
         """Indica si la notificación fue leída (basado en leida_en)"""
         return self.leida_en is not None
-    
+
     # ✅ NUEVO: Propiedad de compatibilidad para created_at
     @property
     def created_at(self):
         """Compatibilidad: alias para creado_en"""
         return self.creado_en
-    
+
     # ✅ NUEVO: Propiedad de compatibilidad para canal (calculada desde tipo)
     @property
     def canal(self) -> Optional[str]:
@@ -153,7 +157,7 @@ class Notificacion(Base):
         if self.tipo in ["EMAIL", "WHATSAPP", "SMS", "PUSH"]:
             return self.tipo
         return None
-    
+
     @canal.setter
     def canal(self, value: Optional[str]):
         """
