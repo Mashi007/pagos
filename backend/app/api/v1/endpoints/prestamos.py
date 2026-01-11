@@ -261,9 +261,17 @@ def serializar_prestamo(prestamo: Prestamo) -> dict:
         "fecha_actualizacion": getattr(prestamo, "fecha_actualizacion", None),
         # Campos ML opcionales - usar getattr para evitar errores si no existen
         "ml_impago_nivel_riesgo_manual": getattr(prestamo, "ml_impago_nivel_riesgo_manual", None),
-        "ml_impago_probabilidad_manual": float(getattr(prestamo, "ml_impago_probabilidad_manual", 0)) if getattr(prestamo, "ml_impago_probabilidad_manual", None) is not None else None,
+        "ml_impago_probabilidad_manual": (
+            float(getattr(prestamo, "ml_impago_probabilidad_manual", 0))
+            if getattr(prestamo, "ml_impago_probabilidad_manual", None) is not None
+            else None
+        ),
         "ml_impago_nivel_riesgo_calculado": getattr(prestamo, "ml_impago_nivel_riesgo_calculado", None),
-        "ml_impago_probabilidad_calculada": float(getattr(prestamo, "ml_impago_probabilidad_calculada", 0)) if getattr(prestamo, "ml_impago_probabilidad_calculada", None) is not None else None,
+        "ml_impago_probabilidad_calculada": (
+            float(getattr(prestamo, "ml_impago_probabilidad_calculada", 0))
+            if getattr(prestamo, "ml_impago_probabilidad_calculada", None) is not None
+            else None
+        ),
         "ml_impago_calculado_en": getattr(prestamo, "ml_impago_calculado_en", None),
         "ml_impago_modelo_id": getattr(prestamo, "ml_impago_modelo_id", None),
     }

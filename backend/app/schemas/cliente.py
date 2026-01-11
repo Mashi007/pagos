@@ -369,42 +369,42 @@ class ClienteResponse(ClienteBase):
         if not v:
             # Si no hay teléfono, devolver un valor por defecto válido
             return "+580000000000"
-        
+
         telefono_str = str(v).strip()
-        
+
         # Si ya tiene el formato correcto, devolverlo tal cual
         if telefono_str.startswith("+58") and len(telefono_str) == 13:
             # Verificar que después de +58 tenga 10 dígitos válidos
             digitos = telefono_str[3:]
             if re.match(r"^[0-9]{10}$", digitos):
                 return telefono_str
-        
+
         # Intentar normalizar formatos comunes
         # Formato: 04121234567 o 4121234567 (sin código de país)
         # Remover espacios, guiones, paréntesis, pero mantener el +
         telefono_limpio = re.sub(r"[^\d+]", "", telefono_str)
-        
+
         # Si empieza con 0, removerlo (0412 -> 412)
         if telefono_limpio.startswith("0") and len(telefono_limpio) == 11:
             telefono_limpio = telefono_limpio[1:]
-        
+
         # Si tiene 10 dígitos y no empieza con +58, agregar el prefijo
         if len(telefono_limpio) == 10 and not telefono_limpio.startswith("+58"):
             telefono_limpio = "+58" + telefono_limpio
-        
+
         # Si ahora tiene el formato correcto, devolverlo
         if telefono_limpio.startswith("+58") and len(telefono_limpio) == 13:
             digitos = telefono_limpio[3:]
             if re.match(r"^[0-9]{10}$", digitos):
                 return telefono_limpio
-        
+
         # Si tiene más de 10 dígitos después de limpiar, intentar extraer los últimos 10
         digitos_solos = re.sub(r"[^\d]", "", telefono_str)
         if len(digitos_solos) >= 10:
             # Tomar los últimos 10 dígitos
             ultimos_10 = digitos_solos[-10:]
             return "+58" + ultimos_10
-        
+
         # Si no se pudo normalizar, usar un valor por defecto válido
         # Esto asegura que siempre devolvemos un formato válido de 13 caracteres
         return "+580000000000"
