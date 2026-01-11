@@ -125,8 +125,9 @@ def aplicar_cambios_prestamo(prestamo: Prestamo, prestamo_data: PrestamoUpdate):
     if prestamo_data.cuota_periodo is not None:
         prestamo.cuota_periodo = prestamo_data.cuota_periodo  # type: ignore[assignment]
 
+    # ✅ REGLA: Interés siempre debe ser 0% - DESACTIVADO
     if prestamo_data.tasa_interes is not None:
-        prestamo.tasa_interes = prestamo_data.tasa_interes  # type: ignore[assignment]
+        prestamo.tasa_interes = Decimal("0.00")  # type: ignore[assignment]  # Forzar a 0% siempre
 
     if prestamo_data.fecha_base_calculo is not None:
         prestamo.fecha_base_calculo = prestamo_data.fecha_base_calculo  # type: ignore[assignment]
@@ -181,9 +182,10 @@ def procesar_cambio_estado(
             numero_cuotas, cuota_periodo = actualizar_cuotas_segun_plazo_maximo(prestamo, plazo_maximo_meses, db)
             logger.info(f"Cuotas ajustadas según análisis de riesgo: {numero_cuotas} cuotas")
 
-        # Aplicar tasa de interés desde evaluación
-        if tasa_interes:
-            prestamo.tasa_interes = tasa_interes  # type: ignore[assignment]
+        # ✅ REGLA: Interés siempre debe ser 0% - DESACTIVADO
+        # if tasa_interes:
+        #     prestamo.tasa_interes = tasa_interes  # type: ignore[assignment]
+        prestamo.tasa_interes = Decimal("0.00")  # type: ignore[assignment]  # Forzar a 0% siempre
 
         # Aplicar fecha base de cálculo
         if fecha_base_calculo:
@@ -1514,9 +1516,10 @@ def aplicar_condiciones_aprobacion(
         if "plazo_maximo" in condiciones:
             actualizar_cuotas_segun_plazo_maximo(prestamo, condiciones["plazo_maximo"], db)
 
-        # Aplicar tasa de interés (SI VIENE)
-        if "tasa_interes" in condiciones:
-            prestamo.tasa_interes = Decimal(str(condiciones["tasa_interes"]))  # type: ignore[assignment]
+        # ✅ REGLA: Interés siempre debe ser 0% - DESACTIVADO
+        # if "tasa_interes" in condiciones:
+        #     prestamo.tasa_interes = Decimal(str(condiciones["tasa_interes"]))  # type: ignore[assignment]
+        prestamo.tasa_interes = Decimal("0.00")  # type: ignore[assignment]  # Forzar a 0% siempre
 
         # Aplicar fecha base de cálculo (SI VIENE)
         if "fecha_base_calculo" in condiciones:
@@ -1536,7 +1539,7 @@ def aplicar_condiciones_aprobacion(
                 current_user,
                 db,
                 plazo_maximo_meses=condiciones.get("plazo_maximo"),
-                tasa_interes=(Decimal(str(condiciones.get("tasa_interes", 0))) if "tasa_interes" in condiciones else None),
+                tasa_interes=Decimal("0.00"),  # ✅ REGLA: Interés siempre 0% - DESACTIVADO
                 fecha_base_calculo=prestamo.fecha_base_calculo,
             )
 

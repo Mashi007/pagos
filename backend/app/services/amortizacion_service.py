@@ -407,16 +407,17 @@ class AmortizacionService:
         for cuota in cuotas:
             total_mora_anterior += cuota.monto_mora
 
-            # Calcular nueva mora
-            dias_mora = (fecha_calculo - cuota.fecha_vencimiento).days
-            nueva_mora = (cuota.monto_cuota * tasa_mora_diaria * Decimal(dias_mora) / Decimal("100")).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-
-            # Actualizar
-            cuota.monto_mora = nueva_mora
-            cuota.dias_mora = dias_mora
-            cuota.tasa_mora = tasa_mora_diaria
+            # ✅ REGLA: Mora siempre debe ser 0% - DESACTIVADO
+            # Calcular nueva mora (SIEMPRE 0)
+            # dias_mora = (fecha_calculo - cuota.fecha_vencimiento).days
+            # nueva_mora = (cuota.monto_cuota * tasa_mora_diaria * Decimal(dias_mora) / Decimal("100")).quantize(
+            #     Decimal("0.01"), rounding=ROUND_HALF_UP
+            # )
+            
+            # Actualizar (SIEMPRE EN 0)
+            cuota.monto_mora = Decimal("0.00")
+            cuota.dias_mora = 0
+            cuota.tasa_mora = Decimal("0.00")
 
             total_mora_nueva += nueva_mora
             cuotas_actualizadas += 1

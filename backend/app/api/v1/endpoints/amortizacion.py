@@ -317,8 +317,9 @@ def recalcular_mora(
             detail="Préstamo no encontrado",
         )
 
-    # Tasa de mora por defecto (0.1% diario = 3% mensual)
-    tasa_mora = request.tasa_mora_diaria or Decimal("0.1")
+    # ✅ REGLA: Mora siempre debe ser 0% - DESACTIVADO
+    # tasa_mora = request.tasa_mora_diaria or Decimal("0.1")  # Desactivado
+    tasa_mora = Decimal("0.0")  # Siempre 0% - Mora desactivada
     fecha_calculo = request.fecha_calculo or date.today()
 
     try:

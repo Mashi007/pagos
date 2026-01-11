@@ -115,7 +115,7 @@ class EstadoConciliacion(str, Enum):
 
 
 # Constantes de valores por defecto
-DEFAULT_INTEREST_RATE = 0.02  # 2% mensual
+DEFAULT_INTEREST_RATE = 0.0  # 0% mensual - DESACTIVADO
 DEFAULT_GRACE_DAYS = 3
 DEFAULT_MAX_LOAN_AMOUNT = 50000
 DEFAULT_MIN_LOAN_AMOUNT = 1000

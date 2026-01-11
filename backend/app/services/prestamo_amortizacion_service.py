@@ -103,6 +103,9 @@ def generar_tabla_amortizacion(
             total_pagado=Decimal("0.00"),
             capital_pendiente=monto_capital,
             interes_pendiente=monto_interes,
+            dias_mora=0,  # ✅ DESACTIVADO: Mora desactivada por defecto
+            monto_mora=Decimal("0.00"),  # ✅ DESACTIVADO: Mora desactivada por defecto
+            tasa_mora=Decimal("0.00"),  # ✅ DESACTIVADO: Tasa de mora desactivada por defecto
             estado="PENDIENTE",
         )
 

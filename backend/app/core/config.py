@@ -137,9 +137,9 @@ class Settings(BaseSettings):
     # ============================================
     # AMORTIZACIÓN Y REGLAS DE NEGOCIO
     # ============================================
-    TASA_INTERES_BASE: float = 12.0  # 12% anual
-    TASA_MORA: float = 2.0  # 2% mensual
-    TASA_MORA_DIARIA: float = 0.067  # 2% / 30 días
+    TASA_INTERES_BASE: float = 0.0  # 0% anual - DESACTIVADO
+    TASA_MORA: float = 0.0  # 0% mensual - DESACTIVADO
+    TASA_MORA_DIARIA: float = 0.0  # 0% diario - DESACTIVADO
     MAX_CUOTA_PERCENTAGE: int = 40  # Máximo 40% del ingreso
     MONTO_MINIMO_PRESTAMO: float = 1000.0
     MONTO_MAXIMO_PRESTAMO: float = 50000.0

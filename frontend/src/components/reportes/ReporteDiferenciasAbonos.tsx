@@ -23,6 +23,8 @@ interface DiferenciaAbono {
 export function ReporteDiferenciasAbonos() {
   const [editandoId, setEditandoId] = useState<number | null>(null)
   const [nuevoTotal, setNuevoTotal] = useState<string>('')
+  const [editandoImagenId, setEditandoImagenId] = useState<number | null>(null)
+  const [nuevoValorImagen, setNuevoValorImagen] = useState<string>('')
   const queryClient = useQueryClient()
 
   // Obtener diferencias de abonos
@@ -55,6 +57,26 @@ export function ReporteDiferenciasAbonos() {
     },
   })
 
+  // Mutación para actualizar valor de imagen
+  const actualizarValorImagen = useMutation({
+    mutationFn: async ({ cedula, valorImagen }: { cedula: string; valorImagen: number }) => {
+      const response = await apiClient.put('/api/v1/reportes/diferencias-abonos/actualizar-valor-imagen', {
+        cedula,
+        valor_imagen: valorImagen,
+      })
+      return response
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['diferencias-abonos'] })
+      setEditandoImagenId(null)
+      setNuevoValorImagen('')
+      toast.success('Valor de imagen actualizado exitosamente.')
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || 'Error al actualizar valor de imagen')
+    },
+  })
+
   const handleEditar = (diferencia: DiferenciaAbono) => {
     setEditandoId(diferencia.prestamo_id)
     setNuevoTotal(diferencia.total_abonos_bd.toString())
@@ -72,6 +94,25 @@ export function ReporteDiferenciasAbonos() {
       return
     }
     ajustarAbono.mutate({ prestamoId, nuevoTotal: total })
+  }
+
+  const handleEditarImagen = (diferencia: DiferenciaAbono) => {
+    setEditandoImagenId(diferencia.prestamo_id)
+    setNuevoValorImagen(diferencia.total_abonos_imagen.toString())
+  }
+
+  const handleCancelarImagen = () => {
+    setEditandoImagenId(null)
+    setNuevoValorImagen('')
+  }
+
+  const handleGuardarImagen = (cedula: string) => {
+    const valor = parseFloat(nuevoValorImagen)
+    if (isNaN(valor) || valor < 0) {
+      toast.error('El valor debe ser un número válido mayor o igual a 0')
+      return
+    }
+    actualizarValorImagen.mutate({ cedula, valorImagen: valor })
   }
 
   if (isLoading) {
@@ -168,7 +209,29 @@ export function ReporteDiferenciasAbonos() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <span className="text-gray-600">{formatCurrency(diferencia.total_abonos_imagen)}</span>
+                    {editandoImagenId === diferencia.prestamo_id ? (
+                      <Input
+                        type="number"
+                        value={nuevoValorImagen}
+                        onChange={(e) => setNuevoValorImagen(e.target.value)}
+                        className="w-32 text-right"
+                        step="0.01"
+                        min="0"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="text-gray-600">{formatCurrency(diferencia.total_abonos_imagen)}</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleEditarImagen(diferencia)}
+                          className="h-6 w-6 p-0"
+                          title="Editar valor de imagen"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <Badge
@@ -182,7 +245,25 @@ export function ReporteDiferenciasAbonos() {
                     <span className="text-sm text-gray-600">{diferencia.detalle}</span>
                   </TableCell>
                   <TableCell className="text-center">
-                    {editandoId === diferencia.prestamo_id ? (
+                    {editandoImagenId === diferencia.prestamo_id ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => handleGuardarImagen(diferencia.cedula)}
+                          disabled={actualizarValorImagen.isPending}
+                        >
+                          {actualizarValorImagen.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={handleCancelarImagen}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : editandoId === diferencia.prestamo_id ? (
                       <div className="flex items-center justify-center gap-2">
                         <Button
                           size="sm"
@@ -203,7 +284,7 @@ export function ReporteDiferenciasAbonos() {
                     ) : (
                       <Button size="sm" variant="outline" onClick={() => handleEditar(diferencia)}>
                         <Edit className="h-4 w-4 mr-1" />
-                        Ajustar
+                        Ajustar BD
                       </Button>
                     )}
                   </TableCell>

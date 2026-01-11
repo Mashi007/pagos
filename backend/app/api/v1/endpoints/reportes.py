@@ -1844,6 +1844,13 @@ class AjustarAbonoRequest(BaseModel):
     nuevo_total_abonos: Decimal
 
 
+class ActualizarValorImagenRequest(BaseModel):
+    """Schema para actualizar valor de imagen en abono_2026"""
+
+    cedula: str
+    valor_imagen: Decimal
+
+
 @router.get("/diferencias-abonos", response_model=List[DiferenciaAbonoResponse])
 def obtener_diferencias_abonos(
     db: Session = Depends(get_db),
@@ -2094,3 +2101,82 @@ def ajustar_total_abonos_bd(
         logger.error(f"Error ajustando total_abonos_bd del préstamo {prestamo_id}: {e}", exc_info=True)
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error ajustando abonos: {str(e)}")
+
+
+@router.put("/diferencias-abonos/actualizar-valor-imagen", response_model=dict)
+def actualizar_valor_imagen(
+    actualizacion: ActualizarValorImagenRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Actualiza el valor de referencia (imagen) en la tabla abono_2026 para una cédula específica.
+    Este valor se usa para comparar con los abonos calculados desde BD.
+    """
+    try:
+        cedula = actualizacion.cedula.strip().upper()
+        valor_imagen = actualizacion.valor_imagen
+
+        if valor_imagen < Decimal("0.00"):
+            raise HTTPException(status_code=400, detail="El valor debe ser mayor o igual a 0")
+
+        # Verificar si existe registro en abono_2026
+        resultado = db.execute(
+            text(
+                """
+                SELECT COUNT(*) 
+                FROM abono_2026 
+                WHERE cedula = :cedula
+                """
+            ),
+            {"cedula": cedula},
+        )
+        existe = resultado.scalar() > 0
+
+        if existe:
+            # Actualizar registro existente
+            db.execute(
+                text(
+                    """
+                    UPDATE abono_2026 
+                    SET abonos = :valor::integer,
+                        fecha_actualizacion = CURRENT_TIMESTAMP
+                    WHERE cedula = :cedula
+                    """
+                ),
+                {"cedula": cedula, "valor": int(valor_imagen)},
+            )
+            accion = "actualizado"
+        else:
+            # Insertar nuevo registro
+            db.execute(
+                text(
+                    """
+                    INSERT INTO abono_2026 (cedula, abonos, fecha_creacion, fecha_actualizacion)
+                    VALUES (:cedula, :valor::integer, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """
+                ),
+                {"cedula": cedula, "valor": int(valor_imagen)},
+            )
+            accion = "creado"
+
+        db.commit()
+
+        logger.info(
+            f"✅ [actualizar_valor_imagen] Cédula {cedula}: valor_imagen={valor_imagen} "
+            f"({accion}) por {current_user.email}"
+        )
+
+        return {
+            "message": f"Valor de imagen {accion} exitosamente",
+            "cedula": cedula,
+            "valor_imagen": float(valor_imagen),
+            "accion": accion,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error actualizando valor de imagen para {actualizacion.cedula}: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error actualizando valor de imagen: {str(e)}")

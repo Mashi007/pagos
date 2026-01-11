@@ -1235,41 +1235,16 @@ def _aplicar_monto_a_cuota(
     if monto_aplicar > Decimal("0.00"):
         cuota.fecha_pago = fecha_pago  # type: ignore[assignment]
 
-        # ✅ UNIFICAR EN FECHA DE PAGO: Si fecha_pago > fecha_vencimiento, calcular mora automáticamente
-        if cuota.fecha_vencimiento and fecha_pago > cuota.fecha_vencimiento:
-            # Calcular días de mora
-            dias_mora = (fecha_pago - cuota.fecha_vencimiento).days
-
-            # Obtener tasa de mora diaria (por defecto desde settings)
-            tasa_mora_diaria = Decimal(str(settings.TASA_MORA_DIARIA))  # 0.067% diario (2% mensual / 30 días)
-
-            # Calcular monto de mora sobre el saldo pendiente al momento del vencimiento
-            # Usar monto_cuota como base (o saldo pendiente si se prefiere)
-            saldo_base_mora = cuota.monto_cuota  # O usar: cuota.capital_pendiente + cuota.interes_pendiente
-
-            # Fórmula: monto_mora = saldo_base * tasa_diaria * dias_mora / 100
-            from decimal import ROUND_HALF_UP
-
-            monto_mora = (saldo_base_mora * tasa_mora_diaria * Decimal(dias_mora) / Decimal("100")).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-
-            # Actualizar campos de mora
-            cuota.dias_mora = dias_mora
-            cuota.monto_mora = monto_mora
-            cuota.tasa_mora = tasa_mora_diaria
-
-            logger.info(
-                f"💰 [aplicar_monto_a_cuota] Cuota #{cuota.numero_cuota} (Préstamo {cuota.prestamo_id}): "
-                f"Mora calculada: {dias_mora} días, ${monto_mora} "
-                f"(fecha_pago: {fecha_pago}, fecha_vencimiento: {cuota.fecha_vencimiento})"
-            )
-        else:
-            # Si pago a tiempo o adelantado, no hay mora
-            if fecha_pago <= cuota.fecha_vencimiento:
-                cuota.dias_mora = 0
-                cuota.monto_mora = Decimal("0.00")
-                cuota.tasa_mora = Decimal("0.00")
+        # ✅ REGLA: Mora siempre debe ser 0% - DESACTIVADO
+        # Independientemente de si el pago es tardío o no, siempre establecer mora en 0
+        cuota.dias_mora = 0  # type: ignore[assignment]
+        cuota.monto_mora = Decimal("0.00")  # type: ignore[assignment]
+        cuota.tasa_mora = Decimal("0.00")  # type: ignore[assignment]
+        
+        logger.debug(
+            f"✅ [aplicar_monto_a_cuota] Cuota #{cuota.numero_cuota} (Préstamo {cuota.prestamo_id}): "
+            f"Mora desactivada (siempre 0%) - fecha_pago: {fecha_pago}, fecha_vencimiento: {cuota.fecha_vencimiento}"
+        )
 
         # ✅ ACTUALIZAR AUTOMÁTICAMENTE columnas de morosidad después de aplicar pago
         _actualizar_morosidad_cuota(cuota, fecha_hoy)
