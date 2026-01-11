@@ -215,8 +215,8 @@ class WhatsAppBotService:
             Respuesta del Chat AI o None si hay error
         """
         try:
-            from app.services.ai_chat_service import AIChatService
             from app.api.v1.endpoints.configuracion import _obtener_configuracion_ai_con_reintento, _validar_configuracion_ai
+            from app.services.ai_chat_service import AIChatService
 
             # Verificar que la configuración AI esté activa
             configs = _obtener_configuracion_ai_con_reintento(self.db)

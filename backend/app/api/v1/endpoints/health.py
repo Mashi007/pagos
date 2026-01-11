@@ -176,6 +176,7 @@ async def detailed_health_check(response: Response):
         cache_status_info = {}
         try:
             from app.core.cache import MemoryCache
+
             cache_type = "MemoryCache" if isinstance(cache_backend, MemoryCache) else "RedisCache"
             cache_status_info = {
                 "type": cache_type,

@@ -6,7 +6,7 @@ Usa APScheduler para ejecutar tareas programadas
 import asyncio
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional, Any
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -158,8 +158,8 @@ async def _enviar_whatsapp_desde_scheduler(
             # Extraer variables del mensaje para los parámetros del template
             # Obtener variables desde la BD si es posible
             try:
-                from app.models.cliente import Cliente
                 from app.models.amortizacion import Cuota
+                from app.models.cliente import Cliente
                 from app.models.prestamo import Prestamo
                 from app.services.variables_notificacion_service import VariablesNotificacionService
 
@@ -1111,14 +1111,16 @@ def reentrenar_modelo_ml_impago_job():
 
     try:
         from datetime import date, datetime
-        from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
-        from app.models.prestamo import Prestamo
-        from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
+
+        from sqlalchemy.exc import OperationalError, ProgrammingError
+
         from app.api.v1.endpoints.ai_training import (
             _obtener_prestamos_aprobados_impago,
             _procesar_prestamos_para_entrenamiento,
         )
-        from sqlalchemy.exc import ProgrammingError, OperationalError
+        from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
+        from app.models.prestamo import Prestamo
+        from app.services.ml_impago_cuotas_service import ML_IMPAGO_SERVICE_AVAILABLE, MLImpagoCuotasService
 
         logger.info("=" * 80)
         logger.info("🤖 [Scheduler] ===== INICIO REENTRENAMIENTO AUTOMÁTICO ML IMPAGO =====")

@@ -5,7 +5,7 @@ Refactorización para reducir complejidad ciclomática
 
 import logging
 import time
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
 
 import httpx
 from fastapi import HTTPException
@@ -78,13 +78,13 @@ class AIChatService:
         Incluye llamada async a documentos semánticos.
         """
         from app.api.v1.endpoints.configuracion import (
-            _obtener_resumen_bd,
-            _obtener_info_esquema,
-            _obtener_contexto_documentos_semantico,
-            _extraer_cedula_de_pregunta,
-            _obtener_info_cliente_por_cedula,
-            _obtener_datos_adicionales,
             _ejecutar_consulta_dinamica,
+            _extraer_cedula_de_pregunta,
+            _obtener_contexto_documentos_semantico,
+            _obtener_datos_adicionales,
+            _obtener_info_cliente_por_cedula,
+            _obtener_info_esquema,
+            _obtener_resumen_bd,
         )
 
         pregunta_lower = pregunta.lower().strip()
@@ -127,9 +127,9 @@ class AIChatService:
         Construye el system prompt usando configuración personalizada o default.
         """
         from app.api.v1.endpoints.configuracion import (
-            _obtener_variables_personalizadas,
-            _construir_system_prompt_personalizado,
             _construir_system_prompt_default,
+            _construir_system_prompt_personalizado,
+            _obtener_variables_personalizadas,
         )
 
         prompt_personalizado = self.config_dict.get("system_prompt_personalizado", "")

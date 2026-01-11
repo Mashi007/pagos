@@ -1388,9 +1388,9 @@ def _calcular_pagos_hoy(db: Session, hoy: date) -> tuple[int, Decimal]:
     Calcula pagos de hoy (cantidad y monto).
     Retorna (cantidad, monto).
     """
+    from datetime import datetime
     from decimal import Decimal
 
-    from datetime import datetime
     from sqlalchemy import text
 
     hoy_dt = datetime.combine(hoy, datetime.min.time())
@@ -1709,10 +1709,9 @@ def _calcular_evolucion_mensual(db: Session, hoy: date) -> list:
     Retorna lista de diccionarios con evolución.
     """
     import time
-
+    from datetime import datetime, timedelta
     from decimal import Decimal
 
-    from datetime import datetime, timedelta
     from sqlalchemy import text
 
     start_evolucion = time.time()
@@ -1925,9 +1924,9 @@ def _calcular_metricas_morosidad(
     Calcula métricas de morosidad (total financiamiento, cartera cobrada, morosidad diferencia).
     Retorna diccionario con las métricas.
     """
+    from datetime import datetime
     from decimal import Decimal
 
-    from datetime import datetime
     from sqlalchemy import func, text
 
     from app.models.prestamo import Prestamo
@@ -2136,10 +2135,9 @@ def _obtener_nuevos_financiamientos_por_mes(
     Retorna diccionario con (año, mes) como clave.
     """
     import time
-
+    from datetime import datetime
     from decimal import Decimal
 
-    from datetime import datetime
     from sqlalchemy import func
 
     from app.models.prestamo import Prestamo
@@ -2214,7 +2212,6 @@ def _obtener_cuotas_programadas_por_mes(
     Retorna diccionario con (año, mes) como clave y monto como valor.
     """
     import time
-
     from decimal import Decimal
 
     from sqlalchemy import func
@@ -2297,7 +2294,6 @@ def _obtener_morosidad_por_mes(
     ✅ CORRECCIÓN: Calcula morosidad real del mes, no acumulada.
     """
     import time
-
     from decimal import Decimal
 
     from sqlalchemy import func, text
@@ -2389,10 +2385,9 @@ def _obtener_pagos_por_mes(
     ✅ CORREGIDO: Agrupa por fecha_pago (fecha real de pago) en lugar de fecha_vencimiento.
     """
     import time
-
+    from datetime import datetime
     from decimal import Decimal
 
-    from datetime import datetime
     from sqlalchemy import func, text
 
     from app.models.pago import Pago

@@ -7,9 +7,9 @@ from app.models.analista import Analista
 from app.models.aprobacion import Aprobacion
 from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
+from app.models.comunicacion_email import ComunicacionEmail
 from app.models.concesionario import Concesionario
 from app.models.configuracion_sistema import ConfiguracionSistema
-from app.models.comunicacion_email import ComunicacionEmail
 from app.models.conversacion_ai import ConversacionAI
 from app.models.conversacion_whatsapp import ConversacionWhatsApp
 from app.models.documento_ai import DocumentoAI

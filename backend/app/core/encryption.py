@@ -3,14 +3,14 @@ Módulo de encriptación para datos sensibles
 Usa Fernet (cryptography) para encriptación simétrica
 """
 
+import base64
 import logging
 from typing import Optional
 
 from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.backends import default_backend
-import base64
 
 from app.core.config import settings
 

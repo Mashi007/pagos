@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 # ✅ CORRECCIÓN: Manejar encoding de DATABASE_URL correctamente
 # Intentar cargar desde .env usando python-dotenv si está disponible
 try:
-    from dotenv import load_dotenv
-
     # Cargar .env con encoding correcto
     from pathlib import Path
+
+    from dotenv import load_dotenv
 
     env_file = Path(__file__).parent.parent.parent / ".env"
     if env_file.exists():
