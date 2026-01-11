@@ -370,7 +370,7 @@ async def lifespan(app: FastAPI):
         logger.info("⚠️ Modo test detectado - saltando lifespan (DB y scheduler)")
         yield
         return
-    
+
     init_db_startup()
 
     # Iniciar scheduler para tareas automáticas
