@@ -881,8 +881,11 @@ def actualizar_prestamo(
         if prestamo_data.analista is not None or prestamo_data.usuario_proponente is not None:
             try:
                 from app.core.cache import invalidate_cache
+
                 invalidate_cache("cobranzas:")
-                logger.debug(f"Cache invalidado para cobranzas después de actualizar analista/usuario_proponente del préstamo {prestamo_id}")
+                logger.debug(
+                    f"Cache invalidado para cobranzas después de actualizar analista/usuario_proponente del préstamo {prestamo_id}"
+                )
             except Exception as cache_error:
                 logger.warning(f"Error invalidando cache: {cache_error}")
 

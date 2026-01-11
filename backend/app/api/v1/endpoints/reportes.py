@@ -323,7 +323,7 @@ def reporte_pagos(
     try:
         # Validar rango de fechas
         validate_date_range(fecha_inicio, fecha_fin, max_days=365)
-        
+
         logger.info(f"[reportes.pagos] Generando reporte pagos desde {fecha_inicio} hasta {fecha_fin}")
         # Total de pagos: usar tabla pagos (tipos nativos)
         fecha_inicio_dt = datetime.combine(fecha_inicio, datetime.min.time())
