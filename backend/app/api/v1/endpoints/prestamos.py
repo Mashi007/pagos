@@ -170,9 +170,7 @@ def procesar_cambio_estado(
 
             actualizar_estado_cliente_por_prestamo(db, prestamo.cedula, nuevo_estado)
         except Exception as e:
-            logger.warning(
-                f"Error actualizando estado del cliente {prestamo.cedula} por cambio de estado del préstamo: {e}"
-            )
+            logger.warning(f"Error actualizando estado del cliente {prestamo.cedula} por cambio de estado del préstamo: {e}")
 
     if nuevo_estado == "APROBADO":
         prestamo.usuario_aprobador = current_user.email  # type: ignore[assignment]
