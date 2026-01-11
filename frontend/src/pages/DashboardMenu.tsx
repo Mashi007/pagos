@@ -873,7 +873,7 @@ export function DashboardMenu() {
               </motion.div>
             )}
 
-            {/* Gráfico de Cobranzas Planificadas vs Reales - Ancho Completo */}
+            {/* Gráfico de Cobranzas Planificadas vs Reales - Últimos 10 Días - Ancho Completo */}
             {datosCobranzas && datosCobranzas.meses && datosCobranzas.meses.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -884,7 +884,7 @@ export function DashboardMenu() {
                   <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
                     <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                       <Target className="h-6 w-6 text-blue-600" />
-                      <span>Cobranzas Mensuales: Planificadas vs Reales</span>
+                      <span>Cobranzas Diarias: Planificadas vs Reales (Últimos 10 Días)</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">
@@ -893,7 +893,7 @@ export function DashboardMenu() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis 
                           dataKey="nombre_mes" 
-                          tick={{ fontSize: 12 }}
+                          tick={{ fontSize: 11 }}
                           angle={-45}
                           textAnchor="end"
                           height={100}
@@ -908,17 +908,17 @@ export function DashboardMenu() {
                             const labels: Record<string, string> = {
                               'cobranzas_planificadas': 'Planificadas',
                               'pagos_reales': 'Reales',
-                              'meta_mensual': 'Meta Mensual'
+                              'meta_mensual': 'Meta Diaria'
                             }
                             return [formatCurrency(value), labels[name] || name]
                           }}
-                          labelFormatter={(label) => `Mes: ${label}`}
+                          labelFormatter={(label) => `Día: ${label}`}
                         />
                         <Legend />
                         <Bar dataKey="cobranzas_planificadas" fill="#3b82f6" name="Cobranzas Planificadas" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="pagos_reales" fill="#10b981" name="Pagos Reales" radius={[4, 4, 0, 0]} />
                         {datosCobranzas.meses.some(m => m.meta_mensual > 0) && (
-                          <Bar dataKey="meta_mensual" fill="#f59e0b" name="Meta Mensual" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="meta_mensual" fill="#f59e0b" name="Meta Diaria" radius={[4, 4, 0, 0]} />
                         )}
                       </BarChart>
                     </ResponsiveContainer>

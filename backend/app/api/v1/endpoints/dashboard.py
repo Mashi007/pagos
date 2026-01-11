@@ -3485,7 +3485,7 @@ def obtener_kpis_principales(
 
 
 @router.get("/cobranzas-mensuales")
-@cache_result(ttl=600, key_prefix="dashboard")  # Cache por 10 minutos (datos históricos)
+@cache_result(ttl=300, key_prefix="dashboard")  # Cache por 5 minutos (datos diarios más dinámicos)
 def obtener_cobranzas_mensuales(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
@@ -3496,201 +3496,68 @@ def obtener_cobranzas_mensuales(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Componente 1: Cobranzas mensuales vs Pagos y Meta Mensual
-    Suma las cobranzas mensuales (amortizaciones de todos los clientes) y las grafica contra pagos.
-    Meta mensual se actualiza el día 1 de cada mes.
-    OPTIMIZADO: Una sola query con GROUP BY en lugar de múltiples queries en loop
+    Componente 1: Cobranzas diarias (últimos 10 días) vs Pagos y Meta Diaria
+    Suma las cobranzas diarias (amortizaciones de todos los clientes) y las grafica contra pagos.
+    Muestra los últimos 10 días hasta el día actual.
+    OPTIMIZADO: Usa funciones auxiliares para calcular por fecha
     """
     import time
 
     start_time = time.time()
-    logger.info("📊 [cobranzas-mensuales] Iniciando cálculo de cobranzas mensuales")
+    logger.info("📊 [cobranzas-mensuales] Iniciando cálculo de cobranzas diarias (últimos 10 días)")
 
     try:
         hoy = date.today()
-        nombres_meses = [
-            "Enero",
-            "Febrero",
-            "Marzo",
-            "Abril",
-            "Mayo",
-            "Junio",
-            "Julio",
-            "Agosto",
-            "Septiembre",
-            "Octubre",
-            "Noviembre",
-            "Diciembre",
-        ]
+        
+        # Calcular fecha inicio (hace 10 días)
+        fecha_inicio_query = hoy - timedelta(days=9)  # 9 días atrás + hoy = 10 días totales
 
-        # Calcular fecha inicio (hace 12 meses)
-        año_inicio = hoy.year
-        mes_inicio = hoy.month - 11
-        if mes_inicio <= 0:
-            año_inicio -= 1
-            mes_inicio += 12
-        fecha_inicio_query = date(año_inicio, mes_inicio, 1)
-
-        # ✅ OPTIMIZACIÓN: Query única para cobranzas planificadas con GROUP BY
-        start_cobranzas = time.time()
-        filtros_cobranzas = [
-            "p.estado = 'APROBADO'",
-            "c.fecha_vencimiento >= :fecha_inicio",
-            "c.fecha_vencimiento <= :fecha_fin_total",
-        ]
-        params_cobranzas = {
-            "fecha_inicio": fecha_inicio_query,
-            "fecha_fin_total": hoy,
-        }
-
-        if analista:
-            filtros_cobranzas.append("(p.analista = :analista OR p.producto_financiero = :analista)")
-            params_cobranzas["analista"] = analista
-        if concesionario:
-            filtros_cobranzas.append("p.concesionario = :concesionario")
-            params_cobranzas["concesionario"] = concesionario
-        if modelo:
-            filtros_cobranzas.append("(p.producto = :modelo OR p.modelo_vehiculo = :modelo)")
-            params_cobranzas["modelo"] = modelo
-
-        where_clause_cobranzas = " AND ".join(filtros_cobranzas)
-        try:
-            query_cobranzas_sql = text(
-                f"""
-                SELECT
-                    EXTRACT(YEAR FROM c.fecha_vencimiento)::int as año,
-                    EXTRACT(MONTH FROM c.fecha_vencimiento)::int as mes,
-                    COALESCE(SUM(c.monto_cuota), 0) as cobranzas
-                FROM cuotas c
-                INNER JOIN prestamos p ON c.prestamo_id = p.id
-                WHERE {where_clause_cobranzas}
-                GROUP BY EXTRACT(YEAR FROM c.fecha_vencimiento), EXTRACT(MONTH FROM c.fecha_vencimiento)
-                ORDER BY año, mes
-            """
-            ).bindparams(**params_cobranzas)
-
-            result_cobranzas = db.execute(query_cobranzas_sql)
-            cobranzas_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_cobranzas}
-            tiempo_cobranzas = int((time.time() - start_cobranzas) * 1000)
-            logger.info(
-                f"📊 [cobranzas-mensuales] Query cobranzas completada en {tiempo_cobranzas}ms, {len(cobranzas_por_mes)} meses"
-            )
-        except Exception as e:
-            logger.error(f"Error consultando cobranzas en cobranzas-mensuales: {e}", exc_info=True)
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            cobranzas_por_mes = {}
-            tiempo_cobranzas = int((time.time() - start_cobranzas) * 1000)
-
-        # ✅ OPTIMIZACIÓN: Query única para pagos reales con GROUP BY
-        start_pagos = time.time()
-        fecha_inicio_dt = datetime.combine(fecha_inicio_query, datetime.min.time())
-        fecha_fin_dt = datetime.combine(hoy, datetime.max.time())
-
-        # ✅ ACTUALIZADO: Usar tabla pagos (no pagos_staging) con prestamo_id y cedula
-        try:
-            query_pagos_sql = text(
-                """
-                SELECT
-                    EXTRACT(YEAR FROM fecha_pago)::int as año,
-                    EXTRACT(MONTH FROM fecha_pago)::int as mes,
-                    COALESCE(SUM(monto_pagado), 0) as pagos
-                FROM pagos
-                WHERE fecha_pago >= :fecha_inicio
-                  AND fecha_pago <= :fecha_fin
-                  AND monto_pagado IS NOT NULL
-                  AND monto_pagado > 0
-                  AND activo = TRUE
-                GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
-                ORDER BY año, mes
-            """
-            )
-
-            result_pagos = db.execute(query_pagos_sql.bindparams(fecha_inicio=fecha_inicio_dt, fecha_fin=fecha_fin_dt))
-            pagos_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in result_pagos}
-            tiempo_pagos = int((time.time() - start_pagos) * 1000)
-            logger.info(f"📊 [cobranzas-mensuales] Query pagos completada en {tiempo_pagos}ms, {len(pagos_por_mes)} meses")
-        except Exception as e:
-            logger.error(f"Error consultando pagos en cobranzas-mensuales: {e}", exc_info=True)
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            pagos_por_mes = {}
-            tiempo_pagos = int((time.time() - start_pagos) * 1000)
-
-        # Generar datos mensuales (incluyendo meses sin datos)
-        meses_data = []
+        # Generar lista de fechas (últimos 10 días)
+        fechas = []
         current_date = fecha_inicio_query
-        for i in range(12):
-            if current_date > hoy:
-                break
-            año_mes = int(current_date.year)
-            num_mes = int(current_date.month)
-            mes_key: tuple[int, int] = (año_mes, num_mes)
+        while current_date <= hoy:
+            fechas.append(current_date)
+            current_date += timedelta(days=1)
 
-            cobranzas_planificadas = cobranzas_por_mes.get(mes_key, 0.0)
-            pagos_reales = pagos_por_mes.get(mes_key, 0.0)
+        # Calcular datos por día
+        dias_data = []
+        for fecha_dia in fechas:
+            # Calcular cobranzas planificadas para este día
+            cobranzas_planificadas = _calcular_total_a_cobrar_fecha(
+                db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            )
+            
+            # Calcular pagos reales para este día
+            pagos_reales = _calcular_pagos_fecha(
+                db, fecha_dia, analista, concesionario, modelo, fecha_inicio, fecha_fin
+            )
 
-            meses_data.append(
+            # Formatear fecha para mostrar
+            nombre_dia = fecha_dia.strftime("%d/%m")
+            dia_semana = fecha_dia.strftime("%a")
+            nombre_completo = f"{nombre_dia} ({dia_semana})"
+
+            dias_data.append(
                 {
-                    "mes": current_date.strftime("%Y-%m"),
-                    "nombre_mes": nombres_meses[num_mes - 1],
+                    "mes": fecha_dia.isoformat(),  # Mantener compatibilidad con frontend
+                    "nombre_mes": nombre_completo,  # Mantener compatibilidad con frontend
                     "cobranzas_planificadas": cobranzas_planificadas,
                     "pagos_reales": pagos_reales,
-                    "meta_mensual": cobranzas_planificadas,  # Meta = cobranzas planificadas
+                    "meta_mensual": cobranzas_planificadas,  # Meta = cobranzas planificadas del día
                 }
             )
 
-            # Avanzar al siguiente mes
-            current_date = _obtener_fechas_mes_siguiente(num_mes, año_mes)
+        # Meta actual = cobranzas planificadas del día actual
+        meta_actual = dias_data[-1]["cobranzas_planificadas"] if dias_data else 0.0
 
-        # Meta actual = cobranzas planificadas del mes actual (usar datos ya calculados si es posible)
-        start_meta = time.time()
-        mes_actual_key = (hoy.year, hoy.month)
-        meta_actual = cobranzas_por_mes.get(mes_actual_key, 0.0)
-
-        # Si no está en los datos calculados, hacer query adicional solo si es necesario
-        if meta_actual == 0.0:
-            mes_actual_inicio = date(hoy.year, hoy.month, 1)
-            if hoy.month == 12:
-                mes_actual_fin = date(hoy.year + 1, 1, 1)
-            else:
-                mes_actual_fin = date(hoy.year, hoy.month + 1, 1)
-
-            try:
-                query_meta = (
-                    db.query(func.sum(Cuota.monto_cuota))
-                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                    .filter(
-                        Prestamo.estado == "APROBADO",
-                        Cuota.fecha_vencimiento >= mes_actual_inicio,
-                        Cuota.fecha_vencimiento < mes_actual_fin,
-                    )
-                )
-                query_meta = FiltrosDashboard.aplicar_filtros_cuota(
-                    query_meta, analista, concesionario, modelo, fecha_inicio, fecha_fin
-                )
-                meta_actual = float(query_meta.scalar() or Decimal("0"))
-            except Exception as e:
-                logger.error(f"Error consultando meta en cobranzas-mensuales: {e}", exc_info=True)
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
-                meta_actual = 0.0
-
-        tiempo_meta = int((time.time() - start_meta) * 1000)
         total_time = int((time.time() - start_time) * 1000)
         logger.info(
-            f"⏱️ [cobranzas-mensuales] Tiempo total: {total_time}ms (cobranzas: {tiempo_cobranzas}ms, pagos: {tiempo_pagos}ms, meta: {tiempo_meta}ms)"
+            f"⏱️ [cobranzas-mensuales] Tiempo total: {total_time}ms, devolviendo {len(dias_data)} días de datos"
         )
-        logger.info(f"📊 [cobranzas-mensuales] Devolviendo {len(meses_data)} meses de datos, meta_actual=${meta_actual:,.2f}")
+        logger.info(f"📊 [cobranzas-mensuales] Meta actual del día=${meta_actual:,.2f}")
 
         return {
-            "meses": meses_data,
+            "meses": dias_data,  # Mantener nombre "meses" para compatibilidad con frontend
             "meta_actual": meta_actual,
         }
 
