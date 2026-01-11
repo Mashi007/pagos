@@ -170,11 +170,19 @@ export function DashboardMenu() {
       }
 
       Object.entries(params).forEach(([key, value]) => {
-        // No agregar fecha_inicio dos veces
-        if (key !== 'fecha_inicio' && value) {
+        // No agregar fecha_inicio dos veces (ya se agregó arriba)
+        // ✅ IMPORTANTE: No pasar fecha_fin para permitir que el backend calcule hasta el último día del mes
+        // Esto asegura que se muestren todos los meses del rango, no solo hasta la fecha actual
+        if (key !== 'fecha_inicio' && key !== 'fecha_fin' && value) {
           queryParams.append(key, value.toString())
         }
       })
+      
+      // ✅ Agregar parámetro meses para mostrar últimos 12 meses por defecto
+      // Esto asegura que se muestren múltiples meses incluso si fecha_fin limita el rango
+      if (!queryParams.has('meses')) {
+        queryParams.append('meses', '12')
+      }
 
       const response = await apiClient.get(
         `/api/v1/dashboard/financiamiento-tendencia-mensual?${queryParams.toString()}`
