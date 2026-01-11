@@ -108,7 +108,9 @@ class Prestamo(Base):
     # ============================================
     # REVISIÓN DE DIFERENCIAS DE ABONOS
     # ============================================
-    requiere_revision = Column(Boolean, nullable=False, default=False, index=True)  # Marca préstamos que requieren revisión manual
+    requiere_revision = Column(
+        Boolean, nullable=False, default=False, index=True
+    )  # Marca préstamos que requieren revisión manual
 
     # Auditoría
     fecha_actualizacion = Column(TIMESTAMP, nullable=False, default=func.now(), onupdate=func.now())

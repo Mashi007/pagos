@@ -1873,9 +1873,8 @@ def obtener_diferencias_abonos(
 
         for prestamo in prestamos_revision:
             # Calcular total_abonos_bd desde cuotas
-            total_abonos_bd_query = (
-                db.query(func.coalesce(func.sum(Cuota.total_pagado), Decimal("0.00")))
-                .filter(Cuota.prestamo_id == prestamo.id)
+            total_abonos_bd_query = db.query(func.coalesce(func.sum(Cuota.total_pagado), Decimal("0.00"))).filter(
+                Cuota.prestamo_id == prestamo.id
             )
             total_abonos_bd = total_abonos_bd_query.scalar() or Decimal("0.00")
 
@@ -1942,7 +1941,7 @@ def ajustar_total_abonos_bd(
 ):
     """
     Ajusta el total_abonos_bd de un préstamo redistribuyendo uniformemente los pagos.
-    
+
     Proceso:
     1. Obtiene todas las cuotas del préstamo ordenadas por fecha_vencimiento
     2. Elimina los pagos existentes del préstamo (marca como activo=False)
@@ -2049,7 +2048,9 @@ def ajustar_total_abonos_bd(
             # Aplicar pago a la cuota manualmente (sin llamar a la función externa para evitar dependencias circulares)
             # Actualizar campos de la cuota directamente
             monto_aplicar = monto_pago
-            capital_aplicar = (monto_aplicar * cuota.monto_capital) / cuota.monto_cuota if cuota.monto_cuota > 0 else Decimal("0.00")
+            capital_aplicar = (
+                (monto_aplicar * cuota.monto_capital) / cuota.monto_cuota if cuota.monto_cuota > 0 else Decimal("0.00")
+            )
             interes_aplicar = monto_aplicar - capital_aplicar
 
             cuota.capital_pagado += capital_aplicar  # type: ignore[assignment]
