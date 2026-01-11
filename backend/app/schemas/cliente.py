@@ -355,7 +355,7 @@ class ClienteResponse(ClienteBase):
 
     # ✅ MANTENER validación estricta - Los clientes que no cumplan se mostrarán en interfaz de corrección
     # El campo telefono hereda la validación estricta de ClienteBase (requiere +58)
-    
+
     # ✅ Sobrescribir validador de email para permitir datos históricos
     # (en lectura, aceptamos emails con errores menores como puntos antes de @ o dobles puntos)
     @field_validator("email", mode="before")

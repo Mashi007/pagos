@@ -34,7 +34,7 @@ class AIChatMetrics:
     ) -> None:
         """
         Registra una métrica de uso del Chat AI
-        
+
         Args:
             usuario_id: ID del usuario
             usuario_email: Email del usuario
@@ -71,10 +71,10 @@ class AIChatMetrics:
     def get_stats(cls, horas: int = 24) -> Dict[str, Any]:
         """
         Obtiene estadísticas de uso del Chat AI
-        
+
         Args:
             horas: Número de horas hacia atrás para calcular estadísticas
-            
+
         Returns:
             Diccionario con estadísticas
         """
@@ -82,9 +82,7 @@ class AIChatMetrics:
         cutoff_iso = cutoff_time.isoformat()
 
         # Filtrar métricas del período
-        recent_metrics = [
-            m for m in cls._metrics_store if m["timestamp"] >= cutoff_iso
-        ]
+        recent_metrics = [m for m in cls._metrics_store if m["timestamp"] >= cutoff_iso]
 
         if not recent_metrics:
             return {
@@ -127,22 +125,18 @@ class AIChatMetrics:
     def get_user_stats(cls, usuario_email: str, horas: int = 24) -> Dict[str, Any]:
         """
         Obtiene estadísticas de uso para un usuario específico
-        
+
         Args:
             usuario_email: Email del usuario
             horas: Número de horas hacia atrás
-            
+
         Returns:
             Diccionario con estadísticas del usuario
         """
         cutoff_time = datetime.now() - timedelta(hours=horas)
         cutoff_iso = cutoff_time.isoformat()
 
-        user_metrics = [
-            m
-            for m in cls._metrics_store
-            if m["usuario_email"] == usuario_email and m["timestamp"] >= cutoff_iso
-        ]
+        user_metrics = [m for m in cls._metrics_store if m["usuario_email"] == usuario_email and m["timestamp"] >= cutoff_iso]
 
         if not user_metrics:
             return {

@@ -71,47 +71,44 @@ class AIChatService:
         pregunta = pregunta.strip()
         if not pregunta:
             raise HTTPException(status_code=400, detail="La pregunta no puede estar vacia")
-        
+
         # ✅ Validar tamaño máximo de pregunta (default: 2000 caracteres)
         max_length = int(self.config_dict.get("max_pregunta_length", "2000")) if self.config_dict else 2000
         if len(pregunta) > max_length:
-            raise HTTPException(
-                status_code=400,
-                detail=f"La pregunta no puede exceder {max_length} caracteres"
-            )
+            raise HTTPException(status_code=400, detail=f"La pregunta no puede exceder {max_length} caracteres")
 
         _validar_pregunta_es_sobre_bd(pregunta)
         return pregunta
-    
+
     def _obtener_resumen_bd_con_cache(self, ttl: int) -> str:
         """
         Obtiene el resumen de BD usando cache para mejorar rendimiento.
-        
+
         Args:
             ttl: Tiempo de vida del cache en segundos
-            
+
         Returns:
             Resumen de BD como string
         """
         from app.core.cache import cache_backend
         from app.api.v1.endpoints.configuracion import _obtener_resumen_bd
-        
+
         cache_key = "ai_chat:resumen_bd"
-        
+
         # Intentar obtener del cache
         cached_result = cache_backend.get(cache_key)
         if cached_result is not None:
             logger.debug(f"✅ Cache HIT: resumen_bd (TTL restante: {ttl}s)")
             return cached_result
-        
+
         # Cache MISS: obtener de BD
         logger.debug(f"❌ Cache MISS: resumen_bd - Obteniendo de BD...")
         resumen_bd = _obtener_resumen_bd(self.db)
-        
+
         # Guardar en cache
         cache_backend.set(cache_key, resumen_bd, ttl=ttl)
         logger.debug(f"💾 Cache guardado: resumen_bd (TTL: {ttl}s)")
-        
+
         return resumen_bd
 
     async def obtener_contexto_completo_async(self, pregunta: str) -> Dict[str, str]:

@@ -11,6 +11,7 @@ from fastapi import HTTPException
 # Intentar importar bleach para sanitización HTML robusta
 try:
     import bleach
+
     BLEACH_AVAILABLE = True
 except ImportError:
     BLEACH_AVAILABLE = False
@@ -70,7 +71,7 @@ def validar_tipo_plantilla(tipo: str) -> None:
 def sanitizar_html(texto: str, permitir_html: bool = True) -> str:
     """
     Sanitiza HTML permitiendo solo tags y atributos seguros.
-    
+
     Protege las variables {{variable}} y permite solo HTML seguro.
     Usa bleach si está disponible para sanitización robusta, sino usa método básico.
 
@@ -91,7 +92,7 @@ def sanitizar_html(texto: str, permitir_html: bool = True) -> str:
     # Primero, proteger las variables {{variable}} para que no sean afectadas
     variables_protegidas = {}
     variable_pattern = r"\{\{([^}]+)\}\}"
-    
+
     # Encontrar todas las variables y reemplazarlas con placeholders
     texto_procesado = texto
     idx = 0
@@ -110,7 +111,7 @@ def sanitizar_html(texto: str, permitir_html: bool = True) -> str:
             "div": ["class"],
             "span": ["class"],
         }
-        
+
         # Sanitizar con bleach
         texto_sanitizado = bleach.clean(
             texto_procesado,
@@ -123,7 +124,7 @@ def sanitizar_html(texto: str, permitir_html: bool = True) -> str:
         # Fallback a método básico si bleach no está disponible
         # Escapar todo HTML primero
         texto_sanitizado = escape(texto_procesado)
-        
+
         # Permitir tags seguros básicos (solo tags de formato, no scripts ni estilos)
         for tag in HTML_TAGS_PERMITIDOS:
             # Permitir tags de apertura con atributos básicos
@@ -174,7 +175,7 @@ def _limpiar_atributos_a(atributos: str) -> str:
     if href_match:
         href = href_match.group(1)
         # Validar que href sea seguro (http/https o mailto)
-        if re.match(r'^(https?://|mailto:|#)', href, re.IGNORECASE):
+        if re.match(r"^(https?://|mailto:|#)", href, re.IGNORECASE):
             atributos_permitidos.append(f'href="{href}"')
 
     if title_match:
@@ -187,7 +188,7 @@ def _limpiar_atributos_a(atributos: str) -> str:
             atributos_permitidos.append(f'target="{target}"')
 
     attrs_str = " ".join(atributos_permitidos)
-    return f'<a {attrs_str}>' if attrs_str else '<a>'
+    return f"<a {attrs_str}>" if attrs_str else "<a>"
 
 
 def validar_variables_obligatorias(tipo: str, asunto: str, cuerpo: str) -> None:
@@ -254,9 +255,7 @@ def validar_y_sanitizar_plantilla(
     # Sanitizar campos de texto
     asunto_sanitizado = sanitizar_html(asunto, permitir_html=sanitizar_html_enabled)
     cuerpo_sanitizado = sanitizar_html(cuerpo, permitir_html=sanitizar_html_enabled)
-    descripcion_sanitizada = (
-        sanitizar_html(descripcion, permitir_html=sanitizar_html_enabled) if descripcion else None
-    )
+    descripcion_sanitizada = sanitizar_html(descripcion, permitir_html=sanitizar_html_enabled) if descripcion else None
 
     # Validar variables obligatorias
     validar_variables_obligatorias(tipo, asunto_sanitizado, cuerpo_sanitizado)

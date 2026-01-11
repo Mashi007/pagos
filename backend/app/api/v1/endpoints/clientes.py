@@ -86,9 +86,9 @@ def _serializar_clientes(clientes):
     clientes_dict = []
     total_clientes = len(clientes)
     errores_serializacion = 0
-    
+
     logger.info(f"📋 [serializar_clientes] Iniciando serialización de {total_clientes} clientes")
-    
+
     for cliente in clientes:
         try:
             cliente_data = ClienteResponse.model_validate(cliente).model_dump()
@@ -101,12 +101,16 @@ def _serializar_clientes(clientes):
             logger.error(f"   Cliente tipo: {type(cliente)}")
             logger.error(f"   Cliente atributos: {dir(cliente)[:20]}")
             continue
-    
-    logger.info(f"✅ [serializar_clientes] Serialización completada: {len(clientes_dict)}/{total_clientes} exitosos, {errores_serializacion} errores")
-    
+
+    logger.info(
+        f"✅ [serializar_clientes] Serialización completada: {len(clientes_dict)}/{total_clientes} exitosos, {errores_serializacion} errores"
+    )
+
     if errores_serializacion > 0 and len(clientes_dict) == 0:
-        logger.warning(f"⚠️ [serializar_clientes] TODOS los clientes fallaron al serializarse. Esto puede indicar un problema con el schema ClienteResponse")
-    
+        logger.warning(
+            f"⚠️ [serializar_clientes] TODOS los clientes fallaron al serializarse. Esto puede indicar un problema con el schema ClienteResponse"
+        )
+
     return clientes_dict
 
 
@@ -116,114 +120,121 @@ def _identificar_problemas_validacion(cliente) -> dict:
     Retorna un dict con los problemas encontrados.
     """
     problemas = []
-    
+
     # Verificar teléfono
     telefono = getattr(cliente, "telefono", None)
     if telefono:
         telefono_str = str(telefono).strip()
         if not telefono_str.startswith("+58"):
-            problemas.append({
-                "campo": "telefono",
-                "valor_actual": telefono_str,
-                "error": f"Teléfono debe empezar por '+58'. Recibido: '{telefono_str}'",
-                "requisito": "Formato: +58 seguido de 10 dígitos, primero NO puede ser 0"
-            })
+            problemas.append(
+                {
+                    "campo": "telefono",
+                    "valor_actual": telefono_str,
+                    "error": f"Teléfono debe empezar por '+58'. Recibido: '{telefono_str}'",
+                    "requisito": "Formato: +58 seguido de 10 dígitos, primero NO puede ser 0",
+                }
+            )
         elif len(telefono_str) != 13:
-            problemas.append({
-                "campo": "telefono",
-                "valor_actual": telefono_str,
-                "error": f"Teléfono debe tener exactamente 13 caracteres. Recibido: {len(telefono_str)}",
-                "requisito": "Formato: +58XXXXXXXXXX (13 caracteres)"
-            })
+            problemas.append(
+                {
+                    "campo": "telefono",
+                    "valor_actual": telefono_str,
+                    "error": f"Teléfono debe tener exactamente 13 caracteres. Recibido: {len(telefono_str)}",
+                    "requisito": "Formato: +58XXXXXXXXXX (13 caracteres)",
+                }
+            )
         elif len(telefono_str) == 13:
             # Verificar que después de +58 tenga 10 dígitos
             digitos = telefono_str[3:]
             if not re.match(r"^[0-9]{10}$", digitos):
-                problemas.append({
-                    "campo": "telefono",
-                    "valor_actual": telefono_str,
-                    "error": f"Después de '+58' deben ir exactamente 10 dígitos. Recibido: '{digitos}'",
-                    "requisito": "Formato: +58 seguido de 10 dígitos numéricos"
-                })
+                problemas.append(
+                    {
+                        "campo": "telefono",
+                        "valor_actual": telefono_str,
+                        "error": f"Después de '+58' deben ir exactamente 10 dígitos. Recibido: '{digitos}'",
+                        "requisito": "Formato: +58 seguido de 10 dígitos numéricos",
+                    }
+                )
             elif digitos[0] == "0":
-                problemas.append({
-                    "campo": "telefono",
-                    "valor_actual": telefono_str,
-                    "error": "El primer dígito después de '+58' NO puede ser 0",
-                    "requisito": "El número debe empezar por 1-9 después de +58"
-                })
+                problemas.append(
+                    {
+                        "campo": "telefono",
+                        "valor_actual": telefono_str,
+                        "error": "El primer dígito después de '+58' NO puede ser 0",
+                        "requisito": "El número debe empezar por 1-9 después de +58",
+                    }
+                )
     elif not telefono:
-        problemas.append({
-            "campo": "telefono",
-            "valor_actual": None,
-            "error": "Teléfono requerido",
-            "requisito": "Teléfono es obligatorio"
-        })
-    
+        problemas.append(
+            {"campo": "telefono", "valor_actual": None, "error": "Teléfono requerido", "requisito": "Teléfono es obligatorio"}
+        )
+
     # Verificar nombres
     nombres = getattr(cliente, "nombres", None)
     if nombres:
         nombres_str = str(nombres).strip()
         palabras = [p for p in nombres_str.split() if p]
         if len(palabras) < 2:
-            problemas.append({
-                "campo": "nombres",
-                "valor_actual": nombres_str,
-                "error": f"Mínimo 2 palabras requeridas. Recibido: {len(palabras)}",
-                "requisito": "Nombre + apellido (mínimo 2 palabras)"
-            })
+            problemas.append(
+                {
+                    "campo": "nombres",
+                    "valor_actual": nombres_str,
+                    "error": f"Mínimo 2 palabras requeridas. Recibido: {len(palabras)}",
+                    "requisito": "Nombre + apellido (mínimo 2 palabras)",
+                }
+            )
         elif len(palabras) > 7:
-            problemas.append({
-                "campo": "nombres",
-                "valor_actual": nombres_str,
-                "error": f"Máximo 7 palabras permitidas. Recibido: {len(palabras)}",
-                "requisito": "Máximo 7 palabras"
-            })
+            problemas.append(
+                {
+                    "campo": "nombres",
+                    "valor_actual": nombres_str,
+                    "error": f"Máximo 7 palabras permitidas. Recibido: {len(palabras)}",
+                    "requisito": "Máximo 7 palabras",
+                }
+            )
     elif not nombres:
-        problemas.append({
-            "campo": "nombres",
-            "valor_actual": None,
-            "error": "Nombres requeridos",
-            "requisito": "Nombres es obligatorio"
-        })
-    
+        problemas.append(
+            {"campo": "nombres", "valor_actual": None, "error": "Nombres requeridos", "requisito": "Nombres es obligatorio"}
+        )
+
     # Verificar email (solo formato básico, no validación estricta)
     email = getattr(cliente, "email", None)
     if email:
         email_str = str(email).strip()
         if "@" not in email_str:
-            problemas.append({
-                "campo": "email",
-                "valor_actual": email_str,
-                "error": "Email debe contener '@'",
-                "requisito": "Formato válido de email"
-            })
-    
+            problemas.append(
+                {
+                    "campo": "email",
+                    "valor_actual": email_str,
+                    "error": "Email debe contener '@'",
+                    "requisito": "Formato válido de email",
+                }
+            )
+
     # Verificar cédula
     cedula = getattr(cliente, "cedula", None)
     if cedula:
         cedula_str = str(cedula).strip()
         if len(cedula_str) < 6 or len(cedula_str) > 13:
-            problemas.append({
-                "campo": "cedula",
-                "valor_actual": cedula_str,
-                "error": f"Cédula debe tener entre 6 y 13 caracteres. Recibido: {len(cedula_str)}",
-                "requisito": "Entre 6 y 13 caracteres"
-            })
+            problemas.append(
+                {
+                    "campo": "cedula",
+                    "valor_actual": cedula_str,
+                    "error": f"Cédula debe tener entre 6 y 13 caracteres. Recibido: {len(cedula_str)}",
+                    "requisito": "Entre 6 y 13 caracteres",
+                }
+            )
     elif not cedula:
-        problemas.append({
-            "campo": "cedula",
-            "valor_actual": None,
-            "error": "Cédula requerida",
-            "requisito": "Cédula es obligatoria"
-        })
-    
+        problemas.append(
+            {"campo": "cedula", "valor_actual": None, "error": "Cédula requerida", "requisito": "Cédula es obligatoria"}
+        )
+
     return {
         "cliente_id": getattr(cliente, "id", None),
         "cedula": getattr(cliente, "cedula", None),
         "nombres": getattr(cliente, "nombres", None),
         "problemas": problemas,
-        "tiene_problemas": len(problemas) > 0
+        "tiene_problemas": len(problemas) > 0,
     }
 
 
@@ -289,7 +300,7 @@ def listar_clientes(
         clientes = query.offset(offset).limit(per_page).all()
         query_time = int((time.time() - start_query) * 1000)
         logger.info(f"📊 [clientes] Query completada en {query_time}ms: {len(clientes)} registros")
-        
+
         # ✅ DEBUG: Log detallado de la query
         if len(clientes) == 0:
             logger.warning(f"⚠️ [clientes] Query retornó 0 registros pero total={total}. Verificando query...")
@@ -306,7 +317,9 @@ def listar_clientes(
         start_serialize = time.time()
         clientes_dict = _serializar_clientes(clientes)
         serialize_time = int((time.time() - start_serialize) * 1000)
-        logger.info(f"📊 [clientes] Serialización completada en {serialize_time}ms: {len(clientes_dict)} clientes serializados")
+        logger.info(
+            f"📊 [clientes] Serialización completada en {serialize_time}ms: {len(clientes_dict)} clientes serializados"
+        )
 
         # Calcular paginas
         if total is not None:
@@ -661,12 +674,13 @@ def listar_clientes_con_problemas_validacion(
     """
     try:
         import time
+
         start_time = time.time()
-        
+
         # Obtener todos los clientes (sin paginación inicial para identificar problemas)
         # Para optimizar, primero obtenemos una muestra y luego contamos
         todos_clientes = db.query(Cliente).all()
-        
+
         # Identificar clientes con problemas
         clientes_con_problemas_completos = []
         for cliente in todos_clientes:
@@ -687,18 +701,18 @@ def listar_clientes_con_problemas_validacion(
                     problemas_info["estado"] = getattr(cliente, "estado", None)
                     problemas_info["activo"] = getattr(cliente, "activo", None)
                     clientes_con_problemas_completos.append(problemas_info)
-        
+
         total_con_problemas = len(clientes_con_problemas_completos)
-        
+
         # Aplicar paginación
         offset = (page - 1) * per_page
-        clientes_paginados = clientes_con_problemas_completos[offset:offset + per_page]
-        
+        clientes_paginados = clientes_con_problemas_completos[offset : offset + per_page]
+
         total_pages = (total_con_problemas + per_page - 1) // per_page if total_con_problemas > 0 else 1
-        
+
         tiempo_total = int((time.time() - start_time) * 1000)
         logger.info(f"📊 [clientes-problemas] Encontrados {total_con_problemas} clientes con problemas en {tiempo_total}ms")
-        
+
         return {
             "clientes": clientes_paginados,
             "total": total_con_problemas,
@@ -706,7 +720,7 @@ def listar_clientes_con_problemas_validacion(
             "per_page": per_page,
             "total_pages": total_pages,
         }
-    
+
     except Exception as e:
         logger.error(f"Error en listar_clientes_con_problemas_validacion: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error interno del servidor")

@@ -167,9 +167,7 @@ def guardar_configuracion_en_bd(db: Session, config: ConfiguracionScheduler) -> 
         raise HTTPException(status_code=500, detail=f"Error guardando configuración: {str(e)}")
 
 
-def registrar_auditoria_scheduler(
-    db: Session, usuario_id: int, accion: str, detalles: str, exito: bool = True
-) -> None:
+def registrar_auditoria_scheduler(db: Session, usuario_id: int, accion: str, detalles: str, exito: bool = True) -> None:
     """
     Registra una acción del scheduler en la tabla de auditoría.
 
@@ -352,9 +350,7 @@ async def ejecutar_scheduler_manual(
         logger.error(f"Error ejecutando scheduler: {e}")
         # Registrar auditoría de error
         try:
-            registrar_auditoria_scheduler(
-                db, current_user.id, "EXECUTE", f"Error ejecutando scheduler: {str(e)}", exito=False
-            )
+            registrar_auditoria_scheduler(db, current_user.id, "EXECUTE", f"Error ejecutando scheduler: {str(e)}", exito=False)
         except Exception:
             pass
         raise HTTPException(status_code=500, detail=f"Error ejecutando scheduler: {str(e)}")

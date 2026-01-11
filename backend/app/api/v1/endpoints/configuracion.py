@@ -55,6 +55,7 @@ class ConfiguracionResponse(BaseModel):
 
 class ChatAIRequest(BaseModel):
     """Schema para solicitud de chat AI"""
+
     pregunta: str = Field(..., description="Pregunta del usuario sobre la base de datos")
 
 
@@ -4404,8 +4405,9 @@ def obtener_metricas_ai(
 
         # ✅ Métricas de Chat AI
         from app.services.ai_chat_metrics import AIChatMetrics
+
         chat_metrics = AIChatMetrics.get_stats(horas=horas)
-        
+
         return {
             "documentos": {
                 "total": total_documentos,
@@ -4440,16 +4442,16 @@ def obtener_metricas_chat_ai(
     """Obtener métricas detalladas de uso del Chat AI"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden ver métricas de Chat AI")
-    
+
     try:
         from app.services.ai_chat_metrics import AIChatMetrics
-        
+
         # Métricas generales
         stats_general = AIChatMetrics.get_stats(horas=horas)
-        
+
         # Métricas del usuario actual
         stats_usuario = AIChatMetrics.get_user_stats(current_user.email, horas=horas)
-        
+
         return {
             "general": stats_general,
             "usuario_actual": stats_usuario,
@@ -7487,7 +7489,7 @@ async def chat_ai(
     - Y más...
 
     Refactorizado para usar AIChatService y reducir complejidad ciclomática.
-    
+
     ✅ Mejoras implementadas:
     - Cache para resumen de BD (mejora rendimiento)
     - Rate limiting (20 requests/minuto)
@@ -7521,19 +7523,22 @@ async def chat_ai(
 
         # Procesar pregunta completa usando el servicio
         resultado = await service.procesar_pregunta(pregunta)
-        
+
         # ✅ Métricas: Calcular tiempo total y agregar métricas al resultado
         elapsed_time = time.time() - start_time
-        metrics.update({
-            "tiempo_total": round(elapsed_time, 2),
-            "exito": resultado.get("success", False),
-            "tokens_usados": resultado.get("tokens_usados", 0),
-            "modelo_usado": resultado.get("modelo_usado", "unknown"),
-            "tiempo_respuesta_openai": resultado.get("tiempo_respuesta", 0),
-        })
-        
+        metrics.update(
+            {
+                "tiempo_total": round(elapsed_time, 2),
+                "exito": resultado.get("success", False),
+                "tokens_usados": resultado.get("tokens_usados", 0),
+                "modelo_usado": resultado.get("modelo_usado", "unknown"),
+                "tiempo_respuesta_openai": resultado.get("tiempo_respuesta", 0),
+            }
+        )
+
         # ✅ Registrar métrica en el sistema de métricas
         from app.services.ai_chat_metrics import AIChatMetrics
+
         AIChatMetrics.record_metric(
             usuario_id=current_user.id,
             usuario_email=current_user.email,
@@ -7544,7 +7549,7 @@ async def chat_ai(
             modelo_usado=resultado.get("modelo_usado", "unknown"),
             exito=resultado.get("success", False),
         )
-        
+
         # Log de métricas
         logger.info(
             f"📊 Chat AI - Usuario: {current_user.email}, "
@@ -7553,24 +7558,27 @@ async def chat_ai(
             f"Modelo: {metrics['modelo_usado']}, "
             f"Éxito: {metrics['exito']}"
         )
-        
+
         # Agregar métricas al resultado
         resultado["metricas"] = metrics
-        
+
         return resultado
 
     except HTTPException:
         raise
     except Exception as e:
         elapsed_time = time.time() - start_time
-        metrics.update({
-            "tiempo_total": round(elapsed_time, 2),
-            "exito": False,
-            "error": str(e),
-        })
-        
+        metrics.update(
+            {
+                "tiempo_total": round(elapsed_time, 2),
+                "exito": False,
+                "error": str(e),
+            }
+        )
+
         # ✅ Registrar métrica de error
         from app.services.ai_chat_metrics import AIChatMetrics
+
         AIChatMetrics.record_metric(
             usuario_id=current_user.id,
             usuario_email=current_user.email,
@@ -7582,11 +7590,9 @@ async def chat_ai(
             exito=False,
             error=str(e),
         )
-        
+
         logger.error(
-            f"❌ Error en Chat AI - Usuario: {current_user.email}, "
-            f"Tiempo: {elapsed_time:.2f}s, "
-            f"Error: {str(e)}",
-            exc_info=True
+            f"❌ Error en Chat AI - Usuario: {current_user.email}, " f"Tiempo: {elapsed_time:.2f}s, " f"Error: {str(e)}",
+            exc_info=True,
         )
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")

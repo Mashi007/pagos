@@ -1043,7 +1043,7 @@ def actualizar_plantilla(
 
         # Obtener datos actuales y nuevos
         update_data = plantilla.model_dump(exclude_unset=True)
-        
+
         # Determinar tipo a usar (nuevo o existente)
         tipo_actual = update_data.get("tipo", plantilla_existente.tipo)
         asunto_actual = update_data.get("asunto", plantilla_existente.asunto)
@@ -1063,7 +1063,7 @@ def actualizar_plantilla(
                 descripcion=descripcion_actual,
                 sanitizar_html_enabled=True,
             )
-            
+
             # Actualizar con datos sanitizados
             if "asunto" in update_data:
                 update_data["asunto"] = asunto_sanitizado
