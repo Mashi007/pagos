@@ -2,12 +2,13 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.cache import cache_result
+from app.core.rate_limiter import RATE_LIMITS, get_rate_limiter
 from app.models.amortizacion import Cuota
 from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
@@ -32,9 +33,17 @@ from app.services.notificacion_automatica_service import (
 )
 from app.services.variables_notificacion_service import VariablesNotificacionService
 from app.services.whatsapp_service import WhatsAppService
+from app.utils.plantilla_validators import (
+    validar_tipo_plantilla,
+    validar_variables_obligatorias,
+    validar_y_sanitizar_plantilla,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# ✅ Rate limiter para endpoints de plantillas
+limiter = get_rate_limiter()
 
 # Cache para verificación de columnas (evita verificar en cada request)
 _columnas_notificaciones_cache: Optional[dict] = None
@@ -940,19 +949,40 @@ def verificar_plantillas(
 
 
 @router.post("/plantillas", response_model=NotificacionPlantillaResponse)
+@limiter.limit(RATE_LIMITS["sensitive"])  # ✅ Rate limiting: 20 requests/minuto
 def crear_plantilla(
+    request: Request,  # ✅ Necesario para rate limiting
     plantilla: NotificacionPlantillaCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Crear nueva plantilla de notificación"""
     try:
+        # ✅ SEGURIDAD: Validar tipo de plantilla contra lista blanca
+        validar_tipo_plantilla(plantilla.tipo)
+
+        # ✅ SEGURIDAD: Validar y sanitizar campos HTML
+        asunto_sanitizado, cuerpo_sanitizado, descripcion_sanitizada = validar_y_sanitizar_plantilla(
+            tipo=plantilla.tipo,
+            asunto=plantilla.asunto,
+            cuerpo=plantilla.cuerpo,
+            descripcion=plantilla.descripcion,
+            sanitizar_html_enabled=True,
+        )
+
         # Verificar si ya existe una plantilla con el mismo nombre
         existe = db.query(NotificacionPlantilla).filter(NotificacionPlantilla.nombre == plantilla.nombre).first()
         if existe:
             raise HTTPException(status_code=400, detail="Ya existe una plantilla con este nombre")
 
-        nueva_plantilla = NotificacionPlantilla(**plantilla.model_dump())
+        # Crear plantilla con datos sanitizados
+        plantilla_data = plantilla.model_dump()
+        plantilla_data["asunto"] = asunto_sanitizado
+        plantilla_data["cuerpo"] = cuerpo_sanitizado
+        if descripcion_sanitizada is not None:
+            plantilla_data["descripcion"] = descripcion_sanitizada
+
+        nueva_plantilla = NotificacionPlantilla(**plantilla_data)
         db.add(nueva_plantilla)
         db.commit()
         db.refresh(nueva_plantilla)
@@ -996,7 +1026,9 @@ def crear_plantilla(
 
 
 @router.put("/plantillas/{plantilla_id}", response_model=NotificacionPlantillaResponse)
+@limiter.limit(RATE_LIMITS["sensitive"])  # ✅ Rate limiting: 20 requests/minuto
 def actualizar_plantilla(
+    request: Request,  # ✅ Necesario para rate limiting
     plantilla_id: int,
     plantilla: NotificacionPlantillaUpdate,
     db: Session = Depends(get_db),
@@ -1009,8 +1041,41 @@ def actualizar_plantilla(
         if not plantilla_existente:
             raise HTTPException(status_code=404, detail="Plantilla no encontrada")
 
-        # Actualizar solo campos proporcionados
+        # Obtener datos actuales y nuevos
         update_data = plantilla.model_dump(exclude_unset=True)
+        
+        # Determinar tipo a usar (nuevo o existente)
+        tipo_actual = update_data.get("tipo", plantilla_existente.tipo)
+        asunto_actual = update_data.get("asunto", plantilla_existente.asunto)
+        cuerpo_actual = update_data.get("cuerpo", plantilla_existente.cuerpo)
+        descripcion_actual = update_data.get("descripcion", plantilla_existente.descripcion)
+
+        # ✅ SEGURIDAD: Validar tipo si se está actualizando
+        if "tipo" in update_data:
+            validar_tipo_plantilla(tipo_actual)
+
+        # ✅ SEGURIDAD: Validar y sanitizar campos HTML si se están actualizando
+        if "asunto" in update_data or "cuerpo" in update_data:
+            asunto_sanitizado, cuerpo_sanitizado, descripcion_sanitizada = validar_y_sanitizar_plantilla(
+                tipo=tipo_actual,
+                asunto=asunto_actual,
+                cuerpo=cuerpo_actual,
+                descripcion=descripcion_actual,
+                sanitizar_html_enabled=True,
+            )
+            
+            # Actualizar con datos sanitizados
+            if "asunto" in update_data:
+                update_data["asunto"] = asunto_sanitizado
+            if "cuerpo" in update_data:
+                update_data["cuerpo"] = cuerpo_sanitizado
+            if "descripcion" in update_data and descripcion_sanitizada is not None:
+                update_data["descripcion"] = descripcion_sanitizada
+        elif "tipo" in update_data:
+            # Si solo se cambia el tipo, validar variables con datos existentes
+            validar_variables_obligatorias(tipo_actual, asunto_actual, cuerpo_actual)
+
+        # Actualizar campos
         for key, value in update_data.items():
             setattr(plantilla_existente, key, value)
 

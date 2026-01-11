@@ -24,6 +24,7 @@ class AIChatService:
         self.modelo: str = "gpt-3.5-turbo"
         self.temperatura: float = 0.7
         self.max_tokens: int = 2000
+        self.timeout: float = 60.0
 
     def inicializar_configuracion(self) -> None:
         """Obtiene y valida la configuración de AI"""
@@ -57,6 +58,8 @@ class AIChatService:
 
         self.temperatura = float(self.config_dict.get("temperatura", "0.7"))
         self.max_tokens = int(self.config_dict.get("max_tokens", "2000"))
+        # ✅ Timeout configurable desde BD (en segundos)
+        self.timeout = float(self.config_dict.get("timeout_segundos", "60.0"))
 
     def validar_pregunta(self, pregunta: str) -> str:
         """
@@ -68,9 +71,48 @@ class AIChatService:
         pregunta = pregunta.strip()
         if not pregunta:
             raise HTTPException(status_code=400, detail="La pregunta no puede estar vacia")
+        
+        # ✅ Validar tamaño máximo de pregunta (default: 2000 caracteres)
+        max_length = int(self.config_dict.get("max_pregunta_length", "2000")) if self.config_dict else 2000
+        if len(pregunta) > max_length:
+            raise HTTPException(
+                status_code=400,
+                detail=f"La pregunta no puede exceder {max_length} caracteres"
+            )
 
         _validar_pregunta_es_sobre_bd(pregunta)
         return pregunta
+    
+    def _obtener_resumen_bd_con_cache(self, ttl: int) -> str:
+        """
+        Obtiene el resumen de BD usando cache para mejorar rendimiento.
+        
+        Args:
+            ttl: Tiempo de vida del cache en segundos
+            
+        Returns:
+            Resumen de BD como string
+        """
+        from app.core.cache import cache_backend
+        from app.api.v1.endpoints.configuracion import _obtener_resumen_bd
+        
+        cache_key = "ai_chat:resumen_bd"
+        
+        # Intentar obtener del cache
+        cached_result = cache_backend.get(cache_key)
+        if cached_result is not None:
+            logger.debug(f"✅ Cache HIT: resumen_bd (TTL restante: {ttl}s)")
+            return cached_result
+        
+        # Cache MISS: obtener de BD
+        logger.debug(f"❌ Cache MISS: resumen_bd - Obteniendo de BD...")
+        resumen_bd = _obtener_resumen_bd(self.db)
+        
+        # Guardar en cache
+        cache_backend.set(cache_key, resumen_bd, ttl=ttl)
+        logger.debug(f"💾 Cache guardado: resumen_bd (TTL: {ttl}s)")
+        
+        return resumen_bd
 
     async def obtener_contexto_completo_async(self, pregunta: str) -> Dict[str, str]:
         """
@@ -89,8 +131,10 @@ class AIChatService:
 
         pregunta_lower = pregunta.lower().strip()
 
-        # Obtener contexto base
-        resumen_bd = _obtener_resumen_bd(self.db)
+        # ✅ Obtener contexto base con cache
+        # Cache TTL configurable desde BD (default: 5 minutos = 300 segundos)
+        cache_ttl = int(self.config_dict.get("cache_resumen_bd_ttl", "300"))
+        resumen_bd = self._obtener_resumen_bd_con_cache(cache_ttl)
         info_esquema = _obtener_info_esquema(pregunta_lower, self.db)
 
         # Obtener contexto de documentos (async)
@@ -163,7 +207,7 @@ class AIChatService:
         """
         start_time = time.time()
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
                     "https://api.openai.com/v1/chat/completions",
                     headers={
@@ -213,10 +257,10 @@ class AIChatService:
 
         except httpx.TimeoutException:
             elapsed_time = time.time() - start_time
-            logger.error(f"Timeout en Chat AI (Tiempo: {elapsed_time:.2f}s)")
+            logger.error(f"Timeout en Chat AI (Tiempo: {elapsed_time:.2f}s, Límite: {self.timeout}s)")
             return {
                 "success": False,
-                "respuesta": "Timeout al conectar con OpenAI (limite: 60s). La pregunta puede ser muy compleja.",
+                "respuesta": f"Timeout al conectar con OpenAI (limite: {self.timeout}s). La pregunta puede ser muy compleja.",
                 "error": "TIMEOUT",
                 "pregunta": pregunta,
             }

@@ -6,12 +6,13 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.rate_limiter import get_rate_limiter
 from app.models.ai_prompt_variable import AIPromptVariable
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
@@ -25,6 +26,9 @@ from app.services.rag_service import RAGService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# ✅ Rate limiter para endpoints
+limiter = get_rate_limiter()
 
 
 class ConfiguracionUpdate(BaseModel):
@@ -4314,8 +4318,9 @@ Placeholders disponibles:
 def obtener_metricas_ai(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    horas: int = 24,
 ):
-    """Obtener métricas de uso de AI"""
+    """Obtener métricas de uso de AI incluyendo Chat AI"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Solo administradores pueden ver métricas de AI")
 
@@ -4373,6 +4378,10 @@ def obtener_metricas_ai(
         api_key = decrypt_api_key(config_dict.get("openai_api_key") or "") if config_dict.get("openai_api_key") else ""
         tiene_token = bool(api_key and api_key.strip())
 
+        # ✅ Métricas de Chat AI
+        from app.services.ai_chat_metrics import AIChatMetrics
+        chat_metrics = AIChatMetrics.get_stats(horas=horas)
+        
         return {
             "documentos": {
                 "total": total_documentos,
@@ -4387,6 +4396,7 @@ def obtener_metricas_ai(
                 "modelo": modelo_configurado,
                 "tiene_token": tiene_token,
             },
+            "chat_ai": chat_metrics,  # ✅ Métricas de Chat AI
             "fecha_consulta": datetime.now().isoformat(),
         }
 
@@ -4395,6 +4405,35 @@ def obtener_metricas_ai(
     except Exception as e:
         logger.error(f"Error obteniendo métricas AI: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/ai/metricas/chat")
+def obtener_metricas_chat_ai(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    horas: int = 24,
+):
+    """Obtener métricas detalladas de uso del Chat AI"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden ver métricas de Chat AI")
+    
+    try:
+        from app.services.ai_chat_metrics import AIChatMetrics
+        
+        # Métricas generales
+        stats_general = AIChatMetrics.get_stats(horas=horas)
+        
+        # Métricas del usuario actual
+        stats_usuario = AIChatMetrics.get_user_stats(current_user.email, horas=horas)
+        
+        return {
+            "general": stats_general,
+            "usuario_actual": stats_usuario,
+            "fecha_consulta": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo métricas de Chat AI: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error obteniendo métricas: {str(e)}")
 
 
 @router.get("/ai/tablas-campos")
@@ -7410,8 +7449,10 @@ def _obtener_variables_personalizadas(db: Session) -> Dict[str, str]:
 
 
 @router.post("/ai/chat")
+@limiter.limit("20/minute")  # ✅ Rate limiting: 20 requests por minuto por usuario
 async def chat_ai(
-    request: ChatAIRequest,
+    request: Request,  # ✅ Necesario para rate limiting
+    request_body: ChatAIRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -7426,12 +7467,27 @@ async def chat_ai(
     - Y más...
 
     Refactorizado para usar AIChatService y reducir complejidad ciclomática.
+    
+    ✅ Mejoras implementadas:
+    - Cache para resumen de BD (mejora rendimiento)
+    - Rate limiting (20 requests/minuto)
+    - Métricas de uso y rendimiento
+    - Timeout configurable desde BD
     """
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403,
             detail="Solo administradores pueden usar Chat AI",
         )
+
+    # ✅ Métricas: Iniciar tracking de tiempo
+    start_time = time.time()
+    metrics = {
+        "usuario_id": current_user.id,
+        "usuario_email": current_user.email,
+        "pregunta_length": len(request_body.pregunta),
+        "timestamp": datetime.now().isoformat(),
+    }
 
     try:
         from app.services.ai_chat_service import AIChatService
@@ -7441,13 +7497,76 @@ async def chat_ai(
         service.inicializar_configuracion()
 
         # Validar y procesar pregunta
-        pregunta = service.validar_pregunta(request.pregunta)
+        pregunta = service.validar_pregunta(request_body.pregunta)
 
         # Procesar pregunta completa usando el servicio
-        return await service.procesar_pregunta(pregunta)
+        resultado = await service.procesar_pregunta(pregunta)
+        
+        # ✅ Métricas: Calcular tiempo total y agregar métricas al resultado
+        elapsed_time = time.time() - start_time
+        metrics.update({
+            "tiempo_total": round(elapsed_time, 2),
+            "exito": resultado.get("success", False),
+            "tokens_usados": resultado.get("tokens_usados", 0),
+            "modelo_usado": resultado.get("modelo_usado", "unknown"),
+            "tiempo_respuesta_openai": resultado.get("tiempo_respuesta", 0),
+        })
+        
+        # ✅ Registrar métrica en el sistema de métricas
+        from app.services.ai_chat_metrics import AIChatMetrics
+        AIChatMetrics.record_metric(
+            usuario_id=current_user.id,
+            usuario_email=current_user.email,
+            pregunta_length=len(pregunta),
+            tiempo_total=elapsed_time,
+            tiempo_respuesta_openai=resultado.get("tiempo_respuesta", 0),
+            tokens_usados=resultado.get("tokens_usados", 0),
+            modelo_usado=resultado.get("modelo_usado", "unknown"),
+            exito=resultado.get("success", False),
+        )
+        
+        # Log de métricas
+        logger.info(
+            f"📊 Chat AI - Usuario: {current_user.email}, "
+            f"Tiempo: {elapsed_time:.2f}s, "
+            f"Tokens: {metrics['tokens_usados']}, "
+            f"Modelo: {metrics['modelo_usado']}, "
+            f"Éxito: {metrics['exito']}"
+        )
+        
+        # Agregar métricas al resultado
+        resultado["metricas"] = metrics
+        
+        return resultado
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error en Chat AI: {e}", exc_info=True)
+        elapsed_time = time.time() - start_time
+        metrics.update({
+            "tiempo_total": round(elapsed_time, 2),
+            "exito": False,
+            "error": str(e),
+        })
+        
+        # ✅ Registrar métrica de error
+        from app.services.ai_chat_metrics import AIChatMetrics
+        AIChatMetrics.record_metric(
+            usuario_id=current_user.id,
+            usuario_email=current_user.email,
+            pregunta_length=len(request_body.pregunta),
+            tiempo_total=elapsed_time,
+            tiempo_respuesta_openai=0,
+            tokens_usados=0,
+            modelo_usado="unknown",
+            exito=False,
+            error=str(e),
+        )
+        
+        logger.error(
+            f"❌ Error en Chat AI - Usuario: {current_user.email}, "
+            f"Tiempo: {elapsed_time:.2f}s, "
+            f"Error: {str(e)}",
+            exc_info=True
+        )
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
