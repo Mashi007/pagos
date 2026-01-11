@@ -23,9 +23,9 @@ class Prestamo(Base):
     # ============================================
     # DATOS DEL CLIENTE (vinculado por cédula)
     # ============================================
-    cliente_id = Column(Integer, ForeignKey("clientes.id", nullable=False), nullable=False, index=True)
-    cedula = Column(String(20, nullable=False), nullable=False, index=True)  # Cédula del cliente
-    nombres = Column(String(100, nullable=False), nullable=False)  # Nombre del cliente
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False, index=True)
+    cedula = Column(String(20), nullable=False, index=True)  # Cédula del cliente
+    nombres = Column(String(100), nullable=False)  # Nombre del cliente
 
     # Relación con Cliente
     cliente = relationship("Cliente", backref="prestamos")
@@ -33,33 +33,33 @@ class Prestamo(Base):
     # ============================================
     # DATOS DEL PRÉSTAMO
     # ============================================
-    valor_activo = Column(Numeric(15, 2, nullable=True), nullable=True)  # Valor del activo (vehículo)
-    total_financiamiento = Column(Numeric(15, 2, nullable=False), nullable=False)  # Monto total
+    valor_activo = Column(Numeric(15, 2), nullable=True)  # Valor del activo (vehículo)
+    total_financiamiento = Column(Numeric(15, 2), nullable=False)  # Monto total
     fecha_requerimiento = Column(Date, nullable=False)  # Fecha que necesita el préstamo
-    modalidad_pago = Column(String(20, nullable=False), nullable=False)  # MENSUAL, QUINCENAL, SEMANAL
+    modalidad_pago = Column(String(20), nullable=False)  # MENSUAL, QUINCENAL, SEMANAL
     numero_cuotas = Column(Integer, nullable=False)  # Calculado automáticamente
-    cuota_periodo = Column(Numeric(15, 2, nullable=False), nullable=False)  # Cuota por período según modalidad
+    cuota_periodo = Column(Numeric(15, 2), nullable=False)  # Cuota por período según modalidad
 
     # Tasa de interés (0% por defecto hasta que Admin la asigne)
-    tasa_interes = Column(Numeric(5, 2, nullable=False), nullable=False, default=0.00)
+    tasa_interes = Column(Numeric(5, 2), nullable=False, default=0.00)
     fecha_base_calculo = Column(Date, nullable=True)  # Fecha desde la cual se genera tabla de amortizaciones
 
     # Producto financiero
-    producto = Column(String(100, nullable=False), nullable=False)  # Modelo de vehículo
-    producto_financiero = Column(String(100, nullable=False), nullable=False)  # Analista asignado
+    producto = Column(String(100), nullable=False)  # Modelo de vehículo
+    producto_financiero = Column(String(100), nullable=False)  # Analista asignado
 
     # ============================================
     # INFORMACIÓN ADICIONAL
     # ============================================
     # Campos legacy (mantener para compatibilidad durante migración)
-    concesionario = Column(String(100, nullable=True), nullable=True)  # Concesionario (legacy - usar concesionario_id)
-    analista = Column(String(100, nullable=True), nullable=True)  # Analista (legacy - usar analista_id)
-    modelo_vehiculo = Column(String(100, nullable=True), nullable=True)  # Modelo del vehículo (legacy - usar modelo_vehiculo_id)
+    concesionario = Column(String(100), nullable=True)  # Concesionario (legacy - usar concesionario_id)
+    analista = Column(String(100), nullable=True)  # Analista (legacy - usar analista_id)
+    modelo_vehiculo = Column(String(100), nullable=True)  # Modelo del vehículo (legacy - usar modelo_vehiculo_id)
 
     # ✅ Nuevas relaciones normalizadas
-    concesionario_id = Column(Integer, ForeignKey("concesionarios.id", nullable=True), nullable=True, index=True)
-    analista_id = Column(Integer, ForeignKey("analistas.id", nullable=True), nullable=True, index=True)
-    modelo_vehiculo_id = Column(Integer, ForeignKey("modelos_vehiculos.id", nullable=True), nullable=True, index=True)
+    concesionario_id = Column(Integer, ForeignKey("concesionarios.id"), nullable=True, index=True)
+    analista_id = Column(Integer, ForeignKey("analistas.id"), nullable=True, index=True)
+    modelo_vehiculo_id = Column(Integer, ForeignKey("modelos_vehiculos.id"), nullable=True, index=True)
 
     # ✅ Relaciones normalizadas con catálogos (definidas después de las columnas)
     concesionario_rel = relationship("Concesionario")
@@ -69,14 +69,14 @@ class Prestamo(Base):
     # ============================================
     # ESTADO Y APROBACIÓN
     # ============================================
-    estado = Column(String(20, nullable=False), nullable=False, default="DRAFT", index=True)
+    estado = Column(String(20), nullable=False, default="DRAFT", index=True)
     # DRAFT → EN_REVISION → APROBADO/RECHAZADO
 
     # Usuarios del proceso
-    usuario_proponente = Column(String(100, nullable=False), nullable=False)  # Email del analista
-    usuario_aprobador = Column(String(100, nullable=True), nullable=True)  # Email del admin (se llena al aprobar)
+    usuario_proponente = Column(String(100), nullable=False)  # Email del analista
+    usuario_aprobador = Column(String(100), nullable=True)  # Email del admin (se llena al aprobar)
     usuario_autoriza = Column(
-        String(100, nullable=True), nullable=True
+        String(100), nullable=True
     )  # Email del usuario que autoriza crear nuevo préstamo cuando ya existe uno
     observaciones = Column(Text, nullable=True)  # Observaciones de aprobación/rechazo
 
@@ -94,8 +94,8 @@ class Prestamo(Base):
     # ============================================
     # ML IMPAGO - VALORES MANUALES
     # ============================================
-    ml_impago_nivel_riesgo_manual = Column(String(20, nullable=True), nullable=True)  # Alto, Medio, Bajo (valores manuales)
-    ml_impago_probabilidad_manual = Column(Numeric(5, 3, nullable=True), nullable=True)  # Probabilidad manual (0.0 a 1.0)
+    ml_impago_nivel_riesgo_manual = Column(String(20), nullable=True)  # Alto, Medio, Bajo (valores manuales)
+    ml_impago_probabilidad_manual = Column(Numeric(5, 3), nullable=True)  # Probabilidad manual (0.0 a 1.0)
 
     # ============================================
     # ML IMPAGO - VALORES CALCULADOS (persistentes)

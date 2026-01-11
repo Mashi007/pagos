@@ -20,21 +20,21 @@ class Cliente(Base):
     # Documento - OBLIGATORIO
     # CORREGIDO: Removido unique=True para permitir múltiples clientes con
     # misma cédula
-    cedula = Column(String(CEDULA_LENGTH, nullable=False), nullable=False, index=True)
+    cedula = Column(String(CEDULA_LENGTH), nullable=False, index=True)
 
-    nombres = Column(String(NAME_LENGTH, nullable=False), nullable=False)  # 2-7 palabras (nombres + apellidos unificados)
-    telefono = Column(String(PHONE_LENGTH, nullable=False), nullable=False, index=True)  # Validado por validadores
-    email = Column(String(EMAIL_LENGTH, nullable=False), nullable=False, index=True)  # Validado por validadores
+    nombres = Column(String(NAME_LENGTH), nullable=False)  # 2-7 palabras (nombres + apellidos unificados)
+    telefono = Column(String(PHONE_LENGTH), nullable=False, index=True)  # Validado por validadores
+    email = Column(String(EMAIL_LENGTH), nullable=False, index=True)  # Validado por validadores
     direccion = Column(Text, nullable=False)  # Libre
     fecha_nacimiento = Column(Date, nullable=False)  # Validado por validadores
-    ocupacion = Column(String(OCCUPATION_LENGTH, nullable=False), nullable=False)  # Texto libre
+    ocupacion = Column(String(OCCUPATION_LENGTH), nullable=False)  # Texto libre
 
     # Estado y control - OBLIGATORIOS
     # REGLA DE NEGOCIO: Por defecto FINALIZADO (no tiene deudas, no se aprobó crédito)
     # FINALIZADO → ACTIVO: Automático al aprobar préstamo
     # ACTIVO → FINALIZADO: Automático cuando todas las cuotas están PAGADAS y total_pagado >= monto_total_financiamiento
     # ACTIVO → INACTIVO: Automático al rechazar préstamo
-    estado = Column(String(STATE_LENGTH, nullable=False), nullable=False, default="FINALIZADO", index=True)  # FINALIZADO/ACTIVO/INACTIVO
+    estado = Column(String(STATE_LENGTH), nullable=False, default="FINALIZADO", index=True)  # FINALIZADO/ACTIVO/INACTIVO
     activo = Column(Boolean, nullable=False, default=False, index=True)  # Por defecto False (FINALIZADO)
 
     # Auditoría - OBLIGATORIOS
@@ -44,7 +44,7 @@ class Cliente(Base):
     fecha_actualizacion = Column(
         TIMESTAMP, nullable=False, default=func.now(), onupdate=func.now()
     )  # Automático - Se actualiza al editar cualquier campo
-    usuario_registro = Column(String(USER_LENGTH, nullable=False), nullable=False)  # Email del usuario logueado (automático)
+    usuario_registro = Column(String(USER_LENGTH), nullable=False)  # Email del usuario logueado (automático)
 
     # Notas - OBLIGATORIO con default 'NA'
     notas = Column(Text, nullable=False, default="NA")  # Obligatorio pero puede ser "NA"

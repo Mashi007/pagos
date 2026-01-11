@@ -41,7 +41,7 @@ class Notificacion(Base):
 
     __tablename__ = "notificaciones"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, nullable=False)
 
     # Destinatario
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
@@ -65,7 +65,7 @@ class Notificacion(Base):
     estado = Column(String(20), nullable=False, default="PENDIENTE", index=True)  # USER-DEFINED enum en BD
     prioridad = Column(
         String(20), nullable=False, default="MEDIA", index=True
-    )  # ✅ NUEVO: Existe en BD como USER-DEFINED enum
+    )  # ✅ NUEVO: Existe en BD como USER-DEFINED enum (NOT NULL según BD)
     programada_para = Column(DateTime(timezone=True), nullable=True, index=True)
     enviada_en = Column(DateTime(timezone=True), nullable=True)
     # ✅ CORREGIDO: leida -> leida_en (timestamp en lugar de boolean)

@@ -23,19 +23,19 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True, nullable=False)
-    email = Column(String(EMAIL_LENGTH, nullable=False), unique=True, index=True, nullable=False)
-    nombre = Column(String(NAME_LENGTH, nullable=False), nullable=False)
-    apellido = Column(String(NAME_LENGTH, nullable=False), nullable=False)
-    hashed_password = Column(String(PASSWORD_LENGTH, nullable=False), nullable=False)
-    rol = Column(String(50, nullable=False), default="USER", nullable=False)  # Campo rol requerido
+    email = Column(String(EMAIL_LENGTH), unique=True, index=True, nullable=False)
+    nombre = Column(String(NAME_LENGTH), nullable=False)
+    apellido = Column(String(NAME_LENGTH), nullable=False)
+    hashed_password = Column(String(PASSWORD_LENGTH), nullable=False)
+    rol = Column(String(50), default="USER", nullable=False)  # Campo rol requerido
     is_admin = Column(Boolean, default=False, nullable=False)  # Cambio clave: rol → is_admin
-    cargo = Column(String(NAME_LENGTH, nullable=True), nullable=True)  # Campo separado para cargo en la empresa
+    cargo = Column(String(NAME_LENGTH), nullable=True)  # Campo separado para cargo en la empresa
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Timestamps
-    created_at = Column(DateTime, server_default=func.now(, nullable=False), nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(
-        DateTime, server_default=func.now(, nullable=True), onupdate=func.now(), nullable=True
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=True
     )  # Fecha de última actualización
     last_login = Column(DateTime, nullable=True)  # Último acceso del usuario
 
