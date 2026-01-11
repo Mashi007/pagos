@@ -233,6 +233,69 @@ export function TablaAmortizacionCompleta() {
     },
   })
 
+  // Mutación para generar amortización
+  const mutationGenerarAmortizacion = useMutation({
+    mutationFn: (prestamoId: number) => prestamoService.generarAmortizacion(prestamoId),
+    onSuccess: (data, prestamoId) => {
+      toast.success(`Tabla de amortización generada exitosamente para el préstamo ${prestamoId}`)
+      // Invalidar queries para recargar cuotas
+      queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
+      queryClient.invalidateQueries({ queryKey: ['prestamos-cedula', cedulaSeleccionada] })
+    },
+    onError: (error: any) => {
+      toast.error(`Error al generar amortización: ${error?.response?.data?.detail || error?.message || 'Error desconocido'}`)
+    },
+  })
+
+  // Función para generar cuotas para todos los préstamos sin cuotas
+  const handleGenerarCuotasParaTodos = async () => {
+    if (!prestamos || prestamos.length === 0) {
+      toast.error('No hay préstamos para procesar')
+      return
+    }
+
+    // Filtrar préstamos aprobados que tengan fecha_base_calculo pero no tengan cuotas
+    const prestamosSinCuotas = prestamos.filter((p: any) => {
+      const tieneCuotas = todasLasCuotas && todasLasCuotas.length > 0 
+        ? todasLasCuotas.some((c: Cuota) => c.prestamo_id === p.id)
+        : false
+      return p.estado === 'APROBADO' && p.fecha_base_calculo && !tieneCuotas
+    })
+
+    if (prestamosSinCuotas.length === 0) {
+      toast.info('Todos los préstamos aprobados ya tienen cuotas generadas o no tienen fecha base de cálculo')
+      return
+    }
+
+    if (!confirm(`¿Generar tabla de amortización para ${prestamosSinCuotas.length} préstamo(s)?`)) {
+      return
+    }
+
+    // Generar cuotas para cada préstamo secuencialmente para evitar sobrecarga
+    let exitosos = 0
+    let fallidos = 0
+
+    for (const prestamo of prestamosSinCuotas) {
+      try {
+        await mutationGenerarAmortizacion.mutateAsync(prestamo.id)
+        exitosos++
+      } catch (error) {
+        fallidos++
+        console.error(`Error generando cuotas para préstamo ${prestamo.id}:`, error)
+      }
+    }
+
+    // Recargar datos
+    queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
+    queryClient.invalidateQueries({ queryKey: ['prestamos-cedula', cedulaSeleccionada] })
+
+    if (exitosos > 0) {
+      toast.success(`Se generaron las cuotas para ${exitosos} préstamo(s) exitosamente${fallidos > 0 ? `. ${fallidos} fallaron.` : ''}`)
+    } else {
+      toast.error('No se pudieron generar las cuotas. Verifique los logs para más detalles.')
+    }
+  }
+
   // Función para confirmar eliminación de pago
   const handleEliminarPago = (pagoId: number) => {
     if (!confirm('¿Está seguro de eliminar este pago? Esta acción no se puede deshacer.')) {
@@ -408,27 +471,8 @@ export function TablaAmortizacionCompleta() {
                     </Card>
                   ) : null}
 
-                  {/* Tabla de Cuotas */}
+                  {/* Tabla de Cuotas - Siempre se muestra cuando hay préstamos */}
                   {prestamos && prestamos.length > 0 && (
-                    <>
-                      {loadingCuotas ? (
-                        <Card className="mb-6">
-                          <CardContent className="py-8 text-center">
-                            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
-                            <p className="text-gray-600">Cargando tabla de amortización...</p>
-                          </CardContent>
-                        </Card>
-                      ) : errorCuotas ? (
-                        <Card className="mb-6">
-                          <CardContent className="py-8 text-center">
-                            <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-                            <p className="text-red-600 mb-2">Error al cargar las cuotas</p>
-                            <p className="text-sm text-gray-600">
-                              {errorCuotas instanceof Error ? errorCuotas.message : 'Error desconocido'}
-                            </p>
-                          </CardContent>
-                        </Card>
-                      ) : todasLasCuotas && todasLasCuotas.length > 0 ? (
                     <Card className="mb-6">
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -437,79 +481,117 @@ export function TablaAmortizacionCompleta() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Préstamo ID</TableHead>
-                                <TableHead>Cuota #</TableHead>
-                                <TableHead>Fecha Vencimiento</TableHead>
-                                <TableHead>Monto Cuota</TableHead>
-                                <TableHead>Capital</TableHead>
-                                <TableHead>Interés</TableHead>
-                                <TableHead>Total Pagado</TableHead>
-                                <TableHead>Capital Pendiente</TableHead>
-                                <TableHead>Estado</TableHead>
-                                <TableHead>Días Mora</TableHead>
-                                <TableHead>Mora</TableHead>
-                                <TableHead className="text-right">Acciones</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {todasLasCuotas.map((cuota) => (
-                                <TableRow key={cuota.id}>
-                                  <TableCell>{cuota.prestamo_id}</TableCell>
-                                  <TableCell className="font-semibold">{cuota.numero_cuota}</TableCell>
-                                  <TableCell>{formatDate(cuota.fecha_vencimiento)}</TableCell>
-                                  <TableCell>{formatCurrency(cuota.monto_cuota)}</TableCell>
-                                  <TableCell>{formatCurrency(cuota.monto_capital)}</TableCell>
-                                  <TableCell>{formatCurrency(cuota.monto_interes)}</TableCell>
-                                  <TableCell className="font-semibold">{formatCurrency(cuota.total_pagado)}</TableCell>
-                                  <TableCell>{formatCurrency(cuota.capital_pendiente)}</TableCell>
-                                  <TableCell>{getEstadoBadge(cuota.estado)}</TableCell>
-                                  <TableCell>{cuota.dias_mora || 0}</TableCell>
-                                  <TableCell>{formatCurrency(cuota.monto_mora || 0)}</TableCell>
-                                  <TableCell className="text-right">
-                                    <div className="flex gap-2 justify-end">
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => handleEditarCuota(cuota)}
-                                        title="Editar Cuota"
-                                      >
-                                        <Edit className="w-4 h-4" />
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                        onClick={() => handleEliminarCuota(cuota.id)}
-                                        title="Eliminar Cuota"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </Button>
-                                    </div>
-                                  </TableCell>
+                        {loadingCuotas ? (
+                          <div className="py-8 text-center">
+                            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+                            <p className="text-gray-600">Cargando tabla de amortización...</p>
+                          </div>
+                        ) : errorCuotas ? (
+                          <div className="py-8 text-center">
+                            <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                            <p className="text-red-600 mb-2">Error al cargar las cuotas</p>
+                            <p className="text-sm text-gray-600">
+                              {errorCuotas instanceof Error ? errorCuotas.message : 'Error desconocido'}
+                            </p>
+                          </div>
+                        ) : todasLasCuotas && todasLasCuotas.length > 0 ? (
+                          <div className="overflow-x-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Préstamo ID</TableHead>
+                                  <TableHead>Cuota #</TableHead>
+                                  <TableHead>Fecha Vencimiento</TableHead>
+                                  <TableHead>Monto Cuota</TableHead>
+                                  <TableHead>Capital</TableHead>
+                                  <TableHead>Interés</TableHead>
+                                  <TableHead>Total Pagado</TableHead>
+                                  <TableHead>Capital Pendiente</TableHead>
+                                  <TableHead>Estado</TableHead>
+                                  <TableHead>Días Mora</TableHead>
+                                  <TableHead>Mora</TableHead>
+                                  <TableHead className="text-right">Acciones</TableHead>
                                 </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </CardContent>
-                    </Card>
-                      ) : (
-                        <Card className="mb-6">
-                          <CardContent className="py-8 text-center">
+                              </TableHeader>
+                              <TableBody>
+                                {todasLasCuotas.map((cuota) => (
+                                  <TableRow key={cuota.id}>
+                                    <TableCell>{cuota.prestamo_id}</TableCell>
+                                    <TableCell className="font-semibold">{cuota.numero_cuota}</TableCell>
+                                    <TableCell>{formatDate(cuota.fecha_vencimiento)}</TableCell>
+                                    <TableCell>{formatCurrency(cuota.monto_cuota)}</TableCell>
+                                    <TableCell>{formatCurrency(cuota.monto_capital)}</TableCell>
+                                    <TableCell>{formatCurrency(cuota.monto_interes)}</TableCell>
+                                    <TableCell className="font-semibold">{formatCurrency(cuota.total_pagado)}</TableCell>
+                                    <TableCell>{formatCurrency(cuota.capital_pendiente)}</TableCell>
+                                    <TableCell>{getEstadoBadge(cuota.estado)}</TableCell>
+                                    <TableCell>{cuota.dias_mora || 0}</TableCell>
+                                    <TableCell>{formatCurrency(cuota.monto_mora || 0)}</TableCell>
+                                    <TableCell className="text-right">
+                                      <div className="flex gap-2 justify-end">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleEditarCuota(cuota)}
+                                          title="Editar Cuota"
+                                        >
+                                          <Edit className="w-4 h-4" />
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                          onClick={() => handleEliminarCuota(cuota.id)}
+                                          title="Eliminar Cuota"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        ) : (
+                          <div className="py-8 text-center">
                             <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                             <p className="text-gray-600 mb-2">No se encontraron cuotas para los préstamos de este cliente</p>
-                            <p className="text-sm text-gray-500">
-                              Los préstamos pueden no tener tabla de amortización generada. 
-                              Genera la tabla de amortización desde el módulo de préstamos.
+                            <p className="text-sm text-gray-500 mb-4">
+                              Los préstamos pueden no tener tabla de amortización generada.
                             </p>
-                          </CardContent>
-                        </Card>
-                      )}
-                    </>
+                            {prestamos && prestamos.length > 0 && prestamos.some((p: any) => 
+                              p.estado === 'APROBADO' && p.fecha_base_calculo
+                            ) && (
+                              <Button
+                                onClick={handleGenerarCuotasParaTodos}
+                                disabled={mutationGenerarAmortizacion.isPending}
+                                className="mt-2"
+                              >
+                                {mutationGenerarAmortizacion.isPending ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Generando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <FileText className="w-4 h-4 mr-2" />
+                                    Generar Tabla de Amortización
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                            {prestamos && prestamos.length > 0 && !prestamos.some((p: any) => 
+                              p.estado === 'APROBADO' && p.fecha_base_calculo
+                            ) && (
+                              <p className="text-sm text-yellow-600 mt-2">
+                                Los préstamos necesitan estar aprobados y tener fecha base de cálculo para generar cuotas.
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                   )}
 
                   {/* Tabla de Pagos */}
