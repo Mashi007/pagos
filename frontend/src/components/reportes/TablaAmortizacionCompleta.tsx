@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search,
@@ -90,7 +90,9 @@ export function TablaAmortizacionCompleta() {
   const prestamos = prestamosData || []
 
   // Obtener cuotas de todos los préstamos (optimizado - una sola query)
-  const prestamoIds = prestamosData?.map(p => p.id) || []
+  // Usar JSON.stringify para crear una key estable para React Query
+  const prestamoIds = prestamosData?.map(p => p.id).sort((a, b) => a - b) || []
+  const prestamoIdsKey = JSON.stringify(prestamoIds)
   const shouldFetchCuotas = !!cedulaSeleccionada && !!prestamosData && Array.isArray(prestamosData) && prestamosData.length > 0 && !loadingPrestamos
   
   console.log('🔍 [TablaAmortizacion] Condición para cargar cuotas:', {
@@ -100,20 +102,22 @@ export function TablaAmortizacionCompleta() {
     prestamosLength: prestamosData?.length || 0,
     loadingPrestamos,
     shouldFetchCuotas,
-    prestamoIds
+    prestamoIds,
+    prestamoIdsKey
   })
   
   const { data: todasLasCuotas, isLoading: loadingCuotas, error: errorCuotas } = useQuery({
-    queryKey: ['cuotas-prestamos', prestamoIds],
+    queryKey: ['cuotas-prestamos', prestamoIdsKey],
     queryFn: async () => {
-      if (!prestamosData || prestamosData.length === 0) {
+      const ids = prestamosData?.map(p => p.id) || []
+      if (!prestamosData || prestamosData.length === 0 || ids.length === 0) {
         console.log('⚠️ [TablaAmortizacion] No hay préstamos para cargar cuotas')
         return []
       }
       try {
         // Usar endpoint optimizado para múltiples préstamos
-        console.log('📡 [TablaAmortizacion] Cargando cuotas para préstamos:', prestamoIds)
-        const cuotas = await cuotaService.getCuotasMultiplesPrestamos(prestamoIds)
+        console.log('📡 [TablaAmortizacion] Cargando cuotas para préstamos:', ids)
+        const cuotas = await cuotaService.getCuotasMultiplesPrestamos(ids)
         console.log('✅ [TablaAmortizacion] Cuotas cargadas:', cuotas.length)
         return cuotas
       } catch (error) {
@@ -125,6 +129,20 @@ export function TablaAmortizacionCompleta() {
     enabled: shouldFetchCuotas,
     retry: 1, // Solo reintentar una vez
   })
+
+  // Debug: Verificar cuando cambian los préstamos
+  useEffect(() => {
+    console.log('🔄 [TablaAmortizacion] useEffect - Prestamos cambiaron:', {
+      cedulaSeleccionada,
+      loadingPrestamos,
+      prestamosData,
+      prestamosLength: prestamosData?.length || 0,
+      prestamoIds,
+      shouldFetchCuotas,
+      loadingCuotas,
+      todasLasCuotasLength: todasLasCuotas?.length || 0
+    })
+  }, [cedulaSeleccionada, loadingPrestamos, prestamosData, prestamoIds, shouldFetchCuotas, loadingCuotas, todasLasCuotas])
 
   // Obtener pagos por cédula (manejar errores para que no fallen los reportes)
   const { data: pagosData, isLoading: loadingPagos, error: errorPagos } = useQuery({
