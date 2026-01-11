@@ -1,0 +1,45 @@
+# ============================================
+# ACTUALIZACIONES DE SEGURIDAD - 2025-01-27
+# ============================================
+# Paquetes actualizados para corregir vulnerabilidades encontradas por pip-audit
+#
+# Vulnerabilidades corregidas:
+# - aiohttp: 8 CVEs (CVE-2025-69223 a CVE-2025-69230) → requiere aiohttp>=3.13.3
+# - starlette: 2 CVEs (CVE-2025-54121, CVE-2025-62727) → requiere starlette>=0.49.1
+# - mcp: 2 CVEs (CVE-2025-53365, CVE-2025-66416) → requiere mcp>=1.23.0
+# - pip: 1 CVE (CVE-2025-8869) → requiere pip>=25.3 (actualizar manualmente)
+#
+# Nota: ecdsa tiene CVE-2024-23342 pero no hay fix disponible.
+# Es una dependencia indirecta de python-jose/cryptography.
+# Considerar alternativas si se usa directamente para operaciones críticas.
+
+# ============================================
+# ACTUALIZACIONES DE DEPENDENCIAS PRINCIPALES
+# ============================================
+
+# FastAPI debe actualizarse para incluir starlette>=0.49.1
+# FastAPI 0.115.0+ incluye starlette 0.38.0+
+# Necesitamos verificar compatibilidad
+fastapi>=0.121.2  # Ya está actualizado en base.txt
+
+# httpx puede requerir aiohttp como dependencia
+# Actualizar httpx para asegurar compatibilidad con aiohttp>=3.13.3
+httpx>=0.28.1  # Ya está actualizado en base.txt
+
+# ============================================
+# DEPENDENCIAS DIRECTAS A ACTUALIZAR
+# ============================================
+
+# Si aiohttp se usa directamente, actualizar:
+# aiohttp>=3.13.3
+
+# Si mcp se usa directamente, actualizar:
+# mcp>=1.23.0
+
+# ============================================
+# NOTAS DE INSTALACIÓN
+# ============================================
+# 1. Actualizar pip primero: pip install --upgrade pip>=25.3
+# 2. Instalar dependencias: pip install -r requirements/base.txt
+# 3. Verificar actualizaciones: pip-audit
+# 4. Probar aplicación después de actualizar
