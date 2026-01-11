@@ -213,10 +213,8 @@ def diagnostico_ml_impago(
                         search_paths.append(Path.cwd() / filename)
 
                 # Buscar archivo
-                archivo_encontrado = None
                 for search_path in search_paths:
                     if search_path.exists() and search_path.is_file():
-                        archivo_encontrado = search_path
                         diagnostico["archivo_existe"] = True
                         diagnostico["ruta_absoluta_encontrada"] = str(search_path.absolute())
                         diagnostico["tamaño_archivo_kb"] = round(search_path.stat().st_size / 1024, 2)
@@ -564,8 +562,8 @@ def obtener_clientes_atrasados(
         # Ejecutar la query primero para detectar errores temprano
         # Esto evita que la transacción se aborte cuando se use en el JOIN
         try:
-            # Primero ejecutar la query para validar que funciona
-            cuotas_vencidas_resultados = (
+            # Primero ejecutar la query para validar que funciona (sin asignar resultado)
+            _ = (
                 db.query(
                     Cuota.prestamo_id,
                     func.count(Cuota.id).label("cuotas_vencidas"),
@@ -957,7 +955,6 @@ def obtener_clientes_atrasados(
                         # Verificar si el archivo existe
                         from pathlib import Path
 
-                        ruta_archivo = Path(modelo_activo.ruta_archivo)
                         if "/" in modelo_activo.ruta_archivo or "\\" in modelo_activo.ruta_archivo:
                             filename = Path(modelo_activo.ruta_archivo).parts[-1]
                             search_paths = [

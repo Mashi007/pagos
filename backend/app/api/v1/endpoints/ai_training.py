@@ -868,7 +868,7 @@ async def activar_modelo_fine_tuned(
 
         logger.info(f"✅ Modelo fine-tuned activado exitosamente: {request.modelo_id}")
         logger.info(f"   Modelo base original: {job.modelo_base}")
-        logger.info(f"   El modelo se usará en todas las llamadas al Chat AI")
+        logger.info("   El modelo se usará en todas las llamadas al Chat AI")
 
         return {
             "mensaje": "Modelo activado exitosamente",

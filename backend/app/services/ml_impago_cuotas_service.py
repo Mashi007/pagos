@@ -655,7 +655,7 @@ class MLImpagoCuotasService:
                         model_file = project_root / "ml_models" / model_path
 
             if model_file is None or not model_file.exists():
-                logger.error(f"❌ [ML] Modelo no encontrado en ninguna ubicación.")
+                logger.error("❌ [ML] Modelo no encontrado en ninguna ubicación.")
                 logger.error(f"   [ML] Ruta original: {model_path}")
                 logger.error(f"   [ML] Directorio de modelos configurado: {self.model_path.absolute()}")
                 logger.error(f"   [ML] Directorio de trabajo actual: {Path.cwd()}")

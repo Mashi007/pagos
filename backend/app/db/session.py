@@ -96,7 +96,7 @@ if database_url_raw:
                     parsed = parsed._replace(netloc=netloc)
                     database_url_raw = urlunparse(parsed)
 
-                    logger.debug(f"✅ DATABASE_URL procesada correctamente (username y password codificados)")
+                    logger.debug("✅ DATABASE_URL procesada correctamente (username y password codificados)")
             except Exception as parse_error:
                 logger.warning(f"⚠️ Error al parsear DATABASE_URL: {parse_error}. Usando URL original.")
     except Exception as e:

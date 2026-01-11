@@ -2962,7 +2962,7 @@ def _procesar_documento_creado(db: Session, documento: DocumentoAI, ruta_archivo
             caracteres = len(texto_extraido)
             logger.info(f"✅ Documento procesado automáticamente: {documento.titulo}")
             logger.info(f"   Caracteres extraídos: {caracteres}")
-            logger.info(f"   Contenido guardado en BD (disponible para entrenamiento)")
+            logger.info("   Contenido guardado en BD (disponible para entrenamiento)")
 
             # Validar que el contenido se guardó correctamente
             if not documento.contenido_texto:
@@ -3159,8 +3159,8 @@ async def crear_documento_ai(
         # Verificar nuevamente que el archivo existe después de crear el registro
         if not ruta_archivo_absoluta.exists():
             logger.warning(f"⚠️ Archivo desapareció después de crear registro en BD: {ruta_archivo_absoluta}")
-            logger.warning(f"   Esto puede indicar un problema con el sistema de archivos efímero")
-            logger.warning(f"   El documento se creó en BD pero el archivo físico no está disponible")
+            logger.warning("   Esto puede indicar un problema con el sistema de archivos efímero")
+            logger.warning("   El documento se creó en BD pero el archivo físico no está disponible")
 
         # Procesar documento automáticamente (extraer texto) - CRÍTICO hacerlo inmediatamente
         # mientras el archivo todavía existe en el sistema de archivos efímero
@@ -3502,7 +3502,7 @@ def _buscar_archivo_documento(documento: DocumentoAI, documento_id: int, directo
 
         ruta_archivo, archivo_encontrado = _buscar_archivo_ruta_absoluta(ruta_original)
         if archivo_encontrado:
-            logger.info(f"✅ Archivo encontrado en ruta absoluta guardada en BD")
+            logger.info("✅ Archivo encontrado en ruta absoluta guardada en BD")
             return ruta_archivo, True, rutas_intentadas
         rutas_intentadas.append(f"Ruta absoluta (BD): {ruta_original_path} (no existe)")
 
@@ -3657,7 +3657,7 @@ def _procesar_y_guardar_documento(documento: DocumentoAI, ruta_archivo, db: Sess
 
         caracteres = len(texto_limpio)
         logger.info(f"✅ Documento procesado: {documento.titulo} ({caracteres} caracteres)")
-        logger.info(f"   Contenido guardado en BD (disponible para entrenamiento)")
+        logger.info("   Contenido guardado en BD (disponible para entrenamiento)")
 
         return {
             "mensaje": "Documento procesado exitosamente",
@@ -3706,7 +3706,7 @@ def procesar_documento_ai(
         if documento.contenido_procesado and documento.contenido_texto:
             caracteres = len(documento.contenido_texto)
             logger.info(f"✅ Documento {documento_id} ya está procesado ({caracteres} caracteres)")
-            logger.info(f"   Contenido disponible en BD - no requiere archivo físico")
+            logger.info("   Contenido disponible en BD - no requiere archivo físico")
             return {
                 "mensaje": "Documento ya estaba procesado",
                 "documento": documento.to_dict(),
@@ -3733,7 +3733,7 @@ def procesar_documento_ai(
                     documento.contenido_procesado = True
                     db.commit()
                     db.refresh(documento)
-                    logger.info(f"✅ Documento marcado como procesado (contenido ya estaba en BD)")
+                    logger.info("✅ Documento marcado como procesado (contenido ya estaba en BD)")
                     return {
                         "mensaje": "Documento procesado exitosamente (contenido recuperado de BD)",
                         "documento": documento.to_dict(),
@@ -3770,7 +3770,7 @@ def procesar_documento_ai(
                 f"❌ Archivo no encontrado después de {len(rutas_intentadas)} intentos. "
                 f"Documento: {documento.titulo} (ID: {documento_id}), "
                 f"Ruta original: {documento.ruta_archivo}. "
-                f"Rutas intentadas: {len(rutas_intentadas)}"
+                f"Rutas intentadas: {len(rutas_intentadas)}\n{mensaje_error_detallado}"
             )
             logger.debug(f"Rutas intentadas detalladas: {rutas_intentadas}")
 
@@ -7328,7 +7328,7 @@ def _ejecutar_consulta_dinamica(pregunta: str, pregunta_lower: str, db: Session)
             if prestamos_pendientes:
                 total = len(prestamos_pendientes)
                 monto_total = sum(float(p.total_financiamiento or 0) for p in prestamos_pendientes)
-                resultado += f"\n=== PRÉSTAMOS PENDIENTES ===\n"
+                resultado += "\n=== PRÉSTAMOS PENDIENTES ===\n"
                 resultado += f"Total: {total}\n"
                 resultado += f"Monto total: {monto_total:,.2f}\n"
 

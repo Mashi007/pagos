@@ -426,7 +426,7 @@ Por favor, mejora ambos textos siguiendo las instrucciones del sistema. Responde
         # Si el modelo es "gpt-4o" sin versión específica, usar la versión específica
         # OpenAI requiere la versión específica "gpt-4o-2024-08-06" para fine-tuning
         if modelo_base == "gpt-4o":
-            logger.info(f"ℹ️ Modelo 'gpt-4o' convertido a 'gpt-4o-2024-08-06' (versión requerida para fine-tuning)")
+            logger.info("ℹ️ Modelo 'gpt-4o' convertido a 'gpt-4o-2024-08-06' (versión requerida para fine-tuning)")
             modelo_base = "gpt-4o-2024-08-06"
 
         try:

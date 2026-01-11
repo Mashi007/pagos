@@ -453,6 +453,16 @@ class ApiClient {
       const errorCode = (error as any).code || ''
       const errorMessage = error.message || ''
 
+      // Log detallado para diagnóstico
+      console.error('❌ [ApiClient] Error de conexión:', {
+        url: error.config?.url,
+        method: error.config?.method,
+        baseURL: API_BASE_URL,
+        code: errorCode,
+        message: errorMessage,
+        requestId: (error.config as any)?.__requestId
+      })
+
       // No mostrar toast para errores de conexión durante el inicio (servidor reiniciando)
       // Estos errores son temporales y se resuelven automáticamente
       if (
@@ -463,10 +473,19 @@ class ApiClient {
       ) {
         // Solo loggear en consola, no mostrar toast (el usuario verá el error si persiste)
         console.warn('⚠️ Servidor no disponible temporalmente. Esto es normal durante reinicios.')
+        console.warn('   Verifica que el backend esté funcionando en:', API_BASE_URL || 'NO CONFIGURADO')
         return
       }
 
-      toast.error('Error de conexión. Verifique su conexión a internet.')
+      // Mensaje más descriptivo según el tipo de error
+      let errorMsg = 'Error de conexión. Verifique su conexión a internet.'
+      if (errorCode === 'ECONNABORTED' || errorMessage.includes('timeout')) {
+        errorMsg = 'Tiempo de espera agotado. El servidor está tardando demasiado en responder.'
+      } else if (errorCode === 'ERR_NETWORK') {
+        errorMsg = 'Error de red. Verifique que el servidor esté funcionando y su conexión a internet.'
+      }
+      
+      toast.error(errorMsg)
     } else {
       // Error de configuración
       toast.error('Error en la configuración de la petición')

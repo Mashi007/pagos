@@ -1066,13 +1066,13 @@ def _registrar_auditoria_reentrenamiento(
         elif nuevo_modelo:
             modelo_activado = nuevo_modelo
 
-        detalles_auditoria = f"Reentrenamiento automático del modelo ML Impago. "
+        detalles_auditoria = "Reentrenamiento automático del modelo ML Impago. "
         if modelo_activado:
             detalles_auditoria += f"Modelo activado: {modelo_activado.nombre} (ID: {modelo_activado.id}). "
             if nuevas_metricas:
                 detalles_auditoria += f"Métricas: Accuracy={nuevas_metricas.get('accuracy', 0.0):.4f}, F1={nuevas_metricas.get('f1_score', 0.0):.4f}"
         else:
-            detalles_auditoria += f"Modelo no activado (métricas inferiores al actual). "
+            detalles_auditoria += "Modelo no activado (métricas inferiores al actual). "
             if all(v is not None for v in [nuevo_accuracy, nuevo_f1, accuracy_actual, f1_actual]):
                 detalles_auditoria += f"Nuevo modelo: Accuracy={nuevo_accuracy:.4f}, F1={nuevo_f1:.4f} vs Actual: Accuracy={accuracy_actual:.4f}, F1={f1_actual:.4f}"
 
@@ -1088,7 +1088,7 @@ def _registrar_auditoria_reentrenamiento(
         )
         db.add(auditoria)
         db.commit()
-        logger.info(f"📝 [Scheduler] Auditoría registrada: Reentrenamiento ML Impago")
+        logger.info("📝 [Scheduler] Auditoría registrada: Reentrenamiento ML Impago")
     except Exception as audit_error:
         logger.warning(f"⚠️ [Scheduler] No se pudo registrar auditoría: {audit_error}")
 
@@ -1192,7 +1192,7 @@ def reentrenar_modelo_ml_impago_job():
         nuevo_accuracy = nuevas_metricas.get("accuracy", 0.0)
         nuevo_f1 = nuevas_metricas.get("f1_score", 0.0)
 
-        logger.info(f"📈 [Scheduler] Nuevo modelo entrenado:")
+        logger.info("📈 [Scheduler] Nuevo modelo entrenado:")
         logger.info(f"   - Accuracy: {nuevo_accuracy:.4f} ({nuevo_accuracy*100:.2f}%)")
         logger.info(f"   - F1 Score: {nuevo_f1:.4f} ({nuevo_f1*100:.2f}%)")
         logger.info(f"   - Precision: {nuevas_metricas.get('precision', 0.0):.4f}")
@@ -1205,7 +1205,7 @@ def reentrenar_modelo_ml_impago_job():
             accuracy_actual = modelo_activo.accuracy or 0.0
             f1_actual = modelo_activo.f1_score or 0.0
 
-            logger.info(f"📊 [Scheduler] Modelo actual activo:")
+            logger.info("📊 [Scheduler] Modelo actual activo:")
             logger.info(f"   - Nombre: {modelo_activo.nombre}")
             logger.info(f"   - Accuracy: {accuracy_actual:.4f} ({accuracy_actual*100:.2f}%)")
             logger.info(f"   - F1 Score: {f1_actual:.4f} ({f1_actual*100:.2f}%)")
