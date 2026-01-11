@@ -212,7 +212,8 @@ def validar_variables_obligatorias(tipo: str, asunto: str, cuerpo: str) -> None:
     faltantes = []
     for variable in requeridas:
         # Buscar variable en formato {{variable}}
-        patron = rf"\{\{{{variable}\}}\}}"
+        # ✅ Construir patrón sin backslashes en expresión f-string
+        patron = r"\{\{" + re.escape(variable) + r"\}\}"
         if not re.search(patron, texto_completo):
             faltantes.append(variable)
 
