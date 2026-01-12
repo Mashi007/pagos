@@ -9,7 +9,6 @@ import {
   TrendingUp,
   TrendingDown,
   Users,
-  Target,
   AlertTriangle,
   Shield,
   Clock,
@@ -319,33 +318,6 @@ export function DashboardMenu() {
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
-  const { data: datosCobranzas, isLoading: loadingCobranzas } = useQuery({
-    queryKey: ['cobranzas-mensuales', periodo, JSON.stringify(filtros)],
-    queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // ✅ Pasar período
-      const queryParams = new URLSearchParams()
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-      // Usar timeout extendido para endpoints lentos
-      const response = await apiClient.get<{
-        meses: Array<{
-          mes: string
-          nombre_mes: string
-          cobranzas_planificadas: number
-          pagos_reales: number
-          meta_mensual: number
-        }>
-        meta_actual: number
-      }>(
-        `/api/v1/dashboard/cobranzas-mensuales?${queryParams.toString()}`,
-        { timeout: 60000 }
-      )
-      return response
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutos
-    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
-  })
 
   // Datos de cobranza para fechas específicas (mañana, hoy, 3 días atrás)
   const { data: datosCobranzaFechas, isLoading: loadingCobranzaFechas } = useQuery({
@@ -536,7 +508,6 @@ export function DashboardMenu() {
       await queryClient.refetchQueries({ queryKey: ['prestamos-modelo'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['financiamiento-rangos'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['composicion-morosidad'], exact: false })
-      await queryClient.refetchQueries({ queryKey: ['cobranzas-mensuales'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['morosidad-analista'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['evolucion-pagos-menu'], exact: false })
@@ -867,60 +838,6 @@ export function DashboardMenu() {
                         <Bar dataKey="cobrado" fill="#10b981" name="Cobrado" />
                         <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" />
                       </ComposedChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
-
-            {/* Gráfico de Cobranzas Planificadas vs Reales - Últimos 10 Días - Ancho Completo */}
-            {datosCobranzas && datosCobranzas.meses && datosCobranzas.meses.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.32 }}
-              >
-                <Card className="shadow-lg border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <Target className="h-6 w-6 text-blue-600" />
-                      <span>Cobranzas Diarias: Planificadas vs Reales (Últimos 10 Días)</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <ResponsiveContainer width="100%" height={400}>
-                      <BarChart data={datosCobranzas.meses} margin={{ top: 10, right: 30, left: 20, bottom: 80 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis 
-                          dataKey="nombre_mes" 
-                          tick={{ fontSize: 11 }}
-                          angle={-45}
-                          textAnchor="end"
-                          height={100}
-                        />
-                        <YAxis 
-                          tick={{ fontSize: 12 }}
-                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
-                          label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft' }}
-                        />
-                        <Tooltip
-                          formatter={(value: number, name: string) => {
-                            const labels: Record<string, string> = {
-                              'cobranzas_planificadas': 'Planificadas',
-                              'pagos_reales': 'Reales',
-                              'meta_mensual': 'Meta Diaria'
-                            }
-                            return [formatCurrency(value), labels[name] || name]
-                          }}
-                          labelFormatter={(label) => `Día: ${label}`}
-                        />
-                        <Legend />
-                        <Bar dataKey="cobranzas_planificadas" fill="#3b82f6" name="Cobranzas Planificadas" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="pagos_reales" fill="#10b981" name="Pagos Reales" radius={[4, 4, 0, 0]} />
-                        {datosCobranzas.meses.some(m => m.meta_mensual > 0) && (
-                          <Bar dataKey="meta_mensual" fill="#f59e0b" name="Meta Diaria" radius={[4, 4, 0, 0]} />
-                        )}
-                      </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
                 </Card>
