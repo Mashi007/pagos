@@ -22,15 +22,21 @@ const ERROR_COLOR_SATURATION = 84
 const ERROR_COLOR_LIGHTNESS = 60
 
 // Configuración del cliente de React Query
+// ✅ OPTIMIZACIÓN: Configuración mejorada para reducir llamadas redundantes y mejorar rendimiento
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: STALE_TIME_MS,
-      retry: RETRY_COUNT,
-      refetchOnWindowFocus: false,
+      staleTime: STALE_TIME_MS, // 5 minutos - datos se consideran frescos durante este tiempo
+      cacheTime: 10 * 60 * 1000, // ✅ 10 minutos - mantener datos en cache más tiempo
+      retry: RETRY_COUNT, // Solo 1 retry para evitar múltiples intentos
+      refetchOnWindowFocus: false, // ✅ No recargar automáticamente al enfocar ventana
+      refetchOnMount: false, // ✅ No recargar si los datos están frescos (staleTime)
+      refetchOnReconnect: true, // Recargar solo si se reconecta después de perder conexión
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Backoff exponencial
     },
     mutations: {
       retry: RETRY_COUNT,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
     },
   },
 })

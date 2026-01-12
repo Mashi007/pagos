@@ -504,6 +504,7 @@ def obtener_clientes_atrasados(
     incluir_admin: bool = Query(False, description="Incluir datos del administrador para diagnóstico"),
     diagnostico_ml: bool = Query(False, description="Incluir diagnóstico ML en la respuesta"),
     incluir_ml: bool = Query(True, description="Incluir predicción ML Impago (puede ser lento con muchos registros)"),
+    limit: Optional[int] = Query(None, ge=1, le=10000, description="Límite opcional de resultados (para optimización)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -645,6 +646,11 @@ def obtener_clientes_atrasados(
         # Aplicar filtro de User.is_admin solo si incluir_admin=False
         if not incluir_admin:
             query = query.filter(or_(User.is_admin.is_(False), User.is_admin.is_(None)))  # Excluir admins
+
+        # ✅ OPTIMIZACIÓN: Aplicar límite si se especifica para mejorar rendimiento
+        if limit is not None:
+            query = query.limit(limit)
+            logger.info(f"⚡ [clientes_atrasados] Aplicando límite de {limit} resultados para optimización")
 
         try:
             resultados = query.all()

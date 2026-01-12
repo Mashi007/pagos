@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/services/api'
 
 interface SidebarCounts {
@@ -7,106 +7,58 @@ interface SidebarCounts {
   notificacionesNoLeidas: number
 }
 
+/**
+ * Hook optimizado que usa React Query para compartir datos con otros componentes
+ * Evita llamadas redundantes a las mismas APIs que otros componentes ya están usando
+ */
 export function useSidebarCounts() {
-  const [counts, setCounts] = useState<SidebarCounts>({
-    pagosPendientes: 0,
-    cuotasEnMora: 0,
-    notificacionesNoLeidas: 0,
+  // ✅ OPTIMIZACIÓN: Usar React Query para compartir datos con otros componentes
+  // Estos queries tienen las mismas queryKeys que otros componentes, así que React Query
+  // compartirá los datos en cache y evitará llamadas redundantes
+  
+  // Query para KPIs de pagos - compartido con DashboardPagos y otros componentes
+  const { data: kpisData, isLoading: loadingKPIs } = useQuery({
+    queryKey: ['kpis-pagos'], // ✅ Misma queryKey que DashboardPagos usa (sin filtros)
+    queryFn: async () => {
+      return await apiClient.get('/api/v1/pagos/kpis') as {
+        cuotas_pendientes?: number
+        clientes_en_mora?: number
+        montoCobradoMes?: number
+        saldoPorCobrar?: number
+        clientesAlDia?: number
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutos - datos no cambian tan rápido
+    refetchOnWindowFocus: false, // ✅ No recargar automáticamente al enfocar ventana
+    refetchInterval: 5 * 60 * 1000, // ✅ Actualizar cada 5 minutos automáticamente
+    refetchIntervalInBackground: false, // Solo actualizar si la página está visible
+    retry: 1, // Solo un retry para evitar múltiples intentos
   })
-  const [loading, setLoading] = useState(true)
-  const abortControllerRef = useRef<AbortController | null>(null)
 
-  useEffect(() => {
-    const fetchCounts = async () => {
-      // Cancelar petición anterior si existe
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
+  // Query para estadísticas de notificaciones - compartido con otros componentes
+  const { data: notificacionesData, isLoading: loadingNotificaciones } = useQuery({
+    queryKey: ['notificaciones-estadisticas-resumen'],
+    queryFn: async () => {
+      return await apiClient.get('/api/v1/notificaciones/estadisticas/resumen') as {
+        no_leidas?: number
+        total?: number
       }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutos
+    refetchOnWindowFocus: false, // ✅ No recargar automáticamente al enfocar ventana
+    refetchInterval: 5 * 60 * 1000, // ✅ Actualizar cada 5 minutos automáticamente
+    refetchIntervalInBackground: false, // Solo actualizar si la página está visible
+    retry: 1,
+  })
 
-      // Crear nuevo AbortController para esta petición
-      abortControllerRef.current = new AbortController()
-      const signal = abortControllerRef.current.signal
+  // Calcular contadores desde los datos obtenidos
+  const counts: SidebarCounts = {
+    pagosPendientes: kpisData?.cuotas_pendientes || 0,
+    cuotasEnMora: kpisData?.clientes_en_mora || 0,
+    notificacionesNoLeidas: notificacionesData?.no_leidas || 0,
+  }
 
-      try {
-        setLoading(true)
-
-        // Obtener KPIs de pagos para cuotas en mora
-        const [kpisResponse, notificacionesResponse] = await Promise.allSettled([
-          apiClient.get('/api/v1/pagos/kpis', { signal }),
-          apiClient.get('/api/v1/notificaciones/estadisticas/resumen', { signal }),
-        ])
-
-        // Si la petición fue cancelada, no actualizar estado
-        if (signal.aborted) return
-
-        let pagosPendientes = 0
-        let cuotasEnMora = 0
-        let notificacionesNoLeidas = 0
-
-        // Procesar KPIs de pagos
-        if (kpisResponse.status === 'fulfilled') {
-          const kpisData = kpisResponse.value as any
-          // Cuotas pendientes como pagos pendientes
-          pagosPendientes = kpisData?.cuotas_pendientes || 0
-          // Clientes en mora como cuotas en mora
-          cuotasEnMora = kpisData?.clientes_en_mora || 0
-        }
-
-        // Procesar estadísticas de notificaciones
-        if (notificacionesResponse.status === 'fulfilled') {
-          const notifData = notificacionesResponse.value as any
-          notificacionesNoLeidas = notifData?.no_leidas || 0
-        }
-
-        setCounts({
-          pagosPendientes,
-          cuotasEnMora,
-          notificacionesNoLeidas,
-        })
-      } catch (error: unknown) {
-        // Ignorar errores de cancelación
-        const err = error as { name?: string }
-        if (err?.name === 'AbortError' || signal.aborted) return
-        // Silenciar errores para no interrumpir la UI
-        console.error('Error obteniendo contadores del sidebar:', error)
-      } finally {
-        if (!signal.aborted) {
-          setLoading(false)
-        }
-      }
-    }
-
-    // Cargar inmediatamente
-    fetchCounts()
-
-    // Verificar si la página está visible antes de actualizar
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        fetchCounts()
-      }
-    }
-
-    // Suscribirse a cambios de visibilidad
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    // Actualizar cada 5 minutos (300 segundos) - optimizado para reducir carga del servidor
-    // Esto reduce significativamente la carga del servidor y los requests repetitivos
-    const interval = setInterval(() => {
-      // Solo actualizar si la página está visible
-      if (document.visibilityState === 'visible') {
-        fetchCounts()
-      }
-    }, 300000) // 5 minutos
-
-    return () => {
-      clearInterval(interval)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      // Cancelar petición pendiente al desmontar
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
-    }
-  }, [])
+  const loading = loadingKPIs || loadingNotificaciones
 
   return { counts, loading }
 }

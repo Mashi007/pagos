@@ -320,6 +320,7 @@ export function DashboardMenu() {
 
 
   // Datos de cobranza para fechas específicas (mañana, hoy, 3 días atrás)
+  // ✅ OPTIMIZACIÓN: Aumentar staleTime y deshabilitar refetchOnWindowFocus para evitar llamadas redundantes
   const { data: datosCobranzaFechas, isLoading: loadingCobranzaFechas } = useQuery({
     queryKey: ['cobranza-fechas-especificas', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -338,9 +339,10 @@ export function DashboardMenu() {
       }>(`/api/v1/dashboard/cobranza-fechas-especificas?${queryParams.toString()}`)
       return response
     },
-    staleTime: 2 * 60 * 1000, // 2 minutos - datos más dinámicos
-    refetchOnWindowFocus: true, // Recargar al enfocar ventana para datos actuales
+    staleTime: 5 * 60 * 1000, // ✅ 5 minutos - datos no cambian tan rápido
+    refetchOnWindowFocus: false, // ✅ No recargar automáticamente al enfocar ventana (reduce llamadas redundantes)
     enabled: true,
+    retry: 1, // Solo un retry para evitar múltiples intentos
   })
 
   const { data: datosCobranzasSemanales, isLoading: loadingCobranzasSemanales } = useQuery({

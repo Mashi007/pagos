@@ -45,7 +45,7 @@ export function DashboardPagos() {
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
 
   const [filtros, setFiltros] = useState<DashboardFiltros>({})
-  const { construirFiltrosObject } = useDashboardFiltros(filtros)
+  const { construirFiltrosObject, tieneFiltrosActivos } = useDashboardFiltros(filtros)
 
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
@@ -66,18 +66,23 @@ export function DashboardPagos() {
   })
 
   // Cargar KPIs de pagos
+  // ✅ OPTIMIZACIÓN: Usar queryKey sin filtros para compartir datos con useSidebarCounts
+  // Si hay filtros activos, usar queryKey con filtros para datos específicos
   const { data: kpisPagos, isLoading: loadingKPIs } = useQuery({
-    queryKey: ['kpis-pagos', filtros],
+    queryKey: tieneFiltrosActivos ? ['kpis-pagos', filtros] : ['kpis-pagos'],
     queryFn: async () => {
       const response = await apiClient.get('/api/v1/pagos/kpis') as {
         montoCobradoMes: number
         saldoPorCobrar: number
         clientesEnMora: number
         clientesAlDia: number
+        cuotas_pendientes?: number
       }
       return response
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // ✅ No recargar automáticamente al enfocar ventana
+    retry: 1, // Solo un retry
   })
 
   // Cargar pagos por estado
