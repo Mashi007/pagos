@@ -24,6 +24,7 @@ from app.schemas.auth import (
 )
 from app.schemas.user import UserMeResponse
 from app.services.auth_service import AuthService
+from app.utils.auditoria_table_helper import asegurar_tabla_auditoria
 from app.utils.validators import validate_password_strength
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,11 @@ def _registrar_auditoria_login(
 ) -> None:
     """Registra auditoría de login sin bloquear el proceso"""
     try:
+        # Asegurar que la tabla existe antes de intentar insertar
+        if not asegurar_tabla_auditoria(db):
+            logger.debug("Tabla 'auditoria' no disponible, omitiendo registro de auditoría")
+            return
+        
         ip, ua = _obtener_info_request(request)
         detalles = "Inicio de sesión" if exito else "Intento de login fallido"
         audit = Auditoria(
@@ -83,8 +89,15 @@ def _registrar_auditoria_login(
             db.rollback()
         except Exception:
             pass
-        tipo = "LOGIN" if exito else "LOGIN FALLIDO"
-        logger.warning(f"No se pudo registrar auditoría {tipo}: {e}")
+        # Solo registrar como warning si es un error diferente a "tabla no existe"
+        error_str = str(e).lower()
+        if "does not exist" in error_str or "undefinedtable" in error_str:
+            # Error de tabla no existe - intentar crear y silenciar el warning
+            logger.debug(f"Tabla 'auditoria' no existe, omitiendo registro de auditoría: {e}")
+        else:
+            # Otro tipo de error - registrar como warning
+            tipo = "LOGIN" if exito else "LOGIN FALLIDO"
+            logger.warning(f"No se pudo registrar auditoría {tipo}: {e}")
 
 
 def _generar_tokens_usuario(user_id: int) -> tuple[str, str]:

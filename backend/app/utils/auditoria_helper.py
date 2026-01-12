@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.auditoria import Auditoria
 from app.models.user import User
+from app.utils.auditoria_table_helper import asegurar_tabla_auditoria
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ def registrar_auditoria(
     user_agent: Optional[str] = None,
     resultado: str = "SUCCESS",
     mensaje_error: Optional[str] = None,
-) -> Auditoria:
+) -> Optional[Auditoria]:
     """
     Registrar una acción en la auditoría del sistema
 
@@ -49,6 +50,13 @@ def registrar_auditoria(
         logger.warning("Intento de registrar auditoría sin usuario")
         raise ValueError("El usuario no puede ser None")
 
+    # Asegurar que la tabla existe antes de intentar insertar
+    if not asegurar_tabla_auditoria(db):
+        logger.debug("Tabla 'auditoria' no disponible, omitiendo registro de auditoría")
+        # Retornar una instancia "falsa" para no romper el código que espera un objeto Auditoria
+        # pero sin persistirla en la BD
+        return None  # Cambiar el tipo de retorno a Optional[Auditoria] si es necesario
+
     try:
         auditoria = Auditoria.registrar(
             usuario_id=usuario.id,
@@ -69,6 +77,16 @@ def registrar_auditoria(
         logger.info(f"Auditoría registrada: {accion} en {modulo}")
         return auditoria
     except Exception as e:
+        error_str = str(e).lower()
+        # Si es un error de tabla no existe, solo hacer rollback y retornar None
+        if "does not exist" in error_str or "undefinedtable" in error_str:
+            logger.debug(f"Tabla 'auditoria' no existe, omitiendo registro: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return None
+        # Para otros errores, hacer rollback y re-lanzar
         logger.error(f"Error registrando auditoría: {e}")
         db.rollback()
         raise
@@ -97,7 +115,7 @@ def registrar_logout(
     usuario: User,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
-) -> Auditoria:
+) -> Optional[Auditoria]:
     """Registrar logout"""
     return registrar_auditoria(
         db=db,
@@ -118,7 +136,7 @@ def registrar_creacion(
     tabla: str,
     registro_id: int,
     descripcion: Optional[str] = None,
-) -> Auditoria:
+) -> Optional[Auditoria]:
     """Registrar creación de registro"""
     return registrar_auditoria(
         db=db,
@@ -138,7 +156,7 @@ def registrar_actualizacion(
     tabla: str,
     registro_id: int,
     descripcion: Optional[str] = None,
-) -> Auditoria:
+) -> Optional[Auditoria]:
     """Registrar actualización de registro"""
     return registrar_auditoria(
         db=db,
@@ -178,7 +196,7 @@ def registrar_error(
     tabla: str,
     error: str,
     registro_id: Optional[int] = None,
-) -> Auditoria:
+) -> Optional[Auditoria]:
     """Registrar error en acción"""
     return registrar_auditoria(
         db=db,

@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.security import get_password_hash
 from app.db.session import SessionLocal
 from app.models.user import User
+from app.utils.auditoria_table_helper import asegurar_tabla_auditoria
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,16 @@ def init_db_startup() -> None:
 
         # Ejecutar migraciones de Alembic automáticamente
         run_migrations()
+
+        # Asegurar que la tabla de auditoría existe (fallback si las migraciones fallaron)
+        try:
+            db_check = SessionLocal()
+            try:
+                asegurar_tabla_auditoria(db_check)
+            finally:
+                db_check.close()
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudo verificar/crear tabla de auditoría al inicio: {e}")
 
         # Create admin user if it doesn't exist
         create_admin_user()
