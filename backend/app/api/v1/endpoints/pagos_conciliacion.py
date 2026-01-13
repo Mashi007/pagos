@@ -141,14 +141,16 @@ def _conciliar_pago(pago: Pago, db: Session, numero_documento: str) -> bool:
                     f"después de conciliación"
                 )
 
-                # ✅ VERIFICAR SI CLIENTE DEBE CAMBIAR A FINALIZADO
+                # ✅ VERIFICAR SI CLIENTE DEBE CAMBIAR A INACTIVO (si tiene 4+ cuotas sin pagar)
+                # Según nuevas reglas: INACTIVO automático con 4+ cuotas sin pagar
+                # ACTIVO siempre si está al día (no cambia a FINALIZADO)
                 try:
-                    from app.services.estado_cliente_service import verificar_y_actualizar_estado_finalizado
+                    from app.services.estado_cliente_service import verificar_y_actualizar_estado_inactivo
 
-                    verificar_y_actualizar_estado_finalizado(db, pago.cedula)
+                    verificar_y_actualizar_estado_inactivo(db, pago.cedula)
                 except Exception as e:
                     logger.warning(
-                        f"Error verificando estado FINALIZADO del cliente {pago.cedula} después de conciliar pago: {e}"
+                        f"Error verificando estado del cliente {pago.cedula} después de conciliar pago: {e}"
                     )
         except Exception as e:
             logger.error(

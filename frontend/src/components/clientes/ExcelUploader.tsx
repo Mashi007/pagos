@@ -1086,11 +1086,20 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         } catch (error: any) {
           console.error(`❌ Error creando cliente en fila ${row._rowIndex}:`, error)
 
-          // Manejar error de cliente duplicado (misma cédula y mismo nombre)
+          // Manejar error de cliente duplicado (cédula Y nombre, o email)
           let errorMessage = error instanceof Error ? error.message : 'Error desconocido'
 
           if (error.response?.status === 400 || error.response?.status === 409) {
-            errorMessage = error.response?.data?.detail || error.response?.data?.message || 'Cliente duplicado: Ya existe un cliente con la misma cédula y el mismo nombre'
+            const detail = error.response?.data?.detail || error.response?.data?.message || ''
+            
+            // Detectar qué tipo de duplicado es
+            if (detail.includes('cédula') && detail.includes('nombre')) {
+              errorMessage = `Cliente duplicado: Ya existe un cliente con la misma cédula (${row.cedula}) y el mismo nombre completo (${row.nombres})`
+            } else if (detail.includes('email')) {
+              errorMessage = `Cliente duplicado: Ya existe un cliente con el mismo email (${row.email})`
+            } else {
+              errorMessage = detail || 'Cliente duplicado: Ya existe un cliente con los mismos datos (cédula y nombre, o email)'
+            }
           }
 
           resultados.push({

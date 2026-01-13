@@ -924,13 +924,24 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
       // Mostrar mensaje de error al usuario
       let errorMessageUser = 'Error al crear el cliente. Por favor, intente nuevamente.'
+      let tipoDuplicado = ''
 
       if (isAxiosError(error)) {
         const errorDetail = getErrorDetail(error)
         const responseData = error.response?.data as { message?: string } | undefined
         if (error.response?.status === 400) {
-          // Error de cliente duplicado (misma cédula y mismo nombre)
-          errorMessageUser = errorDetail || 'No se puede crear un cliente con la misma cédula y el mismo nombre. Ya existe un cliente con estos datos.'
+          // Detectar qué tipo de duplicado es
+          const detailText = errorDetail || ''
+          if (detailText.includes('cédula') && detailText.includes('nombre')) {
+            tipoDuplicado = 'cedula_nombre'
+            errorMessageUser = errorDetail || 'No se puede crear un cliente con la misma cédula y el mismo nombre completo. Ya existe un cliente con esos datos.'
+          } else if (detailText.includes('email')) {
+            tipoDuplicado = 'email'
+            errorMessageUser = errorDetail || 'No se puede crear un cliente con el mismo email. Ya existe un cliente con ese email.'
+          } else {
+            // Error de cliente duplicado genérico
+            errorMessageUser = errorDetail || 'No se puede crear un cliente con datos duplicados. Ya existe un cliente con estos datos.'
+          }
         } else if (errorDetail) {
           errorMessageUser = errorDetail
         } else if (responseData?.message) {
@@ -948,11 +959,21 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
       // Notificar y ofrecer abrir en edición
       if (isAxiosError(error) && error.response?.status === 400) {
-        // Mensaje amigable unificado para regla de duplicados
+        // Mensaje amigable específico según el tipo de duplicado
+        let mensajeDuplicado = ''
+        if (tipoDuplicado === 'cedula_nombre') {
+          mensajeDuplicado = 'la misma cédula y el mismo nombre completo'
+        } else if (tipoDuplicado === 'email') {
+          mensajeDuplicado = 'el mismo email'
+        } else {
+          mensajeDuplicado = 'los mismos datos (cédula y nombre, o email)'
+        }
+
         const friendly = existingId
-          ? `No puedes crear un cliente con el mismo nombre o número de cédula.\n\nYa existe un registro con ID: ${existingId}.\n\n¿Deseas abrir el cliente existente para editarlo?`
-          : `No puedes crear un cliente con el mismo nombre o número de cédula.\n\n¿Deseas abrir el cliente existente para editarlo?`
-        const wantsEdit = window.confirm(`⚠️ ${friendly}`)
+          ? `⚠️ ADVERTENCIA: Ya existe un cliente con ${mensajeDuplicado}.\n\nCliente existente ID: ${existingId}\n\nNo se puede crear un nuevo cliente con datos duplicados.\n\n¿Deseas abrir el cliente existente para editarlo?`
+          : `⚠️ ADVERTENCIA: Ya existe un cliente con ${mensajeDuplicado}.\n\nNo se puede crear un nuevo cliente con datos duplicados.\n\n¿Deseas buscar el cliente existente?`
+        
+        const wantsEdit = window.confirm(friendly)
         if (wantsEdit) {
           // Cerrar el modal de creación antes de abrir edición
           onClose()

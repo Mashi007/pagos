@@ -460,50 +460,62 @@ def crear_cliente(
     try:
         logger.info(f"Crear cliente - Usuario: {current_user.email}")
 
-        # ✅ Validar: NO permitir crear si existe misma cédula O mismo nombre+apellido
-        # Normalizar nombres para comparación (trim y case-insensitive)
+        # ✅ Validar: NO permitir crear si existe:
+        # - Misma cédula Y mismo nombre (ambos deben coincidir)
+        # - O mismo email
+        # NOTA: El teléfono NO se valida como duplicado
         nombres_normalizados = (cliente_data.nombres or "").strip().lower()
+        email_normalizado = (cliente_data.email or "").lower().strip() if cliente_data.email else None
 
-        # 1) Bloquear por cédula duplicada
-        existente_cedula = db.query(Cliente).filter(Cliente.cedula == cliente_data.cedula).first()
-        if existente_cedula:
-            logger.warning(
-                f"❌ Intento de crear cliente con cédula ya registrada: {cliente_data.cedula} "
-                f"(ID existente: {existente_cedula.id})"
-            )
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"No se puede crear un cliente con la misma cédula ({cliente_data.cedula}). "
-                    f"Ya existe un cliente (ID: {existente_cedula.id}) con esa cédula."
-                ),
-            )
-
-        # 2) Bloquear por nombre completo duplicado (case-insensitive)
+        # 1) Bloquear por cédula Y nombre duplicados (ambos deben coincidir)
         if nombres_normalizados:
-            existente_nombre = db.query(Cliente).filter(func.lower(Cliente.nombres) == nombres_normalizados).first()
-            if existente_nombre:
+            existente_cedula_nombre = (
+                db.query(Cliente)
+                .filter(
+                    Cliente.cedula == cliente_data.cedula,
+                    func.lower(Cliente.nombres) == nombres_normalizados
+                )
+                .first()
+            )
+            if existente_cedula_nombre:
                 logger.warning(
-                    f"❌ Intento de crear cliente con nombre ya registrado: {cliente_data.nombres} "
-                    f"(ID existente: {existente_nombre.id})"
+                    f"❌ Intento de crear cliente con cédula y nombre ya registrados: "
+                    f"cédula={cliente_data.cedula}, nombre={cliente_data.nombres} "
+                    f"(ID existente: {existente_cedula_nombre.id})"
                 )
                 raise HTTPException(
                     status_code=400,
                     detail=(
-                        f"No se puede crear un cliente con el mismo nombre completo "
-                        f"({cliente_data.nombres}). Ya existe un cliente (ID: {existente_nombre.id}) "
-                        f"con ese nombre."
+                        f"No se puede crear un cliente con la misma cédula ({cliente_data.cedula}) "
+                        f"y el mismo nombre completo ({cliente_data.nombres}). "
+                        f"Ya existe un cliente (ID: {existente_cedula_nombre.id}) con esos datos."
+                    ),
+                )
+
+        # 2) Bloquear por email duplicado (case-insensitive)
+        if email_normalizado:
+            existente_email = db.query(Cliente).filter(func.lower(Cliente.email) == email_normalizado).first()
+            if existente_email:
+                logger.warning(
+                    f"❌ Intento de crear cliente con email ya registrado: {email_normalizado} "
+                    f"(ID existente: {existente_email.id})"
+                )
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"No se puede crear un cliente con el mismo email ({cliente_data.email}). "
+                        f"Ya existe un cliente (ID: {existente_email.id}) con ese email."
                     ),
                 )
 
         # Preparar datos
         cliente_dict = cliente_data.model_dump()
 
-        # ✅ REGLA DE NEGOCIO: Por defecto FINALIZADO (no tiene deudas, no se aprobó crédito)
-        # FINALIZADO → ACTIVO: Automático al aprobar préstamo
+        # ✅ REGLA DE NEGOCIO ACTUALIZADA: Por defecto ACTIVO (todos los clientes nuevos)
+        # INACTIVO: Automático cuando tiene 4 o más cuotas sin pagar
+        # ACTIVO: Si está al día o termina de pagar todas las cuotas (siempre permanece ACTIVO)
         if not cliente_dict.get("estado"):
-            cliente_dict["estado"] = "FINALIZADO"
-        cliente_dict["activo"] = cliente_dict.get("activo", False)  # FINALIZADO = activo=False
+            cliente_dict["estado"] = "ACTIVO"
 
         # Usuario que registra el cliente
         cliente_dict["usuario_registro"] = current_user.email
@@ -533,49 +545,60 @@ def crear_cliente(
 
 
 def _validar_duplicados_actualizacion(db: Session, cliente_id: int, update_data: dict, cliente: Cliente):
-    """Valida que no haya duplicados al actualizar cédula o nombres"""
-    if "cedula" not in update_data and "nombres" not in update_data:
+    """Valida que no haya duplicados al actualizar: misma cédula Y nombre, o mismo email"""
+    # Solo validar si se actualiza cédula, nombres o email (teléfono no se valida)
+    if not any(key in update_data for key in ["cedula", "nombres", "email"]):
         return
 
     nueva_cedula = update_data.get("cedula", cliente.cedula)
     nuevos_nombres = update_data.get("nombres", cliente.nombres)
+    nuevo_email = update_data.get("email", cliente.email)
 
-    # Validar cédula duplicada
-    otro_con_misma_cedula = db.query(Cliente).filter(Cliente.cedula == nueva_cedula, Cliente.id != cliente_id).first()
-    if otro_con_misma_cedula:
-        logger.warning(
-            f"❌ Intento de actualizar cliente {cliente_id} a cédula duplicada: {nueva_cedula} "
-            f"(ya existe ID: {otro_con_misma_cedula.id})"
-        )
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"No se puede actualizar el cliente para tener la misma cédula "
-                f"({nueva_cedula}) que otro cliente existente (ID: {otro_con_misma_cedula.id})."
-            ),
-        )
-
-    # Validar nombre duplicado
-    if nuevos_nombres:
+    # Validar cédula Y nombre duplicados (ambos deben coincidir)
+    if ("cedula" in update_data or "nombres" in update_data) and nuevos_nombres:
         nuevos_nombres_normalizados = nuevos_nombres.strip().lower()
-        otro_con_mismo_nombre = (
+        otro_con_misma_cedula_nombre = (
             db.query(Cliente)
             .filter(
+                Cliente.cedula == nueva_cedula,
                 func.lower(Cliente.nombres) == nuevos_nombres_normalizados,
                 Cliente.id != cliente_id,
             )
             .first()
         )
-        if otro_con_mismo_nombre:
+        if otro_con_misma_cedula_nombre:
             logger.warning(
-                f"❌ Intento de actualizar cliente {cliente_id} a nombre duplicado: {nuevos_nombres} "
-                f"(ya existe ID: {otro_con_mismo_nombre.id})"
+                f"❌ Intento de actualizar cliente {cliente_id} a cédula y nombre duplicados: "
+                f"cédula={nueva_cedula}, nombre={nuevos_nombres} "
+                f"(ya existe ID: {otro_con_misma_cedula_nombre.id})"
             )
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"No se puede actualizar el cliente para tener el mismo nombre completo "
-                    f"({nuevos_nombres}) que otro cliente existente (ID: {otro_con_mismo_nombre.id})."
+                    f"No se puede actualizar el cliente para tener la misma cédula ({nueva_cedula}) "
+                    f"y el mismo nombre completo ({nuevos_nombres}) que otro cliente existente "
+                    f"(ID: {otro_con_misma_cedula_nombre.id})."
+                ),
+            )
+
+    # Validar email duplicado (case-insensitive)
+    if "email" in update_data and nuevo_email:
+        nuevo_email_normalizado = nuevo_email.lower().strip()
+        otro_con_mismo_email = (
+            db.query(Cliente)
+            .filter(func.lower(Cliente.email) == nuevo_email_normalizado, Cliente.id != cliente_id)
+            .first()
+        )
+        if otro_con_mismo_email:
+            logger.warning(
+                f"❌ Intento de actualizar cliente {cliente_id} a email duplicado: {nuevo_email} "
+                f"(ya existe ID: {otro_con_mismo_email.id})"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"No se puede actualizar el cliente para tener el mismo email "
+                    f"({nuevo_email}) que otro cliente existente (ID: {otro_con_mismo_email.id})."
                 ),
             )
 
@@ -600,13 +623,7 @@ def actualizar_cliente(
         # Validar duplicados
         _validar_duplicados_actualizacion(db, cliente_id, update_data, cliente)
 
-        # Sincronizar estado y activo SI se actualiza el estado
-        if "estado" in update_data:
-            nuevo_estado = update_data["estado"]
-            if nuevo_estado == "ACTIVO":
-                update_data["activo"] = True
-            elif nuevo_estado in ["INACTIVO", "FINALIZADO"]:
-                update_data["activo"] = False
+        # Nota: Ya no hay campo 'activo', solo se maneja 'estado'
 
         # Aplicar actualizaciones
         for field, value in update_data.items():

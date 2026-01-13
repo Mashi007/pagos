@@ -1,42 +1,79 @@
 # 📋 Reglas de Negocio: Estados de Clientes
 
 > **Documento de Referencia Principal**
-> Última actualización: 2026-01-11
+> Última actualización: 2026-01-XX
 
 ---
 
 ## 🎯 Estados Posibles
 
-### 1. **FINALIZADO** (Estado por Defecto)
-- **Significado**: Cliente sin deudas, pagó todas las cuotas según su tabla de amortización
-- **Campo `activo`**: `FALSE`
+### 1. **ACTIVO** (Estado por Defecto) ⭐
+- **Significado**: Cliente activo en el sistema
 - **Cuándo se asigna**:
-  - Por defecto al crear un nuevo cliente (no tiene préstamos aprobados)
-  - Automáticamente cuando todas las cuotas están `PAGADAS` y `total_pagado >= monto_total_financiamiento`
-- **Transición**: `FINALIZADO` → `ACTIVO` (automático al aprobar préstamo)
-
-### 2. **ACTIVO**
-- **Significado**: Cliente con préstamo APROBADO
-- **Campo `activo`**: `TRUE`
-- **Cuándo se asigna**:
-  - Automáticamente al aprobar un préstamo (`estado = 'APROBADO'`)
+  - **Por defecto** al crear un nuevo cliente
+  - Si tiene préstamo aprobado o cuotas pendientes
+  - **O** tiene 3 o menos cuotas atrasadas sin pagar
+  - Si está al día con sus pagos
+  - Si termina de pagar todas las cuotas (siempre permanece ACTIVO, no cambia a FINALIZADO)
 - **Transición**: 
-  - `ACTIVO` → `FINALIZADO` (automático cuando todas las cuotas están pagadas)
-  - `ACTIVO` → `INACTIVO` (automático al rechazar préstamo, solo si no tiene otros préstamos aprobados)
+  - `ACTIVO` → `INACTIVO` (automático cuando tiene 4+ cuotas atrasadas sin pagar)
 
-### 3. **INACTIVO**
-- **Significado**: Cliente con problemas legales, no cumple políticas de pago, no pasó análisis de riesgo, o no inició proceso
-- **Campo `activo`**: `FALSE`
+### 2. **INACTIVO**
+- **Significado**: Cliente con 4 o más cuotas atrasadas sin pagar (vencidas y con total_pagado < monto_cuota)
 - **Cuándo se asigna**:
-  - Automáticamente al rechazar un préstamo (`estado = 'RECHAZADO'`)
+  - **Automáticamente** cuando tiene 4 o más cuotas atrasadas sin pagar (vencidas y con total_pagado < monto_cuota)
   - Manualmente por administrador (requiere observación)
-- **Transición**: `INACTIVO` → `ACTIVO` o `FINALIZADO` (requiere revisión manual y aprobación)
+- **Transición**: 
+  - `INACTIVO` → `ACTIVO` (automático cuando tiene 3 o menos cuotas atrasadas sin pagar)
 
 ---
 
 ## 🔄 Transiciones Automáticas
 
-### **FINALIZADO → ACTIVO**
+### **ACTIVO → INACTIVO** (Automático)
+**Trigger**: Cuando tiene 4 o más cuotas atrasadas sin pagar
+
+```python
+# Implementación en: backend/app/services/estado_cliente_service.py
+# Llamado desde: 
+#   - backend/app/api/v1/endpoints/pagos.py (_actualizar_estado_cuota)
+#   - backend/app/api/v1/endpoints/pagos_conciliacion.py (_conciliar_pago)
+```
+
+**Condiciones**:
+1. Cliente tiene préstamos con estado `APROBADO`
+2. Tiene 4 o más cuotas atrasadas sin pagar:
+   - `fecha_vencimiento < CURRENT_DATE` (vencida)
+   - `total_pagado < monto_cuota` (pago incompleto)
+
+**Acción**:
+- `cliente.estado = 'INACTIVO'`
+- `cliente.fecha_actualizacion = CURRENT_TIMESTAMP`
+
+---
+
+### **INACTIVO → ACTIVO** (Automático)
+**Trigger**: Cuando tiene 3 o menos cuotas atrasadas sin pagar
+
+```python
+# Implementación en: backend/app/services/estado_cliente_service.py
+# Llamado desde: 
+#   - backend/app/api/v1/endpoints/pagos.py (_actualizar_estado_cuota)
+#   - backend/app/api/v1/endpoints/pagos_conciliacion.py (_conciliar_pago)
+```
+
+**Condiciones**:
+1. Cliente está en estado `INACTIVO`
+2. Tiene 3 o menos cuotas atrasadas sin pagar (después de registrar un pago)
+3. O tiene préstamo aprobado o cuotas pendientes
+
+**Acción**:
+- `cliente.estado = 'ACTIVO'`
+- `cliente.fecha_actualizacion = CURRENT_TIMESTAMP`
+
+---
+
+### **Al Aprobar Préstamo**
 **Trigger**: Al aprobar un préstamo (`prestamos.estado = 'APROBADO'`)
 
 ```python
@@ -49,55 +86,15 @@
 - Cliente tiene cédula asociada al préstamo
 
 **Acción**:
-- `cliente.estado = 'ACTIVO'`
-- `cliente.activo = TRUE`
+- `cliente.estado = 'ACTIVO'` (si no está ya en ACTIVO)
 - `cliente.fecha_actualizacion = CURRENT_TIMESTAMP`
 
 ---
 
-### **ACTIVO → FINALIZADO**
-**Trigger**: Cuando todas las cuotas están pagadas
-
-```python
-# Implementación en: backend/app/services/estado_cliente_service.py
-# Llamado desde: 
-#   - backend/app/api/v1/endpoints/pagos.py (_actualizar_estado_cuota)
-#   - backend/app/api/v1/endpoints/pagos_conciliacion.py (_conciliar_pago)
-```
-
-**Condiciones**:
-1. Todas las cuotas tienen `estado = 'PAGADO'`
-2. `total_pagado >= monto_total_financiamiento` (suma de todas las cuotas)
-
-**Acción**:
-- `cliente.estado = 'FINALIZADO'`
-- `cliente.activo = FALSE`
-- `cliente.fecha_actualizacion = CURRENT_TIMESTAMP`
-
-**Observación si no cumple**:
-Si todas las cuotas están `PAGADAS` pero `total_pagado < monto_total_financiamiento`:
-- Se genera una observación en `cliente.notas`
-- El cliente NO cambia a `FINALIZADO`
-- Requiere revisión manual de conciliación de pagos
-
----
-
-### **ACTIVO → INACTIVO**
-**Trigger**: Al rechazar un préstamo (`prestamos.estado = 'RECHAZADO'`)
-
-```python
-# Implementación en: backend/app/services/estado_cliente_service.py
-# Llamado desde: backend/app/api/v1/endpoints/prestamos.py (procesar_cambio_estado)
-```
-
-**Condiciones**:
-- Préstamo cambia a estado `RECHAZADO`
-- Cliente NO tiene otros préstamos `APROBADOS`
-
-**Acción**:
-- `cliente.estado = 'INACTIVO'`
-- `cliente.activo = FALSE`
-- `cliente.fecha_actualizacion = CURRENT_TIMESTAMP`
+### **⚠️ IMPORTANTE: Clientes siempre permanecen ACTIVO si están al día**
+- Si un cliente termina de pagar todas sus cuotas, **siempre permanece en ACTIVO**
+- **NO cambia a FINALIZADO** automáticamente
+- El estado FINALIZADO ya no se usa en las reglas automáticas
 
 ---
 

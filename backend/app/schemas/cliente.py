@@ -99,8 +99,8 @@ class ClienteBase(BaseModel):
     # Estado - OPCIONAL con default ACTIVO
     estado: Optional[str] = Field(
         default="ACTIVO",
-        pattern="^(ACTIVO|INACTIVO|FINALIZADO)$",
-        description="Activo/Inactivo/Finalizado (default: ACTIVO)",
+        pattern="^(ACTIVO|INACTIVO)$",
+        description="Estado del cliente (default: ACTIVO). INACTIVO automático con 4+ cuotas sin pagar",
     )
 
     # Notas - OBLIGATORIO con default 'No hay observacion'
@@ -235,9 +235,8 @@ class ClienteCreate(BaseModel):
         description="Ocupación",
     )
     estado: Optional[str] = Field(
-        default="ACTIVO", pattern="^(ACTIVO|INACTIVO|FINALIZADO)$", description="Estado del cliente (default: ACTIVO)"
+        default="ACTIVO", pattern="^(ACTIVO|INACTIVO)$", description="Estado del cliente (default: ACTIVO). INACTIVO automático con 4+ cuotas sin pagar"
     )
-    activo: Optional[bool] = Field(True, description="Cliente activo")
     notas: Optional[str] = Field("No hay observacion", description="Notas adicionales (default 'No hay observacion')")
 
 
@@ -260,8 +259,7 @@ class ClienteUpdate(BaseModel):
     ocupacion: Optional[str] = Field(None, min_length=2, max_length=100)  # Max 2 palabras validado
 
     # Estado
-    estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO|FINALIZADO)$")
-    activo: Optional[bool] = None
+    estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO)$", description="Estado del cliente. ACTIVO si tiene préstamo aprobado o 3 o menos cuotas atrasadas. INACTIVO automático con 4+ cuotas atrasadas sin pagar")
 
     # Notas - OBLIGATORIO con default 'No hay observacion'
     notas: Optional[str] = Field(None, max_length=1000)
@@ -341,7 +339,6 @@ class ClienteResponse(ClienteBase):
     """Schema de respuesta para cliente - Validación flexible para datos históricos"""
 
     id: int
-    activo: bool
     usuario_registro: str  # Email del usuario que registró
     fecha_registro: Optional[datetime] = Field(None, description="Fecha de creación del cliente")
     fecha_actualizacion: Optional[datetime] = Field(None, description="Fecha de última actualización del cliente")
@@ -500,8 +497,7 @@ class ClienteSearchFilters(BaseModel):
     # Búsqueda de texto
     search_text: Optional[str] = Field(None, description="Texto de búsqueda")
 
-    estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO|FINALIZADO)$")
-    activo: Optional[bool] = None
+    estado: Optional[str] = Field(None, pattern="^(ACTIVO|INACTIVO)$", description="Estado del cliente. ACTIVO si tiene préstamo aprobado o 3 o menos cuotas atrasadas. INACTIVO automático con 4+ cuotas atrasadas sin pagar")
 
     fecha_registro_desde: Optional[date] = None
     fecha_registro_hasta: Optional[date] = None

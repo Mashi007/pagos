@@ -1,4 +1,4 @@
-from sqlalchemy import TIMESTAMP, Boolean, Column, Date, Integer, String, Text
+from sqlalchemy import TIMESTAMP, Column, Date, Integer, String, Text
 from sqlalchemy.sql import func
 
 from app.db.session import Base
@@ -30,12 +30,12 @@ class Cliente(Base):
     ocupacion = Column(String(OCCUPATION_LENGTH), nullable=False)  # Texto libre
 
     # Estado y control - OBLIGATORIOS
-    # REGLA DE NEGOCIO: Por defecto FINALIZADO (no tiene deudas, no se aprobó crédito)
-    # FINALIZADO → ACTIVO: Automático al aprobar préstamo
-    # ACTIVO → FINALIZADO: Automático cuando todas las cuotas están PAGADAS y total_pagado >= monto_total_financiamiento
-    # ACTIVO → INACTIVO: Automático al rechazar préstamo
-    estado = Column(String(STATE_LENGTH), nullable=False, default="FINALIZADO", index=True)  # FINALIZADO/ACTIVO/INACTIVO
-    activo = Column(Boolean, nullable=False, default=False, index=True)  # Por defecto False (FINALIZADO)
+    # REGLA DE NEGOCIO ACTUALIZADA:
+    # - Por defecto ACTIVO (todos los clientes nuevos)
+    # - ACTIVO: Si tiene préstamo aprobado o cuotas pendientes, O tiene 3 o menos cuotas atrasadas sin pagar
+    # - INACTIVO: Automático cuando tiene 4 o más cuotas atrasadas sin pagar
+    # - ACTIVO: Si está al día o termina de pagar todas las cuotas (siempre permanece ACTIVO, no cambia a FINALIZADO)
+    estado = Column(String(STATE_LENGTH), nullable=False, default="ACTIVO", index=True)  # ACTIVO/INACTIVO
 
     # Auditoría - OBLIGATORIOS
     fecha_registro = Column(
@@ -60,6 +60,5 @@ class Cliente(Base):
     def __repr__(self):
         return (
             f"<Cliente(id={self.id}, cedula='{self.cedula}', "
-            f"nombres='{self.nombres}', estado='{self.estado}', "
-            f"activo={self.activo})>"
+            f"nombres='{self.nombres}', estado='{self.estado}')>"
         )
