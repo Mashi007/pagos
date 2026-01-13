@@ -62,7 +62,6 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     modalidad_pago: prestamo?.modalidad_pago || 'MENSUAL',
     fecha_requerimiento: prestamo?.fecha_requerimiento || getCurrentDate(), // Fecha actual por defecto para nuevos préstamos
     producto: prestamo?.producto || '',
-    producto_financiero: prestamo?.producto_financiero || '',
     concesionario: prestamo?.concesionario || '',
     analista: prestamo?.analista || '',
     modelo_vehiculo: prestamo?.modelo_vehiculo || '',
@@ -152,29 +151,18 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
 
 
   // Cargar datos del cliente cuando se encuentra
+  // IMPORTANTE: Solo recibimos clientes ACTIVOS gracias al filtro en el servicio
   useEffect(() => {
     if (clienteInfo && clienteInfo.length > 0) {
       const cliente = clienteInfo[0]
-      // Solo establecer clienteData si el cliente está ACTIVO
-      if (cliente.estado === 'ACTIVO') {
-        setClienteData(cliente)
-        // Auto-llenar campos basados en cliente
-        setFormData(prev => ({
-          ...prev,
-          producto: cliente.modelo_vehiculo || '',
-          producto_financiero: cliente.analista || '',
-          // También llenar nuevos campos si están disponibles en el cliente
-          modelo_vehiculo: cliente.modelo_vehiculo || prev.modelo_vehiculo || '',
-          analista: cliente.analista || prev.analista || '',
-          concesionario: cliente.concesionario || prev.concesionario || '',
-        }))
-      } else {
-        // Cliente encontrado pero no está ACTIVO
-        setClienteData(null)
-        toast.error(`El cliente con cédula ${cliente.cedula} tiene estado "${cliente.estado}". Solo se pueden crear préstamos para clientes ACTIVOS.`)
-      }
+      // Establecer clienteData con todos los datos del cliente disponibles
+      // El modelo Cliente contiene: id, cedula, nombres, telefono, email, direccion,
+      // fecha_nacimiento, ocupacion, estado, fecha_registro, fecha_actualizacion, usuario_registro, notas
+      setClienteData(cliente)
+      // No autocompletamos campos del préstamo porque el cliente no tiene esos datos
+      // (modelo_vehiculo, analista, concesionario son campos del préstamo, no del cliente)
     } else if (formData.cedula && formData.cedula.length >= 2 && clienteInfo && clienteInfo.length === 0) {
-      // Cliente no encontrado o no está ACTIVO
+      // Cliente no encontrado o no está ACTIVO (no aparecerá en la búsqueda)
       setClienteData(null)
     }
   }, [clienteInfo, formData.cedula])
@@ -190,14 +178,10 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       errors.push('La cédula es requerida')
     }
 
-    // Validar que el cliente exista y esté ACTIVO (solo para nuevos préstamos)
+    // Validar que el cliente exista (solo para nuevos préstamos)
+    // NOTA: Solo aparecen clientes ACTIVOS en la búsqueda, pero validamos por seguridad
     if (!prestamo && !clienteData) {
-      errors.push('Debe buscar y seleccionar un cliente válido')
-    }
-
-    // Validar que el cliente esté ACTIVO para permitir crear préstamo
-    if (!prestamo && clienteData && clienteData.estado !== 'ACTIVO') {
-      errors.push(`No se puede crear un préstamo para un cliente con estado: ${clienteData.estado}. El cliente debe estar ACTIVO.`)
+      errors.push('Debe buscar y seleccionar un cliente válido con estado ACTIVO')
     }
 
     // Validar Valor Activo
@@ -230,7 +214,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       errors.push('La fecha de requerimiento es requerida')
     }
 
-    // Requeridos adicionales del formulario (producto/producto_financiero se completan automáticamente al enviar)
+    // Requeridos adicionales del formulario
     const faltaConcesionario = !formData.concesionario || String(formData.concesionario).trim() === ''
     const faltaAnalista = !formData.analista || String(formData.analista).trim() === ''
     if (faltaConcesionario) errors.push('Debe seleccionar un Concesionario')
@@ -291,13 +275,14 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       const prestamoData = {
         ...formData,
         valor_activo: valorActivo > 0 ? valorActivo : undefined,
-        // Asegurar producto/producto_financiero desde selecciones si están vacíos
+        // Asegurar producto desde selecciones si está vacío
         producto: formData.producto && String(formData.producto).trim() !== ''
           ? formData.producto
           : (formData.modelo_vehiculo || ''),
-        producto_financiero: formData.producto_financiero && String(formData.producto_financiero).trim() !== ''
-          ? formData.producto_financiero
-          : (formData.analista || ''),
+        // Asegurar analista (obligatorio)
+        analista: formData.analista && String(formData.analista).trim() !== ''
+          ? formData.analista
+          : '',
         numero_cuotas: numeroCuotas,
         cuota_periodo: cuotaPeriodo,
         fecha_base_calculo: formData.fecha_base_calculo,
@@ -474,21 +459,49 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       <CardContent className="space-y-3">
                         <div className="grid grid-cols-2 gap-4">
                           <div>
+                            <label className="text-sm text-gray-600">Cédula</label>
+                            <p className="font-medium">{clienteData.cedula}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm text-gray-600">Nombres Completos</label>
+                            <p className="font-medium">{clienteData.nombres}</p>
+                          </div>
+                          <div>
                             <label className="text-sm text-gray-600">Teléfono</label>
-                            <p className="font-medium">{clienteData.telefono}</p>
+                            <p className="font-medium">{clienteData.telefono || 'N/A'}</p>
                           </div>
                           <div>
                             <label className="text-sm text-gray-600">Email</label>
-                            <p className="font-medium">{clienteData.email}</p>
+                            <p className="font-medium">{clienteData.email || 'N/A'}</p>
                           </div>
                           <div>
                             <label className="text-sm text-gray-600">Dirección</label>
-                            <p className="font-medium">{clienteData.direccion}</p>
+                            <p className="font-medium">{clienteData.direccion || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm text-gray-600">Fecha de Nacimiento</label>
+                            <p className="font-medium">
+                              {clienteData.fecha_nacimiento 
+                                ? new Date(clienteData.fecha_nacimiento).toLocaleDateString('es-VE')
+                                : 'N/A'}
+                            </p>
+                          </div>
+                          <div>
+                            <label className="text-sm text-gray-600">Ocupación</label>
+                            <p className="font-medium">{clienteData.ocupacion || 'N/A'}</p>
                           </div>
                           <div>
                             <label className="text-sm text-gray-600">Estado</label>
-                            <Badge>{clienteData.estado}</Badge>
+                            <Badge variant={clienteData.estado === 'ACTIVO' ? 'default' : 'secondary'}>
+                              {clienteData.estado}
+                            </Badge>
                           </div>
+                          {clienteData.notas && clienteData.notas !== 'NA' && (
+                            <div className="col-span-2">
+                              <label className="text-sm text-gray-600">Notas</label>
+                              <p className="font-medium text-sm">{clienteData.notas}</p>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </motion.div>

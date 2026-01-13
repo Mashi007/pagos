@@ -532,7 +532,7 @@ def reporte_morosidad(
             text(
                 """
                 SELECT
-                    COALESCE(p.analista, p.producto_financiero, 'Sin Analista') as analista,
+                    COALESCE(p.analista, 'Sin Analista') as analista,
                     COUNT(DISTINCT p.id) as cantidad_prestamos,
                     COUNT(DISTINCT p.cedula) as cantidad_clientes,
                     COALESCE(SUM(c.monto_morosidad), 0) as monto_total_mora,
@@ -544,7 +544,7 @@ def reporte_morosidad(
                   AND c.dias_morosidad > 0
                   AND c.monto_morosidad > 0
                   AND cl.estado != 'INACTIVO'
-                GROUP BY COALESCE(p.analista, p.producto_financiero, 'Sin Analista')
+                GROUP BY COALESCE(p.analista, 'Sin Analista')
                 ORDER BY monto_total_mora DESC
             """
             )
@@ -569,7 +569,7 @@ def reporte_morosidad(
                     p.cedula,
                     p.nombres,
                     p.total_financiamiento,
-                    COALESCE(p.analista, p.producto_financiero, 'Sin Analista') as analista,
+                    COALESCE(p.analista, 'Sin Analista') as analista,
                     p.concesionario,
                     COUNT(c.id) as cuotas_en_mora,
                     COALESCE(SUM(c.monto_morosidad), 0) as monto_total_mora,
@@ -582,7 +582,7 @@ def reporte_morosidad(
                   AND c.dias_morosidad > 0
                   AND c.monto_morosidad > 0
                   AND cl.estado != 'INACTIVO'
-                GROUP BY p.id, p.cedula, p.nombres, p.total_financiamiento, p.analista, p.producto_financiero, p.concesionario
+                GROUP BY p.id, p.cedula, p.nombres, p.total_financiamiento, p.analista, p.concesionario
                 ORDER BY monto_total_mora DESC
                 LIMIT 1000
             """
@@ -788,7 +788,7 @@ def reporte_asesores(
             text(
                 """
                 SELECT
-                    COALESCE(p.analista, p.producto_financiero, 'Sin Analista') as analista,
+                    COALESCE(p.analista, 'Sin Analista') as analista,
                     COUNT(DISTINCT p.id) as total_prestamos,
                     COUNT(DISTINCT p.cedula) as total_clientes,
                     COALESCE(SUM(p.total_financiamiento), 0) as cartera_total,
@@ -800,7 +800,7 @@ def reporte_asesores(
                 INNER JOIN clientes cl ON cl.id = p.cliente_id
                 WHERE p.estado = 'APROBADO'
                   AND cl.estado != 'INACTIVO'
-                GROUP BY COALESCE(p.analista, p.producto_financiero, 'Sin Analista')
+                GROUP BY COALESCE(p.analista, 'Sin Analista')
                 ORDER BY cartera_total DESC
             """
             )
@@ -831,7 +831,7 @@ def reporte_asesores(
             text(
                 """
                 SELECT
-                    COALESCE(p.analista, p.producto_financiero, 'Sin Analista') as analista,
+                    COALESCE(p.analista, 'Sin Analista') as analista,
                     DATE_TRUNC('month', p.fecha_aprobacion)::date as mes,
                     COUNT(DISTINCT p.id) as prestamos_aprobados,
                     COALESCE(SUM(p.total_financiamiento), 0) as monto_aprobado,
@@ -844,7 +844,7 @@ def reporte_asesores(
                 WHERE p.estado = 'APROBADO'
                   AND cl.estado != 'INACTIVO'
                   AND p.fecha_aprobacion >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '6 months'
-                GROUP BY COALESCE(p.analista, p.producto_financiero, 'Sin Analista'), DATE_TRUNC('month', p.fecha_aprobacion)
+                GROUP BY COALESCE(p.analista, 'Sin Analista'), DATE_TRUNC('month', p.fecha_aprobacion)
                 ORDER BY analista, mes DESC
             """
             )
@@ -865,7 +865,7 @@ def reporte_asesores(
             text(
                 """
                 SELECT
-                    COALESCE(p.analista, p.producto_financiero, 'Sin Analista') as analista,
+                    COALESCE(p.analista, 'Sin Analista') as analista,
                     p.cedula,
                     p.nombres,
                     COUNT(DISTINCT p.id) as cantidad_prestamos,
@@ -878,7 +878,7 @@ def reporte_asesores(
                 INNER JOIN clientes cl ON cl.id = p.cliente_id
                 WHERE p.estado = 'APROBADO'
                   AND cl.estado != 'INACTIVO'
-                GROUP BY COALESCE(p.analista, p.producto_financiero, 'Sin Analista'), p.cedula, p.nombres
+                GROUP BY COALESCE(p.analista, 'Sin Analista'), p.cedula, p.nombres
                 ORDER BY analista, monto_total_prestamos DESC
             """
             )

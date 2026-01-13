@@ -41,12 +41,7 @@ class FiltrosDashboard:
             )
         """
         if analista:
-            query = query.filter(
-                or_(
-                    Prestamo.analista == analista,
-                    Prestamo.producto_financiero == analista,
-                )
-            )
+            query = query.filter(Prestamo.analista == analista)
         if concesionario:
             query = query.filter(Prestamo.concesionario == concesionario)
         if modelo:
@@ -239,7 +234,6 @@ class FiltrosDashboard:
             query = query.filter(
                 or_(
                     Prestamo.analista == analista,
-                    Prestamo.producto_financiero == analista,
                     Prestamo.usuario_proponente == analista,  # También por usuario_proponente
                 )
             )

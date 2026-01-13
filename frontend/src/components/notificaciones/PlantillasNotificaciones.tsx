@@ -133,7 +133,6 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
         { campo: 'tasa_interes', descripcion: 'Tasa de interés (%)' },
         { campo: 'fecha_base_calculo', descripcion: 'Fecha base para cálculo' },
         { campo: 'producto', descripcion: 'Producto financiero' },
-        { campo: 'producto_financiero', descripcion: 'Producto financiero' },
         { campo: 'concesionario', descripcion: 'Concesionario' },
         { campo: 'analista', descripcion: 'Analista asignado' },
         { campo: 'modelo_vehiculo', descripcion: 'Modelo del vehículo' },

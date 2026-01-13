@@ -87,11 +87,12 @@ class ClienteService {
   }
 
   // Buscar clientes por término (usando filtros en endpoint principal)
-  // Permite buscar todos los clientes de la base de datos (sin filtrar por estado)
-  // para habilitar la búsqueda en el canal "prospecto" del embudo
-  async searchClientes(query: string, incluirTodosEstados: boolean = true): Promise<Cliente[]> {
+  // IMPORTANTE: Por defecto filtra solo clientes ACTIVOS para formularios de préstamos
+  // Para buscar todos los estados, pasar incluirTodosEstados: true
+  async searchClientes(query: string, incluirTodosEstados: boolean = false): Promise<Cliente[]> {
     const filters: ClienteFilters = { search: query }
-    // Solo filtrar por ACTIVO si se especifica explícitamente
+    // Por defecto filtrar solo ACTIVOS (para formularios de préstamos)
+    // Solo incluir todos los estados si se especifica explícitamente
     if (!incluirTodosEstados) {
       filters.estado = 'ACTIVO'
     }

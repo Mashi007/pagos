@@ -5,7 +5,7 @@ from app.db.session import Base
 
 CEDULA_LENGTH = 20
 NAME_LENGTH = 100
-PHONE_LENGTH = 15
+PHONE_LENGTH = 100  # Aumentado para aceptar múltiples teléfonos separados por /
 EMAIL_LENGTH = 100
 OCCUPATION_LENGTH = 100
 STATE_LENGTH = 20

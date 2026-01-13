@@ -44,16 +44,15 @@ class Prestamo(Base):
     tasa_interes = Column(Numeric(5, 2), nullable=False, default=0.00)
     fecha_base_calculo = Column(Date, nullable=True)  # Fecha desde la cual se genera tabla de amortizaciones
 
-    # Producto financiero
+    # Producto
     producto = Column(String(100), nullable=False)  # Modelo de vehículo
-    producto_financiero = Column(String(100), nullable=False)  # Analista asignado
 
     # ============================================
     # INFORMACIÓN ADICIONAL
     # ============================================
     # Campos legacy (mantener para compatibilidad durante migración)
     concesionario = Column(String(100), nullable=True)  # Concesionario (legacy - usar concesionario_id)
-    analista = Column(String(100), nullable=True)  # Analista (legacy - usar analista_id)
+    analista = Column(String(100), nullable=False)  # Analista asignado (obligatorio - usar analista_id para relaciones normalizadas)
     modelo_vehiculo = Column(String(100), nullable=True)  # Modelo del vehículo (legacy - usar modelo_vehiculo_id)
 
     # ✅ Nuevas relaciones normalizadas

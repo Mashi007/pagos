@@ -143,8 +143,8 @@ export function EmbudoClientes() {
     refetchInterval: 60 * 1000, // Refrescar cada minuto
   })
 
-  // Búsqueda de clientes para agregar
-  const { data: clientesBuscados = [], isLoading: isLoadingSearch } = useSearchClientes(searchCliente)
+  // Búsqueda de clientes para agregar (incluir todos los estados para el embudo)
+  const { data: clientesBuscados = [], isLoading: isLoadingSearch } = useSearchClientes(searchCliente, true)
 
   // Convertir clientes a formato del embudo
   const clientesEmbudo = useMemo(() => {

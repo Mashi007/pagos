@@ -45,10 +45,12 @@ export function useCliente(id: string) {
 }
 
 // Hook para búsqueda de clientes
-export function useSearchClientes(query: string) {
+// Por defecto filtra solo clientes ACTIVOS (para formularios de préstamos)
+// Para buscar todos los estados, pasar incluirTodosEstados: true
+export function useSearchClientes(query: string, incluirTodosEstados: boolean = false) {
   return useQuery({
-    queryKey: clienteKeys.search(query),
-    queryFn: () => clienteService.searchClientes(query),
+    queryKey: [...clienteKeys.search(query), incluirTodosEstados ? 'todos' : 'activos'],
+    queryFn: () => clienteService.searchClientes(query, incluirTodosEstados),
     enabled: query.length >= 2,
     staleTime: STALE_TIME_SHORT,
   })

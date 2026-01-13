@@ -251,7 +251,7 @@ def _calcular_kpis_mes_actual(
     if analista or concesionario or modelo:
         if analista:
             cuotas_conciliadas_query = cuotas_conciliadas_query.filter(
-                or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
+                Prestamo.analista == analista
             )
         if concesionario:
             cuotas_conciliadas_query = cuotas_conciliadas_query.filter(Prestamo.concesionario == concesionario)
@@ -299,7 +299,7 @@ def _calcular_kpis_mes_actual(
     )
     if analista:
         clientes_cuotas_impagas_query = clientes_cuotas_impagas_query.filter(
-            or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista)
+            Prestamo.analista == analista
         )
     if concesionario:
         clientes_cuotas_impagas_query = clientes_cuotas_impagas_query.filter(Prestamo.concesionario == concesionario)

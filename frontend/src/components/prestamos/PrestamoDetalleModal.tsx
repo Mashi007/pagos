@@ -345,7 +345,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                     </div>
                     <div>
                       <label className="text-sm text-gray-600">Analista Asignado</label>
-                      <p className="font-medium">{prestamoData.producto_financiero}</p>
+                      <p className="font-medium">{prestamoData.analista}</p>
                     </div>
                   </CardContent>
                 </Card>

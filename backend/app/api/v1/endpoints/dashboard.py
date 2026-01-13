@@ -183,7 +183,7 @@ def _calcular_total_cobrado_mes(
 
     if analista or concesionario or modelo:
         if analista:
-            prestamo_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+            prestamo_conditions.append("pr.analista = :analista")
             bind_params["analista"] = analista
         if concesionario:
             prestamo_conditions.append("pr.concesionario = :concesionario")
@@ -289,8 +289,8 @@ def _calcular_morosidad(
     bind_params = {"fecha_limite": fecha, "fecha_inicio_calculo": fecha_inicio_calculo}
 
     if analista:
-        filtros_prestamo_p.append("(p.analista = :analista OR p.producto_financiero = :analista)")
-        filtros_prestamo_pr.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+        filtros_prestamo_p.append("p.analista = :analista")
+        filtros_prestamo_pr.append("pr.analista = :analista")
         bind_params["analista"] = analista
     if concesionario:
         filtros_prestamo_p.append("p.concesionario = :concesionario")
@@ -966,7 +966,7 @@ def _calcular_pagos_fecha(
         bind_params = {"fecha_inicio": fecha_dt, "fecha_fin": fecha_dt_end}
 
         if analista:
-            prestamo_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+            prestamo_conditions.append("pr.analista = :analista")
             bind_params["analista"] = analista
         if concesionario:
             prestamo_conditions.append("pr.concesionario = :concesionario")
@@ -1112,8 +1112,7 @@ def obtener_opciones_filtros(
         # Optimizar: usar queries separadas optimizadas para categorías específicas
         # Separar en categorías para mejor organización
         analistas_set = _obtener_valores_distintos_de_columna(db, Prestamo.analista)
-        productos_set = _obtener_valores_distintos_de_columna(db, Prestamo.producto_financiero)
-        analistas_final = sorted(analistas_set | productos_set)
+        analistas_final = sorted(analistas_set)
 
         concesionarios_set = _obtener_valores_distintos_de_columna(db, Prestamo.concesionario)
         concesionarios_final = sorted(concesionarios_set)
@@ -1189,7 +1188,7 @@ def _calcular_total_cobrado(
             bind_params = {"fecha_inicio": fecha_dt, "fecha_fin": fecha_dt_end}
 
             if analista:
-                prestamo_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+                prestamo_conditions.append("pr.analista = :analista")
                 bind_params["analista"] = analista
             if concesionario:
                 prestamo_conditions.append("pr.concesionario = :concesionario")
@@ -1257,7 +1256,7 @@ def _calcular_total_cobrado_acumulativo(
             bind_params = {}
 
             if analista:
-                prestamo_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+                prestamo_conditions.append("pr.analista = :analista")
                 bind_params["analista"] = analista
             if concesionario:
                 prestamo_conditions.append("pr.concesionario = :concesionario")
@@ -2249,7 +2248,6 @@ def _obtener_cuotas_programadas_por_mes(
             query_cuotas = query_cuotas.filter(
                 or_(
                     Prestamo.analista == analista,
-                    Prestamo.producto_financiero == analista,
                 )
             )
         if concesionario:
@@ -2317,7 +2315,7 @@ def _obtener_morosidad_por_mes(
         # ✅ NOTA: fecha_inicio y fecha_fin no están disponibles aquí, solo fecha_inicio_query y fecha_fin_query
         # Los filtros de fecha de aprobación se aplican vía FiltrosDashboard si es necesario
         if analista:
-            where_conditions.append("(p.analista = :analista OR p.producto_financiero = :analista)")
+            where_conditions.append("p.analista = :analista")
             bind_params["analista"] = analista
         if concesionario:
             where_conditions.append("p.concesionario = :concesionario")
@@ -2414,7 +2412,7 @@ def _obtener_pagos_por_mes(
         # Aplicar filtros de analista, concesionario, modelo
         join_needed = False
         if analista:
-            where_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+            where_conditions.append("pr.analista = :analista")
             bind_params["analista"] = analista
             join_needed = True
         if concesionario:
@@ -3867,7 +3865,7 @@ def obtener_morosidad_por_analista(
 
         # Obtener morosidad por analista (morosidad = cuotas vencidas no pagadas)
         # Usar la expresión completa en group_by para evitar errores SQL
-        analista_expr = func.coalesce(Prestamo.analista, Prestamo.producto_financiero, "Sin Analista")
+        analista_expr = func.coalesce(Prestamo.analista, "Sin Analista")
         query = (
             db.query(
                 analista_expr.label("analista"),
@@ -4131,7 +4129,7 @@ def obtener_pagos_conciliados(
         if analista or concesionario or modelo:
             query_base = query_base.join(Prestamo, Pago.prestamo_id == Prestamo.id)
             if analista:
-                query_base = query_base.filter(or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista))
+                query_base = query_base.filter(Prestamo.analista == analista)
             if concesionario:
                 query_base = query_base.filter(Prestamo.concesionario == concesionario)
             if modelo:
@@ -5432,7 +5430,7 @@ def obtener_cobranzas_semanales(
         }
 
         if analista:
-            filtros_cobranzas.append("(p.analista = :analista OR p.producto_financiero = :analista)")
+            filtros_cobranzas.append("p.analista = :analista")
             params_cobranzas["analista"] = analista
         if concesionario:
             filtros_cobranzas.append("p.concesionario = :concesionario")
@@ -5453,7 +5451,7 @@ def obtener_cobranzas_semanales(
             ]
 
             if analista:
-                condiciones.append(or_(Prestamo.analista == analista, Prestamo.producto_financiero == analista))
+                condiciones.append(Prestamo.analista == analista)
             if concesionario:
                 condiciones.append(Prestamo.concesionario == concesionario)
             if modelo:
@@ -6072,7 +6070,7 @@ def obtener_resumen_financiamiento_pagado(
 
         if analista or concesionario or modelo:
             if analista:
-                prestamo_conditions.append("(pr.analista = :analista OR pr.producto_financiero = :analista)")
+                prestamo_conditions.append("pr.analista = :analista")
                 bind_params["analista"] = analista
             if concesionario:
                 prestamo_conditions.append("pr.concesionario = :concesionario")

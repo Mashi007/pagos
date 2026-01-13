@@ -28,11 +28,10 @@ class PrestamoCreate(PrestamoBase):
 
     fecha_requerimiento: date
     producto: str = Field(..., max_length=100)
-    producto_financiero: str = Field(..., max_length=100)
     numero_cuotas: Optional[int] = None  # Si se envía, se usa; si no, se calcula automáticamente
     cuota_periodo: Optional[Decimal] = None  # Si se envía, se usa; si no, se calcula automáticamente
     concesionario: str = Field(..., max_length=100)
-    analista: str = Field(..., max_length=100)
+    analista: str = Field(..., max_length=100)  # Analista asignado (obligatorio)
     modelo_vehiculo: str = Field(..., max_length=100)
     usuario_autoriza: Optional[str] = Field(None, max_length=100)
     observaciones: Optional[str] = None
@@ -40,7 +39,6 @@ class PrestamoCreate(PrestamoBase):
     @field_validator(
         "cedula",
         "producto",
-        "producto_financiero",
         "concesionario",
         "analista",
         "modelo_vehiculo",
@@ -90,9 +88,8 @@ class PrestamoResponse(PrestamoBase):
     tasa_interes: Decimal
     fecha_base_calculo: Optional[date] = None
     producto: str
-    producto_financiero: str
     concesionario: Optional[str] = None
-    analista: Optional[str] = None
+    analista: str  # Analista asignado (obligatorio)
     modelo_vehiculo: Optional[str] = None
     estado: str
     usuario_proponente: str

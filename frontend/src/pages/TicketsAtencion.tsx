@@ -93,8 +93,8 @@ export function TicketsAtencion() {
     asignado_a: user ? `${user.nombre} ${user.apellido}` : '',
   })
 
-  // Búsqueda de clientes para agregar al ticket
-  const { data: clientesBuscados = [], isLoading: isLoadingSearch } = useSearchClientes(searchCliente)
+  // Búsqueda de clientes para agregar al ticket (incluir todos los estados)
+  const { data: clientesBuscados = [], isLoading: isLoadingSearch } = useSearchClientes(searchCliente, true)
 
   // Query para obtener tickets del backend
   const {
