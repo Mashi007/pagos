@@ -88,7 +88,8 @@ class Cuota(Base):
         from datetime import date
 
         if self.fecha_vencimiento:
-            return self.fecha_vencimiento < date.today() and self.estado != "PAGADA"  # type: ignore[return-value]
+            # ✅ CORREGIDO: Estado correcto es "PAGADO" (masculino), no "PAGADA"
+            return self.fecha_vencimiento < date.today() and self.estado != "PAGADO"  # type: ignore[return-value]
         return False
 
     @property
