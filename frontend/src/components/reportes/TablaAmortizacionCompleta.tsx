@@ -559,10 +559,8 @@ export function TablaAmortizacionCompleta() {
                                     <TableHead>Cuota #</TableHead>
                                     <TableHead>Fecha Vencimiento</TableHead>
                                     <TableHead>Monto Cuota</TableHead>
-                                    <TableHead>Capital</TableHead>
-                                    <TableHead>Interés</TableHead>
                                     <TableHead>Total Pagado</TableHead>
-                                    <TableHead>Capital Pendiente</TableHead>
+                                    <TableHead>Pendiente</TableHead>
                                     <TableHead>Estado</TableHead>
                                     <TableHead className="text-right">Acciones</TableHead>
                                   </TableRow>
@@ -573,10 +571,8 @@ export function TablaAmortizacionCompleta() {
                                       <TableCell className="font-semibold">{cuota.numero_cuota}</TableCell>
                                       <TableCell>{formatDate(cuota.fecha_vencimiento)}</TableCell>
                                       <TableCell>{formatCurrency(cuota.monto_cuota)}</TableCell>
-                                      <TableCell>{formatCurrency(cuota.monto_capital)}</TableCell>
-                                      <TableCell>{formatCurrency(cuota.monto_interes)}</TableCell>
-                                      <TableCell className="font-semibold">{formatCurrency(cuota.total_pagado)}</TableCell>
-                                      <TableCell>{formatCurrency(cuota.capital_pendiente)}</TableCell>
+                                      <TableCell className="font-semibold">{formatCurrency(cuota.total_pagado || 0)}</TableCell>
+                                      <TableCell>{formatCurrency((cuota.monto_cuota || 0) - (cuota.total_pagado || 0))}</TableCell>
                                       <TableCell>{getEstadoBadge(cuota.estado)}</TableCell>
                                       <TableCell className="text-right">
                                         <div className="flex gap-2 justify-end">
@@ -682,9 +678,7 @@ export function TablaAmortizacionCompleta() {
 
                 // Validar y formatear montos
                 const camposMonetarios = [
-                  'monto_cuota', 'monto_capital', 'monto_interes',
-                  'capital_pagado', 'interes_pagado',
-                  'capital_pendiente', 'interes_pendiente', 'total_pagado'
+                  'monto_cuota', 'total_pagado'
                 ]
                 
                 const data: CuotaUpdate = {}
@@ -810,112 +804,10 @@ export function TablaAmortizacionCompleta() {
                   />
                   <p className="text-xs text-gray-500 mt-1">Máximo 2 decimales</p>
                 </div>
-                <div>
-                  <Label htmlFor="monto_capital">Monto Capital *</Label>
-                  <Input
-                    id="monto_capital"
-                    name="monto_capital"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue={cuotaEditando.monto_capital}
-                    required
-                    onBlur={(e) => {
-                      const valor = e.target.value
-                      if (valor) {
-                        const validacion = validarMonto(valor)
-                        if (!validacion.valido) {
-                          toast.error(validacion.mensaje || 'Valor inválido')
-                          e.target.focus()
-                        } else {
-                          e.target.value = formatearMonto(valor)
-                        }
-                      }
-                    }}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Máximo 2 decimales</p>
-                </div>
-                <div>
-                  <Label htmlFor="monto_interes">Monto Interés *</Label>
-                  <Input
-                    id="monto_interes"
-                    name="monto_interes"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue={cuotaEditando.monto_interes}
-                    required
-                    onBlur={(e) => {
-                      const valor = e.target.value
-                      if (valor) {
-                        const validacion = validarMonto(valor)
-                        if (!validacion.valido) {
-                          toast.error(validacion.mensaje || 'Valor inválido')
-                          e.target.focus()
-                        } else {
-                          e.target.value = formatearMonto(valor)
-                        }
-                      }
-                    }}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Máximo 2 decimales</p>
-                </div>
               </div>
 
               {/* Montos Pagados */}
-              <div className="grid grid-cols-2 gap-4 border-b pb-4">
-                <div>
-                  <Label htmlFor="capital_pagado">Capital Pagado</Label>
-                  <Input
-                    id="capital_pagado"
-                    name="capital_pagado"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue={cuotaEditando.capital_pagado}
-                    onBlur={(e) => {
-                      const valor = e.target.value
-                      if (valor) {
-                        const validacion = validarMonto(valor)
-                        if (!validacion.valido) {
-                          toast.error(validacion.mensaje || 'Valor inválido')
-                          e.target.focus()
-                        } else {
-                          e.target.value = formatearMonto(valor)
-                        }
-                      }
-                    }}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Máximo 2 decimales</p>
-                </div>
-                <div>
-                  <Label htmlFor="interes_pagado">Interés Pagado</Label>
-                  <Input
-                    id="interes_pagado"
-                    name="interes_pagado"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue={cuotaEditando.interes_pagado}
-                    onBlur={(e) => {
-                      const valor = e.target.value
-                      if (valor) {
-                        const validacion = validarMonto(valor)
-                        if (!validacion.valido) {
-                          toast.error(validacion.mensaje || 'Valor inválido')
-                          e.target.focus()
-                        } else {
-                          e.target.value = formatearMonto(valor)
-                        }
-                      }
-                    }}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Máximo 2 decimales</p>
-                </div>
-              </div>
-
-              {/* Montos Pendientes */}
-              <div className="grid grid-cols-3 gap-4 border-b pb-4">
+              <div className="grid grid-cols-1 gap-4 border-b pb-4">
                 <div>
                   <Label htmlFor="total_pagado">Total Pagado</Label>
                   <Input
@@ -924,55 +816,7 @@ export function TablaAmortizacionCompleta() {
                     type="number"
                     step="0.01"
                     min="0"
-                    defaultValue={cuotaEditando.total_pagado}
-                    onBlur={(e) => {
-                      const valor = e.target.value
-                      if (valor) {
-                        const validacion = validarMonto(valor)
-                        if (!validacion.valido) {
-                          toast.error(validacion.mensaje || 'Valor inválido')
-                          e.target.focus()
-                        } else {
-                          e.target.value = formatearMonto(valor)
-                        }
-                      }
-                    }}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Máximo 2 decimales</p>
-                </div>
-                <div>
-                  <Label htmlFor="capital_pendiente">Capital Pendiente</Label>
-                  <Input
-                    id="capital_pendiente"
-                    name="capital_pendiente"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue={cuotaEditando.capital_pendiente}
-                    onBlur={(e) => {
-                      const valor = e.target.value
-                      if (valor) {
-                        const validacion = validarMonto(valor)
-                        if (!validacion.valido) {
-                          toast.error(validacion.mensaje || 'Valor inválido')
-                          e.target.focus()
-                        } else {
-                          e.target.value = formatearMonto(valor)
-                        }
-                      }
-                    }}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Máximo 2 decimales</p>
-                </div>
-                <div>
-                  <Label htmlFor="interes_pendiente">Interés Pendiente</Label>
-                  <Input
-                    id="interes_pendiente"
-                    name="interes_pendiente"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue={cuotaEditando.interes_pendiente}
+                    defaultValue={cuotaEditando.total_pagado || 0}
                     onBlur={(e) => {
                       const valor = e.target.value
                       if (valor) {

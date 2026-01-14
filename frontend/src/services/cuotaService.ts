@@ -6,22 +6,15 @@ export interface Cuota {
   numero_cuota: number
   fecha_vencimiento: string | Date
   monto_cuota: number
-  monto_capital: number
-  monto_interes: number
   saldo_capital_inicial: number
   saldo_capital_final: number
   fecha_pago?: string | Date | null
-  capital_pagado: number
-  interes_pagado: number
-  mora_pagada: number
   total_pagado: number
-  capital_pendiente: number
-  interes_pendiente: number
   dias_mora: number
-  monto_mora: number
-  tasa_mora: number
+  dias_morosidad?: number
   estado: string
   observaciones?: string | null
+  es_cuota_especial?: boolean
   esta_vencida?: boolean
   monto_pendiente_total?: number
   porcentaje_pagado?: number
@@ -31,12 +24,6 @@ export interface CuotaUpdate {
   fecha_vencimiento?: string | Date | null
   fecha_pago?: string | Date | null
   monto_cuota?: number
-  monto_capital?: number
-  monto_interes?: number
-  capital_pagado?: number
-  interes_pagado?: number
-  capital_pendiente?: number
-  interes_pendiente?: number
   total_pagado?: number
   estado?: string
   observaciones?: string | null

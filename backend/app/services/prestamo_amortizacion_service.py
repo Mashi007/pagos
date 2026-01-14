@@ -88,24 +88,16 @@ def generar_tabla_amortizacion(
         saldo_capital_final = saldo_capital
 
         # Crear cuota
+        # ✅ ACTUALIZADO: Solo usa monto_cuota y total_pagado (sin desglose capital/interés)
         cuota = Cuota(
             prestamo_id=prestamo.id,
             numero_cuota=numero_cuota,
             fecha_vencimiento=fecha_vencimiento,
             monto_cuota=monto_cuota,
-            monto_capital=monto_capital,
-            monto_interes=monto_interes,
             saldo_capital_inicial=saldo_capital_inicial,
             saldo_capital_final=saldo_capital_final,
-            capital_pagado=Decimal("0.00"),
-            interes_pagado=Decimal("0.00"),
-            mora_pagada=Decimal("0.00"),
             total_pagado=Decimal("0.00"),
-            capital_pendiente=monto_capital,
-            interes_pendiente=monto_interes,
             dias_mora=0,  # ✅ DESACTIVADO: Mora desactivada por defecto
-            monto_mora=Decimal("0.00"),  # ✅ DESACTIVADO: Mora desactivada por defecto
-            tasa_mora=Decimal("0.00"),  # ✅ DESACTIVADO: Tasa de mora desactivada por defecto
             estado="PENDIENTE",
         )
 
