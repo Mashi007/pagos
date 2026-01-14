@@ -37,34 +37,20 @@ class Cuota(Base):
     fecha_pago = Column(Date, nullable=True)  # YYYY-MM-DD cuando se paga
 
     # Montos de la cuota
-    monto_cuota = Column(Numeric(12, 2), nullable=False)
-    monto_capital = Column(Numeric(12, 2), nullable=False)
-    monto_interes = Column(Numeric(12, 2), nullable=False)
+    monto_cuota = Column(Numeric(12, 2), nullable=False)  # Monto total programado de la cuota
 
     # Saldos
     saldo_capital_inicial = Column(Numeric(12, 2), nullable=False)  # Saldo al inicio del período
     saldo_capital_final = Column(Numeric(12, 2), nullable=False)  # Saldo al fin del período
 
     # Montos pagados
-    capital_pagado = Column(Numeric(12, 2), default=Decimal("0.00"), nullable=True)
-    interes_pagado = Column(Numeric(12, 2), default=Decimal("0.00"), nullable=True)
-    mora_pagada = Column(Numeric(12, 2), default=Decimal("0.00"), nullable=True)
-    total_pagado = Column(Numeric(12, 2), default=Decimal("0.00"), nullable=True)
-
-    # Montos pendientes
-    capital_pendiente = Column(Numeric(12, 2), nullable=False)  # Capital que falta pagar de esta cuota
-    interes_pendiente = Column(Numeric(12, 2), nullable=False)  # Interés que falta pagar de esta cuota
+    total_pagado = Column(Numeric(12, 2), default=Decimal("0.00"), nullable=True)  # Suma acumulativa de todos los abonos/pagos aplicados
 
     # Mora
     dias_mora = Column(Integer, default=0, nullable=True)
-    monto_mora = Column(Numeric(12, 2), default=Decimal("0.00"), nullable=True)
-    tasa_mora = Column(Numeric(5, 2), default=Decimal("0.00"), nullable=True)  # Tasa de mora aplicada (%)
 
-    # ✅ NUEVAS COLUMNAS: Morosidad Calculada Automáticamente
+    # ✅ COLUMNAS: Morosidad Calculada Automáticamente
     dias_morosidad = Column(Integer, default=0, index=True, nullable=True)  # ✅ Días de atraso (actualización automática)
-    monto_morosidad = Column(
-        Numeric(12, 2), default=Decimal("0.00"), index=True, nullable=True
-    )  # ✅ Monto pendiente: monto_cuota - total_pagado (actualización automática)
 
     # Estado
     estado = Column(
@@ -91,8 +77,10 @@ class Cuota(Base):
 
     @property
     def total_pendiente(self) -> Decimal:
-        """Calcula el total pendiente de pago"""
-        return self.capital_pendiente + self.interes_pendiente + self.monto_mora  # type: ignore[return-value]
+        """Calcula el total pendiente de pago (monto_cuota - total_pagado)"""
+        monto_cuota_val = self.monto_cuota if self.monto_cuota else Decimal("0.00")  # type: ignore[assignment]
+        total_pagado_val = self.total_pagado if self.total_pagado else Decimal("0.00")  # type: ignore[assignment]
+        return max(Decimal("0.00"), monto_cuota_val - total_pagado_val)
 
     @property
     def esta_vencida(self) -> bool:
@@ -118,22 +106,14 @@ class Cuota(Base):
 
     def calcular_mora(self, tasa_mora_diaria: Decimal) -> Decimal:
         """
-        Calcula la mora acumulada hasta la fecha actual
+        ⚠️ DEPRECADO: La mora está desactivada (siempre 0%).
+        Esta función se mantiene por compatibilidad pero siempre retorna 0.
 
         Args:
-            tasa_mora_diaria: Tasa de mora por día (ej: 0.001 para 0.1% diario)
+            tasa_mora_diaria: Tasa de mora por día (no se usa, siempre 0%)
 
         Returns:
-            Monto de mora calculado
+            Siempre Decimal("0.00") porque la mora está desactivada
         """
-        if self.esta_vencida:
-            from datetime import date
-
-            dias_vencido = (date.today() - self.fecha_vencimiento).days
-
-            # Calcular mora sobre el saldo pendiente
-            saldo_mora = self.capital_pendiente + self.interes_pendiente
-            mora_calculada = saldo_mora * tasa_mora_diaria * dias_vencido
-
-            return mora_calculada
+        # La mora está desactivada, siempre retorna 0
         return Decimal("0.00")

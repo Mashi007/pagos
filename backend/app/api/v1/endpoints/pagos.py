@@ -1000,14 +1000,14 @@ def listar_ultimos_pagos(
                     f"(fecha_vencimiento < {hoy} AND total_pagado < monto_cuota) - "
                     f"TODAS las cuotas de TODOS los préstamos - CÁLCULO DINÁMICO DESDE BD ✅"
                 )
-                # Suma optimizada de saldos pendientes (capital+interes+mora) de todas las cuotas no pagadas
+                # Suma optimizada de saldos pendientes (monto_cuota - total_pagado) de todas las cuotas no pagadas
                 # Usando func.sum para mejor performance
+                # ✅ ACTUALIZADO: Solo usa monto_cuota y total_pagado (sin desglose capital/interés)
                 saldo_result = (
                     db.query(
                         func.sum(
-                            func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
-                            + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
-                            + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
+                            func.coalesce(Cuota.monto_cuota, Decimal("0.00"))
+                            - func.coalesce(Cuota.total_pagado, Decimal("0.00"))
                         )
                     )
                     .filter(
@@ -1055,15 +1055,13 @@ def listar_ultimos_pagos(
 
 
 def _calcular_proporcion_capital_interes(cuota, monto_aplicar: Decimal) -> tuple[Decimal, Decimal]:
-    """Calcula la proporción de capital e interés a aplicar según lo pendiente"""
-    total_pendiente = cuota.capital_pendiente + cuota.interes_pendiente
-    if total_pendiente > Decimal("0.00"):
-        capital = monto_aplicar * (cuota.capital_pendiente / total_pendiente)
-        interes = monto_aplicar * (cuota.interes_pendiente / total_pendiente)
-    else:
-        capital = monto_aplicar
-        interes = Decimal("0.00")
-    return capital, interes
+    """
+    ⚠️ DEPRECADO: Esta función ya no se usa porque se eliminaron las columnas capital_pendiente e interes_pendiente.
+    Se mantiene por compatibilidad pero retorna valores que no se usan.
+    La aplicación de pagos ahora solo usa total_pagado y monto_cuota.
+    """
+    # Ya no se calcula proporción porque solo se usa total_pagado
+    return Decimal("0.00"), Decimal("0.00")
 
 
 def _verificar_pagos_conciliados_cuota(db: Session, cuota_id: int, prestamo_id: int) -> bool:
@@ -1646,7 +1644,7 @@ def obtener_kpis_pagos(
     Devuelve:
     - montoCobradoMes: Suma de todos los pagos del mes especificado
     - montoNoDefinido: Suma de pagos no conciliados o sin numero_documento (agrupados como "NO DEFINIDO")
-    - saldoPorCobrar: Suma de capital_pendiente + interes_pendiente + monto_mora de todas las cuotas no pagadas
+    - saldoPorCobrar: Suma de (monto_cuota - total_pagado) de todas las cuotas no pagadas
     - clientesEnMora: Conteo de clientes únicos con cuotas vencidas y no pagadas
     - clientesAlDia: Conteo de clientes únicos sin cuotas vencidas sin pagar
 
