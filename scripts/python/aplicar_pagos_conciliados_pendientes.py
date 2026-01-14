@@ -20,7 +20,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "backend"))
 
 from sqlalchemy import create_engine, and_, or_
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.orm import defer
 
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
@@ -97,14 +96,7 @@ def identificar_pagos_conciliados_sin_aplicar(db: Session) -> list:
     
     for pago in pagos_conciliados:
         # Verificar que el préstamo existe
-        # Usar defer() para excluir columnas que no existen en la BD
-        prestamo = db.query(Prestamo).options(
-            defer('valor_activo'),
-            defer('ml_impago_nivel_riesgo_calculado'),
-            defer('ml_impago_probabilidad_calculada'),
-            defer('ml_impago_calculado_en'),
-            defer('ml_impago_modelo_id')
-        ).filter(Prestamo.id == pago.prestamo_id).first()
+        prestamo = db.query(Prestamo).filter(Prestamo.id == pago.prestamo_id).first()
         if not prestamo:
             logger.warning(f"⚠️ Pago {pago.id}: Préstamo {pago.prestamo_id} no existe")
             continue

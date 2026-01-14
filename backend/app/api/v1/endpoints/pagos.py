@@ -1225,13 +1225,11 @@ def _aplicar_monto_a_cuota(
     if monto_aplicar <= Decimal("0.00"):
         return False
 
-    capital_aplicar, interes_aplicar = _calcular_proporcion_capital_interes(cuota, monto_aplicar)
-
-    cuota.capital_pagado += capital_aplicar  # type: ignore[assignment]
-    cuota.interes_pagado += interes_aplicar  # type: ignore[assignment]
+    # ✅ ACTUALIZADO: Solo actualizar total_pagado (columnas capital/interés eliminadas)
+    # Actualizar total_pagado (suma acumulativa)
+    if cuota.total_pagado is None:
+        cuota.total_pagado = Decimal("0.00")  # type: ignore[assignment]
     cuota.total_pagado += monto_aplicar  # type: ignore[assignment]
-    cuota.capital_pendiente = max(Decimal("0.00"), cuota.capital_pendiente - capital_aplicar)  # type: ignore[assignment]
-    cuota.interes_pendiente = max(Decimal("0.00"), cuota.interes_pendiente - interes_aplicar)  # type: ignore[assignment]
 
     if monto_aplicar > Decimal("0.00"):
         cuota.fecha_pago = fecha_pago  # type: ignore[assignment]
@@ -1239,8 +1237,6 @@ def _aplicar_monto_a_cuota(
         # ✅ REGLA: Mora siempre debe ser 0% - DESACTIVADO
         # Independientemente de si el pago es tardío o no, siempre establecer mora en 0
         cuota.dias_mora = 0  # type: ignore[assignment]
-        cuota.monto_mora = Decimal("0.00")  # type: ignore[assignment]
-        cuota.tasa_mora = Decimal("0.00")  # type: ignore[assignment]
         
         logger.debug(
             f"✅ [aplicar_monto_a_cuota] Cuota #{cuota.numero_cuota} (Préstamo {cuota.prestamo_id}): "
@@ -1551,12 +1547,12 @@ def _calcular_kpis_pagos_interno(db: Session, mes_consulta: int, año_consulta: 
     # OPTIMIZACIÓN 2: Saldo por cobrar (query única optimizada)
     start_saldo = time.time()
     try:
+        # ✅ ACTUALIZADO: Solo usa monto_cuota y total_pagado (sin desglose capital/interés)
         saldo_por_cobrar_query = (
             db.query(
                 func.sum(
-                    func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
-                    + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
-                    + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
+                    func.coalesce(Cuota.monto_cuota, Decimal("0.00"))
+                    - func.coalesce(Cuota.total_pagado, Decimal("0.00"))
                 )
             )
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
