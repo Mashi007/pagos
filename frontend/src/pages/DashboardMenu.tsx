@@ -107,8 +107,8 @@ export function DashboardMenu() {
       }
       return response
     },
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     enabled: true, // ✅ Prioridad máxima - carga inmediatamente
     retry: false, // No reintentar automáticamente en caso de error 401
   })
@@ -138,9 +138,9 @@ export function DashboardMenu() {
         return {}
       }
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
     retry: 1, // Solo un retry para evitar múltiples intentos
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     enabled: true, // ✅ Carga después de Batch 1
   })
 
@@ -193,9 +193,9 @@ export function DashboardMenu() {
       const meses = response.meses
       return meses
     },
-    staleTime: 15 * 60 * 1000, // 15 minutos - optimizado para datos históricos
+    staleTime: 5 * 60 * 1000, // ✅ ACTUALIZADO: 5 minutos para datos históricos más frescos
     enabled: !!kpisPrincipales, // ✅ Solo carga después de KPIs (lazy loading)
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Batch 3: Gráficos secundarios rápidos
@@ -217,8 +217,8 @@ export function DashboardMenu() {
         .slice(0, 10) // Top 10
       return concesionariosOrdenados
     },
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     enabled: !!kpisPrincipales, // ✅ Lazy loading - carga después de KPIs
   })
 
@@ -239,8 +239,8 @@ export function DashboardMenu() {
         .slice(0, 10) // Top 10
       return modelosOrdenados
     },
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     enabled: !!kpisPrincipales, // ✅ Lazy loading - carga después de KPIs
   })
 
@@ -285,8 +285,8 @@ export function DashboardMenu() {
         }
       }
     },
-    staleTime: 10 * 60 * 1000, // 10 minutos - optimizado para reducir carga
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
+    staleTime: 5 * 60 * 1000, // ✅ ACTUALIZADO: 5 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
     retry: 1, // ✅ Permitir 1 reintento para errores de red
     retryDelay: 2000, // Esperar 2 segundos antes de reintentar
@@ -313,8 +313,8 @@ export function DashboardMenu() {
       }
       return response
     },
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
@@ -339,8 +339,8 @@ export function DashboardMenu() {
       }>(`/api/v1/dashboard/cobranza-fechas-especificas?${queryParams.toString()}`)
       return response
     },
-    staleTime: 5 * 60 * 1000, // ✅ 5 minutos - datos no cambian tan rápido
-    refetchOnWindowFocus: false, // ✅ No recargar automáticamente al enfocar ventana (reduce llamadas redundantes)
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     enabled: true,
     retry: 1, // Solo un retry para evitar múltiples intentos
   })
@@ -402,8 +402,8 @@ export function DashboardMenu() {
         .slice(0, 10) // Top 10
       return analistasOrdenados
     },
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 
@@ -436,8 +436,8 @@ export function DashboardMenu() {
       ) as { meses: Array<{ mes: string; morosidad: number }> }
       return response.meses
     },
-    staleTime: 15 * 60 * 1000, // 15 minutos - optimizado para datos históricos
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
+    staleTime: 5 * 60 * 1000, // ✅ ACTUALIZADO: 5 minutos para datos históricos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
   })
 

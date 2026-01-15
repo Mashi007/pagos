@@ -86,7 +86,8 @@ export function DashboardCobranza() {
         } as DashboardData
       }
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar recaudación por día del mes
@@ -109,7 +110,8 @@ export function DashboardCobranza() {
       const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
       return response.dias.filter(d => new Date(d.fecha) >= primerDiaMes)
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar distribución por analista
@@ -127,7 +129,8 @@ export function DashboardCobranza() {
       ) as { analistas: Array<{ analista: string; total_cobrado: number; cantidad_pagos: number }> }
       return response.analistas
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -260,6 +263,8 @@ export function DashboardCobranza() {
               bgColor="bg-indigo-100"
               borderColor="border-indigo-500"
               format="number"
+              // ⚠️ TODO: Conectar con endpoint de pagos conciliados del mes actual
+              // Debe consultar: COUNT(*) FROM pagos WHERE conciliado = TRUE AND fecha_pago >= primer_dia_mes
             />
             <KpiCardLarge
               title="Días Promedio Cobro"
@@ -270,6 +275,8 @@ export function DashboardCobranza() {
               bgColor="bg-amber-100"
               borderColor="border-amber-500"
               format="text"
+              // ⚠️ TODO: Calcular desde base de datos
+              // Debe calcular: AVG(DATEDIFF(fecha_pago, fecha_vencimiento)) de cuotas pagadas
             />
           </div>
         )}

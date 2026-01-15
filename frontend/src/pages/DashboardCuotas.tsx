@@ -85,7 +85,8 @@ export function DashboardCuotas() {
         total_cuotas_impagas_2mas: response.total_cuotas_impagas_2mas || 0,
       } as KPIsData
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar datos para gráfico de estado de cuotas
@@ -163,7 +164,8 @@ export function DashboardCuotas() {
       }
       return response.meses
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   const [isRefreshing, setIsRefreshing] = useState(false)

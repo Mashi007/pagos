@@ -103,7 +103,8 @@ export function DashboardAnalisis() {
       }
       return response
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar datos del dashboard
@@ -119,7 +120,8 @@ export function DashboardAnalisis() {
         return {} as DashboardData
       }
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar cobros diarios del mes
@@ -142,7 +144,8 @@ export function DashboardAnalisis() {
         return [] as CobroDiario[]
       }
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar evolución mensual

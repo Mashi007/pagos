@@ -13,7 +13,8 @@ import {
   User,
   AlertCircle,
   Calendar,
-  MessageSquare
+  MessageSquare,
+  RefreshCw
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -134,7 +135,9 @@ export function ClientesList() {
     data: clientesData,
     isLoading,
     error,
-    isError
+    isError,
+    refetch: refetchClientes,
+    isRefetching
   } = useClientes(
     { ...filters, search: debouncedSearch },
     currentPage,
@@ -271,6 +274,21 @@ export function ClientesList() {
         </div>
 
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => {
+              refetchClientes()
+              queryClient.invalidateQueries({ queryKey: ['clientes'] })
+              queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
+            }}
+            disabled={isRefetching || isLoading}
+            className="px-6 py-6 text-base font-semibold"
+            title="Actualizar datos"
+          >
+            <RefreshCw className={`w-5 h-5 mr-2 ${isRefetching ? 'animate-spin' : ''}`} />
+            {isRefetching ? 'Actualizando...' : 'Actualizar'}
+          </Button>
           <Button
             variant="outline"
             size="lg"

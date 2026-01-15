@@ -62,7 +62,8 @@ export function DashboardPagos() {
       const params = construirFiltrosObject()
       return await pagoService.getStats(params)
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar KPIs de pagos
@@ -80,8 +81,8 @@ export function DashboardPagos() {
       }
       return response
     },
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false, // ✅ No recargar automáticamente al enfocar ventana
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     retry: 1, // Solo un retry
   })
 
@@ -104,7 +105,8 @@ export function DashboardPagos() {
       }
       return response
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Datos para gráfico de pagos por estado
@@ -131,7 +133,8 @@ export function DashboardPagos() {
       }
       return response.meses
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   const [isRefreshing, setIsRefreshing] = useState(false)

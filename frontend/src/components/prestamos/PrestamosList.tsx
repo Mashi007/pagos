@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2, X } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2, X, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -178,6 +178,26 @@ export function PrestamosList() {
     }
   }
 
+  // Función para actualizar los datos manualmente
+  const handleRefresh = async () => {
+    try {
+      // Invalidar todas las queries relacionadas con préstamos
+      queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+      queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
+      
+      // Forzar refetch inmediato ignorando staleTime
+      await queryClient.refetchQueries({
+        queryKey: prestamoKeys.all,
+        exact: false,
+        type: 'active'
+      })
+      
+      toast.success('Datos actualizados correctamente')
+    } catch (error: any) {
+      toast.error('Error al actualizar los datos')
+    }
+  }
+
   if (showCrearPrestamo) {
     return (
       <CrearPrestamoForm
@@ -273,14 +293,26 @@ export function PrestamosList() {
           <h1 className="text-3xl font-bold text-gray-900">Préstamos</h1>
           <p className="text-gray-600 mt-1">Gestión de préstamos y financiamiento</p>
         </div>
-        <Button
-          size="lg"
-          onClick={() => setShowCrearPrestamo(true)}
-          className="px-8 py-6 text-base font-semibold min-w-[200px]"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Nuevo Préstamo
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={handleRefresh}
+            className="px-6 py-6 text-base font-semibold"
+            disabled={isLoading}
+          >
+            <RefreshCw className={`w-5 h-5 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
+          <Button
+            size="lg"
+            onClick={() => setShowCrearPrestamo(true)}
+            className="px-8 py-6 text-base font-semibold min-w-[200px]"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Nuevo Préstamo
+          </Button>
+        </div>
       </div>
 
       {/* Filtros y búsqueda */}

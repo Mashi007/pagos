@@ -30,7 +30,10 @@ export function useClientes(
   return useQuery({
     queryKey: clienteKeys.list({ ...filters, per_page: perPage }),
     queryFn: () => clienteService.getClientes(filters, page, perPage),
-    staleTime: STALE_TIME_MEDIUM,
+    staleTime: STALE_TIME_SHORT, // ✅ Reducido a 2 minutos para datos más frescos
+    refetchOnMount: true, // ✅ Refrescar cuando el componente se monta
+    refetchOnWindowFocus: true, // ✅ Refrescar cuando el usuario vuelve a la ventana
+    refetchInterval: 3 * 60 * 1000, // ✅ Auto-refresh cada 3 minutos
   })
 }
 

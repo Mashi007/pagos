@@ -45,7 +45,7 @@ export function usePrestamos(
     queryFn: () => prestamoService.getPrestamos(filters, page, perPage),
     staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualización inmediata de estado)
     refetchOnMount: true, // Refetch cuando el componente se monta
-    refetchOnWindowFocus: false, // No refetch en focus (evita requests innecesarios)
+    refetchOnWindowFocus: true, // Refetch cuando se enfoca la ventana (mantiene datos actualizados)
   })
 }
 
